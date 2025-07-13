@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,94 +19,112 @@ import {
 } from "@/components/ui/table";
 import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown } from "lucide-react";
 import Link from "next/link";
+import { useApplications } from "@/hooks/useApplications";
+import { supabase } from "@/lib/supabase";
+import type { Application, ApplicationStatus } from "@/types/database";
 
-// Mock data for applications in different stages
-const mockApplications = [
-  {
-    id: "RWB-24-00123",
-    applicantName: "Jane Doe",
-    applicationType: "Surface Water",
-    dateReceived: "2024-06-25",
-    status: "submitted",
-    slaDeadline: "2024-06-27",
-    daysRemaining: 2,
-  },
-  {
-    id: "RWB-24-00122",
-    applicantName: "XYZ Corporation",
-    applicationType: "Groundwater",
-    dateReceived: "2024-06-25",
-    status: "submitted",
-    slaDeadline: "2024-06-27",
-    daysRemaining: 2,
-  },
-  {
-    id: "RWB-24-00121",
-    applicantName: "ABC Company",
-    applicationType: "Groundwater",
-    dateReceived: "2024-06-24",
-    status: "pending_inspection",
-    slaDeadline: "N/A",
-    daysRemaining: null,
-  },
-  {
-    id: "RWB-24-00120",
-    applicantName: "Peter Jones",
-    applicationType: "Surface Water",
-    dateReceived: "2024-06-24",
-    status: "submitted",
-    slaDeadline: "2024-06-26",
-    daysRemaining: 1,
-  },
-  {
-    id: "RWB-24-00115",
-    applicantName: "John Smith",
-    applicationType: "Surface Water",
-    dateReceived: "2024-06-20",
-    status: "ready_for_final_review",
-    slaDeadline: "2024-06-25",
-    daysRemaining: -1, // Overdue
-  },
-  {
-    id: "RWB-24-00114",
-    applicantName: "Tech Solutions Ltd",
-    applicationType: "Industrial Water",
-    dateReceived: "2024-06-19",
-    status: "needs_revision",
-    slaDeadline: "N/A",
-    daysRemaining: null,
-  },
-];
-
-interface Application {
-  id: string;
-  applicantName: string;
-  applicationType: string;
-  dateReceived: string;
-  status: string;
-  slaDeadline: string;
-  daysRemaining: number | null;
+interface ReviewApplication extends Application {
+  applicant_name?: string;
+  sla_days_remaining?: number;
 }
 
 export default function ReviewerDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
+  const [reviewApplications, setReviewApplications] = useState<ReviewApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Filter applications based on status
-  const newSubmissions = mockApplications.filter(app => app.status === "submitted");
-  const pendingInspection = mockApplications.filter(app => app.status === "pending_inspection");
-  const readyForFinalReview = mockApplications.filter(app => app.status === "ready_for_final_review");
-  const needsRevision = mockApplications.filter(app => app.status === "needs_revision");
+  // Fetch applications for review
+  useEffect(() => {
+    const fetchReviewApplications = async () => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      submitted: { label: "Submitted", variant: "secondary" as const },
-      pending_inspection: { label: "Pending Inspection", variant: "outline" as const },
-      ready_for_final_review: { label: "Ready for Final Review", variant: "default" as const },
-      needs_revision: { label: "Needs Revision", variant: "secondary" as const },
+        // Fetch applications that are in review stages with applicant info
+         const { data, error } = await supabase
+           .from('applications')
+           .select(`
+             *,
+             applicant:users!applicant_id(first_name, last_name, company_name)
+           `)
+           .in('status', ['submitted', 'under_review', 'pending_inspection', 'revision_required'])
+           .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Process applications with calculated fields
+                 const processedApplications: ReviewApplication[] = data.map(app => {
+           const applicant = app.applicant as any;
+           const applicantName = applicant?.company_name || 
+                                (applicant?.first_name && applicant?.last_name ? 
+                                 `${applicant.first_name} ${applicant.last_name}` : 
+                                 'Unknown Applicant');
+
+           // Calculate SLA days remaining
+           let slaRemaining: number | null = null;
+           if (app.due_date) {
+             const dueDate = new Date(app.due_date);
+             const now = new Date();
+             const diffTime = dueDate.getTime() - now.getTime();
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+             slaRemaining = diffDays;
+           }
+
+           return {
+             ...app,
+             applicant_name: applicantName,
+             sla_days_remaining: slaRemaining
+           };
+         });
+
+        setReviewApplications(processedApplications);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch applications');
+        console.error('Error fetching review applications:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReviewApplications();
+  }, []);
+
+  // Filter applications by status
+  const newSubmissions = useMemo(() => 
+    reviewApplications.filter(app => app.status === 'submitted'), 
+    [reviewApplications]
+  );
+  
+  const pendingInspection = useMemo(() => 
+    reviewApplications.filter(app => app.status === 'pending_inspection'), 
+    [reviewApplications]
+  );
+  
+  const readyForFinalReview = useMemo(() => 
+    reviewApplications.filter(app => app.status === 'under_review'), 
+    [reviewApplications]
+  );
+  
+  const needsRevision = useMemo(() => 
+    reviewApplications.filter(app => app.status === 'revision_required'), 
+    [reviewApplications]
+  );
+
+  const getStatusBadge = (status: ApplicationStatus) => {
+    const statusConfig: Record<ApplicationStatus, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+      draft: { label: "Draft", variant: "outline" },
+      submitted: { label: "Submitted", variant: "secondary" },
+      under_review: { label: "Under Review", variant: "default" },
+      pending_inspection: { label: "Pending Inspection", variant: "outline" },
+      approved: { label: "Approved", variant: "default" },
+      rejected: { label: "Rejected", variant: "destructive" },
+      revision_required: { label: "Needs Revision", variant: "secondary" },
+      cancelled: { label: "Cancelled", variant: "outline" },
     };
     
-    const config = statusConfig[status as keyof typeof statusConfig];
+    const config = statusConfig[status];
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -117,22 +135,27 @@ export default function ReviewerDashboard() {
     return <span className="text-muted-foreground">In {daysRemaining} days</span>;
   };
 
-  const filterApplications = (applications: Application[]) => {
+  const filterApplications = (applications: ReviewApplication[]) => {
     return applications.filter(app => {
-      const matchesSearch = app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           app.applicantName.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = filterType === "all" || app.applicationType.toLowerCase().includes(filterType.toLowerCase());
+      const matchesSearch = app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           app.applicant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           app.project_title?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesType = filterType === "all" || 
+                         app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
+                         app.application_type?.toLowerCase().includes(filterType.toLowerCase());
+      
       return matchesSearch && matchesType;
     });
   };
 
-  const ApplicationTable = ({ applications, emptyMessage }: { applications: Application[], emptyMessage: string }) => {
+  const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[], emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
     
     if (filteredApps.length === 0) {
       return (
         <div className="flex min-h-[400px] flex-col items-center justify-center space-y-2 text-center">
-          <div className="text-muted-foreground">
+          <div className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
             {filteredApps.length === 0 && applications.length > 0 ? "No applications match your filters" : emptyMessage}
           </div>
         </div>
@@ -164,7 +187,13 @@ export default function ReviewerDashboard() {
               </TableHead>
               <TableHead className="w-[120px]">
                 <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  Date Received
+                  Date Submitted
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead className="w-[120px]">
+                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
+                  Status
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
@@ -180,17 +209,21 @@ export default function ReviewerDashboard() {
           <TableBody>
             {filteredApps.map((app) => (
               <TableRow key={app.id}>
-                <TableCell>{app.id}</TableCell>
-                <TableCell>{app.applicantName}</TableCell>
-                <TableCell>{app.applicationType}</TableCell>
-                <TableCell>{app.dateReceived}</TableCell>
-                <TableCell>{getSLAStatus(app.daysRemaining)}</TableCell>
+                <TableCell className="font-medium">{app.application_number}</TableCell>
+                <TableCell>{app.applicant_name}</TableCell>
+                <TableCell>{app.water_source}</TableCell>
                 <TableCell>
-                  <Link href={`/review/application/${app.id}`}>
+                  {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : 
+                   app.created_at ? new Date(app.created_at).toLocaleDateString() : 'N/A'}
+                </TableCell>
+                <TableCell>{getStatusBadge(app.status)}</TableCell>
+                <TableCell>{getSLAStatus(app.sla_days_remaining ?? null)}</TableCell>
+                <TableCell>
+                  <Link href={`/review/application/${app.application_number}`}>
                     <Button size="sm" variant="ghost">
                       <Eye className="h-4 w-4 mr-1" />
-                      {app.status === "submitted" ? "Review" : 
-                       app.status === "ready_for_final_review" ? "Final Review" : "View"}
+                      {app.status === 'submitted' ? 'Review' : 
+                       app.status === 'under_review' ? 'Final Review' : 'View'}
                     </Button>
                   </Link>
                 </TableCell>
@@ -201,6 +234,37 @@ export default function ReviewerDashboard() {
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading applications...</p>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <p className="text-destructive font-medium">Error loading applications</p>
+              <p className="text-muted-foreground text-sm mt-1">{error}</p>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -217,7 +281,7 @@ export default function ReviewerDashboard() {
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
                 Application Review Dashboard
               </h1>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
                 Review and assess water permit applications for technical compliance
               </p>
             </div>
@@ -234,7 +298,7 @@ export default function ReviewerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{newSubmissions.length}</div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
                   Awaiting initial review
                 </p>
               </CardContent>
@@ -249,7 +313,7 @@ export default function ReviewerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{pendingInspection.length}</div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
                   With inspectors
                 </p>
               </CardContent>
@@ -258,14 +322,14 @@ export default function ReviewerDashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Ready for Final Review
+                  Under Review
                 </CardTitle>
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{readyForFinalReview.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  Final decision needed
+                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
+                  Being reviewed by staff
                 </p>
               </CardContent>
             </Card>
@@ -279,7 +343,7 @@ export default function ReviewerDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{needsRevision.length}</div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
                   Pending resubmission
                 </p>
               </CardContent>
@@ -291,7 +355,7 @@ export default function ReviewerDashboard() {
             <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="new_submissions">New Submissions</TabsTrigger>
               <TabsTrigger value="pending_inspection">Pending Inspection</TabsTrigger>
-              <TabsTrigger value="ready_for_final_review">Ready for Final Review</TabsTrigger>
+              <TabsTrigger value="ready_for_final_review">Under Review</TabsTrigger>
               <TabsTrigger value="all_applications">All Applications</TabsTrigger>
             </TabsList>
 
@@ -316,7 +380,8 @@ export default function ReviewerDashboard() {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="surface">Surface Water</SelectItem>
                   <SelectItem value="groundwater">Groundwater</SelectItem>
-                  <SelectItem value="industrial">Industrial Water</SelectItem>
+                  <SelectItem value="industrial">Industrial</SelectItem>
+                  <SelectItem value="agricultural">Agricultural</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -326,7 +391,7 @@ export default function ReviewerDashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold">New Submissions</CardTitle>
-                  <CardDescription className="text-base">
+                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
                     Applications waiting for initial documentary review
                   </CardDescription>
                 </CardHeader>
@@ -343,7 +408,7 @@ export default function ReviewerDashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold">Pending Inspection</CardTitle>
-                  <CardDescription className="text-base">
+                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
                     Applications currently assigned to inspectors for site assessment
                   </CardDescription>
                 </CardHeader>
@@ -359,15 +424,15 @@ export default function ReviewerDashboard() {
             <TabsContent value="ready_for_final_review" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-xl font-semibold">Ready for Final Review</CardTitle>
-                  <CardDescription className="text-base">
-                    Applications with completed inspections awaiting final recommendation
+                  <CardTitle className="text-xl font-semibold">Under Review</CardTitle>
+                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
+                    Applications currently being reviewed by technical staff
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ApplicationTable 
                     applications={readyForFinalReview}
-                    emptyMessage="No applications ready for final review"
+                    emptyMessage="No applications under review"
                   />
                 </CardContent>
               </Card>
@@ -377,13 +442,13 @@ export default function ReviewerDashboard() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold">All Applications</CardTitle>
-                  <CardDescription className="text-base">
+                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
                     Comprehensive view of all applications assigned to you
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ApplicationTable 
-                    applications={mockApplications}
+                    applications={reviewApplications}
                     emptyMessage="No applications found"
                   />
                 </CardContent>

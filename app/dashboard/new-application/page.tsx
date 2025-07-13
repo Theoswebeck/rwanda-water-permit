@@ -14,7 +14,8 @@ import { useApplications } from "@/hooks/useApplications";
 import type { Application } from "@/types/database";
 
 // Helper function to capitalize province names for database enum compatibility
-function formatProvinceForDB(province: string): Application['province'] {
+function formatProvinceForDB(province: string): Application['province'] | undefined {
+  if (!province) return undefined;
   const provinceMap: Record<string, Application['province']> = {
     'kigali': 'Kigali',
     'northern': 'Northern', 
@@ -22,7 +23,7 @@ function formatProvinceForDB(province: string): Application['province'] {
     'eastern': 'Eastern',
     'western': 'Western'
   };
-  return provinceMap[province.toLowerCase()] || 'Kigali';
+  return provinceMap[province.toLowerCase()];
 }
 
 // Mapping function to transform form data to database schema

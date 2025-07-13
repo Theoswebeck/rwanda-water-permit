@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -35,144 +35,165 @@ import {
   MapPin, 
   Calendar,
   Droplets,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from "lucide-react"
 import Link from "next/link"
+import { getApplicationsPendingInspection } from "@/lib/supabase"
 
-// Sample applications data
-const applications = [
-  {
-    id: "RWB-24-00123",
-    applicant: "John Doe",
-    company: "AquaTech Solutions",
-    location: "Kigali, Gasabo District",
-    type: "Surface Water",
-    purpose: "Industrial Use",
-    status: "Pending Inspection",
-    priority: "High",
-    submittedDate: "2024-03-15",
-    dueDate: "2024-03-30",
-    estimatedVolume: "500 m³/day",
-    contactPhone: "+250 788 123 456",
-    contactEmail: "john.doe@aquatech.rw",
-    notes: "Large-scale industrial water extraction for manufacturing facility. Requires environmental impact assessment.",
-    coordinates: "-1.9441, 30.0619"
-  },
-  {
-    id: "RWB-24-00124",
-    applicant: "Jane Smith",
-    company: "Green Valley Farm",
-    location: "Musanze, Kinigi Sector",
-    type: "Groundwater",
-    purpose: "Agricultural Use",
-    status: "Pending Inspection",
-    priority: "Medium",
-    submittedDate: "2024-03-16",
-    dueDate: "2024-04-01",
-    estimatedVolume: "200 m³/day",
-    contactPhone: "+250 788 234 567",
-    contactEmail: "jane.smith@greenvalley.rw",
-    notes: "Irrigation system for potato farming. Well drilling location needs verification.",
-    coordinates: "-1.4992, 29.6349"
-  },
-  {
-    id: "RWB-24-00125",
-    applicant: "Robert Johnson",
-    company: "City Hotels Ltd",
-    location: "Kigali, Nyarugenge District",
-    type: "Surface Water",
-    purpose: "Commercial Use",
-    status: "Pending Inspection",
-    priority: "Low",
-    submittedDate: "2024-03-18",
-    dueDate: "2024-04-05",
-    estimatedVolume: "150 m³/day",
-    contactPhone: "+250 788 345 678",
-    contactEmail: "robert.johnson@cityhotels.rw",
-    notes: "Hotel complex water supply system. Standard commercial inspection required.",
-    coordinates: "-1.9536, 30.0606"
+interface Application {
+  id: string
+  application_number: string
+  applicant: {
+    first_name: string
+    last_name: string
+    company_name?: string
+    email: string
+    phone: string
   }
-]
+  province: string
+  district: string
+  sector: string
+  water_source: string
+  water_purpose: string
+  estimated_usage_volume: number
+  usage_unit: string
+  project_title: string
+  project_description: string
+  created_at: string
+  due_date?: string
+  coordinates: any // PostGIS geometry
+}
 
 export function ApplicationsTab() {
+  const [applications, setApplications] = useState<Application[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [priorityFilter, setPriorityFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [selectedApp, setSelectedApp] = useState<typeof applications[0] | null>(null)
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null)
+
+  useEffect(() => {
+    const fetchApplications = async () => {
+      try {
+        setLoading(true)
+        const data = await getApplicationsPendingInspection()
+        setApplications(data || [])
+      } catch (err) {
+        console.error('Error fetching applications:', err)
+        setError('Failed to load applications')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchApplications()
+  }, [])
 
   const filteredApplications = applications.filter(app => {
-    const matchesSearch = app.applicant.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.id.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesPriority = priorityFilter === "all" || app.priority.toLowerCase() === priorityFilter
-    const matchesType = typeFilter === "all" || app.type.toLowerCase() === typeFilter.toLowerCase()
+    const applicantName = app.applicant.company_name || `${app.applicant.first_name} ${app.applicant.last_name}`
+    const matchesSearch = applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         app.application_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         app.project_title.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesType = typeFilter === "all" || app.water_source.toLowerCase() === typeFilter.toLowerCase()
     
-    return matchesSearch && matchesPriority && matchesType
+    return matchesSearch && matchesType
   })
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "high": return "bg-red-100 text-red-800 hover:bg-red-100"
-      case "medium": return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-      case "low": return "bg-green-100 text-green-800 hover:bg-green-100"
-      default: return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-    }
+
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString()
   }
 
-  const getPriorityIcon = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "high": return <AlertCircle className="h-3 w-3" />
-      default: return null
+  const getLocationString = (app: Application) => {
+    return `${app.district}, ${app.sector}`
+  }
+
+  const getApplicantName = (app: Application) => {
+    return app.applicant.company_name || `${app.applicant.first_name} ${app.applicant.last_name}`
+  }
+
+  const getWaterSourceLabel = (waterSource: string) => {
+    const labels: Record<string, string> = {
+      'surface_water': 'Surface Water',
+      'groundwater': 'Groundwater',
+      'borehole': 'Borehole',
+      'river': 'River',
+      'lake': 'Lake',
+      'spring': 'Spring',
+      'other': 'Other'
     }
+    return labels[waterSource] || waterSource
+  }
+
+  const getWaterPurposeLabel = (purpose: string) => {
+    const labels: Record<string, string> = {
+      'domestic': 'Domestic Use',
+      'industrial': 'Industrial Use',
+      'agricultural': 'Agricultural Use',
+      'irrigation': 'Irrigation',
+      'livestock': 'Livestock',
+      'aquaculture': 'Aquaculture',
+      'recreation': 'Recreation',
+      'electricity_generation': 'Electricity Generation',
+      'mining': 'Mining',
+      'municipal_supply': 'Municipal Supply',
+      'other': 'Other'
+    }
+    return labels[purpose] || purpose
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading applications...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex items-center gap-2 text-red-600">
+          <AlertCircle className="h-6 w-6" />
+          <span>{error}</span>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters and Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Filter Applications
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by applicant, company, or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priorities</SelectItem>
-                <SelectItem value="high">High Priority</SelectItem>
-                <SelectItem value="medium">Medium Priority</SelectItem>
-                <SelectItem value="low">Low Priority</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Water Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="surface water">Surface Water</SelectItem>
-                <SelectItem value="groundwater">Groundwater</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by applicant name, application number, or project title..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Filter by type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="surface_water">Surface Water</SelectItem>
+            <SelectItem value="groundwater">Groundwater</SelectItem>
+            <SelectItem value="borehole">Borehole</SelectItem>
+            <SelectItem value="river">River</SelectItem>
+            <SelectItem value="lake">Lake</SelectItem>
+            <SelectItem value="spring">Spring</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Applications Table */}
       <Card>
@@ -190,139 +211,134 @@ export function ApplicationsTab() {
                   <TableHead>Applicant</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Priority</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredApplications.map((application) => (
-                  <TableRow key={application.id} className="hover:bg-muted/50">
-                    <TableCell>
-                      <div className="font-medium">{application.id}</div>
-                      <div className="text-sm text-muted-foreground">{application.company}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium">{application.applicant}</div>
-                      <div className="text-sm text-muted-foreground">{application.purpose}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-sm">{application.location}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="flex items-center gap-1">
-                        <Droplets className="h-3 w-3" />
-                        {application.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getPriorityColor(application.priority)}>
-                        {getPriorityIcon(application.priority)}
-                        {application.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-sm">{application.dueDate}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setSelectedApp(application)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[600px]">
-                            <DialogHeader>
-                              <DialogTitle>Application Details</DialogTitle>
-                            </DialogHeader>
-                            {selectedApp && (
-                              <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Application ID</p>
-                                    <p className="font-medium">{selectedApp.id}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Priority</p>
-                                    <Badge className={getPriorityColor(selectedApp.priority)}>
-                                      {selectedApp.priority}
-                                    </Badge>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Applicant</p>
-                                    <p className="font-medium">{selectedApp.applicant}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Company</p>
-                                    <p className="font-medium">{selectedApp.company}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Water Type</p>
-                                    <p className="font-medium">{selectedApp.type}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Purpose</p>
-                                    <p className="font-medium">{selectedApp.purpose}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Estimated Volume</p>
-                                    <p className="font-medium">{selectedApp.estimatedVolume}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Due Date</p>
-                                    <p className="font-medium">{selectedApp.dueDate}</p>
-                                  </div>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-muted-foreground">Location</p>
-                                  <p className="font-medium">{selectedApp.location}</p>
-                                  <p className="text-sm text-muted-foreground">Coordinates: {selectedApp.coordinates}</p>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-muted-foreground">Contact Information</p>
-                                  <p className="font-medium">{selectedApp.contactPhone}</p>
-                                  <p className="text-sm text-muted-foreground">{selectedApp.contactEmail}</p>
-                                </div>
-                                <div>
-                                  <p className="text-sm font-medium text-muted-foreground">Notes</p>
-                                  <p className="text-sm">{selectedApp.notes}</p>
-                                </div>
-                                <div className="flex justify-end gap-2 pt-4">
-                                  <Button variant="outline" onClick={() => setSelectedApp(null)}>
-                                    Close
-                                  </Button>
-                                  <Button asChild>
-                                    <Link href={`/inspection/new?applicationId=${selectedApp.id}`}>
-                                      <FileCheck className="h-4 w-4 mr-2" />
-                                      Begin Inspection
-                                    </Link>
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </DialogContent>
-                        </Dialog>
-                        <Button size="sm" asChild>
-                          <Link href={`/inspection/new?applicationId=${application.id}`}>
-                            <FileCheck className="h-4 w-4 mr-2" />
-                            Inspect
-                          </Link>
-                        </Button>
-                      </div>
+                {filteredApplications.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No applications pending inspection
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  filteredApplications.map((app) => (
+                    <TableRow key={app.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div className="font-medium">{app.application_number}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {app.project_title}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{getApplicantName(app)}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {getWaterPurposeLabel(app.water_purpose)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm">{getLocationString(app)}</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">{app.province}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Droplets className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm">{getWaterSourceLabel(app.water_source)}</span>
+                        </div>
+                        {app.estimated_usage_volume && (
+                          <div className="text-sm text-muted-foreground">
+                            {app.estimated_usage_volume} {app.usage_unit}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-sm">
+                            {app.due_date ? formatDate(app.due_date) : 'Not set'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedApp(app)}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Application Details</DialogTitle>
+                              </DialogHeader>
+                              {selectedApp && (
+                                <div className="space-y-4">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <h4 className="font-semibold">Application Number</h4>
+                                      <p className="text-sm text-muted-foreground">{selectedApp.application_number}</p>
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">Applicant</h4>
+                                      <p className="text-sm text-muted-foreground">{getApplicantName(selectedApp)}</p>
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">Contact</h4>
+                                      <p className="text-sm text-muted-foreground">{selectedApp.applicant.email}</p>
+                                      <p className="text-sm text-muted-foreground">{selectedApp.applicant.phone}</p>
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">Location</h4>
+                                      <p className="text-sm text-muted-foreground">{getLocationString(selectedApp)}</p>
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">Water Source</h4>
+                                      <p className="text-sm text-muted-foreground">{getWaterSourceLabel(selectedApp.water_source)}</p>
+                                    </div>
+                                    <div>
+                                      <h4 className="font-semibold">Purpose</h4>
+                                      <p className="text-sm text-muted-foreground">{getWaterPurposeLabel(selectedApp.water_purpose)}</p>
+                                    </div>
+                                    {selectedApp.estimated_usage_volume && (
+                                      <div>
+                                        <h4 className="font-semibold">Estimated Volume</h4>
+                                        <p className="text-sm text-muted-foreground">
+                                          {selectedApp.estimated_usage_volume} {selectedApp.usage_unit}
+                                        </p>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="font-semibold">Submitted Date</h4>
+                                      <p className="text-sm text-muted-foreground">{formatDate(selectedApp.created_at)}</p>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold">Project Description</h4>
+                                    <p className="text-sm text-muted-foreground mt-1">{selectedApp.project_description}</p>
+                                  </div>
+                                </div>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                          <Link href={`/inspection/application/${app.id}`}>
+                            <Button size="sm" variant="outline" className="flex items-center gap-2">
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Button>
+                          </Link>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

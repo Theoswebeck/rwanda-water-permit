@@ -7,15 +7,31 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, MapPin, FileText, Calendar, User } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  ArrowLeft, 
+  Loader2, 
+  MapPin, 
+  FileText, 
+  Calendar, 
+  User,
+  AlertTriangle,
+  Edit
+} from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
-import type { Application } from "@/types/database";
+import type { Application, User as UserType, Document, Review } from "@/types/database";
+
+interface ApplicationWithRelations extends Application {
+  applicant?: UserType;
+  documents?: Document[];
+  reviews?: Review[];
+}
 
 export default function ApplicationDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [application, setApplication] = useState<Application | null>(null);
+  const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { getApplication, loading } = useApplications();
   
@@ -31,7 +47,6 @@ export default function ApplicationDetailPage() {
           console.log('✅ Application details loaded:', app);
         } else {
           setError('Application not found');
-          console.log('❌ Application not found for ID:', applicationId);
         }
       } catch (err) {
         console.error('❌ Error fetching application:', err);
@@ -40,10 +55,12 @@ export default function ApplicationDetailPage() {
     };
     
     if (params.id) {
-    fetchApplicationDetails();
+      fetchApplicationDetails();
     }
   }, [params.id, getApplication]);
-  
+
+
+
   // Function to render the correct status badge
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -175,12 +192,45 @@ export default function ApplicationDetailPage() {
               </p>
             </div>
             <div className="flex flex-col gap-2 md:items-end">
-              {getStatusBadge(application.status)}
+              <div className="flex items-center gap-2">
+                {getStatusBadge(application.status)}
+                {application.status === 'revision_required' && (
+                  <Link href={`/dashboard/edit-application/${application.id}`}>
+                    <Button variant="outline" size="sm">
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit Application
+                    </Button>
+                  </Link>
+                )}
+              </div>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
-                {`Application ID: ${application.id} • Status: ${application.status}`}
+                Application ID: {application.application_number}
               </p>
             </div>
           </div>
+          
+          {/* Revision Notes Alert */}
+          {application.status === 'revision_required' && application.revision_notes && (
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="font-medium text-orange-800">Application Returned for Revision</p>
+                    <p className="text-orange-700">{application.revision_notes}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Link href={`/dashboard/edit-application/${application.id}`}>
+                      <Button variant="outline" size="sm" className="bg-white hover:bg-orange-50 border-orange-300">
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Application
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
           
           {/* Application Details */}
           <div className="grid gap-6 md:grid-cols-2">
@@ -580,19 +630,9 @@ export default function ApplicationDetailPage() {
                 </CardContent>
               </Card>
               
-          {/* Additional Notes */}
-          {application.revision_notes && (
-              <Card>
-                <CardHeader>
-                <CardTitle>📝 Revision Notes</CardTitle>
-                </CardHeader>
-                <CardContent>
-                <p className="font-medium">{application.revision_notes}</p>
-                </CardContent>
-              </Card>
-          )}
 
 
+          
 
           {/* Status Information */}
           <Card>
@@ -640,6 +680,8 @@ export default function ApplicationDetailPage() {
           </Card>
         </motion.div>
       </div>
+
+      
     </DashboardLayout>
   );
 } 

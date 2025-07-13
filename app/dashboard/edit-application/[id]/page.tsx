@@ -13,7 +13,8 @@ import { useApplications } from "@/hooks/useApplications";
 import type { Application } from "@/types/database";
 
 // Helper function to capitalize province names for database enum compatibility
-function formatProvinceForDB(province: string): Application['province'] {
+function formatProvinceForDB(province: string): Application['province'] | undefined {
+  if (!province) return undefined;
   const provinceMap: Record<string, Application['province']> = {
     'kigali': 'Kigali',
     'northern': 'Northern', 
@@ -21,7 +22,7 @@ function formatProvinceForDB(province: string): Application['province'] {
     'eastern': 'Eastern',
     'western': 'Western'
   };
-  return provinceMap[province.toLowerCase()] || 'Kigali';
+  return provinceMap[province.toLowerCase()];
 }
 
 // Mapping function to transform form data to database schema
@@ -225,7 +226,7 @@ function mapApplicationToFormData(application: Application): any {
   const pumpData = application.infrastructure_pumps || '';
   const pumpCapacity = extractNumericValue(pumpData, 'Capacity:');
 
-  return {
+  const formData = {
     fullName: "Jane Doe", // This would come from user context
     email: "jane.doe@example.com",
     phone: "+250 789 123 456",
@@ -239,13 +240,13 @@ function mapApplicationToFormData(application: Application): any {
     purpose: application.water_purpose === 'electricity_generation' ? 'hydropower' : application.water_purpose,
     waterSource: application.water_source,
     waterUsage: application.estimated_usage_volume || 1,
-    waterUsageUnit: application.usage_unit || 'm3_per_day',
+    waterUsageUnit: application.usage_unit || '',
     
     // Location
-    province: application.province.toLowerCase(),
-    district: application.district,
-    sector: application.sector,
-    cell: application.cell,
+    province: application.province ? application.province.toLowerCase() : '',
+    district: application.district || '',
+    sector: application.sector || '',
+    cell: application.cell || '',
     village: application.village || '',
     latitude: latitude,
     longitude: longitude,
@@ -302,6 +303,23 @@ function mapApplicationToFormData(application: Application): any {
     
     termsAccepted: true, // Already accepted when draft was created
   };
+
+  // Debug logging for location fields
+  console.log('🔍 Edit Application - Location data from DB:', {
+    province: application.province,
+    district: application.district,
+    sector: application.sector,
+    cell: application.cell
+  });
+  
+  console.log('🔍 Edit Application - Mapped form data location:', {
+    province: formData.province,
+    district: formData.district,
+    sector: formData.sector,
+    cell: formData.cell
+  });
+
+  return formData;
 }
 
 export default function EditApplicationPage() {
@@ -333,9 +351,9 @@ export default function EditApplicationPage() {
         
         const app = await getApplication(applicationId);
         if (app) {
-          // Check if application is editable (draft status)
-          if (app.status !== 'draft') {
-            setError('Only draft applications can be edited');
+          // Check if application is editable (draft or revision_required status)
+          if (app.status !== 'draft' && app.status !== 'revision_required') {
+            setError('Only draft applications and applications returned for revision can be edited');
             return;
           }
           

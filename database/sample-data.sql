@@ -1,172 +1,56 @@
--- Sample data for Rwanda Water Permit System
--- Run this in Supabase SQL Editor to populate test data
+-- Sample data for testing the Rwanda Water Board system
+-- This includes applications in different review stages
 
--- =============================================
--- SAMPLE USERS
--- =============================================
+-- First, let's add some sample users
+INSERT INTO public.users (id, email, first_name, last_name, role, status, account_type, phone, province, district, sector, cell, address, profile_completed) VALUES
+('11111111-1111-1111-1111-111111111111', 'jane.doe@example.com', 'Jane', 'Doe', 'applicant', 'active', 'individual', '+250788123456', 'Kigali', 'Gasabo', 'Remera', 'Rukiri', 'KG 15 Ave, Kigali, Rwanda', true),
+('22222222-2222-2222-2222-222222222222', 'abc.company@example.com', null, null, 'applicant', 'active', 'company', '+250788234567', 'Kigali', 'Gasabo', 'Kimihurura', 'Kimihurura', 'KN 3 Ave, Kigali, Rwanda', true),
+('33333333-3333-3333-3333-333333333333', 'peter.jones@example.com', 'Peter', 'Jones', 'applicant', 'active', 'individual', '+250788345678', 'Southern', 'Huye', 'Tumba', 'Tumba', 'Huye District, Southern Province', true),
+('44444444-4444-4444-4444-444444444444', 'john.smith@example.com', 'John', 'Smith', 'applicant', 'active', 'individual', '+250788456789', 'Northern', 'Musanze', 'Kinigi', 'Kinigi', 'Musanze District, Northern Province', true),
+('55555555-5555-5555-5555-555555555555', 'tech.solutions@example.com', null, null, 'applicant', 'active', 'company', '+250788567890', 'Eastern', 'Kayonza', 'Kayonza', 'Kayonza', 'Kayonza District, Eastern Province', true),
+('66666666-6666-6666-6666-666666666666', 'reviewer1@rwb.rw', 'Sarah', 'Johnson', 'reviewer', 'active', 'individual', '+250788678901', 'Kigali', 'Kicukiro', 'Kicukiro', 'Kicukiro', 'RWB Headquarters', true),
+('77777777-7777-7777-7777-777777777777', 'inspector1@rwb.rw', 'Michael', 'Brown', 'inspector', 'active', 'individual', '+250788789012', 'Kigali', 'Nyarugenge', 'Nyarugenge', 'Nyarugenge', 'RWB Field Office', true)
+ON CONFLICT (email) DO UPDATE SET
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    role = EXCLUDED.role,
+    status = EXCLUDED.status,
+    account_type = EXCLUDED.account_type,
+    phone = EXCLUDED.phone,
+    province = EXCLUDED.province,
+    district = EXCLUDED.district,
+    sector = EXCLUDED.sector,
+    cell = EXCLUDED.cell,
+    address = EXCLUDED.address,
+    profile_completed = EXCLUDED.profile_completed;
 
--- Individual applicant
-INSERT INTO users (
-  id,
-  email,
-  phone,
-  role,
-  status,
-  account_type,
-  first_name,
-  last_name,
-  date_of_birth,
-  id_number,
-  id_type,
-  province,
-  district,
-  sector,
-  cell,
-  village,
-  address,
-  applications_count,
-  reviews_count,
-  inspections_count,
-  profile_completed
-) VALUES (
-  '550e8400-e29b-41d4-a716-446655440001',
-  'jane.doe@example.com',
-  '+250789123456',
-  'applicant',
-  'active',
-  'individual',
-  'Jane',
-  'Doe',
-  '1985-03-15',
-  '1198508012345689',
-  'national_id',
-  'Kigali',
-  'Gasabo',
-  'Kacyiru',
-  'Kamatamu',
-  'Nyarutarama',
-  'KN 5 Ave, Kigali, Rwanda',
-  0,
-  0,
-  0,
-  true
-);
+-- Add company fields for company accounts
+UPDATE public.users SET 
+    company_name = 'ABC Company',
+    company_tin = '123456789',
+    company_address = 'KN 3 Ave, Kigali, Rwanda',
+    company_phone = '+250788234567'
+WHERE id = '22222222-2222-2222-2222-222222222222';
 
--- Company applicant
-INSERT INTO users (
-  id,
-  email,
-  phone,
-  role,
-  status,
-  account_type,
-  company_name,
-  company_tin,
-  company_address,
-  company_phone,
-  province,
-  district,
-  sector,
-  cell,
-  address,
-  applications_count,
-  reviews_count,
-  inspections_count,
-  profile_completed
-) VALUES (
-  '550e8400-e29b-41d4-a716-446655440002',
-  'admin@ecotech.rw',
-  '+250788654321',
-  'applicant',
-  'active',
-  'company',
-  'EcoTech Solutions Ltd',
-  '101234567',
-  'KG 15 Ave, Kigali Industrial Park',
-  '+250788654321',
-  'Kigali',
-  'Kicukiro',
-  'Niboye',
-  'Gahanga',
-  'KG 15 Ave, Kigali Industrial Park',
-  0,
-  0,
-  0,
-  true
-);
+UPDATE public.users SET 
+    company_name = 'Tech Solutions Ltd',
+    company_tin = '987654321',
+    company_address = 'Kayonza District, Eastern Province',
+    company_phone = '+250788567890'
+WHERE id = '55555555-5555-5555-5555-555555555555';
 
--- Administrative users
-INSERT INTO users (
-  id,
-  email,
-  phone,
-  role,
-  status,
-  account_type,
-  first_name,
-  last_name,
-  province,
-  district,
-  applications_count,
-  reviews_count,
-  inspections_count,
-  profile_completed
-) VALUES 
-(
-  '550e8400-e29b-41d4-a716-446655440003',
-  'sarah.johnson@rwb.gov.rw',
-  '+250783456789',
-  'reviewer',
-  'active',
-  'individual',
-  'Sarah',
-  'Johnson',
-  'Kigali',
-  'Nyarugenge',
-  0,
-  0,
-  0,
-  true
-),
-(
-  '550e8400-e29b-41d4-a716-446655440004',
-  'michael.brown@rwb.gov.rw',
-  '+250784567890',
-  'inspector',
-  'active',
-  'individual',
-  'Michael',
-  'Brown',
-  'Kigali',
-  'Gasabo',
-  0,
-  0,
-  0,
-  true
-),
-(
-  '550e8400-e29b-41d4-a716-446655440005',
-  'admin@rwb.gov.rw',
-  '+250785678901',
-  'admin',
-  'active',
-  'individual',
-  'Alice',
-  'Wilson',
-  'Kigali',
-  'Nyarugenge',
-  0,
-  0,
-  0,
-  true
-);
+-- Add revision notes for applications that need revision
+UPDATE public.applications 
+SET revision_notes = 'Please address the following issues before resubmission:
+1. Complete the hydrogeological study for the spring source assessment
+2. Provide detailed water quality test results from the spring
+3. Submit updated environmental management plan with specific mitigation measures
+4. Include detailed technical specifications for the spring capture system
+5. Provide capacity calculations for the 200m³ storage system'
+WHERE application_number = 'RWB-24-00124';
 
--- =============================================
--- SAMPLE APPLICATIONS
--- =============================================
-
--- Domestic water use application (approved)
-INSERT INTO applications (
+-- Sample applications in different review stages
+INSERT INTO public.applications (
   id,
   applicant_id,
   application_number,
@@ -181,431 +65,143 @@ INSERT INTO applications (
   sector,
   cell,
   village,
-  location_description,
   project_title,
   project_description,
   water_taking_method,
   water_measuring_method,
+    storage_facilities,
+    return_flow_description,
   environmental_assessment,
   mitigation_actions,
   sla_status,
-  assigned_reviewer_id,
-  assigned_inspector_id,
+    due_date,
+    submitted_at,
   created_at,
   updated_at
-) VALUES (
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440001',
-  'RWB-2024-00001',
-  'approved',
-  'domestic',
-  'borehole',
-  'domestic',
-  50,
-  'm3_per_day',
-  'Kigali',
-  'Gasabo',
-  'Kacyiru',
-  'Kamatamu',
-  'Nyarutarama',
-  'Gasabo, Kacyiru, Kamatamu',
-  'Residential Water Supply Borehole',
-  'Installation of a borehole for domestic water supply to serve a family of 6 people in Nyarutarama',
-  'Electric submersible pump',
-  'Digital water meter',
-  'Minimal environmental impact expected. Proper waste management during drilling.',
-  'Use biodegradable drilling fluids, proper waste disposal, restore site after completion',
-  'on_time',
-  '550e8400-e29b-41d4-a716-446655440003',
-  '550e8400-e29b-41d4-a716-446655440004',
-  '2024-01-15 08:30:00',
-  '2024-01-25 14:20:00'
-);
+) VALUES
+-- RWB-24-00121 - The specific application mentioned by user
+('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '22222222-2222-2222-2222-222222222222', 'RWB-24-00121', 'pending_inspection', 'industrial', 'groundwater', 'industrial', 750.00, 'm³/day', 'Kigali', 'Gasabo', 'Kimihurura', 'Kimihurura', 'Kimihurura', 'Industrial Water Supply for Manufacturing Plant', 'Large-scale industrial water extraction for manufacturing facility. The project involves drilling a deep borehole to access groundwater for industrial processes including cooling, cleaning, and production. The facility will employ 200+ workers and contribute significantly to local economic development.', 'Borehole drilling with submersible pump', 'Digital flow meter with remote monitoring', 'Concrete reservoir with 2000m³ capacity, secondary containment systems', 'Treated industrial wastewater discharged to municipal treatment plant', 'Comprehensive environmental impact assessment completed. Minimal impact on local groundwater table. No nearby residential wells within 500m radius.', 'Regular groundwater monitoring, water recycling systems, emergency spill containment, community engagement programs', 'on_time', '2025-01-15 09:00:00+00', '2024-12-24 10:30:00+00', '2024-12-24 10:30:00+00', '2024-12-24 10:30:00+00'),
 
--- Industrial water use application (under review)
-INSERT INTO applications (
-  id,
-  applicant_id,
-  application_number,
-  status,
-  application_type,
-  water_source,
-  water_purpose,
-  estimated_usage_volume,
-  usage_unit,
-  province,
-  district,
-  sector,
-  cell,
-  location_description,
-  project_title,
-  project_description,
-  water_taking_method,
-  water_measuring_method,
-  environmental_assessment,
-  mitigation_actions,
-  sla_status,
-  assigned_reviewer_id,
-  created_at,
-  updated_at
-) VALUES (
-  '660e8400-e29b-41d4-a716-446655440002',
-  '550e8400-e29b-41d4-a716-446655440002',
-  'RWB-2024-00002',
-  'under_review',
-  'industrial',
-  'river',
-  'industrial',
-  500,
-  'm3_per_day',
-  'Kigali',
-  'Kicukiro',
-  'Niboye',
-  'Gahanga',
-  'Kicukiro, Niboye, Gahanga',
-  'Manufacturing Plant Water Supply',
-  'Water supply for textile manufacturing operations including dyeing and washing processes',
-  'River intake with filtration system',
-  'Automated flow measurement system',
-  'Potential impact on downstream water quality. Wastewater treatment required.',
-  'Install wastewater treatment plant, monitor discharge quality, implement water recycling',
-  'on_time',
-  '550e8400-e29b-41d4-a716-446655440003',
-  '2024-01-20 10:15:00',
-  '2024-01-20 10:15:00'
-);
+-- RWB-24-00122 - New submission
+('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '11111111-1111-1111-1111-111111111111', 'RWB-24-00122', 'submitted', 'domestic', 'surface_water', 'domestic', 50.00, 'm³/day', 'Kigali', 'Gasabo', 'Remera', 'Rukiri', 'Rukiri', 'Residential Water Supply System', 'Installation of water supply system for new residential development. The system will serve 25 households with reliable water access from nearby stream.', 'Gravity-fed intake system', 'Mechanical flow meter', 'Elevated storage tank 50m³', 'Minimal return flow to natural drainage', 'Low environmental impact. Stream flow assessment completed showing adequate capacity during dry season.', 'Fish ladder installation, riparian buffer zones, regular water quality testing', 'on_time', '2025-01-10 09:00:00+00', '2024-12-25 14:15:00+00', '2024-12-25 14:15:00+00', '2024-12-25 14:15:00+00'),
 
--- Agricultural application (draft)
-INSERT INTO applications (
-  id,
-  applicant_id,
-  application_number,
-  status,
-  application_type,
-  water_source,
-  water_purpose,
-  estimated_usage_volume,
-  usage_unit,
-  province,
-  district,
-  sector,
-  cell,
-  location_description,
-  project_title,
-  project_description,
-  sla_status,
-  created_at,
-  updated_at
-) VALUES (
-  '660e8400-e29b-41d4-a716-446655440003',
-  '550e8400-e29b-41d4-a716-446655440001',
-  'RWB-2024-00003',
-  'draft',
-  'agricultural',
-  'groundwater',
-  'irrigation',
-  200,
-  'm3_per_day',
-  'Eastern',
-  'Nyagatare',
-  'Karangazi',
-  'Nyagahanga',
-  'Nyagatare, Karangazi, Nyagahanga',
-  'Irrigation System for Rice Farming',
-  'Installation of irrigation system for 10 hectares of rice cultivation',
-  'on_time',
-  '2024-01-22 16:45:00',
-  '2024-01-22 16:45:00'
-);
+-- RWB-24-00123 - Under review
+('cccccccc-cccc-cccc-cccc-cccccccccccc', '33333333-3333-3333-3333-333333333333', 'RWB-24-00123', 'under_review', 'agricultural', 'river', 'irrigation', 300.00, 'm³/day', 'Southern', 'Huye', 'Tumba', 'Tumba', 'Tumba', 'Modern Rice Farm Irrigation System', 'Establishment of modern irrigation system for 50-hectare rice farm. The project aims to increase agricultural productivity and ensure year-round farming capabilities.', 'Pumping station with intake structure', 'Electromagnetic flow meter', 'Distribution network with storage pond 1000m³', 'Irrigation return flow to downstream wetlands', 'Moderate environmental impact. Wetland assessment shows sustainable water extraction levels.', 'Efficient irrigation techniques, regular monitoring, buffer zones, community water sharing protocols', 'on_time', '2025-01-05 09:00:00+00', '2024-12-20 09:00:00+00', '2024-12-20 09:00:00+00', '2024-12-20 09:00:00+00'),
 
--- =============================================
--- SAMPLE PERMITS
--- =============================================
+-- RWB-24-00124 - Needs revision
+('dddddddd-dddd-dddd-dddd-dddddddddddd', '44444444-4444-4444-4444-444444444444', 'RWB-24-00124', 'revision_required', 'commercial', 'spring', 'commercial', 150.00, 'm³/day', 'Northern', 'Musanze', 'Kinigi', 'Kinigi', 'Kinigi', 'Hotel Complex Water Supply', 'Water supply system for new eco-tourism hotel complex. The facility will accommodate 100 guests and requires reliable water supply for operations.', 'Spring capture system', 'Mechanical flow meter', 'Gravity storage system 200m³', 'Greywater treatment and reuse system', 'Spring source assessment incomplete. Additional hydrogeological study required.', 'Spring protection measures, water conservation systems, guest education programs', 'due_soon', '2024-12-31 09:00:00+00', '2024-12-18 16:45:00+00', '2024-12-18 16:45:00+00', '2024-12-18 16:45:00+00'),
 
--- Permit for approved domestic application
-INSERT INTO permits (
-  id,
-  application_id,
-  permit_number,
-  status,
-  water_source,
-  purpose,
-  water_allowance,
-  allowance_unit,
-  issuing_authority,
-  issued_date,
-  expiry_date,
-  is_renewal,
-  is_transfer,
-  monitoring_frequency,
-  reporting_requirements,
-  created_at,
-  updated_at
-) VALUES (
-  '770e8400-e29b-41d4-a716-446655440001',
-  '660e8400-e29b-41d4-a716-446655440001',
-  'WP-2024-00001',
-  'active',
-  'borehole',
-  'domestic',
-  50,
-  'm3_per_day',
-  'Rwanda Water Board',
-  '2024-01-25',
-  '2027-01-25',
-  false,
-  false,
-  'annual',
-  'Annual water usage report required by January 31st',
-  '2024-01-25 15:30:00',
-  '2024-01-25 15:30:00'
-);
+-- RWB-24-00125 - Another submitted application
+('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '55555555-5555-5555-5555-555555555555', 'RWB-24-00125', 'submitted', 'industrial', 'borehole', 'industrial', 500.00, 'm³/day', 'Eastern', 'Kayonza', 'Kayonza', 'Kayonza', 'Kayonza', 'Food Processing Plant Water Supply', 'Water supply for new food processing facility. The plant will process agricultural products for export and requires high-quality water for food safety compliance.', 'Deep borehole with submersible pump', 'Digital flow meter with data logging', 'Stainless steel storage tanks 1500m³', 'Treated wastewater to irrigation system', 'Comprehensive environmental management plan developed. Sustainable groundwater extraction confirmed.', 'Water quality monitoring, treatment plant optimization, worker training programs', 'on_time', '2025-01-12 09:00:00+00', '2024-12-26 11:20:00+00', '2024-12-26 11:20:00+00', '2024-12-26 11:20:00+00')
+ON CONFLICT (id) DO UPDATE SET
+    status = EXCLUDED.status,
+    revision_notes = EXCLUDED.revision_notes,
+    updated_at = EXCLUDED.updated_at;
 
--- =============================================
--- SAMPLE DOCUMENTS
--- =============================================
-
--- Documents for domestic application
-INSERT INTO documents (
+-- Add some sample documents
+INSERT INTO public.documents (
   id,
   application_id,
   name,
   type,
+    file_path,
+    file_size,
+    mime_type,
   verification_status,
-  is_required,
   uploaded_by,
   upload_date,
   created_at,
   updated_at
 ) VALUES 
-(
-  '880e8400-e29b-41d4-a716-446655440001',
-  '660e8400-e29b-41d4-a716-446655440001',
-  'Payment Receipt - Bank of Kigali',
-  'payment_proof',
-  'verified',
-  true,
-  '550e8400-e29b-41d4-a716-446655440001',
-  '2024-01-15 09:00:00',
-  '2024-01-15 09:00:00',
-  '2024-01-16 10:30:00'
-),
-(
-  '880e8400-e29b-41d4-a716-446655440002',
-  '660e8400-e29b-41d4-a716-446655440001',
-  'National ID Copy - Jane Doe',
-  'identification_doc',
-  'verified',
-  true,
-  '550e8400-e29b-41d4-a716-446655440001',
-  '2024-01-15 09:05:00',
-  '2024-01-15 09:05:00',
-  '2024-01-16 10:32:00'
-),
-(
-  '880e8400-e29b-41d4-a716-446655440003',
-  '660e8400-e29b-41d4-a716-446655440001',
-  'Land Ownership Certificate',
-  'land_ownership_doc',
-  'verified',
-  true,
-  '550e8400-e29b-41d4-a716-446655440001',
-  '2024-01-15 09:10:00',
-  '2024-01-15 09:10:00',
-  '2024-01-16 10:35:00'
-);
+-- Documents for RWB-24-00121
+('doc00001-0001-0001-0001-doc000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Business License Certificate', 'business_license', '/uploads/business_license_abc.pdf', 2457600, 'application/pdf', 'verified', '22222222-2222-2222-2222-222222222222', '2024-06-24 10:35:00+00', '2024-06-24 10:35:00+00', '2024-06-24 10:35:00+00'),
+('doc00002-0002-0002-0002-doc000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Technical Drawings', 'technical_drawings', '/uploads/technical_drawings_abc.pdf', 5242880, 'application/pdf', 'verified', '22222222-2222-2222-2222-222222222222', '2024-06-24 10:37:00+00', '2024-06-24 10:37:00+00', '2024-06-24 10:37:00+00'),
+('doc00003-0003-0003-0003-doc000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Environmental Impact Assessment', 'environmental_impact_doc', '/uploads/eia_report_abc.pdf', 8912896, 'application/pdf', 'verified', '22222222-2222-2222-2222-222222222222', '2024-06-24 10:40:00+00', '2024-06-24 10:40:00+00', '2024-06-24 10:40:00+00'),
+('doc00004-0004-0004-0004-doc000000004', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Payment Proof', 'payment_proof', '/uploads/payment_proof_abc.pdf', 1048576, 'application/pdf', 'verified', '22222222-2222-2222-2222-222222222222', '2024-06-24 10:42:00+00', '2024-06-24 10:42:00+00', '2024-06-24 10:42:00+00'),
 
--- =============================================
--- SAMPLE REVIEWS
--- =============================================
+-- Documents for RWB-24-00122
+('doc00005-0005-0005-0005-doc000000005', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'National ID Copy', 'identification_doc', '/uploads/national_id_jane.pdf', 819200, 'application/pdf', 'pending', '11111111-1111-1111-1111-111111111111', '2024-06-25 14:20:00+00', '2024-06-25 14:20:00+00', '2024-06-25 14:20:00+00'),
+('doc00006-0006-0006-0006-doc000000006', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Land Title Certificate', 'land_ownership_doc', '/uploads/land_title_jane.pdf', 2097152, 'application/pdf', 'pending', '11111111-1111-1111-1111-111111111111', '2024-06-25 14:22:00+00', '2024-06-25 14:22:00+00', '2024-06-25 14:22:00+00')
+ON CONFLICT (id) DO UPDATE SET
+    verification_status = EXCLUDED.verification_status,
+    updated_at = EXCLUDED.updated_at;
 
-INSERT INTO reviews (
+-- Add some sample reviews
+INSERT INTO public.reviews (
   id,
   application_id,
   reviewer_id,
   review_stage,
   status,
+    technical_review,
+    environmental_review,
+    overall_comments,
   risk_assessment,
   recommendation,
-  technical_review,
-  compliance_review,
-  overall_comments,
   assigned_at,
   completed_at,
-  quality_score,
-  processing_time_hours,
   created_at,
   updated_at
-) VALUES (
-  '990e8400-e29b-41d4-a716-446655440001',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440003',
-  'technical_review',
-  'completed',
-  'low',
-  'approve',
-  'Technical specifications meet standards. Borehole depth and pump capacity appropriate for intended use.',
-  'All regulatory requirements met. Environmental impact minimal.',
-  'Application meets all criteria for approval. Recommend proceeding to inspection phase.',
-  '2024-01-16 08:00:00',
-  '2024-01-18 16:30:00',
-  9.5,
-  56,
-  '2024-01-16 08:00:00',
-  '2024-01-18 16:30:00'
-);
+) VALUES
+-- Review for RWB-24-00121
+('rev00001-0001-0001-0001-rev000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '66666666-6666-6666-6666-666666666666', 'technical', 'completed', 'Technical specifications are comprehensive and well-documented. The proposed borehole drilling method is appropriate for the geological conditions. Water extraction volume is reasonable for the intended industrial use.', 'Environmental impact assessment is thorough. The proposed mitigation measures are adequate. Regular monitoring protocols are well-defined.', 'The application is technically sound and environmentally responsible. All required documentation is complete and verified. Recommend approval for inspection phase.', 'low', 'require_inspection', '2024-06-24 11:00:00+00', '2024-06-25 15:30:00+00', '2024-06-24 11:00:00+00', '2024-06-25 15:30:00+00'),
 
--- =============================================
--- SAMPLE INSPECTIONS
--- =============================================
+-- Review for RWB-24-00123
+('rev00002-0002-0002-0002-rev000000002', 'cccccccc-cccc-cccc-cccc-cccccccccccc', '66666666-6666-6666-6666-666666666666', 'initial', 'completed', 'Initial technical review shows good understanding of irrigation requirements. Pump sizing appears appropriate for the scale of operation.', 'Agricultural water use is generally low-risk. River extraction levels are within sustainable limits based on flow assessment.', 'Application shows good potential. Some additional technical details needed before final approval. Recommend continuation of review process.', 'medium', 'approve', '2024-06-20 09:30:00+00', '2024-06-21 14:00:00+00', '2024-06-20 09:30:00+00', '2024-06-21 14:00:00+00'),
 
-INSERT INTO inspections (
+-- Review for RWB-24-00124 (needs revision)
+('rev00003-0003-0003-0003-rev000000003', 'dddddddd-dddd-dddd-dddd-dddddddddddd', '66666666-6666-6666-6666-666666666666', 'technical', 'completed', 'Technical proposal lacks sufficient detail about spring capacity assessment. Flow measurement data is incomplete.', 'Spring source requires detailed hydrogeological study. Current environmental assessment is insufficient for spring-fed systems.', 'Application requires significant additional information before proceeding. Recommend returning to applicant for revision with specific requirements outlined.', 'high', 'require_revision', '2024-06-18 17:00:00+00', '2024-06-19 10:15:00+00', '2024-06-18 17:00:00+00', '2024-06-19 10:15:00+00')
+ON CONFLICT (id) DO UPDATE SET
+    status = EXCLUDED.status,
+    technical_review = EXCLUDED.technical_review,
+    environmental_review = EXCLUDED.environmental_review,
+    overall_comments = EXCLUDED.overall_comments,
+    recommendation = EXCLUDED.recommendation,
+    completed_at = EXCLUDED.completed_at,
+    updated_at = EXCLUDED.updated_at;
+
+-- Add some workflow history
+INSERT INTO public.workflow_history (
   id,
   application_id,
-  inspector_id,
-  inspection_number,
-  type,
-  status,
-  result,
-  scheduled_date,
-  completed_date,
-  location_verified,
-  coordinates_verified,
-  site_plan_compliance,
-  location_notes,
-  water_source_verified,
-  extraction_method_verified,
-  infrastructure_condition,
-  technical_compliance,
-  technical_notes,
-  environmental_impact_assessed,
-  mitigation_measures_implemented,
-  environmental_compliance,
-  environmental_notes,
-  permit_conditions_met,
-  volume_limits_respected,
-  reporting_up_to_date,
-  fees_paid,
-  regulatory_compliance,
-  regulatory_notes,
-  photos_taken,
-  samples_collected,
-  overall_score,
-  recommendations,
-  follow_up_required,
+    previous_status,
+    new_status,
+    changed_by,
+    change_reason,
+    created_at
+) VALUES
+-- Workflow for RWB-24-00121
+('wf000001-0001-0001-0001-wf0000000001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'draft', 'submitted', '22222222-2222-2222-2222-222222222222', 'Initial application submission', '2024-06-24 10:30:00+00'),
+('wf000002-0002-0002-0002-wf0000000002', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'submitted', 'under_review', '66666666-6666-6666-6666-666666666666', 'Assigned to technical reviewer', '2024-06-24 11:00:00+00'),
+('wf000003-0003-0003-0003-wf0000000003', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'under_review', 'pending_inspection', '66666666-6666-6666-6666-666666666666', 'Technical review completed - approved for inspection', '2024-06-25 15:30:00+00'),
+
+-- Workflow for RWB-24-00124
+('wf000004-0004-0004-0004-wf0000000004', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'draft', 'submitted', '44444444-4444-4444-4444-444444444444', 'Initial application submission', '2024-06-18 16:45:00+00'),
+('wf000005-0005-0005-0005-wf0000000005', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'submitted', 'under_review', '66666666-6666-6666-6666-666666666666', 'Assigned to technical reviewer', '2024-06-18 17:00:00+00'),
+('wf000006-0006-0006-0006-wf0000000006', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'under_review', 'revision_required', '66666666-6666-6666-6666-666666666666', 'Technical review completed - additional information required', '2024-06-19 10:15:00+00')
+ON CONFLICT (id) DO NOTHING;
+
+-- Add some system settings
+INSERT INTO public.system_settings (
+    id,
+    setting_key,
+    setting_value,
+    description,
   created_at,
   updated_at
-) VALUES (
-  'aa0e8400-e29b-41d4-a716-446655440001',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440004',
-  'INS-2024-00001',
-  'initial',
-  'completed',
-  'passed',
-  '2024-01-20 09:00:00',
-  '2024-01-20 14:30:00',
-  true,
-  true,
-  true,
-  'Site location matches application. Access roads adequate.',
-  true,
-  true,
-  'Good condition, proper installation',
-  true,
-  'Pump and piping system installed according to specifications.',
-  true,
-  true,
-  true,
-  'No negative environmental impact observed. Site properly restored.',
-  true,
-  true,
-  true,
-  true,
-  true,
-  'All regulatory requirements satisfied.',
-  12,
-  2,
-  8.8,
-  'Site meets all requirements. Recommend permit approval.',
-  false,
-  '2024-01-20 09:00:00',
-  '2024-01-20 14:30:00'
-);
-
--- =============================================
--- SAMPLE WORKFLOW HISTORY
--- =============================================
-
-INSERT INTO workflow_history (
-  id,
-  application_id,
-  user_id,
-  from_status,
-  to_status,
-  action,
-  comment,
-  created_at
 ) VALUES 
-(
-  'bb0e8400-e29b-41d4-a716-446655440001',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440001',
-  null,
-  'draft',
-  'created',
-  'Application created by applicant',
-  '2024-01-15 08:30:00'
-),
-(
-  'bb0e8400-e29b-41d4-a716-446655440002',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440001',
-  'draft',
-  'submitted',
-  'submitted',
-  'Application submitted for review',
-  '2024-01-15 14:20:00'
-),
-(
-  'bb0e8400-e29b-41d4-a716-446655440003',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440003',
-  'submitted',
-  'under_review',
-  'assigned_for_review',
-  'Application assigned to technical reviewer',
-  '2024-01-16 08:00:00'
-),
-(
-  'bb0e8400-e29b-41d4-a716-446655440004',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440004',
-  'under_review',
-  'pending_inspection',
-  'review_completed',
-  'Technical review completed successfully',
-  '2024-01-18 16:30:00'
-),
-(
-  'bb0e8400-e29b-41d4-a716-446655440005',
-  '660e8400-e29b-41d4-a716-446655440001',
-  '550e8400-e29b-41d4-a716-446655440005',
-  'pending_inspection',
-  'approved',
-  'approved',
-  'Application approved after successful inspection',
-  '2024-01-25 14:20:00'
-);
+('sys00001-0001-0001-0001-sys000000001', 'sla_review_days', '14', 'Number of days allowed for technical review', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
+('sys00002-0002-0002-0002-sys000000002', 'sla_inspection_days', '30', 'Number of days allowed for inspection completion', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00'),
+('sys00003-0003-0003-0003-sys000000003', 'max_file_size_mb', '10', 'Maximum file size for document uploads in MB', '2024-06-01 09:00:00+00', '2024-06-01 09:00:00+00')
+ON CONFLICT (id) DO UPDATE SET
+    setting_value = EXCLUDED.setting_value,
+    updated_at = EXCLUDED.updated_at;
 
--- =============================================
--- UPDATE USER COUNTERS
--- =============================================
+-- Note: This sample data includes:
+-- 1. The specific application RWB-24-00121 mentioned by the user
+-- 2. Applications in different statuses for testing the review dashboard
+-- 3. Related documents and reviews
+-- 4. Workflow history showing status changes
+-- 5. System settings for operational parameters
 
--- Update application counts for users
-UPDATE users SET applications_count = 2 WHERE id = '550e8400-e29b-41d4-a716-446655440001';
-UPDATE users SET applications_count = 1 WHERE id = '550e8400-e29b-41d4-a716-446655440002';
-UPDATE users SET reviews_count = 1 WHERE id = '550e8400-e29b-41d4-a716-446655440003';
-UPDATE users SET inspections_count = 1 WHERE id = '550e8400-e29b-41d4-a716-446655440004';
-
-COMMIT; 
+-- To apply this data, run: psql -d your_database -f database/sample-data.sql 

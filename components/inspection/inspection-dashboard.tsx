@@ -1,41 +1,84 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { StatsPanel } from "./stats-panel"
 import { ApplicationsTab } from "./applications-tab"
 import { InspectionsTab } from "./inspections-tab"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { 
   ClipboardList, 
   FileCheck,
-  User,
-  LogOut,
-  FileText,
-  Settings
+  Loader2
 } from "lucide-react"
-import Link from "next/link"
+import { getInspectionStats, getApplicationsPendingInspection, getInspectionsByInspector, getAllInspections, getCurrentUser } from "@/lib/supabase"
 
 export function InspectionDashboard() {
   const [activeTab, setActiveTab] = useState("applications")
+  const [stats, setStats] = useState({
+    applicationsCount: 0,
+    inspectionsCount: 0
+  })
+  const [loading, setLoading] = useState(true)
 
-  // For demo purposes - in a real app, this would come from auth state
-  const user = {
-    name: "Jane Doe",
-    email: "jane.doe@example.com",
-    initials: "JD",
-    image: null,
-  }
+  useEffect(() => {
+    const fetchCounts = async () => {
+      try {
+        setLoading(true)
+        
+        let applicationsCount = 0
+        let inspectionsCount = 0
+        
+        try {
+          // Get applications pending inspection count
+          const applicationsData = await getApplicationsPendingInspection()
+          applicationsCount = applicationsData?.length || 0
+        } catch (appError) {
+          console.warn('Failed to fetch applications, using fallback count:', appError)
+          applicationsCount = 0
+        }
+        
+        try {
+          // Get inspections count - depends on user role
+          const user = await getCurrentUser()
+          let inspectionsData
+          
+          if (user?.app_metadata?.role === 'inspector') {
+            inspectionsData = await getInspectionsByInspector(user.id)
+          } else {
+            inspectionsData = await getAllInspections()
+          }
+          
+          inspectionsCount = inspectionsData?.length || 0
+        } catch (inspError) {
+          console.warn('Failed to fetch inspections, using fallback count:', inspError)
+          inspectionsCount = 0
+        }
+        
+        setStats({
+          applicationsCount,
+          inspectionsCount
+        })
+        
+        console.log('📊 Dashboard counts loaded:', {
+          applicationsCount,
+          inspectionsCount
+        })
+      } catch (error) {
+        console.error('Error in fetchCounts:', error)
+        // Set to 0 on error
+        setStats({
+          applicationsCount: 0,
+          inspectionsCount: 0
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCounts()
+  }, [])
 
   return (
     <div className="space-y-8">
@@ -66,12 +109,24 @@ export function InspectionDashboard() {
               <TabsTrigger value="applications" className="flex items-center gap-2">
                 <ClipboardList className="h-4 w-4" />
                 Applications to Inspect
-                <Badge variant="secondary" className="ml-2">12</Badge>
+                {loading ? (
+                  <Loader2 className="h-3 w-3 animate-spin ml-2" />
+                ) : (
+                  <Badge variant="secondary" className="ml-2">
+                    {stats.applicationsCount}
+                  </Badge>
+                )}
               </TabsTrigger>
               <TabsTrigger value="inspections" className="flex items-center gap-2">
                 <FileCheck className="h-4 w-4" />
                 My Inspections
-                <Badge variant="secondary" className="ml-2">28</Badge>
+                {loading ? (
+                  <Loader2 className="h-3 w-3 animate-spin ml-2" />
+                ) : (
+                  <Badge variant="secondary" className="ml-2">
+                    {stats.inspectionsCount}
+                  </Badge>
+                )}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="applications" className="mt-6">

@@ -52,7 +52,7 @@ const formSchema = z.object({
   waterSource: z.string({ required_error: "Please select a water source." }),
   purpose: z.string({ required_error: "Please select a purpose." }).min(1),
   waterUsage: z.coerce.number().min(1, { message: "Water usage must be greater than 0." }),
-  waterUsageUnit: z.string().min(1, { message: "Please select a unit." }),
+  waterUsageUnit: z.string({ required_error: "Please select a unit." }).min(1, { message: "Please select a unit." }),
   
   // Industry-specific fields (conditional)
   industryType: z.string().optional(),
@@ -89,8 +89,8 @@ const formSchema = z.object({
   district: z.string().min(1, { message: "District is required" }),
   sector: z.string().min(1, { message: "Sector is required" }),
   cell: z.string().min(1, { message: "Cell is required" }),
-  latitude: z.string().optional(),
-  longitude: z.string().optional(),
+  latitude: z.string().min(1, "Latitude is required"),
+  longitude: z.string().min(1, "Longitude is required"),
   
   // Project details
   projectTitle: z.string().min(5, { message: "Project title must be at least 5 characters." }),
@@ -195,7 +195,7 @@ export function ApplicationForm({
       waterSource: "",
       purpose: "",
     waterUsage: 1, // Default to 1 instead of 0 to avoid validation issues
-      waterUsageUnit: "m3_per_day",
+      waterUsageUnit: "",
       province: "",
       district: "",
       sector: "",
@@ -264,10 +264,50 @@ export function ApplicationForm({
   const watchedPurpose = form.watch("purpose");
   const watchedWaterTaking = form.watch("waterTakingMethod");
   const watchedDistrict = form.watch("district");
+  const watchedProvince = form.watch("province");
+
+  // Initialize state with initial data on mount and reset form when data changes
+  useEffect(() => {
+    if (initialData) {
+      console.log('🔄 ApplicationForm - Initializing with data:', {
+        province: initialData.province,
+        district: initialData.district,
+        sector: initialData.sector,
+        cell: initialData.cell
+      });
+      
+      // Reset form with new data
+      const mergedData = { ...defaultValues, ...initialData };
+      form.reset(mergedData);
+      
+      // Update state variables
+      if (initialData.province) setSelectedProvince(initialData.province);
+      if (initialData.district) setSelectedDistrict(initialData.district);
+      if (initialData.purpose) setSelectedPurpose(initialData.purpose);
+      if (initialData.waterTakingMethod) setSelectedWaterTaking(initialData.waterTakingMethod);
+      
+      console.log('✅ Form reset with merged data:', mergedData);
+      
+      // Debug: Check form values after reset
+      setTimeout(() => {
+        const formValues = form.getValues();
+        console.log('🔍 Form values after reset:', {
+          province: formValues.province,
+          district: formValues.district,
+          sector: formValues.sector,
+          cell: formValues.cell
+        });
+      }, 100);
+    }
+  }, [initialData, form]);
 
   useEffect(() => {
     setSelectedPurpose(watchedPurpose);
   }, [watchedPurpose]);
+
+  useEffect(() => {
+    setSelectedProvince(watchedProvince);
+  }, [watchedProvince]);
 
   useEffect(() => {
     setSelectedWaterTaking(watchedWaterTaking);
@@ -373,7 +413,7 @@ export function ApplicationForm({
       waterSource: "Water Source",
       purpose: "Purpose",
       waterUsage: "Water Usage Amount",
-      waterUsageUnit: "Water Usage Unit",
+      waterUsageUnit: "Unit",
       province: "Province",
       district: "District",
       sector: "Sector",
@@ -424,8 +464,6 @@ export function ApplicationForm({
   };
 
   const handleFormError = (errors: any) => {
-    console.log('Form validation errors:', errors);
-    
     // Find which tab has the first error and switch to it
     const errorFields = Object.keys(errors);
     
@@ -498,6 +536,156 @@ export function ApplicationForm({
     }
   };
   
+  // Validation functions for tab navigation
+  const validatePersonalInfo = () => {
+    const values = form.getValues();
+    const errors = [];
+
+    if (!values.fullName || values.fullName.length < 2) errors.push("Full Name (minimum 2 characters)");
+    if (!values.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.push("Valid Email Address");
+    if (!values.phone || values.phone.length < 10) errors.push("Phone Number (minimum 10 characters)");
+    if (!values.address || values.address.length < 5) errors.push("Address (minimum 5 characters)");
+
+    if (errors.length > 0) {
+      setValidationError({
+        show: true,
+        message: "Please complete all required fields in Personal Info",
+        missingFields: errors,
+        tab: "Personal Info"
+      });
+      // Scroll to top to show the error banner
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    return true;
+  };
+
+  const validatePermitDetails = () => {
+    const values = form.getValues();
+    const errors = [];
+
+    if (!values.permitType) errors.push("Permit Type");
+    if (!values.applicantType) errors.push("Applicant Type");
+    if (!values.waterSource) errors.push("Water Source");
+    if (!values.purpose) errors.push("Purpose of Water Use");
+    if (!values.waterUsage || values.waterUsage <= 0) errors.push("Water Usage Amount");
+    if (!values.waterUsageUnit || values.waterUsageUnit.trim() === "") errors.push("Unit");
+
+    if (errors.length > 0) {
+      setValidationError({
+        show: true,
+        message: "Please complete all required fields in Permit Details",
+        missingFields: errors,
+        tab: "Permit Details"
+      });
+      // Scroll to top to show the error banner
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    return true;
+  };
+
+  const validateLocation = () => {
+    const values = form.getValues();
+    const errors = [];
+
+    // Add debug logging
+    console.log('🔍 Location validation - current values:', {
+      province: values.province,
+      district: values.district,
+      sector: values.sector,
+      cell: values.cell,
+      latitude: values.latitude,
+      longitude: values.longitude
+    });
+
+    // Check for empty, null, or undefined values
+    if (!values.province || values.province.trim() === '') {
+      errors.push("Province");
+      console.log('❌ Province validation failed:', values.province);
+    }
+    if (!values.district || values.district.trim() === '') {
+      errors.push("District");
+      console.log('❌ District validation failed:', values.district);
+    }
+    if (!values.sector || values.sector.trim() === '') {
+      errors.push("Sector");
+      console.log('❌ Sector validation failed:', values.sector);
+    }
+    if (!values.cell || values.cell.trim() === '') {
+      errors.push("Cell");
+      console.log('❌ Cell validation failed:', values.cell);
+    }
+    if (!values.latitude || values.latitude.trim() === '') {
+      errors.push("Latitude");
+      console.log('❌ Latitude validation failed:', values.latitude);
+    }
+    if (!values.longitude || values.longitude.trim() === '') {
+      errors.push("Longitude");
+      console.log('❌ Longitude validation failed:', values.longitude);
+    }
+
+    if (errors.length > 0) {
+      console.log('❌ Location validation failed. Missing fields:', errors);
+      setValidationError({
+        show: true,
+        message: "Please complete all required fields in Location",
+        missingFields: errors,
+        tab: "Location"
+      });
+      // Scroll to top to show the error banner
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    console.log('✅ Location validation passed');
+    return true;
+  };
+
+  const validateProject = () => {
+    const values = form.getValues();
+    const errors = [];
+
+    if (!values.projectTitle || values.projectTitle.length < 5) errors.push("Project Title (minimum 5 characters)");
+    if (!values.projectDescription || values.projectDescription.length < 20) errors.push("Project Description (minimum 20 characters)");
+
+    if (errors.length > 0) {
+      setValidationError({
+        show: true,
+        message: "Please complete all required fields in Project Info",
+        missingFields: errors,
+        tab: "Project Info"
+      });
+      // Scroll to top to show the error banner
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    return true;
+  };
+
+  const validateTechnical = () => {
+    const values = form.getValues();
+    const errors = [];
+
+    if (!values.waterTakingMethod) errors.push("Method of Water Taking");
+    if (!values.waterMeasuringMethod) errors.push("Method of Measurement");
+    if (!values.potentialEffects || values.potentialEffects.length < 20) errors.push("Potential Effects (minimum 20 characters)");
+    if (!values.mitigationActions || values.mitigationActions.length < 20) errors.push("Mitigation Actions (minimum 20 characters)");
+    if (!values.concessionDuration) errors.push("Proposed Duration");
+
+    if (errors.length > 0) {
+      setValidationError({
+        show: true,
+        message: "Please complete all required fields in Technical Details",
+        missingFields: errors,
+        tab: "Technical Details"
+      });
+      // Scroll to top to show the error banner
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return false;
+    }
+    return true;
+  };
+
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       setValidationError({
@@ -1163,17 +1351,67 @@ export function ApplicationForm({
               <Tabs defaultValue="personal" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-6">
                   <TabsTrigger value="personal">Personal Info</TabsTrigger>
-                  <TabsTrigger value="details">Permit Details</TabsTrigger>
-                  <TabsTrigger value="location">Location</TabsTrigger>
-                  <TabsTrigger value="project">Project Info</TabsTrigger>
-                  <TabsTrigger value="technical">Technical</TabsTrigger>
-                  <TabsTrigger value="documents">Documents</TabsTrigger>
+                  <TabsTrigger value="details"
+                    onClick={(e) => {
+                      if (activeTab === "personal" && !validatePersonalInfo()) {
+                        e.preventDefault();
+                      } else {
+                        setValidationError(null);
+                      }
+                    }}
+                  >
+                    Permit Details
+                  </TabsTrigger>
+                  <TabsTrigger value="location" 
+                    onClick={(e) => {
+                      if (activeTab === "details" && !validatePermitDetails()) {
+                        e.preventDefault();
+                      } else {
+                        setValidationError(null);
+                      }
+                    }}
+                  >
+                    Location
+                  </TabsTrigger>
+                  <TabsTrigger value="project"
+                    onClick={(e) => {
+                      if (activeTab === "location" && !validateLocation()) {
+                        e.preventDefault();
+                      } else {
+                        setValidationError(null);
+                      }
+                    }}
+                  >
+                    Project Info
+                  </TabsTrigger>
+                  <TabsTrigger value="technical"
+                    onClick={(e) => {
+                      if (activeTab === "project" && !validateProject()) {
+                        e.preventDefault();
+                      } else {
+                        setValidationError(null);
+                      }
+                    }}
+                  >
+                    Technical
+                  </TabsTrigger>
+                  <TabsTrigger value="documents"
+                    onClick={(e) => {
+                      if (activeTab === "technical" && !validateTechnical()) {
+                        e.preventDefault();
+                      } else {
+                        setValidationError(null);
+                      }
+                    }}
+                  >
+                    Documents
+                  </TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="personal" className="pt-6">
                   <CardTitle className="text-lg mb-2">Applicant Information</CardTitle>
                   <CardDescription className="mb-6">
-                    Provide your personal information.
+                    Your personal information is populated from your profile. To update these details, please visit your profile settings.
                   </CardDescription>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <FormField
@@ -1183,7 +1421,7 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>Full Name</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} disabled />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1197,7 +1435,7 @@ export function ApplicationForm({
                           <FormItem>
                           <FormLabel>Email Address</FormLabel>
                             <FormControl>
-                            <Input type="email" {...field} />
+                            <Input type="email" {...field} disabled />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1211,7 +1449,7 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>Phone Number</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} disabled />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1225,7 +1463,7 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>Address</FormLabel>
                             <FormControl>
-                              <Input {...field} />
+                              <Input {...field} disabled />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1234,7 +1472,12 @@ export function ApplicationForm({
                     </div>
                     
                   <div className="flex justify-end pt-6">
-                    <Button type="button" onClick={() => setActiveTab("details")} className="px-6">
+                    <Button type="button" onClick={() => {
+                      if (validatePersonalInfo()) {
+                        setValidationError(null);
+                        setActiveTab("details");
+                      }
+                    }} className="px-6">
                       Next: Permit Details
                     </Button>
                   </div>
@@ -1253,7 +1496,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Permit Type</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                 <SelectValue placeholder="Select a permit type" />
@@ -1277,7 +1520,7 @@ export function ApplicationForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Applicant Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select an applicant type" />
@@ -1303,7 +1546,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Water Source</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select water source" />
@@ -1334,7 +1577,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                           <FormLabel>Purpose of Water Use</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                 <SelectValue placeholder="Select a purpose" />
@@ -1369,7 +1612,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Type of Industry</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select industry type" />
@@ -1402,7 +1645,7 @@ export function ApplicationForm({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Power Generation Type</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Select generation type" />
@@ -1454,7 +1697,7 @@ export function ApplicationForm({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Mining Type</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Select mining type" />
@@ -1479,7 +1722,7 @@ export function ApplicationForm({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Mineral Type</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue placeholder="Select mineral type" />
@@ -1530,16 +1773,16 @@ export function ApplicationForm({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Unit</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
                                   <SelectTrigger>
-                                <SelectValue placeholder="Unit" />
+                                    <SelectValue placeholder="Select a unit" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
                                   <SelectItem value="m3_per_day">m³/day</SelectItem>
-                              <SelectItem value="m3_per_hour">m³/hour</SelectItem>
-                              <SelectItem value="liters_per_sec">liters/sec</SelectItem>
+                                  <SelectItem value="m3_per_hour">m³/hour</SelectItem>
+                                  <SelectItem value="liters_per_sec">liters/sec</SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -1555,7 +1798,12 @@ export function ApplicationForm({
                     <Button type="button" variant="outline" onClick={() => setActiveTab("personal")} className="px-6">
                       Previous: Personal Info
                     </Button>
-                    <Button type="button" onClick={() => setActiveTab("location")} className="px-6">
+                    <Button type="button" onClick={() => {
+                      if (validatePermitDetails()) {
+                        setValidationError(null);
+                        setActiveTab("location");
+                      }
+                    }} className="px-6">
                       Next: Location
                     </Button>
                   </div>
@@ -1573,28 +1821,31 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Province</FormLabel>
-                            <Select 
-                              onValueChange={(value) => {
-                                field.onChange(value);
-                                setSelectedProvince(value);
-                              // Reset dependent fields when province changes
-                                form.setValue("district", "");
-                              }} 
-                              defaultValue={field.value}
-                            >
-                              <FormControl>
+                            <FormControl>
+                              <Select 
+                                key={`province-${field.value || 'empty'}`}
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedProvince(value);
+                                // Reset dependent fields when province changes
+                                  form.setValue("district", "");
+                                  form.setValue("sector", "");
+                                  form.setValue("cell", "");
+                                }} 
+                                value={field.value || ""}
+                              >
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select province" />
                                 </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                              <SelectItem value="kigali">Kigali</SelectItem>
-                                <SelectItem value="northern">Northern Province</SelectItem>
-                                <SelectItem value="southern">Southern Province</SelectItem>
-                              <SelectItem value="eastern">Eastern Province</SelectItem>
-                              <SelectItem value="western">Western Province</SelectItem>
-                              </SelectContent>
-                            </Select>
+                                <SelectContent>
+                                <SelectItem value="kigali">Kigali</SelectItem>
+                                  <SelectItem value="northern">Northern Province</SelectItem>
+                                  <SelectItem value="southern">Southern Province</SelectItem>
+                                <SelectItem value="eastern">Eastern Province</SelectItem>
+                                <SelectItem value="western">Western Province</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1606,29 +1857,30 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>District</FormLabel>
-                          <Select 
-                            onValueChange={(value) => {
-                              field.onChange(value);
-                              setSelectedDistrict(value);
-                              // Reset dependent fields when district changes
-                              form.setValue("sector", "");
-                              form.setValue("cell", "");
-                            }} 
-                            defaultValue={field.value}
-                          >
-                              <FormControl>
+                            <FormControl>
+                              <Select 
+                                key={`district-${field.value || 'empty'}`}
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedDistrict(value);
+                                  // Reset dependent fields when district changes
+                                  form.setValue("sector", "");
+                                  form.setValue("cell", "");
+                                }} 
+                                value={field.value || ""}
+                              >
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select district" />
                                 </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                              {getDistrictOptions().map((district) => (
-                                  <SelectItem key={district.value} value={district.value}>
-                                    {district.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                                <SelectContent>
+                                {getDistrictOptions().map((district) => (
+                                    <SelectItem key={district.value} value={district.value}>
+                                      {district.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1642,18 +1894,17 @@ export function ApplicationForm({
                             <FormLabel>Sector</FormLabel>
                             <FormControl>
                               <Select 
+                                key={`sector-${field.value || 'empty'}`}
                                 onValueChange={(value) => {
                                   field.onChange(value);
                                   // Reset cell field when sector changes
                                   form.setValue("cell", "");
                                 }} 
-                                defaultValue={field.value}
+                                value={field.value || ""}
                               >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select sector" />
-                                  </SelectTrigger>
-                                </FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select sector" />
+                                </SelectTrigger>
                                 <SelectContent>
                                   {getSectorOptions().map((sector) => (
                                     <SelectItem key={sector.value} value={sector.value}>
@@ -1675,12 +1926,14 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>Cell</FormLabel>
                             <FormControl>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select cell" />
-                                  </SelectTrigger>
-                                </FormControl>
+                              <Select 
+                                key={`cell-${field.value || 'empty'}`}
+                                onValueChange={field.onChange} 
+                                value={field.value || ""}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select cell" />
+                                </SelectTrigger>
                                 <SelectContent>
                                   {getCellOptions().map((cell) => (
                                     <SelectItem key={cell.value} value={cell.value}>
@@ -1700,7 +1953,7 @@ export function ApplicationForm({
                           name="latitude"
                           render={({ field }) => (
                             <FormItem>
-                          <FormLabel>Latitude (Optional)</FormLabel>
+                          <FormLabel>Latitude</FormLabel>
                               <FormControl>
                             <Input {...field} placeholder="e.g., -1.9441" />
                               </FormControl>
@@ -1714,7 +1967,7 @@ export function ApplicationForm({
                           name="longitude"
                           render={({ field }) => (
                             <FormItem>
-                          <FormLabel>Longitude (Optional)</FormLabel>
+                          <FormLabel>Longitude</FormLabel>
                               <FormControl>
                             <Input {...field} placeholder="e.g., 30.0619" />
                               </FormControl>
@@ -1740,7 +1993,12 @@ export function ApplicationForm({
                     <Button type="button" variant="outline" onClick={() => setActiveTab("details")} className="px-6">
                       Previous: Permit Details
                     </Button>
-                    <Button type="button" onClick={() => setActiveTab("project")} className="px-6">
+                    <Button type="button" onClick={() => {
+                      if (validateLocation()) {
+                        setValidationError(null);
+                        setActiveTab("project");
+                      }
+                    }} className="px-6">
                       Next: Project Info
                     </Button>
                   </div>
@@ -1789,7 +2047,12 @@ export function ApplicationForm({
                     <Button type="button" variant="outline" onClick={() => setActiveTab("location")} className="px-6">
                       Previous: Location
                     </Button>
-                    <Button type="button" onClick={() => setActiveTab("technical")} className="px-6">
+                    <Button type="button" onClick={() => {
+                      if (validateProject()) {
+                        setValidationError(null);
+                        setActiveTab("technical");
+                      }
+                    }} className="px-6">
                       Next: Technical Details
                     </Button>
                   </div>
@@ -1807,7 +2070,7 @@ export function ApplicationForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Proposed Duration of Concession</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select duration" />
@@ -1836,7 +2099,7 @@ export function ApplicationForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Method of Water Taking</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select method of water taking" />
@@ -2094,7 +2357,7 @@ export function ApplicationForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Method of Measuring Water Quantity</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value || ""}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select measuring method" />
@@ -2123,7 +2386,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Storage Facilities (if proposed)</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select storage facility type" />
@@ -2302,7 +2565,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Return Flow Quality</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value || ""}>
                               <FormControl>
                                 <SelectTrigger>
                                   <SelectValue placeholder="Select quality" />
@@ -2371,7 +2634,12 @@ export function ApplicationForm({
                     <Button type="button" variant="outline" onClick={() => setActiveTab("project")} className="px-6">
                       Previous: Project Info
                     </Button>
-                    <Button type="button" onClick={() => setActiveTab("documents")} className="px-6">
+                    <Button type="button" onClick={() => {
+                      if (validateTechnical()) {
+                        setValidationError(null);
+                        setActiveTab("documents");
+                      }
+                    }} className="px-6">
                       Next: Documents
                     </Button>
                   </div>
