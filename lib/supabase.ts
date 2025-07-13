@@ -87,6 +87,35 @@ export const getApplicationsForReview = async () => {
   return data
 }
 
+// Helper function to get all applications for inspection view
+export const getApplicationsForInspection = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        applicant:users!applicant_id(
+          first_name,
+          last_name,
+          company_name,
+          email,
+          phone
+        )
+      `)
+      .in('status', ['submitted', 'under_review', 'pending_inspection', 'revision_required', 'approved', 'rejected'])
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.warn('Database error, returning empty array:', error.message)
+      return []
+    }
+    return data || []
+  } catch (error) {
+    console.warn('Failed to fetch applications for inspection:', error)
+    return []
+  }
+}
+
 // Helper function to add internal review comment
 export const addReviewComment = async (applicationId: string, reviewerId: string, comment: string) => {
   const { data, error } = await supabase

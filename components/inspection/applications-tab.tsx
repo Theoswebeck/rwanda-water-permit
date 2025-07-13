@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -20,17 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { 
   Search, 
-  Filter, 
-  Eye, 
   FileCheck, 
   MapPin, 
   Calendar,
@@ -38,12 +28,14 @@ import {
   AlertCircle,
   Loader2
 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { getApplicationsPendingInspection } from "@/lib/supabase"
 
 interface Application {
   id: string
   application_number: string
+  status: string
   applicant: {
     first_name: string
     last_name: string
@@ -71,7 +63,6 @@ export function ApplicationsTab() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
-  const [selectedApp, setSelectedApp] = useState<Application | null>(null)
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -112,6 +103,49 @@ export function ApplicationsTab() {
 
   const getApplicantName = (app: Application) => {
     return app.applicant.company_name || `${app.applicant.first_name} ${app.applicant.last_name}`
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      'submitted': { 
+        label: 'Submitted', 
+        className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
+      },
+      'under_review': { 
+        label: 'Under Review', 
+        className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
+      },
+      'pending_inspection': { 
+        label: 'Pending Inspection', 
+        className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
+      },
+      'revision_required': { 
+        label: 'Revision Required', 
+        className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+      },
+      'approved': { 
+        label: 'Approved', 
+        className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800' 
+      },
+      'rejected': { 
+        label: 'Rejected', 
+        className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+      }
+    }
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || { 
+      label: status, 
+      className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800' 
+    }
+    
+    return (
+      <Badge 
+        variant="outline" 
+        className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}
+      >
+        {config.label}
+      </Badge>
+    )
   }
 
   const getWaterSourceLabel = (waterSource: string) => {
@@ -169,21 +203,21 @@ export function ApplicationsTab() {
   return (
     <div className="space-y-4">
       {/* Search and Filter Controls */}
-      <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg">
+      <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
           <Input
             placeholder="Search by applicant name, application number, or project title..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
           />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-full md:w-48">
+          <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
             <SelectValue placeholder="Filter by type" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="surface_water">Surface Water</SelectItem>
             <SelectItem value="groundwater">Groundwater</SelectItem>
@@ -196,145 +230,99 @@ export function ApplicationsTab() {
       </div>
 
       {/* Applications Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
+      <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
             Applications Pending Inspection ({filteredApplications.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
-            <Table>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table className="w-full">
               <TableHeader>
-                <TableRow>
-                  <TableHead>Application</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[20%] hidden md:table-cell">Location & Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden sm:table-cell">Due Date</TableHead>
+                  <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredApplications.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No applications pending inspection
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="text-muted-foreground/50 text-lg">
+                          No applications pending inspection
+                        </div>
+                        <div className="text-sm text-muted-foreground/70">
+                          Applications requiring inspection will appear here
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredApplications.map((app) => (
-                    <TableRow key={app.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <div className="font-medium">{app.application_number}</div>
-                        <div className="text-sm text-muted-foreground">
+                    <TableRow 
+                      key={app.id} 
+                      className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
+                    >
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                          {app.application_number}
+                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {app.project_title}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{getApplicantName(app)}</div>
-                        <div className="text-sm text-muted-foreground">
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                          {getApplicantName(app)}
+                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {getWaterPurposeLabel(app.water_purpose)}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{getLocationString(app)}</span>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="flex justify-center">
+                          {getStatusBadge('pending_inspection')}
                         </div>
-                        <div className="text-sm text-muted-foreground">{app.province}</div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Droplets className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{getWaterSourceLabel(app.water_source)}</span>
+                      <TableCell className="p-2 sm:p-3 hidden md:table-cell">
+                        <div className="flex items-center gap-1 mb-1">
+                          <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                            {getLocationString(app)}
+                          </span>
                         </div>
-                        {app.estimated_usage_volume && (
-                          <div className="text-sm text-muted-foreground">
-                            {app.estimated_usage_volume} {app.usage_unit}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">
+                          <Droplets className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                            {getWaterSourceLabel(app.water_source)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3 hidden sm:table-cell">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300">
                             {app.due_date ? formatDate(app.due_date) : 'Not set'}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedApp(app)}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
-                              <DialogHeader>
-                                <DialogTitle>Application Details</DialogTitle>
-                              </DialogHeader>
-                              {selectedApp && (
-                                <div className="space-y-4">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                      <h4 className="font-semibold">Application Number</h4>
-                                      <p className="text-sm text-muted-foreground">{selectedApp.application_number}</p>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold">Applicant</h4>
-                                      <p className="text-sm text-muted-foreground">{getApplicantName(selectedApp)}</p>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold">Contact</h4>
-                                      <p className="text-sm text-muted-foreground">{selectedApp.applicant.email}</p>
-                                      <p className="text-sm text-muted-foreground">{selectedApp.applicant.phone}</p>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold">Location</h4>
-                                      <p className="text-sm text-muted-foreground">{getLocationString(selectedApp)}</p>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold">Water Source</h4>
-                                      <p className="text-sm text-muted-foreground">{getWaterSourceLabel(selectedApp.water_source)}</p>
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold">Purpose</h4>
-                                      <p className="text-sm text-muted-foreground">{getWaterPurposeLabel(selectedApp.water_purpose)}</p>
-                                    </div>
-                                    {selectedApp.estimated_usage_volume && (
-                                      <div>
-                                        <h4 className="font-semibold">Estimated Volume</h4>
-                                        <p className="text-sm text-muted-foreground">
-                                          {selectedApp.estimated_usage_volume} {selectedApp.usage_unit}
-                                        </p>
-                                      </div>
-                                    )}
-                                    <div>
-                                      <h4 className="font-semibold">Submitted Date</h4>
-                                      <p className="text-sm text-muted-foreground">{formatDate(selectedApp.created_at)}</p>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <h4 className="font-semibold">Project Description</h4>
-                                    <p className="text-sm text-muted-foreground mt-1">{selectedApp.project_description}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </DialogContent>
-                          </Dialog>
-                          <Link href={`/inspection/application/${app.id}`}>
-                            <Button size="sm" variant="outline" className="flex items-center gap-2">
-                              <Eye className="h-4 w-4" />
-                              View
-                            </Button>
-                          </Link>
-                        </div>
+                      <TableCell className="p-2 sm:p-3 text-right">
+                        <Link href={`/inspection/application/${app.application_number}`}>
+                          <Button 
+                            size="sm" 
+                            className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                          >
+                            <FileCheck className="h-3 w-3" />
+                            <span className="hidden sm:inline">Inspect</span>
+                            <span className="sm:hidden">Go</span>
+                          </Button>
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))

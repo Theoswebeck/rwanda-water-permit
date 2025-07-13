@@ -3,15 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Table,
   TableBody,
@@ -20,162 +12,140 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
 import { 
   Search, 
-  Eye, 
-  Edit, 
+  Eye,
   FileCheck, 
+  MapPin, 
   Calendar,
-  MapPin,
-  User,
-  Send,
-  Clock,
-  CheckCircle2,
-  AlertTriangle,
-  XCircle,
+  Droplets,
+  AlertCircle,
   Loader2
 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import { getInspectionsByInspector, getAllInspections, getCurrentUser } from "@/lib/supabase"
+import { getApplicationsForInspection } from "@/lib/supabase"
 
-interface Inspection {
+interface Application {
   id: string
-  inspection_number: string
+  application_number: string
   status: string
-  result?: string
-  scheduled_date: string
-  completed_date?: string
-  recommendations?: string
-  location_verified?: boolean
-  technical_compliance?: boolean
-  environmental_compliance?: boolean
-  regulatory_compliance?: boolean
-  application: {
-    id: string
-    application_number: string
-    project_title: string
-    water_source: string
-    province: string
-    district: string
-    sector: string
-    applicant: {
-      first_name: string
-      last_name: string
-      company_name?: string
-      email: string
-      phone: string
-    }
-  }
-  inspector: {
+  water_source: string
+  water_purpose: string
+  province: string
+  district: string
+  sector: string
+  project_title: string
+  project_description: string
+  created_at: string
+  submitted_at?: string
+  due_date?: string
+  estimated_usage_volume?: number
+  usage_unit?: string
+  applicant: {
     first_name: string
     last_name: string
+    company_name?: string
     email: string
+    phone: string
   }
 }
 
 export function InspectionsTab() {
-  const [inspections, setInspections] = useState<Inspection[]>([])
+  const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [complianceFilter, setComplianceFilter] = useState("all")
+  const [waterSourceFilter, setWaterSourceFilter] = useState("all")
+
+  // Helper functions
+  const getApplicantName = (app: Application) => {
+    return app.applicant.company_name || `${app.applicant.first_name} ${app.applicant.last_name}`
+  }
+
+  const getStatusBadge = (status: string) => {
+    const statusConfig = {
+      'submitted': { 
+        label: 'Submitted', 
+        className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
+      },
+      'under_review': { 
+        label: 'Under Review', 
+        className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
+      },
+      'pending_inspection': { 
+        label: 'Pending Inspection', 
+        className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
+      },
+      'revision_required': { 
+        label: 'Revision Required', 
+        className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+      },
+      'approved': { 
+        label: 'Approved', 
+        className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800' 
+      },
+      'rejected': { 
+        label: 'Rejected', 
+        className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+      }
+    }
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || { 
+      label: status, 
+      className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800' 
+    }
+    
+    return (
+      <Badge 
+        variant="outline" 
+        className={`${config.className} text-xs font-medium px-2 py-1 rounded-full border backdrop-blur-sm`}
+      >
+        {config.label}
+      </Badge>
+    )
+  }
 
   useEffect(() => {
-    const fetchInspections = async () => {
+    const fetchApplications = async () => {
       try {
         setLoading(true)
-        
-        // Get current user to determine if they're an inspector or admin
-        const user = await getCurrentUser()
-        let data
-        
-        if (user?.app_metadata?.role === 'inspector') {
-          data = await getInspectionsByInspector(user.id)
-        } else {
-          // Admin or reviewer can see all inspections
-          data = await getAllInspections()
-        }
-        
-        setInspections(data || [])
+        const data = await getApplicationsForInspection()
+        setApplications(data || [])
       } catch (err) {
-        console.error('Error fetching inspections:', err)
-        setError('Failed to load inspections')
+        console.error('Error fetching applications:', err)
+        setError('Failed to load applications')
       } finally {
         setLoading(false)
       }
     }
 
-    fetchInspections()
+    fetchApplications()
   }, [])
 
-  const filteredInspections = inspections.filter(inspection => {
-    const applicantName = inspection.application.applicant.company_name || 
-                         `${inspection.application.applicant.first_name} ${inspection.application.applicant.last_name}`
-    
+  const filteredApplications = applications.filter(app => {
+    const applicantName = getApplicantName(app)
     const matchesSearch = applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         inspection.inspection_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         inspection.application.application_number.toLowerCase().includes(searchTerm.toLowerCase())
+                         app.application_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         app.project_title.toLowerCase().includes(searchTerm.toLowerCase())
     
-    const matchesStatus = statusFilter === "all" || inspection.status.toLowerCase() === statusFilter.toLowerCase()
+    const matchesStatus = statusFilter === "all" || app.status === statusFilter
+    const matchesWaterSource = waterSourceFilter === "all" || app.water_source === waterSourceFilter
     
-    const matchesCompliance = complianceFilter === "all" || 
-                             (inspection.result && inspection.result.toLowerCase() === complianceFilter.toLowerCase())
-    
-    return matchesSearch && matchesStatus && matchesCompliance
+    return matchesSearch && matchesStatus && matchesWaterSource
   })
 
-
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "scheduled": return "bg-blue-100 text-blue-800 hover:bg-blue-100"
-      case "in_progress": return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-      case "completed": return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "cancelled": return "bg-red-100 text-red-800 hover:bg-red-100"
-      default: return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "scheduled": return <Clock className="h-3 w-3 mr-1" />
-      case "in_progress": return <FileCheck className="h-3 w-3 mr-1" />
-      case "completed": return <CheckCircle2 className="h-3 w-3 mr-1" />
-      case "cancelled": return <XCircle className="h-3 w-3 mr-1" />
-      default: return null
-    }
-  }
-
-  const getComplianceColor = (result: string) => {
-    switch (result.toLowerCase()) {
-      case "passed": return "bg-green-100 text-green-800 hover:bg-green-100"
-      case "failed": return "bg-red-100 text-red-800 hover:bg-red-100"
-      case "conditional": return "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-      default: return "bg-gray-100 text-gray-800 hover:bg-gray-100"
-    }
-  }
-
-  const getComplianceIcon = (result: string) => {
-    switch (result.toLowerCase()) {
-      case "passed": return <CheckCircle2 className="h-3 w-3 mr-1" />
-      case "failed": return <XCircle className="h-3 w-3 mr-1" />
-      case "conditional": return <AlertTriangle className="h-3 w-3 mr-1" />
-      default: return null
-    }
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString()
-  }
-
-  const getLocationString = (inspection: Inspection) => {
-    return `${inspection.application.district}, ${inspection.application.sector}`
-  }
-
-  const getApplicantName = (inspection: Inspection) => {
-    return inspection.application.applicant.company_name || 
-           `${inspection.application.applicant.first_name} ${inspection.application.applicant.last_name}`
+  const getLocationString = (app: Application) => {
+    return `${app.district}, ${app.sector}`
   }
 
   const getWaterSourceLabel = (waterSource: string) => {
@@ -191,12 +161,62 @@ export function InspectionsTab() {
     return labels[waterSource] || waterSource
   }
 
+  const getWaterPurposeLabel = (purpose: string) => {
+    const labels: Record<string, string> = {
+      'domestic': 'Domestic Use',
+      'industrial': 'Industrial Use',
+      'agricultural': 'Agricultural Use',
+      'irrigation': 'Irrigation',
+      'livestock': 'Livestock',
+      'aquaculture': 'Aquaculture',
+      'recreation': 'Recreation',
+      'electricity_generation': 'Electricity Generation',
+      'mining': 'Mining',
+      'municipal_supply': 'Municipal Supply',
+      'other': 'Other'
+    }
+    return labels[purpose] || purpose
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString()
+  }
+
+  const getActionButton = (application: Application) => {
+    if (application.status === 'pending_inspection') {
+      return (
+        <Link href={`/inspection/application/${application.application_number}`}>
+          <Button 
+            size="sm" 
+            className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-3 py-1.5 text-xs font-medium"
+          >
+            <FileCheck className="h-3.5 w-3.5" />
+            Inspect
+          </Button>
+        </Link>
+      )
+    } else {
+      return (
+        <Link href={`/inspection/application/${application.application_number}`}>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all duration-200 rounded-lg px-3 py-1.5 text-xs font-medium border border-transparent hover:border-muted-foreground/20"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            View
+          </Button>
+        </Link>
+      )
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Loading inspections...</span>
+          <span>Loading applications...</span>
         </div>
       </div>
     )
@@ -206,7 +226,7 @@ export function InspectionsTab() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2 text-red-600">
-          <AlertTriangle className="h-6 w-6" />
+          <AlertCircle className="h-6 w-6" />
           <span>{error}</span>
         </div>
       </div>
@@ -216,144 +236,130 @@ export function InspectionsTab() {
   return (
     <div className="space-y-4">
       {/* Search and Filter Controls */}
-      <div className="flex flex-col md:flex-row gap-4 p-4 border rounded-lg">
+      <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
           <Input
-            placeholder="Search by applicant name, inspection number, or application number..."
+            placeholder="Search by applicant name, application number, or project title..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full md:w-48">
+          <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="scheduled">Scheduled</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="submitted">Submitted</SelectItem>
+            <SelectItem value="under_review">Under Review</SelectItem>
+            <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
+            <SelectItem value="revision_required">Revision Required</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={complianceFilter} onValueChange={setComplianceFilter}>
-          <SelectTrigger className="w-full md:w-48">
-            <SelectValue placeholder="Filter by result" />
+        <Select value={waterSourceFilter} onValueChange={setWaterSourceFilter}>
+          <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
+            <SelectValue placeholder="Filter by water source" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Results</SelectItem>
-            <SelectItem value="passed">Passed</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-            <SelectItem value="conditional">Conditional</SelectItem>
+          <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="surface_water">Surface Water</SelectItem>
+            <SelectItem value="groundwater">Groundwater</SelectItem>
+            <SelectItem value="borehole">Borehole</SelectItem>
+            <SelectItem value="river">River</SelectItem>
+            <SelectItem value="lake">Lake</SelectItem>
+            <SelectItem value="spring">Spring</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Inspections Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            My Inspections ({filteredInspections.length})
+      {/* Applications Table */}
+      <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
+            All Applications ({filteredApplications.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+        <CardContent className="p-0">
+          <div className="overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Inspection</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Result</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Location</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Due Date</TableHead>
+                  <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredInspections.length === 0 ? (
+                {filteredApplications.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No inspections found
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="text-muted-foreground/50 text-lg">
+                          {applications.length === 0 ? "No applications found" : "No applications match your filters"}
+                        </div>
+                        <div className="text-sm text-muted-foreground/70">
+                          {applications.length === 0 ? "Applications will appear here once submitted" : "Try adjusting your search or filter criteria"}
+                        </div>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInspections.map((inspection) => (
-                    <TableRow key={inspection.id} className="hover:bg-muted/50">
-                      <TableCell>
-                        <div className="font-medium">{inspection.inspection_number}</div>
-                        <div className="text-sm text-muted-foreground">
-                          App: {inspection.application.application_number}
+                  filteredApplications.map((app) => (
+                    <TableRow 
+                      key={app.id} 
+                      className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
+                    >
+                      <TableCell className="p-4">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">{app.application_number}</div>
+                        <div className="text-sm text-slate-600 dark:text-slate-400">
+                          {app.project_title}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{getApplicantName(inspection)}</div>
-                        <div className="text-sm text-muted-foreground flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          {inspection.inspector.first_name} {inspection.inspector.last_name}
+                      <TableCell className="p-4">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">{getApplicantName(app)}</div>
+                        <div className="text-sm text-slate-600 dark:text-slate-400">
+                          {app.water_purpose ? getWaterPurposeLabel(app.water_purpose) : 'N/A'}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-4">
                         <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{getLocationString(inspection)}</span>
+                          <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{getLocationString(app)}</span>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {getWaterSourceLabel(inspection.application.water_source)}
+                        <div className="text-sm text-slate-600 dark:text-slate-400">{app.province}</div>
+                      </TableCell>
+                      <TableCell className="p-4">
+                        <div className="flex items-center gap-1">
+                          <Droplets className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{getWaterSourceLabel(app.water_source)}</span>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(inspection.status)}>
-                          {getStatusIcon(inspection.status)}
-                          {inspection.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {inspection.result ? (
-                          <Badge className={getComplianceColor(inspection.result)}>
-                            {getComplianceIcon(inspection.result)}
-                            {inspection.result}
-                          </Badge>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Pending</span>
+                        {app.estimated_usage_volume && (
+                          <div className="text-sm text-slate-600 dark:text-slate-400">
+                            {app.estimated_usage_volume} {app.usage_unit}
+                          </div>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-4">
+                        {getStatusBadge(app.status)}
+                      </TableCell>
+                      <TableCell className="p-4">
                         <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">
-                            {inspection.completed_date 
-                              ? formatDate(inspection.completed_date)
-                              : formatDate(inspection.scheduled_date)
-                            }
+                          <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400" />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">
+                            {app.due_date ? formatDate(app.due_date) : 'Not set'}
                           </span>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          {inspection.completed_date ? 'Completed' : 'Scheduled'}
-                        </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Link href={`/inspection/${inspection.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                          {inspection.status !== 'completed' && (
-                            <Link href={`/inspection/new?inspectionId=${inspection.id}`}>
-                              <Button variant="ghost" size="sm">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                          )}
-                          {inspection.status === 'completed' && inspection.result && (
-                            <Button variant="ghost" size="sm">
-                              <Send className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
+                      <TableCell className="p-4 text-right">
+                        {getActionButton(app)}
                       </TableCell>
                     </TableRow>
                   ))

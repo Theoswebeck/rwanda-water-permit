@@ -19,7 +19,7 @@ import {
   ClipboardList
 } from "lucide-react";
 import Link from "next/link";
-import { getApplicationById } from "@/lib/supabase";
+import { getApplicationByNumber } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 
 interface ApplicationWithRelations extends Application {
@@ -38,11 +38,11 @@ export default function InspectorApplicationView() {
   useEffect(() => {
     const fetchApplicationDetails = async () => {
       try {
-        const applicationId = params.id as string;
-        console.log('Fetching application details for inspection:', applicationId);
+        const applicationNumber = params.id as string;
+        console.log('Fetching application details for inspection:', applicationNumber);
         
-        // Get application by ID for inspector view
-        const app = await getApplicationById(applicationId);
+        // Get application by number for inspector view
+        const app = await getApplicationByNumber(applicationNumber);
         if (app) {
           setApplication(app);
           console.log('✅ Application details loaded for inspection:', app);

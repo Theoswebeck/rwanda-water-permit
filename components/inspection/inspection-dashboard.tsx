@@ -12,13 +12,13 @@ import {
   FileCheck,
   Loader2
 } from "lucide-react"
-import { getInspectionStats, getApplicationsPendingInspection, getInspectionsByInspector, getAllInspections, getCurrentUser } from "@/lib/supabase"
+import { getInspectionStats, getApplicationsPendingInspection, getApplicationsForInspection, getCurrentUser } from "@/lib/supabase"
 
 export function InspectionDashboard() {
   const [activeTab, setActiveTab] = useState("applications")
   const [stats, setStats] = useState({
     applicationsCount: 0,
-    inspectionsCount: 0
+    allApplicationsCount: 0
   })
   const [loading, setLoading] = useState(true)
 
@@ -28,7 +28,7 @@ export function InspectionDashboard() {
         setLoading(true)
         
         let applicationsCount = 0
-        let inspectionsCount = 0
+        let allApplicationsCount = 0
         
         try {
           // Get applications pending inspection count
@@ -40,37 +40,29 @@ export function InspectionDashboard() {
         }
         
         try {
-          // Get inspections count - depends on user role
-          const user = await getCurrentUser()
-          let inspectionsData
-          
-          if (user?.app_metadata?.role === 'inspector') {
-            inspectionsData = await getInspectionsByInspector(user.id)
-          } else {
-            inspectionsData = await getAllInspections()
-          }
-          
-          inspectionsCount = inspectionsData?.length || 0
+          // Get all applications count for inspector view
+          const applicationsData = await getApplicationsForInspection()
+          allApplicationsCount = applicationsData?.length || 0
         } catch (inspError) {
-          console.warn('Failed to fetch inspections, using fallback count:', inspError)
-          inspectionsCount = 0
+          console.warn('Failed to fetch applications, using fallback count:', inspError)
+          allApplicationsCount = 0
         }
         
         setStats({
           applicationsCount,
-          inspectionsCount
+          allApplicationsCount
         })
         
         console.log('📊 Dashboard counts loaded:', {
           applicationsCount,
-          inspectionsCount
+          allApplicationsCount
         })
       } catch (error) {
         console.error('Error in fetchCounts:', error)
         // Set to 0 on error
         setStats({
           applicationsCount: 0,
-          inspectionsCount: 0
+          allApplicationsCount: 0
         })
       } finally {
         setLoading(false)
@@ -119,12 +111,12 @@ export function InspectionDashboard() {
               </TabsTrigger>
               <TabsTrigger value="inspections" className="flex items-center gap-2">
                 <FileCheck className="h-4 w-4" />
-                My Inspections
+                All Applications
                 {loading ? (
                   <Loader2 className="h-3 w-3 animate-spin ml-2" />
                 ) : (
                   <Badge variant="secondary" className="ml-2">
-                    {stats.inspectionsCount}
+                    {stats.allApplicationsCount}
                   </Badge>
                 )}
               </TabsTrigger>
