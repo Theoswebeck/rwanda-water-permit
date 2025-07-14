@@ -17,7 +17,7 @@ export type Json =
 
 export type UserRole = 'applicant' | 'reviewer' | 'inspector' | 'admin' | 'approver'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
-export type AccountType = 'individual' | 'company'
+export type AccountType = 'individual' | 'company' | 'cooperative' | 'organization' | 'institution'
 export type IdType = 'national_id' | 'passport' | 'driving_license'
 
 export type ApplicationStatus = 
@@ -44,7 +44,10 @@ export type WaterSourceType =
   | 'river' 
   | 'groundwater'
   | 'lake' 
-  | 'spring' 
+  | 'spring'
+  | 'dam'
+  | 'stream'
+  | 'swamp'
   | 'other'
 
 export type WaterPurpose = 
@@ -58,6 +61,15 @@ export type WaterPurpose =
   | 'mining' 
   | 'municipal_supply' 
   | 'other'
+
+export type WaterReliability = 'always_available' | 'frequently_dry' | 'seasonal_dry'
+
+export type LandOwnershipStatus = 
+  | 'own_all_land' 
+  | 'recorded_easement' 
+  | 'written_consent' 
+  | 'lease_agreement' 
+  | 'access_pending'
 
 export type SlaStatus = 'on_time' | 'due_soon' | 'overdue'
 
@@ -98,7 +110,7 @@ export interface User {
   status: UserStatus
   account_type: AccountType
   
-  // Individual fields
+  // Personal information
   first_name?: string
   last_name?: string
   date_of_birth?: string
@@ -110,6 +122,13 @@ export interface User {
   company_tin?: string
   company_address?: string
   company_phone?: string
+  
+  // Enhanced contact information (from schema update)
+  po_box?: string
+  mobile_phone?: string
+  landline_phone?: string
+  incorporation_certificate_number?: string
+  alternative_contact?: Json // JSONB for alternative contact person details
   
   // Location information
   province?: ProvinceType
@@ -182,6 +201,45 @@ export interface Application {
   // Environmental information
   environmental_assessment?: string
   mitigation_actions?: string
+  
+  // =============================================
+  // NEW FIELDS FROM SCHEMA UPDATE
+  // =============================================
+  
+  // Water Source Details (Section 7 of form)
+  water_body_name?: string
+  tributary_name?: string
+  catchment_name_level_1?: string
+  catchment_name_level_2?: string
+  water_reliability?: WaterReliability
+  natural_discharge_volume_m3?: number
+  
+  // Water Usage Breakdown (Section 8 of form)
+  max_daily_volume_m3?: number
+  max_monthly_volume_m3?: number
+  max_yearly_volume_m3?: number
+  flow_rate_m3_per_second?: number
+  abstraction_facilities_description?: string
+  return_flow_location?: string
+  return_flow_volume_m3?: number
+  proposed_duration_months?: number
+  proposed_duration_years?: number
+  pumping_hours_per_day?: number
+  
+  // Project Details (Section 9 of form)
+  proposed_facilities_description?: string
+  construction_type?: string
+  concession_area?: number // in hectares
+  operational_overview?: string
+  
+  // Land Ownership Information (Section 11 of form)
+  owns_all_required_land?: boolean
+  land_ownership_status?: LandOwnershipStatus
+  affected_landowners?: Json // JSONB array of landowner details
+  easement_details?: string
+  written_consent_details?: string
+  lease_agreement_details?: string
+  land_access_steps?: string
   
   // Assignment tracking
   assigned_reviewer_id?: string

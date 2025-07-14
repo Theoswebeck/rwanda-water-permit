@@ -46,6 +46,15 @@ const formSchema = z.object({
   phone: z.string().min(10, { message: "Phone number must be at least 10 characters." }),
   address: z.string().min(5, { message: "Address must be at least 5 characters." }),
   
+  // Enhanced contact information (NEW)
+  poBox: z.string().optional(),
+  mobilePhone: z.string().optional(),
+  landlinePhone: z.string().optional(),
+  incorporationCertificateNumber: z.string().optional(),
+  alternativeContactName: z.string().optional(),
+  alternativeContactRelationship: z.string().optional(),
+  alternativeContactPhone: z.string().optional(),
+  
   // Permit details
   permitType: z.string({ required_error: "Please select a permit type." }),
   applicantType: z.string({ required_error: "Please select an applicant type." }),
@@ -53,6 +62,41 @@ const formSchema = z.object({
   purpose: z.string({ required_error: "Please select a purpose." }).min(1),
   waterUsage: z.coerce.number().min(1, { message: "Water usage must be greater than 0." }),
   waterUsageUnit: z.string({ required_error: "Please select a unit." }).min(1, { message: "Please select a unit." }),
+  
+  // Water Source Details (NEW - Section 7)
+  waterBodyName: z.string().optional(),
+  tributaryName: z.string().optional(),
+  catchmentNameLevel1: z.string().optional(),
+  catchmentNameLevel2: z.string().optional(),
+  waterReliability: z.string().optional(),
+  naturalDischargeVolume: z.coerce.number().optional(),
+  
+  // Water Usage Breakdown (NEW - Section 8)
+  maxDailyVolume: z.coerce.number().optional(),
+  maxMonthlyVolume: z.coerce.number().optional(),
+  maxYearlyVolume: z.coerce.number().optional(),
+  flowRatePerSecond: z.coerce.number().optional(),
+  abstractionFacilitiesDescription: z.string().optional(),
+  returnFlowLocation: z.string().optional(),
+  returnFlowVolume: z.coerce.number().optional(),
+  proposedDurationMonths: z.coerce.number().optional(),
+  proposedDurationYears: z.coerce.number().optional(),
+  pumpingHoursPerDay: z.coerce.number().optional(),
+  
+  // Project Details (NEW - Section 9)
+  proposedFacilitiesDescription: z.string().optional(),
+  constructionType: z.string().optional(),
+  concessionArea: z.coerce.number().optional(),
+  operationalOverview: z.string().optional(),
+  
+  // Land Ownership Information (NEW - Section 11)
+  ownsAllRequiredLand: z.boolean().optional(),
+  landOwnershipStatus: z.string().optional(),
+  affectedLandowners: z.string().optional(), // Will be JSON string
+  easementDetails: z.string().optional(),
+  writtenConsentDetails: z.string().optional(),
+  leaseAgreementDetails: z.string().optional(),
+  landAccessSteps: z.string().optional(),
   
   // Industry-specific fields (conditional)
   industryType: z.string().optional(),
@@ -123,8 +167,8 @@ const formSchema = z.object({
   intakeDischargeMap: z.any().optional(),
   
   // Terms
-  termsAccepted: z.boolean().refine(value => value === true, {
-    message: "You must accept the terms and conditions to proceed.",
+  termsAccepted: z.boolean().refine((value) => value === true, {
+    message: "You must accept the terms and conditions to continue.",
   }),
 });
 
@@ -190,66 +234,112 @@ export function ApplicationForm({
     email: userData?.email || "",
     phone: userData?.phone || "",
     address: userData?.address || "",
-      permitType: "",
-      applicantType: "",
-      waterSource: "",
-      purpose: "",
+    
+    // Enhanced contact information defaults
+    poBox: "",
+    mobilePhone: "",
+    landlinePhone: "",
+    incorporationCertificateNumber: "",
+    alternativeContactName: "",
+    alternativeContactRelationship: "",
+    alternativeContactPhone: "",
+    
+    permitType: "",
+    applicantType: "",
+    waterSource: "",
+    purpose: "",
     waterUsage: 1, // Default to 1 instead of 0 to avoid validation issues
-      waterUsageUnit: "",
-      province: "",
-      district: "",
-      sector: "",
-      cell: "",
-      latitude: "",
-      longitude: "",
-      projectTitle: "",
-      projectDescription: "",
-      
-      // Technical Details
-      storageFacilities: "",
+    waterUsageUnit: "",
+    
+    // Water Source Details defaults
+    waterBodyName: "",
+    tributaryName: "",
+    catchmentNameLevel1: "",
+    catchmentNameLevel2: "",
+    waterReliability: "",
+    naturalDischargeVolume: undefined,
+    
+    // Water Usage Breakdown defaults
+    maxDailyVolume: undefined,
+    maxMonthlyVolume: undefined,
+    maxYearlyVolume: undefined,
+    flowRatePerSecond: undefined,
+    abstractionFacilitiesDescription: "",
+    returnFlowLocation: "",
+    returnFlowVolume: undefined,
+    proposedDurationMonths: undefined,
+    proposedDurationYears: undefined,
+    pumpingHoursPerDay: undefined,
+    
+    // Project Details defaults
+    proposedFacilitiesDescription: "",
+    constructionType: "",
+    concessionArea: undefined,
+    operationalOverview: "",
+    
+    // Land Ownership Information defaults
+    ownsAllRequiredLand: false,
+    landOwnershipStatus: "",
+    affectedLandowners: "",
+    easementDetails: "",
+    writtenConsentDetails: "",
+    leaseAgreementDetails: "",
+    landAccessSteps: "",
+    
+    province: "",
+    district: "",
+    sector: "",
+    cell: "",
+    latitude: "",
+    longitude: "",
+    projectTitle: "",
+    projectDescription: "",
+    
+    // Technical Details
+    storageFacilities: "",
     storageCapacity: undefined, // Use undefined for optional numeric fields
-      waterTakingMethod: "",
-      waterMeasuringMethod: "",
+    waterTakingMethod: "",
+    waterMeasuringMethod: "",
     returnFlowQuantity: undefined,
-      returnFlowQuality: "",
-      potentialEffects: "",
-      mitigationActions: "",
-      concessionDuration: "",
-      
-      // Industry-specific defaults
-      industryType: "",
-      industryDetails: "",
-      powerGenerationType: "",
+    returnFlowQuality: "",
+    potentialEffects: "",
+    mitigationActions: "",
+    concessionDuration: "",
+    
+    // Industry-specific defaults
+    industryType: "",
+    industryDetails: "",
+    powerGenerationType: "",
     installedCapacity: undefined,
-      turbineType: "",
+    turbineType: "",
     headHeight: undefined,
-      miningType: "",
-      miningMethod: "",
-      mineralType: "",
+    miningType: "",
+    miningMethod: "",
+    mineralType: "",
     miningArea: undefined,
-      
-      // Water Flow Diversion defaults
-      intakeLocation: "",
+    
+    // Water Flow Diversion defaults
+    intakeLocation: "",
     intakeFlow: undefined,
-      intakeLatitude: "",
-      intakeLongitude: "",
+    intakeLatitude: "",
+    intakeLongitude: "",
     intakeElevation: undefined,
-      dischargeLocation: "",
+    dischargeLocation: "",
     dischargeFlow: undefined,
-      dischargeLatitude: "",
-      dischargeLongitude: "",
+    dischargeLatitude: "",
+    dischargeLongitude: "",
     dischargeElevation: undefined,
-      streamLevelVariations: "",
-      diversionStructureConfig: "",
-      
-      // Pipes and fixtures
-      pipeDetails: "",
+    streamLevelVariations: "",
+    diversionStructureConfig: "",
+    
+    // Pipes and fixtures
+    pipeDetails: "",
     pumpCapacity: undefined,
-      valveDetails: "",
-      meterDetails: "",
-      backflowControlDevices: "",
+    valveDetails: "",
+    meterDetails: "",
+    backflowControlDevices: "",
 
-      termsAccepted: false,
+    termsAccepted: false,
   };
 
   // Merge with initial data if editing
@@ -408,12 +498,58 @@ export function ApplicationForm({
       email: "Email Address",
       phone: "Phone Number",
       address: "Address",
+      
+      // Enhanced contact information
+      poBox: "P.O. Box",
+      mobilePhone: "Mobile Phone",
+      landlinePhone: "Landline Phone",
+      incorporationCertificateNumber: "Incorporation Certificate Number",
+      alternativeContactName: "Alternative Contact Name",
+      alternativeContactRelationship: "Alternative Contact Relationship",
+      alternativeContactPhone: "Alternative Contact Phone",
+      
       permitType: "Permit Type",
       applicantType: "Applicant Type",
       waterSource: "Water Source",
       purpose: "Purpose",
       waterUsage: "Water Usage Amount",
       waterUsageUnit: "Unit",
+      
+      // Water Source Details
+      waterBodyName: "Water Body Name",
+      tributaryName: "Tributary Name",
+      catchmentNameLevel1: "Catchment Name (Level 1)",
+      catchmentNameLevel2: "Catchment Name (Level 2)",
+      waterReliability: "Water Reliability",
+      naturalDischargeVolume: "Natural Discharge Volume (m³)",
+      
+      // Water Usage Breakdown
+      maxDailyVolume: "Max Daily Volume (m³)",
+      maxMonthlyVolume: "Max Monthly Volume (m³)",
+      maxYearlyVolume: "Max Yearly Volume (m³)",
+      flowRatePerSecond: "Flow Rate (m³/s)",
+      abstractionFacilitiesDescription: "Abstraction Facilities Description",
+      returnFlowLocation: "Return Flow Location",
+      returnFlowVolume: "Return Flow Volume (m³)",
+      proposedDurationMonths: "Proposed Duration (Months)",
+      proposedDurationYears: "Proposed Duration (Years)",
+      pumpingHoursPerDay: "Pumping Hours per Day",
+      
+      // Project Details
+      proposedFacilitiesDescription: "Proposed Facilities Description",
+      constructionType: "Construction Type",
+      concessionArea: "Concession Area (hectares)",
+      operationalOverview: "Operational Overview",
+      
+      // Land Ownership Information
+      ownsAllRequiredLand: "Owns All Required Land",
+      landOwnershipStatus: "Land Ownership Status",
+      affectedLandowners: "Affected Landowners",
+      easementDetails: "Easement Details",
+      writtenConsentDetails: "Written Consent Details",
+      leaseAgreementDetails: "Lease Agreement Details",
+      landAccessSteps: "Land Access Steps",
+      
       province: "Province",
       district: "District",
       sector: "Sector",
