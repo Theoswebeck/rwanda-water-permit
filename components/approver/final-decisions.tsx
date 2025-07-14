@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,154 +23,140 @@ import {
   Scale,
   Clock,
   TrendingUp,
-  Timer
+  Timer,
+  Loader2
 } from "lucide-react";
+import { getApplicationsPendingApproval, approveApplication, rejectApplication } from "@/lib/supabase";
+import type { Application, User as UserType } from "@/types/database";
 
 interface FinalReviewApplication {
   id: string;
+  application_number?: string;
   applicantName: string;
   applicantType: "company" | "individual";
   applicationType: string;
   waterSource: string;
   location: string;
   submittedDate: string;
-  reviewCompletedDate: string;
-  inspectionCompletedDate: string;
-  estimatedValue: number;
-  assignedReviewer: string;
-  assignedInspector: string;
-  reviewerRecommendation: "approve" | "reject";
-  inspectorRecommendation: "approve" | "reject";
+  reviewCompletedDate?: string;
+  inspectionCompletedDate?: string;
+  estimatedValue?: number;
+  assignedReviewer?: string;
+  assignedInspector?: string;
+  reviewerRecommendation?: "approve" | "reject";
+  inspectorRecommendation?: "approve" | "reject";
   riskLevel: "low" | "medium" | "high";
   daysInSystem: number;
+  project_title: string;
 }
 
-const mockFinalReviewApplications: FinalReviewApplication[] = [
-  {
-    id: "RWB-24-00158",
-    applicantName: "EcoTech Solutions Ltd",
-    applicantType: "company",
-    applicationType: "Industrial Water Use",
-    waterSource: "River",
-    location: "Kigali, Kicukiro",
-    submittedDate: "2024-03-10",
-    reviewCompletedDate: "2024-03-18",
-    inspectionCompletedDate: "2024-03-21",
-    estimatedValue: 3200000,
-    assignedReviewer: "Sarah Johnson",
-    assignedInspector: "Michael Brown",
-    reviewerRecommendation: "approve",
-    inspectorRecommendation: "approve",
-    riskLevel: "medium",
-    daysInSystem: 13
-  },
-  {
-    id: "RWB-24-00157",
-    applicantName: "Rwanda Farms Cooperative",
-    applicantType: "company",
-    applicationType: "Agricultural Water Use",
-    waterSource: "Groundwater",
-    location: "Nyagatare, Eastern Province",
-    submittedDate: "2024-03-12",
-    reviewCompletedDate: "2024-03-19",
-    inspectionCompletedDate: "2024-03-22",
-    estimatedValue: 1800000,
-    assignedReviewer: "Michael Brown",
-    assignedInspector: "Alice Wilson",
-    reviewerRecommendation: "approve",
-    inspectorRecommendation: "approve",
-    riskLevel: "low",
-    daysInSystem: 11
-  },
-  {
-    id: "RWB-24-00156",
-    applicantName: "Mountain View Resort",
-    applicantType: "company",
-    applicationType: "Commercial Water Use",
-    waterSource: "Spring",
-    location: "Musanze, Northern Province",
-    submittedDate: "2024-03-08",
-    reviewCompletedDate: "2024-03-16",
-    inspectionCompletedDate: "2024-03-20",
-    estimatedValue: 950000,
-    assignedReviewer: "Sarah Johnson",
-    assignedInspector: "Robert Davis",
-    reviewerRecommendation: "reject",
-    inspectorRecommendation: "approve",
-    riskLevel: "high",
-    daysInSystem: 15
-  },
-  {
-    id: "RWB-24-00155",
-    applicantName: "Peter Uwimana",
-    applicantType: "individual",
-    applicationType: "Domestic Water Use",
-    waterSource: "Borehole",
-    location: "Kigali, Gasabo",
-    submittedDate: "2024-03-14",
-    reviewCompletedDate: "2024-03-20",
-    inspectionCompletedDate: "2024-03-23",
-    estimatedValue: 75000,
-    assignedReviewer: "Michael Brown",
-    assignedInspector: "Alice Wilson",
-    reviewerRecommendation: "approve",
-    inspectorRecommendation: "approve",
-    riskLevel: "low",
-    daysInSystem: 9
-  }
-];
-
 export function FinalDecisions() {
-  const [applications, setApplications] = useState(mockFinalReviewApplications);
+  const [applications, setApplications] = useState<FinalReviewApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRisk, setFilterRisk] = useState("all");
   const [selectedApplication, setSelectedApplication] = useState<FinalReviewApplication | null>(null);
   const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
-  const [decisionType, setDecisionType] = useState<"approve" | "reject" | null>(null);
+  const [decisionType, setDecisionType] = useState<"approve" | "reject">("approve");
   const [decisionReason, setDecisionReason] = useState("");
+  const [conditions, setConditions] = useState("");
+
+  useEffect(() => {
+    fetchApplications();
+  }, []);
+
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      const data = await getApplicationsPendingApproval();
+      
+      const formattedApplications: FinalReviewApplication[] = data.map((app: any) => {
+        const applicantName = app.applicant?.account_type === 'individual' 
+          ? `${app.applicant.first_name} ${app.applicant.last_name}`
+          : app.applicant?.company_name || 'Unknown';
+        
+        const daysInSystem = Math.floor(
+          (new Date().getTime() - new Date(app.created_at).getTime()) / (1000 * 60 * 60 * 24)
+        );
+
+        return {
+          id: app.id,
+          application_number: app.application_number,
+          applicantName,
+          applicantType: app.applicant?.account_type === 'individual' ? 'individual' : 'company',
+          applicationType: app.application_type,
+          waterSource: app.water_source,
+          location: `${app.district}, ${app.province}`,
+          submittedDate: app.created_at,
+          reviewCompletedDate: app.reviewed_at,
+          inspectionCompletedDate: app.inspected_at,
+          estimatedValue: app.project_value,
+          assignedReviewer: app.assigned_reviewer ? `${app.assigned_reviewer.first_name} ${app.assigned_reviewer.last_name}` : undefined,
+          assignedInspector: app.assigned_inspector ? `${app.assigned_inspector.first_name} ${app.assigned_inspector.last_name}` : undefined,
+          reviewerRecommendation: app.reviews?.[0]?.recommendation === 'approve' ? 'approve' : 'reject',
+          inspectorRecommendation: app.inspections?.[0]?.result === 'passed' ? 'approve' : 'reject',
+          riskLevel: app.reviews?.[0]?.risk_assessment || 'medium',
+          daysInSystem,
+          project_title: app.project_title
+        };
+      });
+
+      setApplications(formattedApplications);
+    } catch (err) {
+      console.error('Failed to fetch applications pending approval:', err);
+      setError('Failed to load applications');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getRiskBadge = (risk: FinalReviewApplication["riskLevel"]) => {
-    const riskConfig = {
-      low: { label: "Low Risk", variant: "secondary" as const },
-      medium: { label: "Medium Risk", variant: "outline" as const },
-      high: { label: "High Risk", variant: "destructive" as const }
+    const riskColors = {
+      low: "bg-green-100 text-green-700 border-green-200",
+      medium: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      high: "bg-red-100 text-red-700 border-red-200"
     };
-    const config = riskConfig[risk];
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return <Badge variant="outline" className={riskColors[risk]}>{risk.toUpperCase()}</Badge>;
   };
 
   const getRecommendationBadge = (recommendation: "approve" | "reject") => {
-    return recommendation === "approve" 
-      ? (
-          <Badge variant="default">
-            Approve
-          </Badge>
-        )
-      : (
-          <Badge variant="destructive">
-            Reject
-          </Badge>
-        );
+    return recommendation === "approve" ? (
+      <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">
+        <CheckCircle2 className="h-3 w-3 mr-1" />
+        Approve
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">
+        <XCircle className="h-3 w-3 mr-1" />
+        Reject
+      </Badge>
+    );
   };
 
-  const filteredApplications = applications.filter(app => {
-    const matchesSearch = app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.applicationType.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRisk = filterRisk === "all" || app.riskLevel === filterRisk;
-    return matchesSearch && matchesRisk;
-  });
-
-  const handleFinalDecision = (applicationId: string, decision: "approve" | "reject") => {
-    // In a real application, this would make an API call
-    console.log(`Final decision for ${applicationId}: ${decision}`);
-    console.log(`Reason: ${decisionReason}`);
-    
-    // Remove from pending list (simulate processing)
-    setApplications(applications.filter(app => app.id !== applicationId));
-    setIsDecisionDialogOpen(false);
-    setSelectedApplication(null);
-    setDecisionReason("");
+  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject") => {
+    try {
+      const mockApproverId = 'mock-approver-id'; // In real app, get from auth context
+      
+      if (decision === 'approve') {
+        const conditionsObj = conditions ? { conditions: conditions.split('\n') } : undefined;
+        await approveApplication(applicationId, mockApproverId, conditionsObj);
+      } else {
+        await rejectApplication(applicationId, mockApproverId, decisionReason);
+      }
+      
+      // Refresh applications list
+      await fetchApplications();
+      
+      // Close dialog and reset form
+      setIsDecisionDialogOpen(false);
+      setDecisionReason("");
+      setConditions("");
+      setSelectedApplication(null);
+    } catch (err) {
+      console.error('Failed to process decision:', err);
+      setError('Failed to process decision');
+    }
   };
 
   const openDecisionDialog = (application: FinalReviewApplication, decision: "approve" | "reject") => {
@@ -178,6 +164,35 @@ export function FinalDecisions() {
     setDecisionType(decision);
     setIsDecisionDialogOpen(true);
   };
+
+  const filteredApplications = applications.filter(app => {
+    const matchesSearch = app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         app.project_title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRisk = filterRisk === "all" || app.riskLevel === filterRisk;
+    return matchesSearch && matchesRisk;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <h3 className="scroll-m-20 text-xl font-semibold tracking-tight mb-2">Error Loading Applications</h3>
+        <p className="text-muted-foreground">{error}</p>
+        <Button onClick={fetchApplications} className="mt-4">
+          Try Again
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -290,7 +305,7 @@ export function FinalDecisions() {
                   <TableRow key={application.id}>
                     <TableCell>
                       <div>
-                        <div className="font-medium">{application.id}</div>
+                        <div className="font-medium">{application.application_number || application.id}</div>
                         <div className="text-sm text-muted-foreground flex items-center">
                           <Calendar className="h-3 w-3 mr-1" />
                           {application.submittedDate}
@@ -321,12 +336,12 @@ export function FinalDecisions() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-muted-foreground tracking-wide">Reviewer</span>
-                          {getRecommendationBadge(application.reviewerRecommendation)}
+                          {getRecommendationBadge(application.reviewerRecommendation || "reject")}
                         </div>
                         <div className="h-px bg-border/50 mx-2" />
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-muted-foreground tracking-wide">Inspector</span>
-                          {getRecommendationBadge(application.inspectorRecommendation)}
+                          {getRecommendationBadge(application.inspectorRecommendation || "reject")}
                         </div>
                       </motion.div>
                     </TableCell>
@@ -403,20 +418,28 @@ export function FinalDecisions() {
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {decisionType === "approve" ? "Approval Notes (Optional)" : "Rejection Reason (Required)"}
-                </label>
-                <Textarea
-                  placeholder={decisionType === "approve" 
-                    ? "Add any conditions or notes for the approval..."
-                    : "Explain why this application is being rejected..."
-                  }
-                  value={decisionReason}
-                  onChange={(e) => setDecisionReason(e.target.value)}
-                  rows={3}
-                />
-              </div>
+              {decisionType === "approve" ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Approval Conditions (Optional)</label>
+                  <Textarea
+                    placeholder="Add any conditions or requirements for the approval (one per line)..."
+                    value={conditions}
+                    onChange={(e) => setConditions(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Rejection Reason (Required)</label>
+                  <Textarea
+                    placeholder="Explain why this application is being rejected..."
+                    value={decisionReason}
+                    onChange={(e) => setDecisionReason(e.target.value)}
+                    rows={3}
+                    required
+                  />
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -424,7 +447,7 @@ export function FinalDecisions() {
               Cancel
             </Button>
             <Button
-              onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType!)}
+              onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
               disabled={decisionType === "reject" && !decisionReason.trim()}
               variant={decisionType === "approve" ? "default" : "destructive"}
             >

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -14,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import {
   Form,
   FormControl,
@@ -32,10 +31,10 @@ import {
   Shield, 
   User,
   CheckCircle,
-  XCircle,
   AlertTriangle,
   Mail,
-  Phone
+  Phone,
+  Loader2
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,200 +44,264 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getAllUsers, createUser, updateUser, deleteUser } from "@/lib/supabase";
+import type { User as UserType } from "@/types/database";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
 
 interface User {
   id: string;
-  name: string;
   email: string;
-  phone: string;
-  role: "applicant" | "reviewer" | "inspector" | "admin";
+  phone?: string;
+  role: "applicant" | "reviewer" | "inspector" | "admin" | "approver";
   status: "active" | "inactive" | "suspended";
-  registrationDate: string;
-  lastLogin: string;
-  applicationsCount?: number;
-  reviewsCount?: number;
-  inspectionsCount?: number;
+  account_type: "individual" | "company" | "cooperative" | "organization" | "institution";
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  created_at: string;
+  last_login_at?: string;
+  applications_count: number;
+  reviews_count: number;
+  inspections_count: number;
 }
 
-// User validation schema
 const userValidationSchema = z.object({
-  name: z.string()
-    .min(2, { message: "Full name must be at least 2 characters" })
-    .max(100, { message: "Full name must be less than 100 characters" })
-    .regex(/^[a-zA-Z\s'-]+$/, { message: "Full name can only contain letters, spaces, hyphens and apostrophes" }),
-  email: z.string()
-    .min(1, { message: "Email is required" })
-    .email({ message: "Please enter a valid email address" })
-    .max(100, { message: "Email must be less than 100 characters" }),
-  phone: z.string()
-    .min(1, { message: "Phone number is required" })
-    .regex(/^\+250\s?[0-9]{3}\s?[0-9]{3}\s?[0-9]{3}$/, { 
-      message: "Please enter a valid Rwanda phone number (+250 XXX XXX XXX)" 
-    }),
-  role: z.enum(["applicant", "reviewer", "inspector", "admin"], {
-    required_error: "Please select a role"
-  })
+  email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  role: z.enum(["applicant", "reviewer", "inspector", "admin", "approver"]),
+  status: z.enum(["active", "inactive", "suspended"]),
+  account_type: z.enum(["individual", "company", "cooperative", "organization", "institution"]),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  company_name: z.string().optional(),
+}).refine((data) => {
+  // For individual accounts, first_name and last_name are required
+  if (data.account_type === 'individual') {
+    return data.first_name && data.first_name.trim() !== '' && 
+           data.last_name && data.last_name.trim() !== '';
+  }
+  // For organizational accounts, company_name is required  
+  if (['company', 'cooperative', 'organization', 'institution'].includes(data.account_type)) {
+    return data.company_name && data.company_name.trim() !== '';
+  }
+  return true;
+}, {
+  message: "Individual accounts require first and last name. Organizational accounts require company name.",
+  path: ["account_type"] // This will show the error on the account_type field
 });
 
 type UserFormValues = z.infer<typeof userValidationSchema>;
 
-// Mock user data
-const mockUsers: User[] = [
-  {
-    id: "USR-001",
-    name: "John Doe",
-    email: "john.doe@example.com",
-    phone: "+250 789 123 456",
-    role: "applicant",
-    status: "active",
-    registrationDate: "2024-01-15",
-    lastLogin: "2024-03-20",
-    applicationsCount: 3
-  },
-  {
-    id: "USR-002",
-    name: "Sarah Johnson",
-    email: "sarah.johnson@rwb.gov.rw",
-    phone: "+250 789 123 457",
-    role: "reviewer",
-    status: "active",
-    registrationDate: "2023-08-10",
-    lastLogin: "2024-03-22",
-    reviewsCount: 145
-  },
-  {
-    id: "USR-003",
-    name: "Michael Brown",
-    email: "michael.brown@rwb.gov.rw",
-    phone: "+250 789 123 458",
-    role: "inspector",
-    status: "active",
-    registrationDate: "2023-09-22",
-    lastLogin: "2024-03-21",
-    inspectionsCount: 89
-  },
-  {
-    id: "USR-004",
-    name: "Alice Wilson",
-    email: "alice.wilson@rwb.gov.rw",
-    phone: "+250 789 123 459",
-    role: "admin",
-    status: "active",
-    registrationDate: "2023-06-01",
-    lastLogin: "2024-03-22"
-  },
-  {
-    id: "USR-005",
-    name: "Robert Davis",
-    email: "robert.davis@example.com",
-    phone: "+250 789 123 460",
-    role: "applicant",
-    status: "suspended",
-    registrationDate: "2024-02-28",
-    lastLogin: "2024-03-10",
-    applicationsCount: 1
-  }
-];
-
 export function UserManagement() {
-  const [users, setUsers] = useState(mockUsers);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterRole, setFilterRole] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  
+  const { handleErrorWithBack } = useErrorHandler();
 
-  // Form validation setup
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userValidationSchema),
     defaultValues: {
-      name: "",
       email: "",
       phone: "",
-      role: "applicant"
-    }
+      role: "applicant",
+      status: "active",
+      account_type: "individual",
+      first_name: "",
+      last_name: "",
+      company_name: "",
+    },
   });
 
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const userData = await getAllUsers();
+      setUsers(userData.map((user: UserType) => ({
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        status: user.status,
+        account_type: user.account_type,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        company_name: user.company_name,
+        created_at: user.created_at,
+        last_login_at: user.last_login_at,
+        applications_count: user.applications_count || 0,
+        reviews_count: user.reviews_count || 0,
+        inspections_count: user.inspections_count || 0,
+      })));
+    } catch (err) {
+      handleErrorWithBack(err, 'load users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getRoleBadge = (role: User["role"]) => {
-    const roleConfig = {
-      applicant: { label: "Applicant", variant: "secondary" as const },
-      reviewer: { label: "Reviewer", variant: "default" as const },
-      inspector: { label: "Inspector", variant: "outline" as const },
-      admin: { label: "Admin", variant: "destructive" as const }
+    const roleColors = {
+      admin: "bg-red-100 text-red-700 border-red-200",
+      approver: "bg-purple-100 text-purple-700 border-purple-200",
+      reviewer: "bg-blue-100 text-blue-700 border-blue-200",
+      inspector: "bg-green-100 text-green-700 border-green-200",
+      applicant: "bg-gray-100 text-gray-700 border-gray-200",
     };
-    const config = roleConfig[role];
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    return <Badge variant="outline" className={roleColors[role]}>{role}</Badge>;
   };
 
   const getStatusBadge = (status: User["status"]) => {
-    const statusConfig = {
-      active: { label: "Active", variant: "default" as const, icon: CheckCircle },
-      inactive: { label: "Inactive", variant: "secondary" as const, icon: XCircle },
-      suspended: { label: "Suspended", variant: "destructive" as const, icon: AlertTriangle }
-    };
-    const config = statusConfig[status];
-    const Icon = config.icon;
-    return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
-    );
-  };
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === "all" || user.role === filterRole;
-    const matchesStatus = filterStatus === "all" || user.status === filterStatus;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
-  const handleAddUser = (data: UserFormValues) => {
-    const user: User = {
-      id: `USR-${(users.length + 1).toString().padStart(3, '0')}`,
-      ...data,
-      status: "active",
-      registrationDate: new Date().toISOString().split('T')[0],
-      lastLogin: "Never"
-    };
-    setUsers([...users, user]);
-    form.reset();
-    setIsAddUserOpen(false);
-  };
-
-  const handleEditUser = (user: User) => {
-    setSelectedUser(user);
-    setIsEditUserOpen(true);
-  };
-
-  const handleUpdateUser = (updatedUser: User) => {
-    setUsers(users.map(user => user.id === updatedUser.id ? updatedUser : user));
-    setIsEditUserOpen(false);
-    setSelectedUser(null);
-  };
-
-  const handleDeleteUser = (userId: string) => {
-    if (confirm("Are you sure you want to delete this user?")) {
-      setUsers(users.filter(user => user.id !== userId));
+    switch (status) {
+      case "active":
+        return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">Active</Badge>;
+      case "inactive":
+        return <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-200">Inactive</Badge>;
+      case "suspended":
+        return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">Suspended</Badge>;
+      default:
+        return <Badge variant="outline">Unknown</Badge>;
     }
   };
 
-  const handleSuspendUser = (userId: string) => {
-    setUsers(users.map(user => 
-      user.id === userId 
-        ? { ...user, status: user.status === "suspended" ? "active" : "suspended" as User["status"] }
-        : user
-    ));
+  const handleAddUser = async (data: UserFormValues) => {
+    try {
+      // Clean the data based on account type to match database constraints
+      const cleanedData = {
+        ...data,
+        // For individual accounts, ensure first_name and last_name are not empty
+        // For organizational accounts, ensure company_name is not empty
+        first_name: data.account_type === 'individual' ? (data.first_name?.trim() || null) : (data.first_name?.trim() || null),
+        last_name: data.account_type === 'individual' ? (data.last_name?.trim() || null) : (data.last_name?.trim() || null),
+        company_name: ['company', 'cooperative', 'organization', 'institution'].includes(data.account_type) 
+          ? (data.company_name?.trim() || null) 
+          : null, // Set to null for individual accounts
+        phone: data.phone?.trim() || null,
+        profile_completed: false,
+        applications_count: 0,
+        reviews_count: 0,
+        inspections_count: 0,
+      };
+
+      await createUser(cleanedData);
+      
+      await fetchUsers(); // Refresh the users list
+      setIsAddDialogOpen(false);
+      form.reset();
+    } catch (err) {
+      handleErrorWithBack(err, 'create user');
+    }
   };
 
-  const usersByRole = {
-    applicant: users.filter(u => u.role === "applicant").length,
-    reviewer: users.filter(u => u.role === "reviewer").length,
-    inspector: users.filter(u => u.role === "inspector").length,
-    admin: users.filter(u => u.role === "admin").length
+  const handleEditUser = (user: User) => {
+    setOpenDropdownId(null); // Close any open dropdowns
+    setSelectedUser(user);
+    form.reset({
+      email: user.email,
+      phone: user.phone || "",
+      role: user.role,
+      status: user.status,
+      account_type: user.account_type,
+      first_name: user.first_name || "",
+      last_name: user.last_name || "",
+      company_name: user.company_name || "",
+    });
+    setIsEditDialogOpen(true);
   };
+
+  const handleUpdateUser = async (data: UserFormValues) => {
+    if (!selectedUser) return;
+    
+    try {
+      // Clean the data based on account type to match database constraints
+      const cleanedData = {
+        ...data,
+        // For individual accounts, ensure first_name and last_name are not empty
+        // For organizational accounts, ensure company_name is not empty
+        first_name: data.account_type === 'individual' ? (data.first_name?.trim() || null) : (data.first_name?.trim() || null),
+        last_name: data.account_type === 'individual' ? (data.last_name?.trim() || null) : (data.last_name?.trim() || null),
+        company_name: ['company', 'cooperative', 'organization', 'institution'].includes(data.account_type) 
+          ? (data.company_name?.trim() || null) 
+          : null, // Set to null for individual accounts
+        phone: data.phone?.trim() || null,
+      };
+
+      await updateUser(selectedUser.id, cleanedData);
+      await fetchUsers(); // Refresh the users list
+      setIsEditDialogOpen(false);
+      setSelectedUser(null);
+      form.reset();
+    } catch (err) {
+      handleErrorWithBack(err, 'update user');
+    }
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      setUserToDelete(user);
+      setIsDeleteDialogOpen(true);
+    }
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await deleteUser(userToDelete.id);
+      await fetchUsers(); // Refresh the users list
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    } catch (err) {
+      handleErrorWithBack(err, 'delete user');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleSuspendUser = async (userId: string) => {
+    try {
+      await updateUser(userId, { status: 'suspended' });
+      await fetchUsers(); // Refresh the users list
+    } catch (err) {
+      handleErrorWithBack(err, 'suspend user');
+    }
+  };
+
+  // Filter users based on search term and active tab
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (user.first_name && user.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (user.last_name && user.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                         (user.company_name && user.company_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesTab = activeTab === "all" || user.role === activeTab;
+    
+    return matchesSearch && matchesTab;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Error handling is now done globally with automatic page reload/navigation
 
   return (
     <div className="space-y-6">
@@ -263,7 +326,7 @@ export function UserManagement() {
             <User className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{usersByRole.applicant}</div>
+            <div className="text-2xl font-bold">{users.filter(u => u.role === "applicant").length}</div>
             <p className="text-xs text-muted-foreground">
               Regular applicants
             </p>
@@ -277,7 +340,7 @@ export function UserManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {usersByRole.reviewer + usersByRole.inspector + usersByRole.admin}
+              {users.filter(u => u.role === "reviewer").length + users.filter(u => u.role === "inspector").length + users.filter(u => u.role === "admin").length}
             </div>
             <p className="text-xs text-muted-foreground">
               RWB staff members
@@ -292,7 +355,7 @@ export function UserManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter(u => u.lastLogin === "2024-03-22").length}
+              {users.filter(u => u.last_login_at && u.last_login_at.startsWith("2024-03-22")).length}
             </div>
             <p className="text-xs text-muted-foreground">
               Logged in today
@@ -311,7 +374,7 @@ export function UserManagement() {
                 Add, remove, and manage user roles and permissions
               </CardDescription>
             </div>
-            <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="flex items-center gap-2">
                   <UserPlus className="h-4 w-4" />
@@ -329,13 +392,30 @@ export function UserManagement() {
                   <form onSubmit={form.handleSubmit(handleAddUser)} className="space-y-4">
                     <FormField
                       control={form.control}
-                      name="name"
+                      name="first_name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Full Name</FormLabel>
+                          <FormLabel>First Name</FormLabel>
                           <FormControl>
                             <Input 
-                              placeholder="Enter full name" 
+                              placeholder="Enter first name" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="last_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Enter last name" 
                               {...field} 
                             />
                           </FormControl>
@@ -396,6 +476,72 @@ export function UserManagement() {
                               <SelectItem value="reviewer">Reviewer</SelectItem>
                               <SelectItem value="inspector">Inspector</SelectItem>
                               <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="approver">Approver</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="account_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account Type</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select account type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="individual">Individual</SelectItem>
+                              <SelectItem value="company">Company</SelectItem>
+                              <SelectItem value="cooperative">Cooperative</SelectItem>
+                              <SelectItem value="organization">Organization</SelectItem>
+                              <SelectItem value="institution">Institution</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="company_name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Company Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Enter company name" 
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="active">Active</SelectItem>
+                              <SelectItem value="inactive">Inactive</SelectItem>
+                              <SelectItem value="suspended">Suspended</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -409,7 +555,7 @@ export function UserManagement() {
                         variant="outline" 
                         onClick={() => {
                           form.reset();
-                          setIsAddUserOpen(false);
+                          setIsAddDialogOpen(false);
                         }}
                       >
                         Cancel
@@ -438,7 +584,7 @@ export function UserManagement() {
                 />
               </div>
             </div>
-            <Select value={filterRole} onValueChange={setFilterRole}>
+            <Select value={activeTab} onValueChange={setActiveTab}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
@@ -448,9 +594,10 @@ export function UserManagement() {
                 <SelectItem value="reviewer">Reviewer</SelectItem>
                 <SelectItem value="inspector">Inspector</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="approver">Approver</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <Select value={activeTab} onValueChange={setActiveTab}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -485,12 +632,12 @@ export function UserManagement() {
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={`https://avatar.vercel.sh/${user.email}`} />
                           <AvatarFallback>
-                            {user.name.split(' ').map(n => n[0]).join('')}
+                            {user.first_name && user.first_name[0] + (user.last_name ? user.last_name[0] : '')}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-medium">{user.name}</div>
-                          <div className="text-sm text-muted-foreground">{user.id}</div>
+                          <div className="font-medium">{user.first_name} {user.last_name}</div>
+                          <div className="text-sm text-muted-foreground">{user.email}</div>
                         </div>
                       </div>
                     </TableCell>
@@ -509,28 +656,40 @@ export function UserManagement() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{user.lastLogin}</div>
+                      <div className="text-sm">{user.last_login_at ? new Date(user.last_login_at).toLocaleDateString() : "Never"}</div>
                       <div className="text-xs text-muted-foreground">
-                        Joined {user.registrationDate}
+                        Joined {new Date(user.created_at).toLocaleDateString()}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        {user.applicationsCount && `${user.applicationsCount} applications`}
-                        {user.reviewsCount && `${user.reviewsCount} reviews`}
-                        {user.inspectionsCount && `${user.inspectionsCount} inspections`}
+                        {user.applications_count > 0 && `${user.applications_count} applications`}
+                        {user.reviews_count > 0 && `${user.reviews_count} reviews`}
+                        {user.inspections_count > 0 && `${user.inspections_count} inspections`}
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <DropdownMenu>
+                      <DropdownMenu 
+                        open={openDropdownId === user.id} 
+                        onOpenChange={(open) => setOpenDropdownId(open ? user.id : null)}
+                      >
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button 
+                            variant="ghost" 
+                            className="h-8 w-8 p-0"
+                            aria-label={`Actions for ${user.email}`}
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => handleEditUser(user)}>
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleEditUser(user);
+                            }}
+                          >
                             <Edit className="mr-2 h-4 w-4" />
                             Edit User
                           </DropdownMenuItem>
@@ -559,7 +718,16 @@ export function UserManagement() {
 
       {/* Edit User Dialog */}
       {selectedUser && (
-        <Dialog open={isEditUserOpen} onOpenChange={setIsEditUserOpen}>
+        <Dialog 
+          open={isEditDialogOpen} 
+          onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) {
+              setSelectedUser(null);
+              form.reset();
+            }
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
@@ -567,77 +735,292 @@ export function UserManagement() {
                 Update user information and role
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-name">Full Name</Label>
-                <Input
-                  id="edit-name"
-                  value={selectedUser.name}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleUpdateUser)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="first_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>First Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          id="edit-first-name"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-email">Email</Label>
-                <Input
-                  id="edit-email"
-                  type="email"
-                  value={selectedUser.email}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, email: e.target.value })}
+                
+                <FormField
+                  control={form.control}
+                  name="last_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Last Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          id="edit-last-name"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-phone">Phone</Label>
-                <Input
-                  id="edit-phone"
-                  value={selectedUser.phone}
-                  onChange={(e) => setSelectedUser({ ...selectedUser, phone: e.target.value })}
+                
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input 
+                          id="edit-email"
+                          type="email" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-role">Role</Label>
-                <Select 
-                  value={selectedUser.role} 
-                  onValueChange={(value) => setSelectedUser({ ...selectedUser, role: value as User["role"] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="applicant">Applicant</SelectItem>
-                    <SelectItem value="reviewer">Reviewer</SelectItem>
-                    <SelectItem value="inspector">Inspector</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-status">Status</Label>
-                <Select 
-                  value={selectedUser.status} 
-                  onValueChange={(value) => setSelectedUser({ ...selectedUser, status: value as User["status"] })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="suspended">Suspended</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditUserOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={() => handleUpdateUser(selectedUser)}>
-                Update User
-              </Button>
-            </DialogFooter>
+                
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input 
+                          id="edit-phone"
+                          placeholder="+250 XXX XXX XXX" 
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="applicant">Applicant</SelectItem>
+                          <SelectItem value="reviewer">Reviewer</SelectItem>
+                          <SelectItem value="inspector">Inspector</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="approver">Approver</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="account_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Type</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="individual">Individual</SelectItem>
+                          <SelectItem value="company">Company</SelectItem>
+                          <SelectItem value="cooperative">Cooperative</SelectItem>
+                          <SelectItem value="organization">Organization</SelectItem>
+                          <SelectItem value="institution">Institution</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="suspended">Suspended</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="company_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Name</FormLabel>
+                      <FormControl>
+                        <Input 
+                          id="edit-company-name"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                                 <DialogFooter>
+                   <Button 
+                     variant="outline" 
+                     type="button"
+                     onClick={() => {
+                       setIsEditDialogOpen(false);
+                       setSelectedUser(null);
+                       form.reset();
+                     }}
+                   >
+                     Cancel
+                   </Button>
+                   <Button type="submit">
+                     Update User
+                   </Button>
+                 </DialogFooter>
+              </form>
+            </Form>
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                <AlertTriangle className="h-6 w-6 text-gray-600" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-semibold text-gray-900">
+                  Delete User
+                </DialogTitle>
+                <DialogDescription className="text-sm text-gray-600">
+                  This action cannot be undone.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          {userToDelete && (
+            <div className="my-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-blue-100 text-blue-600 font-medium">
+                    {userToDelete.first_name?.[0] || userToDelete.email[0].toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate">
+                    {userToDelete.first_name && userToDelete.last_name 
+                      ? `${userToDelete.first_name} ${userToDelete.last_name}`
+                      : userToDelete.company_name || 'Unnamed User'
+                    }
+                  </p>
+                  <p className="text-sm text-gray-600 truncate">{userToDelete.email}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    {getRoleBadge(userToDelete.role)}
+                    {getStatusBadge(userToDelete.status)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+            <div className="flex gap-3">
+              <AlertTriangle className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-gray-700">
+                <p className="font-medium mb-1 text-gray-900">Are you sure you want to delete this user?</p>
+                <p className="text-red-600 font-medium">This will permanently remove:</p>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>User profile and account data</li>
+                  <li>All associated applications ({userToDelete?.applications_count || 0})</li>
+                  <li>Review history ({userToDelete?.reviews_count || 0})</li>
+                  <li>Inspection records ({userToDelete?.inspections_count || 0})</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setUserToDelete(null);
+              }}
+              disabled={isDeleting}
+              className="w-full sm:w-auto"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={confirmDeleteUser}
+              disabled={isDeleting}
+              className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-gray-300"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete User
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

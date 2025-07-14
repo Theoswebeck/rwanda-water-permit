@@ -1,17 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { motion } from "framer-motion";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
   Search, 
-  Filter, 
   Eye, 
   MoreHorizontal, 
   AlertTriangle, 
@@ -19,11 +17,11 @@ import {
   CheckCircle, 
   XCircle,
   FileText,
-  Calendar,
-  MapPin,
   User,
-  TrendingUp,
-  Download
+  Download,
+  Loader2,
+  CheckCircle2,
+  Circle
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -33,6 +31,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getAllApplicationsForAdmin } from "@/lib/supabase";
+import Link from "next/link";
 
 interface Application {
   id: string;
@@ -41,7 +41,9 @@ interface Application {
   applicationType: string;
   waterSource: string;
   location: string;
-  status: "submitted" | "under_review" | "pending_inspection" | "approved" | "rejected" | "revision_required";
+  district: string;
+  province: string;
+  status: "submitted" | "under_review" | "pending_inspection" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled";
   submittedDate: string;
   lastUpdated: string;
   assignedReviewer?: string;
@@ -49,245 +51,341 @@ interface Application {
   slaStatus: "on_time" | "due_soon" | "overdue";
   daysRemaining: number;
   estimatedValue: number;
+  applicationNumber?: string;
+  projectTitle: string;
 }
 
-// Mock application data for admin oversight
-const mockApplications: Application[] = [
-  {
-    id: "RWB-24-00156",
-    applicantName: "John Smith",
-    applicantType: "individual",
-    applicationType: "Domestic Water Use",
-    waterSource: "Borehole",
-    location: "Kigali, Gasabo",
-    status: "submitted",
-    submittedDate: "2024-03-22",
-    lastUpdated: "2024-03-22",
-    slaStatus: "on_time",
-    daysRemaining: 12,
-    estimatedValue: 50000
-  },
-  {
-    id: "RWB-24-00155",
-    applicantName: "Green Industries Ltd",
-    applicantType: "company",
-    applicationType: "Industrial Water Use",
-    waterSource: "Surface Water",
-    location: "Musanze, Northern Province",
-    status: "under_review",
-    submittedDate: "2024-03-18",
-    lastUpdated: "2024-03-21",
-    assignedReviewer: "Sarah Johnson",
-    slaStatus: "due_soon",
-    daysRemaining: 2,
-    estimatedValue: 2500000
-  },
-  {
-    id: "RWB-24-00154",
-    applicantName: "AgriTech Solutions",
-    applicantType: "company",
-    applicationType: "Agricultural Water Use",
-    waterSource: "River",
-    location: "Nyagatare, Eastern Province",
-    status: "pending_inspection",
-    submittedDate: "2024-03-15",
-    lastUpdated: "2024-03-20",
-    assignedReviewer: "Michael Brown",
-    assignedInspector: "Alice Wilson",
-    slaStatus: "on_time",
-    daysRemaining: 5,
-    estimatedValue: 1800000
-  },
-  {
-    id: "RWB-24-00153",
-    applicantName: "City Water Corp",
-    applicantType: "company",
-    applicationType: "Municipal Water Supply",
-    waterSource: "Lake",
-    location: "Kigali, Nyarugenge",
-    status: "approved",
-    submittedDate: "2024-03-10",
-    lastUpdated: "2024-03-21",
-    assignedReviewer: "Sarah Johnson",
-    assignedInspector: "Robert Davis",
-    slaStatus: "on_time",
-    daysRemaining: 0,
-    estimatedValue: 5000000
-  },
-  {
-    id: "RWB-24-00152",
-    applicantName: "Mining Co Ltd",
-    applicantType: "company",
-    applicationType: "Mining Water Use",
-    waterSource: "Groundwater",
-    location: "Rusizi, Western Province",
-    status: "revision_required",
-    submittedDate: "2024-03-05",
-    lastUpdated: "2024-03-19",
-    assignedReviewer: "Michael Brown",
-    slaStatus: "overdue",
-    daysRemaining: -3,
-    estimatedValue: 3200000
-  }
-];
-
 export function ApplicationOversight() {
-  const [applications, setApplications] = useState(mockApplications);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterSLA, setFilterSLA] = useState("all");
-  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
 
-  const getStatusBadge = (status: Application["status"]) => {
-    const statusConfig = {
-      submitted: { label: "Submitted", variant: "secondary" as const, icon: FileText },
-      under_review: { label: "Under Review", variant: "default" as const, icon: Eye },
-      pending_inspection: { label: "Pending Inspection", variant: "outline" as const, icon: Clock },
-      approved: { label: "Approved", variant: "default" as const, icon: CheckCircle },
-      rejected: { label: "Rejected", variant: "destructive" as const, icon: XCircle },
-      revision_required: { label: "Revision Required", variant: "secondary" as const, icon: AlertTriangle }
-    };
-    const config = statusConfig[status];
-    const Icon = config.icon;
-    return (
-      <Badge variant={config.variant} className="flex items-center gap-1">
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
-    );
-  };
+  useEffect(() => {
+    fetchApplications();
+  }, []);
 
+  const fetchApplications = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllApplicationsForAdmin();
+      
+      // Transform database data to component format
+      const transformedApps: Application[] = data.map((app) => {
+        const applicant = Array.isArray(app.applicant) ? app.applicant[0] : app.applicant;
+        const reviewer = Array.isArray(app.assigned_reviewer) ? app.assigned_reviewer[0] : app.assigned_reviewer;
+        const inspector = Array.isArray(app.assigned_inspector) ? app.assigned_inspector[0] : app.assigned_inspector;
+        
+        const applicantName = applicant?.company_name || 
+                            `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() || 
+                            'Unknown';
+        
+        const reviewerName = reviewer ? 
+                           `${reviewer.first_name || ''} ${reviewer.last_name || ''}`.trim() : 
+                           undefined;
+        
+        const inspectorName = inspector ? 
+                            `${inspector.first_name || ''} ${inspector.last_name || ''}`.trim() : 
+                            undefined;
 
+        // Calculate SLA status and days remaining (mock calculation)
+        const submittedDate = new Date(app.created_at);
+        const now = new Date();
+        const daysSinceSubmitted = Math.floor((now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60 * 24));
+        const slaTarget = 30; // 30 days SLA
+        const daysRemaining = slaTarget - daysSinceSubmitted;
+        
+        let slaStatus: "on_time" | "due_soon" | "overdue";
+        if (daysRemaining < 0) {
+          slaStatus = "overdue";
+        } else if (daysRemaining <= 5) {
+          slaStatus = "due_soon";
+        } else {
+          slaStatus = "on_time";
+        }
 
-  const getSLABadge = (slaStatus: Application["slaStatus"], daysRemaining: number) => {
-    if (slaStatus === "overdue") {
-      return <Badge variant="destructive">Overdue ({Math.abs(daysRemaining)} days)</Badge>;
-    } else if (slaStatus === "due_soon") {
-      return <Badge variant="outline">Due in {daysRemaining} days</Badge>;
-    } else {
-      return <Badge variant="secondary">{daysRemaining} days left</Badge>;
+        return {
+          id: app.id,
+          applicantName,
+          applicantType: applicant?.account_type === 'individual' ? 'individual' : 'company',
+          applicationType: app.application_type || 'Unknown',
+          waterSource: app.water_source_type || 'Unknown',
+          location: `${app.district || 'Unknown'}, ${app.province || 'Unknown'}`,
+          district: app.district || 'Unknown',
+          province: app.province || 'Unknown',
+          status: app.status,
+          submittedDate: app.created_at.split('T')[0],
+          lastUpdated: app.updated_at.split('T')[0],
+          assignedReviewer: reviewerName,
+          assignedInspector: inspectorName,
+          slaStatus,
+          daysRemaining,
+          estimatedValue: app.project_value || 0,
+          applicationNumber: app.application_number,
+          projectTitle: app.project_title || 'Untitled Project'
+        };
+      });
+      
+      setApplications(transformedApps);
+    } catch (err) {
+      console.error('Failed to fetch applications:', err);
+      setError('Failed to load applications');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredApplications = applications.filter(app => {
-    const matchesSearch = app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         app.applicationType.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === "all" || app.status === filterStatus;
-    const matchesSLA = filterSLA === "all" || app.slaStatus === filterSLA;
-    return matchesSearch && matchesStatus && matchesSLA;
-  });
+  // Filter applications based on search and filters (matching dashboard logic)
+  const filteredApplications = useMemo(() => {
+    return applications.filter((app) => {
+      const matchesSearch = 
+        app.projectTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.applicationNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.applicantName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.district?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        app.province?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesType = filterType === "all" || app.applicationType === filterType;
+      const matchesStatus = filterStatus === "all" || app.status === filterStatus;
+      
+      return matchesSearch && matchesType && matchesStatus;
+    });
+  }, [applications, searchTerm, filterType, filterStatus]);
 
-  const handleReassignApplication = (applicationId: string, newReviewer: string) => {
-    setApplications(applications.map(app => 
-      app.id === applicationId 
-        ? { ...app, assignedReviewer: newReviewer, lastUpdated: new Date().toISOString().split('T')[0] }
-        : app
-    ));
+  // Function to get the appropriate status with icon and color (matching dashboard)
+  const getStatusConfig = (status: string) => {
+    switch (status) {
+      case "draft":
+        return {
+          label: "Draft",
+          icon: <Circle className="h-4 w-4" />,
+          className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "submitted":
+        return {
+          label: "Submitted",
+          icon: <Clock className="h-4 w-4" />,
+          className: "bg-blue-100 text-blue-700 border-0 hover:bg-blue-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "under_review":
+        return {
+          label: "Under Review",
+          icon: <AlertTriangle className="h-4 w-4" />,
+          className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "pending_inspection":
+        return {
+          label: "Pending Inspection",
+          icon: <Eye className="h-4 w-4" />,
+          className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "approved":
+        return {
+          label: "Approved",
+          icon: <CheckCircle2 className="h-4 w-4" />,
+          className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "rejected":
+        return {
+          label: "Rejected",
+          icon: <XCircle className="h-4 w-4" />,
+          className: "bg-red-100 text-red-700 border-0 hover:bg-red-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "revision_required":
+        return {
+          label: "Revision Required",
+          icon: <AlertTriangle className="h-4 w-4" />,
+          className: "bg-orange-100 text-orange-700 border-0 hover:bg-orange-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "cancelled":
+        return {
+          label: "Cancelled",
+          icon: <XCircle className="h-4 w-4" />,
+          className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
+        };
+      default:
+        return {
+          label: "Unknown",
+          icon: <Circle className="h-4 w-4" />,
+          className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
+        };
+    }
   };
 
-  const totalValue = applications.reduce((sum, app) => sum + app.estimatedValue, 0);
-  const avgProcessingTime = 12.5; // Mock data
+  const getStatusBadge = (status: string) => {
+    const config = getStatusConfig(status);
+    return (
+      <div className={`inline-flex items-center gap-2 text-sm ${config.className}`}>
+        {config.icon}
+        {config.label}
+      </div>
+    );
+  };
+
+  // Format date to be more readable (matching dashboard)
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short", 
+      day: "numeric",
+    });
+  };
+
+  // Format application type for display (matching dashboard)
+  const formatApplicationType = (type: string) => {
+    return type
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Calculate stats like dashboard
+  const stats = {
+    total: applications.length,
+    pending: applications.filter(app => ['submitted', 'under_review', 'pending_inspection'].includes(app.status)).length,
+    approved: applications.filter(app => app.status === 'approved').length,
+    overdue: applications.filter(app => app.slaStatus === "overdue").length,
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading applications...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+        <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Applications</h2>
+        <p className="text-muted-foreground">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      {/* Overview Statistics */}
+      {/* Overview Statistics - Match dashboard style */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{applications.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Active in system
-            </p>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0 }}
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Applications</CardTitle>
+              <FileText className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total}</div>
+              <p className="text-xs text-muted-foreground">
+                Active in system
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {applications.filter(app => app.slaStatus === "overdue").length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Require immediate attention
-            </p>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">In Progress</CardTitle>
+              <Clock className="h-4 w-4 text-amber-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.pending}</div>
+              <p className="text-xs text-muted-foreground">
+                Awaiting processing
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {(totalValue / 1000000).toFixed(1)}M RWF
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Estimated project value
-            </p>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Processing</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{avgProcessingTime} days</div>
-            <p className="text-xs text-muted-foreground">
-              Current average
-            </p>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Approved</CardTitle>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.approved}</div>
+              <p className="text-xs text-muted-foreground">
+                Successfully processed
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Overdue</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+              <p className="text-xs text-muted-foreground">
+                Require immediate attention
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
-      {/* Application Management */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Application Oversight</CardTitle>
-              <CardDescription>
-                Monitor and manage all water permit applications across the system
-              </CardDescription>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export Data
-              </Button>
-            </div>
+      {/* Search and Filters - Match dashboard layout exactly */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search applications..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        </CardHeader>
-        <CardContent>
-          {/* Filters */}
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search applications..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
-            </div>
+          
+          <div className="flex items-center gap-2">
+            <Label className="text-sm whitespace-nowrap">Filter by:</Label>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="domestic">Domestic</SelectItem>
+                <SelectItem value="industrial">Industrial</SelectItem>
+                <SelectItem value="agricultural">Agricultural</SelectItem>
+                <SelectItem value="commercial">Commercial</SelectItem>
+                <SelectItem value="municipal">Municipal</SelectItem>
+                <SelectItem value="mining_water_use">Mining Water Use</SelectItem>
+              </SelectContent>
+            </Select>
+            
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Filter by status" />
+              <SelectTrigger className="w-40">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="under_review">Under Review</SelectItem>
                 <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
@@ -296,168 +394,126 @@ export function ApplicationOversight() {
                 <SelectItem value="revision_required">Revision Required</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filterSLA} onValueChange={setFilterSLA}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="SLA Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All SLA</SelectItem>
-                <SelectItem value="overdue">Overdue</SelectItem>
-                <SelectItem value="due_soon">Due Soon</SelectItem>
-                <SelectItem value="on_time">On Time</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
-
-          {/* Applications Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Application</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Type & Source</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Assigned Staff</TableHead>
-                  <TableHead>SLA Status</TableHead>
-                  <TableHead>Value</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredApplications.map((application) => (
-                  <TableRow key={application.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{application.id}</div>
-                        <div className="text-sm text-muted-foreground flex items-center">
-                          <Calendar className="h-3 w-3 mr-1" />
-                          {application.submittedDate}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{application.applicantName}</div>
-                        <div className="text-sm text-muted-foreground flex items-center">
-                          <MapPin className="h-3 w-3 mr-1" />
-                          {application.location}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="text-sm">{application.applicationType}</div>
-                        <div className="text-xs text-muted-foreground">{application.waterSource}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(application.status)}</TableCell>
-                    <TableCell>
-                      <div className="space-y-1">
-                        {application.assignedReviewer && (
-                          <div className="text-sm flex items-center">
-                            <User className="h-3 w-3 mr-1" />
-                            {application.assignedReviewer}
-                          </div>
-                        )}
-                        {application.assignedInspector && (
-                          <div className="text-xs text-muted-foreground">
-                            Inspector: {application.assignedInspector}
-                          </div>
-                        )}
-                        {!application.assignedReviewer && !application.assignedInspector && (
-                          <div className="text-xs text-muted-foreground">Unassigned</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getSLABadge(application.slaStatus, application.daysRemaining)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm font-medium">
-                        {(application.estimatedValue / 1000000).toFixed(1)}M RWF
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
+        </div>
+      </div>
+      
+      {/* Applications Table - Match dashboard design exactly */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.4 }}
+        className="rounded-lg border bg-white shadow-sm overflow-hidden"
+      >
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent bg-gray-50/50">
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Date</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Project Title</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Type</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Status</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Location</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredApplications.length > 0 ? (
+              filteredApplications.map((application) => (
+                <TableRow key={application.id} className="hover:bg-blue-50/30 transition-colors duration-150 border-b border-gray-100">
+                  <TableCell className="font-medium text-gray-900 px-6 py-4">
+                    <div className="text-sm">
+                      {formatDate(application.submittedDate)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-gray-600 px-6 py-4">
+                    <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-md font-medium">
+                      {application.applicationNumber || `RWB-${application.id.slice(-6)}`}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-medium text-gray-900 px-6 py-4 max-w-xs">
+                    <div className="truncate" title={application.projectTitle}>
+                      {application.projectTitle}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-gray-600 px-6 py-4">
+                    <div className="text-sm">
+                      {formatApplicationType(application.applicationType)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-6 py-4">
+                    {getStatusBadge(application.status)}
+                  </TableCell>
+                  <TableCell className="text-gray-600 px-6 py-4">
+                    <div className="text-sm">
+                      {application.district}, {application.province}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right px-6 py-4">
+                    <div className="flex justify-end gap-1.5">
+                      <Link href={`/dashboard/application/${application.id}`}>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                          title="View Application"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </Link>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                            title="More Actions"
+                          >
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setSelectedApplication(application)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleReassignApplication(application.id, "New Reviewer")}>
+                          <DropdownMenuItem>
                             <User className="mr-2 h-4 w-4" />
                             Reassign
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem>
+                            <Download className="mr-2 h-4 w-4" />
+                            Export Data
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Application Detail Dialog */}
-      {selectedApplication && (
-        <Dialog open={!!selectedApplication} onOpenChange={() => setSelectedApplication(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Application Details - {selectedApplication.id}</DialogTitle>
-              <DialogDescription>
-                Comprehensive view of application information and status
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-medium">Applicant Information</h4>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>Name: {selectedApplication.applicantName}</p>
-                    <p>Type: {selectedApplication.applicantType}</p>
-                    <p>Location: {selectedApplication.location}</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-16 text-gray-500">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="p-3 bg-gray-100 rounded-full">
+                      <FileText className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 mb-1">
+                        {applications.length === 0 ? "No applications yet" : "No matches found"}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        {applications.length === 0 
+                          ? "Applications will appear here once they are submitted."
+                          : "Try adjusting your search or filter criteria."
+                        }
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <h4 className="font-medium">Application Details</h4>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>Type: {selectedApplication.applicationType}</p>
-                    <p>Water Source: {selectedApplication.waterSource}</p>
-                    <p>Estimated Value: {(selectedApplication.estimatedValue / 1000000).toFixed(1)}M RWF</p>
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-medium">Status & Timeline</h4>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>Current Status: {getStatusBadge(selectedApplication.status)}</p>
-                    <p>Submitted: {selectedApplication.submittedDate}</p>
-                    <p>Last Updated: {selectedApplication.lastUpdated}</p>
-                  </div>
-                </div>
-                <div>
-                  <h4 className="font-medium">Assignment & SLA</h4>
-                  <div className="space-y-1 text-sm text-muted-foreground">
-                    <p>Reviewer: {selectedApplication.assignedReviewer || "Unassigned"}</p>
-                    <p>Inspector: {selectedApplication.assignedInspector || "Not assigned"}</p>
-                    <p>SLA Status: {getSLABadge(selectedApplication.slaStatus, selectedApplication.daysRemaining)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </motion.div>
     </div>
   );
 } 

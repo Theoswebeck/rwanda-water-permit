@@ -341,6 +341,9 @@ export default function EditApplicationPage() {
     phone: "+250 789 123 456",
     address: "KN 5 Ave, Kigali, Rwanda",
     idNumber: "1 1980 8 0123456 7 89",
+    account_type: 'individual' as const,
+    id_number: "1 1980 8 0123456 7 89",
+    company_tin: undefined,
   };
 
   useEffect(() => {

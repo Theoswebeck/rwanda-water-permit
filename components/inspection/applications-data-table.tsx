@@ -23,7 +23,8 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { TypographyH3, TypographyP } from "@/components/ui/typography"
 import { ClipboardList, MoreHorizontal, FileCheck, Loader2, AlertTriangle } from "lucide-react"
 import Link from "next/link"
-import { getApplicationsPendingInspection } from "@/lib/supabase"
+import { getApplicationsPendingInspection } from "@/lib/supabase";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
 
 interface Application {
   id: string
@@ -49,7 +50,8 @@ interface Application {
 export function ApplicationsDataTable() {
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  
+  const { handleErrorWithBack } = useErrorHandler();
 
   useEffect(() => {
     const fetchApplications = async () => {
@@ -58,8 +60,7 @@ export function ApplicationsDataTable() {
         const data = await getApplicationsPendingInspection()
         setApplications(data || [])
       } catch (err) {
-        console.error('Error fetching applications:', err)
-        setError('Failed to load applications')
+        handleErrorWithBack(err, 'load applications');
       } finally {
         setLoading(false)
       }
@@ -104,16 +105,7 @@ export function ApplicationsDataTable() {
     )
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-2 text-red-600">
-          <AlertTriangle className="h-6 w-6" />
-          <span>{error}</span>
-        </div>
-      </div>
-    )
-  }
+  // Error handling is now done globally with automatic page reload/navigation
 
   return (
     <div className="space-y-4">

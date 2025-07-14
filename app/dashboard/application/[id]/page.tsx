@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,6 @@ import {
   Loader2, 
   MapPin, 
   FileText, 
-  Calendar, 
   User,
   AlertTriangle,
   Edit
@@ -30,7 +29,6 @@ interface ApplicationWithRelations extends Application {
 
 export default function ApplicationDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { getApplication, loading } = useApplications();
@@ -116,6 +114,12 @@ export default function ApplicationDetailPage() {
     } catch (error) {
       return 'Invalid coordinates';
     }
+  };
+
+  // Helper function to format application ID
+  const formatApplicationId = (application: ApplicationWithRelations) => {
+    // Only show the RWB format application number, no UUID fallback
+    return application.application_number || 'Pending Assignment';
   };
 
   if (loading) {
@@ -204,7 +208,7 @@ export default function ApplicationDetailPage() {
                 )}
               </div>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
-                Application ID: {application.application_number}
+                Application ID: <span className="font-mono text-foreground font-semibold">{formatApplicationId(application)}</span>
               </p>
             </div>
           </div>
@@ -232,6 +236,92 @@ export default function ApplicationDetailPage() {
             </Alert>
           )}
           
+          {/* Personal Information */}
+          {application.applicant && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Applicant Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {application.applicant.account_type === 'individual' ? (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Full Name</p>
+                      <p className="font-medium">
+                        {application.applicant.first_name} {application.applicant.last_name}
+                      </p>
+                    </div>
+                    {application.applicant.id_number && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">National ID Number</p>
+                        <p className="font-medium">{application.applicant.id_number}</p>
+                      </div>
+                    )}
+                    {application.applicant.date_of_birth && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Date of Birth</p>
+                        <p className="font-medium">{formatDate(application.applicant.date_of_birth)}</p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Company Name</p>
+                      <p className="font-medium">{application.applicant.company_name}</p>
+                    </div>
+                    {application.applicant.company_tin && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">TIN</p>
+                        <p className="font-medium">{application.applicant.company_tin}</p>
+                      </div>
+                    )}
+                    {application.applicant.incorporation_certificate_number && (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Incorporation Certificate</p>
+                        <p className="font-medium">{application.applicant.incorporation_certificate_number}</p>
+                      </div>
+                    )}
+                  </>
+                )}
+                
+                <div>
+                  <p className="text-sm text-muted-foreground">Account Type</p>
+                  <p className="font-medium">{formatApplicationType(application.applicant.account_type)}</p>
+                </div>
+                
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium">{application.applicant.email}</p>
+                </div>
+                
+                {application.applicant.phone && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Phone</p>
+                    <p className="font-medium">{application.applicant.phone}</p>
+                  </div>
+                )}
+                
+                {application.applicant.mobile_phone && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Mobile Phone</p>
+                    <p className="font-medium">{application.applicant.mobile_phone}</p>
+                  </div>
+                )}
+                
+                {application.applicant.address && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Address</p>
+                    <p className="font-medium">{application.applicant.address}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Application Details */}
           <div className="grid gap-6 md:grid-cols-2">
               <Card>
@@ -591,6 +681,250 @@ export default function ApplicationDetailPage() {
             </Card>
           )}
 
+          {/* Water Source Details */}
+          {(application.water_body_name || application.tributary_name || application.catchment_name_level_1 || application.catchment_name_level_2 || application.water_reliability || application.natural_discharge_volume_m3) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-blue-600" />
+                  💧 Water Source Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {application.water_body_name && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Water Body Name</p>
+                      <p className="font-medium">{application.water_body_name}</p>
+                    </div>
+                  )}
+                  {application.tributary_name && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Tributary Name</p>
+                      <p className="font-medium">{application.tributary_name}</p>
+                    </div>
+                  )}
+                  {application.catchment_name_level_1 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Primary Catchment</p>
+                      <p className="font-medium">{application.catchment_name_level_1}</p>
+                    </div>
+                  )}
+                  {application.catchment_name_level_2 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Secondary Catchment</p>
+                      <p className="font-medium">{application.catchment_name_level_2}</p>
+                    </div>
+                  )}
+                  {application.water_reliability && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Water Reliability</p>
+                      <p className="font-medium">{formatApplicationType(application.water_reliability)}</p>
+                    </div>
+                  )}
+                  {application.natural_discharge_volume_m3 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Natural Discharge Volume</p>
+                      <p className="font-medium">{application.natural_discharge_volume_m3.toLocaleString()} m³</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Water Usage Breakdown */}
+          {(application.max_daily_volume_m3 || application.max_monthly_volume_m3 || application.max_yearly_volume_m3 || application.flow_rate_m3_per_second || application.abstraction_facilities_description || application.return_flow_location || application.return_flow_volume_m3 || application.proposed_duration_months || application.proposed_duration_years || application.pumping_hours_per_day) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-green-600" />
+                  📊 Water Usage Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {application.max_daily_volume_m3 && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Max Daily Volume</p>
+                      <p className="font-bold text-lg text-blue-600">{application.max_daily_volume_m3.toLocaleString()} m³/day</p>
+                    </div>
+                  )}
+                  {application.max_monthly_volume_m3 && (
+                    <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Max Monthly Volume</p>
+                      <p className="font-bold text-lg text-green-600">{application.max_monthly_volume_m3.toLocaleString()} m³/month</p>
+                    </div>
+                  )}
+                  {application.max_yearly_volume_m3 && (
+                    <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Max Yearly Volume</p>
+                      <p className="font-bold text-lg text-purple-600">{application.max_yearly_volume_m3.toLocaleString()} m³/year</p>
+                    </div>
+                  )}
+                  {application.flow_rate_m3_per_second && (
+                    <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Flow Rate</p>
+                      <p className="font-bold text-lg text-orange-600">{application.flow_rate_m3_per_second} m³/s</p>
+                    </div>
+                  )}
+                  {application.pumping_hours_per_day && (
+                    <div className="p-3 bg-cyan-50 dark:bg-cyan-950/20 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Pumping Hours/Day</p>
+                      <p className="font-bold text-lg text-cyan-600">{application.pumping_hours_per_day} hours</p>
+                    </div>
+                  )}
+                  {(application.proposed_duration_months || application.proposed_duration_years) && (
+                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Proposed Duration</p>
+                      <p className="font-bold text-lg text-indigo-600">
+                        {[
+                          application.proposed_duration_years && `${application.proposed_duration_years} years`,
+                          application.proposed_duration_months && `${application.proposed_duration_months} months`
+                        ].filter(Boolean).join(', ')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                
+                {application.abstraction_facilities_description && (
+                  <div className="pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">Abstraction Facilities Description</p>
+                    <p className="font-medium mt-1">{application.abstraction_facilities_description}</p>
+                  </div>
+                )}
+                
+                {(application.return_flow_location || application.return_flow_volume_m3) && (
+                  <div className="pt-4 border-t">
+                    <h4 className="font-semibold text-lg mb-3">Return Flow Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {application.return_flow_location && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Return Flow Location</p>
+                          <p className="font-medium">{application.return_flow_location}</p>
+                        </div>
+                      )}
+                      {application.return_flow_volume_m3 && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Return Flow Volume</p>
+                          <p className="font-medium">{application.return_flow_volume_m3.toLocaleString()} m³</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Project Details & Construction */}
+          {(application.proposed_facilities_description || application.construction_type || application.concession_area || application.operational_overview) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-orange-600" />
+                  🏗️ Project Details & Construction
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {application.proposed_facilities_description && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Proposed Facilities Description</p>
+                    <p className="font-medium mt-1">{application.proposed_facilities_description}</p>
+                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {application.construction_type && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Construction Type</p>
+                      <p className="font-medium">{application.construction_type}</p>
+                    </div>
+                  )}
+                  {application.concession_area && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Concession Area</p>
+                      <p className="font-medium">{application.concession_area} hectares</p>
+                    </div>
+                  )}
+                </div>
+                
+                {application.operational_overview && (
+                  <div className="pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">Operational Overview</p>
+                    <p className="font-medium mt-1">{application.operational_overview}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Land Ownership Information */}
+          {(application.owns_all_required_land !== undefined || application.land_ownership_status || application.affected_landowners || application.easement_details || application.written_consent_details || application.lease_agreement_details || application.land_access_steps) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-green-600" />
+                  🏠 Land Ownership Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {application.owns_all_required_land !== undefined && (
+                  <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                    <p className="text-sm text-muted-foreground">Owns All Required Land</p>
+                    <p className="font-bold text-lg text-green-600">
+                      {application.owns_all_required_land ? '✅ Yes' : '❌ No'}
+                    </p>
+                  </div>
+                )}
+                
+                {application.land_ownership_status && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Land Ownership Status</p>
+                    <p className="font-medium">{formatApplicationType(application.land_ownership_status)}</p>
+                  </div>
+                )}
+                
+                {application.affected_landowners && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Affected Landowners</p>
+                    <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(application.affected_landowners, null, 2)}</pre>
+                    </div>
+                  </div>
+                )}
+                
+                {application.easement_details && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Easement Details</p>
+                    <p className="font-medium mt-1">{application.easement_details}</p>
+                  </div>
+                )}
+                
+                {application.written_consent_details && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Written Consent Details</p>
+                    <p className="font-medium mt-1">{application.written_consent_details}</p>
+                  </div>
+                )}
+                
+                {application.lease_agreement_details && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Lease Agreement Details</p>
+                    <p className="font-medium mt-1">{application.lease_agreement_details}</p>
+                  </div>
+                )}
+                
+                {application.land_access_steps && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Land Access Steps</p>
+                    <p className="font-medium mt-1">{application.land_access_steps}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Assignment & Processing Details */}
           <Card>
             <CardHeader>
@@ -678,6 +1012,8 @@ export default function ApplicationDetailPage() {
               )}
             </CardContent>
           </Card>
+
+
         </motion.div>
       </div>
 

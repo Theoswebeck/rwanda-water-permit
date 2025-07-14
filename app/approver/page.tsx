@@ -1,21 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getApproverDashboardStats } from "@/lib/supabase";
 import { 
   CheckCircle, 
   XCircle, 
   Clock, 
   TrendingUp, 
-  Users, 
   FileCheck, 
   AlertTriangle,
   Shield,
-  Scale
+  Scale,
+  Loader2
 } from "lucide-react";
 import { FinalDecisions } from "@/components/approver/final-decisions";
 import { ExecutiveOverview } from "@/components/approver/executive-overview";
@@ -30,17 +29,50 @@ interface DashboardStats {
   complianceRate: number;
 }
 
-const mockStats: DashboardStats = {
-  pendingFinalApproval: 8,
-  approvedThisMonth: 47,
-  rejectedThisMonth: 3,
-  totalApplications: 567,
-  avgDecisionTime: 2.3,
-  complianceRate: 98.2
-};
-
 export default function ApproverDashboard() {
   const [activeTab, setActiveTab] = useState("decisions");
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const dashboardStats = await getApproverDashboardStats();
+        setStats(dashboardStats);
+      } catch (err) {
+        console.error('Failed to fetch approver dashboard stats:', err);
+        setError('Failed to load dashboard statistics');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="text-center py-12">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
+          <p className="text-muted-foreground">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-6 py-8 space-y-8">
@@ -75,7 +107,7 @@ export default function ApproverDashboard() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{mockStats.pendingFinalApproval}</div>
+              <div className="text-2xl font-bold">{stats?.pendingFinalApproval || 0}</div>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
                 Awaiting your review
               </p>
@@ -88,7 +120,7 @@ export default function ApproverDashboard() {
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{mockStats.approvedThisMonth}</div>
+              <div className="text-2xl font-bold">{stats?.approvedThisMonth || 0}</div>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
                 This month
               </p>
@@ -101,22 +133,9 @@ export default function ApproverDashboard() {
               <XCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{mockStats.rejectedThisMonth}</div>
+              <div className="text-2xl font-bold">{stats?.rejectedThisMonth || 0}</div>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                Past 7 days
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Decision</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{mockStats.avgDecisionTime}</div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                Average processing
+                This month
               </p>
             </CardContent>
           </Card>
@@ -127,49 +146,55 @@ export default function ApproverDashboard() {
               <FileCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{mockStats.totalApplications}</div>
+              <div className="text-2xl font-bold">{stats?.totalApplications || 0}</div>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                Success rate
+                All time
               </p>
             </CardContent>
           </Card>
           
-
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Avg Decision Time</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.avgDecisionTime || 0} days</div>
+              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
+                Processing efficiency
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 pt-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="decisions" className="flex items-center space-x-2">
+            <TabsTrigger value="decisions" className="flex items-center gap-2">
               <Scale className="h-4 w-4" />
-              <span className="hidden sm:inline">Final Decisions</span>
-              <span className="sm:hidden">Decisions</span>
+              Final Decisions
             </TabsTrigger>
-            <TabsTrigger value="overview" className="flex items-center space-x-2">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <Shield className="h-4 w-4" />
+              Executive Overview
+            </TabsTrigger>
+            <TabsTrigger value="metrics" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              <span className="hidden sm:inline">Executive Overview</span>
-              <span className="sm:hidden">Overview</span>
-            </TabsTrigger>
-            <TabsTrigger value="performance" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span className="hidden sm:inline">Performance</span>
-              <span className="sm:hidden">Performance</span>
+              Performance Metrics
             </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="decisions" className="space-y-6">
             <FinalDecisions />
           </TabsContent>
-          
+
           <TabsContent value="overview" className="space-y-6">
             <ExecutiveOverview />
           </TabsContent>
-          
-          <TabsContent value="performance" className="space-y-6">
+
+          <TabsContent value="metrics" className="space-y-6">
             <PerformanceMetrics />
           </TabsContent>
-          
-
         </Tabs>
       </motion.div>
     </div>

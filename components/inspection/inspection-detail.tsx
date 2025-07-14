@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle2, XCircle, AlertCircle, Loader2, AlertTriangle } from "lucide-react"
-import { getInspectionById } from "@/lib/supabase"
+import { getInspectionById } from "@/lib/supabase";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
 
 interface InspectionDetailProps {
   inspectionId: string
@@ -74,7 +75,8 @@ interface Inspection {
 export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  
+  const { handleErrorWithBack } = useErrorHandler();
 
   useEffect(() => {
     const fetchInspection = async () => {
@@ -83,8 +85,7 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
         const data = await getInspectionById(inspectionId)
         setInspection(data)
       } catch (err) {
-        console.error('Error fetching inspection:', err)
-        setError('Failed to load inspection details')
+        handleErrorWithBack(err, 'load inspection details');
       } finally {
         setLoading(false)
       }
@@ -174,16 +175,7 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
     )
   }
 
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="flex items-center gap-2 text-red-600">
-          <AlertTriangle className="h-6 w-6" />
-          <span>{error}</span>
-        </div>
-      </div>
-    )
-  }
+  // Error handling is now done globally with automatic page reload/navigation
 
   if (!inspection) {
     return (

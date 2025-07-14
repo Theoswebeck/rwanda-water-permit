@@ -33,10 +33,12 @@ import {
   FormMessage
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { MapPin, Upload, X, FileText, Check, AlertCircle, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Upload, X, FileText, Check, AlertCircle, XCircle, Droplet, Building, Zap, Mountain } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useErrorHandler } from "@/hooks/useErrorHandler";
 
 // Define the validation schema for the form
 const formSchema = z.object({
@@ -50,7 +52,6 @@ const formSchema = z.object({
   poBox: z.string().optional(),
   mobilePhone: z.string().optional(),
   landlinePhone: z.string().optional(),
-  incorporationCertificateNumber: z.string().optional(),
   alternativeContactName: z.string().optional(),
   alternativeContactRelationship: z.string().optional(),
   alternativeContactPhone: z.string().optional(),
@@ -179,7 +180,10 @@ interface UserData {
   name: string;
   phone: string;
   address: string;
-  idNumber: string;
+  idNumber?: string;
+  account_type?: 'individual' | 'company' | 'cooperative' | 'organization' | 'institution';
+  company_tin?: string;
+  id_number?: string;
 }
 
 interface ApplicationFormProps {
@@ -239,7 +243,6 @@ export function ApplicationForm({
     poBox: "",
     mobilePhone: "",
     landlinePhone: "",
-    incorporationCertificateNumber: "",
     alternativeContactName: "",
     alternativeContactRelationship: "",
     alternativeContactPhone: "",
@@ -503,7 +506,6 @@ export function ApplicationForm({
       poBox: "P.O. Box",
       mobilePhone: "Mobile Phone",
       landlinePhone: "Landline Phone",
-      incorporationCertificateNumber: "Incorporation Certificate Number",
       alternativeContactName: "Alternative Contact Name",
       alternativeContactRelationship: "Alternative Contact Relationship",
       alternativeContactPhone: "Alternative Contact Phone",
@@ -1496,7 +1498,7 @@ export function ApplicationForm({
                       }
                     }}
                   >
-                    Permit Details
+                    Permit & Water Details
                   </TabsTrigger>
                   <TabsTrigger value="location" 
                     onClick={(e) => {
@@ -1549,7 +1551,9 @@ export function ApplicationForm({
                   <CardDescription className="mb-6">
                     Your personal information is populated from your profile. To update these details, please visit your profile settings.
                   </CardDescription>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Basic Contact Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                       <FormField
                         control={form.control}
                         name="fullName"
@@ -1607,6 +1611,128 @@ export function ApplicationForm({
                       />
                     </div>
                     
+                  {/* Enhanced Contact Information */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg space-y-6 mb-8">
+                    <h4 className="text-lg font-medium text-blue-800 dark:text-blue-200">
+                      Enhanced Contact Information
+                    </h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      Additional contact details for official correspondence and alternative contact person.
+                    </p>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="poBox"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>P.O. Box (Optional)</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="P.O. Box number" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="mobilePhone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Mobile Phone (Optional)</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="+250 xxx xxx xxx" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="landlinePhone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Landline Phone (Optional)</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="+250 xxx xxx xxx" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      {/* TIN/NID Display (Read-only from Account) */}
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">
+                          {userData?.account_type === 'individual' ? 'National ID Number' : 'TIN (Tax Identification Number)'}
+                        </Label>
+                        <div className="flex items-center space-x-2">
+                          <Input
+                            value={userData?.account_type === 'individual' ? userData?.id_number || 'Not provided' : userData?.company_tin || 'Not provided'}
+                            disabled
+                            className="bg-muted"
+                          />
+                          <Badge variant="secondary" className="text-xs">
+                            Verified
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          This information was verified during account registration and cannot be changed here.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Alternative Contact Person */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded border border-blue-200 dark:border-blue-800">
+                      <h5 className="font-medium text-blue-800 dark:text-blue-200 mb-4">Alternative Contact Person</h5>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="alternativeContactName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Full Name (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Alternative contact person" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="alternativeContactRelationship"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Relationship (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="e.g., Manager, Delegate, etc." />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="alternativeContactPhone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Phone Number (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="+250 xxx xxx xxx" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                    
                   <div className="flex justify-end pt-6">
                     <Button type="button" onClick={() => {
                       if (validatePersonalInfo()) {
@@ -1620,179 +1746,114 @@ export function ApplicationForm({
                 </TabsContent>
                 
                 <TabsContent value="details" className="pt-6">
-                  <CardTitle className="text-lg mb-2">Permit Details</CardTitle>
-                  <CardDescription className="mb-6">
-                    Provide details about the water permit you are applying for.
-                  </CardDescription>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Permit Type */}
-                      <FormField
-                        control={form.control}
-                        name="permitType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Permit Type</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Select a permit type" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                              <SelectItem value="new">New Permit</SelectItem>
-                              <SelectItem value="renewal">Renewal</SelectItem>
-                              <SelectItem value="modification">Modification</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                    {/* Applicant Type */}
-                    <FormField
-                      control={form.control}
-                      name="applicantType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Applicant Type</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select an applicant type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="domestic">Domestic</SelectItem>
-                              <SelectItem value="commercial">Commercial</SelectItem>
-                              <SelectItem value="industrial">Industrial</SelectItem>
-                              <SelectItem value="agricultural">Agricultural</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <div className="space-y-8">
+                    {/* Main Header */}
+                    <div className="text-center pb-2">
+                      <CardTitle className="text-2xl mb-2">Permit & Water Details</CardTitle>
+                      <CardDescription className="text-base">
+                        Provide comprehensive details about your water permit application and usage requirements.
+                      </CardDescription>
+                    </div>
 
-                    {/* Water Source */}
-                      <FormField
-                        control={form.control}
-                        name="waterSource"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Water Source</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select water source" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="groundwater">Groundwater</SelectItem>
-                              <SelectItem value="surface_water">Surface Water</SelectItem>
-                                <SelectItem value="river">River</SelectItem>
-                                <SelectItem value="lake">Lake</SelectItem>
-                                <SelectItem value="spring">Spring</SelectItem>
-                              <SelectItem value="borehole">Borehole</SelectItem>
-                              <SelectItem value="reservoir">Reservoir</SelectItem>
-                              <SelectItem value="stream">Stream</SelectItem>
-                              <SelectItem value="wetland">Wetland</SelectItem>
-                              <SelectItem value="hydropower_source">Hydropower Source</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    {/* Permit Information Section */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                          <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">Permit Information</h3>
+                          <p className="text-sm text-blue-700 dark:text-blue-300">Basic permit application details</p>
+                        </div>
+                      </div>
                       
-                    {/* Purpose */}
-                      <FormField
-                        control={form.control}
-                        name="purpose"
-                        render={({ field }) => (
-                          <FormItem>
-                          <FormLabel>Purpose of Water Use</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                <SelectValue placeholder="Select a purpose" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                              <SelectItem value="irrigation">Irrigation</SelectItem>
-                                <SelectItem value="livestock">Livestock</SelectItem>
-                              <SelectItem value="aquaculture">Aquaculture</SelectItem>
-                              <SelectItem value="hydropower">Hydropower</SelectItem>
-                              <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
-                              <SelectItem value="industrial">Industrial Use</SelectItem>
-                              <SelectItem value="mining">Mining</SelectItem>
-                              <SelectItem value="domestic">Domestic Use</SelectItem>
-                              <SelectItem value="commercial">Commercial Use</SelectItem>
-                              <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          <FormDescription>
-                            Refer to the checklist and provide all required information corresponding to the proposed use.
-                          </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                    {/* Conditional Industry Type Field */}
-                    {shouldShowIndustryFields() && (
-                      <FormField
-                        control={form.control}
-                        name="industryType"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Type of Industry</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value || ""}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select industry type" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="manufacturing">Manufacturing</SelectItem>
-                                <SelectItem value="food_processing">Food Processing</SelectItem>
-                                <SelectItem value="textile">Textile</SelectItem>
-                                <SelectItem value="chemical">Chemical</SelectItem>
-                                <SelectItem value="pharmaceutical">Pharmaceutical</SelectItem>
-                                <SelectItem value="cement">Cement</SelectItem>
-                                <SelectItem value="paper_pulp">Paper & Pulp</SelectItem>
-                                <SelectItem value="steel">Steel</SelectItem>
-                                <SelectItem value="other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-
-                    {/* Conditional Electricity Generation Fields */}
-                    {shouldShowElectricityFields() && (
-                      <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <FormField
                           control={form.control}
-                          name="powerGenerationType"
+                          name="permitType"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Power Generation Type</FormLabel>
+                              <FormLabel className="text-blue-900 dark:text-blue-100">Permit Type</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select generation type" />
+                                  <SelectTrigger className="bg-white dark:bg-gray-800">
+                                    <SelectValue placeholder="Select a permit type" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="run_of_river">Run-of-River</SelectItem>
+                                  <SelectItem value="new">New Permit</SelectItem>
+                                  <SelectItem value="renewal">Renewal</SelectItem>
+                                  <SelectItem value="modification">Modification</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="applicantType"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-blue-900 dark:text-blue-100">Applicant Type</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-white dark:bg-gray-800">
+                                    <SelectValue placeholder="Select an applicant type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="domestic">Domestic</SelectItem>
+                                  <SelectItem value="commercial">Commercial</SelectItem>
+                                  <SelectItem value="industrial">Industrial</SelectItem>
+                                  <SelectItem value="agricultural">Agricultural</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Water Source & Usage Section */}
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 p-6 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg">
+                          <Droplet className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-emerald-900 dark:text-emerald-100">Water Source & Usage</h3>
+                          <p className="text-sm text-emerald-700 dark:text-emerald-300">Water source identification and usage requirements</p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="waterSource"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-emerald-900 dark:text-emerald-100">Water Source</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-white dark:bg-gray-800">
+                                    <SelectValue placeholder="Select water source" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="groundwater">Groundwater</SelectItem>
+                                  <SelectItem value="surface_water">Surface Water</SelectItem>
+                                  <SelectItem value="river">River</SelectItem>
+                                  <SelectItem value="lake">Lake</SelectItem>
+                                  <SelectItem value="spring">Spring</SelectItem>
+                                  <SelectItem value="borehole">Borehole</SelectItem>
                                   <SelectItem value="reservoir">Reservoir</SelectItem>
-                                  <SelectItem value="pumped_storage">Pumped Storage</SelectItem>
-                                  <SelectItem value="micro_hydro">Micro Hydro</SelectItem>
-                                  <SelectItem value="other">Other</SelectItem>
+                                  <SelectItem value="stream">Stream</SelectItem>
+                                  <SelectItem value="wetland">Wetland</SelectItem>
+                                  <SelectItem value="hydropower_source">Hydropower Source</SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -1802,99 +1863,50 @@ export function ApplicationForm({
                         
                         <FormField
                           control={form.control}
-                          name="installedCapacity"
+                          name="purpose"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Installed Capacity (MW)</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  type="number" 
-                                  placeholder="e.g., 10.5"
-                                  value={field.value || ""}
-                                  onChange={e => {
-                                    const value = e.target.value;
-                                    field.onChange(value === "" ? undefined : parseFloat(value));
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </>
-                    )}
-
-                    {/* Conditional Mining Fields */}
-                    {shouldShowMiningFields() && (
-                      <>
-                        <FormField
-                          control={form.control}
-                          name="miningType"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Mining Type</FormLabel>
+                              <FormLabel className="text-emerald-900 dark:text-emerald-100">Purpose of Water Use</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select mining type" />
+                                  <SelectTrigger className="bg-white dark:bg-gray-800">
+                                    <SelectValue placeholder="Select a purpose" />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="surface">Surface Mining</SelectItem>
-                                  <SelectItem value="underground">Underground Mining</SelectItem>
-                                  <SelectItem value="placer">Placer Mining</SelectItem>
-                                  <SelectItem value="quarrying">Quarrying</SelectItem>
+                                  <SelectItem value="irrigation">Irrigation</SelectItem>
+                                  <SelectItem value="livestock">Livestock</SelectItem>
+                                  <SelectItem value="aquaculture">Aquaculture</SelectItem>
+                                  <SelectItem value="hydropower">Hydropower</SelectItem>
+                                  <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
+                                  <SelectItem value="industrial">Industrial Use</SelectItem>
+                                  <SelectItem value="mining">Mining</SelectItem>
+                                  <SelectItem value="domestic">Domestic Use</SelectItem>
+                                  <SelectItem value="commercial">Commercial Use</SelectItem>
                                   <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
+                              <FormDescription className="text-emerald-700 dark:text-emerald-300">
+                                Refer to the checklist and provide all required information corresponding to the proposed use.
+                              </FormDescription>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
                         
-                        <FormField
-                          control={form.control}
-                          name="mineralType"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Mineral Type</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || ""}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select mineral type" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="gold">Gold</SelectItem>
-                                  <SelectItem value="tin">Tin</SelectItem>
-                                  <SelectItem value="tungsten">Tungsten</SelectItem>
-                                  <SelectItem value="tantalum">Tantalum</SelectItem>
-                                  <SelectItem value="limestone">Limestone</SelectItem>
-                                  <SelectItem value="clay">Clay</SelectItem>
-                                  <SelectItem value="sand">Sand</SelectItem>
-                                  <SelectItem value="gravel">Gravel</SelectItem>
-                                  <SelectItem value="other">Other</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </>
-                    )}
-
-                    {/* Water Usage */}
                         <FormField
                           control={form.control}
                           name="waterUsage"
                           render={({ field }) => (
                             <FormItem>
-                          <FormLabel>Water Usage Amount</FormLabel>
+                              <FormLabel className="text-emerald-900 dark:text-emerald-100">Water Usage Amount</FormLabel>
                               <FormControl>
                                 <Input 
                                   type="number" 
+                                  className="bg-white dark:bg-gray-800"
+                                  placeholder="Enter amount"
                                   {...field}
-                              onChange={e => field.onChange(parseInt(e.target.value, 10))}
+                                  onChange={e => field.onChange(parseInt(e.target.value, 10))}
                                 />
                               </FormControl>
                               <FormMessage />
@@ -1902,16 +1914,15 @@ export function ApplicationForm({
                           )}
                         />
                         
-                    {/* Water Usage Unit */}
                         <FormField
                           control={form.control}
                           name="waterUsageUnit"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Unit</FormLabel>
+                              <FormLabel className="text-emerald-900 dark:text-emerald-100">Unit</FormLabel>
                               <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
-                                  <SelectTrigger>
+                                  <SelectTrigger className="bg-white dark:bg-gray-800">
                                     <SelectValue placeholder="Select a unit" />
                                   </SelectTrigger>
                                 </FormControl>
@@ -1925,9 +1936,311 @@ export function ApplicationForm({
                             </FormItem>
                           )}
                         />
-                    <FormDescription className="col-span-full -mt-4">
-                      Quantity of water to be taken if for consumptive use.
-                    </FormDescription>
+                      </div>
+                      
+                      <div className="mt-4 p-3 bg-emerald-100/50 dark:bg-emerald-900/20 rounded-lg">
+                        <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                          💧 <strong>Note:</strong> Specify the quantity of water to be taken if for consumptive use.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Conditional Specialized Fields */}
+                    {shouldShowIndustryFields() && (
+                      <div className="bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 p-6 rounded-xl border border-orange-200 dark:border-orange-800">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-2 bg-orange-100 dark:bg-orange-900/40 rounded-lg">
+                            <Building className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-orange-900 dark:text-orange-100">Industrial Specifications</h3>
+                            <p className="text-sm text-orange-700 dark:text-orange-300">Specific requirements for industrial water use</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField
+                            control={form.control}
+                            name="industryType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-orange-900 dark:text-orange-100">Type of Industry</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white dark:bg-gray-800">
+                                      <SelectValue placeholder="Select industry type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                                    <SelectItem value="food_processing">Food Processing</SelectItem>
+                                    <SelectItem value="textile">Textile</SelectItem>
+                                    <SelectItem value="chemical">Chemical</SelectItem>
+                                    <SelectItem value="pharmaceutical">Pharmaceutical</SelectItem>
+                                    <SelectItem value="cement">Cement</SelectItem>
+                                    <SelectItem value="paper_pulp">Paper & Pulp</SelectItem>
+                                    <SelectItem value="steel">Steel</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {shouldShowElectricityFields() && (
+                      <div className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 p-6 rounded-xl border border-purple-200 dark:border-purple-800">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+                            <Zap className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">Power Generation Specifications</h3>
+                            <p className="text-sm text-purple-700 dark:text-purple-300">Hydropower and electricity generation details</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField
+                            control={form.control}
+                            name="powerGenerationType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-purple-900 dark:text-purple-100">Power Generation Type</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white dark:bg-gray-800">
+                                      <SelectValue placeholder="Select generation type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="run_of_river">Run-of-River</SelectItem>
+                                    <SelectItem value="reservoir">Reservoir</SelectItem>
+                                    <SelectItem value="pumped_storage">Pumped Storage</SelectItem>
+                                    <SelectItem value="micro_hydro">Micro Hydro</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="installedCapacity"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-purple-900 dark:text-purple-100">Installed Capacity (MW)</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    className="bg-white dark:bg-gray-800"
+                                    placeholder="e.g., 10.5"
+                                    value={field.value || ""}
+                                    onChange={e => {
+                                      const value = e.target.value;
+                                      field.onChange(value === "" ? undefined : parseFloat(value));
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {shouldShowMiningFields() && (
+                      <div className="bg-gradient-to-r from-stone-50 to-gray-50 dark:from-stone-900/20 dark:to-gray-900/20 p-6 rounded-xl border border-stone-200 dark:border-stone-800">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="p-2 bg-stone-100 dark:bg-stone-900/40 rounded-lg">
+                            <Mountain className="h-5 w-5 text-stone-600 dark:text-stone-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-stone-900 dark:text-stone-100">Mining Operations</h3>
+                            <p className="text-sm text-stone-700 dark:text-stone-300">Mining and extraction operation details</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <FormField
+                            control={form.control}
+                            name="miningType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-stone-900 dark:text-stone-100">Mining Type</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white dark:bg-gray-800">
+                                      <SelectValue placeholder="Select mining type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="surface">Surface Mining</SelectItem>
+                                    <SelectItem value="underground">Underground Mining</SelectItem>
+                                    <SelectItem value="placer">Placer Mining</SelectItem>
+                                    <SelectItem value="quarrying">Quarrying</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="mineralType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-stone-900 dark:text-stone-100">Mineral Type</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger className="bg-white dark:bg-gray-800">
+                                      <SelectValue placeholder="Select mineral type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="gold">Gold</SelectItem>
+                                    <SelectItem value="tin">Tin</SelectItem>
+                                    <SelectItem value="tungsten">Tungsten</SelectItem>
+                                    <SelectItem value="tantalum">Tantalum</SelectItem>
+                                    <SelectItem value="limestone">Limestone</SelectItem>
+                                    <SelectItem value="clay">Clay</SelectItem>
+                                    <SelectItem value="sand">Sand</SelectItem>
+                                    <SelectItem value="gravel">Gravel</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {/* Water Source Details Section */}
+                    <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 p-6 rounded-xl border border-cyan-200 dark:border-cyan-800">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-cyan-100 dark:bg-cyan-900/40 rounded-lg">
+                          <MapPin className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-cyan-900 dark:text-cyan-100">Water Source Details</h3>
+                          <p className="text-sm text-cyan-700 dark:text-cyan-300">Detailed information about the water source and its characteristics</p>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField
+                          control={form.control}
+                          name="waterBodyName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-cyan-900 dark:text-cyan-100">Water Body Name (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} className="bg-white dark:bg-gray-800" placeholder="Name of river, lake, stream, etc." />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="tributaryName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-cyan-900 dark:text-cyan-100">Tributary Name (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} className="bg-white dark:bg-gray-800" placeholder="Name of tributary if applicable" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="catchmentNameLevel1"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-cyan-900 dark:text-cyan-100">Catchment Level 1 (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} className="bg-white dark:bg-gray-800" placeholder="Primary catchment area" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="catchmentNameLevel2"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-cyan-900 dark:text-cyan-100">Catchment Level 2 (Optional)</FormLabel>
+                              <FormControl>
+                                <Input {...field} className="bg-white dark:bg-gray-800" placeholder="Secondary catchment area" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="waterReliability"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-cyan-900 dark:text-cyan-100">Water Reliability (Optional)</FormLabel>
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger className="bg-white dark:bg-gray-800">
+                                    <SelectValue placeholder="Select water reliability" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="always_available">Always Available</SelectItem>
+                                  <SelectItem value="frequently_dry">Frequently Dry</SelectItem>
+                                  <SelectItem value="seasonal_dry">Seasonal Dry</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        
+                        <FormField
+                          control={form.control}
+                          name="naturalDischargeVolume"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-cyan-900 dark:text-cyan-100">Natural Discharge Volume (m³) (Optional)</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  type="number" 
+                                  step="0.01"
+                                  className="bg-white dark:bg-gray-800"
+                                  placeholder="Natural flow volume"
+                                  value={field.value || ""}
+                                  onChange={e => {
+                                    const value = e.target.value;
+                                    field.onChange(value === "" ? undefined : parseFloat(value));
+                                  }}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
                   </div>
                   
                   <div className="flex justify-between pt-6">

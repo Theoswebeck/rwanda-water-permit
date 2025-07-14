@@ -166,9 +166,65 @@ export function useApplications({
   const getApplication = useCallback(async (id: string): Promise<Application | null> => {
     try {
       setError(null)
+      
+      // Enhanced query to get application with all related data
       const { data, error } = await supabase
         .from('applications')
-        .select('*')
+        .select(`
+          *,
+          applicant:users!applicant_id(
+            id,
+            email,
+            phone,
+            mobile_phone,
+            landline_phone,
+            role,
+            status,
+            account_type,
+            first_name,
+            last_name,
+            date_of_birth,
+            id_number,
+            id_type,
+            company_name,
+            company_tin,
+            company_address,
+            company_phone,
+            po_box,
+            incorporation_certificate_number,
+            alternative_contact,
+            province,
+            district,
+            sector,
+            cell,
+            village,
+            address,
+            created_at,
+            last_login_at
+          ),
+          assigned_reviewer:users!assigned_reviewer_id(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          assigned_inspector:users!assigned_inspector_id(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          assigned_approver:users!assigned_approver_id(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          documents(*),
+          reviews!application_id(*),
+          inspections!application_id(*),
+          permits!application_id(*)
+        `)
         .eq('id', id)
         .single()
 
