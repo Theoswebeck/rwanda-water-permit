@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin } from "lucide-react";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { supabase } from "@/lib/supabase";
@@ -30,11 +31,13 @@ interface ReviewApplication extends Application {
 }
 
 export default function ReviewerDashboard() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [reviewApplications, setReviewApplications] = useState<ReviewApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [startingReview, setStartingReview] = useState<string | null>(null);
 
   // Fetch applications for review
   useEffect(() => {
@@ -136,6 +139,41 @@ export default function ReviewerDashboard() {
     return <span className="text-muted-foreground">In {daysRemaining} days</span>;
   };
 
+  const handleStartReview = async (application: ReviewApplication) => {
+    try {
+      setStartingReview(application.id);
+      
+      // Update application status to under_review when starting review
+      const { error } = await supabase
+        .from('applications')
+        .update({ status: 'under_review' })
+        .eq('id', application.id);
+
+      if (error) {
+        console.error('Error updating application status:', error);
+        alert('Failed to start review. Please try again.');
+        setStartingReview(null);
+        return;
+      }
+
+      // Update the local state to reflect the status change
+      setReviewApplications(prevApps =>
+        prevApps.map(app =>
+          app.id === application.id 
+            ? { ...app, status: 'under_review' as ApplicationStatus }
+            : app
+        )
+      );
+
+      // Navigate to the review page
+      router.push(`/review/application/${application.application_number}`);
+    } catch (err) {
+      console.error('Error starting review:', err);
+      alert('Failed to start review. Please try again.');
+      setStartingReview(null);
+    }
+  };
+
   const filterApplications = (applications: ReviewApplication[]) => {
     return applications.filter(app => {
       const matchesSearch = app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -220,13 +258,28 @@ export default function ReviewerDashboard() {
                 <TableCell>{getStatusBadge(app.status)}</TableCell>
                 <TableCell>{getSLAStatus(app.sla_days_remaining ?? null)}</TableCell>
                 <TableCell>
-                  <Link href={`/review/application/${app.application_number}`}>
-                    <Button size="sm" variant="ghost">
-                      <Eye className="h-4 w-4 mr-1" />
-                      {app.status === 'submitted' ? 'Review' : 
-                       app.status === 'under_review' ? 'Final Review' : 'View'}
+                  {app.status === 'submitted' ? (
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => handleStartReview(app)}
+                      disabled={startingReview === app.id}
+                    >
+                      {startingReview === app.id ? (
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      ) : (
+                        <Eye className="h-4 w-4 mr-1" />
+                      )}
+                      {startingReview === app.id ? 'Starting...' : 'Review'}
                     </Button>
-                  </Link>
+                  ) : (
+                    <Link href={`/review/application/${app.application_number}`}>
+                      <Button size="sm" variant="ghost">
+                        <Eye className="h-4 w-4 mr-1" />
+                        {app.status === 'under_review' ? 'Final Review' : 'View'}
+                      </Button>
+                    </Link>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
