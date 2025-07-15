@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge"
 import { StatsPanel } from "./stats-panel"
 import { ApplicationsTab } from "./applications-tab"
 import { InspectionsTab } from "./inspections-tab"
+import { WaterConcessionMap } from "@/components/shared/water-concession-map"
 import { 
   ClipboardList, 
   FileCheck,
-  Loader2
+  Loader2,
+  MapPin
 } from "lucide-react"
 import { getInspectionStats, getApplicationsPendingInspection, getApplicationsForInspection, getCurrentUser } from "@/lib/supabase"
 
@@ -97,7 +99,7 @@ export function InspectionDashboard() {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="applications" className="flex items-center gap-2">
                 <ClipboardList className="h-4 w-4" />
                 Applications to Inspect
@@ -120,12 +122,19 @@ export function InspectionDashboard() {
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="map" className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Concession Map
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="applications" className="mt-6">
               <ApplicationsTab />
             </TabsContent>
             <TabsContent value="inspections" className="mt-6">
               <InspectionsTab />
+            </TabsContent>
+            <TabsContent value="map" className="mt-6">
+              <WaterConcessionMap />
             </TabsContent>
           </Tabs>
         </CardContent>

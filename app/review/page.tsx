@@ -17,11 +17,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown } from "lucide-react";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
+import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -352,11 +353,15 @@ export default function ReviewerDashboard() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="new_submissions" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="new_submissions">New Submissions</TabsTrigger>
               <TabsTrigger value="pending_inspection">Pending Inspection</TabsTrigger>
               <TabsTrigger value="ready_for_final_review">Under Review</TabsTrigger>
               <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+              <TabsTrigger value="map" className="flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Concession Map
+              </TabsTrigger>
             </TabsList>
 
             {/* Search and Filter Controls */}
@@ -453,6 +458,10 @@ export default function ReviewerDashboard() {
                   />
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="map" className="space-y-4">
+              <WaterConcessionMap />
             </TabsContent>
           </Tabs>
         </div>

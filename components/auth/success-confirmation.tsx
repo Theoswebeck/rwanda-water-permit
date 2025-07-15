@@ -14,6 +14,7 @@ interface SuccessConfirmationProps {
   redirectUrl?: string;
   redirectLabel?: string;
   showApplyButton?: boolean;
+  onComplete?: () => void;
 }
 
 export function SuccessConfirmation({ 
@@ -22,7 +23,8 @@ export function SuccessConfirmation({
   message = "Your account has been successfully created and your email has been verified.",
   redirectUrl = "/dashboard",
   redirectLabel = "Go to Dashboard",
-  showApplyButton = true
+  showApplyButton = true,
+  onComplete
 }: SuccessConfirmationProps) {
   const router = useRouter();
 
@@ -74,11 +76,17 @@ export function SuccessConfirmation({
             </ul>
           </div>
           <div className="flex flex-col gap-2">
-            <Button asChild>
-              <Link href={redirectUrl}>
+            {onComplete ? (
+              <Button onClick={onComplete}>
                 {redirectLabel}
-              </Link>
-            </Button>
+              </Button>
+            ) : (
+              <Button asChild>
+                <Link href={redirectUrl}>
+                  {redirectLabel}
+                </Link>
+              </Button>
+            )}
             {showApplyButton && (
               <Button variant="outline" asChild>
                 <Link href="/applications/new">

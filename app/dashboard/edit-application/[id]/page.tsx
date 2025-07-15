@@ -10,7 +10,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
-import type { Application } from "@/types/database";
+import { DocumentViewer } from "@/components/documents/document-viewer";
+import type { Application, Document, User as UserType } from "@/types/database";
+
+interface ApplicationWithRelations extends Application {
+  applicant?: UserType;
+  documents?: Document[];
+}
 
 // Helper function to capitalize province names for database enum compatibility
 function formatProvinceForDB(province: string): Application['province'] | undefined {
@@ -328,7 +334,7 @@ export default function EditApplicationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [application, setApplication] = useState<Application | null>(null);
+  const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [loadingApplication, setLoadingApplication] = useState(true);
   
@@ -534,6 +540,19 @@ export default function EditApplicationPage() {
               Update your draft application below. You can save changes as a draft or submit for review.
             </p>
           </div>
+
+          {/* Documents Section */}
+          {application?.documents && (
+            <DocumentViewer
+              documents={application.documents}
+              title="Application Documents"
+              description="Documents currently uploaded for this application"
+              allowDownload={true}
+              allowView={true}
+              showStatus={true}
+              emptyMessage="No documents have been uploaded for this application yet"
+            />
+          )}
           
           {application && initialFormData && (
             <ApplicationForm 

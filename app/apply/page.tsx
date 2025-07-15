@@ -2,14 +2,19 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { PinVerification } from "@/components/auth/pin-verification";
 import { SuccessConfirmation } from "@/components/auth/success-confirmation";
 import { SignUpForm } from "@/components/auth/sign-up-form";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ApplyPage() {
+  const router = useRouter();
+  const { signUp } = useAuth();
   const [step, setStep] = useState<"signup" | "verify" | "success">("signup");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>("");
   const [userData, setUserData] = useState<{
     email: string;
     accountType: string;
@@ -20,21 +25,59 @@ export default function ApplyPage() {
     details: {}
   });
 
-  const handleSignUp = (email: string, password: string, accountType: string, details: any) => {
+  const handleSignUp = async (email: string, password: string, accountType: string, details: any) => {
+    setError("");
     setIsLoading(true);
     
-    // Store the user data for later use
-    setUserData({
-      email,
-      accountType,
-      details
-    });
-    
-    // Simulate API call for registration
-    setTimeout(() => {
+    try {
+      console.log("🔄 Starting application registration for:", email);
+      
+      // Prepare signup data based on account type
+      const signUpData = {
+        email,
+        password,
+        accountType: accountType as 'individual' | 'company',
+        ...(accountType === 'individual' ? {
+          firstName: details.firstName,
+          lastName: details.lastName,
+          phone: details.phone,
+          idNumber: details.identification?.number,
+          idType: details.identification?.type,
+        } : {
+          companyName: details.companyName,
+          companyTIN: details.companyTIN,
+          companyAddress: details.companyAddress,
+          companyPhone: details.companyPhone,
+        })
+      };
+
+      const result = await signUp(signUpData);
+      
+      if (result.error) {
+        console.error("❌ Application registration failed:", result.error);
+        setError(result.error);
+        return;
+      }
+      
+      // Store the user data for later use
+      setUserData({
+        email,
+        accountType,
+        details
+      });
+      
+      console.log("✅ Application registration successful");
+      
+      // For now, skip PIN verification and go straight to success
+      // In a real implementation, you would handle email verification here
+      setStep("success");
+      
+    } catch (err) {
+      console.error("❌ Application registration error:", err);
+      setError("An unexpected error occurred during registration");
+    } finally {
       setIsLoading(false);
-      setStep("verify");
-    }, 1500);
+    }
   };
   
   const handleVerifyPin = (pin: string) => {
@@ -49,6 +92,11 @@ export default function ApplyPage() {
     console.log("Resending PIN to", userData.email);
   };
 
+  const handleSuccessComplete = () => {
+    // Redirect to dashboard after successful registration
+    router.push("/dashboard");
+  };
+
   return (
     <AuthLayout>
       {step === "signup" && (
@@ -58,7 +106,11 @@ export default function ApplyPage() {
           transition={{ duration: 0.5 }}
           className="w-full"
         >
-          <SignUpForm onSubmit={handleSignUp} />
+          <SignUpForm 
+            onSubmit={handleSignUp} 
+            error={error}
+            isLoading={isLoading}
+          />
         </motion.div>
       )}
       
@@ -71,7 +123,13 @@ export default function ApplyPage() {
       )}
       
       {step === "success" && (
-        <SuccessConfirmation email={userData.email} />
+        <SuccessConfirmation 
+          email={userData.email} 
+          onComplete={handleSuccessComplete}
+          title="Welcome to Water Permit Portal!"
+          message="Your account has been successfully created. You can now apply for water permits and track your applications."
+          redirectLabel="Start Dashboard"
+        />
       )}
     </AuthLayout>
   );

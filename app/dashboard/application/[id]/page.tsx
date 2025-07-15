@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
+import { DocumentViewer } from "@/components/documents/document-viewer";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 
 interface ApplicationWithRelations extends Application {
@@ -41,8 +42,11 @@ export default function ApplicationDetailPage() {
         
         const app = await getApplication(applicationId);
         if (app) {
-          setApplication(app);
-          console.log('✅ Application details loaded:', app);
+          const appWithRelations = app as ApplicationWithRelations;
+          setApplication(appWithRelations);
+          console.log('✅ Application details loaded:', appWithRelations);
+          console.log('📄 Documents found:', appWithRelations.documents?.length || 0, 'documents');
+          console.log('📄 Documents data:', appWithRelations.documents);
         } else {
           setError('Application not found');
         }
@@ -924,6 +928,17 @@ export default function ApplicationDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* Documents Section */}
+          <DocumentViewer
+            documents={application.documents || []}
+            title="Application Documents"
+            description="Documents submitted with this application"
+            allowDownload={true}
+            allowView={true}
+            showStatus={true}
+            emptyMessage="No documents have been uploaded for this application yet"
+          />
 
           {/* Assignment & Processing Details */}
           <Card>

@@ -21,25 +21,13 @@ export const getCurrentUser = async () => {
   try {
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error) {
-      // Return a mock user for now since auth is not implemented
-      console.warn('Auth not implemented, using mock user')
-      return {
-        id: 'mock-inspector-id',
-        app_metadata: {
-          role: 'inspector'
-        }
-      }
+      console.error('Error getting current user:', error)
+      return null
     }
     return user
   } catch (error) {
-    // Return a mock user for now since auth is not implemented
-    console.warn('Auth not implemented, using mock user')
-    return {
-      id: 'mock-inspector-id',
-      app_metadata: {
-        role: 'inspector'
-      }
-    }
+    console.error('Error getting current user:', error)
+    return null
   }
 }
 

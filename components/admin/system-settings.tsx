@@ -74,7 +74,7 @@ export function SystemSettings() {
 
   const [hasChanges, setHasChanges] = useState(false);
 
-  const updateSetting = (category: string, key: string, value: any) => {
+  const updateSetting = (category: keyof typeof settings, key: string, value: any) => {
     setSettings(prev => ({
       ...prev,
       [category]: {

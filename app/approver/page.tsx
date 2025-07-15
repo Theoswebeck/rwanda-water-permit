@@ -14,11 +14,13 @@ import {
   AlertTriangle,
   Shield,
   Scale,
-  Loader2
+  Loader2,
+  MapPin
 } from "lucide-react";
 import { FinalDecisions } from "@/components/approver/final-decisions";
 import { ExecutiveOverview } from "@/components/approver/executive-overview";
 import { PerformanceMetrics } from "@/components/approver/performance-metrics";
+import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 
 interface DashboardStats {
   pendingFinalApproval: number;
@@ -169,7 +171,7 @@ export default function ApproverDashboard() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="decisions" className="flex items-center gap-2">
               <Scale className="h-4 w-4" />
               Final Decisions
@@ -177,6 +179,10 @@ export default function ApproverDashboard() {
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Shield className="h-4 w-4" />
               Executive Overview
+            </TabsTrigger>
+            <TabsTrigger value="map" className="flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Concession Map
             </TabsTrigger>
             <TabsTrigger value="metrics" className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -190,6 +196,10 @@ export default function ApproverDashboard() {
 
           <TabsContent value="overview" className="space-y-6">
             <ExecutiveOverview />
+          </TabsContent>
+
+          <TabsContent value="map" className="space-y-6">
+            <WaterConcessionMap />
           </TabsContent>
 
           <TabsContent value="metrics" className="space-y-6">
