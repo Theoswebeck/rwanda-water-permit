@@ -82,10 +82,10 @@ export const uploadDocument = async (
       path: data.path,
       url: url || ''
     };
-  } catch (error) {
-    console.error('Error uploading document:', error);
-    return null;
-  }
+      } catch (error) {
+      console.error('Error uploading document:', error);
+      return null;
+    }
 };
 
 /**

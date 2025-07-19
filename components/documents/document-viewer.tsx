@@ -44,6 +44,10 @@ export function DocumentViewer({
   emptyMessage = "No documents uploaded yet"
 }: DocumentViewerProps) {
 
+  console.log('📄 DocumentViewer received documents:', documents);
+  console.log('📄 DocumentViewer documents count:', documents?.length || 0);
+  console.log('📄 DocumentViewer first document:', documents?.[0]);
+
   const handleView = (document: Document) => {
     const url = getDocumentUrl(document.file_path);
     if (url) {

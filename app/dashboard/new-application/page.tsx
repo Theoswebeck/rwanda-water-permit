@@ -11,7 +11,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
-import type { Application } from "@/types/database";
+import { uploadDocument } from "@/lib/supabase-storage";
+import { supabase } from "@/lib/supabase";
+import type { Application, Document } from "@/types/database";
 
 // Helper function to capitalize province names for database enum compatibility
 function formatProvinceForDB(province: string): Application['province'] | undefined {
@@ -136,6 +138,108 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
   };
 }
 
+// Helper function to create storage bucket if it doesn't exist
+async function ensureStorageBucket() {
+  try {
+    const bucketName = 'application-documents';
+    
+    // Try to get bucket info to see if it exists
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    
+    if (listError) {
+      console.warn('Could not list buckets:', listError);
+      return;
+    }
+    
+    const bucketExists = buckets?.some(bucket => bucket.name === bucketName);
+    
+    if (!bucketExists) {
+      // Create the bucket
+      const { error: createError } = await supabase.storage.createBucket(bucketName, {
+        public: true,
+        allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        fileSizeLimit: 10485760 // 10MB
+      });
+      
+      if (createError) {
+        console.warn('Could not create storage bucket:', createError);
+      } else {
+        console.log('✅ Storage bucket created successfully');
+      }
+    }
+  } catch (error) {
+    console.warn('Storage bucket setup failed:', error);
+  }
+}
+
+// Helper function to upload documents and save to database
+async function uploadApplicationDocuments(applicationId: string, formData: any): Promise<Document[]> {
+  try {
+    const uploadedDocuments: Document[] = [];
+    
+    // Document type mapping
+    const documentTypes = {
+      paymentProof: 'payment_proof',
+      identificationDoc: 'identification_doc', 
+      landOwnershipDoc: 'land_ownership_doc',
+      technicalDrawings: 'technical_drawings',
+      environmentalImpactDoc: 'environmental_impact_doc',
+      intakeDischargeMap: 'intake_discharge_map'
+    };
+    
+    for (const [fieldName, documentType] of Object.entries(documentTypes)) {
+      const file = formData[fieldName];
+      
+      if (file && file instanceof File) {
+        try {
+          console.log(`📤 Uploading ${fieldName}:`, file.name);
+          
+          // Upload file to storage
+          const uploadResult = await uploadDocument(file, applicationId, fieldName);
+          
+          if (uploadResult) {
+            console.log(`✅ File uploaded successfully:`, uploadResult);
+            
+            // Save document record to database
+            const { data: documentRecord, error: dbError } = await supabase
+              .from('documents')
+              .insert({
+                application_id: applicationId,
+                name: file.name,
+                type: documentType as any,
+                file_path: uploadResult.path,
+                file_size: file.size,
+                mime_type: file.type,
+                verification_status: 'pending',
+                is_required: ['paymentProof', 'identificationDoc'].includes(fieldName),
+                uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
+              })
+              .select()
+              .single();
+              
+            if (dbError) {
+              console.error(`❌ Error saving document ${fieldName} to database:`, dbError);
+            } else {
+              console.log(`✅ Document ${fieldName} saved to database:`, documentRecord);
+              uploadedDocuments.push(documentRecord);
+            }
+          } else {
+            console.error(`❌ Failed to upload ${fieldName}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error processing document ${fieldName}:`, error);
+        }
+      }
+    }
+    
+    console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+    return uploadedDocuments;
+  } catch (error) {
+    console.error('❌ Error uploading documents:', error);
+    throw error;
+  }
+}
+
 export default function NewApplicationPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -161,18 +265,31 @@ export default function NewApplicationPage() {
       setIsLoading(true);
       setError(null);
       
-      console.log('Form data received:', formData);
+      console.log('📋 Form data received:', formData);
+      
+      // Ensure storage bucket exists
+      await ensureStorageBucket();
       
       // Map form data to application schema with submitted status
       const applicationData = mapFormDataToApplication(formData, status);
       
-      console.log('Mapped application data:', applicationData);
+      console.log('📊 Mapped application data:', applicationData);
       
-      // Create the application
+      // Create the application first
       const newApplication = await createApplication(applicationData);
       
       if (newApplication) {
-        console.log('✅ Application submitted successfully:', newApplication);
+        console.log('✅ Application created successfully:', newApplication);
+        
+        // Upload documents if any were provided
+        try {
+          const uploadedDocuments = await uploadApplicationDocuments(newApplication.id, formData);
+          console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+        } catch (docError) {
+          console.error('⚠️ Document upload failed but application was created:', docError);
+          // Don't fail the entire process if document upload fails
+        }
+        
         setSuccess(true);
         
         // Redirect to dashboard after a brief success message
@@ -189,35 +306,53 @@ export default function NewApplicationPage() {
     }
   };
 
-  const handleSaveAsDraft = async (formData: any, status: 'draft') => {
+  const handleSaveAsDraft = async (formData: any, status: 'draft', isAutoSave: boolean = false) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('Saving draft, form data received:', formData);
+      console.log('💾 Saving draft, form data received:', formData);
+      
+      // Ensure storage bucket exists
+      await ensureStorageBucket();
       
       // Map form data to application schema with draft status
       const applicationData = mapFormDataToApplication(formData, status);
       
-      console.log('Mapped draft application data:', applicationData);
+      console.log('📊 Mapped draft application data:', applicationData);
       
       // Create the application as draft
       const newApplication = await createApplication(applicationData);
       
       if (newApplication) {
         console.log('✅ Application saved as draft successfully:', newApplication);
-        setSuccess(true);
         
-        // Redirect to dashboard after a brief success message
-        setTimeout(() => {
-          router.push("/dashboard?tab=applications&success=draft-saved");
-        }, 2000);
+        // Upload documents for drafts too (they can be incomplete)
+        try {
+          const uploadedDocuments = await uploadApplicationDocuments(newApplication.id, formData);
+          console.log(`📎 ${uploadedDocuments.length} documents uploaded with draft`);
+        } catch (docError) {
+          console.error('⚠️ Document upload failed but draft was saved:', docError);
+          // Don't fail draft saving if document upload fails
+        }
+        
+        // Only redirect and show success for manual saves, not auto-saves
+        if (!isAutoSave) {
+          setSuccess(true);
+          
+          // Redirect to dashboard after a brief success message
+          setTimeout(() => {
+            router.push("/dashboard?tab=applications&success=draft-saved");
+          }, 2000);
+        }
       } else {
         throw new Error('Failed to save draft');
       }
     } catch (error) {
       console.error('❌ Error saving draft:', error);
       setError(error instanceof Error ? error.message : 'Failed to save draft');
+    } finally {
+      // Always reset loading state
       setIsLoading(false);
     }
   };

@@ -34,13 +34,13 @@ import {
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Upload, X, FileText, Check, AlertCircle, XCircle, Droplet, Building, Zap, Mountain } from "lucide-react";
+import { MapPin, Upload, X, FileText, Check, AlertCircle, XCircle, CheckCircle, Droplet, Building, Zap, Mountain } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 
-// Define the validation schema for the form
+// Define the validation schema for the form (STRICT - for submission)
 const formSchema = z.object({
   // Personal information (prefilled)
   fullName: z.string().min(2, { message: "Name must be at least 2 characters." }),
@@ -173,7 +173,140 @@ const formSchema = z.object({
   }),
 });
 
+// Define the DRAFT schema (RELAXED - for auto-save and manual draft save)
+const draftSchema = z.object({
+  // Personal information (optional for drafts)
+  fullName: z.string().optional(),
+  email: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  
+  // Enhanced contact information
+  poBox: z.string().optional(),
+  mobilePhone: z.string().optional(),
+  landlinePhone: z.string().optional(),
+  alternativeContactName: z.string().optional(),
+  alternativeContactRelationship: z.string().optional(),
+  alternativeContactPhone: z.string().optional(),
+  
+  // Permit details (all optional for drafts)
+  permitType: z.string().optional(),
+  applicantType: z.string().optional(),
+  waterSource: z.string().optional(),
+  purpose: z.string().optional(),
+  waterUsage: z.coerce.number().optional(),
+  waterUsageUnit: z.string().optional(),
+  
+  // Water Source Details
+  waterBodyName: z.string().optional(),
+  tributaryName: z.string().optional(),
+  catchmentNameLevel1: z.string().optional(),
+  catchmentNameLevel2: z.string().optional(),
+  waterReliability: z.string().optional(),
+  naturalDischargeVolume: z.coerce.number().optional(),
+  
+  // Water Usage Breakdown
+  maxDailyVolume: z.coerce.number().optional(),
+  maxMonthlyVolume: z.coerce.number().optional(),
+  maxYearlyVolume: z.coerce.number().optional(),
+  flowRatePerSecond: z.coerce.number().optional(),
+  abstractionFacilitiesDescription: z.string().optional(),
+  returnFlowLocation: z.string().optional(),
+  returnFlowVolume: z.coerce.number().optional(),
+  proposedDurationMonths: z.coerce.number().optional(),
+  proposedDurationYears: z.coerce.number().optional(),
+  pumpingHoursPerDay: z.coerce.number().optional(),
+  
+  // Project Details
+  proposedFacilitiesDescription: z.string().optional(),
+  constructionType: z.string().optional(),
+  concessionArea: z.coerce.number().optional(),
+  operationalOverview: z.string().optional(),
+  
+  // Land Ownership Information
+  ownsAllRequiredLand: z.boolean().optional(),
+  landOwnershipStatus: z.string().optional(),
+  affectedLandowners: z.string().optional(),
+  easementDetails: z.string().optional(),
+  writtenConsentDetails: z.string().optional(),
+  leaseAgreementDetails: z.string().optional(),
+  landAccessSteps: z.string().optional(),
+  
+  // Industry-specific fields
+  industryType: z.string().optional(),
+  industryDetails: z.string().optional(),
+  
+  // Electricity Generation fields
+  powerGenerationType: z.string().optional(),
+  installedCapacity: z.coerce.number().optional(),
+  turbineType: z.string().optional(),
+  headHeight: z.coerce.number().optional(),
+  
+  // Mining fields
+  miningType: z.string().optional(),
+  miningMethod: z.string().optional(),
+  mineralType: z.string().optional(),
+  miningArea: z.coerce.number().optional(),
+  
+  // Water Flow Diversion specific fields
+  intakeLocation: z.string().optional(),
+  intakeFlow: z.coerce.number().optional(),
+  intakeLatitude: z.string().optional(),
+  intakeLongitude: z.string().optional(),
+  intakeElevation: z.coerce.number().optional(),
+  dischargeLocation: z.string().optional(),
+  dischargeFlow: z.coerce.number().optional(),
+  dischargeLatitude: z.string().optional(),
+  dischargeLongitude: z.string().optional(),
+  dischargeElevation: z.coerce.number().optional(),
+  streamLevelVariations: z.string().optional(),
+  diversionStructureConfig: z.string().optional(),
+  
+  // Location (optional for drafts)
+  province: z.string().optional(),
+  district: z.string().optional(),
+  sector: z.string().optional(),
+  cell: z.string().optional(),
+  village: z.string().optional(),
+  latitude: z.string().optional(),
+  longitude: z.string().optional(),
+  
+  // Project details (optional for drafts)
+  projectTitle: z.string().optional(),
+  projectDescription: z.string().optional(),
+  
+  // Technical Details (optional for drafts)
+  storageFacilities: z.string().optional(),
+  storageCapacity: z.coerce.number().optional(),
+  waterTakingMethod: z.string().optional(),
+  waterMeasuringMethod: z.string().optional(),
+  returnFlowQuantity: z.coerce.number().optional(),
+  returnFlowQuality: z.string().optional(),
+  potentialEffects: z.string().optional(),
+  mitigationActions: z.string().optional(),
+  concessionDuration: z.string().optional(),
+  
+  // Pipes, materials, and fixtures
+  pipeDetails: z.string().optional(),
+  pumpCapacity: z.coerce.number().optional(),
+  valveDetails: z.string().optional(),
+  meterDetails: z.string().optional(),
+  backflowControlDevices: z.string().optional(),
+  
+  // Documents
+  paymentProof: z.any().optional(),
+  identificationDoc: z.any().optional(),
+  landOwnershipDoc: z.any().optional(),
+  technicalDrawings: z.any().optional(),
+  environmentalImpactDoc: z.any().optional(),
+  intakeDischargeMap: z.any().optional(),
+  
+  // Terms (optional for drafts)
+  termsAccepted: z.boolean().optional(),
+});
+
 type FormValues = z.infer<typeof formSchema>;
+type DraftFormValues = z.infer<typeof draftSchema>;
 
 interface UserData {
   email: string;
@@ -188,8 +321,8 @@ interface UserData {
 
 interface ApplicationFormProps {
   userData: UserData;
-  onSubmit: (data: FormValues, status: 'submitted') => void;
-  onSaveAsDraft: (data: FormValues, status: 'draft') => void;
+  onSubmit: (data: FormValues, status: 'submitted') => void | Promise<void>;
+  onSaveAsDraft: (data: FormValues, status: 'draft', isAutoSave?: boolean) => void | Promise<void>;
   isLoading: boolean;
   initialData?: Partial<FormValues>;
   mode?: 'create' | 'edit';
@@ -359,6 +492,72 @@ export function ApplicationForm({
   const watchedDistrict = form.watch("district");
   const watchedProvince = form.watch("province");
 
+  // Auto-save state
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  // Auto-save functionality - runs every 30 seconds
+  useEffect(() => {
+    const autoSaveInterval = setInterval(async () => {
+      try {
+        setAutoSaveStatus('saving');
+        
+        // Get current form values without validation
+        const currentValues = form.getValues();
+        
+        // Validate with draft schema (relaxed validation)
+        const validatedData = draftSchema.parse(currentValues);
+        
+        // Add files to the form data
+        const formData = {
+          ...validatedData,
+          ...files,
+        };
+        
+        // Save as draft (auto-save)
+        await onSaveAsDraft(formData as any, 'draft', true);
+        
+        setLastAutoSave(new Date());
+        setAutoSaveStatus('saved');
+        
+        // Reset status after 2 seconds
+        setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+        setAutoSaveStatus('error');
+        setTimeout(() => setAutoSaveStatus('idle'), 3000);
+      }
+    }, 30000); // 30 seconds
+
+    // Cleanup interval on unmount
+    return () => clearInterval(autoSaveInterval);
+  }, [form, files, onSaveAsDraft]);
+
+  // Manual auto-save trigger (can be called immediately)
+  const triggerAutoSave = async () => {
+    try {
+      setAutoSaveStatus('saving');
+      
+      const currentValues = form.getValues();
+      const validatedData = draftSchema.parse(currentValues);
+      
+      const formData = {
+        ...validatedData,
+        ...files,
+      };
+      
+      await onSaveAsDraft(formData as any, 'draft', true);
+      
+      setLastAutoSave(new Date());
+      setAutoSaveStatus('saved');
+      setTimeout(() => setAutoSaveStatus('idle'), 2000);
+    } catch (error) {
+      console.error('Manual auto-save failed:', error);
+      setAutoSaveStatus('error');
+      setTimeout(() => setAutoSaveStatus('idle'), 3000);
+    }
+  };
+
   // Initialize state with initial data on mount and reset form when data changes
   useEffect(() => {
     if (initialData) {
@@ -468,30 +667,48 @@ export function ApplicationForm({
     }
   };
   
-  const handleFormSubmit = (values: FormValues) => {
-    // Clear any validation errors on successful submit
-    setValidationError(null);
-    
-    // Add files to the form data
-    const formData = {
-      ...values,
-      ...files,
-    };
-    
-    onSubmit(formData, 'submitted');
+  const handleFormSubmit = async (values: FormValues) => {
+    try {
+      // Clear any validation errors on successful submit
+      setValidationError(null);
+      
+      // Add files to the form data
+      const formData = {
+        ...values,
+        ...files,
+      };
+      
+      // Await the async submit operation
+      await onSubmit(formData, 'submitted');
+    } catch (error) {
+      console.error('❌ Error submitting application:', error);
+    }
   };
 
-  const handleSaveAsDraft = (values: FormValues) => {
-    // Clear any validation errors on successful save
-    setValidationError(null);
-    
-    // Add files to the form data
-    const formData = {
-      ...values,
-      ...files,
-    };
-    
-    onSaveAsDraft(formData, 'draft');
+  // Manual Save as Draft handler - bypasses strict validation, uses draft schema
+  const handleSaveAsDraft = async () => {
+    try {
+      // Clear any validation errors
+      setValidationError(null);
+      
+      // Get current form values without strict validation
+      const currentValues = form.getValues();
+      
+      // Validate with draft schema (relaxed validation)
+      const validatedData = draftSchema.parse(currentValues);
+      
+      // Add files to the form data
+      const formData = {
+        ...validatedData,
+        ...files,
+      };
+      
+      // Await the async save operation (manual save, will redirect)
+      await onSaveAsDraft(formData as any, 'draft', false);
+    } catch (error) {
+      console.error('❌ Error saving draft:', error);
+      // You could show a toast notification or error message here
+    }
   };
 
   // Helper function to get user-friendly field names
@@ -1430,6 +1647,44 @@ export function ApplicationForm({
     return sector ? sector.cells.map(cell => ({ value: cell, label: cell.charAt(0).toUpperCase() + cell.slice(1) })) : [];
   };
 
+  // File upload handler
+  const handleFileUpload = (documentType: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    
+    if (file) {
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        alert('File size must be less than 10MB');
+        return;
+      }
+
+      // Validate file type
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only PDF, JPG, PNG, DOC, and DOCX files are allowed');
+        return;
+      }
+
+      setFiles(prev => ({
+        ...prev,
+        [documentType]: file
+      }));
+
+      // Update form value
+      form.setValue(documentType as any, file);
+    }
+  };
+
+  // Remove file handler
+  const handleFileRemove = (documentType: string) => {
+    setFiles(prev => ({
+      ...prev,
+      [documentType]: null
+    }));
+    form.setValue(documentType as any, null);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1440,7 +1695,7 @@ export function ApplicationForm({
         <CardHeader>
           <CardTitle>Water Permit Application Form</CardTitle>
           <CardDescription>
-            Fill out all required fields to submit your water permit application
+            Fill out all required fields to submit your water permit application. Your progress is automatically saved every 30 seconds as a draft.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -1484,66 +1739,66 @@ export function ApplicationForm({
             </motion.div>
           )}
 
+          {/* Auto-save Status Indicator */}
+          <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                {autoSaveStatus === 'saving' && (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm text-blue-600">Auto-saving...</span>
+                  </>
+                )}
+                {autoSaveStatus === 'saved' && (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-sm text-green-600">Auto-saved</span>
+                  </>
+                )}
+                {autoSaveStatus === 'error' && (
+                  <>
+                    <XCircle className="h-4 w-4 text-red-600" />
+                    <span className="text-sm text-red-600">Auto-save failed</span>
+                  </>
+                )}
+                {autoSaveStatus === 'idle' && lastAutoSave && (
+                  <>
+                    <FileText className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">
+                      Last saved: {lastAutoSave.toLocaleTimeString()}
+                    </span>
+                  </>
+                )}
+                {autoSaveStatus === 'idle' && !lastAutoSave && (
+                  <>
+                    <FileText className="h-4 w-4 text-gray-500" />
+                    <span className="text-sm text-gray-500">Auto-save enabled (every 30s)</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              onClick={triggerAutoSave}
+              disabled={autoSaveStatus === 'saving'}
+              className="text-xs"
+            >
+              Save Now
+            </Button>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleFormSubmit, handleFormError)} className="space-y-6">
               <Tabs defaultValue="personal" value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-6">
-                  <TabsTrigger value="personal">Personal Info</TabsTrigger>
-                  <TabsTrigger value="details"
-                    onClick={(e) => {
-                      if (activeTab === "personal" && !validatePersonalInfo()) {
-                        e.preventDefault();
-                      } else {
-                        setValidationError(null);
-                      }
-                    }}
-                  >
-                    Permit & Water Details
-                  </TabsTrigger>
-                  <TabsTrigger value="location" 
-                    onClick={(e) => {
-                      if (activeTab === "details" && !validatePermitDetails()) {
-                        e.preventDefault();
-                      } else {
-                        setValidationError(null);
-                      }
-                    }}
-                  >
-                    Location
-                  </TabsTrigger>
-                  <TabsTrigger value="project"
-                    onClick={(e) => {
-                      if (activeTab === "location" && !validateLocation()) {
-                        e.preventDefault();
-                      } else {
-                        setValidationError(null);
-                      }
-                    }}
-                  >
-                    Project Info
-                  </TabsTrigger>
-                  <TabsTrigger value="technical"
-                    onClick={(e) => {
-                      if (activeTab === "project" && !validateProject()) {
-                        e.preventDefault();
-                      } else {
-                        setValidationError(null);
-                      }
-                    }}
-                  >
-                    Technical
-                  </TabsTrigger>
-                  <TabsTrigger value="documents"
-                    onClick={(e) => {
-                      if (activeTab === "technical" && !validateTechnical()) {
-                        e.preventDefault();
-                      } else {
-                        setValidationError(null);
-                      }
-                    }}
-                  >
-                    Documents
-                  </TabsTrigger>
+                  <TabsTrigger value="personal">Personal</TabsTrigger>
+                  <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="location">Location</TabsTrigger>
+                  <TabsTrigger value="project">Project</TabsTrigger>
+                  <TabsTrigger value="technical">Technical</TabsTrigger>
+                  <TabsTrigger value="documents">Documents</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="personal" className="pt-6">
@@ -1733,7 +1988,26 @@ export function ApplicationForm({
                     </div>
                   </div>
                     
-                  <div className="flex justify-end pt-6">
+                  <div className="flex justify-between pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={isLoading}
+                      onClick={handleSaveAsDraft}
+                      className="flex items-center gap-2 px-6"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Save as Draft
+                        </>
+                      )}
+                    </Button>
                     <Button type="button" onClick={() => {
                       if (validatePersonalInfo()) {
                         setValidationError(null);
@@ -1848,12 +2122,15 @@ export function ApplicationForm({
                                   <SelectItem value="surface_water">Surface Water</SelectItem>
                                   <SelectItem value="river">River</SelectItem>
                                   <SelectItem value="lake">Lake</SelectItem>
+                                  <SelectItem value="stream">Stream</SelectItem>
                                   <SelectItem value="spring">Spring</SelectItem>
                                   <SelectItem value="borehole">Borehole</SelectItem>
+                                  <SelectItem value="dam">Dam</SelectItem>
                                   <SelectItem value="reservoir">Reservoir</SelectItem>
-                                  <SelectItem value="stream">Stream</SelectItem>
                                   <SelectItem value="wetland">Wetland</SelectItem>
+                                  <SelectItem value="swamp">Swamp</SelectItem>
                                   <SelectItem value="hydropower_source">Hydropower Source</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -2243,18 +2520,39 @@ export function ApplicationForm({
                     </div>
                   </div>
                   
-                  <div className="flex justify-between pt-6">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab("personal")} className="px-6">
-                      Previous: Personal Info
+                  <div className="flex justify-between items-center pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={isLoading}
+                      onClick={handleSaveAsDraft}
+                      className="flex items-center gap-2 px-6"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Save as Draft
+                        </>
+                      )}
                     </Button>
-                    <Button type="button" onClick={() => {
-                      if (validatePermitDetails()) {
-                        setValidationError(null);
-                        setActiveTab("location");
-                      }
-                    }} className="px-6">
-                      Next: Location
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button type="button" variant="outline" onClick={() => setActiveTab("personal")} className="px-6">
+                        Previous: Personal Info
+                      </Button>
+                      <Button type="button" onClick={() => {
+                        if (validatePermitDetails()) {
+                          setValidationError(null);
+                          setActiveTab("location");
+                        }
+                      }} className="px-6">
+                        Next: Location
+                      </Button>
+                    </div>
                   </div>
                 </TabsContent>
                 
@@ -2438,18 +2736,39 @@ export function ApplicationForm({
                     </Button>
                   </div>
                   
-                  <div className="flex justify-between pt-6">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab("details")} className="px-6">
-                      Previous: Permit Details
+                  <div className="flex justify-between items-center pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={isLoading}
+                      onClick={handleSaveAsDraft}
+                      className="flex items-center gap-2 px-6"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Save as Draft
+                        </>
+                      )}
                     </Button>
-                    <Button type="button" onClick={() => {
-                      if (validateLocation()) {
-                        setValidationError(null);
-                        setActiveTab("project");
-                      }
-                    }} className="px-6">
-                      Next: Project Info
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button type="button" variant="outline" onClick={() => setActiveTab("details")} className="px-6">
+                        Previous: Permit Details
+                      </Button>
+                      <Button type="button" onClick={() => {
+                        if (validateLocation()) {
+                          setValidationError(null);
+                          setActiveTab("project");
+                        }
+                      }} className="px-6">
+                        Next: Project Info
+                      </Button>
+                    </div>
                   </div>
                 </TabsContent>
                 
@@ -2492,18 +2811,39 @@ export function ApplicationForm({
                     />
                   </div>
                   
-                  <div className="flex justify-between pt-6">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab("location")} className="px-6">
-                      Previous: Location
+                  <div className="flex justify-between items-center pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={isLoading}
+                      onClick={handleSaveAsDraft}
+                      className="flex items-center gap-2 px-6"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Save as Draft
+                        </>
+                      )}
                     </Button>
-                    <Button type="button" onClick={() => {
-                      if (validateProject()) {
-                        setValidationError(null);
-                        setActiveTab("technical");
-                      }
-                    }} className="px-6">
-                      Next: Technical Details
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button type="button" variant="outline" onClick={() => setActiveTab("location")} className="px-6">
+                        Previous: Location
+                      </Button>
+                      <Button type="button" onClick={() => {
+                        if (validateProject()) {
+                          setValidationError(null);
+                          setActiveTab("technical");
+                        }
+                      }} className="px-6">
+                        Next: Technical Details
+                      </Button>
+                    </div>
                   </div>
                 </TabsContent>
                 
@@ -3079,316 +3419,405 @@ export function ApplicationForm({
                     />
                   </div>
                   
-                  <div className="flex justify-between pt-6">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab("project")} className="px-6">
-                      Previous: Project Info
+                  <div className="flex justify-between items-center pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={isLoading}
+                      onClick={handleSaveAsDraft}
+                      className="flex items-center gap-2 px-6"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Save as Draft
+                        </>
+                      )}
                     </Button>
-                    <Button type="button" onClick={() => {
-                      if (validateTechnical()) {
-                        setValidationError(null);
-                        setActiveTab("documents");
-                      }
-                    }} className="px-6">
-                      Next: Documents
-                    </Button>
+                    <div className="flex gap-3">
+                      <Button type="button" variant="outline" onClick={() => setActiveTab("project")} className="px-6">
+                        Previous: Project Info
+                      </Button>
+                      <Button type="button" onClick={() => {
+                        if (validateTechnical()) {
+                          setValidationError(null);
+                          setActiveTab("documents");
+                        }
+                      }} className="px-6">
+                        Next: Documents
+                      </Button>
+                    </div>
                   </div>
                 </TabsContent>
                 
                 <TabsContent value="documents" className="pt-6">
-                  <CardTitle className="text-lg mb-2">Supporting Documents</CardTitle>
+                  <CardTitle className="text-lg mb-2">Required Documents</CardTitle>
                   <CardDescription className="mb-6">
-                    Upload all the required documents for your application.
+                    Upload all required documents for your application. All documents must be in PDF, JPG, PNG, DOC, or DOCX format and under 10MB.
                   </CardDescription>
+                  
                   <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Payment Proof */}
-                      <div className="space-y-2">
-                        <Label htmlFor="paymentProof">Payment Receipt</Label>
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            id="paymentProof"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => handleFileChange(e, "paymentProof")}
-                            ref={fileInputRefs.paymentProof}
-                            className="flex-1"
-                          />
-                          {files.paymentProof && (
-                          <Button 
+                    {/* Payment Proof */}
+                    <div className="space-y-3">
+                      <Label htmlFor="paymentProof" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
+                        Proof of Payment <span className="text-red-500">*</span>
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Upload proof of application fee payment (bank receipt, mobile money receipt, etc.)
+                      </p>
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
+                        {files.paymentProof ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <FileText className="h-8 w-8 text-emerald-600" />
+                              <div>
+                                <p className="font-medium">{files.paymentProof.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {(files.paymentProof.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
                               type="button"
                               variant="outline"
-                            size="sm" 
-                              onClick={() => removeFile("paymentProof")}
-                              className="px-2"
-                          >
+                              size="sm"
+                              onClick={() => handleFileRemove('paymentProof')}
+                              className="text-red-600 hover:text-red-700"
+                            >
                               <X className="h-4 w-4" />
-                          </Button>
-                          )}
-                      </div>
-                        {files.paymentProof && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {files.paymentProof.name}
-                          </p>
-                      )}
-                    </div>
-                    
-                    {/* Identification Document */}
-                      <div className="space-y-2">
-                        <Label htmlFor="identificationDoc">Identification Document</Label>
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            id="identificationDoc"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => handleFileChange(e, "identificationDoc")}
-                            ref={fileInputRefs.identificationDoc}
-                            className="flex-1"
-                          />
-                          {files.identificationDoc && (
-                          <Button 
-                              type="button"
-                              variant="outline"
-                            size="sm" 
-                            onClick={() => removeFile("identificationDoc")}
-                              className="px-2"
-                          >
-                              <X className="h-4 w-4" />
-                          </Button>
-                          )}
-                        </div>
-                        {files.identificationDoc && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {files.identificationDoc.name}
-                          </p>
-                      )}
-                    </div>
-                    
-                    {/* Land Ownership Document */}
-                      <div className="space-y-2">
-                        <Label htmlFor="landOwnershipDoc">Land Ownership Certificate</Label>
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            id="landOwnershipDoc"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
-                            onChange={(e) => handleFileChange(e, "landOwnershipDoc")}
-                            ref={fileInputRefs.landOwnershipDoc}
-                            className="flex-1"
-                          />
-                          {files.landOwnershipDoc && (
-                          <Button 
-                              type="button"
-                              variant="outline"
-                            size="sm" 
-                            onClick={() => removeFile("landOwnershipDoc")}
-                              className="px-2"
-                          >
-                              <X className="h-4 w-4" />
-                          </Button>
-                          )}
-                      </div>
-                        {files.landOwnershipDoc && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {files.landOwnershipDoc.name}
-                          </p>
-                      )}
-                    </div>
-                    
-                    {/* Technical Drawings */}
-                      <div className="space-y-2">
-                        <Label htmlFor="technicalDrawings">Technical Drawings</Label>
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            id="technicalDrawings"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.dwg,.dxf"
-                            onChange={(e) => handleFileChange(e, "technicalDrawings")}
-                            ref={fileInputRefs.technicalDrawings}
-                            className="flex-1"
-                          />
-                          {files.technicalDrawings && (
-                          <Button 
-                              type="button"
-                              variant="outline"
-                            size="sm" 
-                            onClick={() => removeFile("technicalDrawings")}
-                              className="px-2"
-                          >
-                              <X className="h-4 w-4" />
-                          </Button>
-                          )}
-                      </div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p className="leading-relaxed [&:not(:first-child)]:mt-6 font-medium">Required technical drawings include:</p>
-                          <ul className="list-disc list-inside space-y-0.5 ml-2">
-                            <li>Site layout plan showing water source location</li>
-                            <li>Water abstraction/intake structure design</li>
-                            <li>Piping and distribution system layout</li>
-                            <li>Storage facility plans (if applicable)</li>
-                            <li>Water treatment facility design (if applicable)</li>
-                            <li>Drainage and return flow systems</li>
-                            <li>Cross-sectional views of all structures</li>
-                            <li>Elevation drawings with dimensions</li>
-                            <li>Detailed specifications and materials list</li>
-                          </ul>
-                          <p className="text-xs mt-2 italic">
-                            Drawings should be professionally prepared, scaled, and include all relevant dimensions and specifications.
-                          </p>
-                        </div>
-                        {files.technicalDrawings && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {files.technicalDrawings.name}
-                          </p>
-                      )}
-                    </div>
-                    
-                      {/* Environmental Impact Assessment */}
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="environmentalImpactDoc">Environmental Impact Assessment</Label>
-                        <div className="flex items-center space-x-2">
-                          <Input
-                            id="environmentalImpactDoc"
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.dwg,.dxf"
-                            onChange={(e) => handleFileChange(e, "environmentalImpactDoc")}
-                            ref={fileInputRefs.environmentalImpactDoc}
-                            className="flex-1"
-                          />
-                          {files.environmentalImpactDoc && (
-                          <Button 
-                              type="button"
-                              variant="outline"
-                            size="sm" 
-                            onClick={() => removeFile("environmentalImpactDoc")}
-                              className="px-2"
-                          >
-                              <X className="h-4 w-4" />
-                          </Button>
-                          )}
-                      </div>
-                        {files.environmentalImpactDoc && (
-                          <p className="text-sm text-muted-foreground flex items-center gap-1">
-                            <FileText className="h-3 w-3" />
-                            {files.environmentalImpactDoc.name}
-                          </p>
+                            </Button>
+                          </div>
+                        ) : (
+                          <label htmlFor="paymentProof" className="cursor-pointer block">
+                            <div className="text-center">
+                              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                              <div className="mt-4">
+                                <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Click to upload payment proof
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              id="paymentProof"
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={handleFileUpload('paymentProof')}
+                            />
+                          </label>
                         )}
                       </div>
+                    </div>
 
-                      {/* Conditional Intake/Discharge Map for Water Flow Diversion */}
-                      {shouldShowDiversionFields() && (
-                        <div className="space-y-2 md:col-span-2">
-                          <Label htmlFor="intakeDischargeMap">Maps Showing Location of Intake and Discharges</Label>
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              id="intakeDischargeMap"
-                            type="file"
-                              accept=".pdf,.jpg,.jpeg,.png,.dwg,.dxf"
-                              onChange={(e) => handleFileChange(e, "intakeDischargeMap")}
-                              ref={fileInputRefs.intakeDischargeMap}
-                              className="flex-1"
+                    {/* Identification Document */}
+                    <div className="space-y-3">
+                      <Label htmlFor="identificationDoc" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
+                        Identification Document <span className="text-red-500">*</span>
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Upload a copy of your national ID, passport, or other valid identification document
+                      </p>
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
+                        {files.identificationDoc ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <FileText className="h-8 w-8 text-emerald-600" />
+                              <div>
+                                <p className="font-medium">{files.identificationDoc.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {(files.identificationDoc.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFileRemove('identificationDoc')}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label htmlFor="identificationDoc" className="cursor-pointer block">
+                            <div className="text-center">
+                              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                              <div className="mt-4">
+                                <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Click to upload identification document
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              id="identificationDoc"
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={handleFileUpload('identificationDoc')}
                             />
-                            {files.intakeDischargeMap && (
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Land Ownership Document */}
+                    <div className="space-y-3">
+                      <Label htmlFor="landOwnershipDoc" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
+                        Land Ownership Document
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Upload land title, lease agreement, or permission letter from land owner
+                      </p>
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
+                        {files.landOwnershipDoc ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <FileText className="h-8 w-8 text-emerald-600" />
+                              <div>
+                                <p className="font-medium">{files.landOwnershipDoc.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {(files.landOwnershipDoc.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFileRemove('landOwnershipDoc')}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label htmlFor="landOwnershipDoc" className="cursor-pointer block">
+                            <div className="text-center">
+                              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                              <div className="mt-4">
+                                <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Click to upload land ownership document
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              id="landOwnershipDoc"
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={handleFileUpload('landOwnershipDoc')}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Technical Drawings */}
+                    <div className="space-y-3">
+                      <Label htmlFor="technicalDrawings" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
+                        Technical Drawings/Plans
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Upload project plans, technical drawings, or engineering designs
+                      </p>
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
+                        {files.technicalDrawings ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <FileText className="h-8 w-8 text-emerald-600" />
+                              <div>
+                                <p className="font-medium">{files.technicalDrawings.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {(files.technicalDrawings.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFileRemove('technicalDrawings')}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label htmlFor="technicalDrawings" className="cursor-pointer block">
+                            <div className="text-center">
+                              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                              <div className="mt-4">
+                                <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Click to upload technical drawings
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              id="technicalDrawings"
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={handleFileUpload('technicalDrawings')}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Environmental Impact Document */}
+                    <div className="space-y-3">
+                      <Label htmlFor="environmentalImpactDoc" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
+                        Environmental Impact Assessment
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Upload environmental impact assessment or environmental management plan (if applicable)
+                      </p>
+                      <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
+                        {files.environmentalImpactDoc ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              <FileText className="h-8 w-8 text-emerald-600" />
+                              <div>
+                                <p className="font-medium">{files.environmentalImpactDoc.name}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {(files.environmentalImpactDoc.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleFileRemove('environmentalImpactDoc')}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <label htmlFor="environmentalImpactDoc" className="cursor-pointer block">
+                            <div className="text-center">
+                              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                              <div className="mt-4">
+                                <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  Click to upload environmental impact document
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              id="environmentalImpactDoc"
+                              type="file"
+                              className="hidden"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              onChange={handleFileUpload('environmentalImpactDoc')}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Intake/Discharge Map (for water flow diversion) */}
+                    {shouldShowDiversionFields() && (
+                      <div className="space-y-3">
+                        <Label htmlFor="intakeDischargeMap" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
+                          Intake/Discharge Location Map <span className="text-red-500">*</span>
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Upload map showing intake and discharge locations (Required for water flow diversion projects)
+                        </p>
+                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
+                          {files.intakeDischargeMap ? (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <FileText className="h-8 w-8 text-emerald-600" />
+                                <div>
+                                  <p className="font-medium">{files.intakeDischargeMap.name}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {(files.intakeDischargeMap.size / 1024 / 1024).toFixed(2)} MB
+                                  </p>
+                                </div>
+                              </div>
                               <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={() => removeFile("intakeDischargeMap")}
-                                className="px-2"
+                                onClick={() => handleFileRemove('intakeDischargeMap')}
+                                className="text-red-600 hover:text-red-700"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
-                            )}
+                            </div>
+                                                     ) : (
+                             <label htmlFor="intakeDischargeMap" className="cursor-pointer block">
+                               <div className="text-center">
+                                 <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                                 <div className="mt-4">
+                                   <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
+                                     Click to upload intake/discharge map
+                                   </span>
+                                 </div>
+                               </div>
+                               <input
+                                 id="intakeDischargeMap"
+                                 type="file"
+                                 className="hidden"
+                                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                 onChange={handleFileUpload('intakeDischargeMap')}
+                               />
+                             </label>
+                           )}
                         </div>
-                          <div className="text-xs text-muted-foreground space-y-1">
-                            <p className="leading-relaxed [&:not(:first-child)]:mt-6 font-medium text-blue-700 dark:text-blue-300">Required for water flow diversion only:</p>
-                            <ul className="list-disc list-inside space-y-0.5 ml-2">
-                              <li>Maps showing exact location of intake points</li>
-                              <li>Maps showing discharge locations and routes</li>
-                              <li>Detailed drawings of intake structure configuration</li>
-                              <li>Stream level indicators at different seasonal flows</li>
-                              <li>Direction and velocity measurements</li>
-                              <li>Detailed sizes and configuration of diversion structures</li>
-                            </ul>
-                          </div>
-                          {files.intakeDischargeMap && (
-                            <p className="text-sm text-muted-foreground flex items-center gap-1">
-                              <FileText className="h-3 w-3" />
-                              {files.intakeDischargeMap.name}
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Terms and Conditions */}
-                    <div className="border-t pt-6">
-                    <FormField
-                      control={form.control}
-                      name="termsAccepted"
-                      render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>
-                                I agree to the terms and conditions
-                            </FormLabel>
-                            <FormDescription>
-                                By checking this box, you confirm that all information provided is accurate and complete.
-                            </FormDescription>
-                          </div>
-                            <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    </div>
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="flex justify-between pt-6">
-                    <Button type="button" variant="outline" onClick={() => setActiveTab("technical")} className="px-6">
-                      Previous: Technical Details
-                    </Button>
-                    <div className="flex gap-3">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        disabled={isLoading}
-                        onClick={form.handleSubmit(handleSaveAsDraft)}
-                        className="flex items-center gap-2 px-6"
-                      >
-                        {isLoading ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                            Saving...
-                          </>
-                        ) : (
-                          <>
-                            <FileText className="h-4 w-4" />
-                            Save as Draft
-                          </>
-                        )}
-                    </Button>
-                    <Button type="submit" disabled={isLoading} className="flex items-center gap-2 px-6">
+
+                  <div className="flex justify-between items-center pt-6">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      disabled={isLoading}
+                      onClick={handleSaveAsDraft}
+                      className="flex items-center gap-2 px-6"
+                    >
                       {isLoading ? (
                         <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                          Submitting...
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
+                          Saving...
                         </>
                       ) : (
                         <>
-                          <Check className="h-4 w-4" />
-                          Submit Application
+                          <FileText className="h-4 w-4" />
+                          Save as Draft
                         </>
                       )}
                     </Button>
+                    <div className="flex gap-3">
+                      <Button type="button" variant="outline" onClick={() => setActiveTab("technical")} className="px-6">
+                        Previous: Technical Details
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        disabled={isLoading}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-8"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4 mr-2" />
+                            Submit Application
+                          </>
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </TabsContent>
