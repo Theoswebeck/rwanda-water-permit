@@ -35,6 +35,7 @@ import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus, User, Document, Review } from "@/types/database";
+import { ApplicationComments } from "@/components/shared/ApplicationComments";
 
 interface ApplicationWithRelations extends Application {
   applicant?: User;
@@ -345,6 +346,21 @@ export default function ReviewApplicationPage() {
               </p>
             </div>
           </div>
+
+          {/* Rejection Reason Alert */}
+          {application.status === 'rejected' && application.rejection_reason && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="font-medium text-red-800">Application Rejected</p>
+                    <p className="text-red-700">{application.rejection_reason}</p>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Revision Notes Alert */}
           {application.status === 'revision_required' && application.revision_notes && (
@@ -769,71 +785,7 @@ export default function ReviewApplicationPage() {
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Internal Notes & History</CardTitle>
-                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                    Comments are visible to all RWB staff
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {/* Comments Display */}
-                  <div className="space-y-6">
-                    {comments.length > 0 ? (
-                      comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-4">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">{comment.avatar}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{comment.author}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {comment.role}
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
-                          </div>
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">
-                            {comment.content}
-                          </p>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8">
-                        <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">No comments yet</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                
-                <CardFooter className="pt-6">
-                  <div className="w-full space-y-4">
-                    <Separator />
-                    <div className="space-y-3">
-                      <Label htmlFor="new-note" className="text-sm font-medium">Add a new note</Label>
-                      <Textarea
-                        id="new-note"
-                        placeholder="Type your internal note here..."
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        className="min-h-[100px]"
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <Button 
-                        onClick={handleAddComment}
-                        disabled={!newComment.trim()}
-                        className="gap-2"
-                      >
-                        <Send className="h-4 w-4" />
-                        Post Note
-                      </Button>
-                    </div>
-                  </div>
-                </CardFooter>
-              </Card>
+              {application.id && <ApplicationComments applicationId={application.id} />}
             </TabsContent>
           </Tabs>
         </motion.div>

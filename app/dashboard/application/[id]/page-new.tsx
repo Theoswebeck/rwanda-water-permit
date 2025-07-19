@@ -7,7 +7,8 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, MapPin, FileText, Calendar, User } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ArrowLeft, Loader2, MapPin, FileText, Calendar, User, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import type { Application } from "@/types/database";
@@ -165,6 +166,36 @@ export default function ApplicationDetailPage() {
               </p>
             </div>
           </div>
+
+          {/* Rejection Reason Alert */}
+          {application.status === 'rejected' && application.rejection_reason && (
+            <Alert className="border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="font-medium text-red-800">Application Rejected</p>
+                    <p className="text-red-700">{application.rejection_reason}</p>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Revision Notes Alert */}
+          {application.status === 'revision_required' && application.revision_notes && (
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="font-medium text-orange-800">Application Returned for Revision</p>
+                    <p className="text-orange-700">{application.revision_notes}</p>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Application Details */}
           <div className="grid gap-6 md:grid-cols-2">

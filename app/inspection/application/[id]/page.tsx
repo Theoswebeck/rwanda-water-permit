@@ -201,6 +201,36 @@ export default function InspectorApplicationView() {
           </div>
         </div>
         
+        {/* Rejection Reason Alert */}
+        {application.status === 'rejected' && application.rejection_reason && (
+          <Alert className="border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertDescription>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <p className="font-medium text-red-800">Application Rejected</p>
+                  <p className="text-red-700">{application.rejection_reason}</p>
+                </div>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Revision Notes Alert */}
+        {application.status === 'revision_required' && application.revision_notes && (
+          <Alert className="border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertDescription>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <p className="font-medium text-orange-800">Application Returned for Revision</p>
+                  <p className="text-orange-700">{application.revision_notes}</p>
+                </div>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+        
         {/* Inspector Alert */}
         <Alert className="border-blue-200 bg-blue-50">
           <ClipboardList className="h-4 w-4 text-blue-600" />
