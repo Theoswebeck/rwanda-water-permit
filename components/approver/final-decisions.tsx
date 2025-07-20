@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,18 +17,15 @@ import {
   Eye, 
   Calendar,
   MapPin,
-  User,
-  FileText,
   AlertTriangle,
   Search,
-  Scale,
   Clock,
   TrendingUp,
-  Timer,
-  Loader2
+  Loader2,
+  User
 } from "lucide-react";
-import { getApplicationsPendingApproval, approveApplication, rejectApplication } from "@/lib/supabase";
-import type { Application, User as UserType } from "@/types/database";
+import { getApplicationsPendingApproval, approveApplication, rejectApplication, supabase } from "@/lib/supabase";
+import type { Application } from "@/types/database";
 
 interface FinalReviewApplication {
   id: string;
@@ -48,6 +46,9 @@ interface FinalReviewApplication {
   riskLevel: "low" | "medium" | "high";
   daysInSystem: number;
   project_title: string;
+  status: string;
+  sla_status?: string;
+  due_date?: string;
 }
 
 export function FinalDecisions() {
@@ -58,7 +59,7 @@ export function FinalDecisions() {
   const [filterRisk, setFilterRisk] = useState("all");
   const [selectedApplication, setSelectedApplication] = useState<FinalReviewApplication | null>(null);
   const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
-  const [decisionType, setDecisionType] = useState<"approve" | "reject">("approve");
+  const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_review">("approve");
   const [decisionReason, setDecisionReason] = useState("");
   const [conditions, setConditions] = useState("");
 
@@ -98,7 +99,10 @@ export function FinalDecisions() {
           inspectorRecommendation: app.inspections?.[0]?.result === 'passed' ? 'approve' : 'reject',
           riskLevel: app.reviews?.[0]?.risk_assessment || 'medium',
           daysInSystem,
-          project_title: app.project_title
+          project_title: app.project_title,
+          status: app.status,
+          sla_status: app.sla_status,
+          due_date: app.due_date
         };
       });
 
@@ -120,6 +124,43 @@ export function FinalDecisions() {
     return <Badge variant="outline" className={riskColors[risk]}>{risk.toUpperCase()}</Badge>;
   };
 
+  const getStatusBadge = (status: string) => {
+    const statusColors: Record<string, string> = {
+      draft: "bg-gray-100 text-gray-700 border-gray-200",
+      submitted: "bg-blue-100 text-blue-700 border-blue-200",
+      under_review: "bg-yellow-100 text-yellow-700 border-yellow-200",
+      pending_inspection: "bg-orange-100 text-orange-700 border-orange-200",
+      approved: "bg-green-100 text-green-700 border-green-200",
+      rejected: "bg-red-100 text-red-700 border-red-200",
+      revision_required: "bg-amber-100 text-amber-700 border-amber-200",
+      cancelled: "bg-gray-100 text-gray-700 border-gray-200"
+    };
+    
+    const color = statusColors[status] || "bg-gray-100 text-gray-700 border-gray-200";
+    const displayText = status.replace('_', ' ').toUpperCase();
+    
+    return <Badge variant="outline" className={color}>{displayText}</Badge>;
+  };
+
+  const getSLABadge = (application: FinalReviewApplication) => {
+    if (!application.due_date) return null;
+    
+    const dueDate = new Date(application.due_date);
+    const now = new Date();
+    const isOverdue = now > dueDate;
+    
+    if (isOverdue) {
+      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">Overdue</Badge>;
+    }
+    
+    const daysRemaining = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysRemaining <= 2) {
+      return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">Due Soon</Badge>;
+    }
+    
+    return null;
+  };
+
   const getRecommendationBadge = (recommendation: "approve" | "reject") => {
     return recommendation === "approve" ? (
       <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">
@@ -134,15 +175,34 @@ export function FinalDecisions() {
     );
   };
 
-  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject") => {
+  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject" | "return_to_review") => {
     try {
-      const mockApproverId = 'mock-approver-id'; // In real app, get from auth context
+      // Fetch a real approver UUID from the users table
+      const { data: approverData, error: approverError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'approver')
+        .limit(1)
+        .single();
+      if (approverError || !approverData) throw approverError || new Error('No approver found');
+      const approverId = approverData.id;
       
       if (decision === 'approve') {
         const conditionsObj = conditions ? { conditions: conditions.split('\n') } : undefined;
-        await approveApplication(applicationId, mockApproverId, conditionsObj);
-      } else {
-        await rejectApplication(applicationId, mockApproverId, decisionReason);
+        await approveApplication(applicationId, approverId, conditionsObj);
+      } else if (decision === 'reject') {
+        await rejectApplication(applicationId, approverId, decisionReason);
+      } else if (decision === 'return_to_review') {
+        // Return application to under_review status
+        const { error } = await supabase
+          .from('applications')
+          .update({ 
+            status: 'under_review',
+            revision_notes: decisionReason
+          })
+          .eq('id', applicationId);
+        
+        if (error) throw error;
       }
       
       // Refresh applications list
@@ -159,7 +219,7 @@ export function FinalDecisions() {
     }
   };
 
-  const openDecisionDialog = (application: FinalReviewApplication, decision: "approve" | "reject") => {
+  const openDecisionDialog = (application: FinalReviewApplication, decision: "approve" | "reject" | "return_to_review") => {
     setSelectedApplication(application);
     setDecisionType(decision);
     setIsDecisionDialogOpen(true);
@@ -202,7 +262,7 @@ export function FinalDecisions() {
             Final Approval Decisions
           </h2>
           <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-            Applications ready for your final decision after review and inspection
+            Applications that have completed review and inspection phases, ready for your final approval decision
           </p>
         </div>
       </div>
@@ -244,7 +304,7 @@ export function FinalDecisions() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {Math.round(applications.reduce((sum, app) => sum + app.daysInSystem, 0) / applications.length)}
+              {applications.length > 0 ? Math.round(applications.reduce((sum, app) => sum + app.daysInSystem, 0) / applications.length) : 0}
             </div>
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
               Days in system
@@ -295,9 +355,10 @@ export function FinalDecisions() {
                   <TableHead>Application</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Type & Source</TableHead>
-                  <TableHead className="font-semibold">Recommendations</TableHead>
-                  <TableHead>Processing Time</TableHead>
-                  <TableHead className="text-right">Final Decision</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>SLA</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -306,9 +367,10 @@ export function FinalDecisions() {
                     <TableCell>
                       <div>
                         <div className="font-medium">{application.application_number || application.id}</div>
-                        <div className="text-sm text-muted-foreground flex items-center">
+                        <div className="text-sm text-muted-foreground">{application.project_title}</div>
+                        <div className="text-xs text-muted-foreground flex items-center">
                           <Calendar className="h-3 w-3 mr-1" />
-                          {application.submittedDate}
+                          {new Date(application.submittedDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}
                         </div>
                       </div>
                     </TableCell>
@@ -316,8 +378,8 @@ export function FinalDecisions() {
                       <div>
                         <div className="font-medium">{application.applicantName}</div>
                         <div className="text-sm text-muted-foreground flex items-center">
-                          <MapPin className="h-3 w-3 mr-1" />
-                          {application.location}
+                          <User className="h-3 w-3 mr-1" />
+                          {application.applicantType === 'individual' ? 'Individual' : 'Company'}
                         </div>
                       </div>
                     </TableCell>
@@ -328,51 +390,65 @@ export function FinalDecisions() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <motion.div 
-                        className="space-y-3"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.1 }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-muted-foreground tracking-wide">Reviewer</span>
-                          {getRecommendationBadge(application.reviewerRecommendation || "reject")}
-                        </div>
-                        <div className="h-px bg-border/50 mx-2" />
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-muted-foreground tracking-wide">Inspector</span>
-                          {getRecommendationBadge(application.inspectorRecommendation || "reject")}
-                        </div>
-                      </motion.div>
+                      <div className="text-sm text-muted-foreground flex items-center">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {application.location}
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <div className="text-sm">{application.daysInSystem} days</div>
+                      {getStatusBadge(application.status)}
+                    </TableCell>
+                    <TableCell>
+                      {getSLABadge(application)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedApplication(application)}
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          Review
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => openDecisionDialog(application, "approve")}
-                        >
-                          <CheckCircle2 className="h-4 w-4 mr-1" />
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => openDecisionDialog(application, "reject")}
-                        >
-                          <XCircle className="h-4 w-4 mr-1" />
-                          Reject
-                        </Button>
+                        <Link href={`/approver/application/${application.application_number}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                        </Link>
+                        
+                        {/* Only show action dropdown for applications ready for final approval */}
+                        {application.status === 'pending_final_approval' && (
+                          <Select
+                            onValueChange={(value) => {
+                              if (value === "return_to_review") {
+                                openDecisionDialog(application, value as any);
+                              } else {
+                                openDecisionDialog(application, value as "approve" | "reject");
+                              }
+                            }}
+                          >
+                            <SelectTrigger className="w-[130px] h-8">
+                              <SelectValue placeholder="Action" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="approve">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                                  Approve
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="reject">
+                                <div className="flex items-center gap-2">
+                                  <XCircle className="h-4 w-4 text-red-600" />
+                                  Reject
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="return_to_review">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                  Return to Review
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -388,12 +464,18 @@ export function FinalDecisions() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {decisionType === "approve" ? "Approve Application" : "Reject Application"}
+              {decisionType === "approve" 
+                ? "Approve Application" 
+                : decisionType === "reject" 
+                  ? "Reject Application" 
+                  : "Return Application to Review"}
             </DialogTitle>
             <DialogDescription>
               {decisionType === "approve" 
                 ? "You are about to approve this water permit application. This decision is final."
-                : "You are about to reject this water permit application. Please provide a reason."
+                : decisionType === "reject"
+                  ? "You are about to reject this water permit application. Please provide a reason."
+                  : "You are about to return this application to the review stage. Please provide specific instructions for the reviewers."
               }
             </DialogDescription>
           </DialogHeader>
@@ -430,9 +512,15 @@ export function FinalDecisions() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Rejection Reason (Required)</label>
+                  <label className="text-sm font-medium">
+                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Review Instructions (Required)"}
+                  </label>
                   <Textarea
-                    placeholder="Explain why this application is being rejected..."
+                    placeholder={
+                      decisionType === "reject" 
+                        ? "Explain why this application is being rejected..."
+                        : "Provide specific instructions for what needs to be reviewed or corrected..."
+                    }
                     value={decisionReason}
                     onChange={(e) => setDecisionReason(e.target.value)}
                     rows={3}
@@ -448,10 +536,20 @@ export function FinalDecisions() {
             </Button>
             <Button
               onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
-              disabled={decisionType === "reject" && !decisionReason.trim()}
-              variant={decisionType === "approve" ? "default" : "destructive"}
+              disabled={(decisionType === "reject" || decisionType === "return_to_review") && !decisionReason.trim()}
+              variant={
+                decisionType === "approve" 
+                  ? "default" 
+                  : decisionType === "reject" 
+                    ? "destructive" 
+                    : "outline"
+              }
             >
-              {decisionType === "approve" ? "Approve Application" : "Reject Application"}
+              {decisionType === "approve" 
+                ? "Approve Application" 
+                : decisionType === "reject" 
+                  ? "Reject Application"
+                  : "Return to Review"}
             </Button>
           </DialogFooter>
         </DialogContent>

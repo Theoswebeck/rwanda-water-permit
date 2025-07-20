@@ -25,6 +25,7 @@ export type ApplicationStatus =
   | 'submitted' 
   | 'under_review' 
   | 'pending_inspection'
+  | 'pending_final_approval'
   | 'approved' 
   | 'rejected' 
   | 'revision_required' 
@@ -48,6 +49,9 @@ export type WaterSourceType =
   | 'dam'
   | 'stream'
   | 'swamp'
+  | 'reservoir'
+  | 'wetland'
+  | 'hydropower_source'
   | 'other'
 
 export type WaterPurpose = 

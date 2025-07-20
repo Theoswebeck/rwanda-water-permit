@@ -249,6 +249,7 @@ export default function ReviewApplicationPage() {
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
       pending_inspection: { label: "Pending Inspection", variant: "outline" },
+      pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved: { label: "Approved", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
@@ -679,13 +680,13 @@ export default function ReviewApplicationPage() {
                           <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
                             application.status === 'pending_inspection' 
                               ? 'bg-yellow-100 border-2 border-yellow-400' 
-                              : ['approved', 'rejected'].includes(application.status)
+                              : ['pending_final_approval', 'approved', 'rejected'].includes(application.status)
                                 ? 'bg-primary text-primary-foreground'
                                 : 'bg-muted'
                           }`}>
                             {application.status === 'pending_inspection' ? (
                               <Clock className="h-4 w-4 text-yellow-600" />
-                            ) : ['approved', 'rejected'].includes(application.status) ? (
+                            ) : ['pending_final_approval', 'approved', 'rejected'].includes(application.status) ? (
                               <CheckCircle className="h-4 w-4" />
                             ) : (
                             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -698,6 +699,49 @@ export default function ReviewApplicationPage() {
                                 ? new Date(application.inspected_at).toLocaleDateString()
                                 : application.status === 'pending_inspection' 
                                   ? 'Scheduled'
+                                  : 'Pending'
+                              }
+                            </p>
+                          </div>
+                        </div>
+                        
+                        {/* Final Approval Stage */}
+                        <div className="flex items-start gap-3">
+                          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                            application.status === 'pending_final_approval' 
+                              ? 'bg-yellow-100 border-2 border-yellow-400' 
+                              : ['approved', 'rejected'].includes(application.status)
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted'
+                          }`}>
+                            {application.status === 'pending_final_approval' ? (
+                              <Clock className="h-4 w-4 text-yellow-600" />
+                            ) : ['approved', 'rejected'].includes(application.status) ? (
+                              application.status === 'approved' ? (
+                                <CheckCircle className="h-4 w-4" />
+                              ) : (
+                                <XCircle className="h-4 w-4" />
+                              )
+                            ) : (
+                              <Clock className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">
+                              {application.status === 'pending_final_approval' 
+                                ? 'Pending Approval' 
+                                : application.status === 'approved' 
+                                  ? 'Approved' 
+                                  : application.status === 'rejected'
+                                    ? 'Rejected'
+                                    : 'Final Approval'
+                              }
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {application.status === 'pending_final_approval' 
+                                ? 'Awaiting final decision' 
+                                : application.status === 'approved' || application.status === 'rejected'
+                                  ? (application.approved_at ? new Date(application.approved_at).toLocaleDateString() : 'Completed')
                                   : 'Pending'
                               }
                             </p>

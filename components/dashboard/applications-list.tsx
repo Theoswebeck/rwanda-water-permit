@@ -200,6 +200,7 @@ export function ApplicationsList({ applications, loading = false }: Applications
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
               <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
+              <SelectItem value="pending_final_approval">Pending Approval</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="revision_required">Revision Required</SelectItem>

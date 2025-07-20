@@ -14,6 +14,8 @@ export interface DailyReport {
   // ... complete type definitions
 }
 
+// AVoid circular reference in the RLS policies
+
 export const financialService = {
   async getDailyReports(): Promise<DailyReport[]> {
     // implementation

@@ -17,6 +17,7 @@ interface UseApplicationsReturn {
   updateApplication: (id: string, data: Partial<Application>) => Promise<Application | null>
   deleteApplication: (id: string) => Promise<boolean>
   getApplication: (id: string) => Promise<Application | null>
+  getApplicationByNumber: (applicationNumber: string) => Promise<Application | null>
 }
 
 export function useApplications({
@@ -238,6 +239,79 @@ export function useApplications({
     }
   }, [])
 
+  const getApplicationByNumber = useCallback(async (applicationNumber: string): Promise<Application | null> => {
+    try {
+      setError(null)
+      console.log('🔍 Supabase: Querying application by number:', applicationNumber)
+
+      const { data, error } = await supabase
+        .from('applications')
+        .select(`
+          *,
+          applicant:users!applicant_id(
+            id,
+            first_name,
+            last_name,
+            email,
+            phone,
+            mobile_phone,
+            account_type,
+            company_name,
+            company_tin,
+            incorporation_certificate_number,
+            id_number,
+            date_of_birth,
+            province,
+            district,
+            sector,
+            cell,
+            village,
+            address,
+            created_at,
+            last_login_at
+          ),
+          assigned_reviewer:users!assigned_reviewer_id(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          assigned_inspector:users!assigned_inspector_id(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          assigned_approver:users!assigned_approver_id(
+            id,
+            first_name,
+            last_name,
+            email
+          ),
+          documents(*),
+          reviews!application_id(*),
+          inspections!application_id(*),
+          permits!application_id(*)
+        `)
+        .eq('application_number', applicationNumber)
+        .single()
+
+      console.log('📥 Supabase response:', { data, error })
+      console.log('📄 Documents in response:', data?.documents)
+
+      if (error) {
+        console.error('❌ Supabase error:', error)
+        throw error
+      }
+
+      return data
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch application')
+      console.error('Error fetching application by number:', err)
+      return null
+    }
+  }, [])
+
   useEffect(() => {
     if (autoFetch) {
       fetchApplications()
@@ -252,6 +326,7 @@ export function useApplications({
     createApplication,
     updateApplication,
     deleteApplication,
-    getApplication
+    getApplication,
+    getApplicationByNumber
   }
 } 

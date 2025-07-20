@@ -53,7 +53,7 @@ export default function ReviewerDashboard() {
              *,
              applicant:users!applicant_id(first_name, last_name, company_name)
            `)
-           .in('status', ['submitted', 'under_review', 'pending_inspection', 'revision_required'])
+           .in('status', ['submitted', 'under_review', 'pending_inspection', 'pending_final_approval', 'revision_required'])
            .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -122,6 +122,7 @@ export default function ReviewerDashboard() {
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
       pending_inspection: { label: "Pending Inspection", variant: "outline" },
+      pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved: { label: "Approved", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },

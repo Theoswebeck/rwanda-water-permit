@@ -86,6 +86,10 @@ export function InspectionsTab() {
         label: 'Pending Inspection', 
         className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
       },
+      'pending_final_approval': { 
+        label: 'Pending Approval', 
+        className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800' 
+      },
       'revision_required': { 
         label: 'Revision Required', 
         className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 

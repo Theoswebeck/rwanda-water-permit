@@ -420,7 +420,7 @@ export default function EditApplicationPage() {
     }
   };
 
-  const handleSaveAsDraft = async (formData: any, status: 'draft') => {
+  const handleSaveAsDraft = async (formData: any, status: 'draft', isAutoSave: boolean = false) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -437,18 +437,24 @@ export default function EditApplicationPage() {
       
       if (updatedApplication) {
         console.log('✅ Application updated as draft successfully:', updatedApplication);
-        setSuccess(true);
         
-        // Redirect to dashboard after a brief success message
-        setTimeout(() => {
-          router.push("/dashboard?tab=applications&success=draft-updated");
-        }, 2000);
+        // Only redirect and show success for manual saves, not auto-saves
+        if (!isAutoSave) {
+          setSuccess(true);
+          
+          // Redirect to dashboard after a brief success message
+          setTimeout(() => {
+            router.push("/dashboard?tab=applications&success=draft-updated");
+          }, 2000);
+        }
       } else {
         throw new Error('Failed to save draft');
       }
     } catch (error) {
       console.error('❌ Error saving draft:', error);
       setError(error instanceof Error ? error.message : 'Failed to save draft');
+    } finally {
+      // Always reset loading state
       setIsLoading(false);
     }
   };

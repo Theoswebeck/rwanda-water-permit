@@ -90,7 +90,7 @@ export const getApplicationsForInspection = async () => {
           phone
         )
       `)
-      .in('status', ['submitted', 'under_review', 'pending_inspection', 'revision_required', 'approved', 'rejected'])
+      .in('status', ['submitted', 'under_review', 'pending_inspection', 'pending_final_approval', 'revision_required', 'approved', 'rejected'])
       .order('created_at', { ascending: false })
     
     if (error) {
@@ -385,6 +385,54 @@ export const scheduleInspection = async (applicationId: string, inspectorId: str
   
   if (error) throw error
   return data
+}
+
+// Helper function to complete inspection and update application status
+export const completeInspection = async (
+  inspectionId: string, 
+  inspectionData: {
+    result: 'passed' | 'failed' | 'conditional',
+    overall_score?: number,
+    recommendations?: string,
+    follow_up_required?: boolean,
+    location_verified?: boolean,
+    technical_compliance?: boolean,
+    environmental_compliance?: boolean,
+    regulatory_compliance?: boolean,
+    [key: string]: any
+  }
+) => {
+  try {
+    // Update inspection with completion data
+    const { data: inspection, error: inspectionError } = await supabase
+      .from('inspections')
+      .update({
+        ...inspectionData,
+        status: 'completed',
+        completed_date: new Date().toISOString()
+      })
+      .eq('id', inspectionId)
+      .select('application_id')
+      .single()
+    
+    if (inspectionError) throw inspectionError
+    
+    // Update application status to pending_final_approval
+    const { error: applicationError } = await supabase
+      .from('applications')
+      .update({ 
+        status: 'pending_final_approval',
+        inspected_at: new Date().toISOString()
+      })
+      .eq('id', inspection.application_id)
+    
+    if (applicationError) throw applicationError
+    
+    return inspection
+  } catch (error) {
+    console.error('Error completing inspection:', error)
+    throw error
+  }
 } 
 
 // Helper function to get application by ID (for inspector view)
@@ -603,6 +651,7 @@ export const deleteUser = async (userId: string) => {
 // Helper function to get applications pending final approval
 export const getApplicationsPendingApproval = async () => {
   try {
+    // Get applications that are in pending_final_approval status
     const { data, error } = await supabase
       .from('applications')
       .select(`
@@ -626,21 +675,26 @@ export const getApplicationsPendingApproval = async () => {
         reviews!application_id(
           recommendation,
           risk_assessment,
-          overall_comments
+          overall_comments,
+          status
         ),
         inspections!application_id(
           result,
           overall_score,
-          recommendations
+          recommendations,
+          status
         )
       `)
-      .in('status', ['pending_inspection', 'under_review'])
+      .eq('status', 'pending_final_approval') // Only applications ready for final approval
       .order('created_at', { ascending: false })
     
     if (error) {
       console.warn('Database error, returning empty array:', error.message)
       return []
     }
+
+    // Return applications that are in pending_final_approval status
+    // These have already completed review and inspection phases
     return data || []
   } catch (error) {
     console.warn('Failed to fetch applications pending approval:', error)
