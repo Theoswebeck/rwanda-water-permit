@@ -85,8 +85,19 @@ export default function ReviewerDashboard() {
 
         setReviewApplications(processedApplications);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch applications');
-        console.error('Error fetching review applications:', err);
+        let errorMsg = 'Failed to fetch applications';
+        if (err instanceof Error) {
+          errorMsg = err.message;
+          console.error('❌ Error fetching review applications:', err);
+        } else if (typeof err === 'object' && err !== null) {
+          // Safely access message/details if present
+          const maybeMsg = (err as { message?: string; details?: string });
+          errorMsg = maybeMsg.message || maybeMsg.details || JSON.stringify(err);
+          console.error('❌ Error fetching review applications:', JSON.stringify(err, null, 2));
+        } else {
+          console.error('❌ Error fetching review applications:', err);
+        }
+        setError(errorMsg);
       } finally {
         setLoading(false);
       }
@@ -127,6 +138,7 @@ export default function ReviewerDashboard() {
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
+      approved_pending_permit: { label: "Pending Terms Acceptance", variant: "default" },
     };
     
     const config = statusConfig[status];
