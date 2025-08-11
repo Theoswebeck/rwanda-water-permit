@@ -119,6 +119,22 @@ export function useApplications({
   const updateApplication = useCallback(async (id: string, data: Partial<Application>): Promise<Application | null> => {
     try {
       setError(null)
+      
+      // First, check if the application is approved or rejected (if we're not just updating status through admin/reviewer workflow)
+      if (!data.status || (data.status !== 'approved' && data.status !== 'rejected')) {
+        const { data: currentApp, error: fetchError } = await supabase
+          .from('applications')
+          .select('status')
+          .eq('id', id)
+          .single()
+        
+        if (fetchError) throw fetchError
+        
+        if (currentApp?.status === 'approved' || currentApp?.status === 'rejected') {
+          throw new Error('Approved or rejected applications cannot be edited. Please contact an administrator if changes are needed.')
+        }
+      }
+      
       const { data: updatedApplication, error } = await supabase
         .from('applications')
         .update(data)

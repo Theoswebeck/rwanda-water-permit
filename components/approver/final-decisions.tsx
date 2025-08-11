@@ -255,20 +255,20 @@ export function FinalDecisions() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
+    <div className="space-y-8">
+      <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl">
+          <h2 className="text-3xl font-bold tracking-tight">
             Final Approval Decisions
           </h2>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+          <p className="text-muted-foreground mt-2">
             Applications that have completed review and inspection phases, ready for your final approval decision
           </p>
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Decisions</CardTitle>
@@ -276,7 +276,7 @@ export function FinalDecisions() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{applications.length}</div>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Awaiting final approval
             </p>
           </CardContent>
@@ -291,7 +291,7 @@ export function FinalDecisions() {
             <div className="text-2xl font-bold">
               {applications.filter(app => app.riskLevel === "high").length}
             </div>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Requires careful review
             </p>
           </CardContent>
@@ -306,23 +306,23 @@ export function FinalDecisions() {
             <div className="text-2xl font-bold">
               {applications.length > 0 ? Math.round(applications.reduce((sum, app) => sum + app.daysInSystem, 0) / applications.length) : 0}
             </div>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               Days in system
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Applications Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-4">
           <CardTitle>Applications Ready for Final Decision</CardTitle>
           <CardDescription>
             Review completed applications and make final approval decisions
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4 mb-6">
+        <CardContent className="space-y-6">
+          <div className="flex items-center space-x-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -347,7 +347,6 @@ export function FinalDecisions() {
             </Select>
           </div>
 
-          {/* Applications Table */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -368,7 +367,7 @@ export function FinalDecisions() {
                       <div>
                         <div className="font-medium">{application.application_number || application.id}</div>
                         <div className="text-sm text-muted-foreground">{application.project_title}</div>
-                        <div className="text-xs text-muted-foreground flex items-center">
+                        <div className="text-xs text-muted-foreground flex items-center mt-1">
                           <Calendar className="h-3 w-3 mr-1" />
                           {new Date(application.submittedDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}
                         </div>
@@ -481,22 +480,22 @@ export function FinalDecisions() {
           </DialogHeader>
           {selectedApplication && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div className="grid grid-cols-2 gap-4 text-sm bg-muted/50 p-4 rounded-lg">
                 <div>
-                  <span className="font-medium">Application ID:</span>
-                  <p className="leading-relaxed [&:not(:first-child)]:mt-6">{selectedApplication.id}</p>
+                  <span className="font-medium text-muted-foreground">Application ID:</span>
+                  <p className="mt-1 font-medium">{selectedApplication.id}</p>
                 </div>
                 <div>
-                  <span className="font-medium">Applicant:</span>
-                  <p className="leading-relaxed [&:not(:first-child)]:mt-6">{selectedApplication.applicantName}</p>
+                  <span className="font-medium text-muted-foreground">Applicant:</span>
+                  <p className="mt-1 font-medium">{selectedApplication.applicantName}</p>
                 </div>
                 <div>
-                  <span className="font-medium">Type:</span>
-                  <p className="leading-relaxed [&:not(:first-child)]:mt-6">{selectedApplication.applicationType}</p>
+                  <span className="font-medium text-muted-foreground">Type:</span>
+                  <p className="mt-1 font-medium">{selectedApplication.applicationType}</p>
                 </div>
                 <div>
-                  <span className="font-medium">Location:</span>
-                  <p className="leading-relaxed [&:not(:first-child)]:mt-6">{selectedApplication.location}</p>
+                  <span className="font-medium text-muted-foreground">Location:</span>
+                  <p className="mt-1 font-medium">{selectedApplication.location}</p>
                 </div>
               </div>
               
@@ -530,7 +529,7 @@ export function FinalDecisions() {
               )}
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="gap-2 pt-6">
             <Button variant="outline" onClick={() => setIsDecisionDialogOpen(false)}>
               Cancel
             </Button>

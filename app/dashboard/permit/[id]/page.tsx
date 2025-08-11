@@ -676,7 +676,7 @@ export default function PermitDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Button 
-                    className="w-full flex items-center gap-2"
+                    className="w-full bg-black hover:bg-gray-800 text-white"
                     onClick={handleDownloadPermit}
                     disabled={isDownloading}
                   >
@@ -684,15 +684,6 @@ export default function PermitDetailPage() {
                     {isDownloading ? "Generating PDF..." : "Download Permit"}
                   </Button>
                   
-                  {permit.status === "active" || permit.status === "expiring-soon" ? (
-                    <Button variant="outline" className="w-full">
-                      Request Modification
-                    </Button>
-                  ) : (
-                    <Button variant="default" className="w-full">
-                      Apply for Renewal
-                    </Button>
-                  )}
                 </CardContent>
               </Card>
               
@@ -705,7 +696,9 @@ export default function PermitDetailPage() {
                   <p className="text-sm text-muted-foreground mb-4">
                     If you have any questions about your permit, please contact our support team.
                   </p>
-                  <Button className="w-full">Contact Support</Button>
+                  <Link href={`/contact-us?permit=${permit?.permitNumber || params.id}&category=permit`}>
+                    <Button className="w-full">Contact Support</Button>
+                  </Link>
                 </CardContent>
               </Card>
             </div>

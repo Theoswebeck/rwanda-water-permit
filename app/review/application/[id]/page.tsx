@@ -261,8 +261,10 @@ export default function ReviewApplicationPage() {
   };
 
   const shouldShowReviewActions = (status: ApplicationStatus): boolean => {
+    // Only show review actions for applications that haven't been finalized
     const reviewableStatuses: ApplicationStatus[] = ['submitted', 'under_review'];
-    return reviewableStatuses.includes(status);
+    const finalizedStatuses: ApplicationStatus[] = ['approved', 'rejected'];
+    return reviewableStatuses.includes(status) && !finalizedStatuses.includes(status);
   };
 
   if (loading) {

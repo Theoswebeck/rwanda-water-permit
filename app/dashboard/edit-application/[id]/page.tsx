@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { ApplicationForm } from "@/components/dashboard/application-form";
+import { ApplicationForm } from "@/components/dashboard/application-form-new";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
@@ -360,6 +360,12 @@ export default function EditApplicationPage() {
         
         const app = await getApplication(applicationId);
         if (app) {
+          // Check if application is editable - approved or rejected applications cannot be edited by anyone
+          if (app.status === 'approved' || app.status === 'rejected') {
+            setError('Approved or rejected applications cannot be edited. Please contact an administrator if changes are needed.');
+            return;
+          }
+          
           // Check if application is editable (draft or revision_required status)
           if (app.status !== 'draft' && app.status !== 'revision_required') {
             setError('Only draft applications and applications returned for revision can be edited');

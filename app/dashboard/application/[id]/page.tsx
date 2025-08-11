@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { TermsConditionsModal } from "@/components/dashboard/terms-conditions-modal";
 import { 
   ArrowLeft, 
   Loader2, 
@@ -32,7 +33,8 @@ export default function ApplicationDetailPage() {
   const params = useParams();
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { getApplication, loading } = useApplications();
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const { getApplication, loading, refresh } = useApplications();
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -47,6 +49,11 @@ export default function ApplicationDetailPage() {
           console.log('✅ Application details loaded:', appWithRelations);
           console.log('📄 Documents found:', appWithRelations.documents?.length || 0, 'documents');
           console.log('📄 Documents data:', appWithRelations.documents);
+          
+          // Show Terms modal if status is approved_pending_permit
+          if (appWithRelations.status === 'approved_pending_permit') {
+            setTermsModalOpen(true);
+          }
         } else {
           setError('Application not found');
         }
@@ -76,6 +83,8 @@ export default function ApplicationDetailPage() {
         return <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-purple-200">Pending Inspection</Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved</Badge>;
+      case "approved_pending_permit":
+        return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Pending Terms Acceptance</Badge>;
       case "rejected":
         return <Badge variant="outline" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Rejected</Badge>;
       case "revision_required":
@@ -202,7 +211,7 @@ export default function ApplicationDetailPage() {
             <div className="flex flex-col gap-2 md:items-end">
               <div className="flex items-center gap-2">
                 {getStatusBadge(application.status)}
-                {application.status === 'revision_required' && (
+                {(application.status === 'revision_required' || application.status === 'draft') && (
                   <Link href={`/dashboard/edit-application/${application.id}`}>
                     <Button variant="outline" size="sm">
                       <Edit className="h-4 w-4 mr-2" />
@@ -1047,6 +1056,20 @@ export default function ApplicationDetailPage() {
         </motion.div>
       </div>
 
+      {/* Terms & Conditions Modal */}
+      {application && application.status === 'approved_pending_permit' && (
+        <TermsConditionsModal
+          isOpen={termsModalOpen}
+          onClose={() => setTermsModalOpen(false)}
+          applicationId={application.id}
+          applicationNumber={application.application_number || ''}
+          projectTitle={application.project_title}
+          onTermsAccepted={() => {
+            refresh();
+            setTermsModalOpen(false);
+          }}
+        />
+      )}
       
     </DashboardLayout>
   );

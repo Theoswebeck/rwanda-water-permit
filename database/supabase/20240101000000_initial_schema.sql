@@ -20,7 +20,7 @@ CREATE TYPE id_type AS ENUM ('national_id', 'passport', 'driving_license');
 -- Application related enums
 CREATE TYPE application_status AS ENUM (
     'draft', 'submitted', 'under_review', 'pending_inspection', 
-    'approved', 'rejected', 'revision_required', 'cancelled'
+    'approved', 'approved_pending_permit', 'rejected', 'revision_required', 'cancelled'
 );
 CREATE TYPE application_type AS ENUM (
     'domestic', 'industrial', 'agricultural', 'commercial', 
@@ -189,6 +189,11 @@ CREATE TABLE public.applications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
+    -- Terms & Conditions tracking
+    terms_presented_at TIMESTAMP WITH TIME ZONE,
+    terms_accepted_at TIMESTAMP WITH TIME ZONE,
+    terms_status VARCHAR(50), -- 'pending', 'accepted', 'rejected'
+    
     -- Additional metadata
     revision_notes TEXT,
     rejection_reason TEXT,
@@ -228,6 +233,9 @@ CREATE TABLE public.permits (
     -- Monitoring requirements
     monitoring_frequency VARCHAR(100),
     reporting_requirements TEXT,
+    
+    -- Digital Document
+    permit_pdf_url VARCHAR(500), -- URL/path to generated PDF permit
     
     -- Audit fields
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

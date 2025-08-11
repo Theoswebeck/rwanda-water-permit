@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { ApplicationForm } from "@/components/dashboard/application-form";
+import { ApplicationForm } from "@/components/dashboard/application-form-new";
 import { PaymentNotice } from "@/components/dashboard/payment-notice";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";

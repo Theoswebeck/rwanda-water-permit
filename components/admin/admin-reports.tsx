@@ -3,17 +3,12 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   TrendingUp, 
-  TrendingDown, 
   Download, 
-  Calendar,
-  BarChart3,
-  PieChart,
   FileText,
   Users,
   Clock,
@@ -49,7 +44,7 @@ interface ReportData {
 
 export function AdminReports() {
   const [timeRange, setTimeRange] = useState("30d");
-  const [reportType, setReportType] = useState("overview");
+
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +71,47 @@ export function AdminReports() {
   };
 
   const generateReport = (type: string) => {
-    // Mock function to generate and download reports
-    alert(`Generating ${type} report for ${timeRange}...`);
+    if (!reportData) {
+      alert('No data available for report generation');
+      return;
+    }
+    
+    // Create CSV content based on report type
+    let csvContent = '';
+    const currentDate = new Date().toISOString().split('T')[0];
+    
+    switch (type) {
+      case 'comprehensive':
+        csvContent = `Rwanda Water Permit System - Comprehensive Report (${timeRange})\n\n`;
+        csvContent += `Generated on: ${currentDate}\n\n`;
+        csvContent += `OVERVIEW\n`;
+        csvContent += `Total Applications,${reportData.overview.totalApplications}\n`;
+        csvContent += `Approved Applications,${reportData.overview.approvedApplications}\n`;
+        csvContent += `Rejected Applications,${reportData.overview.rejectedApplications}\n`;
+        csvContent += `Pending Applications,${reportData.overview.pendingApplications}\n`;
+        csvContent += `Total Value (RWF),${reportData.overview.totalValue}\n`;
+        csvContent += `Average Processing Time (days),${reportData.overview.avgProcessingTime}\n\n`;
+        csvContent += `PERFORMANCE\n`;
+        csvContent += `Average Review Time (days),${reportData.performance.avgReviewTime}\n`;
+        csvContent += `Average Inspection Time (days),${reportData.performance.avgInspectionTime}\n`;
+        csvContent += `Overdue Applications,${reportData.performance.overtimeApplications}\n`;
+        csvContent += `Staff Utilization (%),${reportData.performance.staffUtilization}\n`;
+        break;
+      default:
+        csvContent = `${type.charAt(0).toUpperCase() + type.slice(1)} Report - ${currentDate}\n`;
+        csvContent += `Report generation for ${type} type is in development.\n`;
+    }
+    
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${type}_report_${currentDate}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (loading) {
@@ -140,13 +174,11 @@ export function AdminReports() {
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-        </TabsList>
+              <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
+          </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           {/* Key Performance Indicators */}
@@ -159,9 +191,8 @@ export function AdminReports() {
               <CardContent>
                 <div className="text-2xl font-bold">{reportData.overview.totalApplications}</div>
                 <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                  <TrendingUp className="h-3 w-3 text-green-600" />
-                  <span className="text-green-600">+8.2%</span>
-                  <span>from last period</span>
+                  <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                  <span>Total applications processed</span>
                 </div>
               </CardContent>
             </Card>
@@ -178,9 +209,8 @@ export function AdminReports() {
                     : 0}%
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                  <TrendingUp className="h-3 w-3 text-green-600" />
-                  <span className="text-green-600">+2.1%</span>
-                  <span>improvement</span>
+                  <CheckCircle className="h-3 w-3 text-muted-foreground" />
+                  <span>Approval percentage</span>
                 </div>
               </CardContent>
             </Card>
@@ -197,9 +227,8 @@ export function AdminReports() {
                     : '0 RWF'}
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                  <TrendingUp className="h-3 w-3 text-green-600" />
-                  <span className="text-green-600">+15.3%</span>
-                  <span>growth</span>
+                  <DollarSign className="h-3 w-3 text-muted-foreground" />
+                  <span>Total project value</span>
                 </div>
               </CardContent>
             </Card>
@@ -212,9 +241,8 @@ export function AdminReports() {
               <CardContent>
                 <div className="text-2xl font-bold">{reportData.overview.avgProcessingTime} days</div>
                 <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                  <TrendingDown className="h-3 w-3 text-green-600" />
-                  <span className="text-green-600">-1.2 days</span>
-                  <span>faster</span>
+                  <Clock className="h-3 w-3 text-muted-foreground" />
+                  <span>Average processing time</span>
                 </div>
               </CardContent>
             </Card>
@@ -365,110 +393,10 @@ export function AdminReports() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Advanced Analytics</CardTitle>
-              <CardDescription>Detailed analysis and trends</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-12">
-                <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-medium mb-2">Advanced Analytics</h3>
-                <p className="text-muted-foreground">
-                  Detailed charts and trend analysis coming soon
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
-        <TabsContent value="compliance" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Compliance & Quality Metrics</CardTitle>
-              <CardDescription>Regulatory compliance and quality indicators</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div className="space-y-4">
-                  <h4 className="font-medium">System Uptime</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Current Uptime</span>
-                      <span className="text-sm font-medium">{reportData.overview.systemUptime}%</span>
-                    </div>
-                    <Progress value={reportData.overview.systemUptime} className="h-2" />
-                    <p className="text-xs text-muted-foreground">Excellent system reliability</p>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h4 className="font-medium">User Satisfaction</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm">Average Rating</span>
-                      <span className="text-sm font-medium">{reportData.overview.userSatisfaction}/5.0</span>
-                    </div>
-                    <Progress value={(reportData.overview.userSatisfaction / 5) * 100} className="h-2" />
-                    <p className="text-xs text-muted-foreground">High user satisfaction rating</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="font-medium">Quality Indicators</h4>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {reportData.overview.totalApplications > 0 
-                        ? Math.round((reportData.overview.approvedApplications / reportData.overview.totalApplications) * 100)
-                        : 0}%
-                    </div>
-                    <p className="text-sm text-muted-foreground">Approval Rate</p>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">{reportData.performance.avgReviewTime}</div>
-                    <p className="text-sm text-muted-foreground">Avg Review Days</p>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">{reportData.performance.errorRate}%</div>
-                    <p className="text-sm text-muted-foreground">Error Rate</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
-      {/* Quick Report Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Reports</CardTitle>
-          <CardDescription>Generate common reports instantly</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <Button variant="outline" onClick={() => generateReport("monthly")}>
-              <FileText className="h-4 w-4 mr-2" />
-              Monthly Summary
-            </Button>
-            <Button variant="outline" onClick={() => generateReport("performance")}>
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Performance Report
-            </Button>
-            <Button variant="outline" onClick={() => generateReport("compliance")}>
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Compliance Report
-            </Button>
-            <Button variant="outline" onClick={() => generateReport("financial")}>
-              <DollarSign className="h-4 w-4 mr-2" />
-              Financial Summary
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 } 

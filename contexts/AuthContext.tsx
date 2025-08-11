@@ -18,6 +18,7 @@ interface SignUpData {
   phone?: string;
   idNumber?: string;
   idType?: string;
+  identification?: { number: string; type: string };
 }
 
 interface AuthContextType {
@@ -104,7 +105,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (currentUser) {
           console.log('✅ User session updated:', currentUser.email);
-          await fetchUserProfile(currentUser.id);
+          const profile = await fetchUserProfile(currentUser.id);
+          
+          // Check if user is suspended even during session restoration
+          if (profile && profile.status === 'suspended') {
+            console.warn('🚫 Suspended user session detected, signing out:', currentUser.email);
+            await supabase.auth.signOut();
+            setUser(null);
+            setUserProfile(null);
+            return;
+          }
+          
+          // Check if user is inactive
+          if (profile && profile.status === 'inactive') {
+            console.warn('⚠️ Inactive user session detected, signing out:', currentUser.email);
+            await supabase.auth.signOut();
+            setUser(null);
+            setUserProfile(null);
+            return;
+          }
         } else {
           console.log('🚪 No active session.');
           setUserProfile(null);
@@ -121,12 +140,72 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.error('❌ Sign in error:', error.message);
         return { error: error.message };
       }
-      console.log('✅ Successfully signed in');
+
+      if (!authData.user) {
+        return { error: 'Authentication failed' };
+      }
+
+      console.log('✅ Authentication successful, checking user status...');
+
+      // Fetch user profile to check status
+      const { data: userProfile, error: profileError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError) {
+        console.error('❌ Error fetching user profile:', profileError);
+        // Sign out the user since we can't verify their status
+        await supabase.auth.signOut();
+        return { error: 'Unable to verify account status' };
+      }
+
+      // Check if user is suspended
+      if (userProfile.status === 'suspended') {
+        console.warn('🚫 Suspended user attempted login:', email);
+        // Sign out the user immediately
+        await supabase.auth.signOut();
+        return { 
+          error: 'Your account has been suspended. Please contact support for assistance.' 
+        };
+      }
+
+      // Check if user is inactive
+      if (userProfile.status === 'inactive') {
+        console.warn('⚠️ Inactive user attempted login:', email);
+        await supabase.auth.signOut();
+        return { 
+          error: 'Your account is inactive. Please contact support to reactivate your account.' 
+        };
+      }
+
+      // Only allow active users to proceed
+      if (userProfile.status !== 'active') {
+        console.warn('⚠️ User with invalid status attempted login:', email, userProfile.status);
+        await supabase.auth.signOut();
+        return { 
+          error: 'Your account status does not allow access. Please contact support.' 
+        };
+      }
+
+      // Update last login timestamp for active users
+      try {
+        await supabase
+          .from('users')
+          .update({ last_login_at: new Date().toISOString() })
+          .eq('id', authData.user.id);
+      } catch (updateError) {
+        console.warn('⚠️ Failed to update last login timestamp:', updateError);
+        // Don't fail the login for this
+      }
+
+      console.log('✅ Successfully signed in with active account');
       return {};
     } catch (err) {
       console.error('❌ Unexpected sign in error:', err);
@@ -172,13 +251,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profileData.first_name = data.firstName;
         profileData.last_name = data.lastName;
         profileData.phone = data.phone;
-        profileData.id_number = data.idNumber;
-        profileData.id_type = data.idType as any;
+        profileData.id_number = data.identification?.number || data.idNumber;
+        profileData.id_type = 'national_id'; // Individual accounts use National ID
       } else {
         profileData.company_name = data.companyName;
         profileData.company_tin = data.companyTIN;
         profileData.company_address = data.companyAddress;
         profileData.company_phone = data.companyPhone;
+        profileData.id_type = 'tin'; // Company accounts use TIN
+        profileData.id_number = data.companyTIN; // Use TIN as the ID number for companies
       }
 
       console.log('💾 Creating user profile...');

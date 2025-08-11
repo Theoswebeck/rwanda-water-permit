@@ -20,7 +20,7 @@ CREATE TYPE id_type AS ENUM ('national_id', 'passport', 'driving_license');
 -- Application related enums
 CREATE TYPE application_status AS ENUM (
     'draft', 'submitted', 'under_review', 'pending_inspection', 
-    'approved', 'rejected', 'revision_required', 'cancelled'
+    'approved', 'approved_pending_permit', 'rejected', 'revision_required', 'cancelled'
 );
 CREATE TYPE application_type AS ENUM (
     'domestic', 'industrial', 'agricultural', 'commercial', 
@@ -188,6 +188,11 @@ CREATE TABLE applications (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
+    -- Terms & Conditions tracking
+    terms_presented_at TIMESTAMP WITH TIME ZONE,
+    terms_accepted_at TIMESTAMP WITH TIME ZONE,
+    terms_status VARCHAR(50), -- 'pending', 'accepted', 'rejected'
+    
     -- Additional metadata
     revision_notes TEXT,
     rejection_reason TEXT,
@@ -283,6 +288,9 @@ CREATE TABLE permits (
     -- Monitoring requirements
     monitoring_frequency VARCHAR(100),
     reporting_requirements TEXT,
+    
+    -- Digital Document
+    permit_pdf_url VARCHAR(500), -- URL/path to generated PDF permit
     
     -- Audit fields
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -768,9 +776,12 @@ CREATE POLICY "Users can create their own applications"
     ON applications FOR INSERT
     WITH CHECK (auth.uid() = applicant_id);
 
+-- Drop existing policy and recreate with updated logic
+DROP POLICY IF EXISTS "Users can update their own draft applications" ON applications;
+
 CREATE POLICY "Users can update their own draft applications"
     ON applications FOR UPDATE
-    USING (auth.uid() = applicant_id AND status = 'draft');
+    USING (auth.uid() = applicant_id AND status IN ('draft', 'revision_required') AND status NOT IN ('approved', 'rejected'));
 
 CREATE POLICY "Reviewers can view assigned applications"
     ON applications FOR SELECT
@@ -792,16 +803,20 @@ CREATE POLICY "Inspectors can view assigned applications"
         )
     );
 
+-- Drop existing policy and recreate with updated logic
+DROP POLICY IF EXISTS "Staff can update applications in their workflow" ON applications;
+
 CREATE POLICY "Staff can update applications in their workflow"
     ON applications FOR UPDATE
     USING (
-        auth.uid() = assigned_reviewer_id OR
-        auth.uid() = assigned_inspector_id OR
-        auth.uid() = assigned_approver_id OR
-        EXISTS (
-            SELECT 1 FROM users 
-            WHERE id = auth.uid() AND role = 'admin'
-        )
+        (auth.uid() = assigned_reviewer_id OR
+         auth.uid() = assigned_inspector_id OR
+         auth.uid() = assigned_approver_id OR
+         EXISTS (
+             SELECT 1 FROM users 
+             WHERE id = auth.uid() AND role = 'admin'
+         )) AND
+        status NOT IN ('approved', 'rejected')
     );
 
 -- Permits policies

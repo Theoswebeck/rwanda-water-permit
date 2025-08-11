@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Select, 
   SelectContent, 
@@ -34,275 +35,222 @@ import {
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Upload, X, FileText, Check, AlertCircle, XCircle, CheckCircle, Droplet, Building, Zap, Mountain } from "lucide-react";
+import { MapPin, Upload, X, FileText, Check, AlertCircle, XCircle, CheckCircle, Droplet, Building, Zap, Mountain, Save, Send, User, Globe, Factory } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 
-// Define the validation schema for the form (STRICT - for submission)
+// Form schema based on NEW_WATER_PERMIT_APPLICATION_FORM.md structure
 const formSchema = z.object({
-  // Personal information (prefilled)
-  fullName: z.string().min(2, { message: "Name must be at least 2 characters." }),
-  email: z.string().email({ message: "Please enter a valid email address." }),
-  phone: z.string().min(10, { message: "Phone number must be at least 10 characters." }),
-  address: z.string().min(5, { message: "Address must be at least 5 characters." }),
+  // SECTION 1: IDENTIFICATION AND ADDRESS OF THE APPLICANT
+  fullNameApplicant: z.string().min(2, { message: "Full name of applicant is required" }),
+  categoryApplicant: z.enum(["individual", "company", "cooperative", "organization", "institution", "other"], {
+    required_error: "Please select applicant category"
+  }),
+  categoryApplicantOther: z.string().optional(),
+  nameRepresentative: z.string().optional(), // For Company, Cooperative, Organization, Institution
+  identificationDoc: z.any().optional(), // For Individual: copy of ID/Passport, For Company: registration certificate
   
-  // Enhanced contact information (NEW)
-  poBox: z.string().optional(),
-  mobilePhone: z.string().optional(),
-  landlinePhone: z.string().optional(),
-  alternativeContactName: z.string().optional(),
-  alternativeContactRelationship: z.string().optional(),
-  alternativeContactPhone: z.string().optional(),
+  // Office Address (Province, District, Sector, Cell, Village)
+  officeProvince: z.string().min(1, { message: "Office province is required" }),
+  officeDistrict: z.string().min(1, { message: "Office district is required" }),
+  officeSector: z.string().min(1, { message: "Office sector is required" }),
+  officeCell: z.string().min(1, { message: "Office cell is required" }),
+  officeVillage: z.string().optional(),
   
-  // Permit details
-  permitType: z.string({ required_error: "Please select a permit type." }),
-  applicantType: z.string({ required_error: "Please select an applicant type." }),
-  waterSource: z.string({ required_error: "Please select a water source." }),
-  purpose: z.string({ required_error: "Please select a purpose." }).min(1),
-  waterUsage: z.coerce.number().min(1, { message: "Water usage must be greater than 0." }),
-  waterUsageUnit: z.string({ required_error: "Please select a unit." }).min(1, { message: "Please select a unit." }),
+  // Contact Information
+  telephoneContact: z.string().min(10, { message: "Telephone contact is required" }),
+  emailAddress: z.string().email({ message: "Valid email address is required" }),
   
-  // Water Source Details (NEW - Section 7)
-  waterBodyName: z.string().optional(),
-  tributaryName: z.string().optional(),
-  catchmentNameLevel1: z.string().optional(),
-  catchmentNameLevel2: z.string().optional(),
-  waterReliability: z.string().optional(),
-  naturalDischargeVolume: z.coerce.number().optional(),
+  // SECTION 2: SOURCE OF WATER
+  waterSourceType: z.enum(["lake", "dam", "spring", "borehole", "stream_river", "other"], {
+    required_error: "Please select a water source type"
+  }),
+  waterSourceOther: z.string().optional(), // If "Other" is selected
+  nameSourceWater: z.string().min(1, { message: "Name of water source is required" }),
+  tributaryToMain: z.string().optional(), // Tributary to (main river/lake)
   
-  // Water Usage Breakdown (NEW - Section 8)
-  maxDailyVolume: z.coerce.number().optional(),
-  maxMonthlyVolume: z.coerce.number().optional(),
-  maxYearlyVolume: z.coerce.number().optional(),
-  flowRatePerSecond: z.coerce.number().optional(),
-  abstractionFacilitiesDescription: z.string().optional(),
-  returnFlowLocation: z.string().optional(),
-  returnFlowVolume: z.coerce.number().optional(),
-  proposedDurationMonths: z.coerce.number().optional(),
-  proposedDurationYears: z.coerce.number().optional(),
-  pumpingHoursPerDay: z.coerce.number().optional(),
+  // Location of water source (Province, District, Sector, Cell, Village)
+  waterSourceProvince: z.string().min(1, { message: "Water source province is required" }),
+  waterSourceDistrict: z.string().min(1, { message: "Water source district is required" }),
+  waterSourceSector: z.string().min(1, { message: "Water source sector is required" }),
+  waterSourceCell: z.string().min(1, { message: "Water source cell is required" }),
+  waterSourceVillage: z.string().optional(),
   
-  // Project Details (NEW - Section 9)
-  proposedFacilitiesDescription: z.string().optional(),
-  constructionType: z.string().optional(),
-  concessionArea: z.coerce.number().optional(),
-  operationalOverview: z.string().optional(),
+  // Coordinates of water source
+  waterSourceLatitude: z.string().min(1, { message: "Water source latitude is required" }),
+  waterSourceLongitude: z.string().min(1, { message: "Water source longitude is required" }),
   
-  // Land Ownership Information (NEW - Section 11)
-  ownsAllRequiredLand: z.boolean().optional(),
-  landOwnershipStatus: z.string().optional(),
-  affectedLandowners: z.string().optional(), // Will be JSON string
-  easementDetails: z.string().optional(),
-  writtenConsentDetails: z.string().optional(),
-  leaseAgreementDetails: z.string().optional(),
-  landAccessSteps: z.string().optional(),
+  // Reliability of water source
+  waterReliability: z.enum(["water_always_available", "frequently_dry", "dry_during_certain_season"], {
+    required_error: "Please select water reliability"
+  }),
   
-  // Industry-specific fields (conditional)
-  industryType: z.string().optional(),
-  industryDetails: z.string().optional(),
+  // SECTION 3: INTENDED ACTIVITY
+  // Activity Types (multiple selection possible)
+  intendedActivities: z.array(z.enum([
+    "irrigation", "construction_of_dam", "aquaculture", "mining", "industry", 
+    "water_supply", "coffee_washing", "electricity_generation", "navigation", 
+    "recreation_activities", "construction_of_infrastructures", "other"
+  ])).min(1, { message: "Please select at least one intended activity" }),
+  intendedActivityOther: z.string().optional(), // If "Other" is selected
   
-  // Electricity Generation fields (conditional)
-  powerGenerationType: z.string().optional(),
-  installedCapacity: z.coerce.number().optional(),
-  turbineType: z.string().optional(),
-  headHeight: z.coerce.number().optional(),
+  // Water Abstraction Table
+  waterAbstractionDetails: z.array(z.object({
+    activity: z.string().min(1, { message: "Activity is required" }),
+    flowRate: z.string().optional(), // Flow rate (m³/s or m³/day)
+    flowRateUnit: z.enum(["m3_per_second", "m3_per_day"]).optional(),
+    maxAverageYearly: z.coerce.number().optional(), // Maximum average yearly (m³/year)
+    abstractionMethod: z.string().optional(), // Method of water abstraction
+  })).min(1, { message: "At least one water abstraction detail is required" }),
   
-  // Mining fields (conditional)
-  miningType: z.string().optional(),
-  miningMethod: z.string().optional(),
-  mineralType: z.string().optional(),
-  miningArea: z.coerce.number().optional(),
+  // Water Concession (for Aquaculture)
+  concessionArea: z.coerce.number().optional(), // Total area (m² or ha)
+  concessionAreaUnit: z.enum(["m2", "ha"]).optional(),
+  permitPeriod: z.string().optional(), // Period for which permit is required
   
-  // Water Flow Diversion specific fields (conditional)
-  intakeLocation: z.string().optional(),
-  intakeFlow: z.coerce.number().optional(),
-  intakeLatitude: z.string().optional(),
-  intakeLongitude: z.string().optional(),
-  intakeElevation: z.coerce.number().optional(),
-  dischargeLocation: z.string().optional(),
-  dischargeFlow: z.coerce.number().optional(),
-  dischargeLatitude: z.string().optional(),
-  dischargeLongitude: z.string().optional(),
-  dischargeElevation: z.coerce.number().optional(),
-  streamLevelVariations: z.string().optional(),
-  diversionStructureConfig: z.string().optional(),
+  // SECTION 4: OWNERSHIP OF ADJOINING LAND
+  ownsAllLand: z.boolean({ required_error: "Please specify if you own all required land" }),
+  hasLandAccess: z.boolean().optional(), // If ownsAllLand is false
+  landAccessDocuments: z.any().optional(), // Easement/consent/lease documents
   
-  // Location
-  province: z.string().min(1, { message: "Province is required" }),
-  district: z.string().min(1, { message: "District is required" }),
-  sector: z.string().min(1, { message: "Sector is required" }),
-  cell: z.string().min(1, { message: "Cell is required" }),
-  latitude: z.string().min(1, "Latitude is required"),
-  longitude: z.string().min(1, "Longitude is required"),
+  // SECTION 5: PAYMENT INFORMATION
+  paymentProof: z.any({ required_error: "Payment proof is required for submission" }),
   
-  // Project details
-  projectTitle: z.string().min(5, { message: "Project title must be at least 5 characters." }),
-  projectDescription: z.string().min(20, { message: "Description must be at least 20 characters." }),
+  // ANNEXES - Activity-specific additional information
+  // Note: Fill only the annex corresponding to the intended use of water
   
-  // Technical Details
-  storageFacilities: z.string().optional(),
-  storageCapacity: z.coerce.number().optional(),
-  waterTakingMethod: z.string({ required_error: "Method of water taking is required." }),
-  waterMeasuringMethod: z.string({ required_error: "Method of measurement is required." }),
-  returnFlowQuantity: z.coerce.number().optional(),
-  returnFlowQuality: z.string().optional(),
-  potentialEffects: z.string({ required_error: "Potential effects are required." }).min(20, { message: "Please describe the effects in at least 20 characters." }),
-  mitigationActions: z.string({ required_error: "Mitigation actions are required." }).min(20, { message: "Please describe the actions in at least 20 characters." }),
-  concessionDuration: z.string({ required_error: "Proposed duration is required." }),
+  // ANNEX A: Irrigation
+  annexA_irrigationDetails: z.string().optional(),
   
-  // Pipes, materials, and fixtures
-  pipeDetails: z.string().optional(),
-  pumpCapacity: z.coerce.number().optional(),
-  valveDetails: z.string().optional(),
-  meterDetails: z.string().optional(),
-  backflowControlDevices: z.string().optional(),
+  // ANNEX B: Water Supply  
+  annexB_waterSupplyDetails: z.string().optional(),
   
-  // Documents
-  paymentProof: z.any().optional(),
-  identificationDoc: z.any().optional(),
-  landOwnershipDoc: z.any().optional(),
+  // ANNEX C: Aquaculture
+  annexC_aquacultureDetails: z.string().optional(),
+  
+  // ANNEX D: Coffee Washing
+  annexD_coffeeWashingDetails: z.string().optional(),
+  
+  // ANNEX E: Industries
+  annexE_industryDetails: z.string().optional(),
+  
+  // ANNEX F: Electricity Generation
+  annexF_electricityDetails: z.string().optional(),
+  
+  // ANNEX G: Mining
+  annexG_miningDetails: z.string().optional(),
+  
+  // ANNEX H: Construction of infrastructures
+  annexH_constructionDetails: z.string().optional(),
+  
+  // ANNEX I: Navigation
+  annexI_navigationDetails: z.string().optional(),
+  
+  // ANNEX J: Recreation activities
+  annexJ_recreationDetails: z.string().optional(),
+  
+  // ANNEX K: Other activities
+  annexK_otherDetails: z.string().optional(),
+  
+  // Additional documents based on activity
   technicalDrawings: z.any().optional(),
   environmentalImpactDoc: z.any().optional(),
-  intakeDischargeMap: z.any().optional(),
+  feasibilityStudy: z.any().optional(),
   
-  // Terms
-  termsAccepted: z.boolean().refine((value) => value === true, {
-    message: "You must accept the terms and conditions to continue.",
+  // CERTIFICATION SECTION
+  certificationAgreement: z.boolean().refine((value) => value === true, {
+    message: "You must certify that the information provided is true and accurate.",
   }),
 });
 
-// Define the DRAFT schema (RELAXED - for auto-save and manual draft save)
+// Draft schema - all fields optional for saving drafts
 const draftSchema = z.object({
-  // Personal information (optional for drafts)
-  fullName: z.string().optional(),
-  email: z.string().optional(),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  
-  // Enhanced contact information
-  poBox: z.string().optional(),
-  mobilePhone: z.string().optional(),
-  landlinePhone: z.string().optional(),
-  alternativeContactName: z.string().optional(),
-  alternativeContactRelationship: z.string().optional(),
-  alternativeContactPhone: z.string().optional(),
-  
-  // Permit details (all optional for drafts)
-  permitType: z.string().optional(),
-  applicantType: z.string().optional(),
-  waterSource: z.string().optional(),
-  purpose: z.string().optional(),
-  waterUsage: z.coerce.number().optional(),
-  waterUsageUnit: z.string().optional(),
-  
-  // Water Source Details
-  waterBodyName: z.string().optional(),
-  tributaryName: z.string().optional(),
-  catchmentNameLevel1: z.string().optional(),
-  catchmentNameLevel2: z.string().optional(),
-  waterReliability: z.string().optional(),
-  naturalDischargeVolume: z.coerce.number().optional(),
-  
-  // Water Usage Breakdown
-  maxDailyVolume: z.coerce.number().optional(),
-  maxMonthlyVolume: z.coerce.number().optional(),
-  maxYearlyVolume: z.coerce.number().optional(),
-  flowRatePerSecond: z.coerce.number().optional(),
-  abstractionFacilitiesDescription: z.string().optional(),
-  returnFlowLocation: z.string().optional(),
-  returnFlowVolume: z.coerce.number().optional(),
-  proposedDurationMonths: z.coerce.number().optional(),
-  proposedDurationYears: z.coerce.number().optional(),
-  pumpingHoursPerDay: z.coerce.number().optional(),
-  
-  // Project Details
-  proposedFacilitiesDescription: z.string().optional(),
-  constructionType: z.string().optional(),
-  concessionArea: z.coerce.number().optional(),
-  operationalOverview: z.string().optional(),
-  
-  // Land Ownership Information
-  ownsAllRequiredLand: z.boolean().optional(),
-  landOwnershipStatus: z.string().optional(),
-  affectedLandowners: z.string().optional(),
-  easementDetails: z.string().optional(),
-  writtenConsentDetails: z.string().optional(),
-  leaseAgreementDetails: z.string().optional(),
-  landAccessSteps: z.string().optional(),
-  
-  // Industry-specific fields
-  industryType: z.string().optional(),
-  industryDetails: z.string().optional(),
-  
-  // Electricity Generation fields
-  powerGenerationType: z.string().optional(),
-  installedCapacity: z.coerce.number().optional(),
-  turbineType: z.string().optional(),
-  headHeight: z.coerce.number().optional(),
-  
-  // Mining fields
-  miningType: z.string().optional(),
-  miningMethod: z.string().optional(),
-  mineralType: z.string().optional(),
-  miningArea: z.coerce.number().optional(),
-  
-  // Water Flow Diversion specific fields
-  intakeLocation: z.string().optional(),
-  intakeFlow: z.coerce.number().optional(),
-  intakeLatitude: z.string().optional(),
-  intakeLongitude: z.string().optional(),
-  intakeElevation: z.coerce.number().optional(),
-  dischargeLocation: z.string().optional(),
-  dischargeFlow: z.coerce.number().optional(),
-  dischargeLatitude: z.string().optional(),
-  dischargeLongitude: z.string().optional(),
-  dischargeElevation: z.coerce.number().optional(),
-  streamLevelVariations: z.string().optional(),
-  diversionStructureConfig: z.string().optional(),
-  
-  // Location (optional for drafts)
-  province: z.string().optional(),
-  district: z.string().optional(),
-  sector: z.string().optional(),
-  cell: z.string().optional(),
-  village: z.string().optional(),
-  latitude: z.string().optional(),
-  longitude: z.string().optional(),
-  
-  // Project details (optional for drafts)
-  projectTitle: z.string().optional(),
-  projectDescription: z.string().optional(),
-  
-  // Technical Details (optional for drafts)
-  storageFacilities: z.string().optional(),
-  storageCapacity: z.coerce.number().optional(),
-  waterTakingMethod: z.string().optional(),
-  waterMeasuringMethod: z.string().optional(),
-  returnFlowQuantity: z.coerce.number().optional(),
-  returnFlowQuality: z.string().optional(),
-  potentialEffects: z.string().optional(),
-  mitigationActions: z.string().optional(),
-  concessionDuration: z.string().optional(),
-  
-  // Pipes, materials, and fixtures
-  pipeDetails: z.string().optional(),
-  pumpCapacity: z.coerce.number().optional(),
-  valveDetails: z.string().optional(),
-  meterDetails: z.string().optional(),
-  backflowControlDevices: z.string().optional(),
-  
-  // Documents
-  paymentProof: z.any().optional(),
+  // Make all form schema fields optional for drafts
+  fullNameApplicant: z.string().optional(),
+  categoryApplicant: z.string().optional(),
+  categoryApplicantOther: z.string().optional(),
+  nameRepresentative: z.string().optional(),
   identificationDoc: z.any().optional(),
-  landOwnershipDoc: z.any().optional(),
+  
+  // Office Address
+  officeProvince: z.string().optional(),
+  officeDistrict: z.string().optional(),
+  officeSector: z.string().optional(),
+  officeCell: z.string().optional(),
+  officeVillage: z.string().optional(),
+  
+  // Contact Information
+  telephoneContact: z.string().optional(),
+  emailAddress: z.string().optional(),
+  
+  // SECTION 2: SOURCE OF WATER
+  waterSourceType: z.string().optional(),
+  waterSourceOther: z.string().optional(),
+  nameSourceWater: z.string().optional(),
+  tributaryToMain: z.string().optional(),
+  
+  // Location of water source
+  waterSourceProvince: z.string().optional(),
+  waterSourceDistrict: z.string().optional(),
+  waterSourceSector: z.string().optional(),
+  waterSourceCell: z.string().optional(),
+  waterSourceVillage: z.string().optional(),
+  
+  // Coordinates of water source
+  waterSourceLatitude: z.string().optional(),
+  waterSourceLongitude: z.string().optional(),
+  
+  // Reliability of water source
+  waterReliability: z.string().optional(),
+  
+  // SECTION 3: INTENDED ACTIVITY
+  intendedActivities: z.array(z.string()).optional(),
+  intendedActivityOther: z.string().optional(),
+  
+  // Water abstraction details
+  waterAbstractionDetails: z.array(z.object({
+    activity: z.string(),
+    flowRate: z.string().optional(),
+    flowRateUnit: z.string().optional(),
+    maxAverageYearly: z.coerce.number().optional(),
+    abstractionMethod: z.string().optional(),
+  })).optional(),
+  
+  // Water concession
+  concessionArea: z.coerce.number().optional(),
+  concessionAreaUnit: z.string().optional(),
+  permitPeriod: z.string().optional(),
+  
+  // SECTION 4: OWNERSHIP OF ADJOINING LAND
+  ownsAllLand: z.boolean().optional(),
+  hasLandAccess: z.boolean().optional(),
+  landAccessDocuments: z.any().optional(),
+  
+  // SECTION 5: PAYMENT INFORMATION
+  paymentProof: z.any().optional(),
+  
+  // ANNEXES
+  annexA_irrigationDetails: z.string().optional(),
+  annexB_waterSupplyDetails: z.string().optional(),
+  annexC_aquacultureDetails: z.string().optional(),
+  annexD_coffeeWashingDetails: z.string().optional(),
+  annexE_industryDetails: z.string().optional(),
+  annexF_electricityDetails: z.string().optional(),
+  annexG_miningDetails: z.string().optional(),
+  annexH_constructionDetails: z.string().optional(),
+  annexI_navigationDetails: z.string().optional(),
+  annexJ_recreationDetails: z.string().optional(),
+  annexK_otherDetails: z.string().optional(),
+  
+  // Additional documents
   technicalDrawings: z.any().optional(),
   environmentalImpactDoc: z.any().optional(),
-  intakeDischargeMap: z.any().optional(),
+  feasibilityStudy: z.any().optional(),
   
-  // Terms (optional for drafts)
-  termsAccepted: z.boolean().optional(),
+  // CERTIFICATION SECTION
+  certificationAgreement: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -365,117 +313,92 @@ export function ApplicationForm({
     intakeDischargeMap: useRef<HTMLInputElement>(null),
   };
   
-  // Initialize form with default values from user data and merge with initial data if editing
+  // Initialize form with default values based on new schema structure
   const defaultValues = {
-    fullName: userData?.name || "",
-    email: userData?.email || "",
-    phone: userData?.phone || "",
-    address: userData?.address || "",
+    // SECTION 1: IDENTIFICATION AND ADDRESS OF THE APPLICANT
+    fullNameApplicant: userData?.name || "",
+    categoryApplicant: userData?.account_type || "",
+    categoryApplicantOther: "",
+    nameRepresentative: "",
+    identificationDoc: undefined,
     
-    // Enhanced contact information defaults
-    poBox: "",
-    mobilePhone: "",
-    landlinePhone: "",
-    alternativeContactName: "",
-    alternativeContactRelationship: "",
-    alternativeContactPhone: "",
+    // Office Address
+    officeProvince: "",
+    officeDistrict: "",
+    officeSector: "",
+    officeCell: "",
+    officeVillage: "",
     
-    permitType: "",
-    applicantType: "",
-    waterSource: "",
-    purpose: "",
-    waterUsage: 1, // Default to 1 instead of 0 to avoid validation issues
-    waterUsageUnit: "",
+    // Contact Information
+    telephoneContact: userData?.phone || "",
+    emailAddress: userData?.email || "",
     
-    // Water Source Details defaults
-    waterBodyName: "",
-    tributaryName: "",
-    catchmentNameLevel1: "",
-    catchmentNameLevel2: "",
+    // SECTION 2: SOURCE OF WATER
+    waterSourceType: "",
+    waterSourceOther: "",
+    nameSourceWater: "",
+    tributaryToMain: "",
+    
+    // Location of water source
+    waterSourceProvince: "",
+    waterSourceDistrict: "",
+    waterSourceSector: "",
+    waterSourceCell: "",
+    waterSourceVillage: "",
+    
+    // Coordinates of water source
+    waterSourceLatitude: "",
+    waterSourceLongitude: "",
+    
+    // Reliability of water source
     waterReliability: "",
-    naturalDischargeVolume: undefined,
     
-    // Water Usage Breakdown defaults
-    maxDailyVolume: undefined,
-    maxMonthlyVolume: undefined,
-    maxYearlyVolume: undefined,
-    flowRatePerSecond: undefined,
-    abstractionFacilitiesDescription: "",
-    returnFlowLocation: "",
-    returnFlowVolume: undefined,
-    proposedDurationMonths: undefined,
-    proposedDurationYears: undefined,
-    pumpingHoursPerDay: undefined,
+    // SECTION 3: INTENDED ACTIVITY
+    intendedActivities: [],
+    intendedActivityOther: "",
     
-    // Project Details defaults
-    proposedFacilitiesDescription: "",
-    constructionType: "",
+    // Water abstraction details
+    waterAbstractionDetails: [{
+      activity: "",
+      flowRate: "",
+      flowRateUnit: "",
+      maxAverageYearly: undefined,
+      abstractionMethod: "",
+    }],
+    
+    // Water concession
     concessionArea: undefined,
-    operationalOverview: "",
+    concessionAreaUnit: "",
+    permitPeriod: "",
     
-    // Land Ownership Information defaults
-    ownsAllRequiredLand: false,
-    landOwnershipStatus: "",
-    affectedLandowners: "",
-    easementDetails: "",
-    writtenConsentDetails: "",
-    leaseAgreementDetails: "",
-    landAccessSteps: "",
+    // SECTION 4: OWNERSHIP OF ADJOINING LAND
+    ownsAllLand: false,
+    hasLandAccess: false,
+    landAccessDocuments: undefined,
     
-    province: "",
-    district: "",
-    sector: "",
-    cell: "",
-    latitude: "",
-    longitude: "",
-    projectTitle: "",
-    projectDescription: "",
+    // SECTION 5: PAYMENT INFORMATION
+    paymentProof: undefined,
     
-    // Technical Details
-    storageFacilities: "",
-    storageCapacity: undefined, // Use undefined for optional numeric fields
-    waterTakingMethod: "",
-    waterMeasuringMethod: "",
-    returnFlowQuantity: undefined,
-    returnFlowQuality: "",
-    potentialEffects: "",
-    mitigationActions: "",
-    concessionDuration: "",
+    // ANNEXES - Activity-specific details
+    annexA_irrigationDetails: "",
+    annexB_waterSupplyDetails: "",
+    annexC_aquacultureDetails: "",
+    annexD_coffeeWashingDetails: "",
+    annexE_industryDetails: "",
+    annexF_electricityDetails: "",
+    annexG_miningDetails: "",
+    annexH_constructionDetails: "",
+    annexI_navigationDetails: "",
+    annexJ_recreationDetails: "",
+    annexK_otherDetails: "",
     
-    // Industry-specific defaults
-    industryType: "",
-    industryDetails: "",
-    powerGenerationType: "",
-    installedCapacity: undefined,
-    turbineType: "",
-    headHeight: undefined,
-    miningType: "",
-    miningMethod: "",
-    mineralType: "",
-    miningArea: undefined,
+    // Additional documents
+    technicalDrawings: undefined,
+    environmentalImpactDoc: undefined,
+    feasibilityStudy: undefined,
     
-    // Water Flow Diversion defaults
-    intakeLocation: "",
-    intakeFlow: undefined,
-    intakeLatitude: "",
-    intakeLongitude: "",
-    intakeElevation: undefined,
-    dischargeLocation: "",
-    dischargeFlow: undefined,
-    dischargeLatitude: "",
-    dischargeLongitude: "",
-    dischargeElevation: undefined,
-    streamLevelVariations: "",
-    diversionStructureConfig: "",
-    
-    // Pipes and fixtures
-    pipeDetails: "",
-    pumpCapacity: undefined,
-    valveDetails: "",
-    meterDetails: "",
-    backflowControlDevices: "",
-
-    termsAccepted: false,
+    // CERTIFICATION SECTION
+    certificationAgreement: false,
   };
 
   // Merge with initial data if editing
@@ -486,11 +409,11 @@ export function ApplicationForm({
     defaultValues: mergedDefaultValues,
   });
 
-  // Watch for purpose changes to show/hide conditional fields
-  const watchedPurpose = form.watch("purpose");
-  const watchedWaterTaking = form.watch("waterTakingMethod");
-  const watchedDistrict = form.watch("district");
-  const watchedProvince = form.watch("province");
+  // Watch for activity changes to show/hide conditional fields
+  const watchedIntendedActivities = form.watch("intendedActivities");
+  const watchedWaterSourceType = form.watch("waterSourceType");
+  const watchedWaterSourceDistrict = form.watch("waterSourceDistrict");
+  const watchedWaterSourceProvince = form.watch("waterSourceProvince");
 
   // Auto-save state
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
@@ -562,10 +485,10 @@ export function ApplicationForm({
   useEffect(() => {
     if (initialData) {
       console.log('🔄 ApplicationForm - Initializing with data:', {
-        province: initialData.province,
-        district: initialData.district,
-        sector: initialData.sector,
-        cell: initialData.cell
+        waterSourceProvince: initialData.waterSourceProvince,
+        waterSourceDistrict: initialData.waterSourceDistrict,
+        waterSourceSector: initialData.waterSourceSector,
+        waterSourceCell: initialData.waterSourceCell
       });
       
       // Reset form with new data
@@ -573,10 +496,10 @@ export function ApplicationForm({
       form.reset(mergedData);
       
       // Update state variables
-      if (initialData.province) setSelectedProvince(initialData.province);
-      if (initialData.district) setSelectedDistrict(initialData.district);
-      if (initialData.purpose) setSelectedPurpose(initialData.purpose);
-      if (initialData.waterTakingMethod) setSelectedWaterTaking(initialData.waterTakingMethod);
+      if (initialData.waterSourceProvince) setSelectedProvince(initialData.waterSourceProvince);
+      if (initialData.waterSourceDistrict) setSelectedDistrict(initialData.waterSourceDistrict);
+      if (initialData.intendedActivities) setSelectedPurpose(initialData.intendedActivities.join(','));
+      if (initialData.waterSourceType) setSelectedWaterTaking(initialData.waterSourceType);
       
       console.log('✅ Form reset with merged data:', mergedData);
       
@@ -584,30 +507,30 @@ export function ApplicationForm({
       setTimeout(() => {
         const formValues = form.getValues();
         console.log('🔍 Form values after reset:', {
-          province: formValues.province,
-          district: formValues.district,
-          sector: formValues.sector,
-          cell: formValues.cell
+          waterSourceProvince: formValues.waterSourceProvince,
+          waterSourceDistrict: formValues.waterSourceDistrict,
+          waterSourceSector: formValues.waterSourceSector,
+          waterSourceCell: formValues.waterSourceCell
         });
       }, 100);
     }
   }, [initialData, form]);
 
   useEffect(() => {
-    setSelectedPurpose(watchedPurpose);
-  }, [watchedPurpose]);
+    setSelectedPurpose(watchedIntendedActivities?.join(',') || '');
+  }, [watchedIntendedActivities]);
 
   useEffect(() => {
-    setSelectedProvince(watchedProvince);
-  }, [watchedProvince]);
+    setSelectedProvince(watchedWaterSourceProvince || '');
+  }, [watchedWaterSourceProvince]);
 
   useEffect(() => {
-    setSelectedWaterTaking(watchedWaterTaking);
-  }, [watchedWaterTaking]);
+    setSelectedWaterTaking(watchedWaterSourceType || '');
+  }, [watchedWaterSourceType]);
 
   useEffect(() => {
-    setSelectedDistrict(watchedDistrict);
-  }, [watchedDistrict]);
+    setSelectedDistrict(watchedWaterSourceDistrict || '');
+  }, [watchedWaterSourceDistrict]);
 
   // Auto-dismiss error when user switches tabs (shows they're working on it)
   useEffect(() => {
@@ -723,9 +646,18 @@ export function ApplicationForm({
       poBox: "P.O. Box",
       mobilePhone: "Mobile Phone",
       landlinePhone: "Landline Phone",
+      certificateNumber: "Certificate Number",
+      certificateType: "Certificate Type",
       alternativeContactName: "Alternative Contact Name",
-      alternativeContactRelationship: "Alternative Contact Relationship",
-      alternativeContactPhone: "Alternative Contact Phone",
+      alternativeContactIdNumber: "Alternative Contact ID Number",
+      alternativeContactProvince: "Alternative Contact Province",
+      alternativeContactDistrict: "Alternative Contact District",
+      alternativeContactSector: "Alternative Contact Sector",
+      alternativeContactCell: "Alternative Contact Cell",
+      alternativeContactVillage: "Alternative Contact Village",
+      alternativeContactMobilePhone: "Alternative Contact Mobile Phone",
+      alternativeContactLandlinePhone: "Alternative Contact Landline Phone",
+      alternativeContactEmail: "Alternative Contact Email",
       
       permitType: "Permit Type",
       applicantType: "Applicant Type",
@@ -736,18 +668,22 @@ export function ApplicationForm({
       
       // Water Source Details
       waterBodyName: "Water Body Name",
-      tributaryName: "Tributary Name",
+      tributaryTo: "Tributary Name",
       catchmentNameLevel1: "Catchment Name (Level 1)",
       catchmentNameLevel2: "Catchment Name (Level 2)",
       waterReliability: "Water Reliability",
-      naturalDischargeVolume: "Natural Discharge Volume (m³)",
+      waterVolumeDischarge: "Natural Discharge Volume (m³)",
       
       // Water Usage Breakdown
+      concessionArea: "Concession Area (hectares)",
+      concessionAreaUnit: "Unit",
       maxDailyVolume: "Max Daily Volume (m³)",
       maxMonthlyVolume: "Max Monthly Volume (m³)",
       maxYearlyVolume: "Max Yearly Volume (m³)",
       flowRatePerSecond: "Flow Rate (m³/s)",
-      abstractionFacilitiesDescription: "Abstraction Facilities Description",
+      abstractingFacilitiesType: "Abstraction Facilities Description",
+      abstractingFacilitiesDimensions: "Abstraction Facilities Dimensions",
+      systemCapacityPerSecond: "System Capacity (m³/s)",
       returnFlowLocation: "Return Flow Location",
       returnFlowVolume: "Return Flow Volume (m³)",
       proposedDurationMonths: "Proposed Duration (Months)",
@@ -755,24 +691,25 @@ export function ApplicationForm({
       pumpingHoursPerDay: "Pumping Hours per Day",
       
       // Project Details
-      proposedFacilitiesDescription: "Proposed Facilities Description",
+      facilityDescriptions: "Proposed Facilities Description",
       constructionType: "Construction Type",
-      concessionArea: "Concession Area (hectares)",
       operationalOverview: "Operational Overview",
+      methodOfWaterUse: "Method of Water Use",
       
       // Land Ownership Information
       ownsAllRequiredLand: "Owns All Required Land",
       landOwnershipStatus: "Land Ownership Status",
+      hasRecordedEasement: "Easement Details",
+      hasWrittenConsent: "Written Consent Details",
+      hasLeaseAgreement: "Lease Agreement Details",
       affectedLandowners: "Affected Landowners",
-      easementDetails: "Easement Details",
-      writtenConsentDetails: "Written Consent Details",
-      leaseAgreementDetails: "Lease Agreement Details",
-      landAccessSteps: "Land Access Steps",
+      accessAcquisitionSteps: "Land Access Steps",
       
       province: "Province",
       district: "District",
       sector: "Sector",
       cell: "Cell",
+      village: "Village",
       latitude: "Latitude",
       longitude: "Longitude",
       projectTitle: "Project Title",
@@ -1939,10 +1876,63 @@ export function ApplicationForm({
                       </div>
                     </div>
                     
+                    {/* Certificate Information (for Legal Entities) */}
+                    {userData?.account_type !== 'individual' && (
+                      <div className="bg-white dark:bg-gray-800 p-4 rounded border border-blue-200 dark:border-blue-800 mb-4">
+                        <h5 className="font-medium text-blue-800 dark:text-blue-200 mb-4">Legal Certificate Information</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="certificateType"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Certificate Type (Optional)</FormLabel>
+                                <Select value={field.value} onValueChange={field.onChange}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select certificate type" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="business_registration">Business Registration Certificate</SelectItem>
+                                    <SelectItem value="cooperative_certificate">Cooperative Certificate</SelectItem>
+                                    <SelectItem value="ngo_certificate">NGO Registration Certificate</SelectItem>
+                                    <SelectItem value="institution_license">Institution License</SelectItem>
+                                    <SelectItem value="other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="certificateNumber"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Certificate Number (Optional)</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="Certificate/license number" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Alternative Contact Person */}
                     <div className="bg-white dark:bg-gray-800 p-4 rounded border border-blue-200 dark:border-blue-800">
                       <h5 className="font-medium text-blue-800 dark:text-blue-200 mb-4">Alternative Contact Person</h5>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                        Provide details of an alternative contact person who can be reached regarding this application.
+                      </p>
+                      
+                      <div className="space-y-6">
+                        {/* Basic Information */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
                           name="alternativeContactName"
@@ -1959,24 +1949,27 @@ export function ApplicationForm({
                         
                         <FormField
                           control={form.control}
-                          name="alternativeContactRelationship"
+                            name="alternativeContactIdNumber"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Relationship (Optional)</FormLabel>
+                                <FormLabel>ID Number (Optional)</FormLabel>
                               <FormControl>
-                                <Input {...field} placeholder="e.g., Manager, Delegate, etc." />
+                                  <Input {...field} placeholder="National ID number" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+                        </div>
                         
+                        {/* Contact Information */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
-                          name="alternativeContactPhone"
+                            name="alternativeContactMobilePhone"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Phone Number (Optional)</FormLabel>
+                                <FormLabel>Mobile Phone (Optional)</FormLabel>
                               <FormControl>
                                 <Input {...field} placeholder="+250 xxx xxx xxx" />
                               </FormControl>
@@ -1984,6 +1977,122 @@ export function ApplicationForm({
                             </FormItem>
                           )}
                         />
+                          
+                          <FormField
+                            control={form.control}
+                            name="alternativeContactLandlinePhone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Landline Phone (Optional)</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="+250 xxx xxx xxx" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          
+                          <FormField
+                            control={form.control}
+                            name="alternativeContactEmail"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Email (Optional)</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="email@example.com" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        {/* Address Information */}
+                        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded">
+                          <h6 className="font-medium text-gray-800 dark:text-gray-200 mb-3">Address Information</h6>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <FormField
+                              control={form.control}
+                              name="alternativeContactProvince"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Province (Optional)</FormLabel>
+                                  <Select value={field.value} onValueChange={field.onChange}>
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select province" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="kigali">Kigali</SelectItem>
+                                      <SelectItem value="northern">Northern</SelectItem>
+                                      <SelectItem value="southern">Southern</SelectItem>
+                                      <SelectItem value="eastern">Eastern</SelectItem>
+                                      <SelectItem value="western">Western</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="alternativeContactDistrict"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>District (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="District" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="alternativeContactSector"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Sector (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Sector" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="alternativeContactCell"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Cell (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Cell" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            
+                            <FormField
+                              control={form.control}
+                              name="alternativeContactVillage"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Village (Optional)</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Village" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2430,7 +2539,7 @@ export function ApplicationForm({
                         
                         <FormField
                           control={form.control}
-                          name="tributaryName"
+                          name="tributaryTo"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-cyan-900 dark:text-cyan-100">Tributary Name (Optional)</FormLabel>
@@ -2495,7 +2604,7 @@ export function ApplicationForm({
                         
                         <FormField
                           control={form.control}
-                          name="naturalDischargeVolume"
+                          name="waterVolumeDischarge"
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel className="text-cyan-900 dark:text-cyan-100">Natural Discharge Volume (m³) (Optional)</FormLabel>
@@ -3520,7 +3629,7 @@ export function ApplicationForm({
                         Identification Document <span className="text-red-500">*</span>
                       </Label>
                       <p className="text-sm text-muted-foreground">
-                        Upload a copy of your national ID, passport, or other valid identification document
+                        Upload a copy of your National ID
                       </p>
                       <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 hover:border-emerald-400 transition-colors">
                         {files.identificationDoc ? (

@@ -474,11 +474,16 @@ export function ApplicationOversight() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem>
-                            <User className="mr-2 h-4 w-4" />
-                            Reassign
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
+                          {/* Only show reassign for non-finalized applications */}
+                          {application.status !== 'approved' && application.status !== 'rejected' && (
+                            <>
+                              <DropdownMenuItem>
+                                <User className="mr-2 h-4 w-4" />
+                                Reassign
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                            </>
+                          )}
                           <DropdownMenuItem>
                             <Download className="mr-2 h-4 w-4" />
                             Export Data

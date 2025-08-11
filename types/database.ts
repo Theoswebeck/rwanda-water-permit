@@ -18,7 +18,7 @@ export type Json =
 export type UserRole = 'applicant' | 'reviewer' | 'inspector' | 'admin' | 'approver'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
 export type AccountType = 'individual' | 'company' | 'cooperative' | 'organization' | 'institution'
-export type IdType = 'national_id' | 'passport' | 'driving_license'
+export type IdType = 'national_id' | 'tin'
 
 export type ApplicationStatus = 
   | 'draft' 
@@ -27,6 +27,7 @@ export type ApplicationStatus =
   | 'pending_inspection'
   | 'pending_final_approval'
   | 'approved' 
+  | 'approved_pending_permit'
   | 'rejected' 
   | 'revision_required' 
   | 'cancelled'

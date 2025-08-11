@@ -48,7 +48,7 @@ export default function DashboardPage() {
     error: applicationsError,
     refresh: refreshApplications
   } = useApplications({
-    autoFetch: true
+    // We'll add user filtering later
   });
 
   const {
@@ -219,6 +219,9 @@ export default function DashboardPage() {
           </Tabs>
         </motion.div>
       </div>
+      
+      {/* Terms & Conditions Modal */}
+      {/* This modal is now handled by the application detail page */}
     </DashboardLayout>
   );
 } 

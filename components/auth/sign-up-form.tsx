@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -38,20 +38,6 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
   const [phone, setPhone] = useState("");
   const [idNumber, setIdNumber] = useState("");
   const [idType, setIdType] = useState("nationalId");
-  const [idPlaceholder, setIdPlaceholder] = useState("1 19XX X XXXXXXX X XX");
-
-  // Update ID placeholder based on selected ID type
-  useEffect(() => {
-    if (idType === "nationalId") {
-      setIdPlaceholder("1 19XX X XXXXXXX X XX");
-    } else if (idType === "driverLicense") {
-      setIdPlaceholder("1 19XXXXXXXXXX");
-    } else if (idType === "passport") {
-      setIdPlaceholder("PCXXXXXX");
-    } else {
-      setIdPlaceholder("Enter ID number");
-    }
-  }, [idType]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,46 +61,27 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
     }, 1000);
   };
 
-  const formatRwandaIdNumber = (value: string) => {
-    if (!value) return value;
+  const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
     
-    // Format for National ID with specific spacing pattern: 1 19XX X XXXXXXX X XX
-    if (idType === "nationalId") {
-      // Remove all non-digits
-      const digits = value.replace(/\D/g, '');
-      
-      // Apply the spacing pattern for Rwanda National ID
-      if (digits.length <= 1) {
-        return digits; // Just the first digit
-      } else if (digits.length <= 5) {
-        return `${digits.slice(0, 1)} ${digits.slice(1)}`; // 1 19XX
-      } else if (digits.length <= 6) {
-        return `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5)}`; // 1 19XX X
-      } else if (digits.length <= 13) {
-        return `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6)}`; // 1 19XX X XXXXXXX
-      } else if (digits.length <= 14) {
-        return `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13)}`; // 1 19XX X XXXXXXX X
-      } else {
-        return `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13, 14)} ${digits.slice(14, 16)}`; // 1 19XX X XXXXXXX X XX
-      }
-    } else if (idType === "driverLicense") {
-      // Simplified format for driver's license
-      const digits = value.replace(/\D/g, '');
-      
-      if (digits.length <= 1) {
-        return digits;
-      } else if (digits.length <= 3) {
-        return `${digits.slice(0, 1)} ${digits.slice(1)}`;
-      } else {
-        return `${digits.slice(0, 1)} ${digits.slice(1, 3)}${digits.slice(3)}`;
-      }
+    // Only format National ID
+    const digits = value.replace(/\D/g, '').slice(0, 16); // Limit to 16 digits for National ID
+    
+    let formatted = '';
+    if (digits.length <= 1) {
+      formatted = digits;
+    } else if (digits.length <= 4) {
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1)}`; // 1 19XX
+    } else if (digits.length <= 6) {
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5)}`; // 1 19XX X
+    } else if (digits.length <= 13) {
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6)}`; // 1 19XX X XXXXXXX
+    } else if (digits.length <= 14) {
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13)}`; // 1 19XX X XXXXXXX X
+    } else {
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13, 14)} ${digits.slice(14, 16)}`; // 1 19XX X XXXXXXX X XX
     }
     
-    return value;
-  };
-
-  const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatRwandaIdNumber(e.target.value);
     setIdNumber(formatted);
   };
 
@@ -318,15 +285,13 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                     <Select 
                       value={idType} 
                       onValueChange={setIdType}
+                      defaultValue="nationalId"
                     >
                       <SelectTrigger id="idType" className="w-full">
-                        <SelectValue placeholder="Select ID Type" />
+                        <SelectValue placeholder="National ID" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="nationalId">National ID</SelectItem>
-                        <SelectItem value="driverLicense">Driver's License</SelectItem>
-                        <SelectItem value="passport">Passport</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -336,7 +301,7 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                     <Input 
                       id="idNumber" 
                       type="text" 
-                      placeholder={idPlaceholder}
+                      placeholder="Enter your National ID number"
                       required 
                       value={idNumber}
                       onChange={handleIdNumberChange}
@@ -344,9 +309,6 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                     />
                     {idType === "nationalId" && (
                       <p className="text-xs text-muted-foreground mt-1">Format: 1 19XX X XXXXXXX X XX</p>
-                    )}
-                    {idType === "driverLicense" && (
-                      <p className="text-xs text-muted-foreground mt-1">Format: 1 19XXXXXXXXXX</p>
                     )}
                   </div>
                 </div>

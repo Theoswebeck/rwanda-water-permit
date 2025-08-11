@@ -96,6 +96,12 @@ export function ApplicationsList({ applications, loading = false }: Applications
           icon: <CheckCircle2 className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
         };
+      case "approved_pending_permit":
+        return {
+          label: "Pending Terms Acceptance",
+          icon: <FileText className="h-4 w-4" />,
+          className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
+        };
       case "rejected":
         return {
           label: "Rejected",
@@ -257,7 +263,7 @@ export function ApplicationsList({ applications, loading = false }: Applications
                   </TableCell>
                   <TableCell className="text-right px-6 py-4">
                     <div className="flex justify-end gap-1.5">
-                      {application.status === 'draft' && (
+                      {(application.status === 'draft' || application.status === 'revision_required') && (
                         <Link href={`/dashboard/edit-application/${application.id}`}>
                           <Button 
                             variant="ghost" 
@@ -269,6 +275,20 @@ export function ApplicationsList({ applications, loading = false }: Applications
                           </Button>
                         </Link>
                       )}
+                      
+                      {application.status === 'approved_pending_permit' && (
+                        <Link href={`/dashboard/application/${application.id}`}>
+                          <Button 
+                            size="sm" 
+                            className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
+                            title="Accept Terms & Conditions"
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Accept Terms
+                          </Button>
+                        </Link>
+                      )}
+                      
                       <Link href={`/dashboard/application/${application.id}`}>
                         <Button 
                           variant="ghost" 
@@ -279,14 +299,16 @@ export function ApplicationsList({ applications, loading = false }: Applications
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Delete Application"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Delete Application"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
