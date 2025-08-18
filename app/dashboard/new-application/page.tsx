@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { ApplicationForm } from "@/components/dashboard/application-form-new";
-import { PaymentNotice } from "@/components/dashboard/payment-notice";
+
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, CheckCircle, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
+import { useDocuments } from "@/hooks/useDocuments";
 import { uploadDocument } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
 import type { Application, Document } from "@/types/database";
@@ -30,112 +31,278 @@ function formatProvinceForDB(province: string): Application['province'] | undefi
 
 // Mapping function to transform form data to database schema
 function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft'): Partial<Application> {
-  // Create coordinates object if latitude and longitude are provided
-  const coordinates = (formData.latitude && formData.longitude) ? {
-    type: 'Point',
-    coordinates: [parseFloat(formData.longitude), parseFloat(formData.latitude)]
-  } : undefined;
+  // Handle coordinates
+  let coordinates = undefined;
+  if (formData.waterSourceLatitude && formData.waterSourceLongitude) {
+    try {
+      const lat = parseFloat(formData.waterSourceLatitude);
+      const lon = parseFloat(formData.waterSourceLongitude);
+      if (!isNaN(lat) && !isNaN(lon)) {
+        // Store as GeoJSON point for PostGIS compatibility
+        coordinates = {
+          type: 'Point',
+          coordinates: [lon, lat] // GeoJSON uses [longitude, latitude] order
+        };
+      }
+    } catch (error) {
+      console.warn('Invalid coordinates provided:', error);
+    }
+  }
 
-  return {
+  // Map intended activities to application type and purpose
+  const primaryActivity = formData.intendedActivities?.[0] || 'domestic';
+  const waterSourceTypeMap: Record<string, Application['water_source']> = {
+    'lake': 'surface_water',
+    'dam': 'surface_water', 
+    'spring': 'surface_water',
+    'borehole': 'groundwater',
+    'stream_river': 'surface_water',
+    'other': 'surface_water'
+  };
+  
+  const activityTypeMap: Record<string, Application['application_type']> = {
+    'irrigation': 'agricultural',
+    'water_supply': 'domestic',
+    'aquaculture': 'agricultural',
+    'coffee_washing': 'industrial',
+    'industry': 'industrial',
+    'electricity': 'industrial', // electricity generation projects are industrial
+    'mining': 'mining_water_use',
+    'construction': 'industrial',
+    'navigation': 'commercial', // navigation is commercial activity
+    'recreation': 'commercial', // recreation is commercial activity
+    'other': 'domestic'
+  };
+
+  const activityPurposeMap: Record<string, Application['water_purpose']> = {
+    'irrigation': 'irrigation',
+    'water_supply': 'domestic',
+    'aquaculture': 'aquaculture',
+    'coffee_washing': 'industrial',
+    'industry': 'industrial',
+    'electricity': 'electricity_generation',
+    'mining': 'mining',
+    'construction': 'industrial',
+    'navigation': 'recreation', // navigation falls under recreation
+    'recreation': 'recreation',
+    'other': 'domestic'
+  };
+
+  // For drafts, provide default values for required fields that might be empty
+  const defaultsForDrafts = {
+    water_source: waterSourceTypeMap[formData.waterSourceType] || 'surface_water',
+    water_purpose: activityPurposeMap[primaryActivity] || 'domestic',
+    application_type: activityTypeMap[primaryActivity] || 'domestic',
+    province: formatProvinceForDB(formData.officeProvince) || 'Kigali',
+    district: formData.officeDistrict || 'Draft District',
+    sector: formData.officeSector || 'Draft Sector', 
+    cell: formData.officeCell || 'Draft Cell',
+    project_title: formData.fullNameApplicant ? `${formData.fullNameApplicant} Water Permit Application` : 'Draft Application'
+  };
+
+  const mappedData = {
     // Set status based on action
     status,
     
-    // Application type and water details
-    application_type: formData.purpose === 'domestic' ? 'domestic' :
-                     formData.purpose === 'industrial' ? 'industrial' :
-                     formData.purpose === 'irrigation' ? 'agricultural' :
-                     formData.purpose === 'commercial' ? 'commercial' :
-                     formData.purpose === 'municipal_supply' ? 'municipal' :
-                     formData.purpose === 'mining' ? 'mining_water_use' : 'domestic',
+    // Application type and water details - with defaults for drafts
+    application_type: defaultsForDrafts.application_type,
+    water_source: defaultsForDrafts.water_source,
+    water_purpose: defaultsForDrafts.water_purpose,
+    estimated_usage_volume: formData.waterAbstractionDetails?.[0]?.maxAverageYearly,
+    usage_unit: 'm³/year',
     
-    water_source: formData.waterSource as Application['water_source'],
-    water_purpose: formData.purpose === 'hydropower' ? 'electricity_generation' : 
-                  formData.purpose as Application['water_purpose'],
-    estimated_usage_volume: formData.waterUsage,
-    usage_unit: formData.waterUsageUnit,
-    
-    // Location details - fix province mapping  
-    province: formatProvinceForDB(formData.province),
-    district: formData.district,
-    sector: formData.sector,
-    cell: formData.cell,
-    village: formData.village,
+    // Location details - with defaults for drafts  
+    province: defaultsForDrafts.province,
+    district: defaultsForDrafts.district,
+    sector: defaultsForDrafts.sector,
+    cell: defaultsForDrafts.cell,
+    village: formData.officeVillage,
     coordinates: coordinates,
-    location_description: `${formData.district}, ${formData.sector}, ${formData.cell}${formData.village ? `, ${formData.village}` : ''}`,
+    location_description: formData.officeDistrict ? 
+      `${formData.officeDistrict}, ${formData.officeSector || defaultsForDrafts.sector}, ${formData.officeCell || defaultsForDrafts.cell}${formData.officeVillage ? `, ${formData.officeVillage}` : ''}` :
+      'Draft location',
     
-    // Project information
-    project_title: formData.projectTitle,
-    project_description: formData.projectDescription,
+    // Project information - with defaults for drafts
+    project_title: defaultsForDrafts.project_title,
+    project_description: `${formData.categoryApplicant} water permit application for ${formData.intendedActivities?.join(', ') || 'water use'}`,
     
-    // Technical specifications - enhanced with all form data
-    water_taking_method: formData.waterTakingMethod,
-    water_measuring_method: formData.waterMeasuringMethod,
-    storage_facilities: formData.storageFacilities ? 
-      `${formData.storageFacilities}${formData.storageCapacity ? ` (Capacity: ${formData.storageCapacity}m³)` : ''}` : undefined,
-    return_flow_description: [
-      formData.returnFlowQuality,
-      formData.returnFlowQuantity ? `Quantity: ${formData.returnFlowQuantity}m³/day` : '',
-      formData.concessionDuration ? `Duration: ${formData.concessionDuration}` : ''
-    ].filter(Boolean).join(' | '),
+    // Technical specifications - based on new form structure
+    water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
+    water_measuring_method: 'Flow meter', // Default for drafts
+    storage_facilities: undefined, // Will be filled when form is more complete
+    return_flow_description: undefined, // Will be filled when form is more complete
     
-    // Industry-specific fields - enhanced with complete data
-    electricity_generation_capacity: (formData.powerGenerationType || formData.installedCapacity || formData.turbineType || formData.headHeight) ? 
-      [
-        formData.installedCapacity ? `${formData.installedCapacity} MW` : '',
-        formData.powerGenerationType ? `Type: ${formData.powerGenerationType}` : '',
-        formData.turbineType ? `Turbine: ${formData.turbineType}` : '',
-        formData.headHeight ? `Head: ${formData.headHeight}m` : ''
-      ].filter(Boolean).join(' | ') : undefined,
+    // Industry-specific fields - based on annexes
+    electricity_generation_capacity: formData.annexF_electricityDetails,
+    mining_operations_type: formData.annexG_miningDetails || 
+      (formData.miningMineralsType ? `Mining: ${formData.miningMineralsType}` : undefined),
+    water_diversion_details: undefined, // Will be filled based on water source details
     
-    mining_operations_type: (formData.miningType || formData.miningMethod || formData.mineralType || formData.miningArea) ?
-      [
-        formData.miningType ? `Type: ${formData.miningType}` : '',
-        formData.miningMethod ? `Method: ${formData.miningMethod}` : '',
-        formData.mineralType ? `Mineral: ${formData.mineralType}` : '',
-        formData.miningArea ? `Area: ${formData.miningArea} hectares` : ''
-      ].filter(Boolean).join(' | ') : undefined,
+    // Infrastructure details - will be enhanced as form develops
+    infrastructure_pipes: undefined,
+    infrastructure_pumps: undefined,
+    infrastructure_valves: undefined,
+    infrastructure_meters: undefined,
     
-    water_diversion_details: (formData.intakeLocation || formData.dischargeLocation || formData.intakeFlow || formData.dischargeFlow || formData.streamLevelVariations || formData.diversionStructureConfig) ?
-      [
-        formData.intakeLocation ? `Intake: ${formData.intakeLocation}` : '',
-        formData.intakeFlow ? `Intake Flow: ${formData.intakeFlow}m³/s` : '',
-        formData.intakeLatitude && formData.intakeLongitude ? `Intake Coords: ${formData.intakeLatitude}, ${formData.intakeLongitude}` : '',
-        formData.intakeElevation ? `Intake Elevation: ${formData.intakeElevation}m` : '',
-        formData.dischargeLocation ? `Discharge: ${formData.dischargeLocation}` : '',
-        formData.dischargeFlow ? `Discharge Flow: ${formData.dischargeFlow}m³/s` : '',
-        formData.dischargeLatitude && formData.dischargeLongitude ? `Discharge Coords: ${formData.dischargeLatitude}, ${formData.dischargeLongitude}` : '',
-        formData.dischargeElevation ? `Discharge Elevation: ${formData.dischargeElevation}m` : '',
-        formData.streamLevelVariations ? `Stream Variations: ${formData.streamLevelVariations}` : '',
-        formData.diversionStructureConfig ? `Structure Config: ${formData.diversionStructureConfig}` : ''
-      ].filter(Boolean).join(' | ') : undefined,
+    // Environmental information - will be enhanced as form develops
+    environmental_assessment: undefined,
+    mitigation_actions: undefined,
     
-    // Infrastructure details - enhanced with all form data
-    infrastructure_pipes: formData.pipeDetails,
-    infrastructure_pumps: formData.pumpCapacity ? `Capacity: ${formData.pumpCapacity}m³/h` : undefined,
-    infrastructure_valves: [
-      formData.valveDetails,
-      formData.backflowControlDevices ? `Backflow Control: ${formData.backflowControlDevices}` : ''
-    ].filter(Boolean).join(' | '),
-    infrastructure_meters: formData.meterDetails,
-    
-    // Environmental information
-    environmental_assessment: formData.potentialEffects,
-    mitigation_actions: formData.mitigationActions,
-    
-    // Additional metadata stored in internal_notes for permit type and applicant type
+    // Additional metadata stored in internal_notes 
     internal_notes: [
-      formData.permitType ? `Permit Type: ${formData.permitType}` : '',
-      formData.applicantType ? `Applicant Type: ${formData.applicantType}` : '',
-      formData.industryType ? `Industry: ${formData.industryType}` : '',
-      formData.industryDetails ? `Industry Details: ${formData.industryDetails}` : ''
+      `Category: ${formData.categoryApplicant}`,
+      `Activities: ${formData.intendedActivities?.join(', ') || 'Not specified'}`,
+      `Water Source: ${formData.waterSourceType || 'Not specified'}`,
+      `Contact: ${formData.emailAddress || 'Not provided'}`,
+      formData.waterSourceOther ? `Other water source: ${formData.waterSourceOther}` : '',
+      formData.intendedActivityOther ? `Other activity: ${formData.intendedActivityOther}` : ''
     ].filter(Boolean).join(' | '),
     
     // SLA tracking
-    sla_status: 'on_time',
+    sla_status: 'on_time' as const,
     
     // Use the sample user UUID (in real app, this would come from auth context)
     applicant_id: '550e8400-e29b-41d4-a716-446655440001',
   };
+
+  return mappedData;
+}
+
+// Transform Application data back to form format for editing
+function mapApplicationToFormData(application: Application): any {
+  const formData: any = {};
+  
+
+  
+  // Parse internal notes to extract form-specific data
+  const notes = application.internal_notes || '';
+  const notesParts = notes.split(' | ');
+  const notesMap: Record<string, string> = {};
+  notesParts.forEach(part => {
+    const [key, value] = part.split(': ');
+    if (key && value) {
+      notesMap[key] = value;
+    }
+  });
+  
+  // Basic applicant information (using internal notes and project title)
+  formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
+  formData.categoryApplicant = notesMap['Category']?.toLowerCase() || 'individual';
+  
+  // Office address (from application location) - reverse the province mapping
+  const provinceReverseMap: Record<string, string> = {
+    'Kigali': 'kigali',
+    'Northern': 'northern',
+    'Southern': 'southern',
+    'Eastern': 'eastern',
+    'Western': 'western'
+  };
+  formData.officeProvince = provinceReverseMap[application.province] || application.province?.toLowerCase() || '';
+  formData.officeDistrict = application.district?.toLowerCase() || '';
+  formData.officeSector = application.sector?.toLowerCase() || '';
+  formData.officeCell = application.cell?.toLowerCase() || '';
+  formData.officeVillage = application.village || '';
+  
+  // Contact information (would need to be stored somewhere in the application)
+  formData.telephoneContact = '';
+  formData.emailAddress = notesMap['Contact']?.replace('Not provided', '') || '';
+  
+  // Water source information
+  const waterSourceMap: Record<string, string> = {
+    'surface_water': 'stream_river',
+    'groundwater': 'borehole'
+  };
+  formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
+  formData.nameSourceWater = 'Water Source'; // Default
+  
+  // Water source location (same as office for now) - reverse the province mapping
+  formData.waterSourceProvince = provinceReverseMap[application.province] || application.province?.toLowerCase() || '';
+  formData.waterSourceDistrict = application.district?.toLowerCase() || '';
+  formData.waterSourceSector = application.sector?.toLowerCase() || '';
+  formData.waterSourceCell = application.cell?.toLowerCase() || '';
+  formData.waterSourceVillage = application.village || '';
+  
+  // Coordinates
+  if (application.coordinates && typeof application.coordinates === 'object') {
+    try {
+      const coords = application.coordinates as any;
+      if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
+        formData.waterSourceLongitude = coords.coordinates[0].toString();
+        formData.waterSourceLatitude = coords.coordinates[1].toString();
+      }
+    } catch (error) {
+      console.warn('Error parsing coordinates:', error);
+      formData.waterSourceLatitude = '';
+      formData.waterSourceLongitude = '';
+    }
+  } else {
+    formData.waterSourceLatitude = '';
+    formData.waterSourceLongitude = '';
+  }
+  
+  // Water reliability
+  formData.waterReliability = 'water_always_available'; // Default
+  
+  // Intended activities - reverse map from application_type and water_purpose
+  const activityMap: Record<string, string[]> = {
+    'domestic': ['water_supply'],
+    'agricultural': ['irrigation', 'aquaculture'],
+    'industrial': ['industry', 'coffee_washing', 'construction'],
+    'commercial': ['navigation', 'recreation'],
+    'municipal': ['water_supply'],
+    'mining_water_use': ['mining']
+  };
+  
+  const purposeToActivity: Record<string, string> = {
+    'domestic': 'water_supply',
+    'irrigation': 'irrigation', 
+    'aquaculture': 'aquaculture',
+    'industrial': 'industry',
+    'electricity_generation': 'electricity',
+    'mining': 'mining',
+    'recreation': 'recreation'
+  };
+  
+  const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+  formData.intendedActivities = [mappedActivity];
+  
+  // Water abstraction details
+  if (application.estimated_usage_volume) {
+    formData.waterAbstractionDetails = [{
+      activity: mappedActivity,
+      flowRate: '',
+      flowRateUnit: 'm³/s',
+      maxAverageYearly: application.estimated_usage_volume,
+      abstractionMethod: application.water_taking_method || 'pump'
+    }];
+  } else {
+    formData.waterAbstractionDetails = [{
+      activity: mappedActivity,
+      flowRate: '',
+      flowRateUnit: 'm³/s',
+      maxAverageYearly: 0,
+      abstractionMethod: 'pump'
+    }];
+  }
+  
+  // Land ownership
+  formData.ownsAllLand = true; // Default
+  formData.hasLandAccess = true; // Default
+  
+  // Annexes - extract from specific fields
+  if (application.electricity_generation_capacity) {
+    formData.annexF_electricityDetails = application.electricity_generation_capacity;
+  }
+  if (application.mining_operations_type) {
+    formData.annexG_miningDetails = application.mining_operations_type;
+  }
+  
+  // Certification
+  formData.certificationAgreement = true; // Must be true for saved applications
+  
+
+  
+  return formData;
 }
 
 // Helper function to create storage bucket if it doesn't exist
@@ -163,8 +330,6 @@ async function ensureStorageBucket() {
       
       if (createError) {
         console.warn('Could not create storage bucket:', createError);
-      } else {
-        console.log('✅ Storage bucket created successfully');
       }
     }
   } catch (error) {
@@ -192,14 +357,10 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       
       if (file && file instanceof File) {
         try {
-          console.log(`📤 Uploading ${fieldName}:`, file.name);
-          
           // Upload file to storage
           const uploadResult = await uploadDocument(file, applicationId, fieldName);
           
           if (uploadResult) {
-            console.log(`✅ File uploaded successfully:`, uploadResult);
-            
             // Save document record to database
             const { data: documentRecord, error: dbError } = await supabase
               .from('documents')
@@ -218,35 +379,97 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
               .single();
               
             if (dbError) {
-              console.error(`❌ Error saving document ${fieldName} to database:`, dbError);
+              console.error(`Error saving document ${fieldName} to database:`, dbError);
             } else {
-              console.log(`✅ Document ${fieldName} saved to database:`, documentRecord);
               uploadedDocuments.push(documentRecord);
             }
           } else {
-            console.error(`❌ Failed to upload ${fieldName}`);
+            console.error(`Failed to upload ${fieldName}`);
           }
         } catch (error) {
-          console.error(`❌ Error processing document ${fieldName}:`, error);
+          console.error(`Error processing document ${fieldName}:`, error);
         }
       }
     }
     
-    console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
     return uploadedDocuments;
   } catch (error) {
-    console.error('❌ Error uploading documents:', error);
+    console.error('Error uploading documents:', error);
     throw error;
   }
 }
 
 export default function NewApplicationPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const draftId = searchParams.get('id'); // Check if we're editing an existing draft
+  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [loadingDraft, setLoadingDraft] = useState(!!draftId);
+  const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
+  const [initialFormData, setInitialFormData] = useState<any>(null);
+  const [initialDocuments, setInitialDocuments] = useState<Record<string, string>>({});
   
-  const { createApplication } = useApplications();
+  const { createApplication, updateApplication, getApplication } = useApplications();
+  const { getDocuments } = useDocuments();
+  
+  // Load existing draft if draftId is provided
+  useEffect(() => {
+    const loadDraft = async () => {
+      if (!draftId) {
+        setLoadingDraft(false);
+        return;
+      }
+      
+      try {
+        setLoadingDraft(true);
+        setError(null);
+        
+        const application = await getApplication(draftId);
+        if (application) {
+          setCurrentApplication(application);
+          // Transform application data to form format
+          const formData = mapApplicationToFormData(application);
+          setInitialFormData(formData);
+          
+          // Load documents for this application
+          const documents = await getDocuments(draftId);
+          const documentMap: Record<string, string> = {};
+          
+          // Map documents by type to their file paths/URLs
+          documents.forEach(doc => {
+            // Map document types to form field names
+            const typeMapping: Record<string, string> = {
+              'identification_doc': 'identificationDoc',
+              'land_ownership_doc': 'landOwnershipDoc', 
+              'technical_drawings': 'technicalDrawings',
+              'environmental_impact_doc': 'environmentalImpactDoc',
+              'payment_proof': 'paymentProof',
+              'intake_discharge_map': 'intakeDischargeMap'
+            };
+            
+            const fieldName = typeMapping[doc.type] || doc.type;
+            if (doc.file_path) {
+              documentMap[fieldName] = doc.file_path;
+            }
+          });
+          
+          setInitialDocuments(documentMap);
+        } else {
+          setError('Draft application not found');
+        }
+      } catch (err) {
+        console.error('Error loading draft:', err);
+        setError('Failed to load draft application');
+      } finally {
+        setLoadingDraft(false);
+      }
+    };
+    
+    loadDraft();
+  }, [draftId, getApplication]);
   
   // This would typically come from a user context/state in a real application
   const userData = {
@@ -306,12 +529,15 @@ export default function NewApplicationPage() {
     }
   };
 
-  const handleSaveAsDraft = async (formData: any, status: 'draft', isAutoSave: boolean = false) => {
+  const handleSaveAsDraft = async (formData: any, status: 'draft', isAutoSave: boolean = false, draftId: string | null = null) => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('💾 Saving draft, form data received:', formData);
+      // Validate essential form data
+      if (!formData) {
+        throw new Error('No form data provided');
+      }
       
       // Ensure storage bucket exists
       await ensureStorageBucket();
@@ -319,21 +545,30 @@ export default function NewApplicationPage() {
       // Map form data to application schema with draft status
       const applicationData = mapFormDataToApplication(formData, status);
       
-      console.log('📊 Mapped draft application data:', applicationData);
+      let result;
       
-      // Create the application as draft
-      const newApplication = await createApplication(applicationData);
+      if (draftId) {
+        // Update existing draft
+        result = await updateApplication(draftId, applicationData);
+      } else {
+        // Create new draft
+        result = await createApplication(applicationData);
+      }
       
-      if (newApplication) {
-        console.log('✅ Application saved as draft successfully:', newApplication);
-        
+      if (result) {
         // Upload documents for drafts too (they can be incomplete)
         try {
-          const uploadedDocuments = await uploadApplicationDocuments(newApplication.id, formData);
-          console.log(`📎 ${uploadedDocuments.length} documents uploaded with draft`);
+          const uploadedDocuments = await uploadApplicationDocuments(result.id, formData);
         } catch (docError) {
-          console.error('⚠️ Document upload failed but draft was saved:', docError);
+          console.error('Document upload failed but draft was saved:', docError);
           // Don't fail draft saving if document upload fails
+        }
+        
+        // Update URL with draft ID if this is a new draft
+        if (!draftId && result.id) {
+          const newUrl = `/dashboard/new-application?id=${result.id}`;
+          router.replace(newUrl); // Use replace to avoid adding to history
+          setCurrentApplication(result);
         }
         
         // Only redirect and show success for manual saves, not auto-saves
@@ -345,18 +580,47 @@ export default function NewApplicationPage() {
             router.push("/dashboard?tab=applications&success=draft-saved");
           }, 2000);
         }
+        
+        // Return the result so component can track the ID
+        return result;
       } else {
-        throw new Error('Failed to save draft');
+        throw new Error('Failed to save draft - no result returned from database operation');
       }
     } catch (error) {
-      console.error('❌ Error saving draft:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save draft');
+      console.error('Error saving draft:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save draft';
+      setError(errorMessage);
+      throw error; // Re-throw so auto-save can handle the error
     } finally {
       // Always reset loading state
       setIsLoading(false);
     }
   };
   
+  if (loadingDraft) {
+    return (
+      <DashboardLayout>
+        <div className="container mx-auto px-4 py-6">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="max-w-md mx-auto text-center py-12"
+          >
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            </div>
+            <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-blue-900 mb-2">Loading Draft...</h2>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-blue-700 mb-4">
+              Please wait while we load your saved application.
+            </p>
+          </motion.div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (success) {
     return (
       <DashboardLayout>
@@ -402,10 +666,24 @@ export default function NewApplicationPage() {
           className="space-y-8"
         >
           <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">New Water Permit Application</h1>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              {draftId ? 'Edit Water Permit Application' : 'New Water Permit Application'}
+            </h1>
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
-              Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.
+              {draftId 
+                ? 'Continue editing your water permit application. Your changes are automatically saved.'
+                : 'Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.'
+              }
             </p>
+            {currentApplication && (
+              <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-700">
+                  📝 Editing draft application • ID: {currentApplication.id.slice(0, 8)}... • 
+                  Status: {currentApplication.status} • 
+                  Last updated: {new Date(currentApplication.updated_at || currentApplication.created_at).toLocaleString()}
+                </p>
+              </div>
+            )}
           </div>
           
           {/* Error Alert */}
@@ -418,13 +696,15 @@ export default function NewApplicationPage() {
             </Alert>
           )}
           
-          <PaymentNotice />
-          
+
           <ApplicationForm 
             userData={userData}
             onSubmit={handleSubmitApplication}
-            onSaveAsDraft={handleSaveAsDraft}
+            onSaveAsDraft={(formData, status, isAutoSave = false) => handleSaveAsDraft(formData, status, isAutoSave, draftId)}
             isLoading={isLoading}
+            initialData={initialFormData}
+            initialDocuments={initialDocuments}
+            mode={draftId ? 'edit' : 'create'}
           />
         </motion.div>
       </div>

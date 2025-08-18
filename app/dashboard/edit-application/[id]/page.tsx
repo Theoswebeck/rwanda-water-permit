@@ -33,11 +33,8 @@ function formatProvinceForDB(province: string): Application['province'] | undefi
 
 // Mapping function to transform form data to database schema
 function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft'): Partial<Application> {
-  // Create coordinates object if latitude and longitude are provided
-  const coordinates = (formData.latitude && formData.longitude) ? {
-    type: 'Point',
-    coordinates: [parseFloat(formData.longitude), parseFloat(formData.latitude)]
-  } : undefined;
+  // Coordinates removed per RWB request
+  const coordinates = undefined;
 
   return {
     // Set status based on action
@@ -102,12 +99,8 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       [
         formData.intakeLocation ? `Intake: ${formData.intakeLocation}` : '',
         formData.intakeFlow ? `Intake Flow: ${formData.intakeFlow}m³/s` : '',
-        formData.intakeLatitude && formData.intakeLongitude ? `Intake Coords: ${formData.intakeLatitude}, ${formData.intakeLongitude}` : '',
-        formData.intakeElevation ? `Intake Elevation: ${formData.intakeElevation}m` : '',
         formData.dischargeLocation ? `Discharge: ${formData.dischargeLocation}` : '',
         formData.dischargeFlow ? `Discharge Flow: ${formData.dischargeFlow}m³/s` : '',
-        formData.dischargeLatitude && formData.dischargeLongitude ? `Discharge Coords: ${formData.dischargeLatitude}, ${formData.dischargeLongitude}` : '',
-        formData.dischargeElevation ? `Discharge Elevation: ${formData.dischargeElevation}m` : '',
         formData.streamLevelVariations ? `Stream Variations: ${formData.streamLevelVariations}` : '',
         formData.diversionStructureConfig ? `Structure Config: ${formData.diversionStructureConfig}` : ''
       ].filter(Boolean).join(' | ') : undefined,

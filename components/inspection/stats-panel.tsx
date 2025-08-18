@@ -9,29 +9,70 @@ import {
   AlertTriangle, 
   TrendingUp,
   Clock,
-  FileCheck
+  FileCheck,
+  Eye,
+  RotateCcw,
+  FileText,
+  UserCheck
 } from "lucide-react"
-import { getInspectionStats } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
-interface StatsData {
-  pendingCount: number
-  completedThisMonth: number
-  overdueCount: number
-  complianceRate: number
-  draftCount: number
+interface InspectionStatsData {
+  totalApplications: number
+  pendingInspection: number
+  underInspection: number
+  returnedForRevision: number
 }
 
 export function StatsPanel() {
-  const [stats, setStats] = useState<StatsData | null>(null)
+  const [stats, setStats] = useState<InspectionStatsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchInspectionStats = async () => {
       try {
         setLoading(true)
-        const data = await getInspectionStats()
-        setStats(data)
+        
+        // Query for total applications
+        const { count: totalCount, error: totalError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+        
+        if (totalError) throw totalError
+
+        // Query for applications pending inspection
+        const { count: pendingCount, error: pendingError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending_inspection')
+        
+        if (pendingError) throw pendingError
+
+        // Query for applications currently under inspection (in_progress)
+        const { count: underInspectionCount, error: underInspectionError } = await supabase
+          .from('inspections')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'in_progress')
+        
+        if (underInspectionError) throw underInspectionError
+
+        // Query for applications returned for revision
+        const { count: revisionCount, error: revisionError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'revision_required')
+        
+        if (revisionError) throw revisionError
+
+        const statsData: InspectionStatsData = {
+          totalApplications: totalCount || 0,
+          pendingInspection: pendingCount || 0,
+          underInspection: underInspectionCount || 0,
+          returnedForRevision: revisionCount || 0
+        }
+
+        setStats(statsData)
       } catch (err) {
         console.error('Error fetching inspection stats:', err)
         setError('Failed to load statistics')
@@ -40,13 +81,13 @@ export function StatsPanel() {
       }
     }
 
-    fetchStats()
+    fetchInspectionStats()
   }, [])
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {[...Array(6)].map((_, index) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, index) => (
           <Card key={index} className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -67,8 +108,8 @@ export function StatsPanel() {
 
   if (error) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <Card className="md:col-span-2 lg:col-span-3 xl:col-span-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="col-span-full">
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-red-600">
               <AlertTriangle className="h-4 w-4" />
@@ -82,63 +123,45 @@ export function StatsPanel() {
 
   const statsCards = [
     {
-      title: "Pending Inspections",
-      value: stats?.pendingCount?.toString() || "0",
-      description: "Applications waiting for inspection",
+      title: "Total Applications",
+      value: stats?.totalApplications?.toString() || "0",
+      description: "All applications in the system",
       icon: ClipboardList,
-      trend: (stats?.pendingCount || 0) > 0 ? `${stats?.pendingCount} pending` : "No pending inspections",
-      trendUp: (stats?.pendingCount || 0) > 0 ? null : true,
+      trend: `${stats?.totalApplications || 0} total`,
+      trendUp: null,
       color: "text-blue-600"
     },
     {
-      title: "Completed This Month",
-      value: stats?.completedThisMonth?.toString() || "0",
-      description: "Inspections completed in current month",
-      icon: CheckCircle2,
-      trend: "Current month",
+      title: "Pending Inspection",
+      value: stats?.pendingInspection?.toString() || "0",
+      description: "Awaiting inspection assignment",
+      icon: Clock,
+      trend: (stats?.pendingInspection || 0) > 0 ? `${stats?.pendingInspection} waiting` : "All caught up",
+      trendUp: (stats?.pendingInspection || 0) === 0 ? true : null,
+      color: "text-amber-600"
+    },
+    {
+      title: "Under Inspection",
+      value: stats?.underInspection?.toString() || "0",
+      description: "Currently being inspected",
+      icon: Eye,
+      trend: (stats?.underInspection || 0) > 0 ? `${stats?.underInspection} in progress` : "No active inspections",
       trendUp: null,
       color: "text-green-600"
     },
     {
-      title: "Overdue",
-      value: stats?.overdueCount?.toString() || "0",
-      description: "Inspections past due date",
-      icon: AlertTriangle,
-      trend: (stats?.overdueCount || 0) > 0 ? "Action required" : "All up to date",
-      trendUp: (stats?.overdueCount || 0) > 0 ? false : true,
+      title: "Returned for Revision",
+      value: stats?.returnedForRevision?.toString() || "0",
+      description: "Pending resubmission",
+      icon: RotateCcw,
+      trend: (stats?.returnedForRevision || 0) > 0 ? `${stats?.returnedForRevision} revisions needed` : "No revisions pending",
+      trendUp: (stats?.returnedForRevision || 0) === 0 ? true : false,
       color: "text-red-600"
-    },
-    {
-      title: "Compliance Rate",
-      value: `${stats?.complianceRate || 0}%`,
-      description: "Applications meeting requirements",
-      icon: TrendingUp,
-      trend: (stats?.complianceRate || 0) >= 90 ? "Excellent" : (stats?.complianceRate || 0) >= 70 ? "Good" : "Needs improvement",
-      trendUp: (stats?.complianceRate || 0) >= 90 ? true : (stats?.complianceRate || 0) >= 70 ? null : false,
-      color: "text-emerald-600"
-    },
-    {
-      title: "Avg. Inspection Time",
-      value: "2.5 hrs",
-      description: "Average time per inspection",
-      icon: Clock,
-      trend: "Estimated average",
-      trendUp: null,
-      color: "text-purple-600"
-    },
-    {
-      title: "Draft Reports",
-      value: stats?.draftCount?.toString() || "0",
-      description: "Inspections saved as draft",
-      icon: FileCheck,
-      trend: (stats?.draftCount || 0) > 0 ? "Ready for completion" : "All reports complete",
-      trendUp: null,
-      color: "text-orange-600"
     }
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
       {statsCards.map((stat, index) => (
         <Card key={index} className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

@@ -61,6 +61,7 @@ export function FinalDecisions() {
   const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
   const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_review">("approve");
   const [decisionReason, setDecisionReason] = useState("");
+  const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
   const [conditions, setConditions] = useState("");
 
   useEffect(() => {
@@ -514,17 +515,27 @@ export function FinalDecisions() {
                   <label className="text-sm font-medium">
                     {decisionType === "reject" ? "Rejection Reason (Required)" : "Review Instructions (Required)"}
                   </label>
-                  <Textarea
-                    placeholder={
-                      decisionType === "reject" 
-                        ? "Explain why this application is being rejected..."
-                        : "Provide specific instructions for what needs to be reviewed or corrected..."
-                    }
-                    value={decisionReason}
-                    onChange={(e) => setDecisionReason(e.target.value)}
-                    rows={3}
-                    required
-                  />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <Select value={decisionReasonPreset} onValueChange={(v)=>{ setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="incomplete_documentation">Incomplete documentation</SelectItem>
+                        <SelectItem value="non_compliance_requirements">Non-compliance with requirements</SelectItem>
+                        <SelectItem value="inconsistent_information">Inconsistent information provided</SelectItem>
+                        <SelectItem value="requires_further_review">Requires further technical review</SelectItem>
+                        <SelectItem value="other">Other...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      placeholder={decisionReasonPreset === 'other' || decisionReasonPreset === '' ? "Type reason/instructions..." : "Add details (optional)"}
+                      value={decisionReason}
+                      onChange={(e) => setDecisionReason(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  
                 </div>
               )}
             </div>

@@ -7,7 +7,7 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
+// Progress UI removed per RWB request
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Form,
@@ -145,7 +145,7 @@ export function InspectionBuilder() {
   const searchParams = useSearchParams()
   const applicationId = searchParams.get("applicationId")
   const [activeTab, setActiveTab] = useState("general")
-  const [progress, setProgress] = useState(0)
+  // const [progress, setProgress] = useState(0)
   const [applicationData, setApplicationData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
@@ -174,51 +174,7 @@ export function InspectionBuilder() {
   const { watch } = form
 
   // Calculate progress based on filled required fields
-  useEffect(() => {
-    const subscription = watch((value) => {
-      let completedSections = 0
-      const totalSections = 6 // general, location, technical, environmental, regulatory, evidence
-      
-      // Check if general section is complete
-      if (value.applicationId && value.inspectionDate && value.inspectorName && value.inspectionType) {
-        completedSections++
-      }
-      
-      // Check if location verification is complete
-      if (value.locationVerification?.matches) {
-        completedSections++
-      }
-      
-      // Check if technical verification is complete
-      if (value.technicalVerification?.waterSourceVerified && 
-          value.technicalVerification?.extractionMethodVerified &&
-          value.technicalVerification?.infrastructureCondition) {
-        completedSections++
-      }
-      
-      // Check if environmental compliance is complete
-      if (value.environmentalCompliance?.impactAssessment && 
-          value.environmentalCompliance?.mitigationMeasures) {
-        completedSections++
-      }
-      
-      // Check if regulatory compliance is complete
-      if (value.regulatoryCompliance?.permitConditions && 
-          value.regulatoryCompliance?.volumeLimits) {
-        completedSections++
-      }
-      
-      // Check if evidence collection is complete
-      if (value.evidenceCollection?.attachments !== undefined || value.evidenceCollection?.samplesCollected !== undefined) {
-        completedSections++
-      }
-      
-      const newProgress = Math.round((completedSections / totalSections) * 100)
-      setProgress(newProgress)
-    })
-    
-    return () => subscription.unsubscribe()
-  }, [watch])
+  // Progress calculation removed per RWB request
 
   useEffect(() => {
     if (applicationId) {
@@ -413,7 +369,7 @@ export function InspectionBuilder() {
 
   return (
     <div className="space-y-6">
-      {/* Progress Header */}
+      {/* Header */}
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
@@ -425,13 +381,6 @@ export function InspectionBuilder() {
               <p className="text-sm text-muted-foreground mt-1">
                 Application ID: {applicationId || "N/A"}
               </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <div className="text-sm font-medium">Progress</div>
-                <div className="text-2xl font-bold">{progress}%</div>
-              </div>
-              <Progress value={progress} className="w-24" />
             </div>
           </div>
         </CardHeader>

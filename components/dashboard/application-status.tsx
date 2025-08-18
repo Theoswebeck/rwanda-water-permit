@@ -85,18 +85,7 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
       color: "text-green-600",
       bgColor: "bg-green-50",
     },
-    {
-      title: "Processing Time",
-      value: stats.total > 0 ? "12" : "0",
-      description: "Average processing days",
-      detail: "Time to completion",
-      change: "+2.5%",
-      changeLabel: "Improvement this month",
-      trend: "up",
-      icon: TrendingUp,
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
-    },
+    // Removed Processing Time panel per RWB request
   ];
 
   const getRecentApplications = () => {

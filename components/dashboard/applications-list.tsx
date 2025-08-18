@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -32,7 +33,9 @@ import {
   Circle,
   XCircle,
   Clock,
-  FileText
+  FileText,
+  Trash,
+  MoreHorizontal
 } from "lucide-react";
 import Link from "next/link";
 import type { Application } from "@/types/database";
@@ -40,12 +43,17 @@ import type { Application } from "@/types/database";
 interface ApplicationsListProps {
   applications: Application[];
   loading?: boolean;
+  onDeleteApplications?: (applicationIds: string[]) => Promise<void>;
 }
 
-export function ApplicationsList({ applications, loading = false }: ApplicationsListProps) {
+export function ApplicationsList({ applications, loading = false, onDeleteApplications }: ApplicationsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const pageSize = 10;
 
   // Filter applications based on search and filters
   const filteredApplications = useMemo(() => {
@@ -62,6 +70,53 @@ export function ApplicationsList({ applications, loading = false }: Applications
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [applications, searchQuery, typeFilter, statusFilter]);
+
+  // Reset to first page when filters change
+  
+  // Current page slice
+  const totalPages = Math.max(1, Math.ceil(filteredApplications.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  const pagedApplications = filteredApplications.slice(start, end);
+
+  // Bulk selection functions
+  const isAllPageSelected = pagedApplications.length > 0 && 
+    pagedApplications.every(app => selectedApplications.includes(app.id));
+  
+  const isSomePageSelected = pagedApplications.some(app => selectedApplications.includes(app.id));
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const currentPageIds = pagedApplications.map(app => app.id);
+      setSelectedApplications(prev => [...new Set([...prev, ...currentPageIds])]);
+    } else {
+      const currentPageIds = pagedApplications.map(app => app.id);
+      setSelectedApplications(prev => prev.filter(id => !currentPageIds.includes(id)));
+    }
+  };
+
+  const handleSelectApplication = (applicationId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedApplications(prev => [...prev, applicationId]);
+    } else {
+      setSelectedApplications(prev => prev.filter(id => id !== applicationId));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!onDeleteApplications || selectedApplications.length === 0) return;
+    
+    try {
+      setIsDeleting(true);
+      await onDeleteApplications(selectedApplications);
+      setSelectedApplications([]);
+    } catch (error) {
+      console.error('Error deleting applications:', error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // Function to get the appropriate status with icon and color
   const getStatusConfig = (status: string) => {
@@ -215,11 +270,66 @@ export function ApplicationsList({ applications, loading = false }: Applications
         </div>
       </div>
       
+      {/* Bulk Actions Toolbar */}
+      {selectedApplications.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-medium text-blue-900">
+              {selectedApplications.length} application{selectedApplications.length !== 1 ? 's' : ''} selected
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedApplications([])}
+              className="text-blue-700 hover:text-blue-900 hover:bg-blue-100"
+            >
+              Clear selection
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {onDeleteApplications && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash className="h-4 w-4 mr-2" />
+                    Delete {selectedApplications.length} application{selectedApplications.length !== 1 ? 's' : ''}
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        </motion.div>
+      )}
+      
       {/* Applications Table */}
       <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-gray-50/50">
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-12">
+                <Checkbox
+                  checked={isAllPageSelected}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Select all applications"
+                />
+              </TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Date</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Project Title</TableHead>
@@ -230,9 +340,16 @@ export function ApplicationsList({ applications, loading = false }: Applications
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredApplications.length > 0 ? (
-              filteredApplications.map((application) => (
+            {pagedApplications.length > 0 ? (
+              pagedApplications.map((application) => (
                 <TableRow key={application.id} className="hover:bg-blue-50/30 transition-colors duration-150 border-b border-gray-100">
+                  <TableCell className="px-4 py-4">
+                    <Checkbox
+                      checked={selectedApplications.includes(application.id)}
+                      onCheckedChange={(checked) => handleSelectApplication(application.id, checked as boolean)}
+                      aria-label={`Select application ${application.application_number || application.id}`}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium text-gray-900 px-6 py-4">
                     <div className="text-sm">
                       {formatDate(application.created_at)}
@@ -299,12 +416,13 @@ export function ApplicationsList({ applications, loading = false }: Applications
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                      {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && (
+                      {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && onDeleteApplications && (
                         <Button 
                           variant="ghost" 
                           size="sm" 
                           className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                           title="Delete Application"
+                          onClick={() => onDeleteApplications([application.id])}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -315,7 +433,7 @@ export function ApplicationsList({ applications, loading = false }: Applications
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-16 text-gray-500">
+                <TableCell colSpan={8} className="text-center py-16 text-gray-500">
                   <div className="flex flex-col items-center gap-3">
                     <div className="p-3 bg-gray-100 rounded-full">
                       <FileText className="h-6 w-6 text-gray-400" />
@@ -337,6 +455,17 @@ export function ApplicationsList({ applications, loading = false }: Applications
             )}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between py-2">
+        <div className="text-sm text-muted-foreground">
+          Page {currentPage} of {totalPages} • Showing {pagedApplications.length} of {filteredApplications.length}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
+          <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>Next</Button>
+        </div>
       </div>
     </div>
   );

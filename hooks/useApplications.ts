@@ -97,6 +97,7 @@ export function useApplications({
   const createApplication = useCallback(async (data: Partial<Application>): Promise<Application | null> => {
     try {
       setError(null)
+      
       const { data: newApplication, error } = await supabase
         .from('applications')
         .insert([data])
@@ -104,6 +105,10 @@ export function useApplications({
         .single()
 
       if (error) throw error
+
+      if (!newApplication) {
+        throw new Error('No application data returned from database');
+      }
 
       // Refresh the list
       await fetchApplications()
@@ -144,14 +149,21 @@ export function useApplications({
 
       if (error) throw error
 
+      if (!updatedApplication) {
+        throw new Error('No application data returned from database update');
+      }
+
+      // Type the updated application correctly
+      const typedApplication = updatedApplication as Application;
+
       // Update local state
       setApplications(prev => 
         prev.map(app => 
-          app.id === id ? { ...app, ...updatedApplication } : app
+          app.id === id ? { ...app, ...typedApplication } : app
         )
       )
 
-      return updatedApplication
+      return typedApplication
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update application')
       console.error('Error updating application:', err)
@@ -184,64 +196,10 @@ export function useApplications({
     try {
       setError(null)
       
-      // Enhanced query to get application with all related data
+      // Simplified query to avoid join issues with nullable foreign keys
       const { data, error } = await supabase
         .from('applications')
-        .select(`
-          *,
-          applicant:users!applicant_id(
-            id,
-            email,
-            phone,
-            mobile_phone,
-            landline_phone,
-            role,
-            status,
-            account_type,
-            first_name,
-            last_name,
-            date_of_birth,
-            id_number,
-            id_type,
-            company_name,
-            company_tin,
-            company_address,
-            company_phone,
-            po_box,
-            incorporation_certificate_number,
-            alternative_contact,
-            province,
-            district,
-            sector,
-            cell,
-            village,
-            address,
-            created_at,
-            last_login_at
-          ),
-          assigned_reviewer:users!assigned_reviewer_id(
-            id,
-            first_name,
-            last_name,
-            email
-          ),
-          assigned_inspector:users!assigned_inspector_id(
-            id,
-            first_name,
-            last_name,
-            email
-          ),
-          assigned_approver:users!assigned_approver_id(
-            id,
-            first_name,
-            last_name,
-            email
-          ),
-          documents(*),
-          reviews!application_id(*),
-          inspections!application_id(*),
-          permits!application_id(*)
-        `)
+        .select('*')
         .eq('id', id)
         .single()
 
@@ -258,7 +216,6 @@ export function useApplications({
   const getApplicationByNumber = useCallback(async (applicationNumber: string): Promise<Application | null> => {
     try {
       setError(null)
-      console.log('🔍 Supabase: Querying application by number:', applicationNumber)
 
       const { data, error } = await supabase
         .from('applications')
@@ -312,11 +269,8 @@ export function useApplications({
         .eq('application_number', applicationNumber)
         .single()
 
-      console.log('📥 Supabase response:', { data, error })
-      console.log('📄 Documents in response:', data?.documents)
-
       if (error) {
-        console.error('❌ Supabase error:', error)
+        console.error('Error fetching application by number:', error)
         throw error
       }
 

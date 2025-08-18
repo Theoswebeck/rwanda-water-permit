@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { getApplicationByNumber } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
+import { ApplicationDocuments } from "@/components/shared/ApplicationDocuments";
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -568,6 +569,17 @@ export default function InspectorApplicationView() {
             )}
           </CardContent>
         </Card>
+
+        {/* Application Documents Section */}
+        <ApplicationDocuments 
+          applicationId={application.id}
+          userRole="inspector"
+          allowDownload={true}
+          allowView={true}
+          showStatus={true}
+          showRefresh={true}
+        />
+
       </motion.div>
     </div>
   );

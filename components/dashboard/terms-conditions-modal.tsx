@@ -21,7 +21,8 @@ import {
   FileCheck, 
   Shield, 
   Clock,
-  Loader2
+  Loader2,
+  Star
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
@@ -45,6 +46,9 @@ export function TermsConditionsModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasReadTerms, setHasReadTerms] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [rating, setRating] = useState<number>(0);
+  const [feedback, setFeedback] = useState<string>("");
 
   const handleAcceptTerms = async () => {
     if (!acceptedTerms) {
@@ -112,8 +116,7 @@ export function TermsConditionsModal({
       );
 
       console.log("✅ Terms accepted successfully! Your permit has been generated...");
-      onTermsAccepted();
-      onClose();
+      setShowFeedback(true);
     } catch (error) {
       console.error('Error accepting terms:', error);
       console.error("Failed to accept terms. Please try again.");
@@ -177,6 +180,7 @@ export function TermsConditionsModal({
           </Card>
         </DialogHeader>
 
+        {!showFeedback ? (
         <div className="space-y-8">
           <div>
             <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
@@ -311,35 +315,60 @@ export function TermsConditionsModal({
             </div>
           </div>
         </div>
+        ) : (
+          <div className="space-y-6">
+            <h3 className="text-xl font-semibold">How was your experience?</h3>
+            <div className="flex items-center gap-2">
+              {[1,2,3,4,5].map((s) => (
+                <button key={s} onClick={()=>setRating(s)} aria-label={`Rate ${s} stars`}>
+                  <Star className={`h-6 w-6 ${rating >= s ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`} />
+                </button>
+              ))}
+            </div>
+            <textarea
+              className="w-full border rounded-md p-3"
+              rows={4}
+              placeholder="Share any feedback to help us improve..."
+              value={feedback}
+              onChange={(e)=>setFeedback(e.target.value)}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={()=>{ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Skip</Button>
+              <Button onClick={()=>{ /* TODO: send to supabase */ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Submit</Button>
+            </div>
+          </div>
+        )}
 
-        <DialogFooter className="gap-3 pt-8">
-          <Button 
-            variant="outline" 
-            onClick={handleRejectTerms}
-            disabled={isProcessing}
-            className="flex items-center gap-2 px-6 py-3"
-          >
-            {isProcessing ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <AlertTriangle className="h-5 w-5" />
-            )}
-            Reject Terms
-          </Button>
-          
-          <Button 
-            onClick={handleAcceptTerms}
-            disabled={!acceptedTerms || isProcessing}
-            className="bg-green-600 hover:bg-green-700 flex items-center gap-2 px-6 py-3"
-          >
-            {isProcessing ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <CheckCircle className="h-5 w-5" />
-            )}
-            Accept Terms & Generate Permit
-          </Button>
-        </DialogFooter>
+        {!showFeedback && (
+          <DialogFooter className="gap-3 pt-8">
+            <Button 
+              variant="outline" 
+              onClick={handleRejectTerms}
+              disabled={isProcessing}
+              className="flex items-center gap-2 px-6 py-3"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <AlertTriangle className="h-5 w-5" />
+              )}
+              Reject Terms
+            </Button>
+            
+            <Button 
+              onClick={handleAcceptTerms}
+              disabled={!acceptedTerms || isProcessing}
+              className="bg-green-600 hover:bg-green-700 flex items-center gap-2 px-6 py-3"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <CheckCircle className="h-5 w-5" />
+              )}
+              Accept Terms & Generate Permit
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

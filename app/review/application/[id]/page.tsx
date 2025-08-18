@@ -36,11 +36,20 @@ import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus, User, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { ApplicationDocuments } from "@/components/shared/ApplicationDocuments";
 
 interface ApplicationWithRelations extends Application {
   applicant?: User;
   documents?: Document[];
   reviews?: Review[];
+}
+
+interface StaffMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
 }
 
 interface Comment {
@@ -65,6 +74,8 @@ export default function ReviewApplicationPage() {
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [transferLoading, setTransferLoading] = useState(false);
 
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -93,6 +104,19 @@ export default function ReviewApplicationPage() {
             throw appError;
           }
           return;
+        }
+
+        // If there's an assigned reviewer, fetch the assigned user information
+        if (appData.assigned_reviewer_id) {
+          const { data: assignedUserData, error: assignedUserError } = await supabase
+            .from('users')
+            .select('first_name, last_name, role')
+            .eq('id', appData.assigned_reviewer_id)
+            .single();
+            
+          if (!assignedUserError && assignedUserData) {
+            (appData as any).assigned_to_user = assignedUserData;
+          }
         }
 
         setApplication(appData);
@@ -124,6 +148,21 @@ export default function ReviewApplicationPage() {
             };
           });
           setComments(formattedComments);
+        }
+        
+        // Fetch staff members for transfer functionality
+        const { data: staffData, error: staffError } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, role, email')
+          .in('role', ['reviewer', 'inspector', 'admin', 'approver'])
+          .eq('status', 'active')
+          .order('role', { ascending: true })
+          .order('first_name', { ascending: true });
+          
+        if (staffError) {
+          console.error('Error fetching staff:', staffError);
+        } else {
+          setStaff(staffData || []);
         }
 
       } catch (err) {
@@ -238,9 +277,57 @@ export default function ReviewApplicationPage() {
     window.location.reload();
   };
 
-  const handleTransferApplication = () => {
-    // Handle transfer application logic
-    alert("Application transferred");
+  const handleTransferApplication = async () => {
+    if (!selectedAction || !application) return;
+    
+    try {
+      setTransferLoading(true);
+      
+      // Find the selected staff member
+      const selectedStaff = staff.find(s => s.id === selectedAction);
+      if (!selectedStaff) {
+        alert('Please select a valid reviewer');
+        return;
+      }
+      
+      // Update application assignment in the database
+      const { error: updateError } = await supabase
+        .from('applications')
+        .update({
+          assigned_reviewer_id: selectedAction,
+          status: 'under_review',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', application.id);
+        
+      if (updateError) throw updateError;
+      
+      // Create a workflow record for the transfer
+      const { error: workflowError } = await supabase
+        .from('workflow_history')
+        .insert({
+          application_id: application.id,
+          from_status: application.status,
+          to_status: 'under_review',
+          action: 'transfer',
+          comment: `Application transferred to ${selectedStaff.first_name} ${selectedStaff.last_name} (${selectedStaff.role})`,
+          user_id: selectedAction
+        });
+        
+      if (workflowError) throw workflowError;
+      
+      alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
+      setSelectedAction('');
+      
+      // Refresh the page to show updated data
+      window.location.reload();
+      
+    } catch (error) {
+      console.error('Error transferring application:', error);
+      alert('Failed to transfer application. Please try again.');
+    } finally {
+      setTransferLoading(false);
+    }
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
@@ -251,6 +338,7 @@ export default function ReviewApplicationPage() {
       pending_inspection: { label: "Pending Inspection", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved: { label: "Approved", variant: "default" },
+      approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
@@ -347,6 +435,11 @@ export default function ReviewApplicationPage() {
               <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
                 Technical review and assessment of water permit application
               </p>
+              {(application as any)?.assigned_to_user && (
+                <p className="text-sm text-muted-foreground">
+                  Assigned to: {(application as any).assigned_to_user.first_name} {(application as any).assigned_to_user.last_name} ({(application as any).assigned_to_user.role})
+                </p>
+              )}
             </div>
           </div>
 
@@ -604,18 +697,32 @@ export default function ReviewApplicationPage() {
                             <SelectValue placeholder="Select reviewer..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="reviewer1">John Smith</SelectItem>
-                            <SelectItem value="reviewer2">Sarah Johnson</SelectItem>
-                            <SelectItem value="reviewer3">Michael Brown</SelectItem>
+                            {staff.map((staffMember) => (
+                              <SelectItem key={staffMember.id} value={staffMember.id}>
+                                {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
+                              </SelectItem>
+                            ))}
+                            {staff.length === 0 && (
+                              <SelectItem value="no-staff" disabled>
+                                No staff members available
+                              </SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <Button 
                           onClick={handleTransferApplication}
                           variant="secondary"
                           className="w-full"
-                          disabled={!selectedAction}
+                          disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
                         >
-                          Transfer Application
+                          {transferLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              Transferring...
+                            </>
+                          ) : (
+                            'Transfer Application'
+                          )}
                         </Button>
                       </div>
                     </CardContent>
@@ -769,18 +876,32 @@ export default function ReviewApplicationPage() {
                             <SelectValue placeholder="Select reviewer..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="reviewer1">Sarah Johnson</SelectItem>
-                            <SelectItem value="reviewer2">Michael Brown</SelectItem>
-                            <SelectItem value="reviewer3">Emma Wilson</SelectItem>
+                            {staff.map((staffMember) => (
+                              <SelectItem key={staffMember.id} value={staffMember.id}>
+                                {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
+                              </SelectItem>
+                            ))}
+                            {staff.length === 0 && (
+                              <SelectItem value="no-staff" disabled>
+                                No staff members available
+                              </SelectItem>
+                            )}
                           </SelectContent>
                         </Select>
                         <Button 
                           onClick={handleTransferApplication}
                           variant="outline" 
                           className="w-full" 
-                          disabled={!selectedAction}
+                          disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
                         >
-                          Transfer Application
+                          {transferLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                              Transferring...
+                            </>
+                          ) : (
+                            'Transfer Application'
+                          )}
                         </Button>
                       </div>
                     </CardContent>
@@ -791,42 +912,14 @@ export default function ReviewApplicationPage() {
 
             {/* Documents Tab */}
             <TabsContent value="documents" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Uploaded Documents</CardTitle>
-                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                    Documents submitted with this application
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {application.documents && application.documents.length > 0 ? (
-                      application.documents.map((doc, index) => (
-                      <div key={index} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
-                            <FileText className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="space-y-1">
-                              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm font-medium">{doc.name}</p>
-                              <p className="text-xs text-muted-foreground">{doc.type} • {doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : 'Size unknown'} • Uploaded {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}</p>
-                            </div>
-                        </div>
-                        <Button size="sm" variant="outline" className="gap-2">
-                          <Download className="h-4 w-4" />
-                          Download
-                        </Button>
-                      </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8">
-                        <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">No documents uploaded yet</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <ApplicationDocuments 
+                applicationId={application.id}
+                userRole="reviewer"
+                allowDownload={true}
+                allowView={true}
+                showStatus={true}
+                showRefresh={true}
+              />
             </TabsContent>
 
             {/* Internal Notes Tab */}

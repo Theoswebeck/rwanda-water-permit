@@ -9,7 +9,6 @@ import {
   CheckCircle, 
   XCircle, 
   Clock, 
-  TrendingUp, 
   FileCheck, 
   AlertTriangle,
   Loader2
@@ -99,8 +98,18 @@ export default function ApproverDashboard() {
           </div>
         </div>
 
-        {/* Executive Summary Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        {/* Summary Cards */}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
+              <FileCheck className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.totalApplications || 0}</div>
+            </CardContent>
+          </Card>
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
@@ -108,9 +117,6 @@ export default function ApproverDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.pendingFinalApproval || 0}</div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                Awaiting your review
-              </p>
             </CardContent>
           </Card>
           
@@ -121,9 +127,6 @@ export default function ApproverDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.approvedThisMonth || 0}</div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                This month
-              </p>
             </CardContent>
           </Card>
           
@@ -134,35 +137,6 @@ export default function ApproverDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats?.rejectedThisMonth || 0}</div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                This month
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
-              <FileCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalApplications || 0}</div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                All time
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Avg Decision Time</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.avgDecisionTime || 0} days</div>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-xs text-muted-foreground">
-                Processing efficiency
-              </p>
             </CardContent>
           </Card>
         </div>
@@ -171,24 +145,12 @@ export default function ApproverDashboard() {
         <div className="mt-12">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
             <div className="border-b">
-              <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/50 rounded-lg">
+              <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/50 rounded-lg">
                 <TabsTrigger 
                   value="decisions" 
                   className="data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200 py-3 px-4 text-sm font-medium"
                 >
                   Final Decisions
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="overview" 
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200 py-3 px-4 text-sm font-medium"
-                >
-                  Executive Overview
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="performance" 
-                  className="data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200 py-3 px-4 text-sm font-medium"
-                >
-                  Performance Metrics
                 </TabsTrigger>
                 <TabsTrigger 
                   value="applications" 
@@ -210,13 +172,7 @@ export default function ApproverDashboard() {
                 <FinalDecisions />
               </TabsContent>
 
-              <TabsContent value="overview" className="mt-0 space-y-6">
-                <ExecutiveOverview />
-              </TabsContent>
-
-              <TabsContent value="performance" className="mt-0 space-y-6">
-                <PerformanceMetrics />
-              </TabsContent>
+              {/* Overview and Performance removed per RWB request */}
 
               <TabsContent value="applications" className="mt-0 space-y-6">
                 <AllApplicationsList />

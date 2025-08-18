@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2 } from "lucide-react";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2, Calendar, Droplets, FileCheck } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +30,13 @@ interface ReviewApplication extends Application {
   sla_days_remaining?: number;
 }
 
+interface ReviewStatsData {
+  newSubmissions: number;
+  pendingInspection: number;
+  underReview: number;
+  returnedForRevision: number;
+}
+
 export default function ReviewerDashboard() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -38,6 +45,8 @@ export default function ReviewerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingReview, setStartingReview] = useState<string | null>(null);
+  const [stats, setStats] = useState<ReviewStatsData | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   // Fetch applications for review
   useEffect(() => {
@@ -104,6 +113,60 @@ export default function ReviewerDashboard() {
     };
 
     fetchReviewApplications();
+  }, []);
+
+  // Fetch review statistics from database
+  useEffect(() => {
+    const fetchReviewStats = async () => {
+      try {
+        setStatsLoading(true);
+        
+        // Query for new submissions (submitted status)
+        const { count: newSubmissionsCount, error: newError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'submitted');
+        
+        if (newError) throw newError;
+
+        // Query for applications pending inspection
+        const { count: pendingInspectionCount, error: pendingError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending_inspection');
+        
+        if (pendingError) throw pendingError;
+
+        // Query for applications under review
+        const { count: underReviewCount, error: reviewError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'under_review');
+        
+        if (reviewError) throw reviewError;
+
+        // Query for applications returned for revision
+        const { count: revisionCount, error: revisionError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'revision_required');
+        
+        if (revisionError) throw revisionError;
+
+        setStats({
+          newSubmissions: newSubmissionsCount || 0,
+          pendingInspection: pendingInspectionCount || 0,
+          underReview: underReviewCount || 0,
+          returnedForRevision: revisionCount || 0
+        });
+      } catch (err) {
+        console.error('Error fetching review stats:', err);
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchReviewStats();
   }, []);
 
   // Filter applications by status
@@ -204,101 +267,220 @@ export default function ReviewerDashboard() {
   const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[], emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
     
-    if (filteredApps.length === 0) {
+    const getApplicantName = (app: ReviewApplication) => {
+      return app.applicant_name || 'Unknown Applicant';
+    };
+
+    const getLocationString = (app: ReviewApplication) => {
+      return `${app.district || 'N/A'}, ${app.sector || 'N/A'}`;
+    };
+
+    const getWaterSourceLabel = (waterSource: string) => {
+      const labels: Record<string, string> = {
+        'surface_water': 'Surface Water',
+        'groundwater': 'Groundwater',
+        'borehole': 'Borehole',
+        'river': 'River',
+        'lake': 'Lake',
+        'spring': 'Spring',
+        'swamp': 'Swamp',
+        'other': 'Other'
+      };
+      return labels[waterSource] || waterSource;
+    };
+
+    const getWaterPurposeLabel = (purpose: string) => {
+      const labels: Record<string, string> = {
+        'domestic': 'Domestic Use',
+        'industrial': 'Industrial Use',
+        'agricultural': 'Agricultural Use',
+        'irrigation': 'Irrigation',
+        'livestock': 'Livestock',
+        'aquaculture': 'Aquaculture',
+        'recreation': 'Recreation',
+        'electricity_generation': 'Electricity Generation',
+        'mining': 'Mining',
+        'municipal_supply': 'Municipal Supply',
+        'other': 'Other'
+      };
+      return labels[purpose] || purpose;
+    };
+
+    const formatDate = (dateString: string) => {
+      return new Date(dateString).toLocaleDateString();
+    };
+
+    const getReviewStatusBadge = (status: string) => {
+      const statusConfig = {
+        'submitted': { 
+          label: 'Submitted', 
+          className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
+        },
+        'under_review': { 
+          label: 'Under Review', 
+          className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
+        },
+        'pending_inspection': { 
+          label: 'Pending Inspection', 
+          className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
+        },
+        'pending_final_approval': { 
+          label: 'Pending Approval', 
+          className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800' 
+        },
+        'revision_required': { 
+          label: 'Revision Required', 
+          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+        },
+        'approved': { 
+          label: 'Approved', 
+          className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800' 
+        },
+        'rejected': { 
+          label: 'Rejected', 
+          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+        }
+      };
+      
+      const config = statusConfig[status as keyof typeof statusConfig] || { 
+        label: status, 
+        className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800' 
+      };
+      
       return (
-        <div className="flex min-h-[400px] flex-col items-center justify-center space-y-2 text-center">
-          <div className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-            {filteredApps.length === 0 && applications.length > 0 ? "No applications match your filters" : emptyMessage}
-          </div>
-        </div>
+        <Badge 
+          variant="outline" 
+          className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}
+        >
+          {config.label}
+        </Badge>
       );
-    }
+    };
 
     return (
-      <div className="rounded-md border">
-        <Table>
+      <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
+            {emptyMessage} ({filteredApps.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <Table className="w-full">
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-[130px]">
-                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  Application ID
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  Applicant Name
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead className="w-[140px]">
-                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  Type
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead className="w-[120px]">
-                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  Date Submitted
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead className="w-[120px]">
-                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  Status
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead className="w-[130px]">
-                <Button variant="ghost" className="h-auto p-0 font-medium justify-start">
-                  SLA Status
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+                <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[20%] hidden md:table-cell">Location & Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden sm:table-cell">Due Date</TableHead>
+                  <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredApps.map((app) => (
-              <TableRow key={app.id}>
-                <TableCell className="font-medium">{app.application_number}</TableCell>
-                <TableCell>{app.applicant_name}</TableCell>
-                <TableCell>{app.water_source}</TableCell>
-                <TableCell>
-                  {app.submitted_at ? new Date(app.submitted_at).toLocaleDateString() : 
-                   app.created_at ? new Date(app.created_at).toLocaleDateString() : 'N/A'}
+                {filteredApps.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="text-muted-foreground/50 text-lg">
+                          {applications.length === 0 ? "No applications found" : "No applications match your filters"}
+                        </div>
+                        <div className="text-sm text-muted-foreground/70">
+                          {applications.length === 0 ? "Applications will appear here once submitted" : "Try adjusting your search or filter criteria"}
+                        </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredApps.map((app) => (
+                    <TableRow 
+                      key={app.id} 
+                      className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
+                    >
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                          {app.application_number}
+                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                          {app.project_title || 'No project title'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                          {getApplicantName(app)}
+                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                          {getWaterPurposeLabel(app.water_purpose || '')}
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="flex justify-center">
+                          {getReviewStatusBadge(app.status)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3 hidden md:table-cell">
+                        <div className="flex items-center gap-1 mb-1">
+                          <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                            {getLocationString(app)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Droplets className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                            {getWaterSourceLabel(app.water_source || '')}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3 hidden sm:table-cell">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
+                          <span className="text-xs text-slate-700 dark:text-slate-300">
+                            {app.due_date ? formatDate(app.due_date) : 'Not set'}
+                          </span>
+                        </div>
                 </TableCell>
-                <TableCell>{getStatusBadge(app.status)}</TableCell>
-                <TableCell>{getSLAStatus(app.sla_days_remaining ?? null)}</TableCell>
-                <TableCell>
+                      <TableCell className="p-2 sm:p-3 text-right">
                   {app.status === 'submitted' ? (
                     <Button 
                       size="sm" 
-                      variant="ghost"
                       onClick={() => handleStartReview(app)}
                       disabled={startingReview === app.id}
+                            className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                     >
                       {startingReview === app.id ? (
-                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              <Loader2 className="h-3 w-3 animate-spin" />
                       ) : (
-                        <Eye className="h-4 w-4 mr-1" />
+                              <Eye className="h-3 w-3" />
                       )}
+                            <span className="hidden sm:inline">
                       {startingReview === app.id ? 'Starting...' : 'Review'}
+                            </span>
+                            <span className="sm:hidden">Go</span>
                     </Button>
                   ) : (
                     <Link href={`/review/application/${app.application_number}`}>
-                      <Button size="sm" variant="ghost">
-                        <Eye className="h-4 w-4 mr-1" />
-                        {app.status === 'under_review' ? 'Final Review' : 'View'}
+                            <Button 
+                              size="sm" 
+                              className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span className="hidden sm:inline">
+                                {app.status === 'under_review' ? 'Continue' : 'View'}
+                              </span>
+                              <span className="sm:hidden">Go</span>
                       </Button>
                     </Link>
                   )}
                 </TableCell>
               </TableRow>
-            ))}
+                  ))
+                )}
           </TableBody>
         </Table>
       </div>
+        </CardContent>
+      </Card>
     );
   };
 
@@ -356,73 +538,159 @@ export default function ReviewerDashboard() {
 
           {/* Summary Stats */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
+            <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
                   New Submissions
                 </CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
+                <Clock className="h-4 w-4 text-blue-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{newSubmissions.length}</div>
-                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
+                <div className="text-2xl font-bold">
+                  {statsLoading ? (
+                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
+                  ) : (
+                    stats?.newSubmissions || 0
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
                   Awaiting initial review
                 </p>
+                {!statsLoading && stats && (
+                  <div className="flex items-center mt-2">
+                    <Badge 
+                      variant={stats.newSubmissions === 0 ? "default" : "outline"}
+                      className={`text-xs ${
+                        stats.newSubmissions === 0 
+                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
+                          : "bg-blue-100 text-blue-800 hover:bg-blue-100"
+                      }`}
+                    >
+                      {stats.newSubmissions === 0 ? "All caught up" : `${stats.newSubmissions} pending review`}
+                    </Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
-            <Card>
+            <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
                   Pending Inspection
                 </CardTitle>
-                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                <AlertCircle className="h-4 w-4 text-amber-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{pendingInspection.length}</div>
-                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
+                <div className="text-2xl font-bold">
+                  {statsLoading ? (
+                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
+                  ) : (
+                    stats?.pendingInspection || 0
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
                   With inspectors
                 </p>
+                {!statsLoading && stats && (
+                  <div className="flex items-center mt-2">
+                    <Badge 
+                      variant="outline"
+                      className={`text-xs ${
+                        stats.pendingInspection === 0 
+                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
+                          : "bg-amber-100 text-amber-800 hover:bg-amber-100"
+                      }`}
+                    >
+                      {stats.pendingInspection === 0 ? "No pending inspections" : `${stats.pendingInspection} with inspectors`}
+                    </Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
-            <Card>
+            <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
                   Under Review
                 </CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                <CheckCircle className="h-4 w-4 text-green-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{readyForFinalReview.length}</div>
-                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
+                <div className="text-2xl font-bold">
+                  {statsLoading ? (
+                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
+                  ) : (
+                    stats?.underReview || 0
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
                   Being reviewed by staff
                 </p>
+                {!statsLoading && stats && (
+                  <div className="flex items-center mt-2">
+                    <Badge 
+                      variant="outline"
+                      className={`text-xs ${
+                        stats.underReview === 0 
+                          ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+                          : "bg-green-100 text-green-800 hover:bg-green-100"
+                      }`}
+                    >
+                      {stats.underReview === 0 ? "No active reviews" : `${stats.underReview} in review`}
+                    </Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
-            <Card>
+            <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
                   Returned for Revision
                 </CardTitle>
-                <XCircle className="h-4 w-4 text-muted-foreground" />
+                <XCircle className="h-4 w-4 text-red-600" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{needsRevision.length}</div>
-                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-xs">
+                <div className="text-2xl font-bold">
+                  {statsLoading ? (
+                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
+                  ) : (
+                    stats?.returnedForRevision || 0
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
                   Pending resubmission
                 </p>
+                {!statsLoading && stats && (
+                  <div className="flex items-center mt-2">
+                    <Badge 
+                      variant="outline"
+                      className={`text-xs ${
+                        stats.returnedForRevision === 0 
+                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
+                          : "bg-red-100 text-red-800 hover:bg-red-100"
+                      }`}
+                    >
+                      {stats.returnedForRevision === 0 ? "No revisions pending" : `${stats.returnedForRevision} revisions needed`}
+                    </Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
           {/* Main Content with Tabs */}
-          <Tabs defaultValue="new_submissions" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="new_submissions">New Submissions</TabsTrigger>
-              <TabsTrigger value="pending_inspection">Pending Inspection</TabsTrigger>
-              <TabsTrigger value="ready_for_final_review">Under Review</TabsTrigger>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck className="h-5 w-5" />
+                Review Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+                             <Tabs defaultValue="applications_to_review" className="w-full">
+                 <TabsList className="grid w-full grid-cols-3">
+                   <TabsTrigger value="applications_to_review">Applications for Review</TabsTrigger>
               <TabsTrigger value="all_applications">All Applications</TabsTrigger>
               <TabsTrigger value="map" className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
@@ -430,24 +698,24 @@ export default function ReviewerDashboard() {
               </TabsTrigger>
             </TabsList>
 
+                {/* Tab Contents */}
+                <TabsContent value="applications_to_review" className="space-y-4 mt-6">
             {/* Search and Filter Controls */}
-            <div className="flex items-center space-x-2">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
                   <Input
-                    placeholder="Search applications..."
+                        placeholder="Search by applicant name, application number, or project title..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-8"
+                        className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
                   />
-                </div>
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-[180px]">
+                      <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
                   <SelectValue placeholder="Filter by type" />
                 </SelectTrigger>
-                <SelectContent>
+                      <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="surface">Surface Water</SelectItem>
                   <SelectItem value="groundwater">Groundwater</SelectItem>
@@ -456,80 +724,49 @@ export default function ReviewerDashboard() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Tab Contents */}
-            <TabsContent value="new_submissions" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold">New Submissions</CardTitle>
-                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                    Applications waiting for initial documentary review
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
                   <ApplicationTable 
-                    applications={newSubmissions}
-                    emptyMessage="No new submissions to review"
+                    applications={reviewApplications.filter(app => app.status === 'submitted')}
+                    emptyMessage="Applications for Review"
                   />
-                </CardContent>
-              </Card>
             </TabsContent>
 
-            <TabsContent value="pending_inspection" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold">Pending Inspection</CardTitle>
-                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                    Applications currently assigned to inspectors for site assessment
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ApplicationTable 
-                    applications={pendingInspection}
-                    emptyMessage="No applications pending inspection"
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="ready_for_final_review" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold">Under Review</CardTitle>
-                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                    Applications currently being reviewed by technical staff
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ApplicationTable 
-                    applications={readyForFinalReview}
-                    emptyMessage="No applications under review"
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="all_applications" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold">All Applications</CardTitle>
-                  <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                    Comprehensive view of all applications assigned to you
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
+                <TabsContent value="all_applications" className="space-y-4 mt-6">
+                  {/* Search and Filter Controls */}
+                  <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
+                      <Input
+                        placeholder="Search by applicant name, application number, or project title..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
+                      />
+                    </div>
+                    <Select value={filterType} onValueChange={setFilterType}>
+                      <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
+                        <SelectValue placeholder="Filter by type" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="surface">Surface Water</SelectItem>
+                        <SelectItem value="groundwater">Groundwater</SelectItem>
+                        <SelectItem value="industrial">Industrial</SelectItem>
+                        <SelectItem value="agricultural">Agricultural</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <ApplicationTable 
                     applications={reviewApplications}
-                    emptyMessage="No applications found"
+                    emptyMessage="All Applications"
                   />
-                </CardContent>
-              </Card>
             </TabsContent>
 
-            <TabsContent value="map" className="space-y-4">
+                <TabsContent value="map" className="space-y-4 mt-6">
               <WaterConcessionMap />
             </TabsContent>
           </Tabs>
+            </CardContent>
+          </Card>
         </div>
       </motion.div>
     </DashboardLayout>

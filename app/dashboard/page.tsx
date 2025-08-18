@@ -46,7 +46,8 @@ export default function DashboardPage() {
     applications,
     loading: applicationsLoading,
     error: applicationsError,
-    refresh: refreshApplications
+    refresh: refreshApplications,
+    deleteApplication
   } = useApplications({
     // We'll add user filtering later
   });
@@ -87,6 +88,21 @@ export default function DashboardPage() {
   };
 
   const permits = databasePermits.map(transformPermitForDisplay);
+
+  // Bulk delete handler
+  const handleBulkDeleteApplications = async (applicationIds: string[]) => {
+    try {
+      // Delete applications one by one
+      const deletePromises = applicationIds.map(id => deleteApplication(id));
+      await Promise.all(deletePromises);
+      
+      // Refresh the applications list
+      await refreshApplications();
+    } catch (error) {
+      console.error('Error deleting applications:', error);
+      throw error; // Re-throw to let the component handle the error display
+    }
+  };
 
   const isLoading = applicationsLoading || permitsLoading;
   const hasError = applicationsError || permitsError;
@@ -182,6 +198,7 @@ export default function DashboardPage() {
                     <ApplicationsList 
                       applications={applications} 
                       loading={applicationsLoading}
+                      onDeleteApplications={handleBulkDeleteApplications}
                     />
                   </CardContent>
                 </Card>
