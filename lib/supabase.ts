@@ -510,26 +510,31 @@ export const getAdminDashboardStats = async () => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'under_review')
 
+    // Get pending assessments count
+    const { count: pendingAssessments } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending_assessment')
+
+    // Get pending approvals count
+    const { count: pendingApprovals } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending_final_approval')
+
     // Get active inspections count
     const { count: activeInspections } = await supabase
       .from('inspections')
       .select('*', { count: 'exact', head: true })
       .in('status', ['scheduled', 'in_progress'])
 
-    // Get overdue applications count
-    const { count: overdueApplications } = await supabase
-      .from('applications')
-      .select('*', { count: 'exact', head: true })
-      .eq('sla_status', 'overdue')
-
     return {
       totalUsers: totalUsers || 0,
       totalApplications: totalApplications || 0,
       pendingReviews: pendingReviews || 0,
-      activeInspections: activeInspections || 0,
-      overdueApplications: overdueApplications || 0,
-      systemUptime: '99.8%',
-      avgProcessingTime: '12 days'
+      pendingAssessments: pendingAssessments || 0,
+      pendingApprovals: pendingApprovals || 0,
+      activeInspections: activeInspections || 0
     }
   } catch (error) {
     console.warn('Failed to fetch admin dashboard stats:', error)
@@ -537,10 +542,9 @@ export const getAdminDashboardStats = async () => {
       totalUsers: 0,
       totalApplications: 0,
       pendingReviews: 0,
-      activeInspections: 0,
-      overdueApplications: 0,
-      systemUptime: '99.8%',
-      avgProcessingTime: '12 days'
+      pendingAssessments: 0,
+      pendingApprovals: 0,
+      activeInspections: 0
     }
   }
 }

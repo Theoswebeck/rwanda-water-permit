@@ -19,8 +19,8 @@ import { supabase } from "@/lib/supabase"
 
 interface InspectionStatsData {
   totalApplications: number
-  pendingInspection: number
-  underInspection: number
+  pendingAssessment: number
+  underAssessment: number
   returnedForRevision: number
 }
 
@@ -41,21 +41,21 @@ export function StatsPanel() {
         
         if (totalError) throw totalError
 
-        // Query for applications pending inspection
+        // Query for applications pending assessment
         const { count: pendingCount, error: pendingError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_inspection')
+          .eq('status', 'pending_assessment')
         
         if (pendingError) throw pendingError
 
-        // Query for applications currently under inspection (in_progress)
-        const { count: underInspectionCount, error: underInspectionError } = await supabase
-          .from('inspections')
+        // Query for assessments currently in progress
+        const { count: underAssessmentCount, error: underAssessmentError } = await supabase
+          .from('assessments')
           .select('*', { count: 'exact', head: true })
           .eq('status', 'in_progress')
         
-        if (underInspectionError) throw underInspectionError
+        if (underAssessmentError) throw underAssessmentError
 
         // Query for applications returned for revision
         const { count: revisionCount, error: revisionError } = await supabase
@@ -67,8 +67,8 @@ export function StatsPanel() {
 
         const statsData: InspectionStatsData = {
           totalApplications: totalCount || 0,
-          pendingInspection: pendingCount || 0,
-          underInspection: underInspectionCount || 0,
+          pendingAssessment: pendingCount || 0,
+          underAssessment: underAssessmentCount || 0,
           returnedForRevision: revisionCount || 0
         }
 
@@ -132,20 +132,20 @@ export function StatsPanel() {
       color: "text-blue-600"
     },
     {
-      title: "Pending Inspection",
-      value: stats?.pendingInspection?.toString() || "0",
-      description: "Awaiting inspection assignment",
+      title: "Pending Assessment",
+      value: stats?.pendingAssessment?.toString() || "0",
+      description: "Awaiting technical assessment",
       icon: Clock,
-      trend: (stats?.pendingInspection || 0) > 0 ? `${stats?.pendingInspection} waiting` : "All caught up",
-      trendUp: (stats?.pendingInspection || 0) === 0 ? true : null,
+      trend: (stats?.pendingAssessment || 0) > 0 ? `${stats?.pendingAssessment} waiting` : "All caught up",
+      trendUp: (stats?.pendingAssessment || 0) === 0 ? true : null,
       color: "text-amber-600"
     },
     {
-      title: "Under Inspection",
-      value: stats?.underInspection?.toString() || "0",
-      description: "Currently being inspected",
+      title: "Under Assessment",
+      value: stats?.underAssessment?.toString() || "0",
+      description: "Currently being assessed",
       icon: Eye,
-      trend: (stats?.underInspection || 0) > 0 ? `${stats?.underInspection} in progress` : "No active inspections",
+      trend: (stats?.underAssessment || 0) > 0 ? `${stats?.underAssessment} in progress` : "No active assessments",
       trendUp: null,
       color: "text-green-600"
     },

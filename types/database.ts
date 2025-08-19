@@ -24,7 +24,7 @@ export type ApplicationStatus =
   | 'draft' 
   | 'submitted' 
   | 'under_review' 
-  | 'pending_inspection'
+  | 'pending_assessment'
   | 'pending_final_approval'
   | 'approved' 
   | 'approved_pending_permit'
@@ -428,6 +428,53 @@ export interface Review {
   updated_at: string
 }
 
+export interface Assessment {
+  id: string
+  application_id: string
+  inspector_id: string
+  
+  // Assessment details
+  assessment_stage: string // 'technical', 'environmental', 'feasibility'
+  status: string // 'pending', 'completed', 'escalated'
+  
+  // Technical Assessment
+  technical_feasibility?: boolean
+  technical_comments?: string
+  site_accessibility?: boolean
+  infrastructure_adequacy?: boolean
+  
+  // Environmental Assessment
+  environmental_impact_level?: RiskAssessment
+  environmental_comments?: string
+  mitigation_required?: boolean
+  
+  // Water Source Assessment
+  source_reliability?: boolean
+  source_capacity_adequate?: boolean
+  source_quality_acceptable?: boolean
+  water_rights_clear?: boolean
+  
+  // Overall Assessment
+  overall_recommendation?: RecommendationType
+  conditions_required?: Json
+  overall_comments?: string
+  
+  // Decision timeline
+  assigned_at: string
+  completed_at?: string
+  due_date?: string
+  
+  // Quality metrics
+  assessment_score?: number
+  field_visit_required?: boolean
+  field_visit_completed?: boolean
+  field_visit_date?: string
+  
+  // Audit fields
+  created_at: string
+  updated_at: string
+}
+
 export interface Approval {
   id: string
   application_id: string
@@ -590,6 +637,7 @@ export interface ApplicationWithRelations extends Application {
   assigned_approver?: User
   documents?: Document[]
   reviews?: Review[]
+  assessments?: Assessment[]
   inspections?: Inspection[]
   permits?: Permit[]
   workflow_history?: WorkflowHistory[]
@@ -747,6 +795,11 @@ export interface Database {
         Row: Review
         Insert: Omit<Review, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Review, 'id' | 'created_at' | 'updated_at'>>
+      }
+      assessments: {
+        Row: Assessment
+        Insert: Omit<Assessment, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<Assessment, 'id' | 'created_at' | 'updated_at'>>
       }
       approvals: {
         Row: Approval

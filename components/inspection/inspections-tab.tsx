@@ -50,6 +50,8 @@ interface Application {
   due_date?: string
   estimated_usage_volume?: number
   usage_unit?: string
+  permit_number?: string
+  inspected_at?: string
   applicant: {
     first_name: string
     last_name: string
@@ -82,8 +84,8 @@ export function InspectionsTab() {
         label: 'Under Review', 
         className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
       },
-      'pending_inspection': { 
-        label: 'Pending Inspection', 
+      'pending_assessment': { 
+        label: 'Pending Assessment', 
         className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
       },
       'pending_final_approval': { 
@@ -97,6 +99,14 @@ export function InspectionsTab() {
       'approved': { 
         label: 'Approved', 
         className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800' 
+      },
+      'approved_pending_permit': { 
+        label: 'Pending Permit Issue', 
+        className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
+      },
+      'pending_inspection': { 
+        label: 'Pending Inspection', 
+        className: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800' 
       },
       'rejected': { 
         label: 'Rejected', 
@@ -123,8 +133,15 @@ export function InspectionsTab() {
     const fetchApplications = async () => {
       try {
         setLoading(true)
+        // Only fetch applications that need post-permit inspection
         const data = await getApplicationsForInspection()
-        setApplications(data || [])
+        // Filter for applications that have permits issued and need inspection
+        const postPermitApplications = (data || []).filter(app => 
+          app.status === 'approved_pending_permit' || 
+          app.status === 'approved' ||
+          (app.status === 'pending_inspection' && app.permit_number) // If we have this status
+        )
+        setApplications(postPermitApplications)
       } catch (err) {
         console.error('Error fetching applications:', err)
         setError('Failed to load applications')
@@ -187,9 +204,11 @@ export function InspectionsTab() {
   }
 
   const getActionButton = (application: Application) => {
-    if (application.status === 'pending_inspection') {
+    // For post-permit applications that need physical inspection
+    if (application.status === 'approved_pending_permit' || 
+        (application.status === 'approved' && !application.inspected_at)) {
       return (
-        <Link href={`/inspection/application/${application.application_number}`}>
+        <Link href={`/inspection/physical/${application.application_number}`}>
           <Button 
             size="sm" 
             className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-3 py-1.5 text-xs font-medium"
@@ -244,7 +263,7 @@ export function InspectionsTab() {
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
           <Input
-            placeholder="Search by applicant name, application number, or project title..."
+            placeholder="Search post-permit inspections by applicant, permit number, or project title..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
@@ -256,12 +275,9 @@ export function InspectionsTab() {
           </SelectTrigger>
           <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
             <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="submitted">Submitted</SelectItem>
-            <SelectItem value="under_review">Under Review</SelectItem>
+            <SelectItem value="approved_pending_permit">Pending Permit Issue</SelectItem>
             <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
-            <SelectItem value="revision_required">Revision Required</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
+            <SelectItem value="approved">Approved & Inspected</SelectItem>
           </SelectContent>
         </Select>
         <Select value={waterSourceFilter} onValueChange={setWaterSourceFilter}>
@@ -284,7 +300,7 @@ export function InspectionsTab() {
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
           <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
-            All Applications ({filteredApplications.length})
+            Post-Permit Inspections ({filteredApplications.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -307,10 +323,10 @@ export function InspectionsTab() {
                     <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
-                          {applications.length === 0 ? "No applications found" : "No applications match your filters"}
+                          {applications.length === 0 ? "No post-permit inspections found" : "No inspections match your filters"}
                         </div>
                         <div className="text-sm text-muted-foreground/70">
-                          {applications.length === 0 ? "Applications will appear here once submitted" : "Try adjusting your search or filter criteria"}
+                          {applications.length === 0 ? "Post-permit inspections will appear here once permits are issued" : "Try adjusting your search or filter criteria"}
                         </div>
                       </div>
                     </TableCell>

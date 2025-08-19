@@ -30,7 +30,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import { getApplicationsPendingInspection } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 interface Application {
   id: string
@@ -68,7 +68,18 @@ export function ApplicationsTab() {
     const fetchApplications = async () => {
       try {
         setLoading(true)
-        const data = await getApplicationsPendingInspection()
+        
+        // Fetch applications that are pending assessment
+        const { data, error } = await supabase
+          .from('applications')
+          .select(`
+            *,
+            applicant:users!applicant_id(first_name, last_name, company_name, email, phone)
+          `)
+          .eq('status', 'pending_assessment')
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
         setApplications(data || [])
       } catch (err) {
         console.error('Error fetching applications:', err)
@@ -115,8 +126,8 @@ export function ApplicationsTab() {
         label: 'Under Review', 
         className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
       },
-      'pending_inspection': { 
-        label: 'Pending Inspection', 
+      'pending_assessment': { 
+        label: 'Pending Assessment', 
         className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
       },
       'revision_required': { 
@@ -233,7 +244,7 @@ export function ApplicationsTab() {
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
           <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
-            Applications Pending Inspection ({filteredApplications.length})
+            Applications Pending Assessment ({filteredApplications.length})
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -255,10 +266,10 @@ export function ApplicationsTab() {
                     <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
-                          No applications pending inspection
+                          No applications pending assessment
                         </div>
                         <div className="text-sm text-muted-foreground/70">
-                          Applications requiring inspection will appear here
+                          Applications requiring technical assessment will appear here
                         </div>
                       </div>
                     </TableCell>
@@ -287,7 +298,7 @@ export function ApplicationsTab() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">
-                          {getStatusBadge('pending_inspection')}
+                          {getStatusBadge('pending_assessment')}
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 hidden md:table-cell">
@@ -313,13 +324,13 @@ export function ApplicationsTab() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        <Link href={`/inspection/application/${app.application_number}`}>
+                        <Link href={`/inspection/assessment/${app.application_number}`}>
                           <Button 
                             size="sm" 
-                            className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                            className="flex items-center gap-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                           >
                             <FileCheck className="h-3 w-3" />
-                            <span className="hidden sm:inline">Inspect</span>
+                            <span className="hidden sm:inline">Assess</span>
                             <span className="sm:hidden">Go</span>
                           </Button>
                         </Link>

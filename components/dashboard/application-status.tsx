@@ -29,7 +29,7 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
   // Calculate statistics from applications
   const stats = {
     total: applications.length,
-    pending: applications.filter(app => ['submitted', 'under_review', 'pending_inspection'].includes(app.status)).length,
+    pending: applications.filter(app => ['submitted', 'under_review', 'pending_assessment'].includes(app.status)).length,
     approved: applications.filter(app => app.status === 'approved').length,
     rejected: applications.filter(app => app.status === 'rejected').length,
     draft: applications.filter(app => app.status === 'draft').length,
@@ -102,8 +102,8 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
         return <Badge variant="outline" className="bg-blue-100 text-blue-700">Submitted</Badge>;
       case "under_review":
         return <Badge variant="outline" className="bg-amber-100 text-amber-700">Under Review</Badge>;
-      case "pending_inspection":
-        return <Badge variant="outline" className="bg-purple-100 text-purple-700">Pending Inspection</Badge>;
+      case "pending_assessment":
+        return <Badge variant="outline" className="bg-purple-100 text-purple-700">Pending Assessment</Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700">Approved</Badge>;
       case "rejected":

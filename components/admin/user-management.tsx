@@ -27,7 +27,6 @@ import {
   Search, 
   MoreHorizontal, 
   Edit, 
-  Trash2, 
   Shield, 
   User,
   CheckCircle,
@@ -44,7 +43,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getAllUsers, createUser, updateUser, deleteUser } from "@/lib/supabase";
+import { getAllUsers, createUser, updateUser } from "@/lib/supabase";
 import type { User as UserType } from "@/types/database";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 
@@ -97,10 +96,7 @@ export function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -248,33 +244,15 @@ export function UserManagement() {
     }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    const user = users.find(u => u.id === userId);
-    if (user) {
-      setUserToDelete(user);
-      setIsDeleteDialogOpen(true);
-    }
-  };
 
-  const confirmDeleteUser = async () => {
-    if (!userToDelete) return;
-    
-    setIsDeleting(true);
-    try {
-      await deleteUser(userToDelete.id);
-      await fetchUsers(); // Refresh the users list
-      setIsDeleteDialogOpen(false);
-      setUserToDelete(null);
-    } catch (err) {
-      handleErrorWithBack(err, 'delete user');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   const handleSuspendUser = async (userId: string) => {
     try {
-      await updateUser(userId, { status: 'suspended' });
+      const user = users.find(u => u.id === userId);
+      if (!user) return;
+      
+      const newStatus = user.status === 'suspended' ? 'active' : 'suspended';
+      await updateUser(userId, { status: newStatus });
       await fetchUsers(); // Refresh the users list
     } catch (err) {
       handleErrorWithBack(err, 'suspend user');
@@ -697,14 +675,6 @@ export function UserManagement() {
                             <AlertTriangle className="mr-2 h-4 w-4" />
                             {user.status === "suspended" ? "Reactivate" : "Suspend"} User
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="text-destructive"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete User
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -928,99 +898,7 @@ export function UserManagement() {
         </Dialog>
       )}
 
-      {/* Delete User Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                <AlertTriangle className="h-6 w-6 text-gray-600" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-semibold text-gray-900">
-                  Delete User
-                </DialogTitle>
-                <DialogDescription className="text-sm text-gray-600">
-                  This action cannot be undone.
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
-          
-          {userToDelete && (
-            <div className="my-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-blue-100 text-blue-600 font-medium">
-                    {userToDelete.first_name?.[0] || userToDelete.email[0].toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">
-                    {userToDelete.first_name && userToDelete.last_name 
-                      ? `${userToDelete.first_name} ${userToDelete.last_name}`
-                      : userToDelete.company_name || 'Unnamed User'
-                    }
-                  </p>
-                  <p className="text-sm text-gray-600 truncate">{userToDelete.email}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    {getRoleBadge(userToDelete.role)}
-                    {getStatusBadge(userToDelete.status)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
-          <div className="rounded-lg bg-gray-50 border border-gray-200 p-4">
-            <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 text-gray-500 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-gray-700">
-                <p className="font-medium mb-1 text-gray-900">Are you sure you want to delete this user?</p>
-                <p className="text-red-600 font-medium">This will permanently remove:</p>
-                <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>User profile and account data</li>
-                  <li>All associated applications ({userToDelete?.applications_count || 0})</li>
-                  <li>Review history ({userToDelete?.reviews_count || 0})</li>
-                  <li>Inspection records ({userToDelete?.inspections_count || 0})</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsDeleteDialogOpen(false);
-                setUserToDelete(null);
-              }}
-              disabled={isDeleting}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              onClick={confirmDeleteUser}
-              disabled={isDeleting}
-              className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-gray-300"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete User
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 } 

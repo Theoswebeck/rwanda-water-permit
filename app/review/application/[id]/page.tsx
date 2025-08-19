@@ -228,18 +228,18 @@ export default function ReviewApplicationPage() {
     }
   };
 
-  const handleApproveForInspection = async () => {
+  const handleApproveForAssessment = async () => {
     if (!application) return;
     
     try {
       const { error } = await supabase
         .from('applications')
-        .update({ status: 'pending_inspection' })
+        .update({ status: 'pending_assessment' })
         .eq('id', application.id);
 
       if (error) throw error;
 
-    alert("Application approved for inspection");
+    alert("Application approved for technical assessment");
       // Refresh the application data
       window.location.reload();
     } catch (err) {
@@ -335,7 +335,7 @@ export default function ReviewApplicationPage() {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
-      pending_inspection: { label: "Pending Inspection", variant: "outline" },
+      pending_assessment: { label: "Pending Assessment", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved: { label: "Approved", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
@@ -671,11 +671,11 @@ export default function ReviewApplicationPage() {
                     <CardContent className="space-y-4">
                       <div className="space-y-3">
                         <Button 
-                          onClick={handleApproveForInspection}
+                          onClick={handleApproveForAssessment}
                           className="w-full gap-2"
                         >
                           <Check className="h-4 w-4" />
-                          Approve for Inspection
+                          Approve for Assessment
                         </Button>
                         
                         <Button 
@@ -752,11 +752,11 @@ export default function ReviewApplicationPage() {
                         {/* Under Review Stage */}
                         <div className="flex items-start gap-3">
                           <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                            ['under_review', 'pending_inspection', 'approved', 'rejected'].includes(application.status) 
+                            ['under_review', 'pending_assessment', 'approved', 'rejected'].includes(application.status) 
                               ? 'bg-primary text-primary-foreground' 
                               : 'bg-muted'
                           }`}>
-                            {['under_review', 'pending_inspection', 'approved', 'rejected'].includes(application.status) ? (
+                            {['under_review', 'pending_assessment', 'approved', 'rejected'].includes(application.status) ? (
                               <CheckCircle className="h-4 w-4" />
                             ) : (
                             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -764,7 +764,7 @@ export default function ReviewApplicationPage() {
                           </div>
                           <div className="flex-1 space-y-1">
                             <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">
-                              {application.reviewed_at || ['pending_inspection', 'approved', 'rejected'].includes(application.status) 
+                              {application.reviewed_at || ['pending_assessment', 'approved', 'rejected'].includes(application.status) 
                                 ? 'Reviewed' 
                                 : application.status === 'under_review' 
                                   ? 'Under Review'
@@ -776,7 +776,7 @@ export default function ReviewApplicationPage() {
                                 ? new Date(application.reviewed_at).toLocaleDateString()
                                 : application.status === 'under_review' 
                                   ? 'In Progress' 
-                                  : ['pending_inspection', 'approved', 'rejected'].includes(application.status)
+                                  : ['pending_assessment', 'approved', 'rejected'].includes(application.status)
                                     ? (application.updated_at ? new Date(application.updated_at).toLocaleDateString() : 'Completed')
                                     : 'Pending'
                               }
@@ -784,16 +784,16 @@ export default function ReviewApplicationPage() {
                           </div>
                         </div>
                         
-                        {/* Inspection Stage */}
+                        {/* Assessment Stage */}
                         <div className="flex items-start gap-3">
                           <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                            application.status === 'pending_inspection' 
+                            application.status === 'pending_assessment' 
                               ? 'bg-yellow-100 border-2 border-yellow-400' 
                               : ['pending_final_approval', 'approved', 'rejected'].includes(application.status)
                                 ? 'bg-primary text-primary-foreground'
                                 : 'bg-muted'
                           }`}>
-                            {application.status === 'pending_inspection' ? (
+                            {application.status === 'pending_assessment' ? (
                               <Clock className="h-4 w-4 text-yellow-600" />
                             ) : ['pending_final_approval', 'approved', 'rejected'].includes(application.status) ? (
                               <CheckCircle className="h-4 w-4" />
@@ -802,12 +802,12 @@ export default function ReviewApplicationPage() {
                             )}
                           </div>
                           <div className="flex-1 space-y-1">
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">Inspection</p>
+                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">Technical Assessment</p>
                             <p className="text-xs text-muted-foreground">
                               {application.inspected_at 
                                 ? new Date(application.inspected_at).toLocaleDateString()
-                                : application.status === 'pending_inspection' 
-                                  ? 'Scheduled'
+                                : application.status === 'pending_assessment' 
+                                  ? 'With Inspector'
                                   : 'Pending'
                               }
                             </p>

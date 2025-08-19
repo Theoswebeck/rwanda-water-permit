@@ -32,7 +32,7 @@ interface ReviewApplication extends Application {
 
 interface ReviewStatsData {
   newSubmissions: number;
-  pendingInspection: number;
+  pendingAssessment: number;
   underReview: number;
   returnedForRevision: number;
 }
@@ -62,7 +62,7 @@ export default function ReviewerDashboard() {
              *,
              applicant:users!applicant_id(first_name, last_name, company_name)
            `)
-           .in('status', ['submitted', 'under_review', 'pending_inspection', 'pending_final_approval', 'revision_required'])
+           .in('status', ['submitted', 'under_review', 'pending_assessment', 'pending_final_approval', 'revision_required'])
            .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -129,11 +129,11 @@ export default function ReviewerDashboard() {
         
         if (newError) throw newError;
 
-        // Query for applications pending inspection
-        const { count: pendingInspectionCount, error: pendingError } = await supabase
+        // Query for applications pending assessment
+        const { count: pendingAssessmentCount, error: pendingError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_inspection');
+          .eq('status', 'pending_assessment');
         
         if (pendingError) throw pendingError;
 
@@ -155,7 +155,7 @@ export default function ReviewerDashboard() {
 
         setStats({
           newSubmissions: newSubmissionsCount || 0,
-          pendingInspection: pendingInspectionCount || 0,
+          pendingAssessment: pendingAssessmentCount || 0,
           underReview: underReviewCount || 0,
           returnedForRevision: revisionCount || 0
         });
@@ -175,8 +175,8 @@ export default function ReviewerDashboard() {
     [reviewApplications]
   );
   
-  const pendingInspection = useMemo(() => 
-    reviewApplications.filter(app => app.status === 'pending_inspection'), 
+  const pendingAssessment = useMemo(() => 
+    reviewApplications.filter(app => app.status === 'pending_assessment'), 
     [reviewApplications]
   );
   
@@ -195,7 +195,7 @@ export default function ReviewerDashboard() {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
-      pending_inspection: { label: "Pending Inspection", variant: "outline" },
+      pending_assessment: { label: "Pending Assessment", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved: { label: "Approved", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
@@ -320,8 +320,8 @@ export default function ReviewerDashboard() {
           label: 'Under Review', 
           className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
         },
-        'pending_inspection': { 
-          label: 'Pending Inspection', 
+        'pending_assessment': { 
+          label: 'Pending Assessment', 
           className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
         },
         'pending_final_approval': { 
@@ -576,7 +576,7 @@ export default function ReviewerDashboard() {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Pending Inspection
+                  Pending Assessment
                 </CardTitle>
                 <AlertCircle className="h-4 w-4 text-amber-600" />
               </CardHeader>
@@ -585,23 +585,23 @@ export default function ReviewerDashboard() {
                   {statsLoading ? (
                     <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
                   ) : (
-                    stats?.pendingInspection || 0
+                    stats?.pendingAssessment || 0
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  With inspectors
+                  With inspectors for assessment
                 </p>
                 {!statsLoading && stats && (
                   <div className="flex items-center mt-2">
                     <Badge 
                       variant="outline"
                       className={`text-xs ${
-                        stats.pendingInspection === 0 
+                        stats.pendingAssessment === 0 
                           ? "bg-green-100 text-green-800 hover:bg-green-100" 
                           : "bg-amber-100 text-amber-800 hover:bg-amber-100"
                       }`}
                     >
-                      {stats.pendingInspection === 0 ? "No pending inspections" : `${stats.pendingInspection} with inspectors`}
+                      {stats.pendingAssessment === 0 ? "No pending assessments" : `${stats.pendingAssessment} with inspectors`}
                     </Badge>
                   </div>
                 )}

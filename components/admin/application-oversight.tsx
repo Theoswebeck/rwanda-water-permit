@@ -31,7 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getAllApplicationsForAdmin } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 
 interface Application {
@@ -43,7 +43,7 @@ interface Application {
   location: string;
   district: string;
   province: string;
-  status: "submitted" | "under_review" | "pending_inspection" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled";
+  status: "submitted" | "under_review" | "pending_assessment" | "pending_final_approval" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled";
   submittedDate: string;
   lastUpdated: string;
   assignedReviewer?: string;
@@ -70,25 +70,40 @@ export function ApplicationOversight() {
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const data = await getAllApplicationsForAdmin();
+      
+      // Simplified query to avoid join issues with nullable foreign keys
+      const { data, error } = await supabase
+        .from('applications')
+        .select(`
+          *,
+          applicant:users!applicant_id(
+            first_name,
+            last_name,
+            company_name,
+            account_type
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
+
+      console.log('Fetched applications:', data?.length || 0, 'applications');
       
       // Transform database data to component format
-      const transformedApps: Application[] = data.map((app) => {
+      const transformedApps: Application[] = (data || []).map((app) => {
         const applicant = Array.isArray(app.applicant) ? app.applicant[0] : app.applicant;
-        const reviewer = Array.isArray(app.assigned_reviewer) ? app.assigned_reviewer[0] : app.assigned_reviewer;
-        const inspector = Array.isArray(app.assigned_inspector) ? app.assigned_inspector[0] : app.assigned_inspector;
         
         const applicantName = applicant?.company_name || 
                             `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() || 
                             'Unknown';
         
-        const reviewerName = reviewer ? 
-                           `${reviewer.first_name || ''} ${reviewer.last_name || ''}`.trim() : 
-                           undefined;
-        
-        const inspectorName = inspector ? 
-                            `${inspector.first_name || ''} ${inspector.last_name || ''}`.trim() : 
-                            undefined;
+        // For now, we'll skip the assigned reviewer/inspector names since they caused query issues
+        // These can be added later with separate queries if needed
+        const reviewerName = undefined;
+        const inspectorName = undefined;
 
         // Calculate SLA status and days remaining (mock calculation)
         const submittedDate = new Date(app.created_at);
@@ -111,7 +126,7 @@ export function ApplicationOversight() {
           applicantName,
           applicantType: applicant?.account_type === 'individual' ? 'individual' : 'company',
           applicationType: app.application_type || 'Unknown',
-          waterSource: app.water_source_type || 'Unknown',
+          waterSource: app.water_source || 'Unknown',
           location: `${app.district || 'Unknown'}, ${app.province || 'Unknown'}`,
           district: app.district || 'Unknown',
           province: app.province || 'Unknown',
@@ -175,11 +190,17 @@ export function ApplicationOversight() {
           icon: <AlertTriangle className="h-4 w-4" />,
           className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
         };
-      case "pending_inspection":
+      case "pending_assessment":
         return {
-          label: "Pending Inspection",
+          label: "Pending Assessment",
           icon: <Eye className="h-4 w-4" />,
           className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "pending_final_approval":
+        return {
+          label: "Pending Final Approval",
+          icon: <CheckCircle className="h-4 w-4" />,
+          className: "bg-indigo-100 text-indigo-700 border-0 hover:bg-indigo-100 px-3 py-2 rounded-full font-medium"
         };
       case "approved":
         return {
@@ -244,7 +265,7 @@ export function ApplicationOversight() {
   // Calculate stats like dashboard
   const stats = {
     total: applications.length,
-    pending: applications.filter(app => ['submitted', 'under_review', 'pending_inspection'].includes(app.status)).length,
+    pending: applications.filter(app => ['submitted', 'under_review', 'pending_assessment', 'pending_final_approval'].includes(app.status)).length,
     approved: applications.filter(app => app.status === 'approved').length,
     overdue: applications.filter(app => app.slaStatus === "overdue").length,
   };
@@ -388,7 +409,8 @@ export function ApplicationOversight() {
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="submitted">Submitted</SelectItem>
                 <SelectItem value="under_review">Under Review</SelectItem>
-                <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
+                <SelectItem value="pending_assessment">Pending Assessment</SelectItem>
+                <SelectItem value="pending_final_approval">Pending Final Approval</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
                 <SelectItem value="revision_required">Revision Required</SelectItem>
