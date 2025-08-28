@@ -37,6 +37,13 @@ import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Facto
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { 
+  getFormattedProvinceOptions,
+  getFormattedDistrictOptions,
+  getFormattedSectorOptions,
+  getFormattedCellOptions,
+  getFormattedVillageOptions
+} from '@/lib/rwanda-administrative-data';
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({
@@ -166,8 +173,6 @@ export function ApplicationForm({
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
-  const [selectedWaterSourceProvince, setSelectedWaterSourceProvince] = useState("");
-  const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
   
   const fileInputRefs = {
     identificationDoc: useRef<HTMLInputElement>(null),
@@ -219,6 +224,14 @@ export function ApplicationForm({
     navigationManagementPlan: useRef<HTMLInputElement>(null),
   };
 
+  // State for cascading dropdowns
+  const [selectedOfficeProvince, setSelectedOfficeProvince] = useState("");
+  const [selectedOfficeDistrict, setSelectedOfficeDistrict] = useState("");
+  const [selectedOfficeSector, setSelectedOfficeSector] = useState("");
+  const [selectedWaterSourceProvince, setSelectedWaterSourceProvince] = useState("");
+  const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
+  const [selectedWaterSourceSector, setSelectedWaterSourceSector] = useState("");
+
   const form = useForm<FormValues>({
     resolver: zodResolver(applicationFormSchema),
     defaultValues: {
@@ -242,10 +255,214 @@ export function ApplicationForm({
     }
   });
 
+  // Helper functions for dropdown options
+  const getOfficeDistrictOptions = () => {
+    if (!selectedOfficeProvince) return [];
+    return getFormattedDistrictOptions(selectedOfficeProvince);
+  };
+
+  const getOfficeSectorOptions = () => {
+    if (!selectedOfficeProvince || !selectedOfficeDistrict) return [];
+    return getFormattedSectorOptions(selectedOfficeProvince, selectedOfficeDistrict);
+  };
+
+  const getOfficeCellOptions = () => {
+    if (!selectedOfficeProvince || !selectedOfficeDistrict || !selectedOfficeSector) return [];
+    return getFormattedCellOptions(selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector);
+  };
+
+  const getWaterSourceDistrictOptions = () => {
+    if (!selectedWaterSourceProvince) return [];
+    return getFormattedDistrictOptions(selectedWaterSourceProvince);
+  };
+
+  const getWaterSourceSectorOptions = () => {
+    if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict) return [];
+    return getFormattedSectorOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict);
+  };
+
+  const getWaterSourceCellOptions = () => {
+    if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict || !selectedWaterSourceSector) return [];
+    return getFormattedCellOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector);
+  };
+
   const watchedCategoryApplicant = form.watch("categoryApplicant");
   const watchedWaterSourceType = form.watch("waterSourceType");
   const watchedIntendedActivities = form.watch("intendedActivities");
   const watchedOwnsAllLand = form.watch("ownsAllLand");
+
+
+
+  // Watch form values to keep dropdown states in sync
+  const officeProvince = form.watch("officeProvince");
+  const officeDistrict = form.watch("officeDistrict");
+  const officeSector = form.watch("officeSector");
+  const waterSourceProvince = form.watch("waterSourceProvince");
+  const waterSourceDistrict = form.watch("waterSourceDistrict");
+  const waterSourceSector = form.watch("waterSourceSector");
+
+  // Update dropdown states when form values change
+  useEffect(() => {
+    if (officeProvince !== selectedOfficeProvince) {
+      setSelectedOfficeProvince(officeProvince || "");
+    }
+    if (officeDistrict !== selectedOfficeDistrict) {
+      setSelectedOfficeDistrict(officeDistrict || "");
+    }
+    if (officeSector !== selectedOfficeSector) {
+      setSelectedOfficeSector(officeSector || "");
+    }
+    if (waterSourceProvince !== selectedWaterSourceProvince) {
+      setSelectedWaterSourceProvince(waterSourceProvince || "");
+    }
+    if (waterSourceDistrict !== selectedWaterSourceDistrict) {
+      setSelectedWaterSourceDistrict(waterSourceDistrict || "");
+    }
+    if (waterSourceSector !== selectedWaterSourceSector) {
+      setSelectedWaterSourceSector(waterSourceSector || "");
+    }
+  }, [officeProvince, officeDistrict, officeSector, waterSourceProvince, waterSourceDistrict, waterSourceSector, 
+      selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector, 
+      selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector]);
+
+  // Helper function to check if required documents are uploaded
+  const checkRequiredDocuments = () => {
+    // Always require identification document
+    const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
+    if (!hasIdentificationDoc) return false;
+
+    // Check activity-specific required documents
+    const intendedActivities = form.getValues('intendedActivities') || [];
+    
+    for (const activity of intendedActivities) {
+      switch (activity) {
+        case 'irrigation':
+          if (!files.irrigationGeneralRequirements && !uploadedFileUrls.irrigationGeneralRequirements) {
+            return false;
+          }
+          break;
+        case 'water_supply':
+          if (!files.waterSupplyGeneralRequirements && !uploadedFileUrls.waterSupplyGeneralRequirements) {
+            return false;
+          }
+          if (!files.waterSupplyFeasibilityStudy && !uploadedFileUrls.waterSupplyFeasibilityStudy) {
+            return false;
+          }
+          break;
+        case 'mining':
+          if (!files.miningGeneralRequirements && !uploadedFileUrls.miningGeneralRequirements) {
+            return false;
+          }
+          if (!files.miningLicense && !uploadedFileUrls.miningLicense) {
+            return false;
+          }
+          if (!files.miningEIA && !uploadedFileUrls.miningEIA) {
+            return false;
+          }
+          break;
+        case 'aquaculture':
+          if (!files.aquacultureGeneralRequirements && !uploadedFileUrls.aquacultureGeneralRequirements) {
+            return false;
+          }
+          if (!files.aquacultureEIA && !uploadedFileUrls.aquacultureEIA) {
+            return false;
+          }
+          if (!files.aquacultureManagementPlan && !uploadedFileUrls.aquacultureManagementPlan) {
+            return false;
+          }
+          break;
+        case 'coffee_washing':
+          if (!files.coffeeWashingGeneralRequirements && !uploadedFileUrls.coffeeWashingGeneralRequirements) {
+            return false;
+          }
+          if (!files.coffeeWashingEIA && !uploadedFileUrls.coffeeWashingEIA) {
+            return false;
+          }
+          break;
+        case 'industry':
+          if (!files.industrialGeneralRequirements && !uploadedFileUrls.industrialGeneralRequirements) {
+            return false;
+          }
+          if (!files.industrialEIA && !uploadedFileUrls.industrialEIA) {
+            return false;
+          }
+          if (!files.industrialWasteManagementPlan && !uploadedFileUrls.industrialWasteManagementPlan) {
+            return false;
+          }
+          break;
+        case 'electricity_generation':
+          if (!files.hydropowerGeneralRequirements && !uploadedFileUrls.hydropowerGeneralRequirements) {
+            return false;
+          }
+          if (!files.hydropowerEIA && !uploadedFileUrls.hydropowerEIA) {
+            return false;
+          }
+          if (!files.hydropowerFeasibilityStudy && !uploadedFileUrls.hydropowerFeasibilityStudy) {
+            return false;
+          }
+          break;
+        case 'construction_of_dam':
+          if (!files.constructionDamGeneralRequirements && !uploadedFileUrls.constructionDamGeneralRequirements) {
+            return false;
+          }
+          if (!files.constructionDamEIA && !uploadedFileUrls.constructionDamEIA) {
+            return false;
+          }
+          if (!files.constructionDamEngineeringPlans && !uploadedFileUrls.constructionDamEngineeringPlans) {
+            return false;
+          }
+          break;
+        case 'construction_of_infrastructures':
+          if (!files.infrastructureGeneralRequirements && !uploadedFileUrls.infrastructureGeneralRequirements) {
+            return false;
+          }
+          if (!files.infrastructureEIA && !uploadedFileUrls.infrastructureEIA) {
+            return false;
+          }
+          if (!files.infrastructureEngineeringPlans && !uploadedFileUrls.infrastructureEngineeringPlans) {
+            return false;
+          }
+          break;
+        case 'navigation':
+          if (!files.navigationGeneralRequirements && !uploadedFileUrls.navigationGeneralRequirements) {
+            return false;
+          }
+          if (!files.navigationEIA && !uploadedFileUrls.navigationEIA) {
+            return false;
+          }
+          if (!files.navigationManagementPlan && !uploadedFileUrls.navigationManagementPlan) {
+            return false;
+          }
+          break;
+        case 'recreation_activities':
+          if (!files.recreationGeneralRequirements && !uploadedFileUrls.recreationGeneralRequirements) {
+            return false;
+          }
+          if (!files.recreationEIA && !uploadedFileUrls.recreationEIA) {
+            return false;
+          }
+          if (!files.recreationManagementPlan && !uploadedFileUrls.recreationManagementPlan) {
+            return false;
+          }
+          break;
+      }
+    }
+
+    return true;
+  };
+
+  // Helper function to check land access documents
+  const checkLandAccessDocuments = () => {
+    const ownsAllLand = form.getValues('ownsAllLand');
+    const hasLandAccess = form.getValues('hasLandAccess');
+    
+    // If user doesn't own all land and doesn't have land access, or if hasLandAccess is true, require documents
+    if (ownsAllLand === false && hasLandAccess === true) {
+      return files.landAccessDocuments || uploadedFileUrls.landAccessDocuments;
+    }
+    
+    return true;
+  };
 
   // Tab validation functions
   const validateApplicantTab = async () => {
@@ -254,6 +471,14 @@ export function ApplicationForm({
       'officeDistrict', 'officeSector', 'officeCell', 'telephoneContact', 'emailAddress'
     ];
     const errors = await form.trigger(fields as any);
+    
+    // Check if identification document is uploaded
+    const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
+    if (!hasIdentificationDoc) {
+      setValidationError("Please upload the required identification document before proceeding.");
+      return false;
+    }
+    
     return errors;
   };
 
@@ -269,7 +494,68 @@ export function ApplicationForm({
   const validateIntendedActivityTab = async () => {
     const fields = ['intendedActivities', 'waterAbstractionDetails'];
     const errors = await form.trigger(fields as any);
+    
+    // Check if activity-specific required documents are uploaded
+    if (!checkRequiredDocuments()) {
+      setValidationError("Please upload all required documents for your selected activities before proceeding.");
+      return false;
+    }
+    
     return errors;
+  };
+
+  const validateLandOwnershipTab = async () => {
+    const fields = ['ownsAllLand'];
+    const errors = await form.trigger(fields as any);
+    
+    // Check land access documents if required
+    if (!checkLandAccessDocuments()) {
+      setValidationError("Please upload the required land access documents before proceeding.");
+      return false;
+    }
+    
+    return errors;
+  };
+
+  // Function to check if Next button should be disabled
+  const isNextButtonDisabled = () => {
+    switch (activeTab) {
+      case "applicant-info":
+        // Check required fields for applicant tab
+        const applicantFields = ['fullNameApplicant', 'categoryApplicant', 'officeProvince', 'officeDistrict', 'officeSector', 'officeCell', 'telephoneContact', 'emailAddress'];
+        const hasApplicantFields = applicantFields.every(field => {
+          const value = form.getValues(field as any);
+          return value && value.toString().trim() !== '';
+        });
+        // Check identification document
+        const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
+        return !hasApplicantFields || !hasIdentificationDoc;
+        
+      case "water-source":
+        // Check required fields for water source tab
+        const waterSourceFields = ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'];
+        return !waterSourceFields.every(field => {
+          const value = form.getValues(field as any);
+          return value && value.toString().trim() !== '';
+        });
+        
+      case "intended-activity":
+        // Check required fields and documents for intended activity tab
+        const intendedActivities = form.getValues('intendedActivities') || [];
+        const waterAbstractionDetails = form.getValues('waterAbstractionDetails') || [];
+        const hasActivityFields = intendedActivities.length > 0 && waterAbstractionDetails.length > 0;
+        const hasRequiredDocs = checkRequiredDocuments();
+        return !hasActivityFields || !hasRequiredDocs;
+        
+      case "land-ownership":
+        // Check required fields and documents for land ownership tab
+        const ownsAllLand = form.getValues('ownsAllLand');
+        const hasLandDocs = checkLandAccessDocuments();
+        return ownsAllLand === undefined || !hasLandDocs;
+        
+      default:
+        return false;
+    }
   };
 
   const handleNextTab = async () => {
@@ -291,6 +577,9 @@ export function ApplicationForm({
       case "intended-activity":
         isValid = await validateIntendedActivityTab();
         break;
+      case "land-ownership":
+        isValid = await validateLandOwnershipTab();
+        break;
       default:
         isValid = true;
     }
@@ -299,8 +588,7 @@ export function ApplicationForm({
       setValidationError(null);
       setActiveTab(tabs[currentIndex + 1]);
     } else {
-      // Show error message
-      setValidationError("Please fill in all required fields before proceeding to the next section.");
+      // Error message is set in individual validation functions
       setTimeout(() => setValidationError(null), 5000); // Clear error after 5 seconds
     }
   };
@@ -369,16 +657,22 @@ export function ApplicationForm({
       
       // Update dropdown selection states to enable cascading
       if (initialData.officeProvince) {
-        setSelectedProvince(initialData.officeProvince);
+        setSelectedOfficeProvince(initialData.officeProvince);
       }
       if (initialData.officeDistrict) {
-        setSelectedDistrict(initialData.officeDistrict);
+        setSelectedOfficeDistrict(initialData.officeDistrict);
+      }
+      if (initialData.officeSector) {
+        setSelectedOfficeSector(initialData.officeSector);
       }
       if (initialData.waterSourceProvince) {
         setSelectedWaterSourceProvince(initialData.waterSourceProvince);
       }
       if (initialData.waterSourceDistrict) {
         setSelectedWaterSourceDistrict(initialData.waterSourceDistrict);
+      }
+      if (initialData.waterSourceSector) {
+        setSelectedWaterSourceSector(initialData.waterSourceSector);
       }
     }
   }, [initialData, form]);
@@ -391,85 +685,8 @@ export function ApplicationForm({
   }, [initialDocuments]);
 
   // Rwanda Administrative Divisions Data
-  const rwandaAdministrativeDivisions = {
-    kigali: {
-      sectors: [
-        { value: "gasabo", label: "Gasabo", cells: ["bumbogo", "gatsata", "jali", "kacyiru", "kimihurura"] },
-        { value: "kicukiro", label: "Kicukiro", cells: ["gahanga", "gatenga", "gikondo", "kanombe", "kigarama"] },
-        { value: "nyarugenge", label: "Nyarugenge", cells: ["gitega", "kanyinya", "kigali", "kimisagara", "mageragere"] }
-      ]
-    },
-    northern: {
-      sectors: [
-        { value: "burera", label: "Burera", cells: ["bungwe", "butaro", "cyanika", "cyeru", "gahunga"] },
-        { value: "gicumbi", label: "Gicumbi", cells: ["bukure", "bwisige", "cyumba", "gicumbi", "kageyo"] },
-        { value: "musanze", label: "Musanze", cells: ["busogo", "cyuve", "gacaca", "gashaki", "gataraga"] },
-        { value: "rulindo", label: "Rulindo", cells: ["base", "burega", "buyoga", "cyinzuzi", "cyungo"] },
-        { value: "gakenke", label: "Gakenke", cells: ["cyabingo", "gakenke", "gashenyi", "mugunga", "janja"] }
-      ]
-    },
-    southern: {
-      sectors: [
-        { value: "gisagara", label: "Gisagara", cells: ["gishubi", "kansi", "kigembe", "mukingo", "musha"] },
-        { value: "huye", label: "Huye", cells: ["gishamvu", "karama", "kigoma", "kinazi", "maraba"] },
-        { value: "kamonyi", label: "Kamonyi", cells: ["gacurabwenge", "karama", "kayenzi", "kayumbu", "mugina"] },
-        { value: "muhanga", label: "Muhanga", cells: ["cyeza", "kibangu", "kiyumba", "muhanga", "mukura"] },
-        { value: "nyamagabe", label: "Nyamagabe", cells: ["buruhukiro", "cyanika", "gasaka", "gatare", "kaduha"] },
-        { value: "nyanza", label: "Nyanza", cells: ["busasamana", "busoro", "cyabakamyi", "kibirizi", "kigoma"] },
-        { value: "nyaruguru", label: "Nyaruguru", cells: ["cyahinda", "gitwe", "kibeho", "mata", "munini"] },
-        { value: "ruhango", label: "Ruhango", cells: ["bweramana", "byimana", "kabagari", "kinazi", "kinihira"] }
-      ]
-    },
-    eastern: {
-      sectors: [
-        { value: "bugesera", label: "Bugesera", cells: ["gashora", "juru", "kamabuye", "mareba", "mayange"] },
-        { value: "gatsibo", label: "Gatsibo", cells: ["gasange", "gatsibo", "kageyo", "kiramuruzi", "kiziguro"] },
-        { value: "kayonza", label: "Kayonza", cells: ["gahini", "kabare", "mukarange", "murama", "mwiri"] },
-        { value: "kirehe", label: "Kirehe", cells: ["gatore", "kigarama", "kirehe", "mahama", "mpanga"] },
-        { value: "ngoma", label: "Ngoma", cells: ["jarama", "karembo", "kibungo", "mugesera", "mutenderi"] },
-        { value: "nyagatare", label: "Nyagatare", cells: ["gatunda", "karangazi", "katabagemu", "kiyombe", "matimba"] },
-        { value: "rwamagana", label: "Rwamagana", cells: ["fumbwe", "gahengeri", "gishari", "karenge", "kigabiro"] }
-      ]
-    },
-    western: {
-      sectors: [
-        { value: "karongi", label: "Karongi", cells: ["bwishyura", "gashari", "gitesi", "murambi", "rugabano"] },
-        { value: "ngororero", label: "Ngororero", cells: ["bwira", "gaseke", "hindiro", "kageyo", "sovu"] },
-        { value: "nyabihu", label: "Nyabihu", cells: ["bigogwe", "jenda", "karago", "mukamira", "rambura"] },
-        { value: "nyamasheke", label: "Nyamasheke", cells: ["bushekeri", "cyato", "gihombo", "kanjongo", "ruharambuga"] },
-        { value: "rusizi", label: "Rusizi", cells: ["butare", "gashonga", "kamembe", "muganza", "nzahaha"] },
-        { value: "rutsiro", label: "Rutsiro", cells: ["boneza", "gihango", "kigeyo", "manihira", "ruhango"] }
-      ]
-    }
-  };
+  // Old administrative data removed - now using comprehensive Rwanda data
 
-  const getDistrictOptions = () => {
-    if (!selectedProvince) return [];
-    const province = rwandaAdministrativeDivisions[selectedProvince as keyof typeof rwandaAdministrativeDivisions];
-    return province ? province.sectors : [];
-  };
-
-  const getSectorOptions = () => {
-    if (!selectedDistrict) return [];
-    const province = rwandaAdministrativeDivisions[selectedProvince as keyof typeof rwandaAdministrativeDivisions];
-    if (!province) return [];
-    const district = province.sectors.find(s => s.value === selectedDistrict);
-    return district ? district.cells.map(cell => ({ value: cell, label: cell.charAt(0).toUpperCase() + cell.slice(1) })) : [];
-  };
-
-  const getWaterSourceDistrictOptions = () => {
-    if (!selectedWaterSourceProvince) return [];
-    const province = rwandaAdministrativeDivisions[selectedWaterSourceProvince as keyof typeof rwandaAdministrativeDivisions];
-    return province ? province.sectors : [];
-  };
-
-  const getWaterSourceSectorOptions = () => {
-    if (!selectedWaterSourceDistrict) return [];
-    const province = rwandaAdministrativeDivisions[selectedWaterSourceProvince as keyof typeof rwandaAdministrativeDivisions];
-    if (!province) return [];
-    const district = province.sectors.find(s => s.value === selectedWaterSourceDistrict);
-    return district ? district.cells.map(cell => ({ value: cell, label: cell.charAt(0).toUpperCase() + cell.slice(1) })) : [];
-  };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = event.target.files?.[0];
@@ -608,6 +825,12 @@ export function ApplicationForm({
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [, forceUpdate] = useState({});
+
+  // Force re-render when files change to update button state
+  useEffect(() => {
+    forceUpdate({});
+  }, [files, uploadedFileUrls]);
 
   const triggerAutoSave = async () => {
     try {
@@ -968,11 +1191,13 @@ export function ApplicationForm({
                               <Select 
                                 onValueChange={(value) => {
                                   field.onChange(value);
-                                  setSelectedProvince(value);
+                                  setSelectedOfficeProvince(value);
                                   // Reset dependent fields
                                   form.setValue("officeDistrict", "");
                                   form.setValue("officeSector", "");
                                   form.setValue("officeCell", "");
+                                  setSelectedOfficeDistrict("");
+                                  setSelectedOfficeSector("");
                                 }} 
                                 value={field.value}
                               >
@@ -980,11 +1205,11 @@ export function ApplicationForm({
                                   <SelectValue placeholder="Select province" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="kigali">Kigali</SelectItem>
-                                  <SelectItem value="northern">Northern Province</SelectItem>
-                                  <SelectItem value="southern">Southern Province</SelectItem>
-                                  <SelectItem value="eastern">Eastern Province</SelectItem>
-                                  <SelectItem value="western">Western Province</SelectItem>
+                                  {getFormattedProvinceOptions().map((province) => (
+                                    <SelectItem key={province.value} value={province.value}>
+                                      {province.label}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </FormControl>
@@ -1003,19 +1228,20 @@ export function ApplicationForm({
                               <Select 
                                 onValueChange={(value) => {
                                   field.onChange(value);
-                                  setSelectedDistrict(value);
+                                  setSelectedOfficeDistrict(value);
                                   // Reset dependent fields
                                   form.setValue("officeSector", "");
                                   form.setValue("officeCell", "");
+                                  setSelectedOfficeSector("");
                                 }}
                                 value={field.value}
-                                disabled={!selectedProvince}
+                                disabled={!selectedOfficeProvince}
                               >
                                 <SelectTrigger className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400">
-                                  <SelectValue placeholder={selectedProvince ? "Select district" : "Select province first"} />
+                                  <SelectValue placeholder={selectedOfficeProvince ? "Select district" : "Select province first"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {getDistrictOptions().map((district) => (
+                                  {getOfficeDistrictOptions().map((district) => (
                                     <SelectItem key={district.value} value={district.value}>
                                       {district.label}
                                     </SelectItem>
@@ -1038,17 +1264,18 @@ export function ApplicationForm({
                               <Select 
                                 onValueChange={(value) => {
                                   field.onChange(value);
+                                  setSelectedOfficeSector(value);
                                   // Reset cell field
                                   form.setValue("officeCell", "");
                                 }}
                                 value={field.value}
-                                disabled={!selectedDistrict}
+                                disabled={!selectedOfficeDistrict}
                               >
                                 <SelectTrigger className="bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 focus:border-purple-400">
-                                  <SelectValue placeholder={selectedDistrict ? "Select sector" : "Select district first"} />
+                                  <SelectValue placeholder={selectedOfficeDistrict ? "Select sector" : "Select district first"} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {getSectorOptions().map((sector) => (
+                                  {getOfficeSectorOptions().map((sector) => (
                                     <SelectItem key={sector.value} value={sector.value}>
                                       {sector.label}
                                     </SelectItem>
@@ -1068,12 +1295,22 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
-                              <Input 
-                                {...field} 
-                                value={field.value || ""}
-                                placeholder="Enter cell"
-                                className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 focus:border-orange-400"
-                              />
+                              <Select 
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={!selectedOfficeSector}
+                              >
+                                <SelectTrigger className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 focus:border-orange-400">
+                                  <SelectValue placeholder={selectedOfficeSector ? "Select cell" : "Select sector first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getOfficeCellOptions().map((cell) => (
+                                    <SelectItem key={cell.value} value={cell.value}>
+                                      {cell.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1116,9 +1353,6 @@ export function ApplicationForm({
                             <FormControl>
                               <Input {...field} disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
                             </FormControl>
-                            <FormDescription className="text-xs text-gray-500">
-                              From your account profile
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1133,9 +1367,6 @@ export function ApplicationForm({
                             <FormControl>
                               <Input {...field} type="email" disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
                             </FormControl>
-                            <FormDescription className="text-xs text-gray-500">
-                              From your account profile
-                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1258,6 +1489,8 @@ export function ApplicationForm({
                                   form.setValue("waterSourceDistrict", "");
                                   form.setValue("waterSourceSector", "");
                                   form.setValue("waterSourceCell", "");
+                                  setSelectedWaterSourceDistrict("");
+                                  setSelectedWaterSourceSector("");
                                 }} 
                                 value={field.value}
                               >
@@ -1265,11 +1498,11 @@ export function ApplicationForm({
                                   <SelectValue placeholder="Select province" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="kigali">Kigali</SelectItem>
-                                  <SelectItem value="northern">Northern Province</SelectItem>
-                                  <SelectItem value="southern">Southern Province</SelectItem>
-                                  <SelectItem value="eastern">Eastern Province</SelectItem>
-                                  <SelectItem value="western">Western Province</SelectItem>
+                                  {getFormattedProvinceOptions().map((province) => (
+                                    <SelectItem key={province.value} value={province.value}>
+                                      {province.label}
+                                    </SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </FormControl>
@@ -1292,6 +1525,7 @@ export function ApplicationForm({
                                   // Reset dependent fields
                                   form.setValue("waterSourceSector", "");
                                   form.setValue("waterSourceCell", "");
+                                  setSelectedWaterSourceSector("");
                                 }}
                                 value={field.value}
                                 disabled={!selectedWaterSourceProvince}
@@ -1323,6 +1557,7 @@ export function ApplicationForm({
                               <Select 
                                 onValueChange={(value) => {
                                   field.onChange(value);
+                                  setSelectedWaterSourceSector(value);
                                   // Reset cell field
                                   form.setValue("waterSourceCell", "");
                                 }}
@@ -1353,11 +1588,22 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Enter cell"
-                                className="bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400"
-                              />
+                              <Select 
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={!selectedWaterSourceSector}
+                              >
+                                <SelectTrigger className="bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400">
+                                  <SelectValue placeholder={selectedWaterSourceSector ? "Select cell" : "Select sector first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getWaterSourceCellOptions().map((cell) => (
+                                    <SelectItem key={cell.value} value={cell.value}>
+                                      {cell.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2710,7 +2956,8 @@ export function ApplicationForm({
                     <Button
                       type="button"
                       onClick={handleNextTab}
-                      disabled={activeTab === "land-ownership"}
+                      disabled={activeTab === "land-ownership" || isNextButtonDisabled()}
+                      className={isNextButtonDisabled() ? "opacity-50 cursor-not-allowed" : ""}
                     >
                       Next
                     </Button>

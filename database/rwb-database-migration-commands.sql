@@ -319,3 +319,6 @@ CREATE TRIGGER trigger_assessments_updated_at
 -- All commands above have been executed successfully.
 -- Frontend changes aligned with database schema updates.
 -- Documentation: See corresponding frontend component changes.
+
+
+

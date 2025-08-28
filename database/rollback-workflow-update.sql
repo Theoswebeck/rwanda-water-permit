@@ -36,3 +36,5 @@ ALTER TABLE applications DROP COLUMN IF EXISTS assessed_at;
 -- SELECT COUNT(*) FROM assessments; -- Should return 0 or error if table doesn't exist
 --
 -- =============================================
+
+

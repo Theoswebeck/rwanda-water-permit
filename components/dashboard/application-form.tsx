@@ -40,6 +40,13 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
+import { 
+  getFormattedProvinceOptions,
+  getFormattedDistrictOptions,
+  getFormattedSectorOptions,
+  getFormattedCellOptions,
+  getFormattedVillageOptions
+} from '@/lib/rwanda-administrative-data';
 
 // Form schema based on NEW_WATER_PERMIT_APPLICATION_FORM.md structure
 const formSchema = z.object({
@@ -1088,7 +1095,102 @@ export function ApplicationForm({
     }
   };
   
-  // Rwanda administrative divisions data
+  // State for cascading dropdowns
+  const [selectedOfficeProvince, setSelectedOfficeProvince] = useState("");
+  const [selectedOfficeDistrict, setSelectedOfficeDistrict] = useState("");
+  const [selectedOfficeSector, setSelectedOfficeSector] = useState("");
+  const [selectedWaterSourceProvince, setSelectedWaterSourceProvince] = useState("");
+  const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
+  const [selectedWaterSourceSector, setSelectedWaterSourceSector] = useState("");
+
+  // Watch form values to keep dropdown states in sync
+  const officeProvince = form.watch("officeProvince");
+  const officeDistrict = form.watch("officeDistrict");
+  const officeSector = form.watch("officeSector");
+  const waterSourceProvince = form.watch("waterSourceProvince");
+  const waterSourceDistrict = form.watch("waterSourceDistrict");
+  const waterSourceSector = form.watch("waterSourceSector");
+
+  // Update dropdown states when form values change
+  useEffect(() => {
+    if (officeProvince !== selectedOfficeProvince) {
+      setSelectedOfficeProvince(officeProvince || "");
+    }
+    if (officeDistrict !== selectedOfficeDistrict) {
+      setSelectedOfficeDistrict(officeDistrict || "");
+    }
+    if (officeSector !== selectedOfficeSector) {
+      setSelectedOfficeSector(officeSector || "");
+    }
+    if (waterSourceProvince !== selectedWaterSourceProvince) {
+      setSelectedWaterSourceProvince(waterSourceProvince || "");
+    }
+    if (waterSourceDistrict !== selectedWaterSourceDistrict) {
+      setSelectedWaterSourceDistrict(waterSourceDistrict || "");
+    }
+    if (waterSourceSector !== selectedWaterSourceSector) {
+      setSelectedWaterSourceSector(waterSourceSector || "");
+    }
+  }, [officeProvince, officeDistrict, officeSector, waterSourceProvince, waterSourceDistrict, waterSourceSector, 
+      selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector, 
+      selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector]);
+
+  // Initialize states from initialData
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.officeProvince) {
+        setSelectedOfficeProvince(initialData.officeProvince);
+      }
+      if (initialData.officeDistrict) {
+        setSelectedOfficeDistrict(initialData.officeDistrict);
+      }
+      if (initialData.officeSector) {
+        setSelectedOfficeSector(initialData.officeSector);
+      }
+      if (initialData.waterSourceProvince) {
+        setSelectedWaterSourceProvince(initialData.waterSourceProvince);
+      }
+      if (initialData.waterSourceDistrict) {
+        setSelectedWaterSourceDistrict(initialData.waterSourceDistrict);
+      }
+      if (initialData.waterSourceSector) {
+        setSelectedWaterSourceSector(initialData.waterSourceSector);
+      }
+    }
+  }, [initialData]);
+
+  // Helper functions for dropdown options
+  const getOfficeDistrictOptions = () => {
+    if (!selectedOfficeProvince) return [];
+    return getFormattedDistrictOptions(selectedOfficeProvince);
+  };
+
+  const getOfficeSectorOptions = () => {
+    if (!selectedOfficeProvince || !selectedOfficeDistrict) return [];
+    return getFormattedSectorOptions(selectedOfficeProvince, selectedOfficeDistrict);
+  };
+
+  const getOfficeCellOptions = () => {
+    if (!selectedOfficeProvince || !selectedOfficeDistrict || !selectedOfficeSector) return [];
+    return getFormattedCellOptions(selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector);
+  };
+
+  const getWaterSourceDistrictOptions = () => {
+    if (!selectedWaterSourceProvince) return [];
+    return getFormattedDistrictOptions(selectedWaterSourceProvince);
+  };
+
+  const getWaterSourceSectorOptions = () => {
+    if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict) return [];
+    return getFormattedSectorOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict);
+  };
+
+  const getWaterSourceCellOptions = () => {
+    if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict || !selectedWaterSourceSector) return [];
+    return getFormattedCellOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector);
+  };
+
+  // Rwanda administrative divisions data (using new comprehensive data)
   const rwandaAdministrativeDivisions = {
     gasabo: {
       sectors: [
@@ -1567,22 +1669,7 @@ export function ApplicationForm({
      }
    };
 
-  const getSectorOptions = () => {
-    if (!selectedDistrict) return [];
-    const district = rwandaAdministrativeDivisions[selectedDistrict as keyof typeof rwandaAdministrativeDivisions];
-    return district ? district.sectors : [];
-  };
-
-  const getCellOptions = () => {
-    const selectedSector = form.watch("sector");
-    if (!selectedDistrict || !selectedSector) return [];
-    
-    const district = rwandaAdministrativeDivisions[selectedDistrict as keyof typeof rwandaAdministrativeDivisions];
-    if (!district) return [];
-    
-    const sector = district.sectors.find(s => s.value === selectedSector);
-    return sector ? sector.cells.map(cell => ({ value: cell, label: cell.charAt(0).toUpperCase() + cell.slice(1) })) : [];
-  };
+  // Remove old administrative division functions - using new comprehensive data now
 
   // File upload handler
   const handleFileUpload = (documentType: string) => (event: React.ChangeEvent<HTMLInputElement>) => {

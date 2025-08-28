@@ -39,8 +39,89 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
   const [idNumber, setIdNumber] = useState("");
   const [idType, setIdType] = useState("nationalId");
 
+  // Validation states
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [companyPhoneError, setCompanyPhoneError] = useState("");
+
+  const validateEmail = (email: string) => {
+    if (!email) {
+      setEmailError("Email is required.");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setEmailError("Invalid email address.");
+      return false;
+    }
+    setEmailError("");
+    return true;
+  };
+
+  const validatePassword = (password: string) => {
+    if (!password) {
+      setPasswordError("Password is required.");
+      return false;
+    }
+    if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters long.");
+      return false;
+    }
+    setPasswordError("");
+    return true;
+  };
+
+  const validatePhone = (phone: string, isCompany = false) => {
+    if (!phone) {
+      const error = "Phone number is required.";
+      isCompany ? setCompanyPhoneError(error) : setPhoneError(error);
+      return false;
+    }
+    const phoneRegex = /^(\+250|0)7\d{8}$/;
+    if (!phoneRegex.test(phone)) {
+      const error = "Invalid Rwandan phone number format.";
+      isCompany ? setCompanyPhoneError(error) : setPhoneError(error);
+      return false;
+    }
+    isCompany ? setCompanyPhoneError("") : setPhoneError("");
+    return true;
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    validateEmail(newEmail);
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+    validatePassword(newPassword);
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>, isCompany = false) => {
+    const newPhone = e.target.value;
+    if (isCompany) {
+      setCompanyPhone(newPhone);
+      validatePhone(newPhone, true);
+    } else {
+      setPhone(newPhone);
+      validatePhone(newPhone, false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+    const isCompanyPhoneValid = accountType === 'company' ? validatePhone(companyPhone, true) : true;
+    const isPersonPhoneValid = accountType === 'individual' ? validatePhone(phone, false) : true;
+
+    if (!isEmailValid || !isPasswordValid || !isCompanyPhoneValid || !isPersonPhoneValid) {
+      return; // Stop submission if validation fails
+    }
     
     const details = accountType === "company" 
       ? { companyName, companyTIN, companyAddress, companyPhone }
@@ -163,10 +244,11 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                     placeholder="+250 XXX XXX XXX" 
                     required
                     value={companyPhone}
-                    onChange={(e) => setCompanyPhone(e.target.value)}
+                    onChange={(e) => handlePhoneChange(e, true)}
                     className="transition-all duration-200 focus:ring-2 focus:ring-primary"
                     disabled={isLoading}
                   />
+                  {companyPhoneError && <p className="text-xs text-red-500 mt-1">{companyPhoneError}</p>}
                 </div>
                 
                 <div className="space-y-2">
@@ -177,10 +259,11 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                     placeholder="" 
                     required 
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={handleEmailChange}
                     className="transition-all duration-200 focus:ring-2 focus:ring-primary"
                     disabled={isLoading}
                   />
+                  {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
                 </div>
                 
                 <div className="space-y-2">
@@ -191,7 +274,7 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                       type={showPassword ? "text" : "password"}
                       required 
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={handlePasswordChange}
                       className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
                       disabled={isLoading}
                     />
@@ -208,6 +291,7 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                       )}
                     </button>
                   </div>
+                  {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                 </div>
                 
                 <Button 
@@ -273,9 +357,10 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                       placeholder="(+250) XXX XXX XXX" 
                       required 
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => handlePhoneChange(e, false)}
                       className="transition-all duration-200 focus:ring-2 focus:ring-primary"
                     />
+                    {phoneError && <p className="text-xs text-red-500 mt-1">{phoneError}</p>}
                   </div>
                 </div>
                 
@@ -321,9 +406,10 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                     placeholder="" 
                     required 
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={handleEmailChange}
                     className="transition-all duration-200 focus:ring-2 focus:ring-primary"
                   />
+                  {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="personPassword">Password</Label>
@@ -333,7 +419,7 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                       type={showPassword ? "text" : "password"}
                       required 
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={handlePasswordChange}
                       className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
                     />
                     <button 
@@ -348,6 +434,7 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
                       )}
                     </button>
                   </div>
+                  {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                 </div>
                 <Button 
                   type="submit" 

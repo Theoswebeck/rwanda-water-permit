@@ -113,3 +113,6 @@ CREATE TRIGGER update_assessments_updated_at BEFORE UPDATE ON assessments
 -- Check if the new column was added
 -- SELECT column_name FROM information_schema.columns 
 -- WHERE table_name = 'applications' AND column_name = 'assessed_at';
+
+
+
