@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   Card,
   CardContent,
@@ -168,6 +169,7 @@ export function ApplicationForm({
   initialDocuments = {},
   mode = 'create' 
 }: ApplicationFormProps) {
+  const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
@@ -232,13 +234,9 @@ export function ApplicationForm({
   const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
   const [selectedWaterSourceSector, setSelectedWaterSourceSector] = useState("");
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(applicationFormSchema),
-    defaultValues: {
-      fullNameApplicant: userData?.name || "",
-      categoryApplicant: "individual",
-      telephoneContact: userData?.phone || "",
-      emailAddress: userData?.email || "",
+  // Get default values from current user profile
+  const getDefaultValues = () => {
+    const defaults: Partial<FormValues> = {
       waterAbstractionDetails: [{ activity: "", flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: 0, abstractionMethod: "" }],
       intendedActivities: [],
       ownsAllLand: false,
@@ -251,8 +249,39 @@ export function ApplicationForm({
       fishPondsDiscardWaterQuantityM3PerDay: undefined,
       waterSourceLatitude: "",
       waterSourceLongitude: "",
-      ...initialData
+    };
+
+    // Auto-fill from current user profile if available
+    if (userProfile) {
+      if (userProfile.account_type === 'individual') {
+        defaults.fullNameApplicant = `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim();
+        defaults.categoryApplicant = "individual";
+      } else if (userProfile.account_type === 'company') {
+        defaults.fullNameApplicant = userProfile.company_name || "";
+        defaults.categoryApplicant = "company";
+        defaults.officeCountry = "Rwanda";
+        defaults.officePostalAddress = userProfile.company_address || "";
+        defaults.telephoneContactOffice = userProfile.company_phone || "";
+      }
+      
+      defaults.emailAddress = userProfile.email || "";
+      defaults.telephoneContact = userProfile.phone || userProfile.company_phone || "";
+      
+      // Set ID information
+      if (userProfile.id_type && userProfile.id_number) {
+        if (userProfile.id_type === 'national_id') {
+          defaults.nationalIdNumber = userProfile.id_number;
+        }
+      }
     }
+
+    // Override with any provided initial data
+    return { ...defaults, ...initialData };
+  };
+
+  const form = useForm<FormValues>({
+    resolver: zodResolver(applicationFormSchema),
+    defaultValues: getDefaultValues()
   });
 
   // Helper functions for dropdown options

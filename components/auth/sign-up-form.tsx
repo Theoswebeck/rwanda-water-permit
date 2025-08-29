@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,19 +12,31 @@ import { Eye, EyeOff } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface SignUpFormProps {
-  onSubmit: (email: string, password: string, accountType: string, details: any) => void;
+  onSubmit?: (email: string, password: string, accountType: string, details: any) => void;
   error?: string;
   isLoading?: boolean;
 }
 
-export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormProps) {
+export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading = false }: SignUpFormProps) {
+  const router = useRouter();
+  const { signUp } = useAuth();
+  
   // Common fields
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [accountType, setAccountType] = useState("company");
+  
+  // Local state
+  const [localError, setLocalError] = useState<string>("");
+  const [localLoading, setLocalLoading] = useState(false);
+  
+  // Use prop values or local state
+  const error = propError || localError;
+  const isLoading = propLoading || localLoading;
   
   // Company fields
   const [companyName, setCompanyName] = useState("");
@@ -113,6 +126,7 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLocalError("");
 
     const isEmailValid = validateEmail(email);
     const isPasswordValid = validatePassword(password);
@@ -122,24 +136,68 @@ export function SignUpForm({ onSubmit, error, isLoading = false }: SignUpFormPro
     if (!isEmailValid || !isPasswordValid || !isCompanyPhoneValid || !isPersonPhoneValid) {
       return; // Stop submission if validation fails
     }
-    
-    const details = accountType === "company" 
-      ? { companyName, companyTIN, companyAddress, companyPhone }
-      : { 
-          firstName, 
-          lastName, 
-          dateOfBirth, 
-          phone,
-          identification: {
-            type: idType,
-            number: idNumber
-          }
-        };
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      onSubmit(email, password, accountType, details);
-    }, 1000);
+
+    // If onSubmit prop is provided, use it (for external handling)
+    if (onSubmit) {
+      const details = accountType === "company" 
+        ? { companyName, companyTIN, companyAddress, companyPhone }
+        : { 
+            firstName, 
+            lastName, 
+            dateOfBirth, 
+            phone,
+            identification: {
+              type: idType,
+              number: idNumber
+            }
+          };
+      
+      setTimeout(() => {
+        onSubmit(email, password, accountType, details);
+      }, 1000);
+      return;
+    }
+
+    // Otherwise, handle signup internally
+    setLocalLoading(true);
+
+    try {
+      const signUpData = {
+        email,
+        password,
+        accountType: accountType as 'individual' | 'company',
+        ...(accountType === 'company' 
+          ? { 
+              companyName, 
+              companyTIN, 
+              companyAddress, 
+              companyPhone 
+            }
+          : { 
+              firstName, 
+              lastName, 
+              phone,
+              identification: {
+                type: idType,
+                number: idNumber
+              }
+            }
+        )
+      };
+
+      const result = await signUp(signUpData);
+      
+      if (result.error) {
+        setLocalError(result.error);
+      } else {
+        // Success - redirect to login or dashboard
+        router.push("/login?message=Account created successfully! Please sign in.");
+      }
+    } catch (err) {
+      setLocalError("An unexpected error occurred during signup");
+    } finally {
+      setLocalLoading(false);
+    }
   };
 
   const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {

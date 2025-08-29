@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import type { User } from '@/types/database'
 
@@ -31,6 +31,12 @@ interface AuthContextType {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (updates: Partial<User>) => Promise<{ error?: string }>
+  resetPassword: (email: string) => Promise<{ error?: string }>
+  isApplicant: boolean
+  isAdmin: boolean
+  isReviewer: boolean
+  isInspector: boolean
+  isApprover: boolean
 }
 
 // Create auth context
@@ -50,11 +56,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Create Supabase client instance
+  const supabase = createClient();
 
   // Function to fetch user profile
   const fetchUserProfile = async (userId: string) => {
     try {
       console.log('🔍 Fetching profile for user:', userId);
+      
+      if (!userId) {
+        console.error('❌ No user ID provided to fetchUserProfile');
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
@@ -63,6 +78,85 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       if (error) {
         console.error('❌ Error fetching user profile:', error);
+        console.log('Error details:', {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+          details: error.details
+        });
+        
+        // If profile doesn't exist, create a basic one
+        if (error.code === 'PGRST116') {
+          console.log('📝 Profile not found, creating basic profile...');
+          
+          // Get the current user's email from auth
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          
+          if (userError) {
+            console.error('❌ Error getting current user:', userError);
+            return null;
+          }
+          
+          if (user && user.email) {
+            console.log('📧 Creating profile for user:', user.email);
+            
+            const basicProfile = {
+              id: userId,
+              email: user.email,
+              role: 'applicant' as const,
+              status: 'active' as const,
+              account_type: 'individual' as const,
+              first_name: 'User', // Required by check constraint
+              last_name: 'Profile', // Required by check constraint
+              applications_count: 0,
+              reviews_count: 0,
+              inspections_count: 0,
+              profile_completed: false, // Mark as incomplete so user can update
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            const { data: insertData, error: createError } = await supabase
+              .from('users')
+              .insert([basicProfile])
+              .select()
+              .single();
+
+            if (createError) {
+              console.error('❌ Error creating profile during fetch:', createError);
+              console.log('Create error details:', {
+                code: createError.code,
+                message: createError.message,
+                hint: createError.hint,
+                details: createError.details
+              });
+              
+              // Try one more time to fetch in case it was created by trigger
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              const { data: retryData, error: retryError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', userId)
+                .single();
+                
+              if (!retryError && retryData) {
+                console.log('✅ Profile found on retry');
+                setUserProfile(retryData);
+                return retryData;
+              }
+              
+              return null;
+            } else {
+              console.log('✅ Profile created successfully during fetch');
+              const newProfile = insertData || basicProfile;
+              setUserProfile(newProfile);
+              return newProfile;
+            }
+          } else {
+            console.error('❌ No authenticated user found for profile creation');
+            return null;
+          }
+        }
         return null;
       }
       
@@ -85,7 +179,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (user) {
           console.log('✅ Initial user loaded:', user.email);
-          await fetchUserProfile(user.id);
+          
+          try {
+            await fetchUserProfile(user.id);
+          } catch (profileError) {
+            console.error('❌ Error fetching initial profile:', profileError);
+            // Don't fail the entire auth process if profile fetch fails
+            // The user can still be authenticated even without a complete profile
+          }
         }
        
       } catch (error) {
@@ -98,31 +199,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     getInitialUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: any, session: any) => {
         console.log('🔄 Auth state change:', event);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         
         if (currentUser) {
           console.log('✅ User session updated:', currentUser.email);
-          const profile = await fetchUserProfile(currentUser.id);
           
-          // Check if user is suspended even during session restoration
-          if (profile && profile.status === 'suspended') {
-            console.warn('🚫 Suspended user session detected, signing out:', currentUser.email);
-            await supabase.auth.signOut();
-            setUser(null);
-            setUserProfile(null);
-            return;
-          }
-          
-          // Check if user is inactive
-          if (profile && profile.status === 'inactive') {
-            console.warn('⚠️ Inactive user session detected, signing out:', currentUser.email);
-            await supabase.auth.signOut();
-            setUser(null);
-            setUserProfile(null);
-            return;
+          try {
+            const profile = await fetchUserProfile(currentUser.id);
+            
+            // Check if user is suspended even during session restoration
+            if (profile && profile.status === 'suspended') {
+              console.warn('🚫 Suspended user session detected, signing out:', currentUser.email);
+              await supabase.auth.signOut();
+              setUser(null);
+              setUserProfile(null);
+              return;
+            }
+            
+            // Check if user is inactive
+            if (profile && profile.status === 'inactive') {
+              console.warn('⚠️ Inactive user session detected, signing out:', currentUser.email);
+              await supabase.auth.signOut();
+              setUser(null);
+              setUserProfile(null);
+              return;
+            }
+            
+            // If profile creation/fetching failed, don't sign out immediately
+            // User might be able to continue with limited functionality
+            if (!profile) {
+              console.warn('⚠️ Could not load/create user profile, but keeping session active');
+            }
+          } catch (profileError) {
+            console.error('❌ Error during profile handling in auth state change:', profileError);
+            // Don't sign out on profile errors during session restoration
           }
         } else {
           console.log('🚪 No active session.');
@@ -161,13 +274,76 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (profileError) {
         console.error('❌ Error fetching user profile:', profileError);
-        // Sign out the user since we can't verify their status
-        await supabase.auth.signOut();
-        return { error: 'Unable to verify account status' };
+        
+        // If profile doesn't exist, create a basic one for the authenticated user
+        if (profileError.code === 'PGRST116') { // No rows returned
+          console.log('📝 Creating missing user profile for:', authData.user.email);
+          
+          const basicProfile = {
+            id: authData.user.id,
+            email: authData.user.email,
+            role: 'applicant' as const,
+            status: 'active' as const,
+            account_type: 'individual' as const,
+            first_name: 'User', // Required by check constraint
+            last_name: 'Profile', // Required by check constraint
+            applications_count: 0,
+            reviews_count: 0,
+            inspections_count: 0,
+            profile_completed: false, // Mark as incomplete so user can update
+          };
+
+          const { error: createError } = await supabase
+            .from('users')
+            .insert([basicProfile]);
+
+          if (createError) {
+            console.error('❌ Error creating user profile:', createError);
+            console.error('❌ Create error details:', {
+              code: createError.code,
+              message: createError.message,
+              details: createError.details,
+              hint: createError.hint
+            });
+            
+            // Don't sign out immediately, try to continue if it's just a permission issue
+            if (createError.code === '42501') { // Insufficient privilege
+              console.warn('⚠️ Profile creation failed due to permissions. User may need manual profile creation.');
+              return { error: 'Account setup incomplete. Please contact support to complete your profile setup.' };
+            } else {
+              await supabase.auth.signOut();
+              return { error: `Unable to create user profile: ${createError.message}` };
+            }
+          }
+
+          console.log('✅ Basic user profile created');
+          // Continue with login using the basic profile
+        } else {
+          // Other database errors
+          console.error('❌ Profile fetch error details:', {
+            code: profileError.code,
+            message: profileError.message,
+            details: profileError.details
+          });
+          await supabase.auth.signOut();
+          return { error: `Unable to verify account status: ${profileError.message}` };
+        }
+      }
+
+      // Get the final user profile (either existing or newly created)
+      let finalProfile = userProfile;
+      if (profileError && profileError.code === 'PGRST116') {
+        // Fetch the newly created profile
+        const { data: newProfile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
+        finalProfile = newProfile;
       }
 
       // Check if user is suspended
-      if (userProfile.status === 'suspended') {
+      if (finalProfile && finalProfile.status === 'suspended') {
         console.warn('🚫 Suspended user attempted login:', email);
         // Sign out the user immediately
         await supabase.auth.signOut();
@@ -177,7 +353,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       // Check if user is inactive
-      if (userProfile.status === 'inactive') {
+      if (finalProfile && finalProfile.status === 'inactive') {
         console.warn('⚠️ Inactive user attempted login:', email);
         await supabase.auth.signOut();
         return { 
@@ -186,8 +362,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       // Only allow active users to proceed
-      if (userProfile.status !== 'active') {
-        console.warn('⚠️ User with invalid status attempted login:', email, userProfile.status);
+      if (finalProfile && finalProfile.status !== 'active') {
+        console.warn('⚠️ User with invalid status attempted login:', email, finalProfile.status);
         await supabase.auth.signOut();
         return { 
           error: 'Your account status does not allow access. Please contact support.' 
@@ -248,11 +424,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Add account-specific fields
       if (data.accountType === 'individual') {
-        profileData.first_name = data.firstName;
-        profileData.last_name = data.lastName;
+        profileData.first_name = data.firstName || 'User';
+        profileData.last_name = data.lastName || 'Profile';
         profileData.phone = data.phone;
         profileData.id_number = data.identification?.number || data.idNumber;
         profileData.id_type = 'national_id'; // Individual accounts use National ID
+        profileData.company_name = undefined; // Explicitly set to undefined for individual accounts
       } else {
         profileData.company_name = data.companyName;
         profileData.company_tin = data.companyTIN;
@@ -260,19 +437,36 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profileData.company_phone = data.companyPhone;
         profileData.id_type = 'tin'; // Company accounts use TIN
         profileData.id_number = data.companyTIN; // Use TIN as the ID number for companies
+        profileData.first_name = undefined; // Explicitly set to undefined for company accounts
+        profileData.last_name = undefined; // Explicitly set to undefined for company accounts
       }
 
-      console.log('💾 Creating user profile...');
+      console.log('💾 Updating user profile with form data...');
 
+      // Wait a moment for the trigger to create the basic profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Update the existing profile instead of creating a new one
       const { error: profileError } = await supabase
         .from('users')
-        .insert([profileData]);
+        .update(profileData)
+        .eq('id', authData.user.id);
 
       if (profileError) {
-        console.error('❌ Profile creation error:', profileError.message);
-        // Clean up auth user if profile creation fails
-        await supabase.auth.signOut();
-        return { error: profileError.message };
+        console.error('❌ Profile update error:', profileError.message);
+        
+        // If update fails, try to insert (fallback)
+        console.log('📝 Trying to insert profile as fallback...');
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert([profileData]);
+          
+        if (insertError && insertError.code !== '23505') {
+          console.error('❌ Profile insert error:', insertError.message);
+          // Clean up auth user if profile creation fails
+          await supabase.auth.signOut();
+          return { error: `Profile creation failed: ${insertError.message}` };
+        }
       }
 
       console.log('✅ User profile created successfully');
@@ -325,6 +519,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        console.error('❌ Password reset error:', error.message);
+        return { error: error.message };
+      }
+
+      console.log('✅ Password reset email sent');
+      return {};
+    } catch (err) {
+      console.error('❌ Unexpected password reset error:', err);
+      return { error: 'An unexpected error occurred' };
+    }
+  };
+
+  // Role-based helper properties
+  const isApplicant = userProfile?.role === 'applicant';
+  const isAdmin = userProfile?.role === 'admin';
+  const isReviewer = userProfile?.role === 'reviewer';
+  const isInspector = userProfile?.role === 'inspector';
+  const isApprover = userProfile?.role === 'approver';
+
   const value = {
     user,
     userProfile,
@@ -335,6 +555,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signUp,
     refreshProfile,
     updateProfile,
+    resetPassword,
+    isApplicant,
+    isAdmin,
+    isReviewer,
+    isInspector,
+    isApprover,
   };
 
   return (

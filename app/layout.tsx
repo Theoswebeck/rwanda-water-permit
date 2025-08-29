@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SessionInitializer } from "@/components/auth/session-initializer";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,6 +29,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
+            <SessionInitializer />
             <Header />
             <main>{children}</main>
             <Footer />
