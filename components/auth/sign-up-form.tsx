@@ -8,11 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Shield, CheckCircle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { PhoneVerificationDialog } from "@/components/auth/phone-verification-dialog";
+import { usePhoneVerification } from "@/hooks/usePhoneVerification";
 
 interface SignUpFormProps {
   onSubmit?: (email: string, password: string, accountType: string, details: any) => void;
@@ -34,9 +37,18 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
   const [localError, setLocalError] = useState<string>("");
   const [localLoading, setLocalLoading] = useState(false);
   
+  // Phone verification state
+  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [verificationRequestId, setVerificationRequestId] = useState<number | undefined>();
+  const [currentPhoneForVerification, setCurrentPhoneForVerification] = useState("");
+  
   // Use prop values or local state
   const error = propError || localError;
   const isLoading = propLoading || localLoading;
+  
+  // Phone verification hook
+  const { sendVerificationCode, verifyCode, isLoading: phoneVerificationLoading } = usePhoneVerification();
   
   // Company fields
   const [companyName, setCompanyName] = useState("");
@@ -57,6 +69,8 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
   const [passwordError, setPasswordError] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [companyPhoneError, setCompanyPhoneError] = useState("");
+  const [idNumberError, setIdNumberError] = useState("");
+  const [companyTINError, setCompanyTINError] = useState("");
 
   const validateEmail = (email: string) => {
     if (!email) {
@@ -101,6 +115,90 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     return true;
   };
 
+  const validateNationalId = (idNumber: string) => {
+    if (!idNumber) {
+      setIdNumberError("National ID is required.");
+      return false;
+    }
+
+    // Remove spaces and validate format: 1 19XX X XXXXXXX X XX
+    const digits = idNumber.replace(/\s/g, '');
+    
+    // Check if it has exactly 16 digits
+    if (digits.length !== 16) {
+      setIdNumberError("National ID must have exactly 16 digits.");
+      return false;
+    }
+
+    // Check if all characters are digits
+    if (!/^\d{16}$/.test(digits)) {
+      setIdNumberError("National ID must contain only numbers.");
+      return false;
+    }
+
+    // Validate format: 1 19XX X XXXXXXX X XX
+    // First digit must be 1
+    if (digits[0] !== '1') {
+      setIdNumberError("National ID must start with 1.");
+      return false;
+    }
+
+    // Second and third digits must be 19 (birth year prefix)
+    if (digits.slice(1, 3) !== '19') {
+      setIdNumberError("Invalid birth year format. Must start with 19.");
+      return false;
+    }
+
+    // Validate year (1900-1999)
+    const year = parseInt(digits.slice(1, 5));
+    if (year < 1900 || year > 1999) {
+      setIdNumberError("Invalid birth year. Must be between 1900-1999.");
+      return false;
+    }
+
+    // Validate that the format matches: 1 19XX X XXXXXXX X XX
+    const formattedPattern = /^1 19\d{2} \d \d{7} \d \d{2}$/;
+    if (!formattedPattern.test(idNumber)) {
+      setIdNumberError("Invalid National ID format. Expected: 1 19XX X XXXXXXX X XX");
+      return false;
+    }
+
+    setIdNumberError("");
+    return true;
+  };
+
+  const validateCompanyTIN = (tin: string) => {
+    if (!tin) {
+      setCompanyTINError("TIN is required for company registration.");
+      return false;
+    }
+
+    // Remove any non-digit characters
+    const digits = tin.replace(/\D/g, '');
+    
+    // Rwanda TIN format: 9 digits
+    if (digits.length !== 9) {
+      setCompanyTINError("TIN must be exactly 9 digits.");
+      return false;
+    }
+
+    // Check if all characters are digits
+    if (!/^\d{9}$/.test(digits)) {
+      setCompanyTINError("TIN must contain only numbers.");
+      return false;
+    }
+
+    // Basic format validation - can be enhanced with checksum if needed
+    const tinPattern = /^\d{9}$/;
+    if (!tinPattern.test(digits)) {
+      setCompanyTINError("Invalid TIN format. Expected: 9 digits (e.g., 123456789)");
+      return false;
+    }
+
+    setCompanyTINError("");
+    return true;
+  };
+
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
@@ -118,10 +216,36 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     if (isCompany) {
       setCompanyPhone(newPhone);
       validatePhone(newPhone, true);
+      // Reset verification status when phone changes
+      if (phoneVerified && currentPhoneForVerification !== newPhone) {
+        setPhoneVerified(false);
+      }
     } else {
       setPhone(newPhone);
       validatePhone(newPhone, false);
+      // Reset verification status when phone changes
+      if (phoneVerified && currentPhoneForVerification !== newPhone) {
+        setPhoneVerified(false);
+      }
     }
+  };
+
+  const handleVerifyPhone = async (phoneNumber: string) => {
+    setCurrentPhoneForVerification(phoneNumber);
+    const result = await sendVerificationCode(phoneNumber);
+    
+    if (result.success) {
+      setVerificationRequestId(result.requestId);
+      setShowPhoneVerification(true);
+    } else {
+      setLocalError(result.message);
+    }
+  };
+
+  const handlePhoneVerificationComplete = () => {
+    setPhoneVerified(true);
+    setShowPhoneVerification(false);
+    setLocalError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,9 +256,18 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     const isPasswordValid = validatePassword(password);
     const isCompanyPhoneValid = accountType === 'company' ? validatePhone(companyPhone, true) : true;
     const isPersonPhoneValid = accountType === 'individual' ? validatePhone(phone, false) : true;
+    const isIdValid = accountType === 'individual' ? validateNationalId(idNumber) : true;
+    const isTINValid = accountType === 'company' ? validateCompanyTIN(companyTIN) : true;
 
-    if (!isEmailValid || !isPasswordValid || !isCompanyPhoneValid || !isPersonPhoneValid) {
+    if (!isEmailValid || !isPasswordValid || !isCompanyPhoneValid || !isPersonPhoneValid || !isIdValid || !isTINValid) {
       return; // Stop submission if validation fails
+    }
+
+    // Check if phone verification is required and completed
+    const currentPhone = accountType === 'company' ? companyPhone : phone;
+    if (!phoneVerified || currentPhoneForVerification !== currentPhone) {
+      setLocalError("Please verify your phone number before creating an account");
+      return;
     }
 
     // If onSubmit prop is provided, use it (for external handling)
@@ -222,6 +355,31 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     }
     
     setIdNumber(formatted);
+    
+    // Validate if the field is complete (16 digits)
+    if (digits.length === 16) {
+      validateNationalId(formatted);
+    } else if (idNumberError) {
+      // Clear error if user is still typing
+      setIdNumberError("");
+    }
+  };
+
+  const handleCompanyTINChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    
+    // Only allow digits and limit to 9 characters
+    const digits = value.replace(/\D/g, '').slice(0, 9);
+    
+    setCompanyTIN(digits);
+    
+    // Validate if the field is complete (9 digits)
+    if (digits.length === 9) {
+      validateCompanyTIN(digits);
+    } else if (companyTINError) {
+      // Clear error if user is still typing
+      setCompanyTINError("");
+    }
   };
 
   return (
@@ -271,13 +429,21 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   <Input 
                     id="companyTIN" 
                     type="text" 
-                    placeholder="XX-XXXXXXX" 
+                    placeholder="123456789" 
                     required 
                     value={companyTIN}
-                    onChange={(e) => setCompanyTIN(e.target.value)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    onChange={handleCompanyTINChange}
+                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                      companyTINError ? 'border-red-500 focus:ring-red-500' : ''
+                    }`}
                     disabled={isLoading}
                   />
+                  {companyTINError && (
+                    <p className="text-xs text-red-500 mt-1">{companyTINError}</p>
+                  )}
+                  {!companyTINError && (
+                    <p className="text-xs text-muted-foreground mt-1">Format: 9 digits (e.g., 123456789)</p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -296,17 +462,45 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                 
                 <div className="space-y-2">
                   <Label htmlFor="companyPhone">Company Phone</Label>
-                  <Input 
-                    id="companyPhone" 
-                    type="tel" 
-                    placeholder="+250 XXX XXX XXX" 
-                    required
-                    value={companyPhone}
-                    onChange={(e) => handlePhoneChange(e, true)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    disabled={isLoading}
-                  />
+                  <div className="flex gap-2">
+                    <Input 
+                      id="companyPhone" 
+                      type="tel" 
+                      placeholder="+250 XXX XXX XXX" 
+                      required
+                      value={companyPhone}
+                      onChange={(e) => handlePhoneChange(e, true)}
+                      className="flex-1 transition-all duration-200 focus:ring-2 focus:ring-primary"
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant={phoneVerified && currentPhoneForVerification === companyPhone ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleVerifyPhone(companyPhone)}
+                      disabled={!companyPhone || companyPhoneError !== "" || phoneVerificationLoading || isLoading}
+                      className="whitespace-nowrap"
+                    >
+                      {phoneVerified && currentPhoneForVerification === companyPhone ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          Verified
+                        </>
+                      ) : (
+                        <>
+                          <Shield className="h-4 w-4 mr-1" />
+                          Verify
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   {companyPhoneError && <p className="text-xs text-red-500 mt-1">{companyPhoneError}</p>}
+                  {phoneVerified && currentPhoneForVerification === companyPhone && (
+                    <div className="flex items-center gap-1 text-green-600 text-xs">
+                      <CheckCircle className="h-3 w-3" />
+                      Phone number verified
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -409,16 +603,45 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number</Label>
-                    <Input 
-                      id="phone" 
-                      type="tel" 
-                      placeholder="(+250) XXX XXX XXX" 
-                      required 
-                      value={phone}
-                      onChange={(e) => handlePhoneChange(e, false)}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    />
+                    <div className="flex gap-2">
+                      <Input 
+                        id="phone" 
+                        type="tel" 
+                        placeholder="(+250) XXX XXX XXX" 
+                        required 
+                        value={phone}
+                        onChange={(e) => handlePhoneChange(e, false)}
+                        className="flex-1 transition-all duration-200 focus:ring-2 focus:ring-primary"
+                        disabled={isLoading}
+                      />
+                      <Button
+                        type="button"
+                        variant={phoneVerified && currentPhoneForVerification === phone ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleVerifyPhone(phone)}
+                        disabled={!phone || phoneError !== "" || phoneVerificationLoading || isLoading}
+                        className="whitespace-nowrap"
+                      >
+                        {phoneVerified && currentPhoneForVerification === phone ? (
+                          <>
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Verified
+                          </>
+                        ) : (
+                          <>
+                            <Shield className="h-4 w-4 mr-1" />
+                            Verify
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     {phoneError && <p className="text-xs text-red-500 mt-1">{phoneError}</p>}
+                    {phoneVerified && currentPhoneForVerification === phone && (
+                      <div className="flex items-center gap-1 text-green-600 text-xs">
+                        <CheckCircle className="h-3 w-3" />
+                        Phone number verified
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -448,9 +671,14 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                       required 
                       value={idNumber}
                       onChange={handleIdNumberChange}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                      className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                        idNumberError ? 'border-red-500 focus:ring-red-500' : ''
+                      }`}
                     />
-                    {idType === "nationalId" && (
+                    {idNumberError && (
+                      <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
+                    )}
+                    {!idNumberError && idType === "nationalId" && (
                       <p className="text-xs text-muted-foreground mt-1">Format: 1 19XX X XXXXXXX X XX</p>
                     )}
                   </div>
@@ -536,6 +764,17 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
           </div>
         </CardFooter>
       </Card>
+
+      {/* Phone Verification Dialog */}
+      <PhoneVerificationDialog
+        open={showPhoneVerification}
+        onOpenChange={setShowPhoneVerification}
+        phoneNumber={currentPhoneForVerification}
+        onVerificationComplete={handlePhoneVerificationComplete}
+        onSendCode={() => sendVerificationCode(currentPhoneForVerification)}
+        onVerifyCode={verifyCode}
+        requestId={verificationRequestId}
+      />
     </motion.div>
   );
 } 

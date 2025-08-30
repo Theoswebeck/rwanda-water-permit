@@ -76,6 +76,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .eq('id', userId)
         .single();
       
+      if (data) {
+        console.log('🔍 Fetched profile data:', {
+          id: data.id,
+          account_type: data.account_type,
+          company_name: data.company_name,
+          first_name: data.first_name,
+          last_name: data.last_name
+        });
+      }
+      
       if (error) {
         console.error('❌ Error fetching user profile:', error);
         console.log('Error details:', {
@@ -112,6 +122,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               reviews_count: 0,
               inspections_count: 0,
               profile_completed: false, // Mark as incomplete so user can update
+              phone_verified: false, // Phone verification status
+              phone_verification_attempts: 0, // Verification attempts
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             };
@@ -291,6 +303,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             reviews_count: 0,
             inspections_count: 0,
             profile_completed: false, // Mark as incomplete so user can update
+            phone_verified: false, // Phone verification status
+            phone_verification_attempts: 0, // Verification attempts
           };
 
           const { error: createError } = await supabase
@@ -370,16 +384,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
       }
 
-      // Update last login timestamp for active users
-      try {
-        await supabase
-          .from('users')
-          .update({ last_login_at: new Date().toISOString() })
-          .eq('id', authData.user.id);
-      } catch (updateError) {
-        console.warn('⚠️ Failed to update last login timestamp:', updateError);
-        // Don't fail the login for this
-      }
+      // Note: Removed last login timestamp update for faster login
 
       console.log('✅ Successfully signed in with active account');
       return {};
@@ -479,12 +484,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      // Clear local state immediately for faster UI response
       setUser(null);
       setUserProfile(null);
+      
+      // Sign out from Supabase (this can happen in background)
+      await supabase.auth.signOut();
       console.log('✅ Successfully signed out');
     } catch (err) {
       console.error('❌ Error signing out:', err);
+      // Even if signOut fails, we've cleared local state
     }
   };
 
@@ -500,18 +509,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: 'No authenticated user' };
       }
 
-      const { error } = await supabase
+      const { data: updatedUser, error } = await supabase
         .from('users')
         .update(updates)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select()
+        .single();
 
       if (error) {
         console.error('❌ Profile update error:', error.message);
         return { error: error.message };
       }
 
-      await refreshProfile();
-      console.log('✅ Profile updated successfully');
+      // Update local state immediately instead of making another DB call
+      if (updatedUser) {
+        setUserProfile(updatedUser);
+        console.log('✅ Profile updated successfully');
+      }
+      
       return {};
     } catch (err) {
       console.error('❌ Unexpected profile update error:', err);
