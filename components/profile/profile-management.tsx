@@ -22,7 +22,7 @@ import {
   Eye,
   EyeOff,
   Save,
-  RefreshCw
+  Loader2
 } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 
@@ -30,6 +30,7 @@ interface ProfileFormData {
   first_name?: string;
   last_name?: string;
   company_name?: string;
+  company_tin?: string;
   phone?: string;
   company_phone?: string;
   company_address?: string;
@@ -43,7 +44,7 @@ interface PasswordChangeData {
 }
 
 export function ProfileManagement() {
-  const { user, userProfile, updateProfile, refreshProfile, resetPassword } = useAuth();
+  const { user, userProfile, updateProfile, resetPassword } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -70,6 +71,7 @@ export function ProfileManagement() {
         first_name: userProfile.first_name || "",
         last_name: userProfile.last_name || "",
         company_name: userProfile.company_name || "",
+        company_tin: userProfile.company_tin || "",
         phone: userProfile.phone || "",
         company_phone: userProfile.company_phone || "",
         company_address: userProfile.company_address || "",
@@ -184,7 +186,7 @@ export function ProfileManagement() {
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center p-8">
-        <RefreshCw className="h-6 w-6 animate-spin" />
+        <Loader2 className="h-6 w-6 animate-spin" />
         <span className="ml-2">Loading profile...</span>
       </div>
     );
@@ -223,15 +225,12 @@ export function ProfileManagement() {
                   <Calendar className="h-4 w-4 mr-1" />
                   Joined {new Date(userProfile.created_at).toLocaleDateString()}
                 </div>
-                {userProfile.last_login_at && (
-                  <div className="mt-1">
-                    Last login: {new Date(userProfile.last_login_at).toLocaleDateString()}
-                  </div>
-                )}
               </div>
               
-              {/* Logout Button */}
-              <LogoutButton size="sm" />
+              <div className="flex space-x-2">
+                {/* Logout Button */}
+                <LogoutButton size="sm" />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -276,128 +275,186 @@ export function ProfileManagement() {
               </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleProfileSubmit} className="space-y-4">
-                {userProfile.account_type === 'individual' ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="first_name">First Name</Label>
-                        <Input
-                          id="first_name"
-                          value={profileData.first_name || ""}
-                          onChange={(e) => setProfileData(prev => ({ ...prev, first_name: e.target.value }))}
-                          disabled={!isEditing}
-                          className="mt-1"
-                        />
+              {!isEditing ? (
+                // Read-only display
+                <div className="space-y-6">
+                  {userProfile.account_type === 'individual' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">First Name</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.first_name || "Not provided"}</p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Last Name</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.last_name || "Not provided"}</p>
+                        </div>
                       </div>
                       <div>
-                        <Label htmlFor="last_name">Last Name</Label>
-                        <Input
-                          id="last_name"
-                          value={profileData.last_name || ""}
-                          onChange={(e) => setProfileData(prev => ({ ...prev, last_name: e.target.value }))}
-                          disabled={!isEditing}
-                          className="mt-1"
-                        />
+                        <h3 className="text-sm font-medium text-gray-900">Phone Number</h3>
+                        <p className="mt-1 text-sm text-gray-600">{userProfile.phone || "Not provided"}</p>
                       </div>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-900">Company Name</h3>
+                        <p className="mt-1 text-sm text-gray-600">{userProfile.company_name || "Not provided"}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-6">
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Company Phone</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.company_phone || "Not provided"}</p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Tax ID (TIN)</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.company_tin || "Not provided"}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-900">Company Address</h3>
+                        <p className="mt-1 text-sm text-gray-600">{userProfile.company_address || "Not provided"}</p>
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Only show Address field for individual accounts */}
+                  {userProfile.account_type === 'individual' && (
                     <div>
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input
-                        id="phone"
-                        value={profileData.phone || ""}
-                        onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
-                        disabled={!isEditing}
-                        className="mt-1"
-                      />
+                      <h3 className="text-sm font-medium text-gray-900">Address</h3>
+                      <p className="mt-1 text-sm text-gray-600">{userProfile.address || "Not provided"}</p>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <Label htmlFor="company_name">Company Name</Label>
-                      <Input
-                        id="company_name"
-                        value={profileData.company_name || ""}
-                        onChange={(e) => setProfileData(prev => ({ ...prev, company_name: e.target.value }))}
-                        disabled={!isEditing}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="company_phone">Company Phone</Label>
-                      <Input
-                        id="company_phone"
-                        value={profileData.company_phone || ""}
-                        onChange={(e) => setProfileData(prev => ({ ...prev, company_phone: e.target.value }))}
-                        disabled={!isEditing}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="company_address">Company Address</Label>
-                      <Input
-                        id="company_address"
-                        value={profileData.company_address || ""}
-                        onChange={(e) => setProfileData(prev => ({ ...prev, company_address: e.target.value }))}
-                        disabled={!isEditing}
-                        className="mt-1"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <Label htmlFor="address">Address</Label>
-                  <Input
-                    id="address"
-                    value={profileData.address || ""}
-                    onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
-                    disabled={!isEditing}
-                    className="mt-1"
-                  />
+                  )}
                 </div>
+              ) : (
+                // Editable form
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  {userProfile.account_type === 'individual' ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="first_name">First Name</Label>
+                          <Input
+                            id="first_name"
+                            value={profileData.first_name || ""}
+                            onChange={(e) => setProfileData(prev => ({ ...prev, first_name: e.target.value }))}
+                            disabled={!isEditing}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="last_name">Last Name</Label>
+                          <Input
+                            id="last_name"
+                            value={profileData.last_name || ""}
+                            onChange={(e) => setProfileData(prev => ({ ...prev, last_name: e.target.value }))}
+                            disabled={!isEditing}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input
+                          id="phone"
+                          value={profileData.phone || ""}
+                          onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
+                          disabled={!isEditing}
+                          className="mt-1"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <Label htmlFor="company_name">Company Name</Label>
+                        <Input
+                          id="company_name"
+                          value={profileData.company_name || ""}
+                          onChange={(e) => setProfileData(prev => ({ ...prev, company_name: e.target.value }))}
+                          disabled={!isEditing}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="company_phone">Company Phone</Label>
+                        <Input
+                          id="company_phone"
+                          value={profileData.company_phone || ""}
+                          onChange={(e) => setProfileData(prev => ({ ...prev, company_phone: e.target.value }))}
+                          disabled={!isEditing}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="company_address">Company Address</Label>
+                        <Input
+                          id="company_address"
+                          value={profileData.company_address || ""}
+                          onChange={(e) => setProfileData(prev => ({ ...prev, company_address: e.target.value }))}
+                          disabled={!isEditing}
+                          className="mt-1"
+                        />
+                      </div>
+                    </>
+                  )}
 
-                {isEditing && (
-                  <div className="flex space-x-2 pt-4">
-                    <Button type="submit" disabled={isLoading}>
-                      {isLoading ? (
-                        <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4 mr-2" />
-                          Save Changes
-                        </>
-                      )}
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => {
-                        setIsEditing(false);
-                        clearMessages();
-                        // Reset form data
-                        if (userProfile) {
-                          setProfileData({
-                            first_name: userProfile.first_name || "",
-                            last_name: userProfile.last_name || "",
-                            company_name: userProfile.company_name || "",
-                            phone: userProfile.phone || "",
-                            company_phone: userProfile.company_phone || "",
-                            company_address: userProfile.company_address || "",
-                            address: userProfile.address || "",
-                          });
-                        }
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                )}
-              </form>
+                  {/* Only show Address field for individual accounts */}
+                  {userProfile.account_type === 'individual' && (
+                    <div>
+                      <Label htmlFor="address">Address</Label>
+                      <Input
+                        id="address"
+                        value={profileData.address || ""}
+                        onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
+                        disabled={!isEditing}
+                        className="mt-1"
+                      />
+                    </div>
+                  )}
+
+                  {isEditing && (
+                    <div className="flex space-x-2 pt-4">
+                      <Button type="submit" disabled={isLoading}>
+                        {isLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4 mr-2" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => {
+                          setIsEditing(false);
+                          clearMessages();
+                          // Reset form data
+                          if (userProfile) {
+                            setProfileData({
+                              first_name: userProfile.first_name || "",
+                              last_name: userProfile.last_name || "",
+                              company_name: userProfile.company_name || "",
+                              company_tin: userProfile.company_tin || "",
+                              phone: userProfile.phone || "",
+                              company_phone: userProfile.company_phone || "",
+                              company_address: userProfile.company_address || "",
+                              address: userProfile.address || "",
+                            });
+                          }
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                </form>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -482,7 +539,7 @@ export function ProfileManagement() {
                 <Button type="submit" disabled={isLoading}>
                   {isLoading ? (
                     <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Processing...
                     </>
                   ) : (
@@ -553,24 +610,7 @@ export function ProfileManagement() {
                 )}
               </div>
 
-              <Separator />
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium">Refresh Profile Data</h4>
-                  <p className="text-sm text-gray-500">
-                    Update your profile with the latest information from the server
-                  </p>
-                </div>
-                <Button 
-                  variant="outline" 
-                  onClick={refreshProfile}
-                  disabled={isLoading}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
