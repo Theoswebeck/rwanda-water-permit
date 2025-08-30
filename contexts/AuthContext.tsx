@@ -95,8 +95,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           details: error.details
         });
         
-        // If profile doesn't exist, create a basic one
+        // If profile doesn't exist, check if this is a deleted user
         if (error.code === 'PGRST116') {
+          // For security: If user exists in auth but not in our users table,
+          // it could mean they were deleted by admin - sign them out
+          console.log('🚨 User profile not found in database');
+          console.log('🔒 Signing out for security (user may have been deleted)...');
+          
+          try {
+            await supabase.auth.signOut();
+            setUser(null);
+            setUserProfile(null);
+            return null;
+          } catch (signOutError) {
+            console.error('❌ Error during security sign out:', signOutError);
+          }
+          
           console.log('📝 Profile not found, creating basic profile...');
           
           // Get the current user's email from auth
