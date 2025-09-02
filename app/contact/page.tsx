@@ -17,9 +17,7 @@ import {
   CheckCircle, 
   AlertCircle,
   MessageSquare,
-  HelpCircle,
-  FileText,
-  Users
+  FileText
 } from "lucide-react";
 
 export default function ContactPage() {
@@ -383,39 +381,7 @@ export default function ContactPage() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <HelpCircle className="h-5 w-5" />
-                    Quick Help
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
-                      <FileText className="h-4 w-4 text-blue-600" />
-                      <div>
-                        <div className="text-sm font-medium">Application Guide</div>
-                        <div className="text-xs text-muted-foreground">Step-by-step process</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
-                      <Users className="h-4 w-4 text-green-600" />
-                      <div>
-                        <div className="text-sm font-medium">FAQ Section</div>
-                        <div className="text-xs text-muted-foreground">Common questions</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
-                      <Clock className="h-4 w-4 text-purple-600" />
-                      <div>
-                        <div className="text-sm font-medium">Processing Times</div>
-                        <div className="text-xs text-muted-foreground">Expected timelines</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+
             </motion.div>
           </div>
         </div>

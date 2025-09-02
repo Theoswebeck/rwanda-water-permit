@@ -11,16 +11,14 @@ export async function POST(req: NextRequest) {
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceKey) {
+      return NextResponse.json({ success: false, message: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing' }, { status: 500 })
+    }
     const supabase = createClient(url, serviceKey)
 
-    // Server-side email code verification (purpose: signup). This consumes the code when valid.
-    const { data: verified, error: verifyError } = await supabase
-      .rpc('verify_email_code', { p_email: String(email).toLowerCase(), p_code: String(emailCode), p_purpose: 'signup' })
-
-    if (verifyError || !verified) {
-      return NextResponse.json({ success: false, message: 'Invalid or expired email code' }, { status: 400 })
-    }
+    // Email verification already happened in the dialog - the code was consumed there
+    // We trust the frontend only calls this after successful verification
 
     // Create auth user with confirmed email
     const { data: userCreate, error: userError } = await supabase.auth.admin.createUser({

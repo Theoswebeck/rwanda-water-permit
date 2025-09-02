@@ -28,6 +28,10 @@ export function EmailCodeDialog({ open, onOpenChange, email, onVerified }: Email
     setMessage(null);
     setTimeLeft(60);
     const t = setInterval(() => setTimeLeft((s) => (s > 0 ? s - 1 : 0)), 1000);
+    
+    // Automatically send email when dialog first opens
+    requestCode();
+    
     return () => clearInterval(t);
   }, [open]);
 
@@ -43,9 +47,8 @@ export function EmailCodeDialog({ open, onOpenChange, email, onVerified }: Email
       const data = await res.json();
       if (!res.ok || !data.success) {
         setMessage(data.message || "Failed to send code");
-      } else if (data.devCode) {
-        // For developers, autofill helps testing quickly
-        setCode(data.devCode.split("").slice(0, 6));
+      } else {
+        setMessage("Verification code sent! Check your email.");
       }
       setTimeLeft(60);
     } catch (e) {
@@ -105,8 +108,8 @@ export function EmailCodeDialog({ open, onOpenChange, email, onVerified }: Email
 
         <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           {message && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertDescription className="text-red-700">{message}</AlertDescription>
+            <Alert className="border-blue-200 bg-blue-50">
+              <AlertDescription className="text-blue-700">{message}</AlertDescription>
             </Alert>
           )}
 

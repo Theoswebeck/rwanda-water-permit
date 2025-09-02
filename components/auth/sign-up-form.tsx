@@ -27,6 +27,7 @@ interface SignUpFormProps {
 export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading = false }: SignUpFormProps) {
   const router = useRouter();
   const { signUp } = useAuth();
+  const skipPhoneVerification = process.env.NEXT_PUBLIC_SKIP_PHONE_VERIFICATION === 'true';
   
   // Common fields
   const [email, setEmail] = useState("");
@@ -257,12 +258,14 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
 
   // Helper function to check if phone verification is complete for current account type
   const isPhoneVerificationComplete = () => {
+    if (skipPhoneVerification) return true;
     const currentPhone = accountType === 'company' ? companyPhone : phone;
     return phoneVerified && currentPhoneForVerification === currentPhone;
   };
 
   // Helper function to get verification status message
   const getPhoneVerificationMessage = () => {
+    if (skipPhoneVerification) return null;
     const currentPhone = accountType === 'company' ? companyPhone : phone;
     if (!phoneVerified) {
       return "Phone verification required";
@@ -294,50 +297,52 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
       return;
     }
 
-    // STRICT ENFORCEMENT: Phone verification is absolutely required
-    const currentPhone = accountType === 'company' ? companyPhone : phone;
-    if (!phoneVerified) {
-      setLocalError("🚨 Phone verification is required to create an account. Please verify your phone number first.");
-      return;
-    }
-    
-    if (currentPhoneForVerification !== currentPhone) {
-      setLocalError("🚨 Phone number has changed since verification. Please verify the new phone number.");
-      // Reset phone verification status
-      setPhoneVerified(false);
-      setCurrentPhoneForVerification("");
-      return;
-    }
-
-    // Double-check verification status
-    if (!isPhoneVerificationComplete()) {
-      setLocalError("🚨 Phone verification incomplete. Please complete phone verification to proceed.");
-      return;
-    }
-
-    // Server-side verification check before account creation
-    setLocalLoading(true);
-    try {
-      const verificationCheck = await fetch('/api/auth/verify-phone-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: currentPhone })
-      });
-
-      const verificationResult = await verificationCheck.json();
+    // STRICT ENFORCEMENT (skippable via flag)
+    if (!skipPhoneVerification) {
+      const currentPhone = accountType === 'company' ? companyPhone : phone;
+      if (!phoneVerified) {
+        setLocalError("🚨 Phone verification is required to create an account. Please verify your phone number first.");
+        return;
+      }
       
-      if (!verificationResult.success || !verificationResult.verified) {
-        setLocalError(`🚨 Server verification failed: ${verificationResult.message || 'Phone not verified on server'}`);
-        setPhoneVerified(false); // Reset local state
-        setLocalLoading(false);
+      if (currentPhoneForVerification !== currentPhone) {
+        setLocalError("🚨 Phone number has changed since verification. Please verify the new phone number.");
+        // Reset phone verification status
+        setPhoneVerified(false);
+        setCurrentPhoneForVerification("");
         return;
       }
 
-      console.log('✅ Server-side phone verification confirmed');
-    } catch (verificationError) {
-      setLocalError("🚨 Failed to verify phone status with server. Please try again.");
-      setLocalLoading(false);
-      return;
+      // Double-check verification status
+      if (!isPhoneVerificationComplete()) {
+        setLocalError("🚨 Phone verification incomplete. Please complete phone verification to proceed.");
+        return;
+      }
+
+      // Server-side verification check before account creation
+      setLocalLoading(true);
+      try {
+        const verificationCheck = await fetch('/api/auth/verify-phone-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber: currentPhone })
+        });
+
+        const verificationResult = await verificationCheck.json();
+        
+        if (!verificationResult.success || !verificationResult.verified) {
+          setLocalError(`🚨 Server verification failed: ${verificationResult.message || 'Phone not verified on server'}`);
+          setPhoneVerified(false); // Reset local state
+          setLocalLoading(false);
+          return;
+        }
+
+        console.log('✅ Server-side phone verification confirmed');
+      } catch (verificationError) {
+        setLocalError("🚨 Failed to verify phone status with server. Please try again.");
+        setLocalLoading(false);
+        return;
+      }
     }
 
     // If onSubmit prop is provided, use it (for external handling)

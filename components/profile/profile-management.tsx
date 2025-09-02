@@ -44,7 +44,7 @@ interface PasswordChangeData {
 }
 
 export function ProfileManagement() {
-  const { user, userProfile, updateProfile, resetPassword } = useAuth();
+  const { user, userProfile, updateProfile, changePassword } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -125,14 +125,12 @@ export function ProfileManagement() {
     setIsLoading(true);
 
     try {
-      // For now, we'll use the reset password flow
-      // In a real implementation, you'd want to verify the current password first
-      const result = await resetPassword(user?.email || "");
+      const result = await changePassword(passwordData.newPassword);
       
       if (result.error) {
         setError(result.error);
       } else {
-        setSuccess("Password reset email sent! Please check your inbox.");
+        setSuccess("Password updated successfully!");
         setPasswordData({
           currentPassword: "",
           newPassword: "",
@@ -358,9 +356,10 @@ export function ProfileManagement() {
                         <Input
                           id="phone"
                           value={profileData.phone || ""}
-                          onChange={(e) => setProfileData(prev => ({ ...prev, phone: e.target.value }))}
-                          disabled={!isEditing}
-                          className="mt-1"
+                          disabled={true}
+                          readOnly
+                          className="mt-1 bg-gray-50 cursor-not-allowed"
+                          placeholder="Phone number cannot be changed"
                         />
                       </div>
                     </>
@@ -381,9 +380,10 @@ export function ProfileManagement() {
                         <Input
                           id="company_phone"
                           value={profileData.company_phone || ""}
-                          onChange={(e) => setProfileData(prev => ({ ...prev, company_phone: e.target.value }))}
-                          disabled={!isEditing}
-                          className="mt-1"
+                          disabled={true}
+                          readOnly
+                          className="mt-1 bg-gray-50 cursor-not-allowed"
+                          placeholder="Phone number cannot be changed"
                         />
                       </div>
                       <div>
@@ -471,28 +471,6 @@ export function ProfileManagement() {
             <CardContent>
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <Label htmlFor="current_password">Current Password</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="current_password"
-                      type={showPasswords.current ? "text" : "password"}
-                      value={passwordData.currentPassword}
-                      onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                      placeholder="Enter current password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3"
-                      onClick={() => setShowPasswords(prev => ({ ...prev, current: !prev.current }))}
-                    >
-                      {showPasswords.current ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-
-                <div>
                   <Label htmlFor="new_password">New Password</Label>
                   <div className="relative mt-1">
                     <Input
@@ -540,12 +518,12 @@ export function ProfileManagement() {
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing...
+                      Updating Password...
                     </>
                   ) : (
                     <>
                       <Key className="h-4 w-4 mr-2" />
-                      Send Password Reset Email
+                      Update Password
                     </>
                   )}
                 </Button>

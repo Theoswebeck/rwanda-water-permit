@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Verification failed' }, { status: 400 })
     }
 
-    return NextResponse.json({ success: !!verified })
+    if (!verified) {
+      return NextResponse.json({ success: false, message: 'Invalid or expired code' }, { status: 400 })
+    }
+
+    return NextResponse.json({ success: true })
   } catch (err) {
     console.error('❌ verify-code server error', err)
     return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 })

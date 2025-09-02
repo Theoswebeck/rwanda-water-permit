@@ -109,11 +109,7 @@ export default function RegisterPage() {
             transition={{ duration: 0.5 }}
             className="w-full"
           >
-            <SignUpForm 
-              onSubmit={handleSignUp} 
-              error={error}
-              isLoading={isLoading}
-            />
+            <SignUpForm />
           </motion.div>
         )}
         

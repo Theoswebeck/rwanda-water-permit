@@ -103,35 +103,7 @@ export function Header() {
                 )}
               </motion.div>
             ))}
-            {/* Show admin and approver links for staff users - in a real app, this would be based on user role */}
-            {(isDashboardPage || isInspectionPage || isReviewPage || isAdminPage || isApproverPage) && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.4 }}
-                >
-                  <Link 
-                    href="/admin"
-                    className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
-                  >
-                    Admin Panel
-                  </Link>
-                </motion.div>
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.5 }}
-                >
-                  <Link 
-                    href="/approver"
-                    className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
-                  >
-                    Executive Dashboard
-                  </Link>
-                </motion.div>
-              </>
-            )}
+
           </nav>
 
           {/* CTA Button */}
@@ -250,25 +222,7 @@ export function Header() {
                     </Link>
                   );
                 })}
-                {/* Show admin and approver links for staff users - in a real app, this would be based on user role */}
-                {(isDashboardPage || isInspectionPage || isReviewPage || isAdminPage || isApproverPage) && (
-                  <>
-                    <Link 
-                      href="/admin"
-                      className="text-foreground hover:text-primary transition-colors text-base font-medium"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      Admin Panel
-                    </Link>
-                    <Link 
-                      href="/approver"
-                      className="text-foreground hover:text-primary transition-colors text-base font-medium"
-                      onClick={() => setIsOpen(false)}
-                    >
-                      Executive Dashboard
-                    </Link>
-                  </>
-                )}
+
                 <div className="pt-6 mt-6 border-t">
                   {isDashboardPage ? (
                     /* On dashboard pages, show the profile link if not already in profile */

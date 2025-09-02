@@ -32,6 +32,7 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>
   updateProfile: (updates: Partial<User>) => Promise<{ error?: string }>
   resetPassword: (email: string) => Promise<{ error?: string }>
+  changePassword: (newPassword: string) => Promise<{ error?: string }>
   isApplicant: boolean
   isAdmin: boolean
   isReviewer: boolean
@@ -502,6 +503,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const changePassword = async (newPassword: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        return { error: 'Not authenticated' };
+      }
+
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        return { error: data.message };
+      }
+
+      return {};
+    } catch (err) {
+      console.error('❌ Change password error:', err);
+      return { error: 'An unexpected error occurred' };
+    }
+  };
+
   // Role-based helper properties
   const isApplicant = userProfile?.role === 'applicant';
   const isAdmin = userProfile?.role === 'admin';
@@ -520,6 +553,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     refreshProfile,
     updateProfile,
     resetPassword,
+    changePassword,
     isApplicant,
     isAdmin,
     isReviewer,

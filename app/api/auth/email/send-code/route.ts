@@ -13,7 +13,10 @@ export async function POST(req: NextRequest) {
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceKey) {
+      return NextResponse.json({ success: false, message: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing' }, { status: 500 })
+    }
     const supabase = createClient(url, serviceKey)
 
     // Create a new verification code (TTL 15 minutes)
@@ -40,43 +43,80 @@ export async function POST(req: NextRequest) {
       code = fallback
     }
 
-    // In development, log the code and short-circuit
-    if (process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true') {
+    const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
+    if (isDev) {
       console.log(`✉️ Dev email code for ${email}: ${code}`)
-      return NextResponse.json({ success: true, message: 'Dev mode: code generated', devCode: code })
     }
 
     // Send the email via Resend if configured
     const resendKey = process.env.RESEND_API_KEY
-    const fromEmail = process.env.EMAIL_FROM || 'noreply@rwb.gov.rw'
+    const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev' // Use Resend's onboarding domain
+    
+    // Log code in development mode only
+    if (process.env.EMAIL_DEV_MODE === 'true') {
+      console.log('✉️ Dev email code for', email, ':', code)
+    }
+    
     if (resendKey) {
-      const subject = 'Your verification code'
+      const subject = 'Your verification code - Rwanda Water Board'
       const html = `
-        <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6">
-          <h2>Verify your email</h2>
-          <p>Use this code to verify your email address. It expires in 15 minutes.</p>
-          <div style="font-size:32px;font-weight:700;letter-spacing:6px;background:#f4f6f8;padding:12px 16px;border-radius:8px;display:inline-block">${code}</div>
-          <p style="color:#6b7280">If you didn't request this, you can ignore this email.</p>
+        <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:600px;margin:0 auto;padding:20px">
+          <div style="text-align:center;margin-bottom:30px">
+            <h1 style="color:#1f2937;margin:0">Rwanda Water Board</h1>
+            <h2 style="color:#4b5563;margin:10px 0">Email Verification</h2>
+          </div>
+          <p style="font-size:16px;color:#374151">Use this code to verify your email address:</p>
+          <div style="text-align:center;margin:30px 0">
+            <div style="font-size:36px;font-weight:700;letter-spacing:8px;background:#f3f4f6;color:#1f2937;padding:20px;border-radius:12px;display:inline-block;border:2px solid #e5e7eb">${code}</div>
+          </div>
+          <p style="color:#6b7280;font-size:14px;margin:20px 0">This code expires in 15 minutes.</p>
+          <p style="color:#6b7280;font-size:14px">If you didn't request this verification, you can safely ignore this email.</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:30px 0">
+          <p style="color:#9ca3af;font-size:12px;text-align:center">Rwanda Water Board - Water Permit Application System</p>
         </div>`
 
+      console.log(`📤 Sending email via Resend API...`)
+      
       const resp = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${resendKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ from: fromEmail, to: email, subject, html })
+        body: JSON.stringify({ 
+          from: fromEmail, 
+          to: email, 
+          subject, 
+          html 
+        })
       })
 
+      const responseText = await resp.text()
+      console.log(`📬 Resend response: status=${resp.status}, body=${responseText}`)
+
       if (!resp.ok) {
-        const msg = await resp.text()
-        console.warn('⚠️ Resend error:', msg)
-        // Still return success because code was created; user can use code if they receive later or request dev
+        console.error('❌ Resend API error:', responseText)
+        // Still return success because code was created; user can use devCode
+        return NextResponse.json({ 
+          success: true, 
+          message: `Email sending failed but code created. ${isDev ? 'Use devCode below.' : 'Try resending.'}`, 
+          devCode: isDev ? code : undefined,
+          debug: isDev ? { resendError: responseText } : undefined
+        })
       }
-      return NextResponse.json({ success: true, message: 'Verification email sent' })
+      
+      // Email sent successfully
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Verification email sent successfully!', 
+        devCode: isDev ? code : undefined 
+      })
     }
 
-    // No provider configured; fall back to dev behavior requiring EMAIL_DEV_MODE
+    // No provider configured
+    if (isDev) {
+      return NextResponse.json({ success: true, message: 'Dev mode: provider not configured, using dev code', devCode: code })
+    }
     return NextResponse.json({ success: false, message: 'Email provider not configured. Set RESEND_API_KEY.' }, { status: 500 })
   } catch (err) {
     console.error('❌ send-code error', err)
