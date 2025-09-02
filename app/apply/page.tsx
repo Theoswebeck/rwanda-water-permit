@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
@@ -11,8 +11,40 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function ApplyPage() {
   const router = useRouter();
-  const { signUp } = useAuth();
+  const { signUp, isAuthenticated, isApplicant, loading } = useAuth();
   const [step, setStep] = useState<"signup" | "verify" | "success">("signup");
+
+  // Redirect authenticated applicants to dashboard
+  useEffect(() => {
+    if (!loading && isAuthenticated && isApplicant) {
+      router.push('/dashboard');
+    }
+  }, [loading, isAuthenticated, isApplicant, router]);
+
+  // Show loading or redirect early to prevent flash
+  if (loading) {
+    return (
+      <AuthLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  // If authenticated applicant, show loading while redirecting
+  if (isAuthenticated && isApplicant) {
+    return (
+      <AuthLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Redirecting to dashboard...</p>
+          </div>
+        </div>
+      </AuthLayout>
+    );
+  }
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [userData, setUserData] = useState<{

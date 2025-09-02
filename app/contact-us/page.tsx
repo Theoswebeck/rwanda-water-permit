@@ -148,7 +148,7 @@ export default function ContactUsPage() {
                       </div>
                       <div>
                         <p className="font-medium text-gray-900">Phone</p>
-                        <p className="text-gray-600">+250 788 123 456</p>
+                        <p className="text-gray-600">+250 782 985 880</p>
                       </div>
                     </div>
                     
@@ -301,7 +301,7 @@ export default function ContactUsPage() {
                             <Input
                               id="phone"
                               type="tel"
-                              placeholder="+250 788 123 456"
+                              placeholder="+250 782 985 880"
                               value={formData.phone}
                               onChange={(e) => handleInputChange("phone", e.target.value)}
                             />

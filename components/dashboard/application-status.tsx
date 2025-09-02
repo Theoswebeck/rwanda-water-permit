@@ -13,9 +13,7 @@ import {
   RefreshCw,
   Loader2,
   TrendingUp,
-  TrendingDown,
-  Users,
-  Calendar
+  TrendingDown
 } from "lucide-react";
 import type { Application } from "@/types/database";
 
@@ -256,66 +254,7 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
           </Card>
         </motion.div>
 
-        {/* Quick Insights */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg font-semibold">Quick Insights</CardTitle>
-              <CardDescription>Application overview and trends</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    <div>
-                      <p className="text-sm font-medium">This Month</p>
-                      <p className="text-xs text-muted-foreground">New submissions</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold">{thisMonthApps}</p>
-                    <p className="text-xs text-green-600">Applications</p>
-                  </div>
-                </div>
 
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <div className="flex items-center gap-3">
-                    <Users className="h-4 w-4 text-green-600" />
-                    <div>
-                      <p className="text-sm font-medium">Success Rate</p>
-                      <p className="text-xs text-muted-foreground">Approval percentage</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold">{approvalRate}%</p>
-                    <p className="text-xs text-muted-foreground">Of processed</p>
-                  </div>
-                </div>
-
-                {stats.revisionRequired > 0 && (
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 border border-orange-200">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="h-4 w-4 text-orange-600" />
-                      <div>
-                        <p className="text-sm font-medium text-orange-900">Action Required</p>
-                        <p className="text-xs text-orange-700">Applications need revision</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold text-orange-900">{stats.revisionRequired}</p>
-                      <p className="text-xs text-orange-600">Pending</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
       </div>
     </div>
   );

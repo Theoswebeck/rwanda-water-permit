@@ -79,7 +79,7 @@ export default function ContactPage() {
     title: "General Inquiries",
     description: "Questions about water permits, applications, and general information",
     items: [
-      { icon: Phone, label: "+250 788 123 456", href: "tel:+250788123456" },
+      { icon: Phone, label: "+250 782 985 880", href: "tel:+250782985880" },
       { icon: Mail, label: "info@rwb.rw", href: "mailto:info@rwb.rw" },
       { icon: Clock, label: "Mon-Fri: 8:00 AM - 5:00 PM" }
     ],
@@ -90,20 +90,8 @@ export default function ContactPage() {
     {
       title: "Main Office - Kigali",
       address: "KN 3 Ave, Kigali, Rwanda",
-      phone: "+250 788 123 456",
-      email: "kigali@rwb.rw"
-    },
-    {
-      title: "Northern Office - Musanze",
-      address: "Musanze District, Northern Province",
-      phone: "+250 788 234 567", 
-      email: "musanze@rwb.rw"
-    },
-    {
-      title: "Southern Office - Huye",
-      address: "Huye District, Southern Province",
-      phone: "+250 788 345 678",
-      email: "huye@rwb.rw"
+      phone: "+250 782 985 880",
+      email: "info@rwb.rw"
     }
   ];
 
