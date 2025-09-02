@@ -33,38 +33,83 @@ export function usePermits({
       setLoading(true)
       setError(null)
 
-      // Simple query without complex joins to avoid RLS issues
-      let query = supabase
-        .from('permits')
-        .select('*')
+      if (userId) {
+        // First get the user's application IDs
+        const { data: userApplications, error: appsError } = await supabase
+          .from('applications')
+          .select('id')
+          .eq('applicant_id', userId)
 
-      // Apply filters
-      if (filters?.status) {
-        query = query.in('status', filters.status)
+        if (appsError) throw appsError
+
+        const applicationIds = userApplications?.map(app => app.id) || []
+
+        if (applicationIds.length === 0) {
+          // User has no applications, so no permits
+          setPermits([])
+          return
+        }
+
+        // Now get permits for those applications
+        let query = supabase
+          .from('permits')
+          .select('*')
+          .in('application_id', applicationIds)
+
+        // Apply filters
+        if (filters?.status) {
+          query = query.in('status', filters.status)
+        }
+
+        if (filters?.expiring_soon) {
+          // Get permits expiring in next 30 days
+          const thirtyDaysFromNow = new Date()
+          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+          query = query.lte('expiry_date', thirtyDaysFromNow.toISOString())
+        }
+
+        // Order by issue date desc
+        query = query.order('issued_date', { ascending: false })
+
+        const { data, error } = await query
+
+        if (error) throw error
+
+        setPermits(data || [])
+      } else {
+        // No userId provided, fetch all permits (for admin/reviewer use cases)
+        let query = supabase
+          .from('permits')
+          .select('*')
+
+        // Apply filters
+        if (filters?.status) {
+          query = query.in('status', filters.status)
+        }
+
+        if (filters?.expiring_soon) {
+          // Get permits expiring in next 30 days
+          const thirtyDaysFromNow = new Date()
+          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+          query = query.lte('expiry_date', thirtyDaysFromNow.toISOString())
+        }
+
+        // Order by issue date desc
+        query = query.order('issued_date', { ascending: false })
+
+        const { data, error } = await query
+
+        if (error) throw error
+
+        setPermits(data || [])
       }
-
-      if (filters?.expiring_soon) {
-        // Get permits expiring in next 30 days
-        const thirtyDaysFromNow = new Date()
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
-        query = query.lte('expiry_date', thirtyDaysFromNow.toISOString())
-      }
-
-      // Order by issue date desc
-      query = query.order('issued_date', { ascending: false })
-
-      const { data, error } = await query
-
-      if (error) throw error
-
-      setPermits(data || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch permits')
       console.error('Error fetching permits:', err)
     } finally {
       setLoading(false)
     }
-  }, [filters])
+  }, [userId, filters])
 
   const getPermit = useCallback(async (id: string): Promise<Permit | null> => {
     try {

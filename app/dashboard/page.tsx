@@ -8,6 +8,7 @@ import { ApplicationsList } from "@/components/dashboard/applications-list";
 import { ApplicationStatus } from "@/components/dashboard/application-status";
 import { PermitsList, Permit as PermitListItem } from "@/components/dashboard/permits-list";
 import { PermitStatus } from "@/components/dashboard/permits-status";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,10 +17,12 @@ import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, BarChart3, Check
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { usePermits } from "@/hooks/usePermits";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Permit as DatabasePermit } from "@/types/database";
 
 export default function DashboardPage() {
   const searchParams = useSearchParams();
+  const { user, userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"applications" | "permits">("applications");
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   
@@ -41,7 +44,7 @@ export default function DashboardPage() {
     }
   }, [searchParams]);
   
-  // Fetch applications and permits (without user filtering for now)
+  // Fetch applications and permits for the current user only
   const {
     applications,
     loading: applicationsLoading,
@@ -49,7 +52,8 @@ export default function DashboardPage() {
     refresh: refreshApplications,
     deleteApplication
   } = useApplications({
-    // We'll add user filtering later
+    userId: user?.id, // Filter applications by current user
+    autoFetch: !!user?.id // Only fetch when we have a user ID
   });
 
   const {
@@ -58,7 +62,8 @@ export default function DashboardPage() {
     error: permitsError,
     refresh: refreshPermits
   } = usePermits({
-    autoFetch: true
+    userId: user?.id, // Filter permits by current user's applications
+    autoFetch: !!user?.id // Only fetch when we have a user ID
   });
 
   // Transform database permits to component format
@@ -108,137 +113,139 @@ export default function DashboardPage() {
   const hasError = applicationsError || permitsError;
 
   return (
-    <DashboardLayout>
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between space-y-2 mb-8">
-            <div>
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-                Water Permit Dashboard
-              </h1>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-                Manage your water permit applications and view permits
-              </p>
+    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+      <DashboardLayout>
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between space-y-2 mb-8">
+              <div>
+                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                  Water Permit Dashboard
+                </h1>
+                <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+                  Manage your water permit applications and view your permits
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Link href="/dashboard/new-application">
+                  <Button>
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    New Application
+                  </Button>
+                </Link>
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <Link href="/dashboard/new-application">
-                <Button>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  New Application
-                </Button>
-              </Link>
-            </div>
-          </div>
 
-          {/* Success Alert */}
-          {showSuccessAlert && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Alert className="mb-6 border-green-200 bg-green-50">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
-                  🎉 <strong>Application Created Successfully!</strong> Your water permit application has been saved as a draft. You can continue editing it or submit it for review.
+            {/* Success Alert */}
+            {showSuccessAlert && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Alert className="mb-6 border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">
+                    🎉 <strong>Application Created Successfully!</strong> Your water permit application has been saved as a draft. You can continue editing it or submit it for review.
+                  </AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
+
+            {/* Error handling */}
+            {hasError && (
+              <Alert variant="destructive" className="mb-6">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {applicationsError || permitsError}
                 </AlertDescription>
               </Alert>
-            </motion.div>
-          )}
+            )}
 
-          {/* Error handling */}
-          {hasError && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {applicationsError || permitsError}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Main Content */}
-          <Tabs defaultValue="applications" value={activeTab} onValueChange={(value) => setActiveTab(value as "applications" | "permits")} className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="applications" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Applications ({applications.length})
-              </TabsTrigger>
-              <TabsTrigger value="permits" className="flex items-center gap-2">
-                <FileCheck className="h-4 w-4" />
-                Permits ({permits.length})
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="applications" className="space-y-4">
-              {/* Applications Status Overview */}
-              <ApplicationStatus 
-                applications={applications} 
-                loading={applicationsLoading}
-                onRefresh={refreshApplications}
-              />
+            {/* Main Content */}
+            <Tabs defaultValue="applications" value={activeTab} onValueChange={(value) => setActiveTab(value as "applications" | "permits")} className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="applications" className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Applications ({applications.length})
+                </TabsTrigger>
+                <TabsTrigger value="permits" className="flex items-center gap-2">
+                  <FileCheck className="h-4 w-4" />
+                  Permits ({permits.length})
+                </TabsTrigger>
+              </TabsList>
               
-              {/* Applications List */}
-              <div className="grid gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      All Applications
-                    </CardTitle>
-                    <CardDescription>
-                      View and manage your water permit applications
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ApplicationsList 
-                      applications={applications} 
-                      loading={applicationsLoading}
-                      onDeleteApplications={handleBulkDeleteApplications}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-            
-            <TabsContent value="permits" className="space-y-4">
-              {/* Permits Overview */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <PermitStatus permits={permits} />
-              </motion.div>
+              <TabsContent value="applications" className="space-y-4">
+                {/* Applications Status Overview */}
+                <ApplicationStatus 
+                  applications={applications} 
+                  loading={applicationsLoading}
+                  onRefresh={refreshApplications}
+                />
+                
+                {/* Applications List */}
+                <div className="grid gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Your Applications
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage your water permit applications
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ApplicationsList 
+                        applications={applications} 
+                        loading={applicationsLoading}
+                        onDeleteApplications={handleBulkDeleteApplications}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
               
-              {/* Permits List */}
-              <div className="grid gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileCheck className="h-5 w-5" />
-                      Active Permits
-                    </CardTitle>
-                    <CardDescription>
-                      View and manage your issued water permits
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <PermitsList permits={permits} />
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </motion.div>
-      </div>
-      
-      {/* Terms & Conditions Modal */}
-      {/* This modal is now handled by the application detail page */}
-    </DashboardLayout>
+              <TabsContent value="permits" className="space-y-4">
+                {/* Permits Overview */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <PermitStatus permits={permits} />
+                </motion.div>
+                
+                {/* Permits List */}
+                <div className="grid gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileCheck className="h-5 w-5" />
+                        Your Permits
+                      </CardTitle>
+                      <CardDescription>
+                        View and manage your issued water permits
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <PermitsList permits={permits} />
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </motion.div>
+        </div>
+        
+        {/* Terms & Conditions Modal */}
+        {/* This modal is now handled by the application detail page */}
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

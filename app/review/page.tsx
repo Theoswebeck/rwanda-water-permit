@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -516,13 +517,14 @@ export default function ReviewerDashboard() {
   }
 
   return (
-    <DashboardLayout>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="container mx-auto px-4 py-6"
-      >
+    <ProtectedRoute allowedRoles={['reviewer']} requireProfile={true}>
+      <DashboardLayout>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="container mx-auto px-4 py-6"
+        >
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -770,5 +772,6 @@ export default function ReviewerDashboard() {
         </div>
       </motion.div>
     </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

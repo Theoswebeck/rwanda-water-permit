@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -57,38 +58,43 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
+      <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+        <DashboardLayout>
+          <div className="container mx-auto px-4 py-6">
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
           </div>
-        </div>
-      </DashboardLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
 
   if (error) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
-          <div className="text-center py-12">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
-            <p className="text-muted-foreground">{error}</p>
+      <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+        <DashboardLayout>
+          <div className="container mx-auto px-4 py-6">
+            <div className="text-center py-12">
+              <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
+              <p className="text-muted-foreground">{error}</p>
+            </div>
           </div>
-        </div>
-      </DashboardLayout>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <DashboardLayout>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="container mx-auto px-4 py-6"
-        >
+    <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+      <DashboardLayout>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="container mx-auto px-4 py-6"
+          >
           <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -224,5 +230,6 @@ export default function AdminDashboard() {
           </div>
         </motion.div>
       </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

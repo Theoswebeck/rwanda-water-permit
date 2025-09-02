@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ApplicationForm } from "@/components/dashboard/application-form-new";
 
 import { Button } from "@/components/ui/button";
@@ -600,64 +601,69 @@ export default function NewApplicationPage() {
   
   if (loadingDraft) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="max-w-md mx-auto text-center py-12"
-          >
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-            </div>
-            <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-blue-900 mb-2">Loading Draft...</h2>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-blue-700 mb-4">
-              Please wait while we load your saved application.
-            </p>
-          </motion.div>
-        </div>
-      </DashboardLayout>
+      <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+        <DashboardLayout>
+          <div className="container mx-auto px-4 py-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="max-w-md mx-auto text-center py-12"
+            >
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+              </div>
+              <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-blue-900 mb-2">Loading Draft...</h2>
+              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-blue-700 mb-4">
+                Please wait while we load your saved application.
+              </p>
+            </motion.div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
 
   if (success) {
     return (
-      <DashboardLayout>
-        <div className="container mx-auto px-4 py-6">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-            className="max-w-md mx-auto text-center py-12"
-          >
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-            <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-green-900 mb-2">Success!</h2>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-green-700 mb-4">
-              Your application has been saved as a draft. You can continue editing or submit it for review.
-            </p>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
-              Your progress has been saved and you can continue working on your application later.
-            </p>
-          </motion.div>
-        </div>
-      </DashboardLayout>
+      <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+        <DashboardLayout>
+          <div className="container mx-auto px-4 py-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+              className="max-w-md mx-auto text-center py-12"
+            >
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+              <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-green-900 mb-2">Success!</h2>
+              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-green-700 mb-4">
+                Your application has been saved as a draft. You can continue editing or submit it for review.
+              </p>
+              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
+                Your progress has been saved and you can continue working on your application later.
+              </p>
+            </motion.div>
+          </div>
+        </DashboardLayout>
+      </ProtectedRoute>
     );
   }
   
   return (
-    <DashboardLayout>
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center mb-6">
-          <Link href="/dashboard">
-            <Button variant="ghost" className="gap-1">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Button>
-          </Link>
-        </div>
+    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+      <DashboardLayout>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center mb-6">
+            <Link href="/dashboard">
+              <Button variant="ghost" className="gap-1">
+                <ArrowLeft className="h-4 w-4" />
+                Back to Dashboard
+              </Button>
+            </Link>
+          </div>
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -707,7 +713,8 @@ export default function NewApplicationPage() {
             mode={draftId ? 'edit' : 'create'}
           />
         </motion.div>
-      </div>
-    </DashboardLayout>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

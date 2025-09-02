@@ -27,7 +27,7 @@ interface AuthContextType {
   loading: boolean
   isAuthenticated: boolean
   signIn: (email: string, password: string) => Promise<{ error?: string }>
-  signUp: (data: SignUpData) => Promise<{ error?: string }>
+  signUp: (data: SignUpData & { emailCode?: string }) => Promise<{ error?: string, needsEmailVerification?: boolean, email?: string }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (updates: Partial<User>) => Promise<{ error?: string }>
@@ -408,87 +408,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  const signUp = async (data: SignUpData) => {
+  const signUp = async (data: SignUpData & { emailCode?: string }) => {
     try {
-      console.log('📝 Starting signup process...', data.accountType);
+      console.log('📝 Starting signup process (custom API)...', data.accountType);
 
-      // Step 1: Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
+      // Call our server route which validates email code, creates user, and profile
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
       });
 
-      if (authError) {
-        console.error('❌ Auth signup error:', authError.message);
-        return { error: authError.message };
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        return { error: result.message || 'Signup failed' };
       }
 
-      if (!authData.user) {
-        return { error: 'Failed to create user account' };
-      }
-
-      console.log('✅ Auth user created:', authData.user.id);
-
-      // Step 2: Create user profile
-      const profileData: Partial<User> = {
-        id: authData.user.id,
-        email: data.email,
-        role: 'applicant',
-        status: 'active',
-        account_type: data.accountType,
-        applications_count: 0,
-        reviews_count: 0,
-        inspections_count: 0,
-      };
-
-      // Add account-specific fields
-      if (data.accountType === 'individual') {
-        profileData.first_name = data.firstName || 'User';
-        profileData.last_name = data.lastName || 'Profile';
-        profileData.phone = data.phone;
-        profileData.id_number = data.identification?.number || data.idNumber;
-        profileData.id_type = 'national_id'; // Individual accounts use National ID
-        profileData.company_name = undefined; // Explicitly set to undefined for individual accounts
-      } else {
-        profileData.company_name = data.companyName;
-        profileData.company_tin = data.companyTIN;
-        profileData.company_address = data.companyAddress;
-        profileData.company_phone = data.companyPhone;
-        profileData.id_type = 'tin'; // Company accounts use TIN
-        profileData.id_number = data.companyTIN; // Use TIN as the ID number for companies
-        profileData.first_name = undefined; // Explicitly set to undefined for company accounts
-        profileData.last_name = undefined; // Explicitly set to undefined for company accounts
-      }
-
-      console.log('💾 Updating user profile with form data...');
-
-      // Wait a moment for the trigger to create the basic profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Update the existing profile instead of creating a new one
-      const { error: profileError } = await supabase
-        .from('users')
-        .update(profileData)
-        .eq('id', authData.user.id);
-
-      if (profileError) {
-        console.error('❌ Profile update error:', profileError.message);
-        
-        // If update fails, try to insert (fallback)
-        console.log('📝 Trying to insert profile as fallback...');
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert([profileData]);
-          
-        if (insertError && insertError.code !== '23505') {
-          console.error('❌ Profile insert error:', insertError.message);
-          // Clean up auth user if profile creation fails
-          await supabase.auth.signOut();
-          return { error: `Profile creation failed: ${insertError.message}` };
-        }
-      }
-
-      console.log('✅ User profile created successfully');
       return {};
     } catch (err) {
       console.error('❌ Unexpected signup error:', err);

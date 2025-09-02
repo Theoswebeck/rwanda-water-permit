@@ -47,11 +47,15 @@ export function LogoutButton({
     setIsLoggingOut(true);
     
     try {
+      // Sign out and wait for it to complete
       await signOut();
-      router.push("/login");
+      
+      // Force a hard redirect to homepage to completely refresh the app state
+      window.location.replace("/");
     } catch (err) {
       console.error("Logout error:", err);
-      setIsLoggingOut(false);
+      // Even if signOut fails, redirect to homepage
+      window.location.replace("/");
     }
   };
 

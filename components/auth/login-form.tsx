@@ -7,17 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Mail, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn } = useAuth();
+  const { signIn, resendEmailVerification } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showEmailVerificationHelp, setShowEmailVerificationHelp] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
 
   useEffect(() => {
     // Check for messages from URL params
@@ -69,6 +73,11 @@ export function LoginForm() {
       if (result.error) {
         console.error("❌ Login failed:", result.error);
         setError(result.error);
+        
+        // Check if error is related to email verification
+        if (result.error.includes('verify your email') || result.error.includes('email not confirmed')) {
+          setShowEmailVerificationHelp(true);
+        }
         return;
       }
       
@@ -79,6 +88,31 @@ export function LoginForm() {
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email) {
+      setError("Please enter your email address first.");
+      return;
+    }
+
+    setResendingEmail(true);
+    setError("");
+    
+    try {
+      const result = await resendEmailVerification(email);
+      
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setSuccess("Verification email sent successfully! Please check your inbox.");
+        setShowEmailVerificationHelp(false);
+      }
+    } catch (error) {
+      setError("Failed to send verification email. Please try again.");
+    } finally {
+      setResendingEmail(false);
     }
   };
 
@@ -101,6 +135,35 @@ export function LoginForm() {
             <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md">
               {success}
             </div>
+          )}
+          {showEmailVerificationHelp && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Mail className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-700">
+                <div className="space-y-2">
+                  <p>Your email address needs to be verified before you can log in.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResendVerification}
+                    disabled={resendingEmail || !email}
+                    className="w-full"
+                  >
+                    {resendingEmail ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="mr-2 h-4 w-4" />
+                        Resend Verification Email
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
           )}
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>

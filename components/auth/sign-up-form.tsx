@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
 import { PhoneVerificationDialog } from "@/components/auth/phone-verification-dialog";
 import { usePhoneVerification } from "@/hooks/usePhoneVerification";
+import { EmailCodeDialog } from "@/components/auth/email-code-dialog";
 
 interface SignUpFormProps {
   onSubmit?: (email: string, password: string, accountType: string, details: any) => void;
@@ -36,6 +37,9 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
   // Local state
   const [localError, setLocalError] = useState<string>("");
   const [localLoading, setLocalLoading] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailCode, setEmailCode] = useState<string | undefined>(undefined);
   
   // Phone verification state
   const [showPhoneVerification, setShowPhoneVerification] = useState(false);
@@ -203,6 +207,9 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     const newEmail = e.target.value;
     setEmail(newEmail);
     validateEmail(newEmail);
+    // Reset email verification status when email changes
+    setEmailVerified(false);
+    setEmailCode(undefined);
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,6 +255,24 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     setLocalError("");
   };
 
+  // Helper function to check if phone verification is complete for current account type
+  const isPhoneVerificationComplete = () => {
+    const currentPhone = accountType === 'company' ? companyPhone : phone;
+    return phoneVerified && currentPhoneForVerification === currentPhone;
+  };
+
+  // Helper function to get verification status message
+  const getPhoneVerificationMessage = () => {
+    const currentPhone = accountType === 'company' ? companyPhone : phone;
+    if (!phoneVerified) {
+      return "Phone verification required";
+    }
+    if (currentPhoneForVerification !== currentPhone) {
+      return "Phone number changed - verification required";
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
@@ -263,10 +288,55 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
       return; // Stop submission if validation fails
     }
 
-    // Check if phone verification is required and completed
+    // Enforce email code verification prior to signup
+    if (!emailVerified || !emailCode) {
+      setEmailDialogOpen(true);
+      return;
+    }
+
+    // STRICT ENFORCEMENT: Phone verification is absolutely required
     const currentPhone = accountType === 'company' ? companyPhone : phone;
-    if (!phoneVerified || currentPhoneForVerification !== currentPhone) {
-      setLocalError("Please verify your phone number before creating an account");
+    if (!phoneVerified) {
+      setLocalError("🚨 Phone verification is required to create an account. Please verify your phone number first.");
+      return;
+    }
+    
+    if (currentPhoneForVerification !== currentPhone) {
+      setLocalError("🚨 Phone number has changed since verification. Please verify the new phone number.");
+      // Reset phone verification status
+      setPhoneVerified(false);
+      setCurrentPhoneForVerification("");
+      return;
+    }
+
+    // Double-check verification status
+    if (!isPhoneVerificationComplete()) {
+      setLocalError("🚨 Phone verification incomplete. Please complete phone verification to proceed.");
+      return;
+    }
+
+    // Server-side verification check before account creation
+    setLocalLoading(true);
+    try {
+      const verificationCheck = await fetch('/api/auth/verify-phone-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: currentPhone })
+      });
+
+      const verificationResult = await verificationCheck.json();
+      
+      if (!verificationResult.success || !verificationResult.verified) {
+        setLocalError(`🚨 Server verification failed: ${verificationResult.message || 'Phone not verified on server'}`);
+        setPhoneVerified(false); // Reset local state
+        setLocalLoading(false);
+        return;
+      }
+
+      console.log('✅ Server-side phone verification confirmed');
+    } catch (verificationError) {
+      setLocalError("🚨 Failed to verify phone status with server. Please try again.");
+      setLocalLoading(false);
       return;
     }
 
@@ -299,6 +369,7 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
         email,
         password,
         accountType: accountType as 'individual' | 'company',
+        emailCode,
         ...(accountType === 'company' 
           ? { 
               companyName, 
@@ -546,12 +617,22 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                 </div>
                 
+                {/* Phone verification status message */}
+                {!isPhoneVerificationComplete() && (
+                  <div className="p-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md flex items-center">
+                    <Shield className="h-4 w-4 mr-2" />
+                    {getPhoneVerificationMessage()}
+                  </div>
+                )}
+
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading}
+                  disabled={isLoading || !isPhoneVerificationComplete()}
                 >
-                  {isLoading ? "Creating account..." : "Create Company Account"}
+                  {isLoading ? "Creating account..." : 
+                   !isPhoneVerificationComplete() ? "Verify Phone to Continue" :
+                   "Create Company Account"}
                 </Button>
               </form>
             </TabsContent>
@@ -722,12 +803,23 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   </div>
                   {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                 </div>
+                
+                {/* Phone verification status message */}
+                {!isPhoneVerificationComplete() && (
+                  <div className="p-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md flex items-center">
+                    <Shield className="h-4 w-4 mr-2" />
+                    {getPhoneVerificationMessage()}
+                  </div>
+                )}
+
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading}
+                  disabled={isLoading || !isPhoneVerificationComplete()}
                 >
-                  {isLoading ? "Creating account..." : "Create Personal Account"}
+                  {isLoading ? "Creating account..." : 
+                   !isPhoneVerificationComplete() ? "Verify Phone to Continue" :
+                   "Create Personal Account"}
                 </Button>
               </form>
             </TabsContent>
@@ -774,6 +866,18 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
         onSendCode={() => sendVerificationCode(currentPhoneForVerification)}
         onVerifyCode={verifyCode}
         requestId={verificationRequestId}
+      />
+
+      {/* Email Code Dialog */}
+      <EmailCodeDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        email={email}
+        onVerified={(code) => {
+          setEmailVerified(true);
+          setEmailCode(code);
+          setLocalError("");
+        }}
       />
     </motion.div>
   );
