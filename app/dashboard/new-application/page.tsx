@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { ApplicationForm } from "@/components/dashboard/application-form-new";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -13,36 +14,53 @@ import { ArrowLeft, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
-import { uploadDocument } from "@/lib/supabase-storage";
+import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
 import type { Application, Document } from "@/types/database";
 
-// Helper function to capitalize province names for database enum compatibility
+// Helper function to map Rwanda administrative data province names to database enum
 function formatProvinceForDB(province: string): Application['province'] | undefined {
   if (!province) return undefined;
   const provinceMap: Record<string, Application['province']> = {
-    'kigali': 'Kigali',
-    'northern': 'Northern', 
-    'southern': 'Southern',
-    'eastern': 'Eastern',
-    'western': 'Western'
+    'Kigali': 'Kigali',
+    'North': 'Northern', 
+    'South': 'Southern',
+    'East': 'Eastern',
+    'West': 'Western'
   };
-  return provinceMap[province.toLowerCase()];
+  return provinceMap[province] || provinceMap[province.toLowerCase()] || undefined;
 }
 
 // Mapping function to transform form data to database schema
 function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft'): Partial<Application> {
-  // Handle coordinates
+  // Handle coordinates - now expecting 5 points for a polygon
   let coordinates = undefined;
-  if (formData.waterSourceLatitude && formData.waterSourceLongitude) {
+  if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
     try {
-      const lat = parseFloat(formData.waterSourceLatitude);
-      const lon = parseFloat(formData.waterSourceLongitude);
-      if (!isNaN(lat) && !isNaN(lon)) {
-        // Store as GeoJSON point for PostGIS compatibility
+      const validCoordinates = formData.waterSourceCoordinates
+        .filter((coord: any) => coord.latitude && coord.longitude)
+        .map((coord: any) => {
+          const lat = parseFloat(coord.latitude);
+          const lon = parseFloat(coord.longitude);
+          if (!isNaN(lat) && !isNaN(lon)) {
+            return [lon, lat]; // GeoJSON uses [longitude, latitude] order
+          }
+          return null;
+        })
+        .filter((coord: any) => coord !== null);
+
+      if (validCoordinates.length === 5) {
+        // Ensure the polygon is closed by making the last point same as first if needed
+        const firstPoint = validCoordinates[0];
+        const lastPoint = validCoordinates[4];
+        if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
+          validCoordinates.push(firstPoint); // Close the polygon
+        }
+        
+        // Store as GeoJSON polygon for PostGIS compatibility
         coordinates = {
-          type: 'Point',
-          coordinates: [lon, lat] // GeoJSON uses [longitude, latitude] order
+          type: 'Polygon',
+          coordinates: [validCoordinates] // Polygon requires array of linear rings
         };
       }
     } catch (error) {
@@ -90,14 +108,15 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
   };
 
   // For drafts, provide default values for required fields that might be empty
+  // Only use defaults when the actual form data is truly empty
   const defaultsForDrafts = {
     water_source: waterSourceTypeMap[formData.waterSourceType] || 'surface_water',
     water_purpose: activityPurposeMap[primaryActivity] || 'domestic',
     application_type: activityTypeMap[primaryActivity] || 'domestic',
     province: formatProvinceForDB(formData.officeProvince) || 'Kigali',
-    district: formData.officeDistrict || 'Draft District',
-    sector: formData.officeSector || 'Draft Sector', 
-    cell: formData.officeCell || 'Draft Cell',
+    district: formData.officeDistrict || (status === 'draft' ? 'Draft District' : ''),
+    sector: formData.officeSector || (status === 'draft' ? 'Draft Sector' : ''), 
+    cell: formData.officeCell || (status === 'draft' ? 'Draft Cell' : ''),
     project_title: formData.fullNameApplicant ? `${formData.fullNameApplicant} Water Permit Application` : 'Draft Application'
   };
 
@@ -112,11 +131,11 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     estimated_usage_volume: formData.waterAbstractionDetails?.[0]?.maxAverageYearly,
     usage_unit: 'm³/year',
     
-    // Location details - with defaults for drafts  
-    province: defaultsForDrafts.province,
-    district: defaultsForDrafts.district,
-    sector: defaultsForDrafts.sector,
-    cell: defaultsForDrafts.cell,
+    // Location details - use actual form data or defaults for drafts  
+    province: formatProvinceForDB(formData.officeProvince) || defaultsForDrafts.province,
+    district: formData.officeDistrict || defaultsForDrafts.district,
+    sector: formData.officeSector || defaultsForDrafts.sector,
+    cell: formData.officeCell || defaultsForDrafts.cell,
     village: formData.officeVillage,
     coordinates: coordinates,
     location_description: formData.officeDistrict ? 
@@ -170,7 +189,7 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
 }
 
 // Transform Application data back to form format for editing
-function mapApplicationToFormData(application: Application): any {
+function mapApplicationToFormData(application: Application, userProfile?: any): any {
   const formData: any = {};
   
 
@@ -191,22 +210,23 @@ function mapApplicationToFormData(application: Application): any {
   formData.categoryApplicant = notesMap['Category']?.toLowerCase() || 'individual';
   
   // Office address (from application location) - reverse the province mapping
+  // Map database province names to Rwanda administrative data keys
   const provinceReverseMap: Record<string, string> = {
-    'Kigali': 'kigali',
-    'Northern': 'northern',
-    'Southern': 'southern',
-    'Eastern': 'eastern',
-    'Western': 'western'
+    'Kigali': 'Kigali',
+    'Northern': 'North',
+    'Southern': 'South',
+    'Eastern': 'East',
+    'Western': 'West'
   };
-  formData.officeProvince = provinceReverseMap[application.province] || application.province?.toLowerCase() || '';
-  formData.officeDistrict = application.district?.toLowerCase() || '';
-  formData.officeSector = application.sector?.toLowerCase() || '';
-  formData.officeCell = application.cell?.toLowerCase() || '';
+  formData.officeProvince = provinceReverseMap[application.province] || application.province || '';
+  formData.officeDistrict = application.district || '';
+  formData.officeSector = application.sector || '';
+  formData.officeCell = application.cell || '';
   formData.officeVillage = application.village || '';
   
-  // Contact information (would need to be stored somewhere in the application)
-  formData.telephoneContact = '';
-  formData.emailAddress = notesMap['Contact']?.replace('Not provided', '') || '';
+  // Contact information - use profile data if available, otherwise try to extract from notes
+  formData.telephoneContact = userProfile?.phone || userProfile?.company_phone || '';
+  formData.emailAddress = userProfile?.email || notesMap['Contact']?.replace('Not provided', '') || '';
   
   // Water source information
   const waterSourceMap: Record<string, string> = {
@@ -217,28 +237,64 @@ function mapApplicationToFormData(application: Application): any {
   formData.nameSourceWater = 'Water Source'; // Default
   
   // Water source location (same as office for now) - reverse the province mapping
-  formData.waterSourceProvince = provinceReverseMap[application.province] || application.province?.toLowerCase() || '';
-  formData.waterSourceDistrict = application.district?.toLowerCase() || '';
-  formData.waterSourceSector = application.sector?.toLowerCase() || '';
-  formData.waterSourceCell = application.cell?.toLowerCase() || '';
+  formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
+  formData.waterSourceDistrict = application.district || '';
+  formData.waterSourceSector = application.sector || '';
+  formData.waterSourceCell = application.cell || '';
   formData.waterSourceVillage = application.village || '';
   
-  // Coordinates
+  // Coordinates - handle both old Point format and new Polygon format
   if (application.coordinates && typeof application.coordinates === 'object') {
     try {
       const coords = application.coordinates as any;
-      if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
-        formData.waterSourceLongitude = coords.coordinates[0].toString();
-        formData.waterSourceLatitude = coords.coordinates[1].toString();
+      if (coords.type === 'Polygon' && Array.isArray(coords.coordinates) && coords.coordinates[0]) {
+        // New polygon format - extract the 5 points
+        const polygonPoints = coords.coordinates[0];
+        formData.waterSourceCoordinates = polygonPoints.slice(0, 5).map((point: number[]) => ({
+          latitude: point[1].toString(),
+          longitude: point[0].toString()
+        }));
+        // Fill remaining slots if less than 5 points
+        while (formData.waterSourceCoordinates.length < 5) {
+          formData.waterSourceCoordinates.push({ latitude: "", longitude: "" });
+        }
+      } else if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
+        // Legacy point format - convert to first coordinate of polygon
+        formData.waterSourceCoordinates = [
+          { latitude: coords.coordinates[1].toString(), longitude: coords.coordinates[0].toString() },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ];
+      } else {
+        // Invalid format - initialize empty
+        formData.waterSourceCoordinates = [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ];
       }
     } catch (error) {
       console.warn('Error parsing coordinates:', error);
-      formData.waterSourceLatitude = '';
-      formData.waterSourceLongitude = '';
+      formData.waterSourceCoordinates = [
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" }
+      ];
     }
   } else {
-    formData.waterSourceLatitude = '';
-    formData.waterSourceLongitude = '';
+    formData.waterSourceCoordinates = [
+      { latitude: "", longitude: "" },
+      { latitude: "", longitude: "" },
+      { latitude: "", longitude: "" },
+      { latitude: "", longitude: "" },
+      { latitude: "", longitude: "" }
+    ];
   }
   
   // Water reliability
@@ -404,6 +460,7 @@ export default function NewApplicationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const draftId = searchParams.get('id'); // Check if we're editing an existing draft
+  const { userProfile } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -411,7 +468,7 @@ export default function NewApplicationPage() {
   const [loadingDraft, setLoadingDraft] = useState(!!draftId);
   const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
-  const [initialDocuments, setInitialDocuments] = useState<Record<string, string>>({});
+  const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   
   const { createApplication, updateApplication, getApplication } = useApplications();
   const { getDocuments } = useDocuments();
@@ -432,14 +489,14 @@ export default function NewApplicationPage() {
         if (application) {
           setCurrentApplication(application);
           // Transform application data to form format
-          const formData = mapApplicationToFormData(application);
+          const formData = mapApplicationToFormData(application, userProfile);
           setInitialFormData(formData);
           
           // Load documents for this application
           const documents = await getDocuments(draftId);
-          const documentMap: Record<string, string> = {};
+          const documentMap: Record<string, { url: string; name: string }> = {};
           
-          // Map documents by type to their file paths/URLs
+          // Map documents by type to their public URLs and names
           documents.forEach(doc => {
             // Map document types to form field names
             const typeMapping: Record<string, string> = {
@@ -452,8 +509,15 @@ export default function NewApplicationPage() {
             };
             
             const fieldName = typeMapping[doc.type] || doc.type;
-            if (doc.file_path) {
-              documentMap[fieldName] = doc.file_path;
+            if (doc.file_path && doc.name) {
+              // Convert file path to public URL
+              const publicUrl = getDocumentUrl(doc.file_path);
+              if (publicUrl) {
+                documentMap[fieldName] = {
+                  url: publicUrl,
+                  name: doc.name
+                };
+              }
             }
           });
           
@@ -470,17 +534,26 @@ export default function NewApplicationPage() {
     };
     
     loadDraft();
-  }, [draftId, getApplication]);
+  }, [draftId, getApplication, userProfile]);
   
-  // This would typically come from a user context/state in a real application
-  const userData = {
-    email: "jane.doe@example.com",
-    name: "Jane Doe",
-    phone: "+250 789 123 456",
-    address: "KN 5 Ave, Kigali, Rwanda",
-    idNumber: "1 1980 8 0123456 7 89",
+  // Use actual user profile data instead of hardcoded values
+  const userData = userProfile ? {
+    email: userProfile.email || "",
+    name: `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim() || userProfile.company_name || "",
+    phone: userProfile.phone || userProfile.company_phone || "",
+    address: userProfile.company_address || "",
+    idNumber: userProfile.id_number || "",
+    account_type: userProfile.account_type || 'individual' as const,
+    id_number: userProfile.id_number || "",
+    company_tin: userProfile.company_tin,
+  } : {
+    email: "",
+    name: "",
+    phone: "",
+    address: "",
+    idNumber: "",
     account_type: 'individual' as const,
-    id_number: "1 1980 8 0123456 7 89",
+    id_number: "",
     company_tin: undefined,
   };
   

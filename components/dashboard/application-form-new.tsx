@@ -45,6 +45,8 @@ import {
   getFormattedCellOptions,
   getFormattedVillageOptions
 } from '@/lib/rwanda-administrative-data';
+import { CoordinateInputWithValidation } from '@/components/forms/CoordinateInputWithValidation';
+import type { ValidationResponse } from '@/lib/polygonValidation';
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({
@@ -61,10 +63,14 @@ const applicationFormSchema = z.object({
   officeSector: z.string().min(1, { message: "Sector is required" }),
   officeCell: z.string().min(1, { message: "Cell is required" }),
   officeVillage: z.string().optional(),
+  officeCountry: z.string().optional(),
+  officePostalAddress: z.string().optional(),
   
   // Contact Information
   telephoneContact: z.string().min(10, { message: "Telephone is required" }),
+  telephoneContactOffice: z.string().optional(),
   emailAddress: z.string().email({ message: "Valid email is required" }),
+  nationalIdNumber: z.string().optional(),
   
   // SECTION 2: SOURCE OF WATER
   waterSourceType: z.enum(["lake", "dam", "spring", "borehole", "stream_river", "other"]),
@@ -79,9 +85,11 @@ const applicationFormSchema = z.object({
   waterSourceCell: z.string().min(1, { message: "Water source cell is required" }),
   waterSourceVillage: z.string().optional(),
   
-  // Coordinates of water source
-  waterSourceLatitude: z.string().optional(),
-  waterSourceLongitude: z.string().optional(),
+  // Coordinates of water source (5 points for polygon - REQUIRED)
+  waterSourceCoordinates: z.array(z.object({
+    latitude: z.string().min(1, { message: "Latitude is required" }),
+    longitude: z.string().min(1, { message: "Longitude is required" })
+  })).length(5, { message: "Exactly 5 coordinate points are required to define the polygon" }),
   
   // Reliability
   waterReliability: z.enum(["water_always_available", "frequently_dry", "dry_during_certain_season"]),
@@ -156,7 +164,7 @@ interface ApplicationFormProps {
   onSaveAsDraft: (data: FormValues, status: 'draft', isAutoSave?: boolean, draftId?: string | null) => Promise<any>;
   isLoading: boolean;
   initialData?: Partial<FormValues>;
-  initialDocuments?: Record<string, string>;
+  initialDocuments?: Record<string, { url: string; name: string }>;
   mode?: 'create' | 'edit';
 }
 
@@ -175,6 +183,10 @@ export function ApplicationForm({
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
+  
+  // Polygon validation state
+  const [coordinateValidation, setCoordinateValidation] = useState<ValidationResponse | null>(null);
+  const [canSubmit, setCanSubmit] = useState(true);
   
   const fileInputRefs = {
     identificationDoc: useRef<HTMLInputElement>(null),
@@ -230,6 +242,7 @@ export function ApplicationForm({
   const [selectedOfficeProvince, setSelectedOfficeProvince] = useState("");
   const [selectedOfficeDistrict, setSelectedOfficeDistrict] = useState("");
   const [selectedOfficeSector, setSelectedOfficeSector] = useState("");
+  const [selectedOfficeCell, setSelectedOfficeCell] = useState("");
   const [selectedWaterSourceProvince, setSelectedWaterSourceProvince] = useState("");
   const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
   const [selectedWaterSourceSector, setSelectedWaterSourceSector] = useState("");
@@ -247,8 +260,13 @@ export function ApplicationForm({
       miningProductionCapacityTonsPerYear: 0,
       fishLakeAreaHectares: undefined,
       fishPondsDiscardWaterQuantityM3PerDay: undefined,
-      waterSourceLatitude: "",
-      waterSourceLongitude: "",
+      waterSourceCoordinates: [
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" }
+      ],
     };
 
     // Auto-fill from current user profile if available
@@ -286,18 +304,27 @@ export function ApplicationForm({
 
   // Helper functions for dropdown options
   const getOfficeDistrictOptions = () => {
-    if (!selectedOfficeProvince) return [];
-    return getFormattedDistrictOptions(selectedOfficeProvince);
+    // Use selected state or fall back to form values for initialization
+    const province = selectedOfficeProvince || officeProvince;
+    if (!province) return [];
+    return getFormattedDistrictOptions(province);
   };
 
   const getOfficeSectorOptions = () => {
-    if (!selectedOfficeProvince || !selectedOfficeDistrict) return [];
-    return getFormattedSectorOptions(selectedOfficeProvince, selectedOfficeDistrict);
+    // Use selected state or fall back to form values for initialization
+    const province = selectedOfficeProvince || officeProvince;
+    const district = selectedOfficeDistrict || officeDistrict;
+    if (!province || !district) return [];
+    return getFormattedSectorOptions(province, district);
   };
 
   const getOfficeCellOptions = () => {
-    if (!selectedOfficeProvince || !selectedOfficeDistrict || !selectedOfficeSector) return [];
-    return getFormattedCellOptions(selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector);
+    // Use selected state or fall back to form values for initialization
+    const province = selectedOfficeProvince || officeProvince;
+    const district = selectedOfficeDistrict || officeDistrict;
+    const sector = selectedOfficeSector || officeSector;
+    if (!province || !district || !sector) return [];
+    return getFormattedCellOptions(province, district, sector);
   };
 
   const getWaterSourceDistrictOptions = () => {
@@ -322,13 +349,14 @@ export function ApplicationForm({
 
 
 
-  // Watch form values to keep dropdown states in sync
-  const officeProvince = form.watch("officeProvince");
-  const officeDistrict = form.watch("officeDistrict");
-  const officeSector = form.watch("officeSector");
-  const waterSourceProvince = form.watch("waterSourceProvince");
-  const waterSourceDistrict = form.watch("waterSourceDistrict");
-  const waterSourceSector = form.watch("waterSourceSector");
+  // Get form values for cascading dropdowns
+  const officeProvince = form.watch('officeProvince');
+  const officeDistrict = form.watch('officeDistrict');
+  const officeSector = form.watch('officeSector');
+  const officeCell = form.watch('officeCell');
+  const waterSourceProvince = form.watch('waterSourceProvince');
+  const waterSourceDistrict = form.watch('waterSourceDistrict');
+  const waterSourceSector = form.watch('waterSourceSector');
 
   // Update dropdown states when form values change
   useEffect(() => {
@@ -341,6 +369,9 @@ export function ApplicationForm({
     if (officeSector !== selectedOfficeSector) {
       setSelectedOfficeSector(officeSector || "");
     }
+    if (officeCell !== selectedOfficeCell) {
+      setSelectedOfficeCell(officeCell || "");
+    }
     if (waterSourceProvince !== selectedWaterSourceProvince) {
       setSelectedWaterSourceProvince(waterSourceProvince || "");
     }
@@ -350,8 +381,8 @@ export function ApplicationForm({
     if (waterSourceSector !== selectedWaterSourceSector) {
       setSelectedWaterSourceSector(waterSourceSector || "");
     }
-  }, [officeProvince, officeDistrict, officeSector, waterSourceProvince, waterSourceDistrict, waterSourceSector, 
-      selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector, 
+  }, [officeProvince, officeDistrict, officeSector, officeCell, waterSourceProvince, waterSourceDistrict, waterSourceSector, 
+      selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector, selectedOfficeCell,
       selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector]);
 
   // Helper function to check if required documents are uploaded
@@ -645,8 +676,13 @@ export function ApplicationForm({
         waterSourceSector: "",
         waterSourceCell: "",
         waterSourceVillage: "",
-        waterSourceLatitude: "",
-        waterSourceLongitude: "",
+        waterSourceCoordinates: [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ],
         waterReliability: "water_always_available",
         intendedActivities: ["water_supply"],
         intendedActivityOther: "",
@@ -694,6 +730,9 @@ export function ApplicationForm({
       if (initialData.officeSector) {
         setSelectedOfficeSector(initialData.officeSector);
       }
+      if (initialData.officeCell) {
+        setSelectedOfficeCell(initialData.officeCell);
+      }
       if (initialData.waterSourceProvince) {
         setSelectedWaterSourceProvince(initialData.waterSourceProvince);
       }
@@ -709,7 +748,18 @@ export function ApplicationForm({
   // Load initial documents when provided
   useEffect(() => {
     if (initialDocuments && Object.keys(initialDocuments).length > 0) {
-      setUploadedFileUrls(initialDocuments);
+      // Convert the new document structure to the old format for uploadedFileUrls
+      const urlMap: Record<string, string> = {};
+      Object.entries(initialDocuments).forEach(([key, doc]) => {
+        if (typeof doc === 'string') {
+          // Handle legacy format (just URL)
+          urlMap[key] = doc;
+        } else {
+          // Handle new format (object with url and name)
+          urlMap[key] = doc.url;
+        }
+      });
+      setUploadedFileUrls(urlMap);
     }
   }, [initialDocuments]);
 
@@ -817,7 +867,23 @@ export function ApplicationForm({
                 rel="noopener noreferrer"
                 className="hover:underline truncate max-w-xs"
               >
-                Previously uploaded document
+                {(() => {
+                  // Try to get document name from initialDocuments
+                  const docInfo = Object.entries(initialDocuments || {}).find(([key, doc]) => {
+                    const url = typeof doc === 'string' ? doc : doc.url;
+                    return url === currentUploadedUrl;
+                  });
+                  if (docInfo && typeof docInfo[1] === 'object') {
+                    return docInfo[1].name;
+                  }
+                  // Fallback: extract filename from URL
+                  try {
+                    const urlPath = new URL(currentUploadedUrl).pathname;
+                    return urlPath.split('/').pop() || 'Uploaded document';
+                  } catch {
+                    return 'Uploaded document';
+                  }
+                })()}
               </a>
               <Button
                 type="button"
@@ -1177,7 +1243,20 @@ export function ApplicationForm({
                                       rel="noopener noreferrer"
                                       className="hover:underline"
                                     >
-                                      Previously uploaded document
+                                      {(() => {
+                                        // Try to get document name from initialDocuments
+                                        const docInfo = initialDocuments?.identificationDoc;
+                                        if (docInfo && typeof docInfo === 'object') {
+                                          return docInfo.name;
+                                        }
+                                        // Fallback: extract filename from URL
+                                        try {
+                                          const urlPath = new URL(uploadedFileUrls.identificationDoc).pathname;
+                                          return urlPath.split('/').pop() || 'Identification document';
+                                        } catch {
+                                          return 'Identification document';
+                                        }
+                                      })()}
                                     </a>
                                     <Button
                                       type="button"
@@ -1294,14 +1373,15 @@ export function ApplicationForm({
                                 onValueChange={(value) => {
                                   field.onChange(value);
                                   setSelectedOfficeSector(value);
-                                  // Reset cell field
+                                  // Reset cell field and state
                                   form.setValue("officeCell", "");
+                                  setSelectedOfficeCell("");
                                 }}
                                 value={field.value}
-                                disabled={!selectedOfficeDistrict}
+                                disabled={!selectedOfficeDistrict && !officeDistrict}
                               >
                                 <SelectTrigger className="bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 focus:border-purple-400">
-                                  <SelectValue placeholder={selectedOfficeDistrict ? "Select sector" : "Select district first"} />
+                                  <SelectValue placeholder={(selectedOfficeDistrict || officeDistrict) ? "Select sector" : "Select district first"} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getOfficeSectorOptions().map((sector) => (
@@ -1325,12 +1405,15 @@ export function ApplicationForm({
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={field.onChange}
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedOfficeCell(value);
+                                }}
                                 value={field.value}
-                                disabled={!selectedOfficeSector}
+                                disabled={!selectedOfficeSector && !officeSector}
                               >
                                 <SelectTrigger className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 focus:border-orange-400">
-                                  <SelectValue placeholder={selectedOfficeSector ? "Select cell" : "Select sector first"} />
+                                  <SelectValue placeholder={(selectedOfficeSector || officeSector) ? "Select cell" : "Select sector first"} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getOfficeCellOptions().map((cell) => (
@@ -1659,58 +1742,45 @@ export function ApplicationForm({
                     </div>
                   </div>
 
-                  {/* 11. Coordinates of water source */}
+                  {/* 11. Coordinates of water source (5 points for polygon) */}
                   <div className="space-y-4">
-                    <Label className="text-base font-medium">
-                      11. Coordinates of water source (Latitude, Longitude)
-                    </Label>
+                    <FormField
+                      control={form.control}
+                      name="waterSourceCoordinates"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <CoordinateInputWithValidation
+                              coordinates={field.value || [
+                                { latitude: "", longitude: "" },
+                                { latitude: "", longitude: "" },
+                                { latitude: "", longitude: "" },
+                                { latitude: "", longitude: "" },
+                                { latitude: "", longitude: "" }
+                              ]}
+                              onCoordinatesChange={(coordinates) => {
+                                field.onChange(coordinates);
+                              }}
+                              onValidationChange={(validation) => {
+                                setCoordinateValidation(validation);
+                                setCanSubmit(!validation || validation.isValid);
+                              }}
+                              applicationId={undefined}
+                              disabled={isLoading}
+                              showValidation={true}
+                              autoValidate={true}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="waterSourceLatitude"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Latitude</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field}
-                                value={field.value || ""}
-                                type="text"
-                                placeholder="e.g., -1.9441"
-                                className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 focus:border-blue-400"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Enter latitude in decimal degrees (e.g., -1.9441)
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
-                        name="waterSourceLongitude"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Longitude</FormLabel>
-                            <FormControl>
-                              <Input 
-                                {...field}
-                                value={field.value || ""}
-                                type="text"
-                                placeholder="e.g., 29.8739"
-                                className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 focus:border-blue-400"
-                              />
-                            </FormControl>
-                            <FormDescription>
-                              Enter longitude in decimal degrees (e.g., 29.8739)
-                            </FormDescription>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800">
+                        <strong>Note:</strong> The 5 coordinate points should form a closed polygon around your water source area. 
+                        Point 1 and Point 5 should be close to each other to complete the polygon.
+                      </p>
                     </div>
                   </div>
 
@@ -2892,7 +2962,20 @@ export function ApplicationForm({
                                   rel="noopener noreferrer"
                                   className="hover:underline"
                                 >
-                                  Previously uploaded document
+                                  {(() => {
+                                    // Try to get document name from initialDocuments
+                                    const docInfo = initialDocuments?.landAccessDocuments;
+                                    if (docInfo && typeof docInfo === 'object') {
+                                      return docInfo.name;
+                                    }
+                                    // Fallback: extract filename from URL
+                                    try {
+                                      const urlPath = new URL(uploadedFileUrls.landAccessDocuments).pathname;
+                                      return urlPath.split('/').pop() || 'Land access document';
+                                    } catch {
+                                      return 'Land access document';
+                                    }
+                                  })()}
                                 </a>
                                 <Button
                                   type="button"
@@ -2992,9 +3075,16 @@ export function ApplicationForm({
                     </Button>
                     
                     {activeTab === "land-ownership" && (
-                      <Button type="submit" disabled={isLoading}>
+                      <Button 
+                        type="submit" 
+                        disabled={isLoading || !canSubmit}
+                        className={!canSubmit ? "opacity-50 cursor-not-allowed" : ""}
+                      >
                         <Send className="h-4 w-4 mr-2" />
                         Submit Application
+                        {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
+                          <span className="ml-2 text-xs">(Fix coordinate conflicts first)</span>
+                        )}
                       </Button>
                     )}
                   </div>
