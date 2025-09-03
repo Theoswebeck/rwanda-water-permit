@@ -32,7 +32,7 @@ function formatProvinceForDB(province: string): Application['province'] | undefi
 }
 
 // Mapping function to transform form data to database schema
-function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft'): Partial<Application> {
+function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft', userId?: string): Partial<Application> {
   // Handle coordinates - now expecting 5 points for a polygon
   let coordinates = undefined;
   if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
@@ -181,8 +181,8 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     // SLA tracking
     sla_status: 'on_time' as const,
     
-    // Use the sample user UUID (in real app, this would come from auth context)
-    applicant_id: '550e8400-e29b-41d4-a716-446655440001',
+    // Use the actual authenticated user's ID
+    applicant_id: userId || '550e8400-e29b-41d4-a716-446655440001', // Fallback to sample ID for development
   };
 
   return mappedData;
@@ -568,7 +568,7 @@ export default function NewApplicationPage() {
       await ensureStorageBucket();
       
       // Map form data to application schema with submitted status
-      const applicationData = mapFormDataToApplication(formData, status);
+      const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       
       console.log('📊 Mapped application data:', applicationData);
       
@@ -617,7 +617,7 @@ export default function NewApplicationPage() {
       await ensureStorageBucket();
       
       // Map form data to application schema with draft status
-      const applicationData = mapFormDataToApplication(formData, status);
+      const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       
       let result;
       

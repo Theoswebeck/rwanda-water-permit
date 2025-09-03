@@ -18,6 +18,7 @@ import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { usePermits } from "@/hooks/usePermits";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import type { Permit as DatabasePermit } from "@/types/database";
 
 export default function DashboardPage() {
@@ -25,6 +26,44 @@ export default function DashboardPage() {
   const { user, userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"applications" | "permits">("applications");
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
+
+  // Development helper: Fix applicant_id for orphaned applications
+  const fixOrphanedApplications = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Find applications with the old hardcoded applicant_id
+      const { data: orphanedApps, error: fetchError } = await supabase
+        .from('applications')
+        .select('id, applicant_id')
+        .eq('applicant_id', '550e8400-e29b-41d4-a716-446655440001');
+      
+      if (fetchError) {
+        console.error('Error fetching orphaned applications:', fetchError);
+        return;
+      }
+      
+      if (orphanedApps && orphanedApps.length > 0) {
+        console.log(`Found ${orphanedApps.length} orphaned applications, fixing...`);
+        
+        // Update them to use the current user's ID
+        const { error: updateError } = await supabase
+          .from('applications')
+          .update({ applicant_id: user.id })
+          .eq('applicant_id', '550e8400-e29b-41d4-a716-446655440001');
+        
+        if (updateError) {
+          console.error('Error updating orphaned applications:', updateError);
+        } else {
+          console.log('Successfully fixed orphaned applications');
+          // Refresh applications
+          await refreshApplications();
+        }
+      }
+    } catch (error) {
+      console.error('Error in fixOrphanedApplications:', error);
+    }
+  };
   
   // Check for success parameters from URL
   useEffect(() => {
@@ -43,6 +82,13 @@ export default function DashboardPage() {
       setActiveTab('permits');
     }
   }, [searchParams]);
+
+  // Auto-fix orphaned applications on mount
+  useEffect(() => {
+    if (user?.id) {
+      fixOrphanedApplications();
+    }
+  }, [user?.id]);
   
   // Fetch applications and permits for the current user only
   const {
