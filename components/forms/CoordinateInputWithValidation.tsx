@@ -5,7 +5,7 @@
 // Rwanda Water Board - Water Permit System
 // =============================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,13 +61,22 @@ export function CoordinateInputWithValidation({
   const [isValidating, setIsValidating] = useState(false);
   const [activeTab, setActiveTab] = useState<"manual" | "map">("manual");
   const [manualCoordinates, setManualCoordinates] = useState<CoordinatePoint[]>(coordinates);
+  
+  // Ref to track if we're updating from internal changes
+  const internalUpdate = useRef(false);
 
   // =============================================
   // EFFECTS
   // =============================================
 
-  // Update manual coordinates when prop changes
+  // Update manual coordinates when prop changes (only from external changes)
   useEffect(() => {
+    // Skip if this is an internal update to prevent loops
+    if (internalUpdate.current) {
+      internalUpdate.current = false;
+      return;
+    }
+    
     setManualCoordinates(coordinates);
   }, [coordinates]);
 
@@ -142,6 +151,9 @@ export function CoordinateInputWithValidation({
     const updated = [...manualCoordinates];
     updated[index] = { ...updated[index], [field]: value };
     setManualCoordinates(updated);
+    
+    // Mark as internal update to prevent useEffect loop
+    internalUpdate.current = true;
     onCoordinatesChange(updated);
   };
 
@@ -149,6 +161,9 @@ export function CoordinateInputWithValidation({
     if (disabled) return;
     
     setManualCoordinates(mapCoordinates);
+    
+    // Mark as internal update to prevent useEffect loop
+    internalUpdate.current = true;
     onCoordinatesChange(mapCoordinates);
   };
 

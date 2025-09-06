@@ -409,9 +409,7 @@ export function ApplicationForm({
     if (waterSourceSector !== selectedWaterSourceSector) {
       setSelectedWaterSourceSector(waterSourceSector || "");
     }
-  }, [officeProvince, officeDistrict, officeSector, officeCell, waterSourceProvince, waterSourceDistrict, waterSourceSector, 
-      selectedOfficeProvince, selectedOfficeDistrict, selectedOfficeSector, selectedOfficeCell,
-      selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector]);
+  }, [officeProvince, officeDistrict, officeSector, officeCell, waterSourceProvince, waterSourceDistrict, waterSourceSector]);
 
   // Helper function to check if required documents are uploaded
   const checkRequiredDocuments = () => {
