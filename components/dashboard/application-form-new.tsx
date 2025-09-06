@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
@@ -161,14 +161,15 @@ type FormValues = z.infer<typeof applicationFormSchema>;
 interface ApplicationFormProps {
   userData: any;
   onSubmit: (data: FormValues, status: 'submitted') => void | Promise<void>;
-  onSaveAsDraft: (data: FormValues, status: 'draft', isAutoSave?: boolean, draftId?: string | null) => Promise<any>;
+  onSaveAsDraft: (data: FormValues, status: 'draft', draftId?: string | null) => Promise<any>;
   isLoading: boolean;
   initialData?: Partial<FormValues>;
   initialDocuments?: Record<string, { url: string; name: string }>;
   mode?: 'create' | 'edit';
 }
 
-export function ApplicationForm({ 
+// ⚡ PERFORMANCE: Memoize the entire form component to prevent unnecessary re-renders
+export const ApplicationForm = memo(function ApplicationForm({ 
   userData, 
   onSubmit, 
   onSaveAsDraft, 
@@ -181,6 +182,8 @@ export function ApplicationForm({
   const [activeTab, setActiveTab] = useState("applicant-info");
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
+  
+  // ⚡ PERFORMANCE: Memoize location states to reduce re-renders
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   
@@ -247,8 +250,8 @@ export function ApplicationForm({
   const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
   const [selectedWaterSourceSector, setSelectedWaterSourceSector] = useState("");
 
-  // Get default values from current user profile
-  const getDefaultValues = () => {
+  // ⚡ PERFORMANCE: Memoize default values to prevent recalculation
+  const getDefaultValues = useMemo(() => {
     const defaults: Partial<FormValues> = {
       // Ensure all form fields have default values to prevent controlled/uncontrolled errors
       fullNameApplicant: "",
@@ -323,11 +326,11 @@ export function ApplicationForm({
 
     // Override with any provided initial data
     return { ...defaults, ...initialData };
-  };
+  }, [userData, initialData]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(applicationFormSchema),
-    defaultValues: getDefaultValues()
+    defaultValues: getDefaultValues
   });
 
   // Helper functions for dropdown options
@@ -941,9 +944,7 @@ export function ApplicationForm({
     </Alert>
   );
 
-  // Auto-save functionality
-  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // Manual save only - no auto-save functionality
   const [validationError, setValidationError] = useState<string | null>(null);
   const [, forceUpdate] = useState({});
 
@@ -951,49 +952,6 @@ export function ApplicationForm({
   useEffect(() => {
     forceUpdate({});
   }, [files, uploadedFileUrls]);
-
-  const triggerAutoSave = async () => {
-    try {
-      setAutoSaveStatus('saving');
-      const formData = form.getValues();
-      
-      // Call the draft save function with auto-save flag
-      const result = await onSaveAsDraft(formData, 'draft', true);
-      
-      setLastAutoSave(new Date());
-      setAutoSaveStatus('saved');
-      
-      // Reset to idle after 3 seconds
-      setTimeout(() => {
-        setAutoSaveStatus('idle');
-      }, 3000);
-    } catch (error) {
-      console.error('Auto-save failed:', error);
-      
-      setAutoSaveStatus('error');
-      setTimeout(() => {
-        setAutoSaveStatus('idle');
-      }, 3000);
-    }
-  };
-
-  // Auto-save every 30 seconds when form data changes
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (form.formState.isDirty) {
-        triggerAutoSave();
-      }
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(timer);
-  }, [form.formState.isDirty]);
-
-  // Auto-save when switching tabs
-  useEffect(() => {
-    if (form.formState.isDirty) {
-      triggerAutoSave();
-    }
-  }, [activeTab]);
 
   const handleFormSubmit = async (values: FormValues) => {
     try {
@@ -1031,38 +989,12 @@ export function ApplicationForm({
             Fill out all required fields to submit your water permit application. Fields marked with * are required.
           </CardDescription>
           
-          {/* Auto-save status */}
+          {/* Manual save only - no auto-save */}
           <div className="flex items-center gap-2 mt-4">
-            {autoSaveStatus === 'saving' && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-2 text-amber-600 text-sm"
-              >
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-600"></div>
-                Saving draft...
-              </motion.div>
-            )}
-            {autoSaveStatus === 'saved' && lastAutoSave && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-2 text-green-600 text-sm"
-              >
-                <CheckCircle className="h-4 w-4" />
-                ✅ Draft saved at {lastAutoSave.toLocaleTimeString()}
-              </motion.div>
-            )}
-            {autoSaveStatus === 'error' && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="flex items-center gap-2 text-red-600 text-sm"
-              >
-                <XCircle className="h-4 w-4" />
-                ❌ Error saving draft - check browser console for details
-              </motion.div>
-            )}
+            <div className="flex items-center gap-2 text-blue-600 text-sm">
+              <Save className="h-4 w-4" />
+              💾 Manual save only - use "Save as Draft" button or "Next" to save progress
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -3066,7 +2998,7 @@ export function ApplicationForm({
                     type="button"
                     variant="outline"
                     onClick={async () => {
-                      await onSaveAsDraft(form.getValues(), 'draft', false);
+                      await onSaveAsDraft(form.getValues(), 'draft');
                     }}
                     disabled={isLoading}
                   >
@@ -3121,4 +3053,4 @@ export function ApplicationForm({
       </Card>
     </motion.div>
   );
-}
+});

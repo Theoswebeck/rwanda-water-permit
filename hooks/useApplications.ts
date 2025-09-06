@@ -110,8 +110,8 @@ export function useApplications({
         throw new Error('No application data returned from database');
       }
 
-      // Refresh the list
-      await fetchApplications()
+      // ⚡ PERFORMANCE: Update local state instead of full refresh
+      setApplications(prev => [newApplication, ...prev])
 
       return newApplication
     } catch (err) {
@@ -119,7 +119,7 @@ export function useApplications({
       console.error('Error creating application:', err)
       return null
     }
-  }, [fetchApplications])
+  }, [])
 
   const updateApplication = useCallback(async (id: string, data: Partial<Application>): Promise<Application | null> => {
     try {
@@ -196,6 +196,12 @@ export function useApplications({
     try {
       setError(null)
       
+      // ⚡ PERFORMANCE: Check local cache first
+      const cachedApp = applications.find(app => app.id === id)
+      if (cachedApp) {
+        return cachedApp
+      }
+      
       // Simplified query to avoid join issues with nullable foreign keys
       const { data, error } = await supabase
         .from('applications')
@@ -205,13 +211,21 @@ export function useApplications({
 
       if (error) throw error
 
+      // ⚡ PERFORMANCE: Update cache with fetched application
+      if (data) {
+        setApplications(prev => {
+          const exists = prev.some(app => app.id === data.id)
+          return exists ? prev : [data, ...prev]
+        })
+      }
+
       return data
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch application')
       console.error('Error fetching application:', err)
       return null
     }
-  }, [])
+  }, [applications])
 
   const getApplicationByNumber = useCallback(async (applicationNumber: string): Promise<Application | null> => {
     try {
