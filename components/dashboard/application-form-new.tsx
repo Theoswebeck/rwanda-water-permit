@@ -1796,7 +1796,7 @@ export function ApplicationForm({
                               applicationId={undefined}
                               disabled={isLoading}
                               showValidation={true}
-                              autoValidate={true}
+                              autoValidate={false}
                             />
                           </FormControl>
                           <FormMessage />
