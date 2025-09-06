@@ -61,25 +61,10 @@ export function CoordinateInputWithValidation({
   const [validation, setValidation] = useState<ValidationResponse | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [activeTab, setActiveTab] = useState<"manual" | "map">("manual");
-  const [manualCoordinates, setManualCoordinates] = useState<CoordinatePoint[]>(coordinates);
-  
-  // Ref to track if we're updating from internal changes
-  const internalUpdate = useRef(false);
 
   // =============================================
   // EFFECTS
   // =============================================
-
-  // Update manual coordinates when prop changes (only from external changes)
-  useEffect(() => {
-    // Skip if this is an internal update to prevent loops
-    if (internalUpdate.current) {
-      internalUpdate.current = false;
-      return;
-    }
-    
-    setManualCoordinates(coordinates);
-  }, [coordinates]);
 
   // Auto-validation disabled - validation only happens on manual trigger
 
@@ -149,22 +134,14 @@ export function CoordinateInputWithValidation({
   const handleManualCoordinateChange = (index: number, field: 'latitude' | 'longitude', value: string) => {
     if (disabled) return;
 
-    const updated = [...manualCoordinates];
+    const updated = [...coordinates];
     updated[index] = { ...updated[index], [field]: value };
-    setManualCoordinates(updated);
-    
-    // Mark as internal update to prevent useEffect loop
-    internalUpdate.current = true;
     onCoordinatesChange(updated);
   };
 
   const handleMapCoordinatesChange = (mapCoordinates: CoordinatePoint[]) => {
     if (disabled) return;
     
-    setManualCoordinates(mapCoordinates);
-    
-    // Mark as internal update to prevent useEffect loop
-    internalUpdate.current = true;
     onCoordinatesChange(mapCoordinates);
   };
 
@@ -174,12 +151,12 @@ export function CoordinateInputWithValidation({
   };
 
   const copyFromMap = () => {
-    setManualCoordinates([...coordinates]);
+    // Coordinates are already synced, just switch tab
     setActiveTab("manual");
   };
 
   const copyToMap = () => {
-    onCoordinatesChange([...manualCoordinates]);
+    // Coordinates are already synced, just switch tab
     setActiveTab("map");
   };
 
@@ -188,13 +165,9 @@ export function CoordinateInputWithValidation({
     
     // Create new coordinate to replace the deleted one
     const newCoordinate = { latitude: "", longitude: "" };
-    const updated = [...manualCoordinates];
+    const updated = [...coordinates];
     updated[index] = newCoordinate;
     
-    setManualCoordinates(updated);
-    
-    // Mark as internal update to prevent useEffect loop
-    internalUpdate.current = true;
     onCoordinatesChange(updated);
   };
 
@@ -285,7 +258,7 @@ export function CoordinateInputWithValidation({
           {/* Manual Entry Tab */}
           <TabsContent value="manual" className="space-y-4">
             <div className="space-y-4">
-              {manualCoordinates.map((coord, index) => {
+              {coordinates.map((coord, index) => {
                 const validationState = getCoordinateValidationState(coord);
                 
                 return (
@@ -415,17 +388,6 @@ export function CoordinateInputWithValidation({
               height="400px"
             />
 
-            <div className="flex items-center gap-2">
-              <Button
-                onClick={copyFromMap}
-                variant="outline"
-                size="sm"
-                disabled={disabled || coordinates.length !== 5}
-              >
-                <Edit3 className="h-4 w-4 mr-1" />
-                Copy to Manual Entry
-              </Button>
-            </div>
           </TabsContent>
         </Tabs>
 

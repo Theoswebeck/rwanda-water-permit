@@ -117,15 +117,63 @@ export default function ApplicationDetailPage() {
   const formatCoordinates = (coordinates: any) => {
     try {
       if (coordinates && typeof coordinates === 'object') {
-        // Handle PostGIS Point geometry
+        // Handle PostGIS Point geometry (legacy)
         if (coordinates.type === 'Point' && coordinates.coordinates) {
           const [lng, lat] = coordinates.coordinates;
           return `${lat.toFixed(6)}°N, ${lng.toFixed(6)}°E`;
+        }
+        
+        // Handle PostGIS Polygon geometry (new format)
+        if (coordinates.type === 'Polygon' && coordinates.coordinates && coordinates.coordinates[0]) {
+          const polygonPoints = coordinates.coordinates[0];
+          return `Polygon with ${polygonPoints.length} points`;
         }
       }
       return JSON.stringify(coordinates);
     } catch (error) {
       return 'Invalid coordinates';
+    }
+  };
+
+  // Helper function to render detailed polygon coordinates
+  const renderPolygonCoordinates = (coordinates: any) => {
+    try {
+      if (coordinates?.type === 'Polygon' && coordinates.coordinates?.[0]) {
+        const points = coordinates.coordinates[0];
+        return (
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-muted-foreground">
+              Water Source Area (Polygon - {points.length} points):
+            </div>
+            <div className="grid gap-2">
+              {points.slice(0, 5).map((point: number[], index: number) => (
+                <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                  <span className="font-medium">Point {index + 1}:</span>
+                  <span>{point[1].toFixed(6)}°N, {point[0].toFixed(6)}°E</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      
+      if (coordinates?.type === 'Point' && coordinates.coordinates) {
+        const [lng, lat] = coordinates.coordinates;
+        return (
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-muted-foreground">
+              Water Source Location (Point):
+            </div>
+            <div className="p-2 bg-muted/50 rounded text-sm">
+              {lat.toFixed(6)}°N, {lng.toFixed(6)}°E
+            </div>
+          </div>
+        );
+      }
+      
+      return <div className="text-sm text-muted-foreground">No coordinates available</div>;
+    } catch (error) {
+      return <div className="text-sm text-red-500">Invalid coordinate data</div>;
     }
   };
 
@@ -418,12 +466,12 @@ export default function ApplicationDetailPage() {
                    </div>
                  )}
                  {application.coordinates && (
-                   <div>
-                     <p className="text-sm text-muted-foreground">GPS Coordinates</p>
-                     <p className="font-medium">
-                       {formatCoordinates(application.coordinates)}
-                     </p>
-                        </div>
+                   <div className="col-span-full">
+                     <p className="text-sm text-muted-foreground mb-3">GPS Coordinates</p>
+                     <div className="font-medium">
+                       {renderPolygonCoordinates(application.coordinates)}
+                     </div>
+                   </div>
                  )}
                 </CardContent>
               </Card>

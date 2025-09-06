@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, MapPin, Droplets, Filter } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { EnhancedWaterConcessionMap } from "@/components/maps/EnhancedWaterConcessionMap";
 
 // Dynamically import Leaflet components to avoid SSR issues
 const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
@@ -56,6 +57,12 @@ const getUsageIntensityColor = (usage: number) => {
 };
 
 export function WaterConcessionMap() {
+  // Redirect to enhanced map component
+  return <EnhancedWaterConcessionMap />;
+}
+
+// Legacy component - keeping for backward compatibility
+export function LegacyWaterConcessionMap() {
   const [permits, setPermits] = useState<WaterPermit[]>([]);
   const [filteredPermits, setFilteredPermits] = useState<WaterPermit[]>([]);
   const [loading, setLoading] = useState(true);

@@ -792,7 +792,6 @@ export function ApplicationForm({
   // Rwanda Administrative Divisions Data
   // Old administrative data removed - now using comprehensive Rwanda data
 
-
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = event.target.files?.[0];
     if (file) {
