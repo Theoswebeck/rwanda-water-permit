@@ -21,7 +21,8 @@ import {
   Map,
   Edit3,
   Info,
-  RefreshCw
+  RefreshCw,
+  Trash2
 } from "lucide-react";
 import { PolygonDrawingMap } from "@/components/maps/PolygonDrawingMap";
 import { validateCoordinates, type ValidationResponse } from "@/lib/polygonValidation";
@@ -182,6 +183,21 @@ export function CoordinateInputWithValidation({
     setActiveTab("map");
   };
 
+  const handleDeleteCoordinate = (index: number) => {
+    if (disabled) return;
+    
+    // Create new coordinate to replace the deleted one
+    const newCoordinate = { latitude: "", longitude: "" };
+    const updated = [...manualCoordinates];
+    updated[index] = newCoordinate;
+    
+    setManualCoordinates(updated);
+    
+    // Mark as internal update to prevent useEffect loop
+    internalUpdate.current = true;
+    onCoordinatesChange(updated);
+  };
+
   // =============================================
   // VALIDATION HELPERS
   // =============================================
@@ -274,12 +290,26 @@ export function CoordinateInputWithValidation({
                 
                 return (
                   <div key={index} className="space-y-2">
-                    <Label className="text-sm font-medium">
-                      Point {index + 1} {index === 0 && "(Starting Point)"}
-                      {validationState === 'valid' && <CheckCircle className="h-4 w-4 text-green-500 inline ml-2" />}
-                      {validationState === 'invalid' && <AlertTriangle className="h-4 w-4 text-red-500 inline ml-2" />}
-                      {validationState === 'outside_rwanda' && <AlertTriangle className="h-4 w-4 text-amber-500 inline ml-2" />}
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium">
+                        Point {index + 1} {index === 0 && "(Starting Point)"}
+                        {validationState === 'valid' && <CheckCircle className="h-4 w-4 text-green-500 inline ml-2" />}
+                        {validationState === 'invalid' && <AlertTriangle className="h-4 w-4 text-red-500 inline ml-2" />}
+                        {validationState === 'outside_rwanda' && <AlertTriangle className="h-4 w-4 text-amber-500 inline ml-2" />}
+                      </Label>
+                      
+                      {/* Delete button - only show if coordinate has data */}
+                      {(coord.latitude || coord.longitude) && !disabled && (
+                        <Button
+                          onClick={() => handleDeleteCoordinate(index)}
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -381,7 +411,7 @@ export function CoordinateInputWithValidation({
               onValidationChange={handleValidationChange}
               applicationId={applicationId}
               readOnly={disabled}
-              showExistingPermits={true}
+              showExistingPermits={false}
               height="400px"
             />
 
