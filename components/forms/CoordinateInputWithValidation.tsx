@@ -71,21 +71,7 @@ export function CoordinateInputWithValidation({
     setManualCoordinates(coordinates);
   }, [coordinates]);
 
-  // Only auto-validate when explicitly enabled and all conditions are met
-  useEffect(() => {
-    if (autoValidate && showValidation && coordinates.length === 5) {
-      const hasValidCoords = coordinates.every(coord => 
-        coord.latitude && coord.longitude && 
-        isValidCoordinate(coord) && 
-        isWithinRwanda(coord)
-      );
-      
-      // Only auto-validate if all coordinates are complete and valid
-      if (hasValidCoords) {
-        performValidation();
-      }
-    }
-  }, [coordinates, applicationId, autoValidate, showValidation]);
+  // Auto-validation disabled - validation only happens on manual trigger
 
   // =============================================
   // HANDLERS
@@ -186,10 +172,10 @@ export function CoordinateInputWithValidation({
   // =============================================
 
   const getCoordinateValidationState = (coord: CoordinatePoint) => {
+    // Disable real-time validation to prevent input field interference
     if (!coord.latitude || !coord.longitude) return 'empty';
-    if (!isValidCoordinate(coord)) return 'invalid';
-    if (!isWithinRwanda(coord)) return 'outside_rwanda';
-    return 'valid';
+    // Skip validation checks during input to prevent field disabling
+    return 'empty';
   };
 
   const getValidationBadge = () => {

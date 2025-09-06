@@ -1794,7 +1794,7 @@ export function ApplicationForm({
                                 setCanSubmit(!validation || validation.isValid);
                               }}
                               applicationId={undefined}
-                              disabled={isLoading}
+                              disabled={false}
                               showValidation={true}
                               autoValidate={false}
                             />
