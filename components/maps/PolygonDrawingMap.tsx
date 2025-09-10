@@ -31,15 +31,12 @@ import {
   type CoordinatePoint 
 } from "@/lib/geoUtils";
 import type { Feature, Polygon } from 'geojson';
-import L from 'leaflet';
 
-// Dynamically import Leaflet components to avoid SSR issues
-const MapContainer = dynamic(() => import("react-leaflet").then((mod) => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then((mod) => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import("react-leaflet").then((mod) => mod.Marker), { ssr: false });
-const Polygon = dynamic(() => import("react-leaflet").then((mod) => mod.Polygon), { ssr: false });
-const Popup = dynamic(() => import("react-leaflet").then((mod) => mod.Popup), { ssr: false });
-const useMapEvents = dynamic(() => import("react-leaflet").then((mod) => mod.useMapEvents), { ssr: false });
+// Create a fully client-side map component
+const ClientOnlyMap = dynamic(() => import('./ClientOnlyMap'), { 
+  ssr: false,
+  loading: () => <div className="h-full w-full flex items-center justify-center bg-gray-100 rounded">Loading map...</div>
+});
 
 // =============================================
 // TYPES AND INTERFACES
@@ -64,26 +61,7 @@ interface ExistingPermit {
   status: string;
 }
 
-// =============================================
-// MAP INTERACTION COMPONENT
-// =============================================
-
-function MapClickHandler({ 
-  onMapClick, 
-  isDrawing 
-}: { 
-  onMapClick: (lat: number, lng: number) => void;
-  isDrawing: boolean;
-}) {
-  useMapEvents({
-    click: (e) => {
-      if (isDrawing) {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      }
-    },
-  });
-  return null;
-}
+// Map interaction is now handled in ClientOnlyMap
 
 // =============================================
 // MAIN COMPONENT
@@ -131,7 +109,7 @@ export function PolygonDrawingMap({
       // Check if all coordinates are valid before creating polygon
       const allValid = coordinates.every(coord => 
         coord.latitude && coord.longitude && 
-        coord.latitude.trim() !== '' && coord.longitude.trim() !== ''
+        String(coord.latitude).trim() !== '' && String(coord.longitude).trim() !== ''
       );
       
       if (allValid) {
@@ -277,18 +255,7 @@ export function PolygonDrawingMap({
     );
   };
 
-  const getPolygonColor = () => {
-    if (!validation) return '#3b82f6'; // Blue for no validation
-    return validation.isValid ? '#10b981' : '#ef4444'; // Green for valid, red for invalid
-  };
-
-  const getPermitPolygonColor = (status: string) => {
-    switch (status) {
-      case 'active': return '#6366f1'; // Indigo
-      case 'expiring_soon': return '#f59e0b'; // Amber
-      default: return '#6b7280'; // Gray
-    }
-  };
+  // Color functions moved to ClientOnlyMap component
 
   // =============================================
   // RENDER
@@ -339,115 +306,16 @@ export function PolygonDrawingMap({
       <CardContent className="p-0">
         {/* Map */}
         <div style={{ height }} className="w-full rounded-lg overflow-hidden">
-          <MapContainer
-            center={rwandaCenter}
-            zoom={8}
-            style={{ height: '100%', width: '100%' }}
-            className="z-0"
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            
-            <MapClickHandler onMapClick={handleMapClick} isDrawing={isDrawing} />
-            
-            {/* Current coordinate markers */}
-            {coordinates.map((coord, index) => {
-              const lat = typeof coord.latitude === 'string' ? parseFloat(coord.latitude) : coord.latitude;
-              const lng = typeof coord.longitude === 'string' ? parseFloat(coord.longitude) : coord.longitude;
-              
-              if (isNaN(lat) || isNaN(lng)) return null;
-              
-              return (
-                <Marker
-                  key={index}
-                  position={[lat, lng]}
-                  icon={L.divIcon({
-                    html: `<div style="
-                      width: 30px; 
-                      height: 30px; 
-                      background: #3b82f6; 
-                      color: white; 
-                      border: 2px solid white; 
-                      border-radius: 50%; 
-                      display: flex; 
-                      align-items: center; 
-                      justify-content: center; 
-                      font-weight: bold; 
-                      font-size: 14px;
-                      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                    ">${index + 1}</div>`,
-                    className: 'custom-numbered-marker',
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                  })}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <strong>Point {index + 1}</strong><br />
-                      Lat: {lat.toFixed(6)}<br />
-                      Lng: {lng.toFixed(6)}
-                    </div>
-                  </Popup>
-                </Marker>
-              );
-            })}
-            
-            {/* Current polygon */}
-            {currentPolygon && (
-              <Polygon
-                positions={geoJSONToLeafletCoords(currentPolygon)}
-                pathOptions={{
-                  fillColor: getPolygonColor(),
-                  color: getPolygonColor(),
-                  weight: 2,
-                  opacity: 0.8,
-                  fillOpacity: 0.3
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>Your Application Area</strong><br />
-                    {currentPolygon && (
-                      <>
-                        Area: {formatArea(getPolygonSummary(currentPolygon).area)}<br />
-                        Status: {validation?.isValid ? 'Valid' : 'Invalid'}<br />
-                        {validation?.intersections.length ? (
-                          <>Conflicts: {validation.intersections.length}</>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                </Popup>
-              </Polygon>
-            )}
-            
-            {/* Existing permits */}
-            {showPermits && existingPermits.map((permit) => (
-              <Polygon
-                key={permit.permitId}
-                positions={permit.coordinates}
-                pathOptions={{
-                  fillColor: getPermitPolygonColor(permit.status),
-                  color: getPermitPolygonColor(permit.status),
-                  weight: 1,
-                  opacity: 0.6,
-                  fillOpacity: 0.2
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{permit.permitNumber}</strong><br />
-                    {permit.projectTitle}<br />
-                    Status: <Badge variant="outline" className="text-xs">
-                      {permit.status}
-                    </Badge>
-                  </div>
-                </Popup>
-              </Polygon>
-            ))}
-          </MapContainer>
+          <ClientOnlyMap
+            coordinates={coordinates}
+            currentPolygon={currentPolygon}
+            existingPermits={existingPermits}
+            showPermits={showPermits}
+            validation={validation}
+            onMapClick={handleMapClick}
+            isDrawing={isDrawing}
+            height={height}
+          />
         </div>
 
         {/* Validation Results */}
@@ -474,7 +342,7 @@ export function PolygonDrawingMap({
                     <span className="text-xs text-muted-foreground">
                       {intersection.intersectionType.replace(/_/g, ' ')} • 
                       {intersection.overlapPercentage.toFixed(1)}% overlap • 
-                      {formatArea(intersection.intersectionArea.toString())}
+                      {formatArea(intersection.intersectionArea)}
                     </span>
                   </div>
                 ))}
@@ -492,7 +360,7 @@ export function PolygonDrawingMap({
                 ✅ Polygon is valid! No intersections with existing permits found.
                 {currentPolygon && (
                   <div className="mt-2 text-sm text-muted-foreground">
-                    Area: {formatArea(getPolygonSummary(currentPolygon).area)}
+                    Area: {getPolygonSummary(currentPolygon).area}
                   </div>
                 )}
               </AlertDescription>

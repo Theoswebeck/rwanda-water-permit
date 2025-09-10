@@ -57,10 +57,15 @@ export const uploadDocument = async (
   documentType: string
 ): Promise<{ path: string; url: string } | null> => {
   try {
+    console.log(`🔧 uploadDocument called with:`, { fileName: file.name, applicationId, documentType });
+    
     // Generate unique filename
     const fileExt = file.name.split('.').pop();
     const fileName = `${documentType}-${Date.now()}.${fileExt}`;
     const filePath = `applications/${applicationId}/${fileName}`;
+    
+    console.log(`🔧 Generated file path: ${filePath}`);
+    console.log(`🔧 Using bucket: ${DOCUMENTS_BUCKET}`);
     
     // Upload file
     const { data, error } = await supabase.storage
@@ -71,21 +76,27 @@ export const uploadDocument = async (
       });
       
     if (error) {
-      console.error('Upload error:', error);
+      console.error('❌ Upload error:', error);
       return null;
     }
+    
+    console.log(`✅ Storage upload successful:`, data);
     
     // Get public URL
     const url = getDocumentUrl(data.path);
+    console.log(`🔧 Generated URL: ${url}`);
     
-    return {
+    const result = {
       path: data.path,
       url: url || ''
     };
-      } catch (error) {
-      console.error('Error uploading document:', error);
-      return null;
-    }
+    
+    console.log(`✅ uploadDocument returning:`, result);
+    return result;
+  } catch (error) {
+    console.error('❌ Upload error in catch block:', error);
+    return null;
+  }
 };
 
 /**

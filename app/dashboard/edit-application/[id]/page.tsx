@@ -277,8 +277,23 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       
       // Document fields (file references - actual files are stored separately)
       technicalDrawings: formData.technicalDrawings,
-      environmentalImpactDoc: formData.environmentalImpactDoc,
-      feasibilityStudy: formData.feasibilityStudy,
+      environmentalImpactDoc: formData.environmentalImpactDoc || 
+                             formData.irrigationEIA || 
+                             formData.aquacultureEIA || 
+                             formData.hydropowerEIA ||
+                             formData.miningEIA,
+      feasibilityStudy: formData.feasibilityStudy || 
+                        formData.irrigationFeasibilityStudy || 
+                        formData.waterSupplyFeasibilityStudy || 
+                        formData.hydropowerFeasibilityStudy ||
+                        formData.aquacultureFeasibilityStudy ||
+                        formData.miningFeasibilityStudy,
+      generalRequirements: formData.generalRequirements ||
+                          formData.irrigationGeneralRequirements ||
+                          formData.waterSupplyGeneralRequirements ||
+                          formData.aquacultureGeneralRequirements ||
+                          formData.hydropowerGeneralRequirements ||
+                          formData.miningGeneralRequirements,
       miningLicense: formData.miningLicense,
       miningEIA: formData.miningEIA,
       miningHydrologicalReport: formData.miningHydrologicalReport,
@@ -290,7 +305,10 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
         activities: formData.intendedActivities?.join(', ') || 'Not specified',
         waterSource: formData.waterSourceType || 'Not specified',
         contact: formData.emailAddress || 'Not provided'
-      }
+      },
+      
+      // Additional documents uploaded by user
+      additionalDocuments: formData.additionalDocuments || []
     }),
     
     // SLA tracking
@@ -364,6 +382,11 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
         { latitude: "", longitude: "" },
         { latitude: "", longitude: "" }
       ];
+    }
+    
+    // Ensure additionalDocuments is always an array
+    if (!formData.additionalDocuments) {
+      formData.additionalDocuments = [];
     }
     
     return formData; // Early return for new format
@@ -525,11 +548,16 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   // Certification
   formData.certificationAgreement = true; // Must be true for saved applications
 
+  // Ensure additionalDocuments is always an array for legacy format too
+  if (!formData.additionalDocuments) {
+    formData.additionalDocuments = [];
+  }
+
   return formData;
 }
 
 // Helper function to upload documents and save to database
-async function uploadApplicationDocuments(applicationId: string, formData: any): Promise<Document[]> {
+async function uploadApplicationDocuments(applicationId: string, formData: any, userId?: string): Promise<Document[]> {
   try {
     const uploadedDocuments: Document[] = [];
     
@@ -581,6 +609,8 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
     };
     
     console.log('📋 Checking for document uploads in formData:', Object.keys(formData).filter(key => formData[key] instanceof File));
+    console.log('📋 All formData keys:', Object.keys(formData));
+    console.log('📋 FormData file entries:', Object.entries(formData).filter(([key, value]) => value instanceof File));
     
     for (const [fieldName, documentType] of Object.entries(documentTypes)) {
       const file = formData[fieldName];
@@ -589,7 +619,9 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
         console.log(`📎 Found file for ${fieldName}:`, file.name);
         try {
           // Upload file to storage
+          console.log(`🔄 Uploading ${fieldName} to storage...`);
           const uploadResult = await uploadDocument(file, applicationId, fieldName);
+          console.log(`✅ Upload result for ${fieldName}:`, uploadResult);
           
           if (uploadResult) {
             // Check if document already exists
@@ -624,6 +656,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
               if (dbError) {
                 console.error(`Error updating document ${fieldName}:`, dbError);
               } else {
+                console.log(`✅ Updated existing document ${fieldName} successfully`);
                 uploadedDocuments.push(documentRecord);
               }
             } else {
@@ -639,7 +672,8 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
                   mime_type: file.type,
                   verification_status: 'pending',
                   is_required: ['paymentProof', 'identificationDoc'].includes(fieldName),
-                  uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
+                  uploaded_by: userId || '550e8400-e29b-41d4-a716-446655440001',
+                  upload_date: new Date().toISOString()
                 })
                 .select()
                 .single();
@@ -647,6 +681,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
               if (dbError) {
                 console.error(`Error saving document ${fieldName} to database:`, dbError);
               } else {
+                console.log(`✅ Created new document ${fieldName} successfully`);
                 uploadedDocuments.push(documentRecord);
               }
             }
@@ -659,6 +694,92 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       }
     }
     
+    // Handle additional documents
+    if (formData.additionalDocuments && Array.isArray(formData.additionalDocuments)) {
+      console.log('📎 Processing additional documents:', formData.additionalDocuments.length);
+      
+      for (const additionalDoc of formData.additionalDocuments) {
+        if (additionalDoc.file && additionalDoc.file instanceof File) {
+          console.log(`📎 Found additional document file:`, additionalDoc.file.name);
+          try {
+            // Upload file to storage with a unique field name
+            const fieldName = `additional_${additionalDoc.id}`;
+            console.log(`🔄 Uploading additional document ${additionalDoc.name} to storage...`);
+            const uploadResult = await uploadDocument(additionalDoc.file, applicationId, fieldName);
+            console.log(`✅ Upload result for additional document ${additionalDoc.name}:`, uploadResult);
+            
+            if (uploadResult) {
+              // Check if document already exists
+              const { data: existingDoc, error: checkError } = await supabase
+                .from('documents')
+                .select('id')
+                .eq('application_id', applicationId)
+                .eq('name', additionalDoc.name)
+                .eq('type', 'other')
+                .maybeSingle();
+                
+              if (checkError && checkError.code !== 'PGRST116') {
+                console.error(`Error checking existing additional document ${additionalDoc.name}:`, checkError);
+                continue;
+              }
+              
+              if (existingDoc) {
+                // Update existing document
+                const { data: documentRecord, error: dbError } = await supabase
+                  .from('documents')
+                  .update({
+                    name: additionalDoc.name,
+                    file_path: uploadResult.path,
+                    file_size: additionalDoc.file.size,
+                    mime_type: additionalDoc.file.type,
+                    verification_status: 'pending' as const,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', existingDoc.id)
+                  .select()
+                  .single();
+                  
+                if (dbError) {
+                  console.error(`Error updating additional document ${additionalDoc.name}:`, dbError);
+                } else {
+                  uploadedDocuments.push(documentRecord);
+                }
+              } else {
+                // Create new document record
+                const { data: documentRecord, error: dbError } = await supabase
+                  .from('documents')
+                  .insert({
+                    application_id: applicationId,
+                    name: additionalDoc.name,
+                    type: 'other' as const,
+                    file_path: uploadResult.path,
+                    file_size: additionalDoc.file.size,
+                    mime_type: additionalDoc.file.type,
+                    verification_status: 'pending' as const,
+                    is_required: false,
+                    uploaded_by: userId || '550e8400-e29b-41d4-a716-446655440001',
+                    upload_date: new Date().toISOString()
+                  })
+                  .select()
+                  .single();
+                  
+                if (dbError) {
+                  console.error(`Error saving additional document ${additionalDoc.name} to database:`, dbError);
+                } else {
+                  uploadedDocuments.push(documentRecord);
+                }
+              }
+            } else {
+              console.error(`Failed to upload additional document ${additionalDoc.name}`);
+            }
+          } catch (error) {
+            console.error(`Error processing additional document ${additionalDoc.name}:`, error);
+          }
+        }
+      }
+    }
+    
+    console.log(`📋 Total documents processed: ${uploadedDocuments.length}`);
     return uploadedDocuments;
   } catch (error) {
     console.error('Error uploading documents:', error);
@@ -745,6 +866,8 @@ export default function EditApplicationPage() {
           
           // ⚡ PERFORMANCE: Process documents efficiently
           const documentMap: Record<string, { url: string; name: string }> = {};
+          const additionalDocsList: any[] = [];
+          
           const typeMapping: Record<string, string> = {
             'identification_doc': 'identificationDoc',
             'land_ownership_doc': 'landOwnershipDoc', 
@@ -752,26 +875,88 @@ export default function EditApplicationPage() {
             'environmental_impact_doc': 'environmentalImpactDoc',
             'payment_proof': 'paymentProof',
             'intake_discharge_map': 'intakeDischargeMap',
-            'other': 'waterSupplyGeneralRequirements', // Default to water supply for 'other' type
             'business_license': 'miningLicense',
             'geological_survey': 'miningHydrologicalReport',
             'water_quality_report': 'waterQualityReport'
           };
+
+          // Create reverse mapping to find field names from documents
+          const documentTypeToField: Record<string, string[]> = {
+            'other': [] // Will be populated with activity-specific documents
+          };
           
+          // Smart document classification based on file path patterns
           for (const doc of documents) {
-            const fieldName = typeMapping[doc.type] || doc.type;
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
-                documentMap[fieldName] = {
-                  url: publicUrl,
-                  name: doc.name
-                };
+                console.log(`📋 Processing document: ${doc.name} (type: ${doc.type}, path: ${doc.file_path})`);
+                
+                // Extract field name from file path if it follows our naming convention
+                const pathParts = doc.file_path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                
+                if (fieldNameMatch) {
+                  // This is a structured document with field name in path
+                  const fieldName = fieldNameMatch[1];
+                  console.log(`📋 Identified field name from path: ${fieldName}`);
+                  
+                  // Check if it's an additional document
+                  if (fieldName.startsWith('additional_')) {
+                    additionalDocsList.push({
+                      id: doc.id || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                      name: doc.name,
+                      category: 'additional',
+                      description: (doc as any).description || '',
+                      file: null,
+                      url: publicUrl
+                    });
+                  } else {
+                    // This is a standard/activity-specific document
+                    documentMap[fieldName] = {
+                      url: publicUrl,
+                      name: doc.name
+                    };
+                  }
+                } else {
+                  // Fallback to old logic for documents without structured naming
+                  const isStandardDoc = Object.keys(typeMapping).includes(doc.type) && 
+                                      doc.type !== 'other';
+                  
+                  if (!isStandardDoc && doc.type === 'other') {
+                    // This is likely an additional document
+                    additionalDocsList.push({
+                      id: doc.id || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                      name: doc.name,
+                      category: 'additional',
+                      description: (doc as any).description || '',
+                      file: null,
+                      url: publicUrl
+                    });
+                  } else {
+                    // This is a standard document
+                    const fieldName = typeMapping[doc.type] || doc.type;
+                    documentMap[fieldName] = {
+                      url: publicUrl,
+                      name: doc.name
+                    };
+                  }
+                }
               }
             }
           }
           
+          // Add additional documents to form data
+          if (additionalDocsList.length > 0) {
+            formData.additionalDocuments = additionalDocsList;
+          }
+          
           setInitialDocuments(documentMap);
+          console.log('📋 Document processing complete:');
+          console.log('📋 Standard documents found:', Object.keys(documentMap));
+          console.log('📋 Additional documents found:', additionalDocsList.length);
+          console.log('📋 Additional documents:', additionalDocsList);
           console.log('✅ Application loaded for editing:', app);
           console.log('✅ Form data mapped:', formData);
         } else {
@@ -820,12 +1005,14 @@ export default function EditApplicationPage() {
         console.log('✅ Application updated and submitted successfully:', updatedApplication);
         
         // Upload documents in background, don't block UI
-        uploadApplicationDocuments(application.id, formData)
+        console.log('🚀 Starting document upload process...');
+        uploadApplicationDocuments(application.id, formData, userProfile?.id)
           .then(uploadedDocuments => {
             console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
           })
           .catch(docError => {
             console.error('⚠️ Document upload failed but application was updated:', docError);
+            console.error('⚠️ Full error details:', docError);
           });
         
         setSuccess(true);
@@ -873,12 +1060,14 @@ export default function EditApplicationPage() {
         console.log('✅ Application updated as draft successfully:', updatedApplication);
         
         // Upload documents in background, don't block UI
-        uploadApplicationDocuments(application.id, formData)
+        console.log('🚀 Starting document upload process for draft...');
+        uploadApplicationDocuments(application.id, formData, userProfile?.id)
           .then(uploadedDocuments => {
             console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
           })
           .catch(docError => {
             console.error('⚠️ Document upload failed but draft was saved:', docError);
+            console.error('⚠️ Full error details:', docError);
           });
         
         // Always show success for manual saves

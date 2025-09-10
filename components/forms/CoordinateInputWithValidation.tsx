@@ -24,7 +24,16 @@ import {
   RefreshCw,
   Trash2
 } from "lucide-react";
-import { PolygonDrawingMap } from "@/components/maps/PolygonDrawingMap";
+import dynamic from "next/dynamic";
+
+// Dynamically import the map component to avoid SSR issues
+const PolygonDrawingMap = dynamic(
+  () => import("@/components/maps/PolygonDrawingMap").then((mod) => mod.PolygonDrawingMap),
+  { 
+    ssr: false,
+    loading: () => <div className="h-96 w-full flex items-center justify-center bg-gray-100 rounded">Loading map...</div>
+  }
+);
 import { validateCoordinates, type ValidationResponse } from "@/lib/polygonValidation";
 import { isValidCoordinate, isWithinRwanda, type CoordinatePoint } from "@/lib/geoUtils";
 

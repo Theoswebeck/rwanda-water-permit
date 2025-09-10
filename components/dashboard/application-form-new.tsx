@@ -34,7 +34,7 @@ import {
   FormMessage
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle } from "lucide-react";
+import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -217,7 +217,6 @@ const applicationFormSchema = z.object({
   additionalDocuments: z.array(z.object({
     id: z.string(),
     name: z.string(),
-    isRequired: z.boolean(),
     category: z.string(),
     description: z.string().optional(),
     file: z.any().optional()
@@ -490,7 +489,6 @@ export const ApplicationForm = memo(function ApplicationForm({
   const [additionalDocuments, setAdditionalDocuments] = useState<Array<{
     id: string;
     name: string;
-    isRequired: boolean;
     category: string;
     description?: string;
     file?: File | null;
@@ -900,6 +898,11 @@ export const ApplicationForm = memo(function ApplicationForm({
       if (initialData.waterSourceSector) {
         setSelectedWaterSourceSector(initialData.waterSourceSector);
       }
+      
+      // Initialize additionalDocuments if they exist in initialData
+      if (initialData.additionalDocuments && Array.isArray(initialData.additionalDocuments)) {
+        setAdditionalDocuments(initialData.additionalDocuments);
+      }
     }
   }, [initialData, form]);
 
@@ -1081,7 +1084,6 @@ export const ApplicationForm = memo(function ApplicationForm({
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [docName, setDocName] = useState("");
     const [docDescription, setDocDescription] = useState("");
-    const [isRequired, setIsRequired] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -1090,7 +1092,6 @@ export const ApplicationForm = memo(function ApplicationForm({
         const newDoc = {
           id: `${activityType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           name: docName.trim(),
-          isRequired,
           category: category || activityType || 'additional',
           description: docDescription.trim(),
           file: selectedFile
@@ -1101,7 +1102,6 @@ export const ApplicationForm = memo(function ApplicationForm({
         // Reset dialog state
         setDocName("");
         setDocDescription("");
-        setIsRequired(false);
         setSelectedFile(null);
         setIsDialogOpen(false);
         
@@ -1114,7 +1114,6 @@ export const ApplicationForm = memo(function ApplicationForm({
     const resetDialog = () => {
       setDocName("");
       setDocDescription("");
-      setIsRequired(false);
       setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
@@ -1218,16 +1217,6 @@ export const ApplicationForm = memo(function ApplicationForm({
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="is-required"
-                    checked={isRequired}
-                    onCheckedChange={(checked) => setIsRequired(checked as boolean)}
-                  />
-                  <Label htmlFor="is-required" className="text-sm">
-                    Mark as required document
-                  </Label>
-                </div>
               </div>
 
               <div className="flex gap-2 pt-4">
@@ -1274,6 +1263,43 @@ export const ApplicationForm = memo(function ApplicationForm({
       setAdditionalDocuments(prev => prev.filter(doc => doc.id !== id));
     };
 
+    const handleViewDocument = (doc: any) => {
+      // Check if we have a stored URL (from Supabase)
+      if (doc.url) {
+        // Open the Supabase CDN URL directly
+        const newWindow = window.open(doc.url, '_blank');
+        if (newWindow) {
+          newWindow.focus();
+        } else {
+          // Fallback: navigate to URL if popup blocked
+          window.location.href = doc.url;
+        }
+      } else if (doc.file && doc.file instanceof File) {
+        // Fallback: Create a blob URL for local files (newly uploaded)
+        const blob = new Blob([doc.file], { type: doc.file.type });
+        const url = URL.createObjectURL(blob);
+        
+        // Open in new tab/window
+        const newWindow = window.open(url, '_blank');
+        if (newWindow) {
+          newWindow.focus();
+          // Clean up the blob URL after a delay
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } else {
+          // Fallback: trigger download if popup blocked
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = doc.file.name || 'document';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+      } else {
+        console.warn('No URL or file available for document:', doc);
+      }
+    };
+
     return (
       <div className="space-y-4">
         {categoryDocs.length > 0 && (
@@ -1293,7 +1319,6 @@ export const ApplicationForm = memo(function ApplicationForm({
                         <FileText className="h-4 w-4 text-blue-600" />
                         <span className="font-medium text-sm truncate">
                           {doc.name}
-                          {doc.isRequired && <span className="text-red-500 ml-1">*</span>}
                         </span>
                       </div>
                       {doc.description && (
@@ -1303,21 +1328,39 @@ export const ApplicationForm = memo(function ApplicationForm({
                       )}
                       <div className="flex items-center gap-2 mt-1">
                         <Check className="h-3 w-3 text-green-600" />
-                        <span className="text-xs text-green-600 truncate">
+                        <button
+                          type="button"
+                          onClick={() => handleViewDocument(doc)}
+                          className="text-xs text-blue-600 hover:text-blue-800 underline truncate cursor-pointer"
+                        >
                           {doc.file?.name}
-                        </span>
+                        </button>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeAdditionalDocument(doc.id)}
-                      className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
-                      disabled={readOnly}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDocument(doc)}
+                        className="h-6 w-6 p-0 text-blue-500 hover:text-blue-700"
+                        title="View document"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                      {!readOnly && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeAdditionalDocument(doc.id)}
+                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                          title="Remove document"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1356,7 +1399,13 @@ export const ApplicationForm = memo(function ApplicationForm({
 
   const handleFormSubmit = async (values: FormValues) => {
     try {
-      await onSubmit({ ...values, ...files }, 'submitted');
+      // Include additionalDocuments in the submission
+      const submissionData = { 
+        ...values, 
+        ...files, 
+        additionalDocuments 
+      };
+      await onSubmit(submissionData, 'submitted');
     } catch (error) {
       console.error('Form submission error:', error);
     }
@@ -3670,7 +3719,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                       type="button"
                       variant="outline"
                       onClick={async () => {
-                        await onSaveAsDraft(form.getValues(), 'draft');
+                        // Include additionalDocuments in the draft save
+                        const draftData = { 
+                          ...form.getValues(), 
+                          ...files, 
+                          additionalDocuments 
+                        };
+                        await onSaveAsDraft(draftData, 'draft');
                       }}
                       disabled={isLoading}
                     >
