@@ -152,8 +152,15 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     // Technical specifications - based on new form structure
     water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
     water_measuring_method: 'Flow meter', // Default for drafts
-    storage_facilities: undefined, // Will be filled when form is more complete
     return_flow_description: undefined, // Will be filled when form is more complete
+    
+    // Water source details - map form fields to database fields
+    water_body_name: formData.nameSourceWater,
+    tributary_name: formData.tributaryToMain,
+    
+    // Storage facilities - use water supply storage capacity if available
+    storage_facilities: formData.waterSupplyStorageCapacity ? 
+      `Storage capacity: ${formData.waterSupplyStorageCapacity} m³` : undefined,
     
     // Industry-specific fields - based on annexes
     electricity_generation_capacity: formData.annexF_electricityDetails,
@@ -225,6 +232,13 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       
       // Water Abstraction
       waterAbstractionDetails: formData.waterAbstractionDetails,
+      
+      // Water Supply Details (structured fields)
+      waterSupplyPopulation: formData.waterSupplyPopulation,
+      waterSupplyPerCapitaDemand: formData.waterSupplyPerCapitaDemand,
+      waterSupplyTotalDailyDemand: formData.waterSupplyTotalDailyDemand,
+      waterSupplyDailyAbstraction: formData.waterSupplyDailyAbstraction,
+      waterSupplyStorageCapacity: formData.waterSupplyStorageCapacity,
       
       // Water Concession (for Aquaculture)
       concessionArea: formData.concessionArea,
@@ -387,8 +401,8 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     'groundwater': 'borehole'
   };
   formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
-  formData.nameSourceWater = ''; // Will be filled by user
-  formData.tributaryToMain = ''; // Will be filled by user
+  formData.nameSourceWater = application.water_body_name || '';
+  formData.tributaryToMain = application.tributary_name || '';
   
   // Water source location (same as office for now) - reverse the province mapping
   formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
@@ -514,6 +528,144 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   return formData;
 }
 
+// Helper function to upload documents and save to database
+async function uploadApplicationDocuments(applicationId: string, formData: any): Promise<Document[]> {
+  try {
+    const uploadedDocuments: Document[] = [];
+    
+    // Document type mapping
+    const documentTypes = {
+      paymentProof: 'payment_proof',
+      identificationDoc: 'identification_doc', 
+      landOwnershipDoc: 'land_ownership_doc',
+      technicalDrawings: 'technical_drawings',
+      environmentalImpactDoc: 'environmental_impact_doc',
+      intakeDischargeMap: 'intake_discharge_map',
+      feasibilityStudy: 'other',
+      miningLicense: 'business_license',
+      miningEIA: 'environmental_impact_doc',
+      miningHydrologicalReport: 'geological_survey',
+      miningGeneralRequirements: 'other',
+      // Irrigation documents
+      irrigationGeneralRequirements: 'other',
+      irrigationEIA: 'environmental_impact_doc',
+      irrigationFeasibilityStudy: 'other',
+      // Water Supply documents
+      waterSupplyGeneralRequirements: 'other',
+      waterSupplyFeasibilityStudy: 'other',
+      // Aquaculture documents
+      aquacultureGeneralRequirements: 'other',
+      aquacultureEIA: 'environmental_impact_doc',
+      aquacultureManagementPlan: 'other',
+      // Coffee Washing documents
+      coffeeWashingGeneralRequirements: 'other',
+      coffeeWashingEIA: 'environmental_impact_doc',
+      // Industrial documents
+      industrialGeneralRequirements: 'other',
+      industrialEIA: 'environmental_impact_doc',
+      // Hydropower documents
+      hydropowerGeneralRequirements: 'other',
+      hydropowerEIA: 'environmental_impact_doc',
+      // Construction Dam documents
+      constructionDamGeneralRequirements: 'other',
+      constructionDamEIA: 'environmental_impact_doc',
+      // Infrastructure documents
+      infrastructureGeneralRequirements: 'other',
+      infrastructureEIA: 'environmental_impact_doc',
+      // Navigation documents
+      navigationGeneralRequirements: 'other',
+      navigationEIA: 'environmental_impact_doc',
+      // Recreation documents
+      recreationGeneralRequirements: 'other',
+      recreationEIA: 'environmental_impact_doc'
+    };
+    
+    console.log('📋 Checking for document uploads in formData:', Object.keys(formData).filter(key => formData[key] instanceof File));
+    
+    for (const [fieldName, documentType] of Object.entries(documentTypes)) {
+      const file = formData[fieldName];
+      
+      if (file && file instanceof File) {
+        console.log(`📎 Found file for ${fieldName}:`, file.name);
+        try {
+          // Upload file to storage
+          const uploadResult = await uploadDocument(file, applicationId, fieldName);
+          
+          if (uploadResult) {
+            // Check if document already exists
+            const { data: existingDoc, error: checkError } = await supabase
+              .from('documents')
+              .select('id')
+              .eq('application_id', applicationId)
+              .eq('type', documentType)
+              .maybeSingle();
+              
+            if (checkError && checkError.code !== 'PGRST116') {
+              console.error(`Error checking existing document ${fieldName}:`, checkError);
+              continue;
+            }
+            
+            if (existingDoc) {
+              // Update existing document
+              const { data: documentRecord, error: dbError } = await supabase
+                .from('documents')
+                .update({
+                  name: file.name,
+                  file_path: uploadResult.path,
+                  file_size: file.size,
+                  mime_type: file.type,
+                  verification_status: 'pending',
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', existingDoc.id)
+                .select()
+                .single();
+                
+              if (dbError) {
+                console.error(`Error updating document ${fieldName}:`, dbError);
+              } else {
+                uploadedDocuments.push(documentRecord);
+              }
+            } else {
+              // Create new document record
+              const { data: documentRecord, error: dbError } = await supabase
+                .from('documents')
+                .insert({
+                  application_id: applicationId,
+                  name: file.name,
+                  type: documentType as any,
+                  file_path: uploadResult.path,
+                  file_size: file.size,
+                  mime_type: file.type,
+                  verification_status: 'pending',
+                  is_required: ['paymentProof', 'identificationDoc'].includes(fieldName),
+                  uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
+                })
+                .select()
+                .single();
+                
+              if (dbError) {
+                console.error(`Error saving document ${fieldName} to database:`, dbError);
+              } else {
+                uploadedDocuments.push(documentRecord);
+              }
+            }
+          } else {
+            console.error(`Failed to upload ${fieldName}`);
+          }
+        } catch (error) {
+          console.error(`Error processing document ${fieldName}:`, error);
+        }
+      }
+    }
+    
+    return uploadedDocuments;
+  } catch (error) {
+    console.error('Error uploading documents:', error);
+    throw error;
+  }
+}
+
 export default function EditApplicationPage() {
   const router = useRouter();
   const params = useParams();
@@ -526,7 +678,10 @@ export default function EditApplicationPage() {
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const [loadingApplication, setLoadingApplication] = useState(true);
   
-  const { getApplication, updateApplication } = useApplications();
+  const { getApplication, updateApplication } = useApplications({
+    userId: userProfile?.id,
+    autoFetch: false // Don't auto-fetch all applications, we only need one
+  });
   const { getDocuments } = useDocuments();
   
   // ⚡ PERFORMANCE: Memoize user data to prevent re-renders
@@ -561,6 +716,8 @@ export default function EditApplicationPage() {
       try {
         const applicationId = params.id as string;
         console.log('Fetching application for editing:', applicationId);
+        console.log('Current user profile:', userProfile);
+        console.log('Current user ID:', userProfile?.id);
         
         const app = await getApplication(applicationId);
         if (app) {
@@ -594,7 +751,11 @@ export default function EditApplicationPage() {
             'technical_drawings': 'technicalDrawings',
             'environmental_impact_doc': 'environmentalImpactDoc',
             'payment_proof': 'paymentProof',
-            'intake_discharge_map': 'intakeDischargeMap'
+            'intake_discharge_map': 'intakeDischargeMap',
+            'other': 'waterSupplyGeneralRequirements', // Default to water supply for 'other' type
+            'business_license': 'miningLicense',
+            'geological_survey': 'miningHydrologicalReport',
+            'water_quality_report': 'waterQualityReport'
           };
           
           for (const doc of documents) {
@@ -614,20 +775,22 @@ export default function EditApplicationPage() {
           console.log('✅ Application loaded for editing:', app);
           console.log('✅ Form data mapped:', formData);
         } else {
-          setError('Application not found');
+          console.log('❌ Application not found for ID:', applicationId);
+          setError('Application not found. This may be because the application doesn\'t exist, you don\'t have permission to edit it, or it belongs to another user.');
         }
       } catch (err) {
         console.error('❌ Error loading application:', err);
-        setError('Failed to load application');
+        console.error('❌ Error details:', err);
+        setError(`Failed to load application: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoadingApplication(false);
       }
     };
     
-    if (params.id) {
+    if (params.id && userProfile?.id) {
       fetchApplication();
     }
-  }, [params.id, getApplication]);
+  }, [params.id, getApplication, userProfile?.id]);
   
   const handleSubmitApplication = async (formData: any, status: 'submitted') => {
     try {
@@ -635,17 +798,36 @@ export default function EditApplicationPage() {
       setError(null);
       
       console.log('Updating application, form data received:', formData);
+      console.log('Current application state at submit:', application);
+      console.log('Application ID at submit:', application?.id);
       
       // Map form data to application schema with submitted status
       const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       
       console.log('Mapped application data:', applicationData);
       
+      // Check if application exists
+      if (!application?.id) {
+        console.error('❌ Application is null or missing ID at submit time');
+        console.error('Application state:', application);
+        throw new Error('Application not found or missing ID');
+      }
+      
       // Update the application
-      const updatedApplication = await updateApplication(application!.id, applicationData);
+      const updatedApplication = await updateApplication(application.id, applicationData);
       
       if (updatedApplication) {
         console.log('✅ Application updated and submitted successfully:', updatedApplication);
+        
+        // Upload documents in background, don't block UI
+        uploadApplicationDocuments(application.id, formData)
+          .then(uploadedDocuments => {
+            console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+          })
+          .catch(docError => {
+            console.error('⚠️ Document upload failed but application was updated:', docError);
+          });
+        
         setSuccess(true);
         
         // Redirect to dashboard after a brief success message
@@ -668,17 +850,36 @@ export default function EditApplicationPage() {
       setError(null);
       
       console.log('Updating draft, form data received:', formData);
+      console.log('Current application state:', application);
+      console.log('Application ID:', application?.id);
+      console.log('User profile ID:', userProfile?.id);
       
       // Map form data to application schema with draft status
       const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       
       console.log('Mapped draft application data:', applicationData);
       
+      // Check if application exists
+      if (!application?.id) {
+        console.error('❌ Application is null or missing ID at save time');
+        console.error('Application state:', application);
+        throw new Error('Application not found or missing ID');
+      }
+      
       // Update the application as draft
-      const updatedApplication = await updateApplication(application!.id, applicationData);
+      const updatedApplication = await updateApplication(application.id, applicationData);
       
       if (updatedApplication) {
         console.log('✅ Application updated as draft successfully:', updatedApplication);
+        
+        // Upload documents in background, don't block UI
+        uploadApplicationDocuments(application.id, formData)
+          .then(uploadedDocuments => {
+            console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+          })
+          .catch(docError => {
+            console.error('⚠️ Document upload failed but draft was saved:', docError);
+          });
         
         // Always show success for manual saves
           setSuccess(true);
@@ -697,7 +898,7 @@ export default function EditApplicationPage() {
       // Always reset loading state
       setIsLoading(false);
     }
-  }, [updateApplication, userProfile?.id, router]);
+  }, [application, updateApplication, userProfile?.id, router]);
   
   if (loadingApplication) {
     return (

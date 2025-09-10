@@ -55,7 +55,6 @@ const applicationFormSchema = z.object({
   categoryApplicant: z.enum(["individual", "company", "cooperative", "organization", "institution", "ngo_association", "other"]),
   categoryApplicantOther: z.string().optional(),
   nameRepresentative: z.string().optional(),
-  identificationDoc: z.any().optional(),
   
   // Office Address
   officeProvince: z.string().min(1, { message: "Province is required" }),
@@ -100,7 +99,6 @@ const applicationFormSchema = z.object({
   
   // Water Abstraction
   waterAbstractionDetails: z.array(z.object({
-    activity: z.string(),
     flowRate: z.string().optional(),
     flowRateUnit: z.string().optional(),
     maxAverageYearly: z.number().optional(),
@@ -118,6 +116,13 @@ const applicationFormSchema = z.object({
   
   // SECTION 5: PAYMENT INFORMATION (removed per RWB request)
   
+  // Water Supply Details (structured fields)
+  waterSupplyPopulation: z.number().optional(),
+  waterSupplyPerCapitaDemand: z.number().optional(),
+  waterSupplyTotalDailyDemand: z.number().optional(),
+  waterSupplyDailyAbstraction: z.number().optional(),
+  waterSupplyStorageCapacity: z.number().optional(),
+
   // ANNEXES
   annexA_irrigationDetails: z.string().optional(),
   annexB_waterSupplyDetails: z.string().optional(),
@@ -140,15 +145,83 @@ const applicationFormSchema = z.object({
   fishLakeAreaHectares: z.number().optional(),
   fishPondsDiscardWaterQuantityM3PerDay: z.number().optional(),
   
-  // Additional documents
+  // Irrigation specific fields
+  irrigationTotalArea: z.number().optional(),
+  
+  // Core application documents
+  identificationDoc: z.any().optional(),
+  paymentProof: z.any().optional(),
+  landOwnershipDoc: z.any().optional(),
   technicalDrawings: z.any().optional(),
   environmentalImpactDoc: z.any().optional(),
   feasibilityStudy: z.any().optional(),
-  // Mining attachments
+  intakeDischargeMap: z.any().optional(),
+  
+  // Activity-specific documents
+  // Irrigation
+  irrigationGeneralRequirements: z.any().optional(),
+  irrigationEIA: z.any().optional(),
+  irrigationFeasibilityStudy: z.any().optional(),
+  
+  // Water Supply
+  waterSupplyGeneralRequirements: z.any().optional(),
+  waterSupplyFeasibilityStudy: z.any().optional(),
+  
+  // Mining
+  miningGeneralRequirements: z.any().optional(),
   miningLicense: z.any().optional(),
   miningEIA: z.any().optional(),
   miningHydrologicalReport: z.any().optional(),
-  miningGeneralRequirements: z.any().optional(),
+  
+  // Aquaculture
+  aquacultureGeneralRequirements: z.any().optional(),
+  aquacultureEIA: z.any().optional(),
+  aquacultureManagementPlan: z.any().optional(),
+  aquacultureRecommendationLetter: z.any().optional(),
+  
+  // Coffee Washing
+  coffeeWashingGeneralRequirements: z.any().optional(),
+  coffeeWashingEIA: z.any().optional(),
+  
+  // Industrial
+  industrialGeneralRequirements: z.any().optional(),
+  industrialEIA: z.any().optional(),
+  industrialWasteManagementPlan: z.any().optional(),
+  
+  // Hydropower/Electricity
+  hydropowerGeneralRequirements: z.any().optional(),
+  hydropowerEIA: z.any().optional(),
+  hydropowerFeasibilityStudy: z.any().optional(),
+  
+  // Construction Dam
+  constructionDamGeneralRequirements: z.any().optional(),
+  constructionDamEIA: z.any().optional(),
+  constructionDamEngineeringPlans: z.any().optional(),
+  
+  // Infrastructure
+  infrastructureGeneralRequirements: z.any().optional(),
+  infrastructureEIA: z.any().optional(),
+  infrastructureEngineeringPlans: z.any().optional(),
+  
+  // Navigation
+  navigationGeneralRequirements: z.any().optional(),
+  navigationEIA: z.any().optional(),
+  navigationManagementPlan: z.any().optional(),
+  
+  // Recreation
+  recreationGeneralRequirements: z.any().optional(),
+  recreationEIA: z.any().optional(),
+  recreationManagementPlan: z.any().optional(),
+  
+  // Additional/Custom documents (extensible)
+  additionalDocuments: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    isRequired: z.boolean(),
+    category: z.string(),
+    description: z.string().optional(),
+    file: z.any().optional()
+  })).optional(),
   
   // CERTIFICATION
   certificationAgreement: z.boolean().refine((val) => val === true, {
@@ -165,7 +238,8 @@ interface ApplicationFormProps {
   isLoading: boolean;
   initialData?: Partial<FormValues>;
   initialDocuments?: Record<string, { url: string; name: string }>;
-  mode?: 'create' | 'edit';
+  mode?: 'create' | 'edit' | 'view';
+  readOnly?: boolean;
 }
 
 // ⚡ PERFORMANCE: Memoize the entire form component to prevent unnecessary re-renders
@@ -176,7 +250,8 @@ export const ApplicationForm = memo(function ApplicationForm({
   isLoading, 
   initialData, 
   initialDocuments = {},
-  mode = 'create' 
+  mode = 'create',
+  readOnly = false 
 }: ApplicationFormProps) {
   const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
@@ -212,6 +287,7 @@ export const ApplicationForm = memo(function ApplicationForm({
     aquacultureGeneralRequirements: useRef<HTMLInputElement>(null),
     aquacultureEIA: useRef<HTMLInputElement>(null),
     aquacultureManagementPlan: useRef<HTMLInputElement>(null),
+    aquacultureRecommendationLetter: useRef<HTMLInputElement>(null),
     // Coffee Washing documents
     coffeeWashingGeneralRequirements: useRef<HTMLInputElement>(null),
     coffeeWashingEIA: useRef<HTMLInputElement>(null),
@@ -279,18 +355,25 @@ export const ApplicationForm = memo(function ApplicationForm({
       waterSourceCell: "",
       waterSourceVillage: "",
       waterReliability: "water_always_available",
-      waterAbstractionDetails: [{ activity: "", flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: 0, abstractionMethod: "" }],
+      waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: 0, abstractionMethod: "" }],
       intendedActivities: [],
       intendedActivityOther: "",
       ownsAllLand: false,
       hasLandAccess: false,
       certificationAgreement: false,
+      waterSupplyPopulation: undefined,
+      waterSupplyPerCapitaDemand: undefined,
+      waterSupplyTotalDailyDemand: undefined,
+      waterSupplyDailyAbstraction: undefined,
+      waterSupplyStorageCapacity: undefined,
       miningQuantityPerDay: "",
       miningQuantityPerMonth: "",
       miningMineralsType: "",
       miningProductionCapacityTonsPerYear: 0,
       fishLakeAreaHectares: 0,
       fishPondsDiscardWaterQuantityM3PerDay: 0,
+      irrigationTotalArea: undefined,
+      additionalDocuments: [],
       waterSourceCoordinates: [
         { latitude: "", longitude: "" },
         { latitude: "", longitude: "" },
@@ -332,6 +415,32 @@ export const ApplicationForm = memo(function ApplicationForm({
     resolver: zodResolver(applicationFormSchema),
     defaultValues: getDefaultValues
   });
+
+  // Helper function to get input props based on readOnly state
+  const getInputProps = (baseProps: any = {}) => {
+    if (readOnly) {
+      return {
+        ...baseProps,
+        readOnly: true,
+        disabled: true,
+        className: `${baseProps.className || ''} bg-gray-50 border-gray-200 cursor-default`.trim()
+      };
+    }
+    return baseProps;
+  };
+
+  // Helper function to get select props based on readOnly state
+  const getSelectProps = (baseProps: any = {}) => {
+    if (readOnly) {
+      return {
+        ...baseProps,
+        disabled: true,
+        onValueChange: undefined, // Disable value changes in read-only mode
+        className: `${baseProps.className || ''} bg-gray-50 border-gray-200 cursor-default opacity-60`.trim()
+      };
+    }
+    return baseProps;
+  };
 
   // Helper functions for dropdown options
   const getOfficeDistrictOptions = () => {
@@ -377,6 +486,15 @@ export const ApplicationForm = memo(function ApplicationForm({
   const watchedWaterSourceType = form.watch("waterSourceType");
   const watchedIntendedActivities = form.watch("intendedActivities");
   const watchedOwnsAllLand = form.watch("ownsAllLand");
+  const watchedIrrigationTotalArea = form.watch("irrigationTotalArea");
+  const [additionalDocuments, setAdditionalDocuments] = useState<Array<{
+    id: string;
+    name: string;
+    isRequired: boolean;
+    category: string;
+    description?: string;
+    file?: File | null;
+  }>>([]);
 
 
 
@@ -426,8 +544,19 @@ export const ApplicationForm = memo(function ApplicationForm({
     for (const activity of intendedActivities) {
       switch (activity) {
         case 'irrigation':
+          // General requirements are always required for irrigation
           if (!files.irrigationGeneralRequirements && !uploadedFileUrls.irrigationGeneralRequirements) {
             return false;
+          }
+          // For irrigation > 10 ha, also require EIA and feasibility study
+          const irrigationArea = form.getValues('irrigationTotalArea') || 0;
+          if (irrigationArea > 10) {
+            if (!files.irrigationEIA && !uploadedFileUrls.irrigationEIA) {
+              return false;
+            }
+            if (!files.irrigationFeasibilityStudy && !uploadedFileUrls.irrigationFeasibilityStudy) {
+              return false;
+            }
           }
           break;
         case 'water_supply':
@@ -716,7 +845,6 @@ export const ApplicationForm = memo(function ApplicationForm({
         intendedActivities: ["water_supply"],
         intendedActivityOther: "",
         waterAbstractionDetails: [{
-          activity: "water_supply",
           flowRate: "",
           flowRateUnit: "m³/s",
           maxAverageYearly: 0,
@@ -744,9 +872,10 @@ export const ApplicationForm = memo(function ApplicationForm({
         miningProductionCapacityTonsPerYear: undefined,
         fishLakeAreaHectares: undefined,
         fishPondsDiscardWaterQuantityM3PerDay: undefined,
+        irrigationTotalArea: undefined,
         certificationAgreement: true,
-        // Override with loaded data (exclude nameSourceWater to prevent auto-population)
-        ...(({ nameSourceWater, ...rest }) => rest)(initialData)
+        // Override with loaded data
+        ...initialData
       });
       
       // Update dropdown selection states to enable cascading
@@ -796,16 +925,25 @@ export const ApplicationForm = memo(function ApplicationForm({
   // Old administrative data removed - now using comprehensive Rwanda data
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
+    console.log(`📎 File change detected for field: ${fieldName}`);
     const file = event.target.files?.[0];
     if (file) {
+      console.log(`📎 File selected: ${file.name} (${file.size} bytes) for field: ${fieldName}`);
       // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         alert('File size must be less than 10MB');
         return;
       }
       
-      setFiles(prev => ({ ...prev, [fieldName]: file }));
+      setFiles(prev => {
+        const newFiles = { ...prev, [fieldName]: file };
+        console.log(`📎 Updated files state:`, Object.keys(newFiles).filter(key => newFiles[key]));
+        return newFiles;
+      });
       form.setValue(fieldName as any, file);
+      console.log(`📎 Form value set for ${fieldName}`);
+    } else {
+      console.log(`📎 No file selected for field: ${fieldName}`);
     }
   };
 
@@ -857,7 +995,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => fileInputRefs[fieldName as keyof typeof fileInputRefs]?.current?.click()}
+                  onClick={readOnly ? undefined : () => fileInputRefs[fieldName as keyof typeof fileInputRefs]?.current?.click()}
+                  disabled={readOnly}
                 >
                   Choose File
                 </Button>
@@ -877,8 +1016,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => removeFile(fieldName)}
+                onClick={readOnly ? undefined : () => removeFile(fieldName)}
                 className="h-6 w-6 p-0"
+                disabled={readOnly}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -917,14 +1057,275 @@ export const ApplicationForm = memo(function ApplicationForm({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => fileInputRefs[fieldName as keyof typeof fileInputRefs]?.current?.click()}
+                onClick={readOnly ? undefined : () => fileInputRefs[fieldName as keyof typeof fileInputRefs]?.current?.click()}
                 className="h-6 w-6 p-0"
+                disabled={readOnly}
               >
                 <Upload className="h-3 w-3" />
               </Button>
             </div>
           )}
         </div>
+      </div>
+    );
+  };
+
+  // Add Document Button Component with Dialog
+  const AddDocumentButton = ({ 
+    category, 
+    activityType 
+  }: { 
+    category: string; 
+    activityType: string; 
+  }) => {
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [docName, setDocName] = useState("");
+    const [docDescription, setDocDescription] = useState("");
+    const [isRequired, setIsRequired] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+    const handleAddDocument = () => {
+      if (docName.trim() && selectedFile) {
+        const newDoc = {
+          id: `${activityType}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          name: docName.trim(),
+          isRequired,
+          category: category || activityType || 'additional',
+          description: docDescription.trim(),
+          file: selectedFile
+        };
+        
+        setAdditionalDocuments(prev => [...prev, newDoc]);
+        
+        // Reset dialog state
+        setDocName("");
+        setDocDescription("");
+        setIsRequired(false);
+        setSelectedFile(null);
+        setIsDialogOpen(false);
+        
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+
+    const resetDialog = () => {
+      setDocName("");
+      setDocDescription("");
+      setIsRequired(false);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+
+    return (
+      <>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setIsDialogOpen(true)}
+          className="border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400"
+          disabled={readOnly}
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          + Add Document
+        </Button>
+
+        {isDialogOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Add Additional Document</h3>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsDialogOpen(false);
+                    resetDialog();
+                  }}
+                  className="h-6 w-6 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="doc-name">Document Name *</Label>
+                  <Input
+                    id="doc-name"
+                    value={docName}
+                    onChange={(e) => setDocName(e.target.value)}
+                    placeholder="e.g., Site Plan, Water Quality Report"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="doc-description">Description (Optional)</Label>
+                  <Textarea
+                    id="doc-description"
+                    value={docDescription}
+                    onChange={(e) => setDocDescription(e.target.value)}
+                    placeholder="Brief description of the document..."
+                    rows={2}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Upload File *</Label>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                      className="hidden"
+                    />
+                    
+                    {!selectedFile ? (
+                      <div className="text-center space-y-2">
+                        <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          Choose File
+                        </Button>
+                        <p className="text-xs text-gray-500">PDF, JPG, PNG, DOC (max 10MB)</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+                        <Check className="h-4 w-4" />
+                        <span className="truncate">{selectedFile.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedFile(null)}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="is-required"
+                    checked={isRequired}
+                    onCheckedChange={(checked) => setIsRequired(checked as boolean)}
+                  />
+                  <Label htmlFor="is-required" className="text-sm">
+                    Mark as required document
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsDialogOpen(false);
+                    resetDialog();
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleAddDocument}
+                  disabled={!docName.trim() || !selectedFile}
+                  className="flex-1"
+                >
+                  Add Document
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // Additional Documents Display Component
+  const AdditionalDocumentsSection = ({ 
+    category, 
+    activityType 
+  }: { 
+    category: string; 
+    activityType: string; 
+  }) => {
+    const categoryDocs = additionalDocuments.filter(doc => 
+      doc.category === category || doc.category === activityType
+    );
+
+    const removeAdditionalDocument = (id: string) => {
+      setAdditionalDocuments(prev => prev.filter(doc => doc.id !== id));
+    };
+
+    return (
+      <div className="space-y-4">
+        {categoryDocs.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Additional Documents ({categoryDocs.length})
+            </h4>
+            <div className="grid gap-3">
+              {categoryDocs.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="border border-gray-200 rounded-lg p-3 bg-gray-50 dark:bg-gray-800 dark:border-gray-700"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-600" />
+                        <span className="font-medium text-sm truncate">
+                          {doc.name}
+                          {doc.isRequired && <span className="text-red-500 ml-1">*</span>}
+                        </span>
+                      </div>
+                      {doc.description && (
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
+                          {doc.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        <Check className="h-3 w-3 text-green-600" />
+                        <span className="text-xs text-green-600 truncate">
+                          {doc.file?.name}
+                        </span>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeAdditionalDocument(doc.id)}
+                      className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
+                      disabled={readOnly}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        <AddDocumentButton category={category} activityType={activityType} />
       </div>
     );
   };
@@ -986,16 +1387,21 @@ export const ApplicationForm = memo(function ApplicationForm({
         <CardHeader>
           <CardTitle>Water Permit Application Form</CardTitle>
           <CardDescription>
-            Fill out all required fields to submit your water permit application. Fields marked with * are required.
+            {readOnly 
+              ? "Review the submitted water permit application details below."
+              : "Fill out all required fields to submit your water permit application. Fields marked with * are required."
+            }
           </CardDescription>
           
           {/* Manual save only - no auto-save */}
-          <div className="flex items-center gap-2 mt-4">
-            <div className="flex items-center gap-2 text-blue-600 text-sm">
-              <Save className="h-4 w-4" />
-              💾 Manual save only - use "Save as Draft" button or "Next" to save progress
+          {!readOnly && (
+            <div className="flex items-center gap-2 mt-4">
+              <div className="flex items-center gap-2 text-blue-600 text-sm">
+                <Save className="h-4 w-4" />
+                💾 Manual save only - use "Save as Draft" button or "Next" to save progress
+              </div>
             </div>
-          </div>
+          )}
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -1106,7 +1512,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                         <FormItem>
                           <FormLabel>Please specify category</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} placeholder="Specify category" />
+                            <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Specify category" })} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1128,7 +1534,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </span>
                           </FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} placeholder="Enter representative name" />
+                            <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter representative name" })} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1166,7 +1572,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => fileInputRefs.identificationDoc.current?.click()}
+                                    onClick={readOnly ? undefined : () => fileInputRefs.identificationDoc.current?.click()}
+                                    disabled={readOnly}
                                   >
                                     Choose File
                                   </Button>
@@ -1183,7 +1590,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                                       type="button"
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => removeFile("identificationDoc")}
+                                      onClick={readOnly ? undefined : () => removeFile("identificationDoc")}
+                                      disabled={readOnly}
                                     >
                                       <X className="h-4 w-4" />
                                     </Button>
@@ -1219,12 +1627,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                                       type="button"
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => {
+                                      onClick={readOnly ? undefined : () => {
                                         setUploadedFileUrls(prev => {
                                           const { identificationDoc, ...rest } = prev;
                                           return rest;
                                         });
                                       }}
+                                      disabled={readOnly}
                                     >
                                       <X className="h-4 w-4" />
                                     </Button>
@@ -1254,7 +1663,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Province *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedOfficeProvince(value);
                                   // Reset dependent fields
@@ -1265,8 +1674,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedOfficeSector("");
                                 }} 
                                 value={field.value}
+                                disabled={readOnly}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 focus:border-blue-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 focus:border-blue-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder="Select province" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1291,7 +1701,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>District *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedOfficeDistrict(value);
                                   // Reset dependent fields
@@ -1300,9 +1710,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedOfficeSector("");
                                 }}
                                 value={field.value}
-                                disabled={!selectedOfficeProvince}
+                                disabled={readOnly || !selectedOfficeProvince}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={selectedOfficeProvince ? "Select district" : "Select province first"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1327,7 +1737,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Sector *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedOfficeSector(value);
                                   // Reset cell field and state
@@ -1335,9 +1745,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedOfficeCell("");
                                 }}
                                 value={field.value}
-                                disabled={!selectedOfficeDistrict && !officeDistrict}
+                                disabled={readOnly || (!selectedOfficeDistrict && !officeDistrict)}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 focus:border-purple-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 focus:border-purple-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={(selectedOfficeDistrict || officeDistrict) ? "Select sector" : "Select district first"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1362,14 +1772,14 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedOfficeCell(value);
                                 }}
                                 value={field.value}
-                                disabled={!selectedOfficeSector && !officeSector}
+                                disabled={readOnly || (!selectedOfficeSector && !officeSector)}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 focus:border-orange-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 focus:border-orange-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={(selectedOfficeSector || officeSector) ? "Select cell" : "Select sector first"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1466,8 +1876,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                           7. Source of Water *
                         </FormLabel>
                         <FormControl>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
-                            <SelectTrigger className="bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200 focus:border-blue-400">
+                          <Select onValueChange={field.onChange} value={field.value || ""} {...getSelectProps()}>
+                            <SelectTrigger className={`bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200 focus:border-blue-400 ${readOnly ? 'cursor-default' : ''}`}>
                               <SelectValue placeholder="Select water source type" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1512,7 +1922,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                           8. Name of the source of water *
                         </FormLabel>
                         <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="Enter name of water source" />
+                          <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" })} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1529,7 +1939,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                           9. Tributary to (main river/lake)
                         </FormLabel>
                         <FormControl>
-                          <Input {...field} value={field.value || ""} placeholder="Enter main river/lake (if applicable)" />
+                          <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter main river/lake (if applicable)" })} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1551,7 +1961,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Province *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceProvince(value);
                                   // Reset dependent fields
@@ -1562,8 +1972,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedWaterSourceSector("");
                                 }} 
                                 value={field.value}
+                                disabled={readOnly}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder="Select province" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1588,7 +1999,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>District *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceDistrict(value);
                                   // Reset dependent fields
@@ -1597,9 +2008,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedWaterSourceSector("");
                                 }}
                                 value={field.value}
-                                disabled={!selectedWaterSourceProvince}
+                                disabled={readOnly || !selectedWaterSourceProvince}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={selectedWaterSourceProvince ? "Select district" : "Select province first"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1624,16 +2035,16 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Sector *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => {
+                                onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceSector(value);
                                   // Reset cell field
                                   form.setValue("waterSourceCell", "");
                                 }}
                                 value={field.value}
-                                disabled={!selectedWaterSourceDistrict}
+                                disabled={readOnly || !selectedWaterSourceDistrict}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={selectedWaterSourceDistrict ? "Select sector" : "Select district first"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1658,11 +2069,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={field.onChange}
+                                onValueChange={readOnly ? undefined : field.onChange}
                                 value={field.value}
-                                disabled={!selectedWaterSourceSector}
+                                disabled={readOnly || !selectedWaterSourceSector}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={selectedWaterSourceSector ? "Select cell" : "Select sector first"} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1751,8 +2162,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                           12. Reliability of water source *
                         </FormLabel>
                         <FormControl>
-                          <Select onValueChange={field.onChange} value={field.value || ""}>
-                            <SelectTrigger className="bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 focus:border-emerald-400">
+                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                            <SelectTrigger className={`bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 focus:border-emerald-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                               <SelectValue placeholder="Select water source reliability" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1792,8 +2203,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                           13. Intended Activity * (Select the primary activity)
                         </FormLabel>
                         <FormControl>
-                          <Select onValueChange={(value) => field.onChange([value])} value={field.value?.[0] || ""}>
-                            <SelectTrigger className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400">
+                          <Select onValueChange={readOnly ? undefined : (value) => field.onChange([value])} value={field.value?.[0] || ""} disabled={readOnly}>
+                            <SelectTrigger className={`bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                               <SelectValue placeholder="Select primary water use activity" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1865,10 +2276,46 @@ export const ApplicationForm = memo(function ApplicationForm({
                                     <Input placeholder="Type of crops" className="border-0 bg-transparent" />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <div className="flex gap-1">
-                                      <Input placeholder="From" className="border-0 bg-transparent text-xs" />
+                                    <div className="flex gap-1 items-center">
+                                      <Select>
+                                        <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
+                                          <SelectValue placeholder="From" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="january">January</SelectItem>
+                                          <SelectItem value="february">February</SelectItem>
+                                          <SelectItem value="march">March</SelectItem>
+                                          <SelectItem value="april">April</SelectItem>
+                                          <SelectItem value="may">May</SelectItem>
+                                          <SelectItem value="june">June</SelectItem>
+                                          <SelectItem value="july">July</SelectItem>
+                                          <SelectItem value="august">August</SelectItem>
+                                          <SelectItem value="september">September</SelectItem>
+                                          <SelectItem value="october">October</SelectItem>
+                                          <SelectItem value="november">November</SelectItem>
+                                          <SelectItem value="december">December</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                       <span className="self-center text-xs">-</span>
-                                      <Input placeholder="To" className="border-0 bg-transparent text-xs" />
+                                      <Select>
+                                        <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
+                                          <SelectValue placeholder="To" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="january">January</SelectItem>
+                                          <SelectItem value="february">February</SelectItem>
+                                          <SelectItem value="march">March</SelectItem>
+                                          <SelectItem value="april">April</SelectItem>
+                                          <SelectItem value="may">May</SelectItem>
+                                          <SelectItem value="june">June</SelectItem>
+                                          <SelectItem value="july">July</SelectItem>
+                                          <SelectItem value="august">August</SelectItem>
+                                          <SelectItem value="september">September</SelectItem>
+                                          <SelectItem value="october">October</SelectItem>
+                                          <SelectItem value="november">November</SelectItem>
+                                          <SelectItem value="december">December</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </div>
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
@@ -1896,10 +2343,25 @@ export const ApplicationForm = memo(function ApplicationForm({
                                     </Select>
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Area in ha" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="irrigationTotalArea"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            step="0.01"
+                                            {...field}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            placeholder="Area in ha" 
+                                            className="border-0 bg-transparent" 
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Water demand" className="border-0 bg-transparent" />
+                                    <Input placeholder="Water demand (m³)" className="border-0 bg-transparent" />
                                   </td>
                                 </tr>
                               </tbody>
@@ -1913,14 +2375,19 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </div>
                             <div>
                               <label className="block text-sm font-medium mb-2">Storage capacity (m³)</label>
-                              <Input placeholder="Enter storage capacity" />
+                              <Input placeholder="Enter storage capacity (m³)" />
                             </div>
                           </div>
 
                           <DocumentRequirementsInfo documents={[
                             "General requirements document",
-                            "Environmental Impact Assessment certificate (for large scale > 10 ha)",
-                            "Feasibility study (for large scale > 10 ha)"
+                            ...(watchedIrrigationTotalArea && watchedIrrigationTotalArea > 10 ? [
+                              "Environmental Impact Assessment certificate (required for > 10 ha)",
+                              "Feasibility study (required for > 10 ha)"
+                            ] : [
+                              "Environmental Impact Assessment certificate (required for > 10 ha)",
+                              "Feasibility study (required for > 10 ha)"
+                            ])
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1930,18 +2397,27 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                             
-                            <DocumentUploadField
-                              fieldName="irrigationEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={false}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="irrigationFeasibilityStudy"
-                              label="Feasibility study"
-                              required={false}
-                            />
+                            {watchedIrrigationTotalArea && watchedIrrigationTotalArea > 10 && (
+                              <>
+                                <DocumentUploadField
+                                  fieldName="irrigationEIA"
+                                  label="Environmental Impact Assessment certificate"
+                                  required={true}
+                                />
+                                
+                                <DocumentUploadField
+                                  fieldName="irrigationFeasibilityStudy"
+                                  label="Feasibility study"
+                                  required={true}
+                                />
+                              </>
+                            )}
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="irrigation" 
+                            activityType="irrigation" 
+                          />
                         </div>
                       )}
 
@@ -1964,31 +2440,115 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Population to be served (number of people/number of dwellings)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Enter population" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="waterSupplyPopulation"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            {...getInputProps({ 
+                                              value: field.value?.toString() || "", 
+                                              placeholder: "Enter population",
+                                              className: "border-0 bg-transparent"
+                                            })}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Water demand per capita per day (m³/day)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Enter per capita demand" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="waterSupplyPerCapitaDemand"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            step="0.001"
+                                            {...getInputProps({ 
+                                              value: field.value?.toString() || "", 
+                                              placeholder: "Enter per capita demand",
+                                              className: "border-0 bg-transparent"
+                                            })}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Water Demand per day (number of person*m³/day)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Total daily demand" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="waterSupplyTotalDailyDemand"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            step="0.001"
+                                            {...getInputProps({ 
+                                              value: field.value?.toString() || "", 
+                                              placeholder: "Total daily demand (m³)",
+                                              className: "border-0 bg-transparent"
+                                            })}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">How much water will be abstracted per day? (m³/day)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Daily abstraction" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="waterSupplyDailyAbstraction"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            step="0.001"
+                                            {...getInputProps({ 
+                                              value: field.value?.toString() || "", 
+                                              placeholder: "Daily abstraction (m³)",
+                                              className: "border-0 bg-transparent"
+                                            })}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Storage capacity (m³)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Storage capacity" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="waterSupplyStorageCapacity"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            step="0.001"
+                                            {...getInputProps({ 
+                                              value: field.value?.toString() || "", 
+                                              placeholder: "Storage capacity (m³)",
+                                              className: "border-0 bg-transparent"
+                                            })}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
@@ -2013,6 +2573,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="water_supply" 
+                            activityType="water_supply" 
+                          />
                         </div>
                       )}
 
@@ -2119,6 +2684,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 required={true}
                               />
                             </div>
+
+                            <AdditionalDocumentsSection 
+                              category="mining" 
+                              activityType="mining" 
+                            />
                           </div>
                         </div>
                       )}
@@ -2199,10 +2769,24 @@ export const ApplicationForm = memo(function ApplicationForm({
                                         <Input placeholder="Surface area" className="border-0 bg-transparent" />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Capacity" className="border-0 bg-transparent" />
+                                        <Input placeholder="Capacity (m³)" className="border-0 bg-transparent" />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Refilling frequency" className="border-0 bg-transparent" />
+                                        <Select>
+                                          <SelectTrigger className="border-0 bg-transparent h-8">
+                                            <SelectValue placeholder="Select frequency" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="daily">Daily</SelectItem>
+                                            <SelectItem value="weekly">Weekly</SelectItem>
+                                            <SelectItem value="bi-weekly">Bi-weekly</SelectItem>
+                                            <SelectItem value="monthly">Monthly</SelectItem>
+                                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                                            <SelectItem value="semi-annually">Semi-annually</SelectItem>
+                                            <SelectItem value="annually">Annually</SelectItem>
+                                            <SelectItem value="as-needed">As needed</SelectItem>
+                                          </SelectContent>
+                                        </Select>
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
                           <FormField
@@ -2213,7 +2797,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                               type="number" 
                                               {...field} 
                                               onChange={(e) => field.onChange(Number(e.target.value))}
-                                              placeholder="Monthly usage" 
+                                              placeholder="Monthly usage (m³)" 
                                               className="border-0 bg-transparent" 
                                             />
                                           )}
@@ -2251,7 +2835,18 @@ export const ApplicationForm = memo(function ApplicationForm({
                               label="Management plan for aquaculture operations"
                               required={true}
                             />
+                            
+                            <DocumentUploadField
+                              fieldName="aquacultureRecommendationLetter"
+                              label="Recommendation Letter from MINAGRI/RAB"
+                              required={true}
+                            />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="aquaculture" 
+                            activityType="aquaculture" 
+                          />
                         </div>
                       )}
 
@@ -2275,10 +2870,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Quantity of abstracted water</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Daily quantity" className="border-0 bg-transparent" />
+                                    <Input placeholder="Daily quantity (m³)" className="border-0 bg-transparent" />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Monthly quantity" className="border-0 bg-transparent" />
+                                    <Input placeholder="Monthly quantity (m³)" className="border-0 bg-transparent" />
                                   </td>
                                 </tr>
                                 <tr>
@@ -2309,6 +2904,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="coffee_washing" 
+                            activityType="coffee_washing" 
+                          />
                         </div>
                       )}
 
@@ -2341,10 +2941,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   <tr key={index}>
                                     <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">{industry}</td>
                                     <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                      <Input placeholder="Daily" className="border-0 bg-transparent" />
+                                      <Input placeholder="Daily (m³)" className="border-0 bg-transparent" />
                                     </td>
                                     <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                      <Input placeholder="Monthly" className="border-0 bg-transparent" />
+                                      <Input placeholder="Monthly (m³)" className="border-0 bg-transparent" />
                                     </td>
                                   </tr>
                                 ))}
@@ -2377,6 +2977,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="industrial" 
+                            activityType="industry" 
+                          />
                         </div>
                       )}
 
@@ -2393,7 +2998,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Quantity of abstracted water (m³/year)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Annual quantity" className="border-0 bg-transparent" />
+                                    <Input placeholder="Annual quantity (m³)" className="border-0 bg-transparent" />
                                   </td>
                                 </tr>
                                 <tr>
@@ -2451,6 +3056,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="hydropower" 
+                            activityType="electricity_generation" 
+                          />
                         </div>
                       )}
 
@@ -2479,7 +3089,23 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="e.g., 24 months" className="border-0 bg-transparent" />
+                                    <Select>
+                                      <SelectTrigger className="border-0 bg-transparent h-8">
+                                        <SelectValue placeholder="Select duration" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="1-month">1 month</SelectItem>
+                                        <SelectItem value="3-months">3 months</SelectItem>
+                                        <SelectItem value="6-months">6 months</SelectItem>
+                                        <SelectItem value="12-months">12 months</SelectItem>
+                                        <SelectItem value="18-months">18 months</SelectItem>
+                                        <SelectItem value="24-months">24 months</SelectItem>
+                                        <SelectItem value="36-months">36 months</SelectItem>
+                                        <SelectItem value="48-months">48 months</SelectItem>
+                                        <SelectItem value="60-months">60 months (5 years)</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </td>
                                 </tr>
                                 <tr>
@@ -2517,6 +3143,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="construction_dam" 
+                            activityType="construction_of_dam" 
+                          />
                         </div>
                       )}
 
@@ -2545,7 +3176,23 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="e.g., 24 months" className="border-0 bg-transparent" />
+                                    <Select>
+                                      <SelectTrigger className="border-0 bg-transparent h-8">
+                                        <SelectValue placeholder="Select duration" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="1-month">1 month</SelectItem>
+                                        <SelectItem value="3-months">3 months</SelectItem>
+                                        <SelectItem value="6-months">6 months</SelectItem>
+                                        <SelectItem value="12-months">12 months</SelectItem>
+                                        <SelectItem value="18-months">18 months</SelectItem>
+                                        <SelectItem value="24-months">24 months</SelectItem>
+                                        <SelectItem value="36-months">36 months</SelectItem>
+                                        <SelectItem value="48-months">48 months</SelectItem>
+                                        <SelectItem value="60-months">60 months (5 years)</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </td>
                                 </tr>
                                 <tr>
@@ -2583,6 +3230,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="infrastructure" 
+                            activityType="construction_of_infrastructures" 
+                          />
                         </div>
                       )}
 
@@ -2617,7 +3269,20 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected duration of navigation activities</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="e.g., Permanent, Seasonal, etc." className="border-0 bg-transparent" />
+                                    <Select>
+                                      <SelectTrigger className="border-0 bg-transparent h-8">
+                                        <SelectValue placeholder="Select duration type" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="permanent">Permanent</SelectItem>
+                                        <SelectItem value="seasonal">Seasonal</SelectItem>
+                                        <SelectItem value="temporary">Temporary</SelectItem>
+                                        <SelectItem value="annual">Annual</SelectItem>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                        <SelectItem value="other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </td>
                                 </tr>
                               </tbody>
@@ -2649,6 +3314,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="navigation" 
+                            activityType="navigation" 
+                          />
                         </div>
                       )}
 
@@ -2709,6 +3379,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               required={true}
                             />
                           </div>
+
+                          <AdditionalDocumentsSection 
+                            category="recreation" 
+                            activityType="recreation" 
+                          />
                         </div>
                       )}
                     </div>
@@ -2727,26 +3402,17 @@ export const ApplicationForm = memo(function ApplicationForm({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <FormField
                             control={form.control}
-                            name="waterAbstractionDetails.0.activity"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Activity *</FormLabel>
-                                <FormControl>
-                                  <Input {...field} placeholder="Enter activity" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
                             name="waterAbstractionDetails.0.flowRate"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Flow Rate</FormLabel>
+                                <FormLabel>Flow Rate (m³/s)</FormLabel>
                                 <FormControl>
-                                  <Input {...field} placeholder="Enter flow rate" />
+                                  <Input 
+                                    type="number"
+                                    step="0.001"
+                                    {...field} 
+                                    {...getInputProps({ value: field.value || "", placeholder: "Enter flow rate (m³/s)" })} 
+                                  />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -2816,10 +3482,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                         </FormLabel>
                         <FormControl>
                           <Select 
-                            onValueChange={(value) => field.onChange(value === "yes")} 
+                            onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")} 
                             value={field.value ? "yes" : "no"}
+                            disabled={readOnly}
                           >
-                            <SelectTrigger className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400">
+                            <SelectTrigger className={`bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                               <SelectValue placeholder="Do you own all the required land?" />
                             </SelectTrigger>
                             <SelectContent>
@@ -2846,10 +3513,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={(value) => field.onChange(value === "yes")} 
+                                onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")} 
                                 value={field.value ? "yes" : "no"}
+                                disabled={readOnly}
                               >
-                                <SelectTrigger className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 focus:border-amber-400">
+                                <SelectTrigger className={`bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 focus:border-amber-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder="Do you have access to the land?" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -2885,7 +3553,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                               <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => fileInputRefs.landAccessDocuments.current?.click()}
+                                onClick={readOnly ? undefined : () => fileInputRefs.landAccessDocuments.current?.click()}
+                                disabled={readOnly}
                               >
                                 Choose Files
                               </Button>
@@ -2902,7 +3571,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => removeFile("landAccessDocuments")}
+                                  onClick={readOnly ? undefined : () => removeFile("landAccessDocuments")}
+                                  disabled={readOnly}
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
@@ -2938,12 +3608,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => {
+                                  onClick={readOnly ? undefined : () => {
                                     setUploadedFileUrls(prev => {
                                       const { landAccessDocuments, ...rest } = prev;
                                       return rest;
                                     });
                                   }}
+                                  disabled={readOnly}
                                 >
                                   <X className="h-4 w-4" />
                                 </Button>
@@ -2994,17 +3665,20 @@ export const ApplicationForm = memo(function ApplicationForm({
 
                 {/* Form Actions */}
                 <div className="flex justify-between pt-6">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={async () => {
-                      await onSaveAsDraft(form.getValues(), 'draft');
-                    }}
-                    disabled={isLoading}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    Save as Draft
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={async () => {
+                        await onSaveAsDraft(form.getValues(), 'draft');
+                      }}
+                      disabled={isLoading}
+                    >
+                      <Save className="h-4 w-4 mr-2" />
+                      Save as Draft
+                    </Button>
+                  )}
+                  {readOnly && <div />}
                   
                   <div className="flex gap-2">
                     <Button
@@ -3024,14 +3698,20 @@ export const ApplicationForm = memo(function ApplicationForm({
                     
                     <Button
                       type="button"
-                      onClick={handleNextTab}
-                      disabled={activeTab === "land-ownership" || isNextButtonDisabled()}
-                      className={isNextButtonDisabled() ? "opacity-50 cursor-not-allowed" : ""}
+                      onClick={readOnly ? () => {
+                        const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+                        const currentIndex = tabs.indexOf(activeTab);
+                        if (currentIndex < tabs.length - 1) {
+                          setActiveTab(tabs[currentIndex + 1]);
+                        }
+                      } : handleNextTab}
+                      disabled={activeTab === "land-ownership" || (!readOnly && isNextButtonDisabled())}
+                      className={(!readOnly && isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
                     >
                       Next
                     </Button>
                     
-                    {activeTab === "land-ownership" && (
+                    {activeTab === "land-ownership" && !readOnly && (
                       <Button 
                         type="submit" 
                         disabled={isLoading || !canSubmit}

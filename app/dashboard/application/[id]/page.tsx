@@ -3,25 +3,39 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TermsConditionsModal } from "@/components/dashboard/terms-conditions-modal";
+import { ProtectedRoute } from "@/components/auth/protected-route";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   ArrowLeft, 
   Loader2, 
-  MapPin, 
-  FileText, 
-  User,
   AlertTriangle,
   Edit
 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
-import { DocumentViewer } from "@/components/documents/document-viewer";
+import { useDocuments } from "@/hooks/useDocuments";
+import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
+
+// Lazy load the ApplicationForm component
+const ApplicationForm = dynamic(
+  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading application form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -29,12 +43,232 @@ interface ApplicationWithRelations extends Application {
   reviews?: Review[];
 }
 
+// Transform Application data back to form format for viewing
+function mapApplicationToFormData(application: Application, userProfile?: any): any {
+  const formData: any = {};
+  
+  // Parse internal notes to extract form-specific data
+  // Try to parse as JSON first (new format), fallback to legacy format
+  let storedFormData: any = {};
+  let legacyNotesMap: Record<string, string> = {};
+  
+  const notes = application.internal_notes || '';
+  
+  try {
+    // Try parsing as JSON (new comprehensive format)
+    storedFormData = JSON.parse(notes);
+    console.log('✅ Successfully parsed stored form data from JSON');
+  } catch (error) {
+    // Fallback to legacy format parsing
+    console.log('📄 Using legacy notes format parsing');
+    const notesParts = notes.split(' | ');
+    notesParts.forEach(part => {
+      const [key, value] = part.split(': ');
+      if (key && value) {
+        legacyNotesMap[key] = value;
+      }
+    });
+  }
+  
+  // If we have comprehensive stored data, use it directly
+  if (Object.keys(storedFormData).length > 0 && storedFormData.fullNameApplicant !== undefined) {
+    // New format: restore all form fields directly from stored data
+    console.log('🔄 Restoring form data from comprehensive JSON storage');
+    
+    // Copy all stored form data
+    Object.assign(formData, storedFormData);
+    
+    // Override with profile data for contact information if available
+    if (userProfile) {
+      formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
+      formData.emailAddress = userProfile.email || formData.emailAddress;
+    }
+    
+    // Ensure coordinates are properly formatted
+    if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
+      // Coordinates are already properly stored
+    } else {
+      // Initialize empty coordinates if missing
+      formData.waterSourceCoordinates = [
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" }
+      ];
+    }
+    
+  } else {
+    // Legacy format: reconstruct from basic database fields and legacy notes
+    console.log('🔄 Restoring form data from legacy format');
+    
+    // Basic applicant information (using internal notes and project title)
+    formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
+    formData.categoryApplicant = legacyNotesMap['Category']?.toLowerCase() || 'individual';
+  
+    // Office address (from application location) - reverse the province mapping
+    // Map database province names to Rwanda administrative data keys
+    const provinceReverseMap: Record<string, string> = {
+      'Kigali': 'Kigali',
+      'Northern': 'North',
+      'Southern': 'South',
+      'Eastern': 'East',
+      'Western': 'West'
+    };
+    formData.officeProvince = provinceReverseMap[application.province] || application.province || '';
+    formData.officeDistrict = application.district || '';
+    formData.officeSector = application.sector || '';
+    formData.officeCell = application.cell || '';
+    formData.officeVillage = application.village || '';
+    
+    // Contact information - use profile data if available, otherwise try to extract from notes
+    formData.telephoneContact = userProfile?.phone || userProfile?.company_phone || '';
+    formData.emailAddress = userProfile?.email || legacyNotesMap['Contact']?.replace('Not provided', '') || '';
+  
+    // Water source information
+    const waterSourceMap: Record<string, string> = {
+      'surface_water': 'stream_river',
+      'groundwater': 'borehole'
+    };
+    formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
+    formData.nameSourceWater = application.water_body_name || '';
+    formData.tributaryToMain = application.tributary_name || '';
+    
+    // Water source location (same as office for now) - reverse the province mapping
+    formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
+    formData.waterSourceDistrict = application.district || '';
+    formData.waterSourceSector = application.sector || '';
+    formData.waterSourceCell = application.cell || '';
+    formData.waterSourceVillage = application.village || '';
+  
+    // Coordinates - handle both old Point format and new Polygon format
+    if (application.coordinates && typeof application.coordinates === 'object') {
+      try {
+        const coords = application.coordinates as any;
+        if (coords.type === 'Polygon' && Array.isArray(coords.coordinates) && coords.coordinates[0]) {
+          // New polygon format - extract the 5 points
+          const polygonPoints = coords.coordinates[0];
+          formData.waterSourceCoordinates = polygonPoints.slice(0, 5).map((point: number[]) => ({
+            latitude: point[1].toString(),
+            longitude: point[0].toString()
+          }));
+          // Fill remaining slots if less than 5 points
+          while (formData.waterSourceCoordinates.length < 5) {
+            formData.waterSourceCoordinates.push({ latitude: "", longitude: "" });
+          }
+        } else if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
+          // Legacy point format - convert to first coordinate of polygon
+          formData.waterSourceCoordinates = [
+            { latitude: coords.coordinates[1].toString(), longitude: coords.coordinates[0].toString() },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" }
+          ];
+        } else {
+          // Invalid format - initialize empty
+          formData.waterSourceCoordinates = [
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" }
+          ];
+        }
+      } catch (error) {
+        console.warn('Error parsing coordinates:', error);
+        formData.waterSourceCoordinates = [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ];
+      }
+    } else {
+      formData.waterSourceCoordinates = [
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" }
+      ];
+    }
+  
+    // Water reliability
+    formData.waterReliability = 'water_always_available'; // Default
+    
+    // Intended activities - reverse map from application_type and water_purpose
+    const activityMap: Record<string, string[]> = {
+      'domestic': ['water_supply'],
+      'agricultural': ['irrigation', 'aquaculture'],
+      'industrial': ['industry', 'coffee_washing', 'construction'],
+      'commercial': ['navigation', 'recreation'],
+      'municipal': ['water_supply'],
+      'mining_water_use': ['mining']
+    };
+    
+    const purposeToActivity: Record<string, string> = {
+      'domestic': 'water_supply',
+      'irrigation': 'irrigation', 
+      'aquaculture': 'aquaculture',
+      'industrial': 'industry',
+      'electricity_generation': 'electricity',
+      'mining': 'mining',
+      'recreation': 'recreation'
+    };
+    
+    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+    formData.intendedActivities = [mappedActivity];
+    
+    // Water abstraction details
+    if (application.estimated_usage_volume) {
+      formData.waterAbstractionDetails = [{
+        activity: mappedActivity,
+        flowRate: '',
+        flowRateUnit: 'm³/s',
+        maxAverageYearly: application.estimated_usage_volume,
+        abstractionMethod: application.water_taking_method || 'pump'
+      }];
+    } else {
+      formData.waterAbstractionDetails = [{
+        activity: mappedActivity,
+        flowRate: '',
+        flowRateUnit: 'm³/s',
+        maxAverageYearly: 0,
+        abstractionMethod: 'pump'
+      }];
+    }
+    
+    // Land ownership
+    formData.ownsAllLand = true; // Default
+    formData.hasLandAccess = true; // Default
+    
+    // Annexes - extract from specific fields
+    if (application.electricity_generation_capacity) {
+      formData.annexF_electricityDetails = application.electricity_generation_capacity;
+    }
+    if (application.mining_operations_type) {
+      formData.annexG_miningDetails = application.mining_operations_type;
+    }
+  
+    // Certification
+    formData.certificationAgreement = true; // Must be true for saved applications
+  }
+  
+  return formData;
+}
+
 export default function ApplicationDetailPage() {
   const params = useParams();
+  const { userProfile } = useAuth();
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [initialFormData, setInitialFormData] = useState<any>(null);
+  const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const { getApplication, loading, refresh } = useApplications();
+  const { getDocuments } = useDocuments();
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -42,13 +276,52 @@ export default function ApplicationDetailPage() {
         const applicationId = params.id as string;
         console.log('Fetching application details for ID:', applicationId);
         
-        const app = await getApplication(applicationId);
+        // Load application and documents in parallel
+        const [app, documents] = await Promise.all([
+          getApplication(applicationId),
+          getDocuments(applicationId)
+        ]);
+        
         if (app) {
           const appWithRelations = app as ApplicationWithRelations;
           setApplication(appWithRelations);
           console.log('✅ Application details loaded:', appWithRelations);
-          console.log('📄 Documents found:', appWithRelations.documents?.length || 0, 'documents');
-          console.log('📄 Documents data:', appWithRelations.documents);
+          
+          // Transform application data to form format
+          const formData = mapApplicationToFormData(appWithRelations, userProfile);
+          setInitialFormData(formData);
+          
+          // Process documents for form
+          const documentMap: Record<string, { url: string; name: string }> = {};
+          const typeMapping: Record<string, string> = {
+            'identification_doc': 'identificationDoc',
+            'land_ownership_doc': 'landOwnershipDoc', 
+            'technical_drawings': 'technicalDrawings',
+            'environmental_impact_doc': 'environmentalImpactDoc',
+            'payment_proof': 'paymentProof',
+            'intake_discharge_map': 'intakeDischargeMap',
+            'other': 'generalRequirements', // Map 'other' type to a generic field name
+            'business_license': 'miningLicense',
+            'geological_survey': 'miningHydrologicalReport',
+            'water_quality_report': 'waterQualityReport'
+          };
+          
+          for (const doc of documents) {
+            const fieldName = typeMapping[doc.type] || doc.type;
+            if (doc.file_path && doc.name) {
+              const publicUrl = getDocumentUrl(doc.file_path);
+              if (publicUrl) {
+                documentMap[fieldName] = {
+                  url: publicUrl,
+                  name: doc.name
+                };
+              }
+            }
+          }
+          
+          setInitialDocuments(documentMap);
+          
+          console.log('📄 Documents found:', documents.length, 'documents');
           
           // Show Terms modal if status is approved_pending_permit
           if (appWithRelations.status === 'approved_pending_permit') {
@@ -66,9 +339,23 @@ export default function ApplicationDetailPage() {
     if (params.id) {
       fetchApplicationDetails();
     }
-  }, [params.id, getApplication]);
+  }, [params.id, getApplication, getDocuments, userProfile]);
 
+  // Create userData object for the form (similar to new-application page)
+  const userData = {
+    email: userProfile?.email || "",
+    name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || userProfile?.company_name || "",
+    phone: userProfile?.phone || userProfile?.company_phone || "",
+    address: userProfile?.company_address || "",
+    idNumber: userProfile?.id_number || "",
+    account_type: userProfile?.account_type || 'individual' as const,
+    id_number: userProfile?.id_number || "",
+    company_tin: userProfile?.company_tin,
+  };
 
+  // Dummy handlers for read-only form (these won't be called)
+  const handleSubmitApplication = async () => {};
+  const handleSaveAsDraft = async () => {};
 
   // Function to render the correct status badge
   const getStatusBadge = (status: string) => {
@@ -231,6 +518,7 @@ export default function ApplicationDetailPage() {
   }
   
   return (
+    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
     <DashboardLayout>
       <div className="container mx-auto px-4 py-6">
         <div className="flex items-center mb-6">
@@ -253,7 +541,7 @@ export default function ApplicationDetailPage() {
             <div>
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{application.project_title}</h1>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-                Application submitted on {formatDate(application.created_at)}
+                Application submitted on {formatDate(application.created_at)} • Read-only view
               </p>
             </div>
             <div className="flex flex-col gap-2 md:items-end">
@@ -312,794 +600,19 @@ export default function ApplicationDetailPage() {
             </Alert>
           )}
           
-          {/* Personal Information */}
-          {application.applicant && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Applicant Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.applicant.account_type === 'individual' ? (
-                  <>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Full Name</p>
-                      <p className="font-medium">
-                        {application.applicant.first_name} {application.applicant.last_name}
-                      </p>
-                    </div>
-                    {application.applicant.id_number && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">National ID Number</p>
-                        <p className="font-medium">{application.applicant.id_number}</p>
-                      </div>
-                    )}
-                    {application.applicant.date_of_birth && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Date of Birth</p>
-                        <p className="font-medium">{formatDate(application.applicant.date_of_birth)}</p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Company Name</p>
-                      <p className="font-medium">{application.applicant.company_name}</p>
-                    </div>
-                    {application.applicant.company_tin && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">TIN</p>
-                        <p className="font-medium">{application.applicant.company_tin}</p>
-                      </div>
-                    )}
-                    {application.applicant.incorporation_certificate_number && (
-                      <div>
-                        <p className="text-sm text-muted-foreground">Incorporation Certificate</p>
-                        <p className="font-medium">{application.applicant.incorporation_certificate_number}</p>
-                      </div>
-                    )}
-                  </>
-                )}
-                
-                <div>
-                  <p className="text-sm text-muted-foreground">Account Type</p>
-                  <p className="font-medium">{formatApplicationType(application.applicant.account_type)}</p>
-                </div>
-                
-                <div>
-                  <p className="text-sm text-muted-foreground">Email</p>
-                  <p className="font-medium">{application.applicant.email}</p>
-                </div>
-                
-                {application.applicant.phone && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Phone</p>
-                    <p className="font-medium">{application.applicant.phone}</p>
-                  </div>
-                )}
-                
-                {application.applicant.mobile_phone && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Mobile Phone</p>
-                    <p className="font-medium">{application.applicant.mobile_phone}</p>
-                  </div>
-                )}
-                
-                {application.applicant.address && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Address</p>
-                    <p className="font-medium">{application.applicant.address}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {/* Application Form in Read-only Mode */}
+          {initialFormData && (
+            <ApplicationForm 
+              userData={userData}
+              onSubmit={handleSubmitApplication}
+              onSaveAsDraft={handleSaveAsDraft}
+              isLoading={false}
+              initialData={initialFormData}
+              initialDocuments={initialDocuments}
+              mode="view"
+              readOnly={true}
+            />
           )}
-
-          {/* Application Details */}
-          <div className="grid gap-6 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Application Information
-                </CardTitle>
-                </CardHeader>
-              <CardContent className="space-y-4">
-                    <div>
-                  <p className="text-sm text-muted-foreground">Application Type</p>
-                  <p className="font-medium">{formatApplicationType(application.application_type)}</p>
-                    </div>
-                    <div>
-                  <p className="text-sm text-muted-foreground">Water Source</p>
-                  <p className="font-medium">{formatApplicationType(application.water_source)}</p>
-                    </div>
-                    <div>
-                  <p className="text-sm text-muted-foreground">Water Purpose</p>
-                  <p className="font-medium">{formatApplicationType(application.water_purpose)}</p>
-                    </div>
-                    <div>
-                  <p className="text-sm text-muted-foreground">Usage</p>
-                  <p className="font-medium">
-                    {application.estimated_usage_volume} {application.usage_unit}
-                  </p>
-                    </div>
-                {application.project_value && (
-                    <div>
-                    <p className="text-sm text-muted-foreground">Project Value</p>
-                    <p className="font-medium">RWF {application.project_value.toLocaleString()}</p>
-                    </div>
-                )}
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Location Information
-                </CardTitle>
-                </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Province</p>
-                  <p className="font-medium">{application.province}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">District</p>
-                  <p className="font-medium">{application.district}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Sector</p>
-                  <p className="font-medium">{application.sector}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Cell</p>
-                  <p className="font-medium">{application.cell}</p>
-                </div>
-                                 {application.village && (
-                   <div>
-                     <p className="text-sm text-muted-foreground">Village</p>
-                     <p className="font-medium">{application.village}</p>
-                   </div>
-                 )}
-                 {application.coordinates && (
-                   <div className="col-span-full">
-                     <p className="text-sm text-muted-foreground mb-3">GPS Coordinates</p>
-                     <div className="font-medium">
-                       {renderPolygonCoordinates(application.coordinates)}
-                     </div>
-                   </div>
-                 )}
-                </CardContent>
-              </Card>
-            </div>
-            
-          {/* Project Description */}
-          {application.project_description && (
-              <Card>
-                <CardHeader>
-                <CardTitle>Project Description</CardTitle>
-                </CardHeader>
-                <CardContent>
-                <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">{application.project_description}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Technical Details & Specifications */}
-          <Card>
-            <CardHeader>
-              <CardTitle>🔧 Technical Information & Specifications</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {application.water_taking_method && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Water Taking Method</p>
-                  <p className="font-medium">{application.water_taking_method}</p>
-                </div>
-              )}
-              {application.water_measuring_method && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Water Measuring Method</p>
-                  <p className="font-medium">{application.water_measuring_method}</p>
-                </div>
-              )}
-              {application.storage_facilities && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Storage Facilities</p>
-                  <p className="font-medium">{application.storage_facilities}</p>
-                </div>
-              )}
-              {/* Enhanced Return Flow Description */}
-              {application.return_flow_description && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Return Flow & Duration Details</p>
-                  {application.return_flow_description.includes('|') ? (
-                    <div className="space-y-2 mt-2">
-                      {application.return_flow_description.split(' | ').map((detail, index) => {
-                        if (!detail.trim()) return null;
-                        const isStructured = detail.includes(':');
-                        return (
-                          <div key={index} className="pl-4 border-l-2 border-gray-200">
-                            {isStructured ? (
-                              <>
-                                <p className="text-xs text-muted-foreground font-medium">{detail.split(':')[0].trim()}</p>
-                                <p className="text-sm">{detail.split(':')[1]?.trim()}</p>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-xs text-muted-foreground font-medium">Quality Description</p>
-                                <p className="text-sm">{detail}</p>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="font-medium">{application.return_flow_description}</p>
-                  )}
-                </div>
-              )}
-              {application.environmental_assessment && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Environmental Assessment</p>
-                  <p className="font-medium">{application.environmental_assessment}</p>
-                </div>
-              )}
-              {application.mitigation_actions && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Mitigation Actions</p>
-                  <p className="font-medium">{application.mitigation_actions}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Enhanced Infrastructure Details */}
-          {(application.infrastructure_pipes || application.infrastructure_pumps || application.infrastructure_valves || application.infrastructure_meters) && (
-            <Card>
-              <CardHeader>
-                <CardTitle>🏗️ Infrastructure Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.infrastructure_pipes && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Pipes & Piping System</p>
-                    <p className="font-medium">{application.infrastructure_pipes}</p>
-                  </div>
-                )}
-                {application.infrastructure_pumps && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Pumps & Pumping System</p>
-                    <p className="font-medium">{application.infrastructure_pumps}</p>
-                  </div>
-                )}
-                {application.infrastructure_valves && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Valves & Control Systems</p>
-                    {application.infrastructure_valves.includes('|') ? (
-                      <div className="space-y-2 mt-2">
-                        {application.infrastructure_valves.split(' | ').map((detail, index) => {
-                          if (!detail.trim()) return null;
-                          const isStructured = detail.includes(':');
-                          return (
-                            <div key={index} className="pl-4 border-l-2 border-blue-200">
-                              {isStructured ? (
-                                <>
-                                  <p className="text-xs text-muted-foreground font-medium">{detail.split(':')[0].trim()}</p>
-                                  <p className="text-sm">{detail.split(':')[1]?.trim()}</p>
-                                </>
-                              ) : (
-                                <>
-                                  <p className="text-xs text-muted-foreground font-medium">Valve Details</p>
-                                  <p className="text-sm">{detail}</p>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="font-medium">{application.infrastructure_valves}</p>
-                    )}
-                  </div>
-                )}
-                {application.infrastructure_meters && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Meters & Measurement Devices</p>
-                    <p className="font-medium">{application.infrastructure_meters}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Application Metadata */}
-          {application.internal_notes && (
-            <Card>
-              <CardHeader>
-                <CardTitle>📋 Application Type & Metadata</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {application.internal_notes.split(' | ').map((note, index) => {
-                    const [label, value] = note.split(':');
-                    if (!label || !value) return null;
-                    return (
-                      <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-sm text-muted-foreground font-medium">{label.trim()}</p>
-                        <p className="font-semibold text-lg">{value.trim()}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Electricity Generation Details */}
-          {application.electricity_generation_capacity && (
-            <Card>
-              <CardHeader>
-                <CardTitle>⚡ Electricity Generation Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.electricity_generation_capacity.includes('|') ? (
-                  // Show structured data
-                  application.electricity_generation_capacity.split(' | ').map((detail, index) => {
-                    if (!detail.trim()) return null;
-                    const [label, value] = detail.split(':');
-                    if (!label || !value) {
-                      return (
-                        <div key={index}>
-                          <p className="text-sm text-muted-foreground">Capacity</p>
-                          <p className="font-medium">{detail.trim()}</p>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={index}>
-                        <p className="text-sm text-muted-foreground">{label.trim()}</p>
-                        <p className="font-medium">{value.trim()}</p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  // Show simple data
-                  <div>
-                    <p className="text-sm text-muted-foreground">Electricity Generation Capacity</p>
-                    <p className="font-medium">{application.electricity_generation_capacity}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Mining Operations Details */}
-          {application.mining_operations_type && (
-            <Card>
-              <CardHeader>
-                <CardTitle>⛏️ Mining Operations Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.mining_operations_type.includes('|') ? (
-                  // Show structured data
-                  application.mining_operations_type.split(' | ').map((detail, index) => {
-                    if (!detail.trim()) return null;
-                    const [label, value] = detail.split(':');
-                    if (!label || !value) {
-                      return (
-                        <div key={index}>
-                          <p className="text-sm text-muted-foreground">Mining Type</p>
-                          <p className="font-medium">{detail.trim()}</p>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={index}>
-                        <p className="text-sm text-muted-foreground">{label.trim()}</p>
-                        <p className="font-medium">{value.trim()}</p>
-                      </div>
-                    );
-                  })
-                ) : (
-                  // Show simple data
-                  <div>
-                    <p className="text-sm text-muted-foreground">Mining Operations Type</p>
-                    <p className="font-medium">{application.mining_operations_type}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Water Diversion Details */}
-          {application.water_diversion_details && (
-            <Card>
-              <CardHeader>
-                <CardTitle>🌊 Water Flow Diversion Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.water_diversion_details.includes('|') ? (
-                  // Show structured data in a grid layout for better readability
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {application.water_diversion_details.split(' | ').map((detail, index) => {
-                      if (!detail.trim()) return null;
-                      const [label, value] = detail.split(':');
-                      if (!label || !value) {
-                        return (
-                          <div key={index} className="col-span-full">
-                            <p className="text-sm text-muted-foreground">Water Diversion</p>
-                            <p className="font-medium">{detail.trim()}</p>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div key={index}>
-                          <p className="text-sm text-muted-foreground">{label.trim()}</p>
-                          <p className="font-medium">{value.trim()}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  // Show simple data
-                  <div>
-                    <p className="text-sm text-muted-foreground">Water Diversion Details</p>
-                    <p className="font-medium">{application.water_diversion_details}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Water Source Details */}
-          {(application.water_body_name || application.tributary_name || application.catchment_name_level_1 || application.catchment_name_level_2 || application.water_reliability || application.natural_discharge_volume_m3) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-blue-600" />
-                  💧 Water Source Details
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {application.water_body_name && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Water Body Name</p>
-                      <p className="font-medium">{application.water_body_name}</p>
-                    </div>
-                  )}
-                  {application.tributary_name && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Tributary Name</p>
-                      <p className="font-medium">{application.tributary_name}</p>
-                    </div>
-                  )}
-                  {application.catchment_name_level_1 && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Primary Catchment</p>
-                      <p className="font-medium">{application.catchment_name_level_1}</p>
-                    </div>
-                  )}
-                  {application.catchment_name_level_2 && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Secondary Catchment</p>
-                      <p className="font-medium">{application.catchment_name_level_2}</p>
-                    </div>
-                  )}
-                  {application.water_reliability && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Water Reliability</p>
-                      <p className="font-medium">{formatApplicationType(application.water_reliability)}</p>
-                    </div>
-                  )}
-                  {application.natural_discharge_volume_m3 && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Natural Discharge Volume</p>
-                      <p className="font-medium">{application.natural_discharge_volume_m3.toLocaleString()} m³</p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Water Usage Breakdown */}
-          {(application.max_daily_volume_m3 || application.max_monthly_volume_m3 || application.max_yearly_volume_m3 || application.flow_rate_m3_per_second || application.abstraction_facilities_description || application.return_flow_location || application.return_flow_volume_m3 || application.proposed_duration_months || application.proposed_duration_years || application.pumping_hours_per_day) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-green-600" />
-                  📊 Water Usage Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {application.max_daily_volume_m3 && (
-                    <div className="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Max Daily Volume</p>
-                      <p className="font-bold text-lg text-blue-600">{application.max_daily_volume_m3.toLocaleString()} m³/day</p>
-                    </div>
-                  )}
-                  {application.max_monthly_volume_m3 && (
-                    <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Max Monthly Volume</p>
-                      <p className="font-bold text-lg text-green-600">{application.max_monthly_volume_m3.toLocaleString()} m³/month</p>
-                    </div>
-                  )}
-                  {application.max_yearly_volume_m3 && (
-                    <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Max Yearly Volume</p>
-                      <p className="font-bold text-lg text-purple-600">{application.max_yearly_volume_m3.toLocaleString()} m³/year</p>
-                    </div>
-                  )}
-                  {application.flow_rate_m3_per_second && (
-                    <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Flow Rate</p>
-                      <p className="font-bold text-lg text-orange-600">{application.flow_rate_m3_per_second} m³/s</p>
-                    </div>
-                  )}
-                  {application.pumping_hours_per_day && (
-                    <div className="p-3 bg-cyan-50 dark:bg-cyan-950/20 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Pumping Hours/Day</p>
-                      <p className="font-bold text-lg text-cyan-600">{application.pumping_hours_per_day} hours</p>
-                    </div>
-                  )}
-                  {(application.proposed_duration_months || application.proposed_duration_years) && (
-                    <div className="p-3 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg">
-                      <p className="text-sm text-muted-foreground">Proposed Duration</p>
-                      <p className="font-bold text-lg text-indigo-600">
-                        {[
-                          application.proposed_duration_years && `${application.proposed_duration_years} years`,
-                          application.proposed_duration_months && `${application.proposed_duration_months} months`
-                        ].filter(Boolean).join(', ')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
-                {application.abstraction_facilities_description && (
-                  <div className="pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">Abstraction Facilities Description</p>
-                    <p className="font-medium mt-1">{application.abstraction_facilities_description}</p>
-                  </div>
-                )}
-                
-                {(application.return_flow_location || application.return_flow_volume_m3) && (
-                  <div className="pt-4 border-t">
-                    <h4 className="font-semibold text-lg mb-3">Return Flow Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {application.return_flow_location && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">Return Flow Location</p>
-                          <p className="font-medium">{application.return_flow_location}</p>
-                        </div>
-                      )}
-                      {application.return_flow_volume_m3 && (
-                        <div>
-                          <p className="text-sm text-muted-foreground">Return Flow Volume</p>
-                          <p className="font-medium">{application.return_flow_volume_m3.toLocaleString()} m³</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Project Details & Construction */}
-          {(application.proposed_facilities_description || application.construction_type || application.concession_area || application.operational_overview) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5 text-orange-600" />
-                  🏗️ Project Details & Construction
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.proposed_facilities_description && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Proposed Facilities Description</p>
-                    <p className="font-medium mt-1">{application.proposed_facilities_description}</p>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {application.construction_type && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Construction Type</p>
-                      <p className="font-medium">{application.construction_type}</p>
-                    </div>
-                  )}
-                  {application.concession_area && (
-                    <div>
-                      <p className="text-sm text-muted-foreground">Concession Area</p>
-                      <p className="font-medium">{application.concession_area} hectares</p>
-                    </div>
-                  )}
-                </div>
-                
-                {application.operational_overview && (
-                  <div className="pt-4 border-t">
-                    <p className="text-sm text-muted-foreground">Operational Overview</p>
-                    <p className="font-medium mt-1">{application.operational_overview}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Land Ownership Information */}
-          {(application.owns_all_required_land !== undefined || application.land_ownership_status || application.affected_landowners || application.easement_details || application.written_consent_details || application.lease_agreement_details || application.land_access_steps) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5 text-green-600" />
-                  🏠 Land Ownership Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {application.owns_all_required_land !== undefined && (
-                  <div className="p-3 bg-green-50 dark:bg-green-950/20 rounded-lg">
-                    <p className="text-sm text-muted-foreground">Owns All Required Land</p>
-                    <p className="font-bold text-lg text-green-600">
-                      {application.owns_all_required_land ? '✅ Yes' : '❌ No'}
-                    </p>
-                  </div>
-                )}
-                
-                {application.land_ownership_status && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Land Ownership Status</p>
-                    <p className="font-medium">{formatApplicationType(application.land_ownership_status)}</p>
-                  </div>
-                )}
-                
-                {application.affected_landowners && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Affected Landowners</p>
-                    <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                      <pre className="text-sm whitespace-pre-wrap">{JSON.stringify(application.affected_landowners, null, 2)}</pre>
-                    </div>
-                  </div>
-                )}
-                
-                {application.easement_details && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Easement Details</p>
-                    <p className="font-medium mt-1">{application.easement_details}</p>
-                  </div>
-                )}
-                
-                {application.written_consent_details && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Written Consent Details</p>
-                    <p className="font-medium mt-1">{application.written_consent_details}</p>
-                  </div>
-                )}
-                
-                {application.lease_agreement_details && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Lease Agreement Details</p>
-                    <p className="font-medium mt-1">{application.lease_agreement_details}</p>
-                  </div>
-                )}
-                
-                {application.land_access_steps && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Land Access Steps</p>
-                    <p className="font-medium mt-1">{application.land_access_steps}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Documents Section */}
-          <DocumentViewer
-            documents={application.documents || []}
-            title="Application Documents"
-            description="Documents submitted with this application"
-            allowDownload={true}
-            allowView={true}
-            showStatus={true}
-            emptyMessage="No documents have been uploaded for this application yet"
-          />
-
-          {/* Assignment & Processing Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Assignment & Processing Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {application.assigned_reviewer_id && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Assigned Reviewer ID</p>
-                  <p className="font-medium">{application.assigned_reviewer_id}</p>
-                </div>
-              )}
-              {application.assigned_inspector_id && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Assigned Inspector ID</p>
-                  <p className="font-medium">{application.assigned_inspector_id}</p>
-                </div>
-              )}
-              {application.assigned_approver_id && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Assigned Approver ID</p>
-                  <p className="font-medium">{application.assigned_approver_id}</p>
-                </div>
-              )}
-              {application.due_date && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Due Date</p>
-                  <p className="font-medium">{formatDate(application.due_date)}</p>
-                </div>
-              )}
-              {application.location_description && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Detailed Location Description</p>
-                  <p className="font-medium">{application.location_description}</p>
-                </div>
-              )}
-                </CardContent>
-              </Card>
-              
-
-
-          
-
-          {/* Status Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Status Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Current Status</p>
-                <div className="mt-1">{getStatusBadge(application.status)}</div>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">SLA Status</p>
-                <div className="mt-1">
-                  <Badge variant={application.sla_status === 'on_time' ? 'default' : 'destructive'}>
-                    {formatApplicationType(application.sla_status)}
-                  </Badge>
-            </div>
-          </div>
-              {application.submitted_at && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Submitted At</p>
-                  <p className="font-medium">{formatDate(application.submitted_at)}</p>
-                </div>
-              )}
-              {application.reviewed_at && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Reviewed At</p>
-                  <p className="font-medium">{formatDate(application.reviewed_at)}</p>
-                </div>
-              )}
-              {application.approved_at && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Approved At</p>
-                  <p className="font-medium">{formatDate(application.approved_at)}</p>
-                </div>
-              )}
-              {application.rejection_reason && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Rejection Reason</p>
-                  <p className="font-medium text-red-600">{application.rejection_reason}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
 
         </motion.div>
       </div>
@@ -1120,5 +633,6 @@ export default function ApplicationDetailPage() {
       )}
       
     </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

@@ -163,8 +163,15 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     // Technical specifications - based on new form structure
     water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
     water_measuring_method: 'Flow meter', // Default for drafts
-    storage_facilities: undefined, // Will be filled when form is more complete
     return_flow_description: undefined, // Will be filled when form is more complete
+    
+    // Water source details - map form fields to database fields
+    water_body_name: formData.nameSourceWater,
+    tributary_name: formData.tributaryToMain,
+    
+    // Storage facilities - use water supply storage capacity if available
+    storage_facilities: formData.waterSupplyStorageCapacity ? 
+      `Storage capacity: ${formData.waterSupplyStorageCapacity} m³` : undefined,
     
     // Industry-specific fields - based on annexes
     electricity_generation_capacity: formData.annexF_electricityDetails,
@@ -236,6 +243,13 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       
       // Water Abstraction
       waterAbstractionDetails: formData.waterAbstractionDetails,
+      
+      // Water Supply Details (structured fields)
+      waterSupplyPopulation: formData.waterSupplyPopulation,
+      waterSupplyPerCapitaDemand: formData.waterSupplyPerCapitaDemand,
+      waterSupplyTotalDailyDemand: formData.waterSupplyTotalDailyDemand,
+      waterSupplyDailyAbstraction: formData.waterSupplyDailyAbstraction,
+      waterSupplyStorageCapacity: formData.waterSupplyStorageCapacity,
       
       // Water Concession (for Aquaculture)
       concessionArea: formData.concessionArea,
@@ -398,8 +412,8 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'groundwater': 'borehole'
     };
     formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
-    formData.nameSourceWater = ''; // Will be filled by user
-    formData.tributaryToMain = ''; // Will be filled by user
+    formData.nameSourceWater = application.water_body_name || '';
+    formData.tributaryToMain = application.tributary_name || '';
     
     // Water source location (same as office for now) - reverse the province mapping
     formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
@@ -570,7 +584,44 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       landOwnershipDoc: 'land_ownership_doc',
       technicalDrawings: 'technical_drawings',
       environmentalImpactDoc: 'environmental_impact_doc',
-      intakeDischargeMap: 'intake_discharge_map'
+      intakeDischargeMap: 'intake_discharge_map',
+      feasibilityStudy: 'other',
+      miningLicense: 'business_license',
+      miningEIA: 'environmental_impact_doc',
+      miningHydrologicalReport: 'geological_survey',
+      miningGeneralRequirements: 'other',
+      // Irrigation documents
+      irrigationGeneralRequirements: 'other',
+      irrigationEIA: 'environmental_impact_doc',
+      irrigationFeasibilityStudy: 'other',
+      // Water Supply documents
+      waterSupplyGeneralRequirements: 'other',
+      waterSupplyFeasibilityStudy: 'other',
+      // Aquaculture documents
+      aquacultureGeneralRequirements: 'other',
+      aquacultureEIA: 'environmental_impact_doc',
+      aquacultureManagementPlan: 'other',
+      // Coffee Washing documents
+      coffeeWashingGeneralRequirements: 'other',
+      coffeeWashingEIA: 'environmental_impact_doc',
+      // Industrial documents
+      industrialGeneralRequirements: 'other',
+      industrialEIA: 'environmental_impact_doc',
+      // Hydropower documents
+      hydropowerGeneralRequirements: 'other',
+      hydropowerEIA: 'environmental_impact_doc',
+      // Construction Dam documents
+      constructionDamGeneralRequirements: 'other',
+      constructionDamEIA: 'environmental_impact_doc',
+      // Infrastructure documents
+      infrastructureGeneralRequirements: 'other',
+      infrastructureEIA: 'environmental_impact_doc',
+      // Navigation documents
+      navigationGeneralRequirements: 'other',
+      navigationEIA: 'environmental_impact_doc',
+      // Recreation documents
+      recreationGeneralRequirements: 'other',
+      recreationEIA: 'environmental_impact_doc'
     };
     
     for (const [fieldName, documentType] of Object.entries(documentTypes)) {
@@ -670,7 +721,11 @@ export default function NewApplicationPage() {
             'technical_drawings': 'technicalDrawings',
             'environmental_impact_doc': 'environmentalImpactDoc',
             'payment_proof': 'paymentProof',
-            'intake_discharge_map': 'intakeDischargeMap'
+            'intake_discharge_map': 'intakeDischargeMap',
+            'other': 'waterSupplyGeneralRequirements', // Default to water supply for 'other' type
+            'business_license': 'miningLicense',
+            'geological_survey': 'miningHydrologicalReport',
+            'water_quality_report': 'waterQualityReport'
           };
           
           for (const doc of documents) {
