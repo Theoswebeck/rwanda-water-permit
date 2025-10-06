@@ -231,11 +231,37 @@ export function useApplications({
     try {
       setError(null)
 
-      const { data, error } = await supabase
+      // First get the basic application data
+      const { data: application, error } = await supabase
         .from('applications')
-        .select(`
-          *,
-          applicant:users!applicant_id(
+        .select('*')
+        .eq('application_number', applicationNumber)
+        .single()
+
+      if (error) {
+        console.error('Error fetching application by number:', error)
+        throw error
+      }
+
+      if (!application) {
+        return null
+      }
+
+      // Fetch related data separately to avoid relationship issues
+      const [
+        applicantResult, 
+        documentsResult, 
+        reviewsResult, 
+        inspectionsResult, 
+        permitsResult,
+        assignedReviewerResult,
+        assignedInspectorResult,
+        assignedApproverResult
+      ] = await Promise.all([
+        // Fetch applicant data
+        supabase
+          .from('users')
+          .select(`
             id,
             first_name,
             last_name,
@@ -256,39 +282,76 @@ export function useApplications({
             address,
             created_at,
             last_login_at
-          ),
-          assigned_reviewer:users!assigned_reviewer_id(
-            id,
-            first_name,
-            last_name,
-            email
-          ),
-          assigned_inspector:users!assigned_inspector_id(
-            id,
-            first_name,
-            last_name,
-            email
-          ),
-          assigned_approver:users!assigned_approver_id(
-            id,
-            first_name,
-            last_name,
-            email
-          ),
-          documents(*),
-          reviews!application_id(*),
-          inspections!application_id(*),
-          permits!application_id(*)
-        `)
-        .eq('application_number', applicationNumber)
-        .single()
+          `)
+          .eq('id', application.applicant_id)
+          .single(),
+        
+        // Fetch documents
+        supabase
+          .from('documents')
+          .select('*')
+          .eq('application_id', application.id),
+          
+        // Fetch reviews
+        supabase
+          .from('reviews')
+          .select('*')
+          .eq('application_id', application.id),
+          
+        // Fetch inspections
+        supabase
+          .from('inspections')
+          .select('*')
+          .eq('application_id', application.id),
+          
+        // Fetch permits
+        supabase
+          .from('permits')
+          .select('*')
+          .eq('application_id', application.id),
 
-      if (error) {
-        console.error('Error fetching application by number:', error)
-        throw error
+        // Fetch assigned reviewer if exists
+        application.assigned_reviewer_id 
+          ? supabase
+              .from('users')
+              .select('id, first_name, last_name, email')
+              .eq('id', application.assigned_reviewer_id)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
+
+        // Fetch assigned inspector if exists
+        application.assigned_inspector_id 
+          ? supabase
+              .from('users')
+              .select('id, first_name, last_name, email')
+              .eq('id', application.assigned_inspector_id)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
+
+        // Fetch assigned approver if exists
+        application.assigned_approver_id 
+          ? supabase
+              .from('users')
+              .select('id, first_name, last_name, email')
+              .eq('id', application.assigned_approver_id)
+              .single()
+          : Promise.resolve({ data: null, error: null })
+      ])
+
+      // Combine all data
+      const enrichedApplication = {
+        ...application,
+        applicant: applicantResult.data || null,
+        documents: documentsResult.data || [],
+        reviews: reviewsResult.data || [],
+        inspections: inspectionsResult.data || [],
+        permits: permitsResult.data || [],
+        assigned_reviewer: assignedReviewerResult.data || null,
+        assigned_inspector: assignedInspectorResult.data || null,
+        assigned_approver: assignedApproverResult.data || null
       }
 
-      return data
+      return enrichedApplication
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch application')
       console.error('Error fetching application by number:', err)

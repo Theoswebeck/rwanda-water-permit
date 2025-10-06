@@ -1,0 +1,179 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { 
+      applicationNumber, 
+      applicantPhone, 
+      applicantName, 
+      decision, // 'approved', 'rejected', 'revision_required'
+      reason,
+      projectTitle 
+    } = body;
+
+    console.log(`📱 API: Sending ${decision} notification for ${applicationNumber} to ${applicantPhone}`);
+
+    // Validate required fields
+    if (!applicationNumber || !applicantPhone || !applicantName || !decision) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Missing required fields: applicationNumber, applicantPhone, applicantName, decision' 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Get environment variables
+    const apiKey = process.env.PINDO_API_KEY;
+    const senderName = process.env.PINDO_SENDER_NAME || 'PindoTest';
+    
+    console.log('🔧 Environment status:', {
+      hasApiKey: !!apiKey,
+      senderName,
+    });
+
+    if (!apiKey) {
+      console.error('❌ Pindo API key not configured');
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'SMS service not configured. Please configure Pindo API key.' 
+        },
+        { status: 500 }
+      );
+    }
+
+    // Format phone number (Rwandan format)
+    const formatPhoneNumber = (phone: string): string => {
+      const digits = phone.replace(/\D/g, '');
+      
+      if (digits.startsWith('250') && digits.length === 12) {
+        return `+${digits}`;
+      } else if (digits.startsWith('0') && digits.length === 10) {
+        return `+250${digits.substring(1)}`;
+      } else if (digits.length === 9) {
+        return `+250${digits}`;
+      }
+      
+      return phone.startsWith('+') ? phone : `+${phone}`;
+    };
+
+    // Validate phone number format
+    const formattedPhone = formatPhoneNumber(applicantPhone);
+    const rwandanMobileRegex = /^\+2507[0-9]{8}$/;
+    
+    if (!rwandanMobileRegex.test(formattedPhone)) {
+      console.warn('⚠️ Invalid phone number format:', applicantPhone);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Invalid phone number format' 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Compose message based on decision
+    let message: string;
+    
+    switch (decision) {
+      case 'approved':
+        const projectInfo = projectTitle ? ` for ${projectTitle}` : '';
+        message = `Dear ${applicantName}, 
+
+Congratulations! Your water permit application ${applicationNumber}${projectInfo} has been APPROVED by Rwanda Water Board.
+
+You will receive your official permit documents shortly. Please visit our office to complete the final permit issuance process.
+
+For inquiries: contact@rwb.rw
+Rwanda Water Board`;
+        break;
+
+      case 'rejected':
+        const reasonInfo = reason ? ` Reason: ${reason.substring(0, 100)}...` : '';
+        message = `Dear ${applicantName},
+
+Your water permit application ${applicationNumber} has been REJECTED by Rwanda Water Board.${reasonInfo}
+
+You may resubmit with corrections or contact us for guidance.
+
+For support: contact@rwb.rw
+Rwanda Water Board`;
+        break;
+
+      case 'revision_required':
+        message = `Dear ${applicantName},
+
+Your water permit application ${applicationNumber} requires REVISIONS.
+
+Please log into your dashboard to view detailed feedback and resubmit your application.
+
+Portal: https://permit.rwb.rw
+Rwanda Water Board`;
+        break;
+
+      default:
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Invalid decision type. Must be: approved, rejected, or revision_required' 
+          },
+          { status: 400 }
+        );
+    }
+
+    console.log('📱 Sending SMS via Pindo API...');
+
+    // Send SMS via Pindo
+    const smsResponse = await fetch('https://api.pindo.io/v1/sms/', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: formattedPhone,
+        text: message,
+        sender: senderName,
+      }),
+    });
+
+    const smsResult = await smsResponse.json();
+    console.log('📱 Pindo response:', smsResult);
+
+    if (!smsResponse.ok) {
+      console.error('❌ Pindo API error:', smsResult);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Failed to send SMS notification',
+          message: smsResult.message || 'SMS service error',
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log(`✅ ${decision} SMS sent successfully to ${formattedPhone}`);
+
+    return NextResponse.json({
+      success: true,
+      message: `${decision} notification sent successfully`,
+      smsId: smsResult.sms_id,
+      phone: formattedPhone
+    });
+
+  } catch (error) {
+    console.error(`❌ Error sending approval notification:`, error);
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Internal server error',
+        message: 'An unexpected error occurred while sending notification'
+      },
+      { status: 500 }
+    );
+  }
+}

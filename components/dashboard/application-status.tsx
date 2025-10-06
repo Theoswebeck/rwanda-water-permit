@@ -102,6 +102,8 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
         return <Badge variant="outline" className="bg-amber-100 text-amber-700">Under Review</Badge>;
       case "pending_assessment":
         return <Badge variant="outline" className="bg-purple-100 text-purple-700">Pending Assessment</Badge>;
+      case "pending_final_approval":
+        return <Badge variant="outline" className="bg-purple-100 text-purple-700">Pending Approval</Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700">Approved</Badge>;
       case "rejected":

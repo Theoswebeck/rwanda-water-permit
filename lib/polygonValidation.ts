@@ -68,15 +68,33 @@ export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
     }
 
     // Transform database response to PermitPolygon format
-    return data.map((permit: PermitPolygonData) => ({
-      permitId: permit.permit_id,
-      permitNumber: permit.permit_number,
-      projectTitle: permit.project_title,
-      coordinates: permit.coordinates_geojson as Feature<Polygon>,
-      status: permit.status,
-      issuedDate: permit.issued_date,
-      expiryDate: permit.expiry_date
-    }));
+    return data
+      .filter((permit: PermitPolygonData) => {
+        // Filter out permits with invalid coordinates
+        if (!permit.coordinates_geojson) {
+          console.warn(`⚠️ Permit ${permit.permit_number} has null coordinates - excluding`);
+          return false;
+        }
+        return true;
+      })
+      .map((permit: PermitPolygonData) => {
+        // ST_AsGeoJSON returns only the geometry, so we need to wrap it in a Feature
+        const feature: Feature<Polygon> = {
+          type: 'Feature',
+          geometry: permit.coordinates_geojson as Polygon,
+          properties: {}
+        };
+
+        return {
+          permitId: permit.permit_id,
+          permitNumber: permit.permit_number,
+          projectTitle: permit.project_title,
+          coordinates: feature,
+          status: permit.status,
+          issuedDate: permit.issued_date,
+          expiryDate: permit.expiry_date
+        };
+      });
   } catch (error) {
     console.error('Error in fetchApprovedPermitPolygons:', error);
     throw error;

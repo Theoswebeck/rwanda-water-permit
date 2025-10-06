@@ -68,7 +68,7 @@ export function TermsConditionsModal({
           applicant:users!applicant_id(*)
         `)
         .eq('id', applicationId)
-        .single();
+        .single() as { data: any; error: any };
 
       if (fetchError) {
         console.error('❌ Error fetching application:', fetchError);
@@ -83,25 +83,55 @@ export function TermsConditionsModal({
       const permitNumber = `RWBP-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       console.log('🔢 Generated permit number:', permitNumber);
       
-      // Create permit in database
+      // Create permit in database with comprehensive data
       console.log('📝 Creating permit in database...');
+      const permitData_insert = {
+        application_id: applicationId,
+        permit_number: permitNumber,
+        status: 'active',
+        water_source: applicationData.water_source,
+        purpose: applicationData.water_purpose,
+        water_allowance: applicationData.estimated_usage_volume || 0,
+        allowance_unit: applicationData.usage_unit || 'm³',
+        issuing_authority: 'Rwanda Water Board',
+        issued_date: new Date().toISOString().split('T')[0],
+        expiry_date: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 years
+        conditions: { 
+          conditions: [
+            'Comply with all environmental regulations', 
+            'Submit quarterly usage reports', 
+            'Allow inspections as required',
+            ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
+          ],
+          // Include location and polygon data for permit enforcement
+          location: {
+            province: applicationData.province,
+            district: applicationData.district,
+            sector: applicationData.sector,
+            cell: applicationData.cell,
+            village: applicationData.village,
+            coordinates: applicationData.coordinates,
+            description: applicationData.location_description
+          },
+          // Include project details
+          project: {
+            title: applicationData.project_title,
+            description: applicationData.project_description,
+            value: applicationData.project_value
+          }
+        }
+      };
+
+      console.log('📍 Permit data includes coordinates:', !!applicationData.coordinates);
+      if (applicationData.coordinates) {
+        console.log('🗺️ Coordinate type:', applicationData.coordinates.type);
+      }
+
       const { data: permitData, error: permitError } = await supabase
         .from('permits')
-        .insert({
-          application_id: applicationId,
-          permit_number: permitNumber,
-          status: 'active',
-          water_source: applicationData.water_source,
-          purpose: applicationData.water_purpose,
-          water_allowance: applicationData.estimated_usage_volume || 0,
-          allowance_unit: applicationData.usage_unit || 'm³',
-          issuing_authority: 'Rwanda Water Board',
-          issued_date: new Date().toISOString().split('T')[0],
-          expiry_date: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 years
-          conditions: { conditions: ['Comply with all environmental regulations', 'Submit quarterly usage reports', 'Allow inspections as required'] }
-        })
+        .insert(permitData_insert as any)
         .select()
-        .single();
+        .single() as { data: any; error: any };
 
       if (permitError) {
         console.error('❌ Error creating permit:', permitError);
@@ -109,8 +139,23 @@ export function TermsConditionsModal({
       }
       console.log('✅ Permit created successfully:', permitData.permit_number);
 
-      // Skip application update for now due to database constraint issues
-      console.log('⏭️ Skipping application status update (permit creation successful)');
+      // Update application status to approved_pending_permit and track terms acceptance
+      console.log('📋 Updating application status to approved_pending_permit...');
+      const { error: updateError } = await (supabase as any)
+        .from('applications')
+        .update({
+          status: 'approved_pending_permit',
+          terms_status: 'accepted',
+          terms_accepted_at: new Date().toISOString()
+        })
+        .eq('id', applicationId);
+
+      if (updateError) {
+        console.warn('⚠️ Warning: Failed to update application status:', updateError);
+        // Continue anyway - permit was created successfully
+      } else {
+        console.log('✅ Application status updated successfully');
+      }
 
       // Import and generate PDF (make this optional to avoid blocking the flow)
       try {
@@ -129,8 +174,14 @@ export function TermsConditionsModal({
       }
 
       console.log("✅ Terms accepted successfully! Your permit has been generated...");
+      
+      // Open the generated permit in a new tab
+      const permitUrl = `/dashboard/permit/${permitData.id}`;
+      console.log('🔗 Opening permit URL:', permitUrl);
+      window.open(permitUrl, '_blank');
+      
       setShowFeedback(true);
-      onTermsAccepted(); // Call the callback to notify parent component
+      // Don't call onTermsAccepted() immediately - let user see feedback first
     } catch (error) {
       console.error('❌ Error accepting terms:', error);
       
@@ -156,7 +207,7 @@ export function TermsConditionsModal({
     setIsProcessing(true);
     try {
       // Update application with terms rejection
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('applications')
         .update({
           terms_status: 'rejected',
@@ -361,7 +412,7 @@ export function TermsConditionsModal({
             />
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={()=>{ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Skip</Button>
-              <Button onClick={()=>{ /* TODO: send to supabase */ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Submit</Button>
+              <Button onClick={()=>{ /* TODO: send feedback to supabase */ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Submit Feedback</Button>
             </div>
           </div>
         )}

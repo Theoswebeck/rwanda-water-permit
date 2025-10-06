@@ -28,6 +28,7 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
   const router = useRouter();
   const { signUp } = useAuth();
   const skipPhoneVerification = process.env.NEXT_PUBLIC_SKIP_PHONE_VERIFICATION === 'true';
+  const skipEmailVerification = process.env.NEXT_PUBLIC_SKIP_EMAIL_VERIFICATION === 'true';
   
   // Common fields
   const [email, setEmail] = useState("");
@@ -280,19 +281,8 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     e.preventDefault();
     setLocalError("");
 
-    const isEmailValid = validateEmail(email);
-    const isPasswordValid = validatePassword(password);
-    const isCompanyPhoneValid = accountType === 'company' ? validatePhone(companyPhone, true) : true;
-    const isPersonPhoneValid = accountType === 'individual' ? validatePhone(phone, false) : true;
-    const isIdValid = accountType === 'individual' ? validateNationalId(idNumber) : true;
-    const isTINValid = accountType === 'company' ? validateCompanyTIN(companyTIN) : true;
-
-    if (!isEmailValid || !isPasswordValid || !isCompanyPhoneValid || !isPersonPhoneValid || !isIdValid || !isTINValid) {
-      return; // Stop submission if validation fails
-    }
-
-    // Enforce email code verification prior to signup
-    if (!emailVerified || !emailCode) {
+    // Enforce email code verification prior to signup (skippable via flag)
+    if (!skipEmailVerification && (!emailVerified || !emailCode)) {
       setEmailDialogOpen(true);
       return;
     }

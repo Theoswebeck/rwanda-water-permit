@@ -7,7 +7,8 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { ApplicationForm } from "@/components/dashboard/application-form-new";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, AlertCircle, CheckCircle, Loader2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
@@ -1176,6 +1177,39 @@ export default function EditApplicationPage() {
               Update your draft application below. You can save changes as a draft or submit for review.
             </p>
           </div>
+
+          {/* Revision Requirements - Prominent Notice */}
+          {application?.status === 'revision_required' && application.revision_notes && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mb-6"
+            >
+              <Alert className="border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-md">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-orange-900 text-lg">⚠️ Revision Required</h3>
+                      <Badge className="border border-orange-300 text-orange-700 bg-orange-100">
+                        Action Needed
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="font-medium text-orange-800">Required Changes:</p>
+                      <div className="bg-white/50 rounded-md p-3 border border-orange-200">
+                        <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{application.revision_notes}</p>
+                      </div>
+                      <p className="text-sm text-orange-700 mt-2">
+                        <strong>Note:</strong> Please review the specific requirements above and make the necessary changes before resubmitting your application.
+                      </p>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
 
           {/* Documents Section */}
           {application?.documents && (

@@ -15,7 +15,8 @@ import {
   ArrowLeft, 
   Loader2, 
   AlertTriangle,
-  Edit
+  Edit,
+  CheckCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
@@ -562,15 +563,46 @@ export default function ApplicationDetailPage() {
             </div>
           </div>
           
-          {/* Rejection Reason Alert */}
-          {application.status === 'rejected' && application.rejection_reason && (
+
+          {/* Rejection Alert */}
+          {application.status === 'rejected' && (
             <Alert className="border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <AlertDescription>
                 <div className="space-y-3">
                   <div className="space-y-2">
                     <p className="font-medium text-red-800">Application Rejected</p>
-                    <p className="text-red-700">{application.rejection_reason}</p>
+                    <p className="text-red-700">
+                      Your water permit application has been rejected.
+                      {application.rejection_reason && (
+                        <span className="block mt-2 font-medium">Reason: {application.rejection_reason}</span>
+                      )}
+                    </p>
+                    <p className="text-red-600 text-sm">You may submit a new application with the necessary corrections.</p>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Approval Alert */}
+          {application.status === 'approved' && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="font-medium text-green-800">🎉 Application Approved!</p>
+                    <p className="text-green-700">
+                      Congratulations! Your water permit application has been approved by Rwanda Water Board.
+                    </p>
+                    {application.approval_conditions && (
+                      <div className="mt-2">
+                        <p className="font-medium text-green-800">Approval Conditions:</p>
+                        <p className="text-green-700 whitespace-pre-line">{application.approval_conditions}</p>
+                      </div>
+                    )}
+                    <p className="text-green-600 text-sm">You will receive your official permit documents shortly. Please visit our office to complete the final permit issuance process.</p>
                   </div>
                 </div>
               </AlertDescription>

@@ -25,7 +25,6 @@ import {
   Eye,
   FileCheck, 
   MapPin, 
-  Calendar,
   Droplets,
   AlertCircle,
   Loader2
@@ -47,7 +46,6 @@ interface Application {
   project_description: string
   created_at: string
   submitted_at?: string
-  due_date?: string
   estimated_usage_volume?: number
   usage_unit?: string
   permit_number?: string
@@ -198,10 +196,6 @@ export function AllApplicationsTab() {
     return labels[purpose] || purpose
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString()
-  }
-
   const getActionButton = (application: Application) => {
     // For pre-permit assessment
     if (application.status === 'pending_assessment') {
@@ -335,14 +329,13 @@ export function AllApplicationsTab() {
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Location</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Due Date</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredApplications.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -391,14 +384,6 @@ export function AllApplicationsTab() {
                       </TableCell>
                       <TableCell className="p-4">
                         {getStatusBadge(app.status)}
-                      </TableCell>
-                      <TableCell className="p-4">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                          <span className="text-sm text-slate-700 dark:text-slate-300">
-                            {app.due_date ? formatDate(app.due_date) : 'Not set'}
-                          </span>
-                        </div>
                       </TableCell>
                       <TableCell className="p-4 text-right">
                         {getActionButton(app)}

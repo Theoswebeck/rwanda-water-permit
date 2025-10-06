@@ -642,53 +642,77 @@ export const deleteUser = async (userId: string) => {
 // Helper function to get applications pending final approval
 export const getApplicationsPendingApproval = async () => {
   try {
+    console.log('🔍 [getApplicationsPendingApproval] Starting query for pending_final_approval applications...');
+    
     // Get applications that are in pending_final_approval status
-    const { data, error } = await supabase
+    const { data: applications, error } = await supabase
       .from('applications')
-      .select(`
-        *,
-        applicant:users!applicant_id(
-          first_name,
-          last_name,
-          company_name,
-          email,
-          phone,
-          account_type
-        ),
-        assigned_reviewer:users!assigned_reviewer_id(
-          first_name,
-          last_name
-        ),
-        assigned_inspector:users!assigned_inspector_id(
-          first_name,
-          last_name
-        ),
-        reviews!application_id(
-          recommendation,
-          risk_assessment,
-          overall_comments,
-          status
-        ),
-        inspections!application_id(
-          result,
-          overall_score,
-          recommendations,
-          status
-        )
-      `)
-      .eq('status', 'pending_final_approval') // Only applications ready for final approval
+      .select('*')
+      .eq('status', 'pending_final_approval')
       .order('created_at', { ascending: false })
     
+    console.log('📊 [getApplicationsPendingApproval] Query result:', { data: applications?.length, error: error?.message });
+    
     if (error) {
-      console.warn('Database error, returning empty array:', error.message)
+      console.warn('❌ [getApplicationsPendingApproval] Database error:', error.message)
       return []
     }
 
-    // Return applications that are in pending_final_approval status
-    // These have already completed review and inspection phases
-    return data || []
+    if (!applications || applications.length === 0) {
+      console.log('✅ [getApplicationsPendingApproval] No applications found');
+      return []
+    }
+
+    // Fetch user data separately for each application to avoid relationship issues
+    const enrichedApplications = await Promise.all(
+      applications.map(async (app: any) => {
+        try {
+          // Fetch applicant data
+          const { data: applicant } = await supabase
+            .from('users')
+            .select('first_name, last_name, company_name, email, phone, account_type')
+            .eq('id', app.applicant_id)
+            .single();
+
+          // Fetch reviewer data if assigned
+          let assigned_reviewer = null;
+          if (app.assigned_reviewer_id) {
+            const { data: reviewer } = await supabase
+              .from('users')
+              .select('first_name, last_name')
+              .eq('id', app.assigned_reviewer_id)
+              .single();
+            assigned_reviewer = reviewer;
+          }
+
+          // Fetch inspector data if assigned  
+          let assigned_inspector = null;
+          if (app.assigned_inspector_id) {
+            const { data: inspector } = await supabase
+              .from('users')
+              .select('first_name, last_name')
+              .eq('id', app.assigned_inspector_id)
+              .single();
+            assigned_inspector = inspector;
+          }
+
+          return {
+            ...app,
+            applicant,
+            assigned_reviewer,
+            assigned_inspector
+          };
+        } catch (err) {
+          console.warn(`Error enriching application ${app.id}:`, err);
+          return app; // Return basic app data if enrichment fails
+        }
+      })
+    );
+
+    console.log('✅ [getApplicationsPendingApproval] Returning', enrichedApplications.length, 'enriched applications');
+    return enrichedApplications
   } catch (error) {
-    console.warn('Failed to fetch applications pending approval:', error)
+    console.warn('❌ [getApplicationsPendingApproval] Exception:', error)
     return []
   }
 }
@@ -1308,5 +1332,138 @@ export const getTeamWorkload = async () => {
       approvers: { count: 0, totalApplications: 0, avgWorkload: 0, workloadPercentage: 0 },
       overdueApplications: 0
     }
+  }
+}
+
+// ============================================
+// APPLICATION DELETION FUNCTIONS
+// ============================================
+
+// Helper function to delete application and all related data
+export const deleteApplicationCompletely = async (applicationNumber: string) => {
+  try {
+    console.log(`🗑️ Starting deletion of application: ${applicationNumber}`);
+    
+    // First, get the application to find its ID
+    const { data: application, error: fetchError } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('application_number', applicationNumber)
+      .single();
+    
+    if (fetchError) {
+      throw new Error(`Failed to find application: ${fetchError.message}`);
+    }
+    
+    if (!application) {
+      throw new Error(`Application ${applicationNumber} not found`);
+    }
+    
+    const applicationId = application.id;
+    console.log(`📋 Found application ID: ${applicationId}`);
+    
+    // Delete related data in the correct order to avoid foreign key violations
+    
+    // 1. Delete workflow history
+    const { error: workflowError } = await supabase
+      .from('workflow_history')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (workflowError) {
+      console.warn('Warning deleting workflow history:', workflowError.message);
+    } else {
+      console.log('✅ Deleted workflow history');
+    }
+    
+    // 2. Delete communications
+    const { error: communicationsError } = await supabase
+      .from('communications')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (communicationsError) {
+      console.warn('Warning deleting communications:', communicationsError.message);
+    } else {
+      console.log('✅ Deleted communications');
+    }
+    
+    // 3. Delete approvals
+    const { error: approvalsError } = await supabase
+      .from('approvals')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (approvalsError) {
+      console.warn('Warning deleting approvals:', approvalsError.message);
+    } else {
+      console.log('✅ Deleted approvals');
+    }
+    
+    // 4. Delete inspections
+    const { error: inspectionsError } = await supabase
+      .from('inspections')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (inspectionsError) {
+      console.warn('Warning deleting inspections:', inspectionsError.message);
+    } else {
+      console.log('✅ Deleted inspections');
+    }
+    
+    // 5. Delete reviews
+    const { error: reviewsError } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (reviewsError) {
+      console.warn('Warning deleting reviews:', reviewsError.message);
+    } else {
+      console.log('✅ Deleted reviews');
+    }
+    
+    // 6. Delete documents
+    const { error: documentsError } = await supabase
+      .from('documents')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (documentsError) {
+      console.warn('Warning deleting documents:', documentsError.message);
+    } else {
+      console.log('✅ Deleted documents');
+    }
+    
+    // 7. Delete permits
+    const { error: permitsError } = await supabase
+      .from('permits')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (permitsError) {
+      console.warn('Warning deleting permits:', permitsError.message);
+    } else {
+      console.log('✅ Deleted permits');
+    }
+    
+    // 8. Finally, delete the application itself
+    const { error: applicationError } = await supabase
+      .from('applications')
+      .delete()
+      .eq('id', applicationId);
+    
+    if (applicationError) {
+      throw new Error(`Failed to delete application: ${applicationError.message}`);
+    }
+    
+    console.log('✅ Successfully deleted application and all related data');
+    return { success: true, message: `Application ${applicationNumber} has been completely deleted` };
+    
+  } catch (error) {
+    console.error('❌ Error deleting application:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { success: false, message: `Failed to delete application: ${errorMessage}` };
   }
 } 

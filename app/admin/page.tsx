@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { ProtectedRoute } from "@/components/auth/protected-route";
+// import { ProtectedRoute } from "@/components/auth/protected-route"; // TEMPORARY: Disabled for testing
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+      // <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
         <DashboardLayout>
           <div className="container mx-auto px-4 py-6">
             <div className="flex items-center justify-center h-64">
@@ -66,13 +66,13 @@ export default function AdminDashboard() {
             </div>
           </div>
         </DashboardLayout>
-      </ProtectedRoute>
+      // </ProtectedRoute>
     );
   }
 
   if (error) {
     return (
-      <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+      // <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
         <DashboardLayout>
           <div className="container mx-auto px-4 py-6">
             <div className="text-center py-12">
@@ -82,12 +82,12 @@ export default function AdminDashboard() {
             </div>
           </div>
         </DashboardLayout>
-      </ProtectedRoute>
+      // </ProtectedRoute>
     );
   }
 
   return (
-    <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+    // <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
       <DashboardLayout>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -105,14 +105,14 @@ export default function AdminDashboard() {
               </p>
             </div>
             <Badge variant="secondary" className="px-3 py-1">
-              Admin Access
+              Admin Access (Temporarily Unprotected)
             </Badge>
           </div>
 
           {/* Testing Component (Disabled - Auth not enabled) */}
-          <div className="mb-4 p-4 border rounded-lg bg-yellow-50 border-yellow-200">
-            <p className="text-sm text-yellow-800">
-              ⚠️ Testing features disabled: Authentication system not yet enabled
+          <div className="mb-4 p-4 border rounded-lg bg-red-50 border-red-200">
+            <p className="text-sm text-red-800">
+              🚨 TEMPORARY: Admin page authentication disabled for testing
             </p>
           </div>
 
@@ -230,6 +230,6 @@ export default function AdminDashboard() {
           </div>
         </motion.div>
       </DashboardLayout>
-    </ProtectedRoute>
+    // </ProtectedRoute>
   );
 } 

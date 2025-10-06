@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,17 +30,34 @@ import {
   Clock,
   User as UserIcon,
   Loader2,
-  XCircle
+  XCircle,
+  User,
+  MapPin,
+  Droplets
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase } from "@/lib/supabase";
-import type { Application, ApplicationStatus, User, Document, Review } from "@/types/database";
+import { getDocumentUrl } from "@/lib/supabase-storage";
+import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
-import { ApplicationDocuments } from "@/components/shared/ApplicationDocuments";
+
+// Lazy load the ApplicationForm component
+const ApplicationForm = dynamic(
+  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading application form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 interface ApplicationWithRelations extends Application {
-  applicant?: User;
+  applicant?: UserType;
   documents?: Document[];
   reviews?: Review[];
 }
@@ -62,6 +80,71 @@ interface Comment {
   created_at: string;
 }
 
+// Transform Application data back to form format for viewing (copied from main application page)
+function mapApplicationToFormData(application: Application, userProfile?: any): any {
+  const formData: any = {};
+  
+  // Parse internal notes to extract form-specific data
+  // Try to parse as JSON first (new format), fallback to legacy format
+  let storedFormData: any = {};
+  let legacyNotesMap: Record<string, string> = {};
+  
+  const notes = application.internal_notes || '';
+  
+  try {
+    // Try parsing as JSON (new comprehensive format)
+    storedFormData = JSON.parse(notes);
+    console.log('✅ Successfully parsed stored form data from JSON');
+  } catch (error) {
+    // Fallback to legacy format parsing
+    console.log('📄 Using legacy notes format parsing');
+    const notesParts = notes.split(' | ');
+    notesParts.forEach(part => {
+      const [key, value] = part.split(': ');
+      if (key && value) {
+        legacyNotesMap[key] = value;
+      }
+    });
+  }
+  
+  // If we have comprehensive stored data, use it directly
+  if (Object.keys(storedFormData).length > 0 && storedFormData.fullNameApplicant !== undefined) {
+    // New format: restore all form fields directly from stored data
+    console.log('🔄 Restoring form data from comprehensive JSON storage');
+    
+    // Copy all stored form data
+    Object.assign(formData, storedFormData);
+    
+    // Override with profile data for contact information if available
+    if (userProfile) {
+      formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
+      formData.emailAddress = userProfile.email || formData.emailAddress;
+    }
+    
+    console.log('🔍 Key fields restored:', {
+      nameSourceWater: formData.nameSourceWater,
+      tributaryToMain: formData.tributaryToMain,
+      waterSourceType: formData.waterSourceType,
+      fullNameApplicant: formData.fullNameApplicant
+    });
+    
+  } else {
+    // Legacy format: reconstruct from basic database fields and legacy notes
+    console.log('🔄 Restoring form data from legacy format');
+    
+    // Basic applicant information (using internal notes and project title)
+    formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
+    formData.categoryApplicant = legacyNotesMap['Category']?.toLowerCase() || 'individual';
+    
+    // Set default values for required fields
+    formData.nameSourceWater = application.water_body_name || '';
+    formData.tributaryToMain = application.tributary_name || '';
+    formData.waterSourceType = 'stream_river'; // Default
+  }
+  
+  return formData;
+}
+
 export default function ReviewApplicationPage() {
   const params = useParams();
   const router = useRouter();
@@ -76,6 +159,10 @@ export default function ReviewApplicationPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [transferLoading, setTransferLoading] = useState(false);
+  
+  // ApplicationForm state
+  const [initialFormData, setInitialFormData] = useState<any>(null);
+  const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
 
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -120,6 +207,79 @@ export default function ReviewApplicationPage() {
         }
 
         setApplication(appData);
+
+        // Transform application data to form format
+        const formData = mapApplicationToFormData(appData, null);
+        setInitialFormData(formData);
+        console.log('✅ Form data mapped:', formData);
+        
+        // Process documents for form
+        const documentMap: Record<string, { url: string; name: string }> = {};
+        const typeMapping: Record<string, string> = {
+          'identification_doc': 'identificationDoc',
+          'land_ownership_doc': 'landOwnershipDoc', 
+          'technical_drawings': 'technicalDrawings',
+          'environmental_impact_doc': 'environmentalImpactDoc',
+          'payment_proof': 'paymentProof',
+          'intake_discharge_map': 'intakeDischargeMap',
+          'other': 'generalRequirements',
+          'business_license': 'miningLicense',
+          'geological_survey': 'miningHydrologicalReport',
+          'water_quality_report': 'waterQualityReport'
+        };
+        
+        // Process documents from appData.documents using smart classification (copied from edit-application page)
+        console.log('🔍 Raw documents from database:', appData.documents);
+        if (appData.documents && Array.isArray(appData.documents)) {
+          for (const doc of appData.documents) {
+            console.log('📋 Processing document:', doc.name, 'type:', doc.type, 'path:', doc.file_path);
+            
+            if (doc.file_path && doc.name) {
+              const publicUrl = getDocumentUrl(doc.file_path);
+              if (publicUrl) {
+                // Extract field name from file path if it follows our naming convention
+                const pathParts = doc.file_path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+
+                if (fieldNameMatch) {
+                  // This is a structured document with field name in path
+                  const fieldName = fieldNameMatch[1];
+                  console.log('🎯 Identified field name from path:', fieldName);
+                  
+                  // Check if it's an additional document
+                  if (fieldName.startsWith('additional_')) {
+                    console.log('📎 Skipping additional document for now:', fieldName);
+                    // Skip additional documents for now since ApplicationForm handles them differently
+                  } else {
+                    // This is a standard/activity-specific document
+                    documentMap[fieldName] = {
+                      url: publicUrl,
+                      name: doc.name
+                    };
+                    console.log('✅ Mapped document:', fieldName, '→', doc.name);
+                  }
+                } else {
+                  // Fallback to old type-based mapping
+                  const fieldName = typeMapping[doc.type] || doc.type;
+                  documentMap[fieldName] = {
+                    url: publicUrl,
+                    name: doc.name
+                  };
+                  console.log('✅ Mapped document (fallback):', fieldName, '→', doc.name);
+                }
+              } else {
+                console.log('❌ Failed to get public URL for:', doc.file_path);
+              }
+            } else {
+              console.log('❌ Missing file_path or name for document:', doc);
+            }
+          }
+        }
+        
+        setInitialDocuments(documentMap);
+        console.log('📄 Final document map:', documentMap);
+        console.log('📄 Documents found:', appData.documents?.length || 0, 'documents');
 
         // Fetch comments from reviews table
         const { data: reviewData, error: reviewError } = await supabase
@@ -443,6 +603,39 @@ export default function ReviewApplicationPage() {
             </div>
           </div>
 
+          {/* Revision Requirements - Prominent Notice */}
+          {application.status === 'revision_required' && application.revision_notes && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mb-6"
+            >
+              <Alert className="border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-md">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-orange-900 text-lg">⚠️ Revision Required</h3>
+                      <Badge className="border border-orange-300 text-orange-700 bg-orange-100">
+                        Action Needed
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="font-medium text-orange-800">Required Changes:</p>
+                      <div className="bg-white/50 rounded-md p-3 border border-orange-200">
+                        <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{application.revision_notes}</p>
+                      </div>
+                      <p className="text-sm text-orange-700 mt-2">
+                        <strong>Note:</strong> Please review the specific requirements above and make the necessary changes before resubmitting your application.
+                      </p>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
           {/* Rejection Reason Alert */}
           {application.status === 'rejected' && application.rejection_reason && (
             <Alert className="border-red-200 bg-red-50">
@@ -458,468 +651,119 @@ export default function ReviewApplicationPage() {
             </Alert>
           )}
 
-          {/* Revision Notes Alert */}
-          {application.status === 'revision_required' && application.revision_notes && (
-            <Alert className="border-orange-200 bg-orange-50">
-              <AlertTriangle className="h-4 w-4 text-orange-600" />
-              <AlertDescription>
-                <div className="space-y-2">
-                  <p className="font-medium text-orange-800">Application Returned for Revision</p>
-                  <p className="text-orange-700">{application.revision_notes}</p>
-                </div>
-              </AlertDescription>
-            </Alert>
+          {/* Review Actions Section - Compact */}
+          {(application.status === 'submitted' || application.status === 'under_review') && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="mb-6"
+            >
+              <Card className="border border-border bg-background">
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <FileText className="h-4 w-4" />
+                      Review Actions:
+                    </div>
+                    
+                    <Button 
+                      onClick={handleApproveForAssessment}
+                      size="sm"
+                      className="gap-1"
+                    >
+                      <Check className="h-3 w-3" />
+                      Approve for Assessment
+                    </Button>
+                    
+                    <Button 
+                      onClick={() => setShowRevisionDialog(true)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                    >
+                      <X className="h-3 w-3" />
+                      Return for Revision
+                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedAction} onValueChange={setSelectedAction}>
+                        <SelectTrigger className="w-[180px] h-8">
+                          <SelectValue placeholder="Transfer to..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {staff.map((staffMember) => (
+                            <SelectItem key={staffMember.id} value={staffMember.id}>
+                              {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
+                            </SelectItem>
+                          ))}
+                          {staff.length === 0 && (
+                            <SelectItem value="no-staff" disabled>
+                              No staff members available
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+
+                      <Button 
+                        onClick={handleTransferApplication}
+                        variant="secondary"
+                        size="sm"
+                        disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
+                        className="gap-1"
+                      >
+                        {transferLoading ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Transferring...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-3 w-3" />
+                            Transfer
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           )}
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
               <TabsTrigger value="internal_notes">Internal Notes & History</TabsTrigger>
             </TabsList>
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Application Information */}
-                <div className="lg:col-span-2 space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Applicant Information</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Details about the applicant submitting this water permit request
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Name</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">
-                            {application.applicant?.company_name || 
-                             (application.applicant?.first_name && application.applicant?.last_name ? 
-                              `${application.applicant.first_name} ${application.applicant.last_name}` : 
-                              'Unknown Applicant')}
-                          </p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Email</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.applicant?.email || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Phone</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.applicant?.phone || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Address</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.applicant?.address || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Permit Details */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Permit Details</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Basic permit information and water usage specifications
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Application Type</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.application_type}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Water Source</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.water_source}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Water Purpose</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.water_purpose}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Estimated Usage</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm font-medium">
-                            {application.estimated_usage_volume} {application.usage_unit}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Location Details */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Location Details</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Geographic location and administrative boundaries
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Province</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.province}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">District</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.district}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Sector</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.sector}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Cell</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.cell}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Project Information */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Project Information</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Detailed project description and objectives
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Project Title</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm font-medium">{application.project_title}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Project Description</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">{application.project_description || 'No description provided'}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Technical Specifications */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Technical Specifications</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Water extraction, measurement, and storage details
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium text-muted-foreground">Water Taking Method</Label>
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.water_taking_method || 'N/A'}</p>
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium text-muted-foreground">Water Measuring Method</Label>
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.water_measuring_method || 'N/A'}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Storage Facilities</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.storage_facilities || 'N/A'}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Return Flow Description</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">{application.return_flow_description || 'N/A'}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Environmental Impact */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Environmental Impact Assessment</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Potential effects and mitigation measures
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Environmental Assessment</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">{application.environmental_assessment || 'No assessment provided'}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-muted-foreground">Mitigation Actions</Label>
-                          <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">{application.mitigation_actions || 'No mitigation actions specified'}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Action Panel */}
-                <div className="space-y-6">
-                  {/* Only show Review Actions if application is in reviewable state */}
-                  {(application.status === 'submitted' || application.status === 'under_review') && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Review Actions</CardTitle>
-                        <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Take action on this application
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-3">
-                        <Button 
-                          onClick={handleApproveForAssessment}
-                          className="w-full gap-2"
-                        >
-                          <Check className="h-4 w-4" />
-                          Approve for Assessment
-                        </Button>
-                        
-                        <Button 
-                            onClick={() => setShowRevisionDialog(true)}
-                          variant="outline"
-                          className="w-full gap-2"
-                        >
-                          <X className="h-4 w-4" />
-                          Return for Revision
-                        </Button>
-                      </div>
-
-                      <Separator />
-
-                      <div className="space-y-3">
-                        <Label className="text-sm font-medium">Transfer Application</Label>
-                        <Select value={selectedAction} onValueChange={setSelectedAction}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select reviewer..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {staff.map((staffMember) => (
-                              <SelectItem key={staffMember.id} value={staffMember.id}>
-                                {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
-                              </SelectItem>
-                            ))}
-                            {staff.length === 0 && (
-                              <SelectItem value="no-staff" disabled>
-                                No staff members available
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <Button 
-                          onClick={handleTransferApplication}
-                          variant="secondary"
-                          className="w-full"
-                          disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
-                        >
-                          {transferLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              Transferring...
-                            </>
-                          ) : (
-                            'Transfer Application'
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  )}
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Application Timeline</CardTitle>
-                      <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-                        Progress through review stages
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {/* Submitted Stage */}
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                            <CheckCircle className="h-4 w-4" />
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm font-medium">Submitted</p>
-                            <p className="text-xs text-muted-foreground">{application.submitted_at ? new Date(application.submitted_at).toLocaleDateString() : application.created_at ? new Date(application.created_at).toLocaleDateString() : 'N/A'}</p>
-                          </div>
-                        </div>
-                        
-                        {/* Under Review Stage */}
-                        <div className="flex items-start gap-3">
-                          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                            ['under_review', 'pending_assessment', 'approved', 'rejected'].includes(application.status) 
-                              ? 'bg-primary text-primary-foreground' 
-                              : 'bg-muted'
-                          }`}>
-                            {['under_review', 'pending_assessment', 'approved', 'rejected'].includes(application.status) ? (
-                              <CheckCircle className="h-4 w-4" />
-                            ) : (
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">
-                              {application.reviewed_at || ['pending_assessment', 'approved', 'rejected'].includes(application.status) 
-                                ? 'Reviewed' 
-                                : application.status === 'under_review' 
-                                  ? 'Under Review'
-                                  : 'Review'
-                              }
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {application.reviewed_at 
-                                ? new Date(application.reviewed_at).toLocaleDateString()
-                                : application.status === 'under_review' 
-                                  ? 'In Progress' 
-                                  : ['pending_assessment', 'approved', 'rejected'].includes(application.status)
-                                    ? (application.updated_at ? new Date(application.updated_at).toLocaleDateString() : 'Completed')
-                                    : 'Pending'
-                              }
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {/* Assessment Stage */}
-                        <div className="flex items-start gap-3">
-                          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                            application.status === 'pending_assessment' 
-                              ? 'bg-yellow-100 border-2 border-yellow-400' 
-                              : ['pending_final_approval', 'approved', 'rejected'].includes(application.status)
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted'
-                          }`}>
-                            {application.status === 'pending_assessment' ? (
-                              <Clock className="h-4 w-4 text-yellow-600" />
-                            ) : ['pending_final_approval', 'approved', 'rejected'].includes(application.status) ? (
-                              <CheckCircle className="h-4 w-4" />
-                            ) : (
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">Technical Assessment</p>
-                            <p className="text-xs text-muted-foreground">
-                              {application.inspected_at 
-                                ? new Date(application.inspected_at).toLocaleDateString()
-                                : application.status === 'pending_assessment' 
-                                  ? 'With Inspector'
-                                  : 'Pending'
-                              }
-                            </p>
-                          </div>
-                        </div>
-                        
-                        {/* Final Approval Stage */}
-                        <div className="flex items-start gap-3">
-                          <div className={`flex h-8 w-8 items-center justify-center rounded-full ${
-                            application.status === 'pending_final_approval' 
-                              ? 'bg-yellow-100 border-2 border-yellow-400' 
-                              : ['approved', 'rejected'].includes(application.status)
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted'
-                          }`}>
-                            {application.status === 'pending_final_approval' ? (
-                              <Clock className="h-4 w-4 text-yellow-600" />
-                            ) : ['approved', 'rejected'].includes(application.status) ? (
-                              application.status === 'approved' ? (
-                                <CheckCircle className="h-4 w-4" />
-                              ) : (
-                                <XCircle className="h-4 w-4" />
-                              )
-                            ) : (
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm">
-                              {application.status === 'pending_final_approval' 
-                                ? 'Pending Approval' 
-                                : application.status === 'approved' 
-                                  ? 'Approved' 
-                                  : application.status === 'rejected'
-                                    ? 'Rejected'
-                                    : 'Final Approval'
-                              }
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {application.status === 'pending_final_approval' 
-                                ? 'Awaiting final decision' 
-                                : application.status === 'approved' || application.status === 'rejected'
-                                  ? (application.approved_at ? new Date(application.approved_at).toLocaleDateString() : 'Completed')
-                                  : 'Pending'
-                              }
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Review Actions Sidebar */}
-                <div className="lg:col-span-1 space-y-6">
-
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Transfer Application</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <Select value={selectedAction} onValueChange={setSelectedAction}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select reviewer..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {staff.map((staffMember) => (
-                              <SelectItem key={staffMember.id} value={staffMember.id}>
-                                {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
-                              </SelectItem>
-                            ))}
-                            {staff.length === 0 && (
-                              <SelectItem value="no-staff" disabled>
-                                No staff members available
-                              </SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                        <Button 
-                          onClick={handleTransferApplication}
-                          variant="outline" 
-                          className="w-full" 
-                          disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
-                        >
-                          {transferLoading ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                              Transferring...
-                            </>
-                          ) : (
-                            'Transfer Application'
-                          )}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </TabsContent>
-
-            {/* Documents Tab */}
-            <TabsContent value="documents" className="space-y-6">
-              <ApplicationDocuments 
-                applicationId={application.id}
-                userRole="reviewer"
-                allowDownload={true}
-                allowView={true}
-                showStatus={true}
-                showRefresh={true}
-              />
+              {/* Application Form in Read-only Mode */}
+              {initialFormData && (
+                <ApplicationForm 
+                  userData={{
+                    email: application.applicant?.email || "",
+                    name: application.applicant?.company_name || 
+                          (application.applicant?.first_name && application.applicant?.last_name ? 
+                           `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
+                    phone: application.applicant?.phone || "",
+                    address: application.applicant?.address || "",
+                    idNumber: "",
+                    account_type: 'individual' as const,
+                    id_number: "",
+                    company_tin: "",
+                  }}
+                  onSubmit={async () => {}} // Dummy handler for read-only form
+                  onSaveAsDraft={async () => {}} // Dummy handler for read-only form
+                  isLoading={false}
+                  initialData={initialFormData}
+                  initialDocuments={initialDocuments}
+                  mode="view"
+                  readOnly={true}
+                />
+              )}
             </TabsContent>
 
             {/* Internal Notes Tab */}

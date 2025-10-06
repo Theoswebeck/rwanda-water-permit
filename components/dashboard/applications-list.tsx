@@ -139,6 +139,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           icon: <AlertCircle className="h-4 w-4" />,
           className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
         };
+      case "pending_assessment":
+        return {
+          label: "Pending Assessment",
+          icon: <Eye className="h-4 w-4" />,
+          className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
+        };
       case "pending_inspection":
         return {
           label: "Pending Inspection",
@@ -156,6 +162,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           label: "Pending Terms Acceptance",
           icon: <FileText className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "pending_final_approval":
+        return {
+          label: "Pending Approval",
+          icon: <Clock className="h-4 w-4" />,
+          className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
         };
       case "rejected":
         return {
@@ -260,6 +272,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
               <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
+              <SelectItem value="pending_assessment">Pending Assessment</SelectItem>
               <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
               <SelectItem value="pending_final_approval">Pending Approval</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>

@@ -38,16 +38,50 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
       try {
         setLoading(true);
         setError(null);
+        console.log('🔍 [ApplicationComments] Fetching comments for application:', applicationId);
+        
+        // First get the reviews data without joins
         const { data: reviewData, error: reviewError } = await supabase
           .from('reviews')
-          .select(`*, reviewer:users!reviewer_id(first_name, last_name, role)`)
+          .select('*')
           .eq('application_id', applicationId)
           .order('created_at', { ascending: false });
-        if (!reviewError && reviewData) {
-          const formattedComments: Comment[] = reviewData.map((review: any) => {
-            const reviewer = review.reviewer as any;
+          
+        console.log('📊 [ApplicationComments] Reviews query result:', { 
+          reviews: reviewData?.length || 0, 
+          error: reviewError?.message 
+        });
+        
+        if (reviewError) {
+          console.error('❌ [ApplicationComments] Reviews query error:', reviewError);
+          setError('Failed to load reviews');
+          return;
+        }
+
+        if (!reviewData || reviewData.length === 0) {
+          console.log('📝 [ApplicationComments] No reviews found for this application');
+          setComments([]);
+          return;
+        }
+
+        // Fetch reviewer data separately for each review
+        const commentsWithReviewers = await Promise.all(
+          reviewData.map(async (review: any) => {
+            let reviewer = null;
+            
+            if (review.reviewer_id) {
+              const { data: reviewerData } = await supabase
+                .from('users')
+                .select('first_name, last_name, role')
+                .eq('id', review.reviewer_id)
+                .single();
+              reviewer = reviewerData;
+            }
+            
             const name = reviewer ? `${reviewer.first_name} ${reviewer.last_name}` : 'Unknown User';
-            const initials = reviewer ? `${reviewer.first_name?.[0] || ''}${reviewer.last_name?.[0] || ''}`.toUpperCase() : 'UU';
+            const initials = reviewer ? 
+              `${reviewer.first_name?.[0] || ''}${reviewer.last_name?.[0] || ''}`.toUpperCase() : 'UU';
+            
             return {
               id: review.id,
               author: name,
@@ -57,10 +91,13 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
               timestamp: new Date(review.created_at).toLocaleString(),
               created_at: review.created_at
             };
-          });
-          setComments(formattedComments);
-        }
+          })
+        );
+
+        console.log('✅ [ApplicationComments] Formatted comments:', commentsWithReviewers.length);
+        setComments(commentsWithReviewers);
       } catch (err) {
+        console.error('❌ [ApplicationComments] Error fetching comments:', err);
         setError('Failed to load comments');
       } finally {
         setLoading(false);

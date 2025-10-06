@@ -64,10 +64,21 @@ export async function GET(request: NextRequest) {
 
     // Fetch approved permit polygons
     console.log('🔍 Fetching approved permit polygons from database...');
-    const permits = await fetchApprovedPermitPolygons();
+    const allPermits = await fetchApprovedPermitPolygons();
+
+    // Filter out permits with missing coordinates
+    const permitsWithCoordinates = allPermits.filter(permit => {
+      if (!permit.coordinates || !permit.coordinates.geometry || !permit.coordinates.geometry.coordinates) {
+        console.warn(`⚠️ Permit ${permit.permitNumber} has missing coordinates - excluding from response`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log(`📊 Filtered ${permitsWithCoordinates.length} permits with valid coordinates from ${allPermits.length} total permits`);
 
     // Filter permits based on parameters
-    let filteredPermits = permits;
+    let filteredPermits = permitsWithCoordinates;
 
     // Filter by status
     if (status !== 'all') {
@@ -261,14 +272,26 @@ function calculateBounds(permits: any[]): [number, number, number, number] | nul
   let maxLng = -Infinity, maxLat = -Infinity;
   
   permits.forEach(permit => {
+    // Safe check for coordinates
+    if (!permit.coordinates?.geometry?.coordinates?.[0]) {
+      return;
+    }
+    
     const coordinates = permit.coordinates.geometry.coordinates[0];
     coordinates.forEach((coord: number[]) => {
-      minLng = Math.min(minLng, coord[0]);
-      maxLng = Math.max(maxLng, coord[0]);
-      minLat = Math.min(minLat, coord[1]);
-      maxLat = Math.max(maxLat, coord[1]);
+      if (Array.isArray(coord) && coord.length >= 2) {
+        minLng = Math.min(minLng, coord[0]);
+        maxLng = Math.max(maxLng, coord[0]);
+        minLat = Math.min(minLat, coord[1]);
+        maxLat = Math.max(maxLat, coord[1]);
+      }
     });
   });
+  
+  // Return null if no valid coordinates were found
+  if (minLng === Infinity || minLat === Infinity) {
+    return null;
+  }
   
   return [minLng, minLat, maxLng, maxLat];
 }

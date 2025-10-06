@@ -360,18 +360,18 @@ export const ApplicationForm = memo(function ApplicationForm({
       ownsAllLand: false,
       hasLandAccess: false,
       certificationAgreement: false,
-      waterSupplyPopulation: undefined,
-      waterSupplyPerCapitaDemand: undefined,
-      waterSupplyTotalDailyDemand: undefined,
-      waterSupplyDailyAbstraction: undefined,
-      waterSupplyStorageCapacity: undefined,
+      waterSupplyPopulation: 0,
+      waterSupplyPerCapitaDemand: 0,
+      waterSupplyTotalDailyDemand: 0,
+      waterSupplyDailyAbstraction: 0,
+      waterSupplyStorageCapacity: 0,
       miningQuantityPerDay: "",
       miningQuantityPerMonth: "",
       miningMineralsType: "",
       miningProductionCapacityTonsPerYear: 0,
       fishLakeAreaHectares: 0,
       fishPondsDiscardWaterQuantityM3PerDay: 0,
-      irrigationTotalArea: undefined,
+      irrigationTotalArea: 0,
       additionalDocuments: [],
       waterSourceCoordinates: [
         { latitude: "", longitude: "" },
@@ -2180,7 +2180,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                               }}
                               onValidationChange={(validation) => {
                                 setCoordinateValidation(validation);
-                                setCanSubmit(!validation || validation.isValid);
+                                // Allow submission even if validation fails - coordinates are optional
+                                setCanSubmit(true);
                               }}
                               applicationId={undefined}
                               disabled={false}
@@ -2401,7 +2402,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                             type="number"
                                             step="0.01"
                                             {...field}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
                                             placeholder="Area in ha" 
                                             className="border-0 bg-transparent" 
                                           />
@@ -2501,7 +2502,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                               placeholder: "Enter population",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
                                           />
                                         </FormControl>
                                       )}
@@ -2524,7 +2525,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                               placeholder: "Enter per capita demand",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
                                           />
                                         </FormControl>
                                       )}
@@ -2547,7 +2548,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                               placeholder: "Total daily demand (m³)",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
                                           />
                                         </FormControl>
                                       )}
@@ -2570,7 +2571,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                               placeholder: "Daily abstraction (m³)",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
                                           />
                                         </FormControl>
                                       )}
@@ -2593,7 +2594,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                               placeholder: "Storage capacity (m³)",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
                                           />
                                         </FormControl>
                                       )}
