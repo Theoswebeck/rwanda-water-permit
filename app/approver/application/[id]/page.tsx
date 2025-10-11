@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { AssessorRecommendation } from "@/components/approver/assessor-recommendation";
 import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 
@@ -280,8 +281,9 @@ export default function ApproverApplicationPage() {
           </div>
         </div>
 
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="application_details">Application Details</TabsTrigger>
+          <TabsTrigger value="assessor_recommendation">Assessor Recommendation</TabsTrigger>
           <TabsTrigger value="comments_history">Comments & History</TabsTrigger>
         </TabsList>
 
@@ -312,6 +314,9 @@ export default function ApproverApplicationPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="assessor_recommendation" className="space-y-6">
+          <AssessorRecommendation applicationId={application.id} />
+        </TabsContent>
 
         <TabsContent value="comments_history">
           {application.id && <ApplicationComments applicationId={application.id} />}
