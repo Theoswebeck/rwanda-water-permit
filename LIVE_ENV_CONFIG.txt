@@ -1,0 +1,51 @@
+# =============================================
+# COPY THIS FILE TO .env.local
+# =============================================
+# Command: cp LIVE_ENV_CONFIG.txt .env.local
+# =============================================
+
+# Supabase Project Settings
+NEXT_PUBLIC_SUPABASE_URL=https://ovlsblmbiwcqtkssnbpv.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92bHNibG1iaXdjcXRrc3NuYnB2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIxMzEzMDIsImV4cCI6MjA2NzcwNzMwMn0.4bAQ1lZ2571gYSFjq59h5CsnBGcu3qvKt4CS1a_eZpo
+
+# ⚠️ TODO: Add your Supabase Service Role Key
+# Get it from: https://supabase.com/dashboard/project/ovlsblmbiwcqtkssnbpv/settings/api
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# =============================================
+# IremboPay Payment Integration (LIVE CREDENTIALS) ✅
+# =============================================
+
+# IremboPay Public Key (Frontend)
+NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=pk_live_e554eff2d06c4c95b621dd99d6e4cf40
+
+# IremboPay Secret Key (Backend only - NEVER expose to frontend)
+IREMBOPAY_SECRET_KEY=sk_live_37dc025062934cf9809cd90ea1c89614
+
+# IremboPay API URL (Production - NOT sandbox!)
+IREMBOPAY_API_URL=https://api.irembopay.com
+
+# Disable sandbox mode (using LIVE credentials)
+IREMBOPAY_SANDBOX=false
+
+# Webhook Configuration
+IREMBOPAY_WEBHOOK_URL=https://webhook.site/cfa1c7cd-1a14-45e1-a0f1-3e07def69c51
+IREMBOPAY_WEBHOOK_SECRET=your_webhook_secret_here
+
+# Application Fee
+NEXT_PUBLIC_APPLICATION_FEE=35000
+
+# Environment
+NODE_ENV=development
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# =============================================
+# Optional Configuration
+# =============================================
+
+# Debug mode
+DEBUG=true
+
+# Default timezone
+TZ=Africa/Kigali
+

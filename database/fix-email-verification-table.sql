@@ -125,3 +125,4 @@ GRANT EXECUTE ON FUNCTION verify_email_code(TEXT, TEXT, TEXT) TO anon;
 -- Log completion
 SELECT 'Email verification system setup completed!' as status;
 
+

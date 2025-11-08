@@ -1,0 +1,21 @@
+{
+  "transactionId": "RWB-1760801414803-V3UW20X40T",
+  "paymentItems": [
+    {
+      "name": "Water Permit Application Fee",
+      "quantity": 1,
+      "unitAmount": 35000
+    }
+  ],
+  "paymentAccountIdentifier": "RWANDA_WATER_BOARD",
+  "expiryAt": "2025-01-20T23:59:59.000+02:00",
+  "description": "Water Permit Application Fee - Rwanda Water Board",
+  "customer": {
+    "email": "test@example.com",
+    "phone": "+250788123456",
+    "name": "Test User"
+  },
+  "language": "EN"
+}
+
+

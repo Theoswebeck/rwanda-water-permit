@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   Card,
@@ -34,7 +35,7 @@ import {
   FormMessage
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye } from "lucide-react";
+import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,6 +48,7 @@ import {
 } from '@/lib/rwanda-administrative-data';
 import { CoordinateInputWithValidation } from '@/components/forms/CoordinateInputWithValidation';
 import type { ValidationResponse } from '@/lib/polygonValidation';
+import { PaymentTab } from '@/components/dashboard/payment-tab';
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({
@@ -239,6 +241,7 @@ interface ApplicationFormProps {
   initialDocuments?: Record<string, { url: string; name: string }>;
   mode?: 'create' | 'edit' | 'view';
   readOnly?: boolean;
+  currentApplication?: any; // The saved application object (needed for payment tab)
 }
 
 // ⚡ PERFORMANCE: Memoize the entire form component to prevent unnecessary re-renders
@@ -250,8 +253,10 @@ export const ApplicationForm = memo(function ApplicationForm({
   initialData, 
   initialDocuments = {},
   mode = 'create',
-  readOnly = false 
+  readOnly = false,
+  currentApplication
 }: ApplicationFormProps) {
+  const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
   const [files, setFiles] = useState<Record<string, File | null>>({});
@@ -701,7 +706,8 @@ export const ApplicationForm = memo(function ApplicationForm({
   const validateWaterSourceTab = async () => {
     const fields = [
       'waterSourceType', 'nameSourceWater', 'waterSourceProvince',
-      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'
+      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability',
+      'waterSourceCoordinates'
     ];
     const errors = await form.trigger(fields as any);
     return errors;
@@ -750,10 +756,19 @@ export const ApplicationForm = memo(function ApplicationForm({
       case "water-source":
         // Check required fields for water source tab
         const waterSourceFields = ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'];
-        return !waterSourceFields.every(field => {
+        const hasWaterSourceFields = waterSourceFields.every(field => {
           const value = form.getValues(field as any);
           return value && value.toString().trim() !== '';
         });
+        
+        // Check if all 5 coordinate points are filled
+        const coordinates = form.getValues('waterSourceCoordinates') || [];
+        const hasValidCoordinates = coordinates.length === 5 && coordinates.every((coord: any) => {
+          return coord.latitude && coord.latitude.toString().trim() !== '' &&
+                 coord.longitude && coord.longitude.toString().trim() !== '';
+        });
+        
+        return !hasWaterSourceFields || !hasValidCoordinates;
         
       case "intended-activity":
         // Check required fields and documents for intended activity tab
@@ -775,7 +790,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   };
 
   const handleNextTab = async () => {
-    const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+    const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"];
     const currentIndex = tabs.indexOf(activeTab);
     
     if (currentIndex >= tabs.length - 1) return;
@@ -1464,7 +1479,7 @@ export const ApplicationForm = memo(function ApplicationForm({
             )}
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
               <Tabs defaultValue="applicant-info" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className="grid w-full grid-cols-5 md:grid-cols-5">
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline">Applicant</span>
@@ -1481,7 +1496,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                     <Globe className="h-4 w-4" />
                     <span className="hidden sm:inline">Land</span>
                   </TabsTrigger>
-                  
+                  <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
+                    <CreditCard className="h-4 w-4" />
+                    <span className="hidden sm:inline">Payment</span>
+                  </TabsTrigger>
                 </TabsList>
                 
                 {/* IDENTIFICATION AND ADDRESS OF THE APPLICANT */}
@@ -3711,7 +3729,17 @@ export const ApplicationForm = memo(function ApplicationForm({
                 </div>
                 </TabsContent>
 
-
+                {/* PAYMENT TAB */}
+                <TabsContent value="payment" className="pt-6 space-y-6">
+                  {/* 🧪 TESTING MODE ENABLED: PaymentTab now works with or without application */}
+                  <PaymentTab
+                    application={currentApplication}
+                    onPaymentSuccess={() => {
+                      router.push('/dashboard?tab=applications&payment=success');
+                    }}
+                    onBack={() => setActiveTab('land-ownership')}
+                  />
+                </TabsContent>
 
                 {/* Form Actions */}
                 <div className="flex justify-between pt-6">
@@ -3720,18 +3748,23 @@ export const ApplicationForm = memo(function ApplicationForm({
                       type="button"
                       variant="outline"
                       onClick={async () => {
-                        // Include additionalDocuments in the draft save
-                        const draftData = { 
-                          ...form.getValues(), 
-                          ...files, 
-                          additionalDocuments 
-                        };
-                        await onSaveAsDraft(draftData, 'draft');
+                        try {
+                          // Include additionalDocuments in the draft save
+                          const draftData = { 
+                            ...form.getValues(), 
+                            ...files, 
+                            additionalDocuments 
+                          };
+                          await onSaveAsDraft(draftData, 'draft');
+                        } catch (error) {
+                          console.error('Draft save error:', error);
+                        }
                       }}
                       disabled={isLoading}
+                      className="hover:bg-gray-100"
                     >
                       <Save className="h-4 w-4 mr-2" />
-                      Save as Draft
+                      {isLoading ? 'Saving...' : 'Save as Draft'}
                     </Button>
                   )}
                   {readOnly && <div />}
@@ -3741,7 +3774,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+                        const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"];
                         const currentIndex = tabs.indexOf(activeTab);
                         if (currentIndex > 0) {
                           setActiveTab(tabs[currentIndex - 1]);
@@ -3752,29 +3785,63 @@ export const ApplicationForm = memo(function ApplicationForm({
                       Previous
                     </Button>
                     
-                    <Button
-                      type="button"
-                      onClick={readOnly ? () => {
-                        const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership"];
-                        const currentIndex = tabs.indexOf(activeTab);
-                        if (currentIndex < tabs.length - 1) {
-                          setActiveTab(tabs[currentIndex + 1]);
-                        }
-                      } : handleNextTab}
-                      disabled={activeTab === "land-ownership" || (!readOnly && isNextButtonDisabled())}
-                      className={(!readOnly && isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
-                    >
-                      Next
-                    </Button>
+                    {activeTab !== "land-ownership" && (
+                      <Button
+                        type="button"
+                        onClick={readOnly ? () => {
+                          const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"];
+                          const currentIndex = tabs.indexOf(activeTab);
+                          if (currentIndex < tabs.length - 1) {
+                            setActiveTab(tabs[currentIndex + 1]);
+                          }
+                        } : handleNextTab}
+                        disabled={activeTab === "payment" || (!readOnly && isNextButtonDisabled())}
+                        className={(!readOnly && isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
+                      >
+                        Next
+                      </Button>
+                    )}
                     
                     {activeTab === "land-ownership" && !readOnly && (
                       <Button 
-                        type="submit" 
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            // Show loading state
+                            const btn = event?.currentTarget as HTMLButtonElement;
+                            if (btn) {
+                              btn.disabled = true;
+                              btn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-2 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing...';
+                            }
+                            
+                            // Automatically save as draft (like airline booking)
+                            const draftData = { 
+                              ...form.getValues(), 
+                              ...files, 
+                              additionalDocuments 
+                            };
+                            
+                            // Save and wait for completion
+                            await onSaveAsDraft(draftData, 'draft');
+                            
+                            // Small delay to ensure state updates
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            
+                            // Navigate to payment tab smoothly
+                            setActiveTab('payment');
+                            
+                            // Scroll to top for better UX
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          } catch (error) {
+                            console.error('Error saving application:', error);
+                            alert('Please try saving your application again before proceeding to payment.');
+                          }
+                        }}
                         disabled={isLoading || !canSubmit}
                         className={!canSubmit ? "opacity-50 cursor-not-allowed" : ""}
                       >
-                        <Send className="h-4 w-4 mr-2" />
-                        Submit Application
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Continue to Payment
                         {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
                           <span className="ml-2 text-xs">(Fix coordinate conflicts first)</span>
                         )}

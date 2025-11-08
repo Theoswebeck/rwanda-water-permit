@@ -639,14 +639,14 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
               .insert({
                 application_id: applicationId,
                 name: file.name,
-                type: documentType as any,
+                type: documentType,
                 file_path: uploadResult.path,
                 file_size: file.size,
                 mime_type: file.type,
-                verification_status: 'pending',
+                verification_status: 'pending' as const,
                 is_required: ['paymentProof', 'identificationDoc'].includes(fieldName),
                 uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
-              })
+              } as any)
               .select()
               .single();
               
@@ -814,12 +814,8 @@ export default function NewApplicationPage() {
             console.error('⚠️ Document upload failed but application was created:', docError);
           });
         
+        // Show success message (redirect is handled by useEffect)
         setSuccess(true);
-        
-        // Redirect to dashboard after a brief success message
-        setTimeout(() => {
-          router.push("/dashboard?tab=applications&success=application-submitted");
-        }, 1500); // Reduced timeout for faster UX
       } else {
         throw new Error('Failed to submit application');
       }
@@ -871,13 +867,8 @@ export default function NewApplicationPage() {
           setCurrentApplication(result);
         }
         
-        // Always show success for manual saves
+        // Show success message (redirect is handled by useEffect)
         setSuccess(true);
-        
-        // Redirect to dashboard after a brief success message
-        setTimeout(() => {
-          router.push("/dashboard?tab=applications&success=draft-saved");
-        }, 1500);
         
         return result;
       } else {
@@ -920,6 +911,17 @@ export default function NewApplicationPage() {
     );
   }
 
+  // Auto-redirect on success
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        router.push("/dashboard?tab=applications&success=draft-saved");
+      }, 1000); // Redirect after 1 second
+      
+      return () => clearTimeout(timer);
+    }
+  }, [success, router]);
+
   if (success) {
     return (
       <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
@@ -936,10 +938,11 @@ export default function NewApplicationPage() {
               </div>
               <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-green-900 mb-2">Success!</h2>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-green-700 mb-4">
-                Your application has been saved as a draft. You can continue editing or submit it for review.
+                Your application has been saved as a draft.
               </p>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
-                Your progress has been saved and you can continue working on your application later.
+              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Redirecting to dashboard...
               </p>
             </motion.div>
           </div>
@@ -1007,6 +1010,7 @@ export default function NewApplicationPage() {
             initialData={initialFormData}
             initialDocuments={initialDocuments}
             mode={draftId ? 'edit' : 'create'}
+            currentApplication={currentApplication}
           />
         </motion.div>
         </div>

@@ -53,7 +53,7 @@ users {
 ```
 
 #### `user_sessions`
-```sql
+```sq
 user_sessions {
   id UUID PRIMARY KEY
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE

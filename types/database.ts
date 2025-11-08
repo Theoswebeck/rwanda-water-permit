@@ -22,6 +22,7 @@ export type IdType = 'national_id' | 'tin'
 
 export type ApplicationStatus = 
   | 'draft' 
+  | 'pending_payment'  // NEW: Application awaiting payment
   | 'submitted' 
   | 'under_review' 
   | 'pending_assessment'
@@ -389,6 +390,53 @@ export interface Inspection {
   recommendations?: string
   follow_up_required: boolean
   follow_up_date?: string
+  
+  // Section 2: Activity Details
+  activity_type?: string
+  activity_starting_date?: string
+  
+  // Section 5: Allowed Water Abstraction
+  allowed_quantity?: number
+  allowed_unit?: string
+  authorized_abstraction_method?: string
+  
+  // Section 6: Actual Water Abstraction
+  actual_quantity?: number
+  actual_unit?: string
+  actual_abstraction_method?: string
+  measurement_device_type?: string
+  measurement_device_notes?: string
+  measurement_device_photo_taken?: boolean
+  
+  // Section 7: Wastewater Management
+  wastewater_system_type?: string
+  wastewater_system_effectiveness?: string
+  wastewater_system_photos_taken?: boolean
+  wastewater_notes?: string
+  
+  // Section 8: Fees Payment Verification
+  fees_payment_verified?: boolean
+  fees_payment_amount?: number
+  fees_payment_proof?: string
+  fees_outstanding_amount?: number
+  
+  // Section 9: Reports Submission
+  reports_submitted?: boolean
+  reports_submission_date?: string
+  reports_reference_number?: string
+  reports_proof?: string
+  
+  // Section 10: Water Use Conflicts
+  water_use_conflicts?: string
+  conflict_severity?: string
+  
+  // Section 11: Catchment Protection Initiatives
+  catchment_protection_initiatives?: string
+  protection_photos_taken?: boolean
+  
+  // Section 12: Overall Assessment
+  general_conclusion?: string
+  compliance_status?: string
   
   // Audit fields
   created_at: string

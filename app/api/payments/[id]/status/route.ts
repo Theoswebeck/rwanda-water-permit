@@ -1,0 +1,174 @@
+// =============================================
+// Payment Status Check API
+// GET /api/payments/[id]/status
+// =============================================
+
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
+import { getIremboPayClient } from '@/lib/irembopay-client';
+import type { PaymentStatusResponse } from '@/types/payment';
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: paymentId } = await params;
+    console.log('🔍 [PAYMENT STATUS] Checking status for payment:', paymentId);
+
+    // Initialize Supabase client
+    const supabase = await createClient();
+
+    // Check authentication using getUser() which is more reliable for API routes
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser();
+
+    if (!user || authError) {
+      console.error('❌ [PAYMENT STATUS] Unauthorized: No authenticated user');
+      console.error('   Auth error:', authError?.message);
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+
+    // =============================================
+    // 1. FETCH PAYMENT FROM DATABASE
+    // =============================================
+
+    const { data: payment, error: paymentError } = await supabase
+      .from('payments')
+      .select(`
+        *,
+        applications (
+          id,
+          application_number,
+          status,
+          project_title
+        )
+      `)
+      .eq('id', paymentId)
+      .eq('applicant_id', userId)
+      .single();
+
+    if (paymentError || !payment) {
+      console.error('❌ [PAYMENT STATUS] Payment not found:', paymentError);
+      return NextResponse.json(
+        { success: false, error: 'Payment not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    console.log('✅ [PAYMENT STATUS] Payment found:', {
+      id: payment.id,
+      status: payment.status,
+      application: payment.applications?.application_number,
+    });
+
+    // =============================================
+    // 2. FETCH LATEST TRANSACTION
+    // =============================================
+
+    const { data: latestTransaction } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .eq('payment_id', paymentId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // =============================================
+    // 3. VERIFY WITH IREMBOPAY (OPTIONAL)
+    // =============================================
+
+    // Only verify with IremboPay if payment is still pending/processing
+    if (
+      (payment.status === 'pending' || payment.status === 'processing') &&
+      payment.irembo_payment_ref
+    ) {
+      try {
+        console.log('🌐 [PAYMENT STATUS] Verifying with IremboPay API...');
+        
+        const iremboPayClient = getIremboPayClient();
+        const iremboStatus = await iremboPayClient.getPaymentStatus(
+          payment.irembo_payment_ref
+        );
+
+        if (iremboStatus.success && iremboStatus.data) {
+          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboStatus.data.status);
+
+          // Update local status if different
+          if (iremboStatus.data.status !== payment.status) {
+            console.log('🔄 [PAYMENT STATUS] Updating local status from IremboPay');
+            
+            const updateData: any = {
+              status: iremboStatus.data.status,
+              irembo_transaction_id: iremboStatus.data.transaction_id || payment.irembo_transaction_id,
+              payment_method: iremboStatus.data.payment_method || payment.payment_method,
+              gateway_response: {
+                ...(payment.gateway_response as any || {}),
+                status_check: iremboStatus.data,
+                checked_at: new Date().toISOString(),
+              },
+            };
+
+            // Set appropriate timestamp
+            if (iremboStatus.data.status === 'completed') {
+              updateData.completed_at = iremboStatus.data.completed_at || new Date().toISOString();
+            } else if (iremboStatus.data.status === 'failed') {
+              updateData.failed_at = new Date().toISOString();
+            }
+
+            await supabase
+              .from('payments')
+              .update(updateData)
+              .eq('id', paymentId);
+
+            // Update the payment object with new status
+            payment.status = iremboStatus.data.status as any;
+            payment.irembo_transaction_id = iremboStatus.data.transaction_id || payment.irembo_transaction_id;
+
+            console.log('✅ [PAYMENT STATUS] Local status updated');
+          }
+        }
+      } catch (verifyError) {
+        console.error('⚠️  [PAYMENT STATUS] IremboPay verification failed:', verifyError);
+        // Non-critical error, continue with local status
+      }
+    }
+
+    // =============================================
+    // 4. PREPARE RESPONSE
+    // =============================================
+
+    const response: PaymentStatusResponse = {
+      success: true,
+      payment: payment as any,
+      transaction: latestTransaction as any,
+    };
+
+    console.log('✅ [PAYMENT STATUS] Returning status:', payment.status);
+
+    return NextResponse.json(response, { status: 200 });
+
+  } catch (error) {
+    console.error('❌ [PAYMENT STATUS] Unexpected error:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// OPTIONS method for CORS
+export async function OPTIONS(request: NextRequest) {
+  return NextResponse.json({}, { status: 200 });
+}
+

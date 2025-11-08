@@ -93,6 +93,36 @@ SUPPORTED_LANGUAGES=en,fr,rw
 IREMBO_API_KEY=
 IREMBO_API_URL=
 
-# Payment Integration
+# =============================================
+# IremboPay Payment Integration
+# =============================================
+
+# IremboPay Environment (set to 'false' for production)
+IREMBOPAY_SANDBOX=true
+
+# IremboPay API Keys
+# Get these from: https://dashboard.sandbox.irembopay.com/auth/login
+# Dashboard -> Integration Details -> View Token
+IREMBOPAY_API_KEY=your_irembopay_api_key_here
+NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=your_irembopay_public_key_here
+
+# IremboPay Webhook Secret (for signature validation)
+IREMBOPAY_WEBHOOK_SECRET=your_webhook_secret_here
+
+# IremboPay API URLs (auto-selected based on IREMBOPAY_SANDBOX)
+# Sandbox: https://api.sandbox.irembopay.com
+# Production: https://api.irembopay.com
+IREMBOPAY_API_URL=https://api.sandbox.irembopay.com
+
+# Application Fee Configuration
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_CURRENCY=RWF
+
+# Payment Callback URL (update with your domain)
+IREMBOPAY_CALLBACK_URL=https://yourdomain.com/api/payments/webhook
+IREMBOPAY_SUCCESS_URL=https://yourdomain.com/dashboard?payment=success
+IREMBOPAY_FAILURE_URL=https://yourdomain.com/dashboard?payment=failed
+
+# Payment Gateway (Legacy - for backward compatibility)
 PAYMENT_GATEWAY_URL=
 PAYMENT_GATEWAY_KEY= 

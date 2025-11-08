@@ -1,0 +1,16 @@
+🚨 UPDATE YOUR .env.local FILE NOW! 🚨
+
+Add or update these lines in your .env.local file:
+
+# IremboPay LIVE Credentials
+NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=pk_live_e554eff2d06c4c95b621dd99d6e4cf40
+IREMBOPAY_SECRET_KEY=sk_live_37dc025062934cf9809cd90ea1c89614
+IREMBOPAY_API_URL=https://api.irembopay.com
+IREMBOPAY_SANDBOX=false
+IREMBOPAY_WEBHOOK_URL=https://webhook.site/cfa1c7cd-1a14-45e1-a0f1-3e07def69c51
+
+Then restart the dev server:
+Ctrl+C (in terminal)
+npm run dev
+
+
