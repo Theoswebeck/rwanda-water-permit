@@ -36,6 +36,7 @@ interface IremboPayWidgetProps {
   publicKey: string;
   amount: number;
   currency?: string;
+  isSandbox?: boolean; // Explicitly specify sandbox mode
   onSuccess?: () => void;
   onFailed?: (error?: any) => void;
   onClose?: () => void;
@@ -46,6 +47,7 @@ export function IremboPayWidget({
   publicKey,
   amount,
   currency = 'RWF',
+  isSandbox = true, // Default to sandbox for safety
   onSuccess,
   onFailed,
   onClose,
@@ -54,8 +56,7 @@ export function IremboPayWidget({
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
 
-  // Determine environment from public key
-  const isSandbox = publicKey?.includes('sandbox') || publicKey?.startsWith('test_');
+  // Use explicit sandbox flag (more reliable than guessing from key)
   const scriptUrl = isSandbox
     ? 'https://dashboard.sandbox.irembopay.com/assets/payment/inline.js'
     : 'https://dashboard.irembopay.com/assets/payment/inline.js';

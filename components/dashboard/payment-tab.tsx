@@ -18,6 +18,18 @@ import { usePayment } from '@/hooks/usePayment';
 import { getApplicationFee } from '@/lib/payment-utils';
 import type { Application } from '@/types/database';
 
+// Get public key from environment
+const IREMBOPAY_PUBLIC_KEY = process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || '';
+
+// Debug: Log public key availability
+if (typeof window !== 'undefined') {
+  console.log('🔑 IremboPay Public Key Check:', {
+    hasKey: !!IREMBOPAY_PUBLIC_KEY,
+    keyPrefix: IREMBOPAY_PUBLIC_KEY ? IREMBOPAY_PUBLIC_KEY.substring(0, 15) + '...' : 'NOT SET',
+    keyLength: IREMBOPAY_PUBLIC_KEY.length,
+  });
+}
+
 interface PaymentTabProps {
   application?: Application; // Optional for testing mode
   onPaymentSuccess?: () => void;
@@ -280,9 +292,10 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
                 <div className="pt-6 border-t">
                   <IremboPayWidget
                     invoiceNumber={payment.irembo_payment_ref}
-                    publicKey={process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || ''}
+                    publicKey={IREMBOPAY_PUBLIC_KEY}
                     amount={payment.amount}
                     currency={payment.currency}
+                    isSandbox={true}
                     onSuccess={handlePaymentSuccess}
                     onFailed={handlePaymentFailed}
                     onClose={() => console.log('Payment modal closed')}
@@ -346,9 +359,10 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
             // Show payment widget
             <IremboPayWidget
               invoiceNumber={payment.irembo_payment_ref}
-              publicKey={process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || ''}
+              publicKey={IREMBOPAY_PUBLIC_KEY}
               amount={payment.amount}
               currency={payment.currency}
+              isSandbox={true}
               onSuccess={handlePaymentSuccess}
               onFailed={handlePaymentFailed}
               onClose={() => setShowWidget(false)}
