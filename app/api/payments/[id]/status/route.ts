@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getIremboPayClient } from '@/lib/irembopay-client';
+import { getApplicationStatusFromPayment } from '@/lib/payment-utils';
 import type { PaymentStatusResponse } from '@/types/payment';
 
 export async function GET(
@@ -133,6 +134,32 @@ export async function GET(
             payment.irembo_transaction_id = iremboStatus.data.transaction_id || payment.irembo_transaction_id;
 
             console.log('✅ [PAYMENT STATUS] Local status updated');
+
+            // =============================================
+            // UPDATE APPLICATION STATUS IF PAYMENT COMPLETED
+            // =============================================
+            if (iremboStatus.data.status === 'completed' && payment.application_id) {
+              const newApplicationStatus = getApplicationStatusFromPayment('completed');
+              const now = new Date().toISOString();
+              
+              const { error: appUpdateError } = await supabase
+                .from('applications')
+                .update({ 
+                  status: newApplicationStatus,
+                  submitted_at: now,
+                })
+                .eq('id', payment.application_id);
+
+              if (appUpdateError) {
+                console.error('⚠️  [PAYMENT STATUS] Failed to update application:', appUpdateError);
+              } else {
+                console.log('✅ [PAYMENT STATUS] Application updated to:', newApplicationStatus);
+                // Update the payment.applications object if it exists
+                if (payment.applications) {
+                  payment.applications.status = newApplicationStatus as any;
+                }
+              }
+            }
           }
         }
       } catch (verifyError) {

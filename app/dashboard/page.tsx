@@ -26,6 +26,7 @@ export default function DashboardPage() {
   const { user, userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"applications" | "permits">("applications");
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Targeted fix for specific application only
   const fixSpecificApplication = async (applicationId: string) => {
@@ -54,12 +55,25 @@ export default function DashboardPage() {
   // Check for success parameters from URL
   useEffect(() => {
     const success = searchParams.get('success');
+    const payment = searchParams.get('payment');
     const tab = searchParams.get('tab');
     
     if (success === 'application-created') {
+      setSuccessMessage('🎉 Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.');
       setShowSuccessAlert(true);
       // Auto-hide success message after 5 seconds
       setTimeout(() => setShowSuccessAlert(false), 5000);
+    }
+    
+    if (payment === 'success') {
+      setSuccessMessage('💰 Payment Successful! Your application fee has been processed and your application has been submitted for review. You will receive updates via email.');
+      setShowSuccessAlert(true);
+      // Auto-hide success message after 10 seconds (longer for payment)
+      setTimeout(() => setShowSuccessAlert(false), 10000);
+      // Refresh applications to show updated status
+      if (refreshApplications) {
+        setTimeout(() => refreshApplications(), 1000);
+      }
     }
     
     if (tab === 'applications') {
@@ -67,7 +81,7 @@ export default function DashboardPage() {
     } else if (tab === 'permits') {
       setActiveTab('permits');
     }
-  }, [searchParams]);
+  }, [searchParams, refreshApplications]);
 
   // Disabled auto-fix to prevent claiming other users' applications
   // useEffect(() => {
@@ -175,7 +189,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Success Alert */}
-            {showSuccessAlert && (
+            {showSuccessAlert && successMessage && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -184,7 +198,7 @@ export default function DashboardPage() {
                 <Alert className="mb-6 border-green-200 bg-green-50">
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-800">
-                    🎉 <strong>Application Created Successfully!</strong> Your water permit application has been saved as a draft. You can continue editing it or submit it for review.
+                    {successMessage}
                   </AlertDescription>
                 </Alert>
               </motion.div>
