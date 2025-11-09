@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, AlertCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { IremboPayWidget } from '@/components/payments/irembopay-widget';
 import { PaymentStatusDisplay } from '@/components/payments/payment-status';
 import { usePayment } from '@/hooks/usePayment';
@@ -31,15 +31,19 @@ if (typeof window !== 'undefined') {
 }
 
 interface PaymentTabProps {
-  application?: Application; // Optional for testing mode
-  onPaymentSuccess?: () => void;
+  application?: Application; // Optional - may not exist yet
+  formData?: any; // Unsaved form data for new applications
+  onPaymentComplete?: (paymentId: string) => Promise<any>; // Save app after payment
   onBack?: () => void;
 }
 
-export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTabProps) {
+export function PaymentTab({ application, formData, onPaymentComplete, onBack }: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [completedApplication, setCompletedApplication] = useState<any>(null);
+  const [isCompletingPayment, setIsCompletingPayment] = useState(false);
   
   // 🧪 TESTING MODE: Use mock app if none exists
   const [mockApp] = useState(() => {
@@ -119,18 +123,42 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
   /**
    * Handle payment success
    */
-  const handlePaymentSuccess = () => {
-    console.log('✅ Payment successful, checking status...');
+  const handlePaymentSuccess = async () => {
+    console.log('✅ Payment successful');
     
-    if (payment?.id) {
-      checkStatus(payment.id);
+    try {
+      // If this is a new application (has formData), save it now
+      if (formData && onPaymentComplete && payment?.id) {
+        setIsCompletingPayment(true);
+        console.log('💾 Completing payment and saving application...');
+        
+        const savedApplication = await onPaymentComplete(payment.id);
+        
+        setCompletedApplication(savedApplication);
+        setPaymentCompleted(true);
+        setIsCompletingPayment(false);
+        
+        console.log('✅ Application saved:', savedApplication.application_number);
+        
+        // Auto-redirect to dashboard after 4 seconds
+        setTimeout(() => {
+          router.push('/dashboard?tab=applications');
+        }, 4000);
+      } else {
+        // Existing application - just check status and redirect
+        if (payment?.id) {
+          await checkStatus(payment.id);
+        }
+        
+        setTimeout(() => {
+          router.push('/dashboard?tab=applications');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('❌ Error completing payment:', error);
+      setIsCompletingPayment(false);
+      alert('Payment was successful but there was an error saving your application. Please contact support.');
     }
-
-    // Wait a bit then trigger callback
-    setTimeout(() => {
-      onPaymentSuccess?.();
-      router.push('/dashboard?tab=applications&payment=success');
-    }, 2000);
   };
 
   /**
@@ -178,6 +206,68 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
   const isPaymentCompleted = payment?.status === 'completed';
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
+
+  // Show success screen if payment completed and application saved
+  if (paymentCompleted && completedApplication) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="flex flex-col items-center justify-center py-16 space-y-6"
+      >
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+          className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center"
+        >
+          <CheckCircle className="h-16 w-16 text-green-600" />
+        </motion.div>
+        
+        <div className="text-center space-y-2">
+          <h2 className="text-3xl font-bold text-green-800">Payment Successful!</h2>
+          <p className="text-lg text-gray-700">
+            Your application <strong className="text-green-700">#{completedApplication.application_number}</strong> has been submitted.
+          </p>
+          <p className="text-sm text-gray-600">
+            Amount paid: <strong>{formatAmount(payment?.amount || 0, payment?.currency)}</strong>
+          </p>
+        </div>
+
+        <Alert className="bg-green-50 border-green-200 max-w-md">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            Your application is now being reviewed. You'll receive updates via email at <strong>{completedApplication.applicant?.email || payment?.customer_email}</strong>
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Redirecting to dashboard...</span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Show completing payment loader
+  if (isCompletingPayment) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col items-center justify-center py-16 space-y-4"
+      >
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        <div className="text-center space-y-2">
+          <p className="text-lg font-medium">Processing your application...</p>
+          <p className="text-sm text-muted-foreground">
+            Please wait while we save your application details.
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

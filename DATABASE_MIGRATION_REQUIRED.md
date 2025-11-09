@@ -66,3 +66,4 @@ See `/PERMIT_INSPECTION_CHECKLIST_IMPLEMENTATION.md` for complete documentation.
 
 **Status:** 🔴 MIGRATION PENDING - Run this before using the new inspection system!
 
+

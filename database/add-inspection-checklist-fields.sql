@@ -95,3 +95,4 @@ CREATE INDEX IF NOT EXISTS idx_inspections_reports_submitted ON inspections(repo
 
 COMMENT ON TABLE inspections IS 'Comprehensive inspection records for permit holders with 12-section checklist template';
 
+

@@ -60,13 +60,7 @@ export async function POST(request: NextRequest) {
       user_id: userId,
     });
 
-    // Validate required fields
-    if (!application_id) {
-      return NextResponse.json(
-        { success: false, error: 'Application ID is required' },
-        { status: 400 }
-      );
-    }
+    // application_id is now optional - will be linked after payment succeeds
 
     // =============================================
     // 1. TRY TO FETCH APPLICATION (optional)
@@ -228,10 +222,10 @@ export async function POST(request: NextRequest) {
     const initiatedAt = new Date();
     const expiresAt = getPaymentExpiryTime(initiatedAt);
 
-    // Build payment record data - ALWAYS include application_id
+    // Build payment record data - application_id may be null initially
     const paymentData: any = {
       applicant_id: userId,
-      application_id: application_id, // Always include - critical for status updates!
+      application_id: application_id || null, // May be null - will be linked after payment succeeds
       amount: paymentAmount,
       currency: paymentCurrency,
       description: iremboPayRequest.description,
@@ -249,9 +243,9 @@ export async function POST(request: NextRequest) {
       created_by: userId,
     };
 
-    console.log('💾 [PAYMENT INITIATE] Payment data with application_id:', {
+    console.log('💾 [PAYMENT INITIATE] Payment data:', {
       payment_id: paymentData.id,
-      application_id: paymentData.application_id,
+      application_id: paymentData.application_id || 'null (will be linked after payment)',
       application_exists: !!application,
     });
 

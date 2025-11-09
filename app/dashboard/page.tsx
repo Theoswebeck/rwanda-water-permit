@@ -55,7 +55,6 @@ export default function DashboardPage() {
   // Check for success parameters from URL
   useEffect(() => {
     const success = searchParams.get('success');
-    const payment = searchParams.get('payment');
     const tab = searchParams.get('tab');
     
     if (success === 'application-created') {
@@ -63,13 +62,6 @@ export default function DashboardPage() {
       setShowSuccessAlert(true);
       // Auto-hide success message after 5 seconds
       setTimeout(() => setShowSuccessAlert(false), 5000);
-    }
-    
-    if (payment === 'success') {
-      setSuccessMessage('💰 Payment Successful! Your application fee has been processed and your application has been submitted for review. You will receive updates via email.');
-      setShowSuccessAlert(true);
-      // Auto-hide success message after 10 seconds (longer for payment)
-      setTimeout(() => setShowSuccessAlert(false), 10000);
     }
     
     if (tab === 'applications') {
@@ -109,18 +101,16 @@ export default function DashboardPage() {
     autoFetch: !!user?.id // Only fetch when we have a user ID
   });
 
-  // Refresh applications after payment success
+  // Auto-refresh applications list periodically to show new submissions
   useEffect(() => {
-    const payment = searchParams.get('payment');
-    if (payment === 'success' && refreshApplications) {
-      // Delay refresh to allow backend to update
+    if (refreshApplications && activeTab === 'applications') {
+      // Refresh when tab becomes active
       const timer = setTimeout(() => {
-        console.log('🔄 Refreshing applications after payment success');
         refreshApplications();
-      }, 1000);
+      }, 500);
       return () => clearTimeout(timer);
     }
-  }, [searchParams, refreshApplications]);
+  }, [activeTab, refreshApplications]);
 
   // Transform database permits to component format
   const transformPermitForDisplay = (dbPermit: DatabasePermit): PermitListItem => {

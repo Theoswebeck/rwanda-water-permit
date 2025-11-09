@@ -106,3 +106,4 @@ export function ReportsSection({ data, onChange }: ReportsSectionProps) {
   );
 }
 
+
