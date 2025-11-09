@@ -35,7 +35,7 @@ import {
   FormMessage
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard } from "lucide-react";
+import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -261,6 +261,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   const [activeTab, setActiveTab] = useState("applicant-info");
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
+  const [isSavingBeforePayment, setIsSavingBeforePayment] = useState(false);
   
   // ⚡ PERFORMANCE: Memoize location states to reduce re-renders
   const [selectedProvince, setSelectedProvince] = useState("");
@@ -419,6 +420,50 @@ export const ApplicationForm = memo(function ApplicationForm({
     resolver: zodResolver(applicationFormSchema),
     defaultValues: getDefaultValues
   });
+
+  /**
+   * Handle tab changes with auto-save before payment
+   */
+  const handleTabChange = async (newTab: string) => {
+    // If navigating to payment tab and application not saved yet, auto-save first
+    if (newTab === 'payment' && !readOnly && !currentApplication?.id) {
+      try {
+        setIsSavingBeforePayment(true);
+        console.log('💾 Auto-saving application before payment...');
+        
+        // Prepare data to save
+        const draftData = {
+          ...form.getValues(),
+          ...files,
+          additionalDocuments
+        };
+        
+        // Save as draft and wait for completion
+        await onSaveAsDraft(draftData, 'draft');
+        
+        console.log('✅ Application auto-saved successfully');
+        
+        // Small delay to ensure state updates propagate
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Now navigate to payment tab
+        setActiveTab(newTab);
+        setIsSavingBeforePayment(false);
+        
+        // Scroll to top for better UX
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (error) {
+        console.error('❌ Failed to auto-save before payment:', error);
+        setIsSavingBeforePayment(false);
+        alert('Please save your application before proceeding to payment. Try clicking "Save as Draft" first.');
+        // Don't navigate to payment if save failed
+        return;
+      }
+    } else {
+      // For other tabs or if already saved, just navigate
+      setActiveTab(newTab);
+    }
+  };
 
   // Helper function to get input props based on readOnly state
   const getInputProps = (baseProps: any = {}) => {
@@ -1478,7 +1523,7 @@ export const ApplicationForm = memo(function ApplicationForm({
               </Alert>
             )}
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
-              <Tabs defaultValue="applicant-info" value={activeTab} onValueChange={setActiveTab}>
+              <Tabs defaultValue="applicant-info" value={activeTab} onValueChange={handleTabChange}>
                 <TabsList className="grid w-full grid-cols-5 md:grid-cols-5">
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
@@ -3731,16 +3776,26 @@ export const ApplicationForm = memo(function ApplicationForm({
 
                 {/* PAYMENT TAB */}
                 <TabsContent value="payment" className="pt-6 space-y-6">
-                  {/* 🧪 TESTING MODE ENABLED: PaymentTab now works with or without application */}
-                  <PaymentTab
-                    application={currentApplication}
-                    onPaymentSuccess={() => {
-                      router.push('/dashboard?tab=applications&payment=success');
-                    }}
-                    onBack={() => setActiveTab('land-ownership')}
-                  />
+                  {isSavingBeforePayment ? (
+                    <div className="flex flex-col items-center justify-center py-16 space-y-4">
+                      <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+                      <div className="text-center space-y-2">
+                        <p className="text-lg font-medium">Saving your application...</p>
+                        <p className="text-sm text-muted-foreground">
+                          Please wait while we save your application before proceeding to payment.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <PaymentTab
+                      application={currentApplication}
+                      onPaymentSuccess={() => {
+                        router.push('/dashboard?tab=applications&payment=success');
+                      }}
+                      onBack={() => setActiveTab('land-ownership')}
+                    />
+                  )}
                 </TabsContent>
-
                 {/* Form Actions */}
                 <div className="flex justify-between pt-6">
                   {!readOnly && (
