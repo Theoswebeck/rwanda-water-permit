@@ -70,10 +70,6 @@ export default function DashboardPage() {
       setShowSuccessAlert(true);
       // Auto-hide success message after 10 seconds (longer for payment)
       setTimeout(() => setShowSuccessAlert(false), 10000);
-      // Refresh applications to show updated status
-      if (refreshApplications) {
-        setTimeout(() => refreshApplications(), 1000);
-      }
     }
     
     if (tab === 'applications') {
@@ -81,7 +77,7 @@ export default function DashboardPage() {
     } else if (tab === 'permits') {
       setActiveTab('permits');
     }
-  }, [searchParams, refreshApplications]);
+  }, [searchParams]);
 
   // Disabled auto-fix to prevent claiming other users' applications
   // useEffect(() => {
@@ -112,6 +108,19 @@ export default function DashboardPage() {
     userId: user?.id, // Filter permits by current user's applications
     autoFetch: !!user?.id // Only fetch when we have a user ID
   });
+
+  // Refresh applications after payment success
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (payment === 'success' && refreshApplications) {
+      // Delay refresh to allow backend to update
+      const timer = setTimeout(() => {
+        console.log('🔄 Refreshing applications after payment success');
+        refreshApplications();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, refreshApplications]);
 
   // Transform database permits to component format
   const transformPermitForDisplay = (dbPermit: DatabasePermit): PermitListItem => {
