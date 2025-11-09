@@ -142,6 +142,11 @@ export async function GET(
               const newApplicationStatus = getApplicationStatusFromPayment('completed');
               const now = new Date().toISOString();
               
+              console.log('🔄 [PAYMENT STATUS] Updating application status:', {
+                application_id: payment.application_id,
+                new_status: newApplicationStatus,
+              });
+
               const { error: appUpdateError } = await supabase
                 .from('applications')
                 .update({ 
@@ -152,6 +157,14 @@ export async function GET(
 
               if (appUpdateError) {
                 console.error('⚠️  [PAYMENT STATUS] Failed to update application:', appUpdateError);
+                console.error('   Error details:', JSON.stringify(appUpdateError));
+                // Check if application exists
+                const { data: checkApp } = await supabase
+                  .from('applications')
+                  .select('id, status')
+                  .eq('id', payment.application_id)
+                  .single();
+                console.log('   Application check:', checkApp);
               } else {
                 console.log('✅ [PAYMENT STATUS] Application updated to:', newApplicationStatus);
                 // Update the payment.applications object if it exists
@@ -159,6 +172,8 @@ export async function GET(
                   payment.applications.status = newApplicationStatus as any;
                 }
               }
+            } else if (iremboStatus.data.status === 'completed' && !payment.application_id) {
+              console.warn('⚠️  [PAYMENT STATUS] Payment completed but no application_id linked!');
             }
           }
         }

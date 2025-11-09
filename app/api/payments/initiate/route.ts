@@ -228,9 +228,10 @@ export async function POST(request: NextRequest) {
     const initiatedAt = new Date();
     const expiresAt = getPaymentExpiryTime(initiatedAt);
 
-    // Build payment record data - only include application_id if application exists
+    // Build payment record data - ALWAYS include application_id
     const paymentData: any = {
       applicant_id: userId,
+      application_id: application_id, // Always include - critical for status updates!
       amount: paymentAmount,
       currency: paymentCurrency,
       description: iremboPayRequest.description,
@@ -248,10 +249,11 @@ export async function POST(request: NextRequest) {
       created_by: userId,
     };
 
-    // Only add application_id if application exists
-    if (application) {
-      paymentData.application_id = application_id;
-    }
+    console.log('💾 [PAYMENT INITIATE] Payment data with application_id:', {
+      payment_id: paymentData.id,
+      application_id: paymentData.application_id,
+      application_exists: !!application,
+    });
 
     const { data: paymentRecord, error: paymentError } = (await supabase
       .from('payments')
