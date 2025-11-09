@@ -91,7 +91,7 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
         },
       });
 
-      if (result.success && result.payment_url) {
+      if (result.success && result.payment) {
         console.log('✅ Payment initialized successfully');
         setShowWidget(true);
       } else {
@@ -276,10 +276,11 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
                 onRetry={isPaymentFailed ? handleRetryPayment : undefined}
               />
 
-              {showWidget && payment.payment_url && isPaymentPending && (
+              {showWidget && payment.irembo_payment_ref && isPaymentPending && (
                 <div className="pt-6 border-t">
                   <IremboPayWidget
-                    paymentUrl={payment.payment_url}
+                    invoiceNumber={payment.irembo_payment_ref}
+                    publicKey={process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || ''}
                     amount={payment.amount}
                     currency={payment.currency}
                     onSuccess={handlePaymentSuccess}
@@ -341,10 +342,11 @@ export function PaymentTab({ application, onPaymentSuccess, onBack }: PaymentTab
                 )}
               </Button>
             </div>
-          ) : showWidget && payment?.payment_url ? (
+          ) : showWidget && payment?.irembo_payment_ref ? (
             // Show payment widget
             <IremboPayWidget
-              paymentUrl={payment.payment_url}
+              invoiceNumber={payment.irembo_payment_ref}
+              publicKey={process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || ''}
               amount={payment.amount}
               currency={payment.currency}
               onSuccess={handlePaymentSuccess}
