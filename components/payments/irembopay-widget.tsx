@@ -55,11 +55,17 @@ export function IremboPayWidget({
   const [error, setError] = useState<string | null>(null);
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
   // Use explicit sandbox flag (more reliable than guessing from key)
   const scriptUrl = isSandbox
     ? 'https://dashboard.sandbox.irembopay.com/assets/payment/inline.js'
     : 'https://dashboard.irembopay.com/assets/payment/inline.js';
+
+  // Generate payment URL as fallback
+  const paymentUrl = isSandbox
+    ? `https://checkout.sandbox.irembopay.com/${invoiceNumber}`
+    : `https://checkout.irembopay.com/${invoiceNumber}`;
 
   /**
    * Validate required props
@@ -72,6 +78,29 @@ export function IremboPayWidget({
       setError('Public key is required');
     }
   }, [invoiceNumber, publicKey]);
+
+  /**
+   * Add timeout for script loading (5 seconds)
+   */
+  useEffect(() => {
+    console.log('📊 IremboPay Widget mounted:', {
+      invoiceNumber,
+      publicKey: publicKey ? publicKey.substring(0, 15) + '...' : 'NOT SET',
+      scriptUrl,
+      paymentUrl,
+    });
+
+    const timer = setTimeout(() => {
+      if (!scriptLoaded) {
+        console.warn('⚠️ IremboPay script loading timeout after 5 seconds');
+        console.warn('   Script URL:', scriptUrl);
+        console.warn('   Fallback to direct payment URL:', paymentUrl);
+        setLoadingTimeout(true);
+      }
+    }, 5000); // 5 seconds
+
+    return () => clearTimeout(timer);
+  }, [scriptLoaded]);
 
   /**
    * Initiate payment when script is loaded
@@ -183,7 +212,7 @@ export function IremboPayWidget({
     );
   }
 
-  // Loading/Processing state
+  // Loading/Processing state with immediate fallback
   return (
     <>
       {/* Load IremboPay inline script */}
@@ -195,10 +224,15 @@ export function IremboPayWidget({
       />
 
       <div className="flex flex-col items-center justify-center py-12 space-y-6">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        {!loadingTimeout && !scriptLoaded && <Loader2 className="h-12 w-12 animate-spin text-blue-600" />}
+        
         <div className="text-center space-y-2">
           <p className="text-lg font-medium">
-            {!scriptLoaded ? 'Loading payment system...' : 'Opening payment modal...'}
+            {loadingTimeout 
+              ? 'Payment system taking longer than expected' 
+              : !scriptLoaded 
+                ? 'Loading payment system...' 
+                : 'Opening payment modal...'}
           </p>
           <p className="text-sm text-muted-foreground">
             Amount: {amount.toLocaleString()} {currency}
@@ -210,10 +244,48 @@ export function IremboPayWidget({
           )}
         </div>
         
-        {scriptLoaded && (
-          <Button onClick={initiatePayment} variant="outline" size="lg">
-            Click here if payment modal doesn't open
+        {/* Always show fallback option immediately */}
+        <div className="space-y-3 w-full max-w-md">
+          {/* Primary action: Open payment page */}
+          <Button 
+            onClick={() => window.open(paymentUrl, '_blank')} 
+            size="lg" 
+            className="w-full"
+          >
+            Open Payment Page {scriptLoaded ? '(Recommended)' : ''}
           </Button>
+          
+          {/* Secondary actions */}
+          {scriptLoaded && (
+            <Button 
+              onClick={initiatePayment} 
+              variant="outline" 
+              size="lg" 
+              className="w-full"
+            >
+              Try Opening Modal Here
+            </Button>
+          )}
+          
+          {loadingTimeout && !scriptLoaded && (
+            <Button 
+              onClick={() => window.location.reload()} 
+              variant="outline" 
+              size="sm" 
+              className="w-full"
+            >
+              Retry Loading Widget
+            </Button>
+          )}
+        </div>
+
+        {!scriptLoaded && (
+          <Alert className="max-w-md">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              Tip: Click "Open Payment Page" to proceed with payment in a new tab. The payment status will update automatically when completed.
+            </AlertDescription>
+          </Alert>
         )}
       </div>
     </>

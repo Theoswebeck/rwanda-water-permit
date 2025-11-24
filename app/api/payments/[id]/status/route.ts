@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getIremboPayClient } from '@/lib/irembopay-client';
-import { getApplicationStatusFromPayment } from '@/lib/payment-utils';
+import { getApplicationStatusFromPayment, mapIremboPayStatus } from '@/lib/payment-utils';
 import type { PaymentStatusResponse } from '@/types/payment';
 
 export async function GET(
@@ -100,16 +100,20 @@ export async function GET(
         );
 
         if (iremboStatus.success && iremboStatus.data) {
-          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboStatus.data.status);
+          // Map IremboPay status to our internal status
+          const iremboPaymentStatus = iremboStatus.data.paymentStatus; // IremboPay uses 'paymentStatus' field
+          const mappedStatus = mapIremboPayStatus(iremboPaymentStatus);
+          
+          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus);
 
           // Update local status if different
-          if (iremboStatus.data.status !== payment.status) {
+          if (mappedStatus !== payment.status) {
             console.log('🔄 [PAYMENT STATUS] Updating local status from IremboPay');
             
             const updateData: any = {
-              status: iremboStatus.data.status,
-              irembo_transaction_id: iremboStatus.data.transaction_id || payment.irembo_transaction_id,
-              payment_method: iremboStatus.data.payment_method || payment.payment_method,
+              status: mappedStatus,
+              irembo_transaction_id: iremboStatus.data.transactionId || payment.irembo_transaction_id,
+              payment_method: iremboStatus.data.paymentMethod?.toLowerCase() || payment.payment_method,
               gateway_response: {
                 ...(payment.gateway_response as any || {}),
                 status_check: iremboStatus.data,
@@ -118,9 +122,9 @@ export async function GET(
             };
 
             // Set appropriate timestamp
-            if (iremboStatus.data.status === 'completed') {
-              updateData.completed_at = iremboStatus.data.completed_at || new Date().toISOString();
-            } else if (iremboStatus.data.status === 'failed') {
+            if (mappedStatus === 'completed') {
+              updateData.completed_at = iremboStatus.data.paidAt || new Date().toISOString();
+            } else if (mappedStatus === 'failed') {
               updateData.failed_at = new Date().toISOString();
             }
 
@@ -130,15 +134,15 @@ export async function GET(
               .eq('id', paymentId);
 
             // Update the payment object with new status
-            payment.status = iremboStatus.data.status as any;
-            payment.irembo_transaction_id = iremboStatus.data.transaction_id || payment.irembo_transaction_id;
+            payment.status = mappedStatus as any;
+            payment.irembo_transaction_id = iremboStatus.data.transactionId || payment.irembo_transaction_id;
 
-            console.log('✅ [PAYMENT STATUS] Local status updated');
+            console.log('✅ [PAYMENT STATUS] Local status updated to:', mappedStatus);
 
             // =============================================
             // UPDATE APPLICATION STATUS IF PAYMENT COMPLETED
             // =============================================
-            if (iremboStatus.data.status === 'completed' && payment.application_id) {
+            if (mappedStatus === 'completed' && payment.application_id) {
               const newApplicationStatus = getApplicationStatusFromPayment('completed');
               const now = new Date().toISOString();
               
@@ -172,7 +176,7 @@ export async function GET(
                   payment.applications.status = newApplicationStatus as any;
                 }
               }
-            } else if (iremboStatus.data.status === 'completed' && !payment.application_id) {
+            } else if (mappedStatus === 'completed' && !payment.application_id) {
               console.warn('⚠️  [PAYMENT STATUS] Payment completed but no application_id linked!');
             }
           }

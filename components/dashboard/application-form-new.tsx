@@ -827,7 +827,11 @@ export const ApplicationForm = memo(function ApplicationForm({
   };
 
   const handleNextTab = async () => {
-    const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"];
+    // Only include payment tab for draft or pending_payment status
+    const shouldShowPayment = !currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status);
+    const tabs = shouldShowPayment 
+      ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
+      : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
     const currentIndex = tabs.indexOf(activeTab);
     
     if (currentIndex >= tabs.length - 1) return;
@@ -1516,7 +1520,7 @@ export const ApplicationForm = memo(function ApplicationForm({
             )}
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
               <Tabs defaultValue="applicant-info" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-5 md:grid-cols-5">
+                <TabsList className={`grid w-full ${currentApplication?.status && !['draft', 'pending_payment'].includes(currentApplication.status) ? 'grid-cols-4 md:grid-cols-4' : 'grid-cols-5 md:grid-cols-5'}`}>
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline">Applicant</span>
@@ -1533,10 +1537,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                     <Globe className="h-4 w-4" />
                     <span className="hidden sm:inline">Land</span>
                   </TabsTrigger>
-                  <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
-                    <CreditCard className="h-4 w-4" />
-                    <span className="hidden sm:inline">Payment</span>
-                  </TabsTrigger>
+                  {/* Only show payment tab for draft or pending_payment status */}
+                  {(!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
+                    <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
+                      <CreditCard className="h-4 w-4" />
+                      <span className="hidden sm:inline">Payment</span>
+                    </TabsTrigger>
+                  )}
                 </TabsList>
                 
                 {/* IDENTIFICATION AND ADDRESS OF THE APPLICANT */}
@@ -3766,19 +3773,21 @@ export const ApplicationForm = memo(function ApplicationForm({
                 </div>
                 </TabsContent>
 
-                {/* PAYMENT TAB */}
-                <TabsContent value="payment" className="pt-6 space-y-6">
-                  <PaymentTab
-                    application={currentApplication}
-                    formData={!currentApplication?.id ? {
-                      ...form.getValues(),
-                      ...files,
-                      additionalDocuments
-                    } : undefined}
-                    onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
-                    onBack={() => setActiveTab('land-ownership')}
-                  />
-                </TabsContent>
+                {/* PAYMENT TAB - Only show for draft or pending_payment */}
+                {(!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
+                  <TabsContent value="payment" className="pt-6 space-y-6">
+                    <PaymentTab
+                      application={currentApplication}
+                      formData={!currentApplication?.id ? {
+                        ...form.getValues(),
+                        ...files,
+                        additionalDocuments
+                      } : undefined}
+                      onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
+                      onBack={() => setActiveTab('land-ownership')}
+                    />
+                  </TabsContent>
+                )}
                 {/* Form Actions */}
                 <div className="flex justify-between pt-6">
                   {!readOnly && (
@@ -3812,7 +3821,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"];
+                        const shouldShowPayment = !currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status);
+                        const tabs = shouldShowPayment 
+                          ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
+                          : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
                         const currentIndex = tabs.indexOf(activeTab);
                         if (currentIndex > 0) {
                           setActiveTab(tabs[currentIndex - 1]);
@@ -3827,7 +3839,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                       <Button
                         type="button"
                         onClick={readOnly ? () => {
-                          const tabs = ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"];
+                          const shouldShowPayment = !currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status);
+                          const tabs = shouldShowPayment 
+                            ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
+                            : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
                           const currentIndex = tabs.indexOf(activeTab);
                           if (currentIndex < tabs.length - 1) {
                             setActiveTab(tabs[currentIndex + 1]);

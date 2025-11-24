@@ -17,7 +17,7 @@ interface UsePaymentReturn {
   loading: boolean;
   error: string | null;
   initiatePayment: (data: InitiatePaymentRequest) => Promise<{ success: boolean; payment?: Payment; payment_url?: string; error?: string }>;
-  checkStatus: (paymentId: string) => Promise<void>;
+  checkStatus: (paymentId: string) => Promise<Payment | null>;
   refetch: () => Promise<void>;
   clearError: () => void;
 }
@@ -121,7 +121,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
   /**
    * Check payment status
    */
-  const checkStatus = useCallback(async (paymentId: string) => {
+  const checkStatus = useCallback(async (paymentId: string): Promise<Payment | null> => {
     try {
       setLoading(true);
       setError(null);
@@ -138,6 +138,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       if (result.success && result.payment) {
         setPayment(result.payment);
         console.log('✅ Payment status:', result.payment.status);
+        return result.payment;
       } else {
         throw new Error(result.error || 'Status check failed');
       }
@@ -145,6 +146,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       const errorMessage = err instanceof Error ? err.message : 'Failed to check payment status';
       console.error('❌ Status check error:', errorMessage);
       setError(errorMessage);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -180,13 +182,17 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
     if (!pollInterval || !payment || !payment.id) return;
 
     // Only poll if payment is in an active state
-    if (payment.status !== 'pending' && payment.status !== 'processing') {
+    const shouldPoll = payment.status === 'pending' || payment.status === 'processing';
+    
+    if (!shouldPoll) {
+      console.log('⏹️  Not polling - payment status is:', payment.status);
       return;
     }
 
-    console.log('🔄 Starting payment status polling...');
+    console.log('🔄 Starting payment status polling for payment:', payment.id);
 
     const intervalId = setInterval(() => {
+      console.log('🔄 Polling payment status...');
       checkStatus(payment.id);
     }, pollInterval);
 
@@ -194,7 +200,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       console.log('⏹️  Stopping payment status polling');
       clearInterval(intervalId);
     };
-  }, [pollInterval, payment, checkStatus]);
+  }, [pollInterval, payment?.id, payment?.status, checkStatus]);
 
   return {
     payment,

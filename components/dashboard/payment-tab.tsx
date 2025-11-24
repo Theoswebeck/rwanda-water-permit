@@ -45,30 +45,6 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
   const [completedApplication, setCompletedApplication] = useState<any>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
   
-  // 🧪 TESTING MODE: Use mock app if none exists
-  const [mockApp] = useState(() => {
-    if (application) return null;
-    
-    const generateTestUUID = () => {
-      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-      }
-      return '00000000-0000-4000-8000-' + Date.now().toString(16).padStart(12, '0');
-    };
-    
-    return {
-      id: generateTestUUID(),
-      application_number: 'TEST-' + Date.now(),
-      project_title: 'Test Water Permit Application',
-      district: 'Test District',
-      province: 'Kigali',
-      applicant_id: generateTestUUID(),
-      status: 'draft' as const,
-    };
-  });
-  
-  const testApplication = (application || mockApp) as Application;
-
   const {
     payment,
     loading,
@@ -77,12 +53,28 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
     checkStatus,
     clearError,
   } = usePayment({
-    applicationId: testApplication.id,
-    autoFetch: false, // Don't auto-fetch to avoid errors
+    applicationId: application?.id,
+    autoFetch: !!application?.id, // Only auto-fetch if there is an application
     pollInterval: 5000,
   });
 
   const applicationFee = getApplicationFee();
+
+  /**
+   * Auto-detect when payment is completed via polling
+   */
+  useEffect(() => {
+    if (payment && payment.status === 'completed' && !paymentCompleted && !isCompletingPayment) {
+      console.log('✅ Payment completed detected via polling');
+      setCompletedApplication(payment.application);
+      setPaymentCompleted(true);
+      
+      // Auto-redirect to dashboard after 4 seconds
+      setTimeout(() => {
+        router.push('/dashboard?tab=applications');
+      }, 4000);
+    }
+  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
 
   /**
    * Handle payment initiation
@@ -92,20 +84,36 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
       setIsInitializing(true);
       clearError();
 
-      console.log('🚀 Initiating payment for application:', testApplication.id);
+      console.log('🚀 Initiating payment...');
 
-      const result = await initiatePayment({
-        application_id: testApplication.id,
-        amount: applicationFee,
-        currency: 'RWF',
-        customer: {
-          email: testApplication.applicant?.email || 'test@example.com',
-          phone: testApplication.applicant?.phone || testApplication.applicant?.company_phone || '+250788123456',
-          name: `${testApplication.applicant?.first_name || ''} ${testApplication.applicant?.last_name || ''}`.trim() ||
-                 testApplication.applicant?.company_name || 
+      const requestData: any = {
+          amount: applicationFee,
+          currency: 'RWF',
+      };
+
+      if (application) {
+        requestData.application_id = application.id;
+        requestData.customer = {
+          email: application.applicant?.email || 'test@example.com',
+          phone: application.applicant?.phone || application.applicant?.company_phone || '+250788123456',
+          name: `${application.applicant?.first_name || ''} ${application.applicant?.last_name || ''}`.trim() ||
+                 application.applicant?.company_name || 
                  'Test User',
-        },
-      });
+        };
+      } else if (formData) {
+        requestData.application_data = formData;
+        requestData.customer = {
+          email: formData.emailAddress || 'test@example.com',
+          phone: formData.telephoneContact || '+250788123456',
+          name: formData.fullNameApplicant || 'Test User',
+        };
+      } else {
+          console.error('❌ Cannot initiate payment without application or form data.');
+          setIsInitializing(false);
+          return;
+      }
+
+      const result = await initiatePayment(requestData);
 
       if (result.success && result.payment) {
         console.log('✅ Payment initialized successfully');
@@ -124,40 +132,34 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
    * Handle payment success
    */
   const handlePaymentSuccess = async () => {
-    console.log('✅ Payment successful');
+    console.log('✅ Payment successful - checking final status');
     
     try {
-      // If this is a new application (has formData), save it now
-      if (formData && onPaymentComplete && payment?.id) {
-        setIsCompletingPayment(true);
-        console.log('💾 Completing payment and saving application...');
+      setIsCompletingPayment(true);
+      console.log('💾 Verifying payment status...');
+
+      // Check status one final time to get the latest payment data
+      if (payment?.id) {
+        const finalPayment = await checkStatus(payment.id);
         
-        const savedApplication = await onPaymentComplete(payment.id);
-        
-        setCompletedApplication(savedApplication);
-        setPaymentCompleted(true);
-        setIsCompletingPayment(false);
-        
-        console.log('✅ Application saved:', savedApplication.application_number);
-        
-        // Auto-redirect to dashboard after 4 seconds
-        setTimeout(() => {
-          router.push('/dashboard?tab=applications');
-        }, 4000);
-      } else {
-        // Existing application - just check status and redirect
-        if (payment?.id) {
-          await checkStatus(payment.id);
+        if (finalPayment && finalPayment.status === 'completed') {
+          setCompletedApplication(finalPayment.application);
+          setPaymentCompleted(true);
+          console.log('✅ Application submitted:', finalPayment.application?.application_number);
+
+          // Auto-redirect to dashboard after 4 seconds
+          setTimeout(() => {
+            router.push('/dashboard?tab=applications');
+          }, 4000);
+        } else {
+          console.log('⏳ Payment not yet completed, waiting for status update...');
+          // The hook's polling will handle the rest
         }
-        
-        setTimeout(() => {
-          router.push('/dashboard?tab=applications');
-        }, 2000);
       }
     } catch (error) {
       console.error('❌ Error completing payment:', error);
+    } finally {
       setIsCompletingPayment(false);
-      alert('Payment was successful but there was an error saving your application. Please contact support.');
     }
   };
 
@@ -260,9 +262,9 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
       >
         <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
         <div className="text-center space-y-2">
-          <p className="text-lg font-medium">Processing your application...</p>
+          <p className="text-lg font-medium">Verifying payment...</p>
           <p className="text-sm text-muted-foreground">
-            Please wait while we save your application details.
+            This may take a few seconds. Please do not close this page.
           </p>
         </div>
       </motion.div>
@@ -302,11 +304,11 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs text-muted-foreground">Application Number</p>
-              <p className="text-sm font-medium">{testApplication.application_number || 'Pending'}</p>
+              <p className="text-sm font-medium">{application?.application_number || 'Pending'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Project Title</p>
-              <p className="text-sm font-medium">{testApplication.project_title || 'N/A'}</p>
+              <p className="text-sm font-medium">{application?.project_title || 'N/A'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Application Fee</p>
@@ -314,7 +316,7 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Location</p>
-              <p className="text-sm">{testApplication.district}, {testApplication.province}</p>
+              <p className="text-sm">{application?.district}, {application?.province}</p>
             </div>
           </div>
         </CardContent>

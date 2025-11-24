@@ -270,6 +270,14 @@ export interface Application {
   revision_notes?: string
   rejection_reason?: string
   internal_notes?: string
+  
+  // Joined relations (from Supabase queries with select joins)
+  applicant?: any // User/applicant data when joined
+  assigned_reviewer?: any
+  assigned_inspector?: any
+  assigned_approver?: any
+  documents?: any[]
+  payments?: any[]
 }
 
 export interface Permit {

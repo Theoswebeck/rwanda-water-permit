@@ -15,6 +15,7 @@ import {
   getPaymentExpiryTime
 } from '@/lib/payment-utils';
 import type { InitiatePaymentRequest, InitiatePaymentResponse } from '@/types/payment';
+import { mapFormDataToApplication } from '@/lib/application-utils';
 
 export async function POST(request: NextRequest) {
   try {
@@ -51,30 +52,59 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body: InitiatePaymentRequest = await request.json();
-    const { application_id, amount, currency, customer } = body;
+    const { application_id, amount, currency, customer, application_data } = body;
 
     console.log('📋 [PAYMENT INITIATE] Request data:', {
       application_id,
       amount,
       currency,
       user_id: userId,
+      has_application_data: !!application_data
     });
 
-    // application_id is now optional - will be linked after payment succeeds
+    let application: any = null;
+    let applicationIdToUse = application_id;
 
     // =============================================
-    // 1. TRY TO FETCH APPLICATION (optional)
+    // 1. GET OR CREATE APPLICATION
     // =============================================
-    // Note: Application may not exist yet if user goes directly to payment tab
 
-    const { data: application, error: appError } = await supabase
-      .from('applications')
-      .select('*, users!applications_applicant_id_fkey(*)')
-      .eq('id', application_id)
-      .maybeSingle() as any; // Type cast to handle optional application
+    if (application_data) {
+      console.log('📝 [PAYMENT INITIATE] Received application data, creating draft...');
+      const mappedData = mapFormDataToApplication(application_data, 'draft', userId);
+      
+      const { data: newApplication, error: createError } = await supabase
+        .from('applications')
+        .insert(mappedData)
+        .select('*, users!applications_applicant_id_fkey(*)')
+        .single();
+
+      if (createError) {
+        console.error('❌ [PAYMENT INITIATE] Failed to create draft application:', createError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to create draft application before payment' },
+          { status: 500 }
+        );
+      }
+      application = newApplication;
+      applicationIdToUse = newApplication.id;
+      console.log('✅ [PAYMENT INITIATE] Draft application created:', applicationIdToUse);
+    } else if (applicationIdToUse) {
+      console.log(`🔍 [PAYMENT INITIATE] Fetching application ${applicationIdToUse}...`);
+      const { data: existingApplication, error: appError } = await supabase
+        .from('applications')
+        .select('*, users!applications_applicant_id_fkey(*)')
+        .eq('id', applicationIdToUse)
+        .single();
+      
+      if (appError) {
+        console.error('❌ [PAYMENT INITIATE] Error fetching application:', appError);
+      }
+      application = existingApplication;
+    }
 
     if (application) {
-      console.log('✅ [PAYMENT INITIATE] Application found:', application.application_number);
+      console.log('✅ [PAYMENT INITIATE] Using application:', application.application_number);
       // Verify ownership
       if (application.applicant_id !== userId) {
         console.error('❌ [PAYMENT INITIATE] Access denied: User does not own this application');
@@ -84,30 +114,33 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      console.log('ℹ️  [PAYMENT INITIATE] No application found - will save after payment');
+      console.warn('⚠️ [PAYMENT INITIATE] No application found or created. Payment will not be linked to an application.');
+      applicationIdToUse = undefined; // Ensure it's undefined if no app
     }
 
     // =============================================
     // 2. CHECK EXISTING PAYMENT
     // =============================================
 
-    const { data: existingPayment } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('application_id', application_id)
-      .eq('status', 'completed')
-      .single();
+    if (applicationIdToUse) {
+      const { data: existingPayment } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('application_id', applicationIdToUse)
+        .eq('status', 'completed')
+        .maybeSingle();
 
-    if (existingPayment) {
-      console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Payment already completed for this application',
-          payment: existingPayment,
-        },
-        { status: 400 }
-      );
+      if (existingPayment) {
+        console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Payment already completed for this application',
+            payment: existingPayment,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // =============================================
@@ -225,7 +258,7 @@ export async function POST(request: NextRequest) {
     // Build payment record data - application_id may be null initially
     const paymentData: any = {
       applicant_id: userId,
-      application_id: application_id || null, // May be null - will be linked after payment succeeds
+      application_id: applicationIdToUse || null,
       amount: paymentAmount,
       currency: paymentCurrency,
       description: iremboPayRequest.description,
@@ -245,7 +278,7 @@ export async function POST(request: NextRequest) {
 
     console.log('💾 [PAYMENT INITIATE] Payment data:', {
       payment_id: paymentData.id,
-      application_id: paymentData.application_id || 'null (will be linked after payment)',
+      application_id: paymentData.application_id,
       application_exists: !!application,
     });
 
@@ -277,7 +310,7 @@ export async function POST(request: NextRequest) {
         .from('applications')
         // @ts-ignore - Type inference issue with conditional query
         .update({ status: 'pending_payment' })
-        .eq('id', application_id);
+        .eq('id', applicationIdToUse);
       
       const { error: updateError } = updateResult as any;
 

@@ -113,6 +113,11 @@ export interface Payment {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  
+  // Joined relations (from Supabase queries with select joins)
+  application?: any; // Application data when joined
+  applicant?: any; // User/applicant data when joined
+  applications?: any; // Alternative join name
 }
 
 // =============================================
@@ -285,18 +290,32 @@ export interface IremboPayWebhookPayload {
   signature?: string;
 }
 
+// IremboPay actual API response structure
 export interface IremboPayStatusResponse {
   success: boolean;
+  message?: string;
   data?: {
-    reference: string;
-    status: PaymentStatus;
     amount: number;
+    invoiceNumber: string;
+    transactionId: string;
+    createdAt: string;
+    updatedAt: string;
+    description?: string;
+    paymentLinkUrl?: string;
+    type: string;
+    paymentStatus: string; // IremboPay uses: 'NEW', 'PAID', 'FAILED', 'CANCELLED'
     currency: string;
-    transaction_id?: string;
-    payment_method?: string;
-    payment_channel?: string;
-    created_at: string;
-    completed_at?: string;
+    customer?: {
+      fullName?: string;
+      email?: string;
+      phone?: string;
+    };
+    createdBy?: string;
+    paymentAccountIdentifier?: string;
+    paymentItems?: any[];
+    paidAt?: string;
+    paymentMethod?: string; // e.g., 'MTN_MOMO'
+    paymentReference?: string;
   };
   error?: {
     code: string;
@@ -309,7 +328,8 @@ export interface IremboPayStatusResponse {
 // =============================================
 
 export interface InitiatePaymentRequest {
-  application_id: string;
+  application_id?: string;
+  application_data?: any; // New field for unsaved application data
   amount?: number;
   currency?: string;
   customer?: {

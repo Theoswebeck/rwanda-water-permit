@@ -281,11 +281,14 @@ export const getRetryMessage = (payment: Payment): string => {
 
 /**
  * Map IremboPay status to internal status
+ * IremboPay uses: NEW, PAID, FAILED, CANCELLED, REFUNDED
  */
 export const mapIremboPayStatus = (iremboStatus: string): PaymentStatus => {
   const statusMap: Record<string, PaymentStatus> = {
+    'NEW': 'pending',
     'PENDING': 'pending',
     'PROCESSING': 'processing',
+    'PAID': 'completed',
     'SUCCESS': 'completed',
     'COMPLETED': 'completed',
     'FAILED': 'failed',
