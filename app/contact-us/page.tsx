@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-export default function ContactUsPage() {
+function ContactUsContent() {
   const searchParams = useSearchParams();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -386,5 +386,28 @@ export default function ContactUsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading fallback
+function ContactUsLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-3">Loading...</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main export with Suspense
+export default function ContactUsPage() {
+  return (
+    <Suspense fallback={<ContactUsLoading />}>
+      <ContactUsContent />
+    </Suspense>
   );
 } 

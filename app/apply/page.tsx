@@ -13,6 +13,17 @@ export default function ApplyPage() {
   const router = useRouter();
   const { signUp, isAuthenticated, isApplicant, loading } = useAuth();
   const [step, setStep] = useState<"signup" | "verify" | "success">("signup");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [userData, setUserData] = useState<{
+    email: string;
+    accountType: string;
+    details: Record<string, unknown>;
+  }>({
+    email: "",
+    accountType: "",
+    details: {}
+  });
 
   // Redirect authenticated applicants to dashboard
   useEffect(() => {
@@ -45,17 +56,6 @@ export default function ApplyPage() {
       </AuthLayout>
     );
   }
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string>("");
-  const [userData, setUserData] = useState<{
-    email: string;
-    accountType: string;
-    details: any;
-  }>({
-    email: "",
-    accountType: "",
-    details: {}
-  });
 
   const handleSignUp = async (email: string, password: string, accountType: string, details: any) => {
     setError("");

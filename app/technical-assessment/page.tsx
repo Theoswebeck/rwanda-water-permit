@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -81,7 +81,7 @@ interface ApplicationWithApplicant extends Application {
   applicant?: UserType;
 }
 
-export default function TechnicalAssessmentPage() {
+function TechnicalAssessmentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const applicationId = searchParams.get('applicationId');
@@ -694,5 +694,28 @@ export default function TechnicalAssessmentPage() {
         </div>
       </motion.div>
     </DashboardLayout>
+  );
+}
+
+// Loading fallback
+function TechnicalAssessmentLoading() {
+  return (
+    <DashboardLayout>
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-3">Loading...</span>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+// Main export with Suspense
+export default function TechnicalAssessmentPage() {
+  return (
+    <Suspense fallback={<TechnicalAssessmentLoading />}>
+      <TechnicalAssessmentContent />
+    </Suspense>
   );
 }

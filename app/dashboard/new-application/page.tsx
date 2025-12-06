@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -164,7 +164,8 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
   }
 }
 
-export default function NewApplicationPage() {
+// Inner component that uses useSearchParams
+function NewApplicationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const draftId = searchParams.get('id'); // Check if we're editing an existing draft
@@ -377,6 +378,17 @@ export default function NewApplicationPage() {
       setIsLoading(false);
     }
   }, [createApplication, updateApplication, userProfile?.id, router]);
+
+  // Auto-redirect on success - must be before any conditional returns!
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        router.push("/dashboard?tab=applications&success=draft-saved");
+      }, 1000); // Redirect after 1 second
+      
+      return () => clearTimeout(timer);
+    }
+  }, [success, router]);
   
   if (loadingDraft) {
     return (
@@ -403,17 +415,6 @@ export default function NewApplicationPage() {
       </ProtectedRoute>
     );
   }
-
-  // Auto-redirect on success
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => {
-        router.push("/dashboard?tab=applications&success=draft-saved");
-      }, 1000); // Redirect after 1 second
-      
-      return () => clearTimeout(timer);
-    }
-  }, [success, router]);
 
   if (success) {
     return (
@@ -509,5 +510,36 @@ export default function NewApplicationPage() {
         </div>
       </DashboardLayout>
     </ProtectedRoute>
+  );
+}
+
+// Loading fallback for Suspense
+function NewApplicationLoading() {
+  return (
+    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+      <DashboardLayout>
+        <div className="container mx-auto px-4 py-6">
+          <div className="space-y-6">
+            <div className="flex items-center mb-6">
+              <div className="h-9 w-32 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+            <div className="space-y-4">
+              <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-6 w-3/4 bg-gray-100 rounded animate-pulse"></div>
+              <div className="h-6 w-1/2 bg-gray-100 rounded animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
+  );
+}
+
+// Main export wrapped in Suspense for useSearchParams
+export default function NewApplicationPage() {
+  return (
+    <Suspense fallback={<NewApplicationLoading />}>
+      <NewApplicationContent />
+    </Suspense>
   );
 } 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -21,7 +21,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { Permit as DatabasePermit } from "@/types/database";
 
-export default function DashboardPage() {
+function DashboardContent() {
   const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<"applications" | "permits">("applications");
@@ -293,5 +293,30 @@ export default function DashboardPage() {
         {/* This modal is now handled by the application detail page */}
       </DashboardLayout>
     </ProtectedRoute>
+  );
+}
+
+// Loading fallback
+function DashboardLoading() {
+  return (
+    <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
+      <DashboardLayout>
+        <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-3">Loading dashboard...</span>
+          </div>
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
+  );
+}
+
+// Main export with Suspense
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <DashboardContent />
+    </Suspense>
   );
 } 
