@@ -182,3 +182,4 @@ Amount: 35,000 RWF
 **Issue**: Payment widget stuck loading indefinitely  
 **Solution**: Added immediate fallback with direct payment URL
 
+

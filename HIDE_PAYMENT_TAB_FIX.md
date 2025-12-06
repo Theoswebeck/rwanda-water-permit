@@ -219,3 +219,4 @@ All changes passed TypeScript checks with no errors.
 **Issue**: Payment tab showing on submitted applications  
 **Solution**: Conditional rendering based on application status
 
+

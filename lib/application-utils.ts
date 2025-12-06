@@ -281,3 +281,4 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
 
   return mappedData;
 }
+
