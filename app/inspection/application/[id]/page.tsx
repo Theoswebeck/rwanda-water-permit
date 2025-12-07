@@ -3,25 +3,60 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { 
   ArrowLeft, 
-  Loader2, 
-  MapPin, 
+  Check, 
+  X, 
+  Send, 
   FileText, 
-  Calendar, 
-  User,
+  MessageSquare, 
+  Download,
+  AlertCircle,
   AlertTriangle,
+  CheckCircle,
+  Clock,
+  User as UserIcon,
+  Loader2,
+  XCircle,
+  User,
+  MapPin,
+  Droplets,
   FileCheck,
   ClipboardList
 } from "lucide-react";
 import Link from "next/link";
-import { getApplicationByNumber } from "@/lib/supabase";
-import type { Application, User as UserType, Document, Review } from "@/types/database";
-import { ApplicationDocuments } from "@/components/shared/ApplicationDocuments";
+import { UserProfileButton } from "@/components/dashboard/user-profile-button";
+import { supabase } from "@/lib/supabase";
+import { getDocumentUrl } from "@/lib/supabase-storage";
+import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
+import { ApplicationComments } from "@/components/shared/ApplicationComments";
+
+// Lazy load the ApplicationForm component
+const ApplicationForm = dynamic(
+  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading application form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -29,30 +64,269 @@ interface ApplicationWithRelations extends Application {
   reviews?: Review[];
 }
 
+interface StaffMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
+}
+
+interface Comment {
+  id: string;
+  author: string;
+  role: string;
+  avatar: string;
+  content: string;
+  timestamp: string;
+  created_at: string;
+}
+
+// Transform Application data back to form format for viewing (copied from main application page)
+function mapApplicationToFormData(application: Application, userProfile?: any): any {
+  const formData: any = {};
+  
+  // Parse internal notes to extract form-specific data
+  // Try to parse as JSON first (new format), fallback to legacy format
+  let storedFormData: any = {};
+  let legacyNotesMap: Record<string, string> = {};
+  
+  const notes = application.internal_notes || '';
+  
+  try {
+    // Try parsing as JSON (new comprehensive format)
+    storedFormData = JSON.parse(notes);
+    console.log('✅ Successfully parsed stored form data from JSON');
+  } catch (error) {
+    // Fallback to legacy format parsing
+    console.log('📄 Using legacy notes format parsing');
+    const notesParts = notes.split(' | ');
+    notesParts.forEach(part => {
+      const [key, value] = part.split(': ');
+      if (key && value) {
+        legacyNotesMap[key] = value;
+      }
+    });
+  }
+  
+  // If we have comprehensive stored data, use it directly
+  if (Object.keys(storedFormData).length > 0 && storedFormData.fullNameApplicant !== undefined) {
+    // New format: restore all form fields directly from stored data
+    console.log('🔄 Restoring form data from comprehensive JSON storage');
+    
+    // Copy all stored form data
+    Object.assign(formData, storedFormData);
+    
+    // Override with profile data for contact information if available
+    if (userProfile) {
+      formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
+      formData.emailAddress = userProfile.email || formData.emailAddress;
+    }
+    
+    console.log('🔍 Key fields restored:', {
+      nameSourceWater: formData.nameSourceWater,
+      tributaryToMain: formData.tributaryToMain,
+      waterSourceType: formData.waterSourceType,
+      fullNameApplicant: formData.fullNameApplicant
+    });
+    
+  } else {
+    // Legacy format: reconstruct from basic database fields and legacy notes
+    console.log('🔄 Restoring form data from legacy format');
+    
+    // Basic applicant information (using internal notes and project title)
+    formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
+    formData.categoryApplicant = legacyNotesMap['Category']?.toLowerCase() || 'individual';
+    
+    // Set default values for required fields
+    formData.nameSourceWater = application.water_body_name || '';
+    formData.tributaryToMain = application.tributary_name || '';
+    formData.waterSourceType = 'stream_river'; // Default
+  }
+  
+  return formData;
+}
+
 export default function InspectorApplicationView() {
   const params = useParams();
   const router = useRouter();
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [newComment, setNewComment] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [selectedAction, setSelectedAction] = useState("");
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [transferLoading, setTransferLoading] = useState(false);
+  
+  // ApplicationForm state
+  const [initialFormData, setInitialFormData] = useState<any>(null);
+  const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
         const applicationNumber = params.id as string;
-        console.log('Fetching application details for inspection:', applicationNumber);
         
-        // Get application by number for inspector view
-        const app = await getApplicationByNumber(applicationNumber);
-        if (app) {
-          setApplication(app);
-          console.log('✅ Application details loaded for inspection:', app);
-        } else {
-          setError('Application not found');
+        // Fetch application with related data
+        const { data: appData, error: appError } = await supabase
+          .from('applications')
+          .select(`
+            *,
+            applicant:users!applicant_id(*),
+            documents(*),
+            reviews:reviews!application_id(*)
+          `)
+          .eq('application_number', applicationNumber)
+          .single();
+
+        if (appError) {
+          if (appError.code === 'PGRST116') {
+            setError('Application not found');
+          } else {
+            throw appError;
+          }
+          return;
         }
+
+        // If there's an assigned inspector, fetch the assigned user information
+        if (appData.assigned_inspector_id) {
+          const { data: assignedUserData, error: assignedUserError } = await supabase
+            .from('users')
+            .select('first_name, last_name, role')
+            .eq('id', appData.assigned_inspector_id)
+            .single();
+            
+          if (!assignedUserError && assignedUserData) {
+            (appData as any).assigned_to_user = assignedUserData;
+          }
+        }
+
+        setApplication(appData);
+
+        // Transform application data to form format
+        const formData = mapApplicationToFormData(appData, null);
+        setInitialFormData(formData);
+        console.log('✅ Form data mapped:', formData);
+        
+        // Process documents for form
+        const documentMap: Record<string, { url: string; name: string }> = {};
+        const typeMapping: Record<string, string> = {
+          'identification_doc': 'identificationDoc',
+          'land_ownership_doc': 'landOwnershipDoc', 
+          'technical_drawings': 'technicalDrawings',
+          'environmental_impact_doc': 'environmentalImpactDoc',
+          'payment_proof': 'paymentProof',
+          'intake_discharge_map': 'intakeDischargeMap',
+          'other': 'generalRequirements',
+          'business_license': 'miningLicense',
+          'geological_survey': 'miningHydrologicalReport',
+          'water_quality_report': 'waterQualityReport'
+        };
+        
+        // Process documents from appData.documents using smart classification
+        console.log('🔍 Raw documents from database:', appData.documents);
+        if (appData.documents && Array.isArray(appData.documents)) {
+          for (const doc of appData.documents) {
+            console.log('📋 Processing document:', doc.name, 'type:', doc.type, 'path:', doc.file_path);
+            
+            if (doc.file_path && doc.name) {
+              const publicUrl = getDocumentUrl(doc.file_path);
+              if (publicUrl) {
+                // Extract field name from file path if it follows our naming convention
+                const pathParts = doc.file_path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+
+                if (fieldNameMatch) {
+                  // This is a structured document with field name in path
+                  const fieldName = fieldNameMatch[1];
+                  console.log('🎯 Identified field name from path:', fieldName);
+                  
+                  // Check if it's an additional document
+                  if (fieldName.startsWith('additional_')) {
+                    console.log('📎 Skipping additional document for now:', fieldName);
+                    // Skip additional documents for now since ApplicationForm handles them differently
+                  } else {
+                    // This is a standard/activity-specific document
+                    documentMap[fieldName] = {
+                      url: publicUrl,
+                      name: doc.name
+                    };
+                    console.log('✅ Mapped document:', fieldName, '→', doc.name);
+                  }
+                } else {
+                  // Fallback to old type-based mapping
+                  const fieldName = typeMapping[doc.type] || doc.type;
+                  documentMap[fieldName] = {
+                    url: publicUrl,
+                    name: doc.name
+                  };
+                  console.log('✅ Mapped document (fallback):', fieldName, '→', doc.name);
+                }
+              } else {
+                console.log('❌ Failed to get public URL for:', doc.file_path);
+              }
+            } else {
+              console.log('❌ Missing file_path or name for document:', doc);
+            }
+          }
+        }
+        
+        setInitialDocuments(documentMap);
+        console.log('📄 Final document map:', documentMap);
+        console.log('📄 Documents found:', appData.documents?.length || 0, 'documents');
+
+        // Fetch comments from reviews table
+        const { data: reviewData, error: reviewError } = await supabase
+          .from('reviews')
+          .select(`
+            *,
+            reviewer:users!reviewer_id(first_name, last_name, role)
+          `)
+          .eq('application_id', appData.id)
+          .order('created_at', { ascending: false });
+
+        if (!reviewError && reviewData) {
+          const formattedComments: Comment[] = reviewData.map(review => {
+            const reviewer = review.reviewer as any;
+            const name = reviewer ? `${reviewer.first_name} ${reviewer.last_name}` : 'Unknown User';
+            const initials = reviewer ? `${reviewer.first_name?.[0] || ''}${reviewer.last_name?.[0] || ''}`.toUpperCase() : 'UU';
+            
+            return {
+              id: review.id,
+              author: name,
+              role: reviewer?.role || 'reviewer',
+              avatar: initials,
+              content: review.overall_comments || review.technical_review || 'No comments',
+              timestamp: new Date(review.created_at).toLocaleString(),
+              created_at: review.created_at
+            };
+          });
+          setComments(formattedComments);
+        }
+        
+        // Fetch staff members for transfer functionality
+        const { data: staffData, error: staffError } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, role, email')
+          .in('role', ['reviewer', 'inspector', 'admin', 'approver'])
+          .eq('status', 'active')
+          .order('role', { ascending: true })
+          .order('first_name', { ascending: true });
+          
+        if (staffError) {
+          console.error('Error fetching staff:', staffError);
+        } else {
+          setStaff(staffData || []);
+        }
+
       } catch (err) {
-        console.error('❌ Error fetching application for inspection:', err);
-        setError('Failed to load application details');
+        console.error('Error fetching application:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch application');
       } finally {
         setLoading(false);
       }
@@ -63,144 +337,240 @@ export default function InspectorApplicationView() {
     }
   }, [params.id]);
 
-  // Function to render the correct status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "draft":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Draft</Badge>;
-      case "submitted":
-        return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">Submitted</Badge>;
-      case "under_review":
-        return <Badge variant="outline" className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">Under Review</Badge>;
-      case "pending_inspection":
-        return <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-purple-200">Pending Inspection</Badge>;
-      case "approved":
-        return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved</Badge>;
-      case "rejected":
-        return <Badge variant="outline" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Rejected</Badge>;
-      case "revision_required":
-        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Revision Required</Badge>;
-      case "cancelled":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Cancelled</Badge>;
-      default:
-        return <Badge variant="outline">Unknown</Badge>;
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !application) return;
+
+    try {
+      // For now, use a default reviewer ID until authentication is implemented
+      const { data: inspectorData, error: inspectorError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'inspector')
+        .limit(1)
+        .single();
+
+      if (inspectorError) {
+        alert('Failed to find inspector account');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('reviews')
+        .insert([{
+          application_id: application.id,
+          reviewer_id: inspectorData.id,
+          review_stage: 'inspection',
+          overall_comments: newComment,
+          status: 'completed'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add to local comments
+      const newCommentObj: Comment = {
+        id: data.id,
+        author: "Current Inspector",
+        role: "Inspector",
+        avatar: "CI",
+        content: newComment,
+        timestamp: "Just now",
+        created_at: new Date().toISOString()
+      };
+      setComments([newCommentObj, ...comments]);
+      setNewComment("");
+    } catch (err) {
+      console.error('Error adding comment:', err);
+      alert('Failed to add comment');
     }
-  };
-  
-  // Format date to be more readable
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-  
-  // Format application type for display
-  const formatApplicationType = (type: string) => {
-    return type
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
   };
 
-  // Helper function to extract coordinates from PostGIS data
-  const formatCoordinates = (coordinates: any) => {
+  const handleTransferApplication = async () => {
+    if (!selectedAction || !application) return;
+    
     try {
-      if (coordinates && typeof coordinates === 'object') {
-        // Handle PostGIS Point geometry
-        if (coordinates.type === 'Point' && coordinates.coordinates) {
-          const [lng, lat] = coordinates.coordinates;
-          return `${lat.toFixed(6)}°N, ${lng.toFixed(6)}°E`;
-        }
+      setTransferLoading(true);
+      
+      // Find the selected staff member
+      const selectedStaff = staff.find(s => s.id === selectedAction);
+      if (!selectedStaff) {
+        alert('Please select a valid inspector');
+        return;
       }
-      return JSON.stringify(coordinates);
+      
+      // Update application assignment in the database
+      const { error: updateError } = await supabase
+        .from('applications')
+        .update({
+          assigned_inspector_id: selectedAction,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', application.id);
+        
+      if (updateError) throw updateError;
+      
+      // Create a workflow record for the transfer
+      const { error: workflowError } = await supabase
+        .from('workflow_history')
+        .insert({
+          application_id: application.id,
+          from_status: application.status,
+          to_status: application.status,
+          action: 'transfer',
+          comment: `Application transferred to ${selectedStaff.first_name} ${selectedStaff.last_name} (${selectedStaff.role})`,
+          user_id: selectedAction
+        });
+        
+      if (workflowError) throw workflowError;
+      
+      alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
+      setSelectedAction('');
+      
+      // Refresh the page to show updated data
+      window.location.reload();
+      
     } catch (error) {
-      return 'Invalid coordinates';
+      console.error('Error transferring application:', error);
+      alert('Failed to transfer application. Please try again.');
+    } finally {
+      setTransferLoading(false);
     }
+  };
+
+  const getStatusBadge = (status: ApplicationStatus) => {
+    const statusConfig: Record<ApplicationStatus, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+      draft: { label: "Draft", variant: "outline" },
+      submitted: { label: "Submitted", variant: "secondary" },
+      under_review: { label: "Under Review", variant: "default" },
+      pending_assessment: { label: "Pending Assessment", variant: "outline" },
+      pending_final_approval: { label: "Pending Approval", variant: "default" },
+      pending_payment: { label: "Pending Payment", variant: "secondary" },
+      approved: { label: "Approved", variant: "default" },
+      approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
+      rejected: { label: "Rejected", variant: "destructive" },
+      revision_required: { label: "Needs Revision", variant: "secondary" },
+      cancelled: { label: "Cancelled", variant: "outline" },
+    };
+    
+    const config = statusConfig[status];
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin mr-2" />
-          <span>Loading application details...</span>
+      <DashboardLayout>
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading application details...</p>
+            </div>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="text-center py-12">
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-red-600 mb-4">Error</h2>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mb-6">{error}</p>
-          <Link href="/inspection">
-            <Button>Back to Inspection Dashboard</Button>
-          </Link>
+      <DashboardLayout>
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <p className="text-destructive font-medium">Error loading application</p>
+              <p className="text-muted-foreground text-sm mt-1">{error}</p>
+              <Button 
+                onClick={() => window.location.href = '/inspection'} 
+                className="mt-4"
+                variant="outline"
+              >
+                Back to Inspection Dashboard
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
   
   if (!application) {
-    return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="text-center py-12">
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl mb-4">Application Not Found</h2>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mb-6">
-            Application not found. Please check the application ID and try again.
-          </p>
-          <Link href="/inspection">
-            <Button>Back to Inspection Dashboard</Button>
-          </Link>
-        </div>
-      </div>
-    );
+    return null;
   }
   
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex items-center mb-6">
+    <DashboardLayout>
+      <div className="flex justify-end p-6">
+        <UserProfileButton />
+      </div>
+      
+      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6 pb-8"
+        >
+          {/* Header */}
+          <div className="space-y-6">
+            <div className="flex items-center">
         <Link href="/inspection">
-          <Button variant="ghost" className="gap-1">
+                <Button variant="ghost" size="sm" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back to Inspection Dashboard
           </Button>
         </Link>
       </div>
       
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="space-y-8"
-      >
-        {/* Application Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{application.project_title}</h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-              Application submitted on {formatDate(application.created_at)}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 md:items-end">
-            <div className="flex items-center gap-2">
-              {getStatusBadge(application.status)}
-              <Link href={`/inspection/new?applicationId=${application.id}`}>
-                <Button variant="default" size="sm">
-                  <FileCheck className="h-4 w-4 mr-2" />
-                  Start Inspection
-                </Button>
-              </Link>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                  Application Inspection: {application.application_number}
+                </h1>
+                {getStatusBadge(application.status)}
+              </div>
+
+              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
+                Field inspection and verification of water permit application
+              </p>
+              {(application as any)?.assigned_to_user && (
+                <p className="text-sm text-muted-foreground">
+                  Assigned to: {(application as any).assigned_to_user.first_name} {(application as any).assigned_to_user.last_name} ({(application as any).assigned_to_user.role})
+                </p>
+              )}
             </div>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
-              Application ID: {application.application_number}
-            </p>
+          </div>
+
+          {/* Revision Requirements - Prominent Notice */}
+          {application.status === 'revision_required' && application.revision_notes && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mb-6"
+            >
+              <Alert className="border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-md">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-orange-900 text-lg">⚠️ Revision Required</h3>
+                      <Badge className="border border-orange-300 text-orange-700 bg-orange-100">
+                        Action Needed
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="font-medium text-orange-800">Required Changes:</p>
+                      <div className="bg-white/50 rounded-md p-3 border border-orange-200">
+                        <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{application.revision_notes}</p>
+                      </div>
           </div>
         </div>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
         
         {/* Rejection Reason Alert */}
         {application.status === 'rejected' && application.rejection_reason && (
@@ -217,22 +587,13 @@ export default function InspectorApplicationView() {
           </Alert>
         )}
 
-        {/* Revision Notes Alert */}
-        {application.status === 'revision_required' && application.revision_notes && (
-          <Alert className="border-orange-200 bg-orange-50">
-            <AlertTriangle className="h-4 w-4 text-orange-600" />
-            <AlertDescription>
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <p className="font-medium text-orange-800">Application Returned for Revision</p>
-                  <p className="text-orange-700">{application.revision_notes}</p>
-                </div>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {/* Inspector Alert */}
+          {/* Inspector Actions Section */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className="mb-6"
+          >
         <Alert className="border-blue-200 bg-blue-50">
           <ClipboardList className="h-4 w-4 text-blue-600" />
           <AlertDescription>
@@ -241,346 +602,102 @@ export default function InspectorApplicationView() {
                 <p className="font-medium text-blue-800">Inspector View</p>
                 <p className="text-blue-700">You are viewing this application as an inspector. Review all details carefully before conducting the inspection.</p>
               </div>
-              <div className="flex gap-2">
+                  <div className="flex flex-wrap items-center gap-3">
                 <Link href={`/inspection/new?applicationId=${application.id}`}>
-                  <Button variant="outline" size="sm" className="bg-white hover:bg-blue-50 border-blue-300">
-                    <FileCheck className="h-4 w-4 mr-2" />
+                      <Button size="sm" className="gap-1">
+                        <FileCheck className="h-3 w-3" />
                     Start Inspection
                   </Button>
                 </Link>
-              </div>
-            </div>
-          </AlertDescription>
-        </Alert>
-        
-        {/* Application Details */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Application Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Application Type</p>
-                <p className="font-medium">{formatApplicationType(application.application_type)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Water Source</p>
-                <p className="font-medium">{formatApplicationType(application.water_source)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Water Purpose</p>
-                <p className="font-medium">{formatApplicationType(application.water_purpose)}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Usage</p>
-                <p className="font-medium">
-                  {application.estimated_usage_volume} {application.usage_unit}
-                </p>
-              </div>
-              {application.project_value && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Project Value</p>
-                  <p className="font-medium">RWF {application.project_value.toLocaleString()}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Location Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Province</p>
-                <p className="font-medium">{application.province}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">District</p>
-                <p className="font-medium">{application.district}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Sector</p>
-                <p className="font-medium">{application.sector}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Cell</p>
-                <p className="font-medium">{application.cell}</p>
-              </div>
-              {application.village && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Village</p>
-                  <p className="font-medium">{application.village}</p>
-                </div>
-              )}
-              {application.coordinates && (
-                <div>
-                  <p className="text-sm text-muted-foreground">GPS Coordinates</p>
-                  <p className="font-medium">
-                    {formatCoordinates(application.coordinates)}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Project Description */}
-        {application.project_description && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Description</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">{application.project_description}</p>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Technical Details & Specifications */}
-        <Card>
-          <CardHeader>
-            <CardTitle>🔧 Technical Information & Specifications</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {application.water_taking_method && (
-              <div>
-                <p className="text-sm text-muted-foreground">Water Taking Method</p>
-                <p className="font-medium">{application.water_taking_method}</p>
-              </div>
-            )}
-            {application.water_measuring_method && (
-              <div>
-                <p className="text-sm text-muted-foreground">Water Measuring Method</p>
-                <p className="font-medium">{application.water_measuring_method}</p>
-              </div>
-            )}
-            {application.storage_facilities && (
-              <div>
-                <p className="text-sm text-muted-foreground">Storage Facilities</p>
-                <p className="font-medium">{application.storage_facilities}</p>
-              </div>
-            )}
-            {application.return_flow_description && (
-              <div>
-                <p className="text-sm text-muted-foreground">Return Flow & Duration Details</p>
-                {application.return_flow_description.includes('|') ? (
-                  <div className="space-y-2 mt-2">
-                    {application.return_flow_description.split(' | ').map((detail, index) => {
-                      if (!detail.trim()) return null;
-                      const isStructured = detail.includes(':');
-                      return (
-                        <div key={index} className="pl-4 border-l-2 border-gray-200">
-                          {isStructured ? (
-                            <>
-                              <p className="text-xs text-muted-foreground font-medium">{detail.split(':')[0].trim()}</p>
-                              <p className="text-sm">{detail.split(':')[1]?.trim()}</p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-xs text-muted-foreground font-medium">Quality Description</p>
-                              <p className="text-sm">{detail}</p>
-                            </>
+                    <div className="flex items-center gap-2">
+                      <Select value={selectedAction} onValueChange={setSelectedAction}>
+                        <SelectTrigger className="w-[180px] h-8">
+                          <SelectValue placeholder="Transfer to..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {staff.filter(s => s.role === 'inspector').map((staffMember) => (
+                            <SelectItem key={staffMember.id} value={staffMember.id}>
+                              {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
+                            </SelectItem>
+                          ))}
+                          {staff.filter(s => s.role === 'inspector').length === 0 && (
+                            <SelectItem value="no-staff" disabled>
+                              No inspectors available
+                            </SelectItem>
                           )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="font-medium">{application.return_flow_description}</p>
-                )}
-              </div>
-            )}
-            {application.environmental_assessment && (
-              <div>
-                <p className="text-sm text-muted-foreground">Environmental Assessment</p>
-                <p className="font-medium">{application.environmental_assessment}</p>
-              </div>
-            )}
-            {application.mitigation_actions && (
-              <div>
-                <p className="text-sm text-muted-foreground">Mitigation Actions</p>
-                <p className="font-medium">{application.mitigation_actions}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                        </SelectContent>
+                      </Select>
 
-        {/* Infrastructure Details */}
-        {(application.infrastructure_pipes || application.infrastructure_pumps || application.infrastructure_valves || application.infrastructure_meters) && (
-          <Card>
-            <CardHeader>
-              <CardTitle>🏗️ Infrastructure Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {application.infrastructure_pipes && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Pipes & Piping System</p>
-                  <p className="font-medium">{application.infrastructure_pipes}</p>
-                </div>
-              )}
-              {application.infrastructure_pumps && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Pumps & Pumping System</p>
-                  <p className="font-medium">{application.infrastructure_pumps}</p>
-                </div>
-              )}
-              {application.infrastructure_valves && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Valves & Control Systems</p>
-                  {application.infrastructure_valves.includes('|') ? (
-                    <div className="space-y-2 mt-2">
-                      {application.infrastructure_valves.split(' | ').map((detail, index) => {
-                        if (!detail.trim()) return null;
-                        const isStructured = detail.includes(':');
-                        return (
-                          <div key={index} className="pl-4 border-l-2 border-blue-200">
-                            {isStructured ? (
-                              <>
-                                <p className="text-xs text-muted-foreground font-medium">{detail.split(':')[0].trim()}</p>
-                                <p className="text-sm">{detail.split(':')[1]?.trim()}</p>
+                      <Button 
+                        onClick={handleTransferApplication}
+                        variant="secondary"
+                        size="sm"
+                        disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
+                        className="gap-1"
+                      >
+                        {transferLoading ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Transferring...
                               </>
                             ) : (
                               <>
-                                <p className="text-xs text-muted-foreground font-medium">Valve Details</p>
-                                <p className="text-sm">{detail}</p>
+                            <Send className="h-3 w-3" />
+                            Transfer
                               </>
                             )}
-                          </div>
-                        );
-                      })}
+                      </Button>
                     </div>
-                  ) : (
-                    <p className="font-medium">{application.infrastructure_valves}</p>
-                  )}
                 </div>
-              )}
-              {application.infrastructure_meters && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Meters & Measurement Devices</p>
-                  <p className="font-medium">{application.infrastructure_meters}</p>
                 </div>
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+
+          {/* Main Content with Tabs */}
+          <Tabs defaultValue="application_details" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="application_details">Application Details</TabsTrigger>
+              <TabsTrigger value="internal_notes">Internal Notes & History</TabsTrigger>
+            </TabsList>
+
+            {/* Application Details Tab */}
+            <TabsContent value="application_details" className="space-y-6">
+              {/* Application Form in Read-only Mode */}
+              {initialFormData && (
+                <ApplicationForm 
+                  userData={{
+                    email: application.applicant?.email || "",
+                    name: application.applicant?.company_name || 
+                          (application.applicant?.first_name && application.applicant?.last_name ? 
+                           `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
+                    phone: application.applicant?.phone || "",
+                    address: application.applicant?.address || "",
+                    idNumber: "",
+                    account_type: 'individual' as const,
+                    id_number: "",
+                    company_tin: "",
+                  }}
+                  onSubmit={async () => {}} // Dummy handler for read-only form
+                  onSaveAsDraft={async () => {}} // Dummy handler for read-only form
+                  isLoading={false}
+                  initialData={initialFormData}
+                  initialDocuments={initialDocuments}
+                  mode="view"
+                  readOnly={true}
+                  isStaffView={true}
+                />
               )}
-            </CardContent>
-          </Card>
-        )}
+            </TabsContent>
 
-        {/* Application Metadata */}
-        {application.internal_notes && (
-          <Card>
-            <CardHeader>
-              <CardTitle>📋 Application Type & Metadata</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {application.internal_notes.split(' | ').map((note, index) => {
-                  const [label, value] = note.split(':');
-                  if (!label || !value) return null;
-                  return (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-sm text-muted-foreground font-medium">{label.trim()}</p>
-                      <p className="font-semibold text-lg">{value.trim()}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Additional Details */}
-        {application.electricity_generation_capacity && (
-          <Card>
-            <CardHeader>
-              <CardTitle>⚡ Electricity Generation Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {application.electricity_generation_capacity.includes('|') ? (
-                application.electricity_generation_capacity.split(' | ').map((detail, index) => {
-                  if (!detail.trim()) return null;
-                  const [label, value] = detail.split(':');
-                  if (!label || !value) {
-                    return (
-                      <div key={index}>
-                        <p className="text-sm text-muted-foreground">Capacity</p>
-                        <p className="font-medium">{detail.trim()}</p>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={index}>
-                      <p className="text-sm text-muted-foreground">{label.trim()}</p>
-                      <p className="font-medium">{value.trim()}</p>
-                    </div>
-                  );
-                })
-              ) : (
-                <div>
-                  <p className="text-sm text-muted-foreground">Electricity Generation Capacity</p>
-                  <p className="font-medium">{application.electricity_generation_capacity}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Status Information */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Status Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Current Status</p>
-              <div className="mt-1">{getStatusBadge(application.status)}</div>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">SLA Status</p>
-              <div className="mt-1">
-                <Badge variant={application.sla_status === 'on_time' ? 'default' : 'destructive'}>
-                  {formatApplicationType(application.sla_status)}
-                </Badge>
-              </div>
-            </div>
-            {application.submitted_at && (
-              <div>
-                <p className="text-sm text-muted-foreground">Submitted At</p>
-                <p className="font-medium">{formatDate(application.submitted_at)}</p>
-              </div>
-            )}
-            {application.due_date && (
-              <div>
-                <p className="text-sm text-muted-foreground">Due Date</p>
-                <p className="font-medium">{formatDate(application.due_date)}</p>
-              </div>
-            )}
-            {application.assigned_inspector_id && (
-              <div>
-                <p className="text-sm text-muted-foreground">Assigned Inspector ID</p>
-                <p className="font-medium">{application.assigned_inspector_id}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Application Documents Section */}
-        <ApplicationDocuments 
-          applicationId={application.id}
-          userRole="inspector"
-          allowDownload={true}
-          allowView={true}
-          showStatus={true}
-          showRefresh={true}
-        />
-
+            {/* Internal Notes Tab */}
+            <TabsContent value="internal_notes" className="space-y-6">
+              {application.id && <ApplicationComments applicationId={application.id} />}
+            </TabsContent>
+          </Tabs>
       </motion.div>
     </div>
+    </DashboardLayout>
   );
 } 

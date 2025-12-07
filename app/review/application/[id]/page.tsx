@@ -497,6 +497,7 @@ export default function ReviewApplicationPage() {
       under_review: { label: "Under Review", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
+      pending_payment: { label: "Pending Payment", variant: "secondary" },
       approved: { label: "Approved", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
@@ -762,6 +763,7 @@ export default function ReviewApplicationPage() {
                   initialDocuments={initialDocuments}
                   mode="view"
                   readOnly={true}
+                  isStaffView={true}
                 />
               )}
             </TabsContent>
