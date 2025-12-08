@@ -42,6 +42,7 @@ interface ApplicationWithRelations extends Application {
   applicant?: UserType;
   documents?: Document[];
   reviews?: Review[];
+  approval_conditions?: string;
 }
 
 // Transform Application data back to form format for viewing
@@ -643,6 +644,7 @@ export default function ApplicationDetailPage() {
               initialDocuments={initialDocuments}
               mode="view"
               readOnly={true}
+              currentApplication={application} // Pass the application object to handle payment tab correctly
             />
           )}
 
