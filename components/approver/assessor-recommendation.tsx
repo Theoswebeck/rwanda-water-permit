@@ -345,15 +345,6 @@ export function AssessorRecommendation({ applicationId }: AssessorRecommendation
         </Card>
       )}
 
-      {/* Important Notice for Approver */}
-      <Alert>
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Important:</strong> Please review the assessor's recommendation and supporting documentation 
-          carefully before making a final approval decision. The technical assessment provides critical 
-          information about field conditions, environmental impact, and technical feasibility.
-        </AlertDescription>
-      </Alert>
     </div>
   );
 }

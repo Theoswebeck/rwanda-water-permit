@@ -242,6 +242,7 @@ interface ApplicationFormProps {
   mode?: 'create' | 'edit' | 'view';
   readOnly?: boolean;
   currentApplication?: any; // The saved application object (needed for payment tab)
+  isStaffView?: boolean; // True for review/assessment/approver views - hides payment tab
 }
 
 // ⚡ PERFORMANCE: Memoize the entire form component to prevent unnecessary re-renders
@@ -254,7 +255,8 @@ export const ApplicationForm = memo(function ApplicationForm({
   initialDocuments = {},
   mode = 'create',
   readOnly = false,
-  currentApplication
+  currentApplication,
+  isStaffView = false
 }: ApplicationFormProps) {
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
@@ -1473,20 +1475,22 @@ export const ApplicationForm = memo(function ApplicationForm({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      {/* Header with legal references */}
-      <Card className="mb-6 border-blue-200 bg-blue-50/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-blue-900">
-            <FileText className="h-5 w-5" />
-            WATER USE PERMIT APPLICATION FORM
-          </CardTitle>
-          <CardDescription className="space-y-2 text-blue-800">
-            <p><strong>Contact Email:</strong> info@rwb.rw</p>
-            <p><strong>Legal Reference:</strong> REFER TO THE LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA</p>
-            <p><strong>Ministerial Order:</strong> MINISTERIAL ORDER NO 001/MOE/24 OF 02/04/2024 RELATING TO WATER RESOURCES USE PERMIT</p>
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      {/* Header with legal references - hide for staff views */}
+      {!isStaffView && (
+        <Card className="mb-6 border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-900">
+              <FileText className="h-5 w-5" />
+              WATER USE PERMIT APPLICATION FORM
+            </CardTitle>
+            <CardDescription className="space-y-2 text-blue-800">
+              <p><strong>Contact Email:</strong> info@rwb.rw</p>
+              <p><strong>Legal Reference:</strong> REFER TO THE LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA</p>
+              <p><strong>Ministerial Order:</strong> MINISTERIAL ORDER NO 001/MOE/24 OF 02/04/2024 RELATING TO WATER RESOURCES USE PERMIT</p>
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card className="border-gray-200 dark:border-gray-800">
         <CardHeader>
@@ -1520,7 +1524,7 @@ export const ApplicationForm = memo(function ApplicationForm({
             )}
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
               <Tabs defaultValue="applicant-info" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className={`grid w-full ${currentApplication?.status && !['draft', 'pending_payment'].includes(currentApplication.status) ? 'grid-cols-4 md:grid-cols-4' : 'grid-cols-5 md:grid-cols-5'}`}>
+                <TabsList className={`grid w-full ${isStaffView || (currentApplication?.status && !['draft', 'pending_payment'].includes(currentApplication.status)) ? 'grid-cols-4 md:grid-cols-4' : 'grid-cols-5 md:grid-cols-5'}`}>
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline">Applicant</span>
@@ -1537,8 +1541,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                     <Globe className="h-4 w-4" />
                     <span className="hidden sm:inline">Land</span>
                   </TabsTrigger>
-                  {/* Only show payment tab for draft or pending_payment status */}
-                  {(!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
+                  {/* Only show payment tab for draft or pending_payment status AND not for staff views (review/assessment/approver) */}
+                  {!isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
                     <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
                       <CreditCard className="h-4 w-4" />
                       <span className="hidden sm:inline">Payment</span>
@@ -3773,8 +3777,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                 </div>
                 </TabsContent>
 
-                {/* PAYMENT TAB - Only show for draft or pending_payment */}
-                {(!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
+                {/* PAYMENT TAB - Only show for draft or pending_payment AND not for staff views */}
+                {!isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
                   <TabsContent value="payment" className="pt-6 space-y-6">
                     <PaymentTab
                       application={currentApplication}
@@ -3821,7 +3825,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        const shouldShowPayment = !currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status);
+                        const shouldShowPayment = !isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
                         const tabs = shouldShowPayment 
                           ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
                           : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
@@ -3839,7 +3843,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                       <Button
                         type="button"
                         onClick={readOnly ? () => {
-                          const shouldShowPayment = !currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status);
+                          // In view mode, show payment tab only if not staff view and status is draft/pending_payment
+                          const shouldShowPayment = !isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
                           const tabs = shouldShowPayment 
                             ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
                             : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
@@ -3848,7 +3853,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             setActiveTab(tabs[currentIndex + 1]);
                           }
                         } : handleNextTab}
-                        disabled={activeTab === "payment" || (!readOnly && isNextButtonDisabled())}
+                        disabled={(!readOnly && activeTab === "payment") || (!readOnly && isNextButtonDisabled())}
                         className={(!readOnly && isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
                       >
                         Next
