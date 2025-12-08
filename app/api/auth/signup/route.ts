@@ -25,6 +25,11 @@ export async function POST(req: NextRequest) {
       email,
       password,
       email_confirm: true,
+      user_metadata: {
+        role: 'applicant',
+        status: 'active',
+        account_type: accountType
+      }
     })
 
     if (userError || !userCreate?.user) {

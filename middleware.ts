@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/middleware'
+import type { User } from '@supabase/supabase-js'
 
 export async function middleware(request: NextRequest) {
-  let supabase, response, user;
+  let supabase, response;
+  let user: User | null = null;
   
   try {
     const client = await createClient(request);
@@ -54,20 +56,32 @@ export async function middleware(request: NextRequest) {
   // If user exists, check role-based access
   if (user && isProtectedRoute) {
     try {
-      // Get user profile to check role and status
-      const { data: userProfile, error } = await supabase
-        .from('users')
-        .select('role, status, account_type')
-        .eq('id', user.id)
-        .single()
+      // Get user profile from metadata if available to avoid DB call
+      // If metadata is missing (old users), fallback to DB
+      let userRole = user.user_metadata?.role;
+      let userStatus = user.user_metadata?.status;
 
-      if (error) {
-        console.error('❌ Error fetching user profile in middleware:', error)
-        return NextResponse.redirect(new URL('/login', request.url))
+      if (!userRole || !userStatus) {
+        // Get user profile to check role and status
+        const { data: data, error } = await supabase
+          .from('users')
+          .select('role, status, account_type')
+          .eq('id', user.id)
+          .single()
+
+        const userProfile = data as any;
+
+        if (error || !userProfile) {
+          console.error('❌ Error fetching user profile in middleware:', error)
+          return NextResponse.redirect(new URL('/login', request.url))
+        }
+        
+        userRole = userProfile.role;
+        userStatus = userProfile.status;
       }
 
       // Check if user is suspended or inactive
-      if (userProfile.status === 'suspended') {
+      if (userStatus === 'suspended') {
         console.warn('🚫 Suspended user attempted access:', user.email)
         // Clear session and redirect to login with error
         await supabase.auth.signOut()
@@ -76,7 +90,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(redirectUrl)
       }
 
-      if (userProfile.status === 'inactive') {
+      if (userStatus === 'inactive') {
         console.warn('⚠️ Inactive user attempted access:', user.email)
         await supabase.auth.signOut()
         const redirectUrl = new URL('/login', request.url)
@@ -85,7 +99,6 @@ export async function middleware(request: NextRequest) {
       }
 
       // Check role-based access
-      const userRole = userProfile.role
       let hasAccess = false
 
       // Check if user's role has access to this route
@@ -133,15 +146,25 @@ export async function middleware(request: NextRequest) {
   const authPages = ['/login', '/register']
   if (authPages.includes(pathname) && user) {
     try {
-      const { data: userProfile } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single()
+      let userRole = user.user_metadata?.role;
+      
+      if (!userRole) {
+        const { data: data } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        
+        const userProfile = data as any;
+        
+        if (userProfile) {
+          userRole = userProfile.role;
+        }
+      }
 
-      if (userProfile) {
+      if (userRole) {
         // Redirect to appropriate dashboard based on role
-        switch (userProfile.role) {
+        switch (userRole) {
           case 'admin':
             return NextResponse.redirect(new URL('/admin', request.url))
           case 'approver':
