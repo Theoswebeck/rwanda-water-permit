@@ -206,19 +206,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (user) {
           console.log('✅ Initial user loaded:', user.email);
+
+          // OPTIMIZATION: Use metadata for instant profile availability
+          // This prevents UI blocking while waiting for DB query
+          const metadata = user.user_metadata;
+          if (metadata && metadata.role && metadata.status) {
+            console.log('⚡ Using cached metadata for fast load');
+            const fastProfile = {
+              id: user.id,
+              email: user.email,
+              role: metadata.role as any,
+              status: metadata.status as any,
+              account_type: (metadata.account_type || 'individual') as any,
+              first_name: metadata.first_name || 'User',
+              last_name: metadata.last_name || 'Profile',
+              // Default values for required fields
+              applications_count: 0,
+              reviews_count: 0,
+              inspections_count: 0,
+              profile_completed: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as User;
+            
+            setUserProfile(fastProfile);
+            setLoading(false); // Unblock UI immediately
+          }
           
           try {
             await fetchUserProfile(user.id);
           } catch (profileError) {
             console.error('❌ Error fetching initial profile:', profileError);
-            // Don't fail the entire auth process if profile fetch fails
-            // The user can still be authenticated even without a complete profile
           }
         }
        
       } catch (error) {
         console.error('❌ Error getting initial user:', error);
       } finally {
+        // Ensure loading is false if it wasn't set in the fast path
         setLoading(false);
       }
     };
@@ -233,6 +258,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (currentUser) {
           console.log('✅ User session updated:', currentUser.email);
+
+          // OPTIMIZATION: Use metadata for instant profile availability
+          const metadata = currentUser.user_metadata;
+          if (metadata && metadata.role && metadata.status) {
+            const fastProfile = {
+              id: currentUser.id,
+              email: currentUser.email,
+              role: metadata.role as any,
+              status: metadata.status as any,
+              account_type: (metadata.account_type || 'individual') as any,
+              first_name: metadata.first_name || 'User',
+              last_name: metadata.last_name || 'Profile',
+              applications_count: 0,
+              reviews_count: 0,
+              inspections_count: 0,
+              profile_completed: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as User;
+            setUserProfile(fastProfile);
+            setLoading(false);
+          }
           
           try {
             const profile = await fetchUserProfile(currentUser.id);
@@ -256,13 +303,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
             
             // If profile creation/fetching failed, don't sign out immediately
-            // User might be able to continue with limited functionality
             if (!profile) {
               console.warn('⚠️ Could not load/create user profile, but keeping session active');
             }
           } catch (profileError) {
             console.error('❌ Error during profile handling in auth state change:', profileError);
-            // Don't sign out on profile errors during session restoration
           }
         } else {
           console.log('🚪 No active session.');

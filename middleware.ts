@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
   // Define protected routes
   const protectedRoutes = [
     '/dashboard',
-    '/apply', 
+    // '/apply', // Public route for new applications
     // '/admin', // TEMPORARY: Disabled for testing
     // '/approver', // TEMPORARY: Disabled for testing
     // '/inspection', // TEMPORARY: Disabled for testing
