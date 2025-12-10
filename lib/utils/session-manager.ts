@@ -7,15 +7,34 @@ interface SessionManager {
   invalidateSession: () => Promise<void>
 }
 
+// ⚡ PERFORMANCE: Throttle function to limit how often activity is updated
+function throttle<T extends (...args: unknown[]) => void>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle = false
+  return function (this: unknown, ...args: Parameters<T>) {
+    if (!inThrottle) {
+      func.apply(this, args)
+      inThrottle = true
+      setTimeout(() => (inThrottle = false), limit)
+    }
+  }
+}
+
 class SessionManagerImpl implements SessionManager {
   private supabase = createClient()
   private lastActivity: Date = new Date()
   private sessionTimeout = 30 * 60 * 1000 // 30 minutes
-  private heartbeatInterval = 30 * 1000 // 30 seconds
+  // ⚡ PERFORMANCE: Increased heartbeat from 30s to 5 minutes
+  private heartbeatInterval = 5 * 60 * 1000 // 5 minutes
   private intervalId: NodeJS.Timeout | null = null
+  private initialized = false
 
   initialize() {
-    console.log('🚀 Session manager initialized')
+    // ⚡ PERFORMANCE: Prevent multiple initializations
+    if (this.initialized) return
+    this.initialized = true
     
     // Set up activity listeners
     this.setupActivityListeners()
@@ -23,55 +42,66 @@ class SessionManagerImpl implements SessionManager {
     // Start heartbeat
     this.startHeartbeat()
     
-    // Check for cold start
+    // Check for cold start only once on init
     if (this.detectColdStart()) {
-      console.log('❄️ Cold start detected')
       this.handleColdStart()
     }
   }
 
   updateLastActivity() {
     this.lastActivity = new Date()
-    localStorage.setItem('lastActivity', this.lastActivity.toISOString())
+    // ⚡ PERFORMANCE: Use try-catch for localStorage (may fail in some contexts)
+    try {
+      localStorage.setItem('lastActivity', this.lastActivity.toISOString())
+    } catch {
+      // localStorage may not be available
+    }
   }
 
   detectColdStart(): boolean {
-    const storedActivity = localStorage.getItem('lastActivity')
-    if (!storedActivity) return false
+    try {
+      const storedActivity = localStorage.getItem('lastActivity')
+      if (!storedActivity) return false
 
-    const lastStoredActivity = new Date(storedActivity)
-    const now = new Date()
-    const timeDiff = now.getTime() - lastStoredActivity.getTime()
+      const lastStoredActivity = new Date(storedActivity)
+      const now = new Date()
+      const timeDiff = now.getTime() - lastStoredActivity.getTime()
 
-    // Consider it a cold start if more than session timeout has passed
-    return timeDiff > this.sessionTimeout
+      // Consider it a cold start if more than session timeout has passed
+      return timeDiff > this.sessionTimeout
+    } catch {
+      return false
+    }
   }
 
   async invalidateSession() {
-    console.log('🔄 Invalidating session')
     await this.supabase.auth.signOut()
-    localStorage.removeItem('lastActivity')
+    try {
+      localStorage.removeItem('lastActivity')
+    } catch {
+      // localStorage may not be available
+    }
     this.clearHeartbeat()
   }
 
   private setupActivityListeners() {
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
+    // ⚡ PERFORMANCE: Throttle activity updates to max once per 30 seconds
+    const throttledUpdate = throttle(() => this.updateLastActivity(), 30000)
+    
+    // ⚡ PERFORMANCE: Only listen to essential events, not mousemove
+    const events = ['mousedown', 'keypress', 'touchstart']
     
     events.forEach(event => {
-      document.addEventListener(event, () => this.updateLastActivity(), { passive: true })
+      document.addEventListener(event, throttledUpdate, { passive: true })
     })
 
-    // Handle visibility changes
+    // Handle visibility changes - check session when tab becomes visible
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         this.updateLastActivity()
+        // ⚡ PERFORMANCE: Only check validity on visibility change, not every event
         this.checkSessionValidity()
       }
-    })
-
-    // Handle page unload
-    window.addEventListener('beforeunload', () => {
-      this.updateLastActivity()
     })
   }
 
@@ -93,11 +123,10 @@ class SessionManagerImpl implements SessionManager {
     const timeDiff = now.getTime() - this.lastActivity.getTime()
 
     if (timeDiff > this.sessionTimeout) {
-      console.log('⏰ Session timeout detected')
       await this.invalidateSession()
       
       // Only redirect if we're not already on the login page
-      if (!window.location.pathname.includes('/login')) {
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         window.location.href = '/login?error=session_timeout'
       }
     }
@@ -105,28 +134,24 @@ class SessionManagerImpl implements SessionManager {
 
   private async handleColdStart() {
     try {
-      // Check if current session is still valid
-      const { data: { user }, error } = await this.supabase.auth.getUser()
+      // ⚡ PERFORMANCE: Use getSession instead of getUser (cached, no network call)
+      const { data: { session }, error } = await this.supabase.auth.getSession()
       
-      if (error || !user) {
-        console.log('❌ Invalid session on cold start')
+      if (error || !session) {
         await this.invalidateSession()
         return
       }
 
-      // Refresh the session
+      // Only refresh if session exists but might be stale
       const { error: refreshError } = await this.supabase.auth.refreshSession()
       
       if (refreshError) {
-        console.log('❌ Failed to refresh session on cold start')
         await this.invalidateSession()
         return
       }
 
-      console.log('✅ Session refreshed successfully')
       this.updateLastActivity()
-    } catch (error) {
-      console.error('❌ Cold start error:', error)
+    } catch {
       await this.invalidateSession()
     }
   }

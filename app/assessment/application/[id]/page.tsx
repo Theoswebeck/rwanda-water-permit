@@ -445,7 +445,8 @@ export default function AssessmentApplicationPage() {
       setShowRevisionDialog(false);
       setRevisionNotes("");
       alert("Application returned to applicant for revision.");
-      window.location.reload();
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
       
     } catch (err) {
       console.error('Error returning application:', err);
@@ -486,7 +487,8 @@ export default function AssessmentApplicationPage() {
       
       alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
       setSelectedAction('');
-      window.location.reload();
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
       
     } catch (error) {
       console.error('Error transferring application:', error);

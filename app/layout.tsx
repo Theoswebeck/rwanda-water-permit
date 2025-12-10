@@ -6,6 +6,7 @@ import { Footer } from "@/components/layout/footer";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SessionInitializer } from "@/components/auth/session-initializer";
+import { ReactQueryProvider } from "@/lib/react-query-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -28,12 +29,14 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <AuthProvider>
-            <SessionInitializer />
-            <Header />
-            <main>{children}</main>
-            <Footer />
-          </AuthProvider>
+          <ReactQueryProvider>
+            <AuthProvider>
+              <SessionInitializer />
+              <Header />
+              <main>{children}</main>
+              <Footer />
+            </AuthProvider>
+          </ReactQueryProvider>
         </ThemeProvider>
       </body>
     </html>

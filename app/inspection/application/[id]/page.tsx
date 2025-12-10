@@ -406,7 +406,8 @@ export default function InspectorApplicationView() {
       });
       
       alert("Assessment submitted and application forwarded to approver.");
-      window.location.reload();
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
       
     } catch (err) {
       console.error('Error forwarding application:', err);
@@ -451,7 +452,8 @@ export default function InspectorApplicationView() {
       setShowRevisionDialog(false);
       setRevisionNotes("");
       alert("Application returned to applicant for revision.");
-      window.location.reload();
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
       
     } catch (err) {
       console.error('Error returning application:', err);
@@ -492,7 +494,8 @@ export default function InspectorApplicationView() {
       
       alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
       setSelectedAction('');
-      window.location.reload();
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
       
     } catch (error) {
       console.error('Error transferring application:', error);

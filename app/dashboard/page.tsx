@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -13,12 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, BarChart3, CheckCircle } from "lucide-react";
+import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, CheckCircle } from "lucide-react";
 import Link from "next/link";
-import { useApplications } from "@/hooks/useApplications";
-import { usePermits } from "@/hooks/usePermits";
+// ⚡ PERFORMANCE: Use React Query hooks for automatic caching
+import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useApplicationsQuery";
+import { usePermitsQuery } from "@/hooks/usePermitsQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase";
 import type { Permit as DatabasePermit } from "@/types/database";
 
 function DashboardContent() {
@@ -27,30 +27,6 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<"applications" | "permits">("applications");
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-
-  // Targeted fix for specific application only
-  const fixSpecificApplication = async (applicationId: string) => {
-    if (!user?.id) return;
-    
-    try {
-      // Only update the specific application if it has the hardcoded ID
-      const { error: updateError } = await supabase
-        .from('applications')
-        .update({ applicant_id: user.id })
-        .eq('id', applicationId)
-        .eq('applicant_id', '550e8400-e29b-41d4-a716-446655440001'); // Only if it has the old hardcoded ID
-      
-      if (updateError) {
-        console.error('Error updating specific application:', updateError);
-      } else {
-        console.log('Successfully fixed specific application:', applicationId);
-        // Refresh applications
-        await refreshApplications();
-      }
-    } catch (error) {
-      console.error('Error in fixSpecificApplication:', error);
-    }
-  };
   
   // Check for success parameters from URL
   useEffect(() => {
@@ -70,47 +46,29 @@ function DashboardContent() {
       setActiveTab('permits');
     }
   }, [searchParams]);
-
-  // Disabled auto-fix to prevent claiming other users' applications
-  // useEffect(() => {
-  //   if (user?.id) {
-  //     // Only fix the specific application ID that we know was created by this user
-  //     fixSpecificApplication('9892014a-cfdf-474d-844f-6f3c4b8dfc8b');
-  //   }
-  // }, [user?.id]);
   
-  // Fetch applications and permits for the current user only
+  // ⚡ PERFORMANCE: Use React Query hooks - automatic caching, no manual refresh needed
   const {
-    applications,
-    loading: applicationsLoading,
-    error: applicationsError,
-    refresh: refreshApplications,
-    deleteApplication
-  } = useApplications({
-    userId: user?.id, // Filter applications by current user
-    autoFetch: !!user?.id // Only fetch when we have a user ID
-  });
+    data: applications = [],
+    isLoading: applicationsLoading,
+    error: applicationsQueryError,
+    refetch: refreshApplications
+  } = useApplicationsQuery(user?.id, undefined, !!user?.id);
 
   const {
-    permits: databasePermits,
-    loading: permitsLoading,
-    error: permitsError,
-    refresh: refreshPermits
-  } = usePermits({
-    userId: user?.id, // Filter permits by current user's applications
-    autoFetch: !!user?.id // Only fetch when we have a user ID
-  });
+    data: databasePermits = [],
+    isLoading: permitsLoading,
+    error: permitsQueryError
+  } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id });
 
-  // Auto-refresh applications list periodically to show new submissions
-  useEffect(() => {
-    if (refreshApplications && activeTab === 'applications') {
-      // Refresh when tab becomes active
-      const timer = setTimeout(() => {
-        refreshApplications();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab, refreshApplications]);
+  // ⚡ PERFORMANCE: Use mutation for deleting applications
+  const deleteApplicationMutation = useDeleteApplicationMutation();
+  
+  // Convert React Query errors to strings for display
+  const applicationsError = applicationsQueryError?.message || null;
+  const permitsError = permitsQueryError?.message || null;
+  
+  // ⚡ PERFORMANCE: Removed auto-refresh - React Query handles caching intelligently
 
   // Transform database permits to component format
   const transformPermitForDisplay = (dbPermit: DatabasePermit): PermitListItem => {
@@ -140,20 +98,20 @@ function DashboardContent() {
 
   const permits = databasePermits.map(transformPermitForDisplay);
 
-  // Bulk delete handler
-  const handleBulkDeleteApplications = async (applicationIds: string[]) => {
+  // ⚡ PERFORMANCE: Bulk delete handler using React Query mutation
+  const handleBulkDeleteApplications = useCallback(async (applicationIds: string[]) => {
     try {
-      // Delete applications one by one
-      const deletePromises = applicationIds.map(id => deleteApplication(id));
+      // Delete applications one by one using mutation
+      const deletePromises = applicationIds.map(id => 
+        deleteApplicationMutation.mutateAsync(id)
+      );
       await Promise.all(deletePromises);
-      
-      // Refresh the applications list
-      await refreshApplications();
+      // React Query will automatically invalidate and refetch the list
     } catch (error) {
       console.error('Error deleting applications:', error);
-      throw error; // Re-throw to let the component handle the error display
+      throw error;
     }
-  };
+  }, [deleteApplicationMutation]);
 
   const isLoading = applicationsLoading || permitsLoading;
   const hasError = applicationsError || permitsError;
@@ -231,7 +189,7 @@ function DashboardContent() {
                 <ApplicationStatus 
                   applications={applications} 
                   loading={applicationsLoading}
-                  onRefresh={refreshApplications}
+                  onRefresh={() => refreshApplications()}
                 />
                 
                 {/* Applications List */}

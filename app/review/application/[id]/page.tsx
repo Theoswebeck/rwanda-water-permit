@@ -399,9 +399,9 @@ export default function ReviewApplicationPage() {
 
       if (error) throw error;
 
-    alert("Application approved for technical assessment");
-      // Refresh the application data
-      window.location.reload();
+      alert("Application approved for technical assessment");
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
     } catch (err) {
       console.error('Error updating application:', err);
       alert('Failed to update application');
@@ -433,8 +433,8 @@ export default function ReviewApplicationPage() {
 
   const handleConfirmClose = () => {
     setShowConfirmDialog(false);
-    // Refresh the application data
-    window.location.reload();
+    // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+    router.refresh();
   };
 
   const handleTransferApplication = async () => {
@@ -479,8 +479,8 @@ export default function ReviewApplicationPage() {
       alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
       setSelectedAction('');
       
-      // Refresh the page to show updated data
-      window.location.reload();
+      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      router.refresh();
       
     } catch (error) {
       console.error('Error transferring application:', error);

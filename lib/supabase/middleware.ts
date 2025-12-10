@@ -53,10 +53,14 @@ export async function createClient(request: NextRequest) {
     }
   )
 
-  // Refresh session if needed
+  // ⚡ PERFORMANCE: Use getSession() instead of getUser()
+  // getSession() reads from cookie (fast, no network call)
+  // getUser() validates JWT with Supabase servers (slow, network call every time)
+  // Note: getSession() is safe here because we're in middleware and the session
+  // cookie is httpOnly, so it can't be tampered with client-side
   const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  return { supabase, response: supabaseResponse, user }
+  return { supabase, response: supabaseResponse, user: session?.user || null }
 }

@@ -2,7 +2,40 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/middleware'
 import type { User } from '@supabase/supabase-js'
 
+// ⚡ PERFORMANCE: Define protected routes statically to avoid repeated checks
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/approver', '/inspection', '/inspector', '/review', '/assessment']
+const AUTH_PAGES = ['/login', '/register']
+
+// ⚡ PERFORMANCE: Role-based route access defined statically
+const ROLE_ROUTES: Record<string, string[]> = {
+  admin: ['/admin'],
+  approver: ['/approver'],
+  inspector: ['/inspection', '/inspector', '/assessment'],
+  reviewer: ['/review', '/assessment'],
+  applicant: ['/dashboard', '/apply']
+}
+
+// ⚡ PERFORMANCE: Role dashboard mapping
+const ROLE_DASHBOARDS: Record<string, string> = {
+  admin: '/admin',
+  approver: '/approver',
+  inspector: '/inspection',
+  reviewer: '/review',
+  applicant: '/dashboard'
+}
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+  
+  // ⚡ PERFORMANCE: Early exit for non-protected routes
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route))
+  const isAuthPage = AUTH_PAGES.includes(pathname)
+  
+  // If neither protected nor auth page, skip middleware entirely
+  if (!isProtectedRoute && !isAuthPage) {
+    return NextResponse.next()
+  }
+
   let supabase, response;
   let user: User | null = null;
   
@@ -13,41 +46,12 @@ export async function middleware(request: NextRequest) {
     user = client.user;
   } catch (error) {
     // If there's a fetch error (network issue), allow the request to continue
-    console.warn('⚠️ Middleware auth check failed (network issue), allowing request:', error);
+    console.warn('⚠️ Middleware auth check failed (network issue), allowing request');
     return NextResponse.next();
   }
 
-  // Define protected routes
-  const protectedRoutes = [
-    '/dashboard',
-    // '/apply', // Public route for new applications
-    // '/admin', // TEMPORARY: Disabled for testing
-    // '/approver', // TEMPORARY: Disabled for testing
-    // '/inspection', // TEMPORARY: Disabled for testing
-    // '/inspector', // TEMPORARY: Disabled for testing
-    // '/review', // TEMPORARY: Disabled for testing
-    // '/assessment' // TEMPORARY: Disabled for testing
-  ]
-
-  // Define role-based route access
-  const roleRoutes = {
-    admin: ['/admin'],
-    approver: ['/approver'],
-    inspector: ['/inspection', '/inspector', '/assessment'],
-    reviewer: ['/review', '/assessment'],
-    applicant: ['/dashboard', '/apply']
-  }
-
-  const pathname = request.nextUrl.pathname
-
-  // Check if the route is protected
-  const isProtectedRoute = protectedRoutes.some(route => 
-    pathname.startsWith(route)
-  )
-
   // If it's a protected route and no user, redirect to login
   if (isProtectedRoute && !user) {
-    console.log('🚫 Unauthorized access attempt to:', pathname)
     const redirectUrl = new URL('/login', request.url)
     redirectUrl.searchParams.set('redirect', pathname)
     return NextResponse.redirect(redirectUrl)
@@ -55,146 +59,76 @@ export async function middleware(request: NextRequest) {
 
   // If user exists, check role-based access
   if (user && isProtectedRoute) {
-    try {
-      // Get user profile from metadata if available to avoid DB call
-      // If metadata is missing (old users), fallback to DB
-      let userRole = user.user_metadata?.role;
-      let userStatus = user.user_metadata?.status;
+    // ⚡ PERFORMANCE: Get role from JWT metadata first (no DB call needed)
+    let userRole = user.user_metadata?.role;
+    let userStatus = user.user_metadata?.status;
 
-      if (!userRole || !userStatus) {
-        // Get user profile to check role and status
-        const { data: data, error } = await supabase
+    // Only fetch from DB if metadata is missing (legacy users)
+    if (!userRole || !userStatus) {
+      try {
+        const { data, error } = await supabase
           .from('users')
-          .select('role, status, account_type')
+          .select('role, status')
           .eq('id', user.id)
           .single()
 
-        const userProfile = data as any;
-
-        if (error || !userProfile) {
-          console.error('❌ Error fetching user profile in middleware:', error)
+        if (error || !data) {
+          console.error('❌ Error fetching user profile in middleware')
           return NextResponse.redirect(new URL('/login', request.url))
         }
         
-        userRole = userProfile.role;
-        userStatus = userProfile.status;
+        // Type assertion for the profile data
+        const profile = data as { role: string; status: string };
+        userRole = profile.role;
+        userStatus = profile.status;
+      } catch (error) {
+        console.error('❌ Middleware error:', error)
+        return NextResponse.redirect(new URL('/login', request.url))
       }
+    }
 
-      // Check if user is suspended or inactive
-      if (userStatus === 'suspended') {
-        console.warn('🚫 Suspended user attempted access:', user.email)
-        // Clear session and redirect to login with error
-        await supabase.auth.signOut()
-        const redirectUrl = new URL('/login', request.url)
-        redirectUrl.searchParams.set('error', 'suspended')
-        return NextResponse.redirect(redirectUrl)
-      }
+    // Check if user is suspended or inactive
+    if (userStatus === 'suspended' || userStatus === 'inactive') {
+      await supabase.auth.signOut()
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('error', userStatus)
+      return NextResponse.redirect(redirectUrl)
+    }
 
-      if (userStatus === 'inactive') {
-        console.warn('⚠️ Inactive user attempted access:', user.email)
-        await supabase.auth.signOut()
-        const redirectUrl = new URL('/login', request.url)
-        redirectUrl.searchParams.set('error', 'inactive')
-        return NextResponse.redirect(redirectUrl)
-      }
+    // ⚡ PERFORMANCE: Simplified role-based access check
+    const allowedRoutes = ROLE_ROUTES[userRole] || []
+    const hasAccess = allowedRoutes.some(route => pathname.startsWith(route))
 
-      // Check role-based access
-      let hasAccess = false
-
-      // Check if user's role has access to this route
-      for (const [role, routes] of Object.entries(roleRoutes)) {
-        if (userRole === role) {
-          hasAccess = routes.some(route => pathname.startsWith(route))
-          break
-        }
-      }
-
-      // Special case: applicants can access dashboard and application pages
-      if (userRole === 'applicant') {
-        const applicantAllowedRoutes = ['/dashboard', '/apply']
-        hasAccess = applicantAllowedRoutes.some(route => pathname.startsWith(route))
-      }
-
-      // If no access based on role, redirect to appropriate dashboard
-      if (!hasAccess) {
-        console.warn(`🚫 Role-based access denied for ${userRole} to ${pathname}`)
-        
-        // Redirect to appropriate dashboard based on role
-        switch (userRole) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/admin', request.url))
-          case 'approver':
-            return NextResponse.redirect(new URL('/approver', request.url))
-          case 'inspector':
-            return NextResponse.redirect(new URL('/inspection', request.url))
-          case 'reviewer':
-            return NextResponse.redirect(new URL('/review', request.url))
-          case 'applicant':
-          default:
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-        }
-      }
-
-      console.log(`✅ Access granted for ${userRole} to ${pathname}`)
-    } catch (error) {
-      console.error('❌ Middleware error:', error)
-      return NextResponse.redirect(new URL('/login', request.url))
+    // If no access, redirect to appropriate dashboard
+    if (!hasAccess) {
+      const redirectPath = ROLE_DASHBOARDS[userRole] || '/dashboard'
+      return NextResponse.redirect(new URL(redirectPath, request.url))
     }
   }
 
   // For auth pages, redirect authenticated users to their dashboard
-  const authPages = ['/login', '/register']
-  if (authPages.includes(pathname) && user) {
-    try {
-      let userRole = user.user_metadata?.role;
-      
-      if (!userRole) {
-        const { data: data } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', user.id)
-          .single()
-        
-        const userProfile = data as any;
-        
-        if (userProfile) {
-          userRole = userProfile.role;
-        }
-      }
-
-      if (userRole) {
-        // Redirect to appropriate dashboard based on role
-        switch (userRole) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/admin', request.url))
-          case 'approver':
-            return NextResponse.redirect(new URL('/approver', request.url))
-          case 'inspector':
-            return NextResponse.redirect(new URL('/inspection', request.url))
-          case 'reviewer':
-            return NextResponse.redirect(new URL('/review', request.url))
-          case 'applicant':
-          default:
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error in auth page redirect:', error)
-    }
+  if (isAuthPage && user) {
+    const userRole = user.user_metadata?.role || 'applicant'
+    const redirectPath = ROLE_DASHBOARDS[userRole] || '/dashboard'
+    return NextResponse.redirect(new URL(redirectPath, request.url))
   }
 
   return response
 }
 
+// ⚡ PERFORMANCE: Narrow matcher to only protected routes
+// This prevents middleware from running on every single request
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public|assets).*)',
+    '/dashboard/:path*',
+    '/admin/:path*',
+    '/review/:path*',
+    '/inspection/:path*',
+    '/inspector/:path*',
+    '/approver/:path*',
+    '/assessment/:path*',
+    '/apply/:path*',
+    '/login',
+    '/register'
   ],
 }
