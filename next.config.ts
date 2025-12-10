@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Note: instrumentation.ts is automatically loaded in Next.js 15+
+  
   images: {
     // ⚡ PERFORMANCE: Enable image optimization (was disabled)
     dangerouslyAllowSVG: true,

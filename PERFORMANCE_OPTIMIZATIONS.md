@@ -191,6 +191,32 @@ For testing, clear browser cache or use incognito mode.
 
 ## Cold Start Prevention ✅
 
+### Internal Keep-Alive Mechanism
+Implemented a self-ping system that runs inside the application:
+
+**Files:**
+- `lib/keep-alive.ts` - Keep-alive logic
+- `instrumentation.ts` - Initializes on server start
+- `app/api/health/route.ts` - Health check endpoint
+
+**How It Works:**
+```
+Server starts → instrumentation.ts runs → startKeepAlive()
+                                              ↓
+                              Wait 30 seconds (let server initialize)
+                                              ↓
+                              Ping /api/health every 4 minutes
+                                              ↓
+                              Container stays warm, no cold starts!
+```
+
+**Features:**
+- Runs automatically in production
+- Pings every 4 minutes (before Railway's 5-min idle timeout)
+- Lightweight HEAD requests
+- Only active in production (skips in development)
+- Graceful failure handling
+
 ### Health Check Endpoint
 Created `/api/health` endpoint that:
 - Returns server status and uptime
@@ -202,37 +228,12 @@ Added `railway.toml` with health check configuration:
 - Pings `/api/health` every 5 minutes
 - Keeps container alive and warm
 
-### UptimeRobot Setup (Free External Monitoring)
-
-**What is UptimeRobot?**
-A free service that pings your app every 5 minutes from external servers. This:
-1. Keeps your Railway container warm (prevents cold starts)
-2. Alerts you if your app goes down
-3. Provides uptime statistics
-
-**Setup Steps:**
-
-1. Go to [uptimerobot.com](https://uptimerobot.com) and create a free account
-
-2. Click **"Add New Monitor"**
-
-3. Configure the monitor:
-   | Field | Value |
-   |-------|-------|
-   | Monitor Type | HTTP(s) |
-   | Friendly Name | Water Permit App |
-   | URL | `https://your-railway-url.railway.app/api/health` |
-   | Monitoring Interval | 5 minutes |
-
-4. Click **"Create Monitor"**
-
-5. (Optional) Add alert contacts to get notified if the app goes down
-
-**Free Tier Limits:**
-- 50 monitors
-- 5-minute intervals
-- Email alerts
-- Public status page
+### Environment Variable (Optional)
+Set `NEXT_PUBLIC_APP_URL` to your Railway URL for the self-ping to work:
+```
+NEXT_PUBLIC_APP_URL=https://your-app.railway.app
+```
+Or Railway automatically provides `RAILWAY_PUBLIC_DOMAIN`.
 
 ---
 
