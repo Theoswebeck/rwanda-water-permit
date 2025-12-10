@@ -189,6 +189,53 @@ For testing, clear browser cache or use incognito mode.
 
 ---
 
+## Cold Start Prevention ✅
+
+### Health Check Endpoint
+Created `/api/health` endpoint that:
+- Returns server status and uptime
+- Supports both GET and HEAD requests
+- Has no-cache headers to ensure fresh checks
+
+### Railway Health Check
+Added `railway.toml` with health check configuration:
+- Pings `/api/health` every 5 minutes
+- Keeps container alive and warm
+
+### UptimeRobot Setup (Free External Monitoring)
+
+**What is UptimeRobot?**
+A free service that pings your app every 5 minutes from external servers. This:
+1. Keeps your Railway container warm (prevents cold starts)
+2. Alerts you if your app goes down
+3. Provides uptime statistics
+
+**Setup Steps:**
+
+1. Go to [uptimerobot.com](https://uptimerobot.com) and create a free account
+
+2. Click **"Add New Monitor"**
+
+3. Configure the monitor:
+   | Field | Value |
+   |-------|-------|
+   | Monitor Type | HTTP(s) |
+   | Friendly Name | Water Permit App |
+   | URL | `https://your-railway-url.railway.app/api/health` |
+   | Monitoring Interval | 5 minutes |
+
+4. Click **"Create Monitor"**
+
+5. (Optional) Add alert contacts to get notified if the app goes down
+
+**Free Tier Limits:**
+- 50 monitors
+- 5-minute intervals
+- Email alerts
+- Public status page
+
+---
+
 ## Future Optimizations (Recommended)
 
 1. **Split Application Form** - The 3917-line form could be split into 5+ smaller components

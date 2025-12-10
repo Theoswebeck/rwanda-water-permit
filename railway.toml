@@ -1,0 +1,19 @@
+# Railway Configuration
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+# Number of instances
+numReplicas = 1
+# Graceful shutdown timeout
+sleepTimeout = 300
+
+# ⚡ PERFORMANCE: Health check to prevent cold starts
+# Railway will ping this endpoint regularly to keep the container alive
+[healthcheck]
+path = "/api/health"
+timeout = 300
+interval = 300
+
