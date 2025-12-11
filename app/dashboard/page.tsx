@@ -48,17 +48,20 @@ function DashboardContent() {
   }, [searchParams]);
   
   // ⚡ PERFORMANCE: Use React Query hooks - automatic caching, no manual refresh needed
+  // ⚡ FIX: Only fetch when user.id is defined (prevents hanging when user is deleted)
   const {
     data: applications = [],
     isLoading: applicationsLoading,
     error: applicationsQueryError,
-    refetch: refreshApplications
+    refetch: refreshApplications,
+    isFetching: applicationsFetching
   } = useApplicationsQuery(user?.id, undefined, !!user?.id);
 
   const {
     data: databasePermits = [],
     isLoading: permitsLoading,
-    error: permitsQueryError
+    error: permitsQueryError,
+    isFetching: permitsFetching
   } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id });
 
   // ⚡ PERFORMANCE: Use mutation for deleting applications
@@ -67,8 +70,6 @@ function DashboardContent() {
   // Convert React Query errors to strings for display
   const applicationsError = applicationsQueryError?.message || null;
   const permitsError = permitsQueryError?.message || null;
-  
-  // ⚡ PERFORMANCE: Removed auto-refresh - React Query handles caching intelligently
 
   // Transform database permits to component format
   const transformPermitForDisplay = (dbPermit: DatabasePermit): PermitListItem => {
@@ -113,7 +114,8 @@ function DashboardContent() {
     }
   }, [deleteApplicationMutation]);
 
-  const isLoading = applicationsLoading || permitsLoading;
+  // ⚡ FIX: Better loading state detection - only show loading when actually fetching
+  const isLoading = (applicationsLoading || permitsLoading) && !!user?.id;
   const hasError = applicationsError || permitsError;
 
   return (

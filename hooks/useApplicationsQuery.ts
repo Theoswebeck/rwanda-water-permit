@@ -22,13 +22,15 @@ export function useApplicationsQuery(
   return useQuery({
     queryKey: applicationKeys.list(filters, userId),
     queryFn: async () => {
+      // ⚡ FIX: Don't fetch if no userId
+      if (!userId) {
+        return []
+      }
+      
       let query = supabase
         .from('applications')
         .select('*')
-
-      if (userId) {
-        query = query.eq('applicant_id', userId)
-      }
+        .eq('applicant_id', userId)
 
       if (filters?.status) {
         query = query.in('status', filters.status)
@@ -46,12 +48,19 @@ export function useApplicationsQuery(
 
       const { data, error } = await query
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Error fetching applications:', error.message)
+        throw error
+      }
       return data || []
     },
-    enabled,
+    // ⚡ FIX: Only enable when we have a valid userId
+    enabled: enabled && !!userId,
     // ⚡ Keep applications fresh for 2 minutes
     staleTime: 2 * 60 * 1000,
+    // ⚡ FIX: Add retry and timeout settings
+    retry: 1,
+    retryDelay: 1000,
   })
 }
 

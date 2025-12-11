@@ -21,44 +21,48 @@ export function usePermitsQuery({ userId, enabled = true }: UsePermitsQueryOptio
   return useQuery({
     queryKey: permitKeys.list(userId),
     queryFn: async (): Promise<Permit[]> => {
-      if (userId) {
-        // First get the user's application IDs
-        const { data: userApplications, error: appsError } = await supabase
-          .from('applications')
-          .select('id')
-          .eq('applicant_id', userId)
-
-        if (appsError) throw appsError
-
-        const applicationIds = userApplications?.map(app => app.id) || []
-
-        if (applicationIds.length === 0) {
-          return []
-        }
-
-        // Get permits for those applications
-        const { data, error } = await supabase
-          .from('permits')
-          .select('*')
-          .in('application_id', applicationIds)
-          .order('issued_date', { ascending: false })
-
-        if (error) throw error
-        return data || []
-      } else {
-        // No userId, fetch all permits
-        const { data, error } = await supabase
-          .from('permits')
-          .select('*')
-          .order('issued_date', { ascending: false })
-
-        if (error) throw error
-        return data || []
+      // ⚡ FIX: Don't fetch if no userId
+      if (!userId) {
+        return []
       }
+      
+      // First get the user's application IDs
+      const { data: userApplications, error: appsError } = await supabase
+        .from('applications')
+        .select('id')
+        .eq('applicant_id', userId)
+
+      if (appsError) {
+        console.error('❌ Error fetching user applications for permits:', appsError.message)
+        throw appsError
+      }
+
+      const applicationIds = userApplications?.map(app => app.id) || []
+
+      if (applicationIds.length === 0) {
+        return []
+      }
+
+      // Get permits for those applications
+      const { data, error } = await supabase
+        .from('permits')
+        .select('*')
+        .in('application_id', applicationIds)
+        .order('issued_date', { ascending: false })
+
+      if (error) {
+        console.error('❌ Error fetching permits:', error.message)
+        throw error
+      }
+      return data || []
     },
-    enabled,
+    // ⚡ FIX: Only enable when we have a valid userId
+    enabled: enabled && !!userId,
     // ⚡ Permits change less frequently, keep fresh for 5 minutes
     staleTime: 5 * 60 * 1000,
+    // ⚡ FIX: Add retry settings
+    retry: 1,
+    retryDelay: 1000,
   })
 }
 

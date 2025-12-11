@@ -107,11 +107,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             await supabase.auth.signOut();
             setUser(null);
             setUserProfile(null);
+            // ⚡ FIX: Redirect to login immediately after signout
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+              window.location.href = '/login?error=account_deleted';
+            }
             return null;
           } catch (signOutError) {
             console.error('❌ Error during security sign out:', signOutError);
+            return null;
           }
           
+          // Note: Code below only runs if signOut fails
           console.log('📝 Profile not found, creating basic profile...');
           
           // Get the current user's email from auth
