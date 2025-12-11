@@ -207,7 +207,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const getInitialUser = async () => {
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
+        
+        let user = null;
+        let userError = null;
+        
+        try {
+          const result = await supabase.auth.getUser();
+          user = result.data?.user;
+          userError = result.error;
+        } catch (fetchError: any) {
+          // ⚡ FIX: Catch network errors like "Failed to fetch" or timeouts
+          console.error('❌ Network error getting user:', fetchError?.message || fetchError);
+          userError = { message: fetchError?.message || 'Network error', status: 0 };
+        }
+        
+        // ⚡ FIX: Handle auth errors (403 Forbidden, network errors, timeouts)
+        if (userError) {
+          console.error('❌ Error getting user from auth:', userError.message);
+          
+          const isAuthError = 
+            userError.status === 403 || 
+            userError.status === 401 ||
+            userError.message?.includes('Forbidden') ||
+            userError.message?.includes('Failed to fetch') ||
+            userError.message?.includes('Network') ||
+            userError.message?.includes('timeout');
+          
+          if (isAuthError) {
+            console.log('🚨 Auth error detected. Clearing session and redirecting...');
+            
+            try {
+              await supabase.auth.signOut();
+            } catch (signOutError) {
+              console.error('❌ Error signing out:', signOutError);
+            }
+            
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
+            
+            // Redirect to login if on a protected page
+            if (typeof window !== 'undefined' && 
+                !window.location.pathname.includes('/login') &&
+                !window.location.pathname.includes('/register') &&
+                window.location.pathname !== '/') {
+              window.location.href = '/login?error=session_expired';
+            }
+            return;
+          }
+        }
+        
         setUser(user);
         
         if (user) {
@@ -240,14 +289,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
           
           try {
-            await fetchUserProfile(user.id);
+            const profile = await fetchUserProfile(user.id);
+            if (!profile) {
+              console.error('🚨 User has auth session but NO profile in DB. Force signing out.');
+              try { await supabase.auth.signOut(); } catch {}
+              setUser(null);
+              setUserProfile(null);
+              window.location.href = '/login?error=account_not_found';
+              return;
+            }
           } catch (profileError) {
             console.error('❌ Error fetching initial profile:', profileError);
           }
         }
        
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Error getting initial user:', error);
+        
+        // ⚡ FIX: Also handle network errors or unexpected auth failures
+        if (error?.status === 403 || error?.message?.includes('Forbidden')) {
+          console.log('🚨 Clearing invalid session...');
+          await supabase.auth.signOut();
+          setUser(null);
+          setUserProfile(null);
+        }
       } finally {
         // Ensure loading is false if it wasn't set in the fast path
         setLoading(false);
@@ -259,6 +324,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event: any, session: any) => {
         console.log('🔄 Auth state change:', event);
+        
+        // ⚡ FIX: Validate session with server for ALL events if user is present
+        // This handles INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, etc.
+        if (session?.user) {
+          console.log('🔍 Validating session with server...');
+          try {
+            // Force network request to validate token
+            const { error: validateError } = await supabase.auth.getUser();
+            
+            if (validateError) {
+              console.error('❌ Session validation failed:', validateError.message);
+              console.log('🚨 Clearing invalid session...');
+              await supabase.auth.signOut();
+              setUser(null);
+              setUserProfile(null);
+              setLoading(false);
+              
+              if (typeof window !== 'undefined' && 
+                  !window.location.pathname.includes('/login') &&
+                  !window.location.pathname.includes('/register') &&
+                  window.location.pathname !== '/') {
+                window.location.href = '/login?error=session_expired';
+              }
+              return;
+            }
+          } catch (fetchError: any) {
+            // Network error - treat as invalid session to be safe, or allow retry?
+            // If it's a timeout/network error, we should probably clear session if it persists
+            console.error('❌ Network error validating session:', fetchError?.message);
+            
+            // Only sign out on specific errors that indicate auth failure
+            if (fetchError?.message?.includes('Forbidden') || fetchError?.status === 403) {
+               console.log('🚨 Clearing session due to Forbidden error...');
+               try { await supabase.auth.signOut(); } catch {}
+               setUser(null);
+               setUserProfile(null);
+               setLoading(false);
+               window.location.href = '/login?error=session_expired';
+               return;
+            }
+          }
+        }
+        
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         
@@ -290,8 +398,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           try {
             const profile = await fetchUserProfile(currentUser.id);
             
+            // ⚡ FIX: If profile is missing (deleted from DB), sign out immediately
+            if (!profile) {
+              console.error('🚨 User has auth session but NO profile in DB. Force signing out.');
+              try { await supabase.auth.signOut(); } catch {}
+              setUser(null);
+              setUserProfile(null);
+              if (typeof window !== 'undefined') {
+                window.location.href = '/login?error=account_not_found';
+              }
+              return;
+            }
+            
             // Check if user is suspended even during session restoration
-            if (profile && profile.status === 'suspended') {
+            if (profile.status === 'suspended') {
               console.warn('🚫 Suspended user session detected, signing out:', currentUser.email);
               await supabase.auth.signOut();
               setUser(null);
