@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Generate verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const senderName = process.env.PINDO_SENDER_NAME || 'PindoTest';
+    const senderName = process.env.PINDO_SENDER_NAME || 'Pindo';
     const message = `Your Rwanda Water Board verification code is: ${verificationCode}. Valid for 10 minutes. Do not share this code.`;
 
     console.log('📱 Sending SMS via Pindo API...');

@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Generate verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const senderName = process.env.PINDO_SENDER_NAME || 'PindoTest';
+    const senderName = process.env.PINDO_SENDER_NAME || 'Pindo';
     const message = `Your Rwanda Water Board verification code is: ${verificationCode}. Valid for 10 minutes. Do not share this code.`;
 
     console.log('📱 Sending SMS via Pindo API...');
@@ -76,6 +76,13 @@ export async function POST(request: NextRequest) {
     console.log('📱 Pindo response:', smsResult);
 
     if (!smsResponse.ok) {
+      console.error('❌ Pindo API Error:', smsResult);
+      
+      // Check for specific sender ID error
+      if (smsResult.message && smsResult.message.includes('Unknown sender id')) {
+        console.warn('⚠️ HINT: The Sender ID (PINDO_SENDER_NAME) is not registered. Try using "Pindo" for testing.');
+      }
+
       return NextResponse.json(
         {
           success: false,
