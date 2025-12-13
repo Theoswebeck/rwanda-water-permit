@@ -6,7 +6,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId, phoneNumber } = body;
 
-    console.log('📱 Simple API: Starting verification for:', { userId, phoneNumber });
+    // Avoid logging PII (phone number) in server logs
+    console.log('📱 Simple API: Starting verification for:', { hasUserId: !!userId, phoneSuffix: String(phoneNumber || '').slice(-3) });
 
     // Validate required fields - phoneNumber is required, userId is optional for registration
     if (!phoneNumber) {
@@ -59,21 +60,35 @@ export async function POST(request: NextRequest) {
     console.log('📱 Sending SMS via Pindo API...');
 
     // Send SMS via Pindo
-    const smsResponse = await fetch('https://api.pindo.io/v1/sms/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        to: phoneNumber,
-        text: message,
-        sender: senderName,
-      }),
-    });
-
-    const smsResult = await smsResponse.json();
-    console.log('📱 Pindo response:', smsResult);
+    let smsResponse: Response | null = null;
+    let smsResult: any = null;
+    try {
+      smsResponse = await fetch('https://api.pindo.io/v1/sms/', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: phoneNumber,
+          text: message,
+          sender: senderName,
+        }),
+      });
+      smsResult = await smsResponse.json().catch(() => null);
+      console.log('📱 Pindo response received');
+    } catch (networkError) {
+      // In local/dev environments, Pindo may be unreachable (no network). Fall back to dev code.
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️ Pindo unreachable in dev; falling back to test code 123456');
+        return NextResponse.json({
+          success: true,
+          message: 'Development fallback: Use code 123456 to verify',
+          requestId: undefined,
+        });
+      }
+      throw networkError;
+    }
 
     if (!smsResponse.ok) {
       console.error('❌ Pindo API Error:', smsResult);

@@ -9,10 +9,15 @@
  */
 
 export async function register() {
-  // Only run on the server (not during build or on client)
+  // Only run keep-alive on Node.js runtime (not on edge or during build)
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { startKeepAlive } = await import('./lib/keep-alive')
     startKeepAlive()
   }
+  
+  // Edge runtime - no initialization needed
+  if (process.env.NEXT_RUNTIME === 'edge') {
+    // Edge runtime doesn't need keep-alive
+    return
+  }
 }
-

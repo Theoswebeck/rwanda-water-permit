@@ -1,80 +1,94 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, Shield, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
-import { PhoneVerificationDialog } from "@/components/auth/phone-verification-dialog";
-import { usePhoneVerification } from "@/hooks/usePhoneVerification";
-import { EmailCodeDialog } from "@/components/auth/email-code-dialog";
+
+// Form data interface for passing to parent
+export interface SignUpFormData {
+  email: string;
+  password: string;
+  accountType: 'individual' | 'company';
+  // Company fields
+  companyName?: string;
+  companyTIN?: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  // Individual fields
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  idNumber?: string;
+  idType?: string;
+  phone?: string;
+}
 
 interface SignUpFormProps {
-  onSubmit?: (email: string, password: string, accountType: string, details: any) => void;
-  error?: string;
+  onContinue: (data: SignUpFormData) => void;
+  initialData?: SignUpFormData | null;
   isLoading?: boolean;
 }
 
-export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading = false }: SignUpFormProps) {
-  const router = useRouter();
-  const { signUp } = useAuth();
-  const skipPhoneVerification = process.env.NEXT_PUBLIC_SKIP_PHONE_VERIFICATION === 'true';
-  const skipEmailVerification = process.env.NEXT_PUBLIC_SKIP_EMAIL_VERIFICATION === 'true';
-  
+export function SignUpForm({ onContinue, initialData, isLoading = false }: SignUpFormProps) {
+  // #region agent log
+  useEffect(() => {
+    console.log('🔍 DEBUG SignUpForm mounted - onContinue type:', typeof onContinue, 'hasOnContinue:', !!onContinue);
+  }, [onContinue]);
+  // #endregion
+  // #region agent log
+  useEffect(() => {
+    try {
+      // NDJSON log (workaround if ingest server isn't reachable)
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      fetch('/api/debug/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'components/auth/sign-up-form.tsx:SignUpForm',
+          message: 'mounted',
+          data: { onContinueType: typeof onContinue, hasOnContinue: !!onContinue },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'pre-fix',
+          hypothesisId: 'ONCONTINUE'
+        })
+      }).catch(() => {});
+    } catch {}
+  }, [onContinue]);
+  // #endregion
   // Common fields
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(initialData?.email || "");
+  const [password, setPassword] = useState(initialData?.password || "");
   const [showPassword, setShowPassword] = useState(false);
-  const [accountType, setAccountType] = useState("company");
+  const [accountType, setAccountType] = useState<'individual' | 'company'>(initialData?.accountType || "company");
   
   // Local state
   const [localError, setLocalError] = useState<string>("");
-  const [localLoading, setLocalLoading] = useState(false);
-  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [emailVerified, setEmailVerified] = useState(false);
-  const [emailCode, setEmailCode] = useState<string | undefined>(undefined);
-  
-  // Phone verification state
-  const [showPhoneVerification, setShowPhoneVerification] = useState(false);
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [verificationRequestId, setVerificationRequestId] = useState<number | undefined>();
-  const [currentPhoneForVerification, setCurrentPhoneForVerification] = useState("");
-  
-  // Use prop values or local state
-  const error = propError || localError;
-  const isLoading = propLoading || localLoading;
-  
-  // Phone verification hook
-  const { sendVerificationCode, verifyCode, isLoading: phoneVerificationLoading } = usePhoneVerification();
   
   // Company fields
-  const [companyName, setCompanyName] = useState("");
-  const [companyTIN, setCompanyTIN] = useState("");
-  const [companyAddress, setCompanyAddress] = useState("");
-  const [companyPhone, setCompanyPhone] = useState("");
+  const [companyName, setCompanyName] = useState(initialData?.companyName || "");
+  const [companyTIN, setCompanyTIN] = useState(initialData?.companyTIN || "");
+  const [companyAddress, setCompanyAddress] = useState(initialData?.companyAddress || "");
+  const [companyPhone, setCompanyPhone] = useState(initialData?.companyPhone || "");
 
   // Person fields
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [phone, setPhone] = useState("");
-  const [idNumber, setIdNumber] = useState("");
-  const [idType, setIdType] = useState("nationalId");
+  const [firstName, setFirstName] = useState(initialData?.firstName || "");
+  const [lastName, setLastName] = useState(initialData?.lastName || "");
+  const [dateOfBirth, setDateOfBirth] = useState(initialData?.dateOfBirth || "");
+  const [idNumber, setIdNumber] = useState(initialData?.idNumber || "");
+  const [idType, setIdType] = useState(initialData?.idType || "nationalId");
+  const [phone, setPhone] = useState(initialData?.phone || "");
 
   // Validation states
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [phoneError, setPhoneError] = useState("");
-  const [companyPhoneError, setCompanyPhoneError] = useState("");
   const [idNumberError, setIdNumberError] = useState("");
   const [companyTINError, setCompanyTINError] = useState("");
 
@@ -102,22 +116,6 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
       return false;
     }
     setPasswordError("");
-    return true;
-  };
-
-  const validatePhone = (phone: string, isCompany = false) => {
-    if (!phone) {
-      const error = "Phone number is required.";
-      isCompany ? setCompanyPhoneError(error) : setPhoneError(error);
-      return false;
-    }
-    const phoneRegex = /^(\+250|0)7\d{8}$/;
-    if (!phoneRegex.test(phone)) {
-      const error = "Invalid Rwandan phone number format.";
-      isCompany ? setCompanyPhoneError(error) : setPhoneError(error);
-      return false;
-    }
-    isCompany ? setCompanyPhoneError("") : setPhoneError("");
     return true;
   };
 
@@ -194,13 +192,6 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
       return false;
     }
 
-    // Basic format validation - can be enhanced with checksum if needed
-    const tinPattern = /^\d{9}$/;
-    if (!tinPattern.test(digits)) {
-      setCompanyTINError("Invalid TIN format. Expected: 9 digits (e.g., 123456789)");
-      return false;
-    }
-
     setCompanyTINError("");
     return true;
   };
@@ -209,9 +200,6 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     const newEmail = e.target.value;
     setEmail(newEmail);
     validateEmail(newEmail);
-    // Reset email verification status when email changes
-    setEmailVerified(false);
-    setEmailCode(undefined);
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -220,182 +208,103 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
     validatePassword(newPassword);
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>, isCompany = false) => {
-    const newPhone = e.target.value;
-    if (isCompany) {
-      setCompanyPhone(newPhone);
-      validatePhone(newPhone, true);
-      // Reset verification status when phone changes
-      if (phoneVerified && currentPhoneForVerification !== newPhone) {
-        setPhoneVerified(false);
-      }
-    } else {
-      setPhone(newPhone);
-      validatePhone(newPhone, false);
-      // Reset verification status when phone changes
-      if (phoneVerified && currentPhoneForVerification !== newPhone) {
-        setPhoneVerified(false);
-      }
-    }
-  };
-
-  const handleVerifyPhone = async (phoneNumber: string) => {
-    setCurrentPhoneForVerification(phoneNumber);
-    const result = await sendVerificationCode(phoneNumber);
-    
-    if (result.success) {
-      setVerificationRequestId(result.requestId);
-      setShowPhoneVerification(true);
-    } else {
-      setLocalError(result.message);
-    }
-  };
-
-  const handlePhoneVerificationComplete = () => {
-    setPhoneVerified(true);
-    setShowPhoneVerification(false);
-    setLocalError("");
-  };
-
-  // Helper function to check if phone verification is complete for current account type
-  const isPhoneVerificationComplete = () => {
-    if (skipPhoneVerification) return true;
-    const currentPhone = accountType === 'company' ? companyPhone : phone;
-    return phoneVerified && currentPhoneForVerification === currentPhone;
-  };
-
-  // Helper function to get verification status message
-  const getPhoneVerificationMessage = () => {
-    if (skipPhoneVerification) return null;
-    const currentPhone = accountType === 'company' ? companyPhone : phone;
-    if (!phoneVerified) {
-      return "Phone verification required";
-    }
-    if (currentPhoneForVerification !== currentPhone) {
-      return "Phone number changed - verification required";
-    }
-    return null;
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError("");
 
-    // Enforce email code verification prior to signup (skippable via flag)
-    if (!skipEmailVerification && (!emailVerified || !emailCode)) {
-      setEmailDialogOpen(true);
+    // Validate common fields
+    const isEmailValid = validateEmail(email);
+    const isPasswordValid = validatePassword(password);
+
+    if (!isEmailValid || !isPasswordValid) {
       return;
     }
 
-    // STRICT ENFORCEMENT (skippable via flag)
-    if (!skipPhoneVerification) {
-      const currentPhone = accountType === 'company' ? companyPhone : phone;
-      if (!phoneVerified) {
-        setLocalError("🚨 Phone verification is required to create an account. Please verify your phone number first.");
+    // Validate account-specific fields
+    if (accountType === 'company') {
+      if (!companyName.trim()) {
+        setLocalError("Company name is required.");
         return;
       }
-      
-      if (currentPhoneForVerification !== currentPhone) {
-        setLocalError("🚨 Phone number has changed since verification. Please verify the new phone number.");
-        // Reset phone verification status
-        setPhoneVerified(false);
-        setCurrentPhoneForVerification("");
+      if (!validateCompanyTIN(companyTIN)) {
         return;
       }
-
-      // Double-check verification status
-      if (!isPhoneVerificationComplete()) {
-        setLocalError("🚨 Phone verification incomplete. Please complete phone verification to proceed.");
+      if (!companyPhone.trim()) {
+        setLocalError("Company phone number is required.");
         return;
       }
-
-      // Server-side verification check before account creation
-      setLocalLoading(true);
-      try {
-        const verificationCheck = await fetch('/api/auth/verify-phone-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phoneNumber: currentPhone })
-        });
-
-        const verificationResult = await verificationCheck.json();
-        
-        if (!verificationResult.success || !verificationResult.verified) {
-          setLocalError(`🚨 Server verification failed: ${verificationResult.message || 'Phone not verified on server'}`);
-          setPhoneVerified(false); // Reset local state
-          setLocalLoading(false);
-          return;
-        }
-
-        console.log('✅ Server-side phone verification confirmed');
-      } catch (verificationError) {
-        setLocalError("🚨 Failed to verify phone status with server. Please try again.");
-        setLocalLoading(false);
+      if (!companyAddress.trim()) {
+        setLocalError("Company address is required.");
+        return;
+      }
+    } else {
+      if (!firstName.trim() || !lastName.trim()) {
+        setLocalError("First name and last name are required.");
+        return;
+      }
+      if (!dateOfBirth) {
+        setLocalError("Date of birth is required.");
+        return;
+      }
+      if (!phone.trim()) {
+        setLocalError("Phone number is required.");
+        return;
+      }
+      if (!validateNationalId(idNumber)) {
         return;
       }
     }
 
-    // If onSubmit prop is provided, use it (for external handling)
-    if (onSubmit) {
-      const details = accountType === "company" 
-        ? { companyName, companyTIN, companyAddress, companyPhone }
+    // Build form data
+    const formData: SignUpFormData = {
+      email,
+      password,
+      accountType,
+      ...(accountType === 'company' 
+        ? { 
+            companyName, 
+            companyTIN, 
+            companyPhone,
+            companyAddress,
+          }
         : { 
             firstName, 
             lastName, 
-            dateOfBirth, 
+            dateOfBirth,
+            idNumber,
+            idType,
             phone,
-            identification: {
-              type: idType,
-              number: idNumber
-            }
-          };
-      
-      setTimeout(() => {
-        onSubmit(email, password, accountType, details);
-      }, 1000);
-      return;
-    }
+          }
+      )
+    };
 
-    // Otherwise, handle signup internally
-    setLocalLoading(true);
-
+    // #region agent log
+    console.log('🔍 DEBUG: onContinue type:', typeof onContinue, 'value:', onContinue);
+    // #endregion
+    // #region agent log
     try {
-      const signUpData = {
-        email,
-        password,
-        accountType: accountType as 'individual' | 'company',
-        emailCode,
-        ...(accountType === 'company' 
-          ? { 
-              companyName, 
-              companyTIN, 
-              companyAddress, 
-              companyPhone 
-            }
-          : { 
-              firstName, 
-              lastName, 
-              phone,
-              identification: {
-                type: idType,
-                number: idNumber
-              }
-            }
-        )
-      };
-
-      const result = await signUp(signUpData);
-      
-      if (result.error) {
-        setLocalError(result.error);
-      } else {
-        // Success - redirect to login or dashboard
-        router.push("/login?message=Account created successfully! Please sign in.");
-      }
-    } catch (err) {
-      setLocalError("An unexpected error occurred during signup");
-    } finally {
-      setLocalLoading(false);
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      fetch('/api/debug/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: 'components/auth/sign-up-form.tsx:handleSubmit',
+          message: 'before onContinue call',
+          data: { onContinueType: typeof onContinue, hasOnContinue: !!onContinue, accountType: formData.accountType },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'pre-fix',
+          hypothesisId: 'ONCONTINUE'
+        })
+      }).catch(() => {});
+    } catch {}
+    // #endregion
+    // Pass data to parent component - with safeguard
+    if (typeof onContinue === 'function') {
+      onContinue(formData);
+    } else {
+      console.error('❌ onContinue is not a function! Type:', typeof onContinue);
+      throw new Error(`onContinue is not a function. Received type: ${typeof onContinue}. Please ensure onContinue prop is passed to SignUpForm.`);
     }
   };
 
@@ -459,16 +368,20 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
           <CardDescription className="text-center">
-            Enter your details below to create your account
+            Enter your details below to get started
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
+          {localError && (
             <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-              {error}
+              {localError}
             </div>
           )}
-          <Tabs defaultValue="company" onValueChange={setAccountType} className="w-full">
+          <Tabs 
+            defaultValue={accountType} 
+            onValueChange={(value) => setAccountType(value as 'individual' | 'company')} 
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="company">Company</TabsTrigger>
               <TabsTrigger value="individual">Person</TabsTrigger>
@@ -511,6 +424,20 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                     <p className="text-xs text-muted-foreground mt-1">Format: 9 digits (e.g., 123456789)</p>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="companyPhone">Company Phone Number</Label>
+                  <Input
+                    id="companyPhone"
+                    type="tel"
+                    placeholder="+2507XXXXXXXX or 07XXXXXXXX"
+                    required
+                    value={companyPhone}
+                    onChange={(e) => setCompanyPhone(e.target.value)}
+                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    disabled={isLoading}
+                  />
+                </div>
                 
                 <div className="space-y-2">
                   <Label htmlFor="companyAddress">Company Address</Label>
@@ -524,49 +451,6 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                     className="transition-all duration-200 focus:ring-2 focus:ring-primary"
                     disabled={isLoading}
                   />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="companyPhone">Company Phone</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      id="companyPhone" 
-                      type="tel" 
-                      placeholder="+250 XXX XXX XXX" 
-                      required
-                      value={companyPhone}
-                      onChange={(e) => handlePhoneChange(e, true)}
-                      className="flex-1 transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading}
-                    />
-                    <Button
-                      type="button"
-                      variant={phoneVerified && currentPhoneForVerification === companyPhone ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => handleVerifyPhone(companyPhone)}
-                      disabled={!companyPhone || companyPhoneError !== "" || phoneVerificationLoading || isLoading}
-                      className="whitespace-nowrap"
-                    >
-                      {phoneVerified && currentPhoneForVerification === companyPhone ? (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Verified
-                        </>
-                      ) : (
-                        <>
-                          <Shield className="h-4 w-4 mr-1" />
-                          Verify
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                  {companyPhoneError && <p className="text-xs text-red-500 mt-1">{companyPhoneError}</p>}
-                  {phoneVerified && currentPhoneForVerification === companyPhone && (
-                    <div className="flex items-center gap-1 text-green-600 text-xs">
-                      <CheckCircle className="h-3 w-3" />
-                      Phone number verified
-                    </div>
-                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -611,23 +495,18 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   </div>
                   {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                 </div>
-                
-                {/* Phone verification status message */}
-                {!isPhoneVerificationComplete() && (
-                  <div className="p-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md flex items-center">
-                    <Shield className="h-4 w-4 mr-2" />
-                    {getPhoneVerificationMessage()}
-                  </div>
-                )}
 
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading || !isPhoneVerificationComplete()}
+                  disabled={isLoading}
                 >
-                  {isLoading ? "Creating account..." : 
-                   !isPhoneVerificationComplete() ? "Verify Phone to Continue" :
-                   "Create Company Account"}
+                  {isLoading ? "Please wait..." : (
+                    <>
+                      Continue
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
                 </Button>
               </form>
             </TabsContent>
@@ -664,61 +543,31 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                    <Input 
-                      id="dateOfBirth" 
-                      type="date" 
-                      required 
-                      value={dateOfBirth}
-                      onChange={(e) => setDateOfBirth(e.target.value)}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <div className="flex gap-2">
-                      <Input 
-                        id="phone" 
-                        type="tel" 
-                        placeholder="(+250) XXX XXX XXX" 
-                        required 
-                        value={phone}
-                        onChange={(e) => handlePhoneChange(e, false)}
-                        className="flex-1 transition-all duration-200 focus:ring-2 focus:ring-primary"
-                        disabled={isLoading}
-                      />
-                      <Button
-                        type="button"
-                        variant={phoneVerified && currentPhoneForVerification === phone ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handleVerifyPhone(phone)}
-                        disabled={!phone || phoneError !== "" || phoneVerificationLoading || isLoading}
-                        className="whitespace-nowrap"
-                      >
-                        {phoneVerified && currentPhoneForVerification === phone ? (
-                          <>
-                            <CheckCircle className="h-4 w-4 mr-1" />
-                            Verified
-                          </>
-                        ) : (
-                          <>
-                            <Shield className="h-4 w-4 mr-1" />
-                            Verify
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    {phoneError && <p className="text-xs text-red-500 mt-1">{phoneError}</p>}
-                    {phoneVerified && currentPhoneForVerification === phone && (
-                      <div className="flex items-center gap-1 text-green-600 text-xs">
-                        <CheckCircle className="h-3 w-3" />
-                        Phone number verified
-                      </div>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                  <Input 
+                    id="dateOfBirth" 
+                    type="date" 
+                    required 
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone Number</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+2507XXXXXXXX or 07XXXXXXXX"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    disabled={isLoading}
+                  />
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -728,6 +577,7 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                       value={idType} 
                       onValueChange={setIdType}
                       defaultValue="nationalId"
+                      disabled={isLoading}
                     >
                       <SelectTrigger id="idType" className="w-full">
                         <SelectValue placeholder="National ID" />
@@ -750,6 +600,7 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                       className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
                         idNumberError ? 'border-red-500 focus:ring-red-500' : ''
                       }`}
+                      disabled={isLoading}
                     />
                     {idNumberError && (
                       <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
@@ -770,9 +621,11 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                     value={email}
                     onChange={handleEmailChange}
                     className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    disabled={isLoading}
                   />
                   {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
                 </div>
+                
                 <div className="space-y-2">
                   <Label htmlFor="personPassword">Password</Label>
                   <div className="relative">
@@ -783,11 +636,13 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                       value={password}
                       onChange={handlePasswordChange}
                       className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
+                      disabled={isLoading}
                     />
                     <button 
                       type="button" 
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={isLoading}
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -798,23 +653,18 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
                   </div>
                   {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
                 </div>
-                
-                {/* Phone verification status message */}
-                {!isPhoneVerificationComplete() && (
-                  <div className="p-3 text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-md flex items-center">
-                    <Shield className="h-4 w-4 mr-2" />
-                    {getPhoneVerificationMessage()}
-                  </div>
-                )}
 
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading || !isPhoneVerificationComplete()}
+                  disabled={isLoading}
                 >
-                  {isLoading ? "Creating account..." : 
-                   !isPhoneVerificationComplete() ? "Verify Phone to Continue" :
-                   "Create Personal Account"}
+                  {isLoading ? "Please wait..." : (
+                    <>
+                      Continue
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </>
+                  )}
                 </Button>
               </form>
             </TabsContent>
@@ -851,29 +701,6 @@ export function SignUpForm({ onSubmit, error: propError, isLoading: propLoading 
           </div>
         </CardFooter>
       </Card>
-
-      {/* Phone Verification Dialog */}
-      <PhoneVerificationDialog
-        open={showPhoneVerification}
-        onOpenChange={setShowPhoneVerification}
-        phoneNumber={currentPhoneForVerification}
-        onVerificationComplete={handlePhoneVerificationComplete}
-        onSendCode={() => sendVerificationCode(currentPhoneForVerification)}
-        onVerifyCode={verifyCode}
-        requestId={verificationRequestId}
-      />
-
-      {/* Email Code Dialog */}
-      <EmailCodeDialog
-        open={emailDialogOpen}
-        onOpenChange={setEmailDialogOpen}
-        email={email}
-        onVerified={(code) => {
-          setEmailVerified(true);
-          setEmailCode(code);
-          setLocalError("");
-        }}
-      />
     </motion.div>
   );
-} 
+}

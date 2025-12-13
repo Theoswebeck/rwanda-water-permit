@@ -222,16 +222,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
         
         // ⚡ FIX: Handle auth errors (403 Forbidden, network errors, timeouts)
+        // Note: "Auth session missing!" is expected when the user is logged out.
         if (userError) {
-          console.error('❌ Error getting user from auth:', userError.message);
+          const message = userError.message || '';
+          const status = (userError as any).status;
+
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/29592803-9713-4a4b-88f7-651d6eb5bc85',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:getInitialUser',message:'getUser() returned error',data:{status,message},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'AUTH-SESSION'},)}).catch(()=>{});
+          // #endregion
+
+          const isMissingSession =
+            message.includes('Auth session missing') ||
+            message.includes('No session') ||
+            message.includes('session missing');
+
+          if (isMissingSession) {
+            // Treat as a normal logged-out state: no error, no signOut, no redirect
+            console.log('ℹ️ No active auth session (logged out).');
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
+            return;
+          }
+
+          console.error('❌ Error getting user from auth:', message);
           
           const isAuthError = 
-            userError.status === 403 || 
-            userError.status === 401 ||
-            userError.message?.includes('Forbidden') ||
-            userError.message?.includes('Failed to fetch') ||
-            userError.message?.includes('Network') ||
-            userError.message?.includes('timeout');
+            status === 403 || 
+            status === 401 ||
+            message.includes('Forbidden') ||
+            message.includes('Failed to fetch') ||
+            message.includes('Network') ||
+            message.includes('timeout');
           
           if (isAuthError) {
             console.log('🚨 Auth error detected. Clearing session and redirecting...');
@@ -593,7 +615,107 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       const result = await res.json();
       if (!res.ok || !result.success) {
-        return { error: result.message || 'Signup failed' };
+        const msg = result.message || 'Signup failed';
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/29592803-9713-4a4b-88f7-651d6eb5bc85',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:signUp',message:'signup API failed',data:{status:res.status,message:msg},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'SIGNUP-ENV'},)}).catch(()=>{});
+        // #endregion
+
+        const isMissingServiceKey = msg.includes('SUPABASE_SERVICE_ROLE_KEY is missing');
+
+        // Dev-only fallback: allow local testing without service role key by using anon client signup + profile insert
+        if (isMissingServiceKey && process.env.NODE_ENV !== 'production') {
+          console.warn('⚠️ Missing SUPABASE_SERVICE_ROLE_KEY. Using dev fallback signup via anon key.');
+
+          const { data: signUpResult, error: signUpError } = await supabase.auth.signUp({
+            email: data.email,
+            password: data.password,
+            options: {
+              data: {
+                role: 'applicant',
+                status: 'active',
+                account_type: data.accountType,
+              }
+            }
+          });
+
+          if (signUpError || !signUpResult.user) {
+            return { error: signUpError?.message || 'Signup failed (dev fallback)' };
+          }
+
+          const newUserId = signUpResult.user.id;
+
+          // Check for an existing profile row by email (can cause unique users_email_key violation)
+          // NOTE: Do NOT log email (PII)
+          let existingProfileId: string | null = null;
+          try {
+            const { data: existingProfile } = await supabase
+              .from('users')
+              .select('id')
+              .eq('email', data.email)
+              .maybeSingle();
+            existingProfileId = (existingProfile as any)?.id || null;
+          } catch {}
+
+          // #region agent log
+          fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'contexts/AuthContext.tsx:signUp(dev-fallback)',message:'pre profile upsert',data:{newUserIdSuffix:String(newUserId).slice(-6),existingProfileIdSuffix:existingProfileId?String(existingProfileId).slice(-6):null,existingProfileFound:!!existingProfileId,idsMatch:existingProfileId===newUserId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'DUP-EMAIL'})}).catch(()=>{});
+          // #endregion
+
+          if (existingProfileId && existingProfileId !== newUserId) {
+            // This means public.users has a row for this email tied to a DIFFERENT auth user id.
+            // The DB trigger + unique email constraint will block creating the correct profile.
+            return {
+              error:
+                'Profile conflict: a users row already exists for this email with a different id. ' +
+                `Existing profile id (suffix): ${String(existingProfileId).slice(-6)}, new auth id (suffix): ${String(newUserId).slice(-6)}. ` +
+                'Delete the stale row from public.users (and its matching auth.users if present), then retry.'
+            };
+          }
+
+          // Create profile using authenticated session (RLS-friendly)
+          const profile: Record<string, any> = {
+            id: newUserId,
+            email: data.email,
+            role: 'applicant',
+            status: 'active',
+            account_type: data.accountType,
+            applications_count: 0,
+            reviews_count: 0,
+            inspections_count: 0,
+            email_verified: false,
+            profile_completed: false,
+            phone: data.phone,
+            company_phone: data.companyPhone,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          if (data.accountType === 'individual') {
+            profile.first_name = data.firstName || 'User';
+            profile.last_name = data.lastName || 'Profile';
+            profile.id_number = data.idNumber || data.identification?.number;
+            profile.id_type = 'national_id';
+          } else {
+            profile.company_name = data.companyName;
+            profile.company_tin = data.companyTIN;
+            profile.company_address = data.companyAddress;
+            profile.company_phone = data.companyPhone;
+            profile.id_type = 'tin';
+            profile.id_number = data.companyTIN;
+          }
+
+          const { error: profileError } = await supabase.from('users').upsert(profile, { onConflict: 'id' });
+          if (profileError) {
+            // #region agent log
+            fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'contexts/AuthContext.tsx:signUp(dev-fallback)',message:'profile upsert failed',data:{code:(profileError as any)?.code,message:profileError.message,newUserIdSuffix:String(newUserId).slice(-6)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'DUP-EMAIL'})}).catch(()=>{});
+            // #endregion
+            return { error: `Profile create failed (dev fallback): ${profileError.message}` };
+          }
+
+          return {};
+        }
+
+        return { error: msg };
       }
 
       return {};

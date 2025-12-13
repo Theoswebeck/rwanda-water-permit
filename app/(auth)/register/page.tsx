@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { SignUpForm } from "@/components/auth/sign-up-form";
-import { PinVerification } from "@/components/auth/pin-verification";
+import { SignUpForm, SignUpFormData } from "@/components/auth/sign-up-form";
+import { PhoneVerification } from "@/components/auth/phone-verification";
 import { SuccessConfirmation } from "@/components/auth/success-confirmation";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -18,35 +18,44 @@ export default function RegisterPage() {
     email: string;
     accountType: string;
     details: any;
+    phoneNumber?: string;
   }>({
     email: "",
     accountType: "",
     details: {}
   });
+
+  const normalizeRwandaPhone = (raw?: string) => {
+    const v = (raw || "").trim();
+    if (!v) return "";
+    if (v.startsWith("+")) return v;
+    const digits = v.replace(/\D/g, "");
+    if (digits.length === 10 && digits.startsWith("07")) return `+25${digits}`;
+    if (digits.length === 12 && digits.startsWith("250")) return `+${digits}`;
+    return v;
+  };
   
-  const handleSignUp = async (email: string, password: string, accountType: string, details: any) => {
+  const handleContinue = async (formData: SignUpFormData) => {
     setError("");
     setIsLoading(true);
     
     try {
-      console.log("🔄 Starting registration for:", email);
+      console.log("🔄 Starting registration for:", formData.email);
       
       // Prepare signup data based on account type
       const signUpData = {
-        email,
-        password,
-        accountType: accountType as 'individual' | 'company',
-        ...(accountType === 'individual' ? {
-          firstName: details.firstName,
-          lastName: details.lastName,
-          phone: details.phone,
-          idNumber: details.identification?.number,
-          idType: details.identification?.type,
+        email: formData.email,
+        password: formData.password,
+        accountType: formData.accountType,
+        ...(formData.accountType === 'individual' ? {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          idNumber: formData.idNumber,
+          idType: formData.idType,
         } : {
-          companyName: details.companyName,
-          companyTIN: details.companyTIN,
-          companyAddress: details.companyAddress,
-          companyPhone: details.companyPhone,
+          companyName: formData.companyName,
+          companyTIN: formData.companyTIN,
+          companyAddress: formData.companyAddress,
         })
       };
 
@@ -58,18 +67,42 @@ export default function RegisterPage() {
         return;
       }
       
+      const phoneNumber = normalizeRwandaPhone(
+        formData.accountType === 'company' ? formData.companyPhone : formData.phone
+      );
+
       // Store the user data for later use
       setUserData({
-        email,
-        accountType,
-        details
+        email: formData.email,
+        accountType: formData.accountType,
+        details: formData,
+        phoneNumber
       });
       
       console.log("✅ Registration successful");
-      
-      // For now, skip PIN verification and go straight to success
-      // In a real implementation, you would handle email verification here
-      setStep("success");
+
+      // ✅ Phone verification: send code then show verify step
+      if (!phoneNumber) {
+        setError("Phone number is required for verification.");
+        return;
+      }
+
+      // #region agent log
+      fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/(auth)/register/page.tsx:handleContinue',message:'sending phone verification code',data:{hasPhone:true},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'PHONE-VERIFY'})}).catch(()=>{});
+      // #endregion
+
+      const sendRes = await fetch('/api/auth/verify-phone/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber })
+      });
+      const sendJson = await sendRes.json().catch(() => null);
+      if (!sendRes.ok || !sendJson?.success) {
+        setError(sendJson?.error || sendJson?.message || 'Failed to send phone verification code');
+        return;
+      }
+
+      setStep("verify");
       
     } catch (err) {
       console.error("❌ Registration error:", err);
@@ -79,19 +112,34 @@ export default function RegisterPage() {
     }
   };
   
-  const handleVerifyPin = (pin: string) => {
-    // In a real implementation, this would verify the PIN with an API
-    console.log("Verifying PIN:", pin);
-    
-    // Move to success step
-    setTimeout(() => {
+  const handleVerifyPhoneCode = async (code: string) => {
+    try {
+      setIsLoading(true);
+      const phoneNumber = userData.phoneNumber || "";
+      const res = await fetch('/api/auth/verify-phone/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber, code })
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setError(json?.message || json?.error || 'Invalid verification code');
+        return;
+      }
       setStep("success");
-    }, 1000);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
-  const handleResendPin = () => {
-    // Mock function to resend PIN
-    console.log("Resending PIN to", userData.email);
+  const handleResendPhoneCode = async () => {
+    const phoneNumber = userData.phoneNumber || "";
+    if (!phoneNumber) return;
+    await fetch('/api/auth/verify-phone/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phoneNumber })
+    }).catch(() => {});
   };
 
   const handleSuccessComplete = () => {
@@ -109,16 +157,22 @@ export default function RegisterPage() {
             transition={{ duration: 0.5 }}
             className="w-full"
           >
-            <SignUpForm />
+            <SignUpForm 
+              onContinue={handleContinue}
+              isLoading={isLoading}
+            />
           </motion.div>
         )}
         
         {step === "verify" && (
-          <PinVerification 
-            email={userData.email} 
-            onSubmit={handleVerifyPin}
-            onResendPin={handleResendPin}
-          />
+        <PhoneVerification
+          phoneNumber={userData.phoneNumber || ""}
+          onSubmit={handleVerifyPhoneCode}
+          onResendCode={handleResendPhoneCode}
+          isLoading={isLoading}
+          error={error}
+          onClearError={() => setError("")}
+        />
         )}
         
         {step === "success" && (

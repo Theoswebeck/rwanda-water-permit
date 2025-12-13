@@ -96,7 +96,7 @@ export function CTASection() {
               transition={{ duration: 0.6, delay: 0.8 }}
               className="text-center mt-10 text-white/80 text-sm"
             >
-              Need assistance? <Link href="/contact" className="underline hover:text-white">Contact government support</Link>
+              Need assistance? <Link href="/contact" className="underline hover:text-white">Contact our support</Link>
             </motion.div>
           </div>
         </motion.div>

@@ -82,19 +82,6 @@ export function ProcessSection() {
           </div>
         </div>
         
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.6 }}
-          className="mt-16 text-center"
-        >
-          <div className="inline-block py-3 px-6 rounded-lg border border-border bg-muted/20">
-            <p className="text-sm text-muted-foreground">
-              Standard processing timeframe: <span className="font-semibold text-primary">10-15 business days</span>
-            </p>
-          </div>
-        </motion.div>
       </div>
     </section>
   );
