@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import type { Database } from '@/types/database'
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,33 +21,56 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Get the user's session token from the Authorization header
-    const authHeader = req.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ 
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+    // Prefer cookie-based auth (no client-sent token needed).
+    // We still support Bearer token auth as a fallback for older clients.
+    let supabaseResponse = NextResponse.next({ request: { headers: req.headers } })
+    const supabaseAuth = createServerClient<Database>(
+      url,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options: object) {
+            supabaseResponse = NextResponse.next({ request: { headers: req.headers } })
+            supabaseResponse.cookies.set({ name, value, ...options })
+          },
+          remove(name: string, options: object) {
+            supabaseResponse = NextResponse.next({ request: { headers: req.headers } })
+            supabaseResponse.cookies.set({ name, value: '', ...options })
+          },
+        },
+      }
+    )
+
+    // ✅ Verified user (recommended by Supabase)
+    let user = (await supabaseAuth.auth.getUser()).data.user
+
+    // Fallback: Bearer token (backward compatibility)
+    if (!user) {
+      const authHeader = req.headers.get('authorization')
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7)
+        const tmp = createClient(url, serviceKey)
+        user = (await tmp.auth.getUser(token)).data.user
+      }
+    }
+    
+    if (!user) {
+      return NextResponse.json({
         success: false, 
         message: 'Authentication required' 
       }, { status: 401 })
     }
 
-    const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-    
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-    const supabase = createClient(url, serviceKey)
-
-    // Get user from the service role client using the token
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token)
-    
-    if (userError || !user) {
-      return NextResponse.json({ 
-        success: false, 
-        message: 'Invalid session' 
-      }, { status: 401 })
-    }
+    const supabaseAdmin = createClient(url, serviceKey)
 
     // Since user is already authenticated, directly update password using admin API
-    const { error: updateError } = await supabase.auth.admin.updateUserById(
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.id,
       { password: newPassword }
     )
@@ -58,10 +83,14 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    return NextResponse.json({ 
+    const res = NextResponse.json({ 
       success: true, 
       message: 'Password updated successfully' 
     })
+
+    // Propagate any auth cookies that were refreshed.
+    supabaseResponse.cookies.getAll().forEach(cookie => res.cookies.set(cookie))
+    return res
 
   } catch (err) {
     console.error('Change password server error:', err)

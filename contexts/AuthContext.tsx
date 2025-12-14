@@ -346,54 +346,86 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event: any, session: any) => {
         console.log('🔄 Auth state change:', event);
-        
-        // ⚡ FIX: Validate session with server for ALL events if user is present
-        // This handles INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED, etc.
-        if (session?.user) {
-          console.log('🔍 Validating session with server...');
-          try {
-            // Force network request to validate token
-            const { error: validateError } = await supabase.auth.getUser();
-            
-            if (validateError) {
-              console.error('❌ Session validation failed:', validateError.message);
-              console.log('🚨 Clearing invalid session...');
-              await supabase.auth.signOut();
+
+        // IMPORTANT: never trust `session.user` from storage/cookies.
+        // Always hydrate the user via getUser() which validates with Supabase Auth.
+        if (event === 'SIGNED_OUT' || !session) {
+          console.log('🚪 No active session.');
+          setUser(null);
+          setUserProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        console.log('🔍 Fetching verified user from auth server...');
+        let currentUser: SupabaseUser | null = null;
+        try {
+          const { data, error: userError } = await supabase.auth.getUser();
+
+          if (userError) {
+            const msg = userError.message || '';
+            const status = (userError as any).status;
+
+            const isMissingSession =
+              msg.includes('Auth session missing') ||
+              msg.includes('No session') ||
+              msg.includes('session missing');
+
+            if (isMissingSession) {
+              console.log('ℹ️ No active auth session (logged out).');
               setUser(null);
               setUserProfile(null);
               setLoading(false);
-              
-              if (typeof window !== 'undefined' && 
-                  !window.location.pathname.includes('/login') &&
-                  !window.location.pathname.includes('/register') &&
-                  window.location.pathname !== '/') {
-                window.location.href = '/login?error=session_expired';
-              }
               return;
             }
-          } catch (fetchError: any) {
-            // Network error - treat as invalid session to be safe, or allow retry?
-            // If it's a timeout/network error, we should probably clear session if it persists
-            console.error('❌ Network error validating session:', fetchError?.message);
-            
-            // Only sign out on specific errors that indicate auth failure
-            if (fetchError?.message?.includes('Forbidden') || fetchError?.status === 403) {
-               console.log('🚨 Clearing session due to Forbidden error...');
-               try { await supabase.auth.signOut(); } catch {}
-               setUser(null);
-               setUserProfile(null);
-               setLoading(false);
-               window.location.href = '/login?error=session_expired';
-               return;
+
+            console.error('❌ Session validation failed:', msg);
+
+            // Clear invalid session and redirect if needed
+            try { await supabase.auth.signOut(); } catch {}
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
+
+            if (
+              typeof window !== 'undefined' &&
+              !window.location.pathname.includes('/login') &&
+              !window.location.pathname.includes('/register') &&
+              window.location.pathname !== '/' &&
+              (status === 401 || status === 403 || msg.includes('Forbidden'))
+            ) {
+              window.location.href = '/login?error=session_expired';
             }
+            return;
           }
+
+          currentUser = data?.user ?? null;
+        } catch (fetchError: any) {
+          console.error('❌ Network error validating session:', fetchError?.message);
+
+          // Only sign out on errors that indicate auth failure
+          if (fetchError?.message?.includes('Forbidden') || fetchError?.status === 403) {
+            console.log('🚨 Clearing session due to Forbidden error...');
+            try { await supabase.auth.signOut(); } catch {}
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
+            if (typeof window !== 'undefined') {
+              window.location.href = '/login?error=session_expired';
+            }
+            return;
+          }
+
+          // On transient network errors, keep existing auth state.
+          console.warn('⚠️ Skipping auth state update due to network error.');
+          setLoading(false);
+          return;
         }
-        
-        const currentUser = session?.user ?? null;
+
         setUser(currentUser);
-        
+
         if (currentUser) {
-          console.log('✅ User session updated:', currentUser.email);
+          console.log('✅ User session updated (verified):', currentUser.email);
 
           // OPTIMIZATION: Use metadata for instant profile availability
           const metadata = currentUser.user_metadata;
@@ -710,17 +742,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const changePassword = async (newPassword: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        return { error: 'Not authenticated' };
-      }
-
       const response = await fetch('/api/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           newPassword
