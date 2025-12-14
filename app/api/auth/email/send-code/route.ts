@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { setDevEmailCode } from '../dev-store'
 
 // Util: basic email validation
 const isValidEmail = (email: string) => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email)
@@ -13,11 +14,23 @@ export async function POST(req: NextRequest) {
     }
 
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceKey) {
-      return NextResponse.json({ success: false, message: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing' }, { status: 500 })
+    const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
+    const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabaseKey = adminKey || anonKey
+
+    if (!supabaseKey) {
+      return NextResponse.json(
+        { success: false, message: 'Server misconfiguration: missing Supabase keys (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
+        { status: 500 }
+      )
     }
-    const supabase = createClient(url, serviceKey)
+
+    if (!adminKey && isDev) {
+      console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY is missing; using NEXT_PUBLIC_SUPABASE_ANON_KEY for email code generation.')
+    }
+
+    const supabase = createClient(url, supabaseKey)
 
     // Create a new verification code (TTL 15 minutes)
     let code: string | undefined
@@ -29,21 +42,36 @@ export async function POST(req: NextRequest) {
       const codeRow: any = Array.isArray(rows) ? rows[0] : rows
       code = codeRow?.code || codeRow?.out_code
     } catch (rpcErr) {
-      console.warn('⚠️ RPC failed, falling back to manual insert:', rpcErr)
-      // Fallback: generate and insert directly
-      const fallback = String(Math.floor(100000 + Math.random() * 900000))
-      const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-      const { error: insertErr } = await supabase
-        .from('email_verification_codes')
-        .insert({ email: email.toLowerCase(), code: fallback, purpose, expires_at: expires })
-      if (insertErr) {
-        console.error('❌ Fallback insert failed:', insertErr)
-        return NextResponse.json({ success: false, message: 'Could not create verification code' }, { status: 500 })
+      console.warn('⚠️ Email code RPC failed:', rpcErr)
+
+      // Dev fallback when service role is missing (RLS blocks direct inserts):
+      // generate a real code, keep it in a server-side dev store, and print it to the terminal.
+      if (!adminKey && isDev) {
+        const fallback = String(Math.floor(100000 + Math.random() * 900000))
+        setDevEmailCode({ email, purpose, code: fallback, ttlMinutes: 15 })
+        code = fallback
+      } else {
+        // Production / service-role path: try direct insert (service role bypasses RLS)
+        console.warn('⚠️ Falling back to manual insert (requires service role)...')
+        const fallback = String(Math.floor(100000 + Math.random() * 900000))
+        const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+        const { error: insertErr } = await supabase
+          .from('email_verification_codes')
+          .insert({ email: email.toLowerCase(), code: fallback, purpose, expires_at: expires })
+        if (insertErr) {
+          console.error('❌ Fallback insert failed:', insertErr)
+          return NextResponse.json(
+            {
+              success: false,
+              message: 'Could not create verification code. Configure SUPABASE_SERVICE_ROLE_KEY or grant RPC access for anon/authenticated.',
+            },
+            { status: 500 }
+          )
+        }
+        code = fallback
       }
-      code = fallback
     }
 
-    const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
     if (isDev) {
       console.log(`✉️ Dev email code for ${email}: ${code}`)
     }
@@ -51,11 +79,6 @@ export async function POST(req: NextRequest) {
     // Send the email via Resend if configured
     const resendKey = process.env.RESEND_API_KEY
     const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev' // Use Resend's onboarding domain
-    
-    // Log code in development mode only
-    if (process.env.EMAIL_DEV_MODE === 'true') {
-      console.log('✉️ Dev email code for', email, ':', code)
-    }
     
     if (resendKey) {
       const subject = 'Your verification code - Rwanda Water Board'
@@ -100,6 +123,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ 
           success: true, 
           message: `Email sending failed but code created. ${isDev ? 'Use devCode below.' : 'Try resending.'}`, 
+          delivered: false,
+          deliveryProvider: 'resend',
           devCode: isDev ? code : undefined,
           debug: isDev ? { resendError: responseText } : undefined
         })
@@ -109,13 +134,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ 
         success: true, 
         message: 'Verification email sent successfully!', 
+        delivered: true,
+        deliveryProvider: 'resend',
         devCode: isDev ? code : undefined 
       })
     }
 
     // No provider configured
     if (isDev) {
-      return NextResponse.json({ success: true, message: 'Dev mode: provider not configured, using dev code', devCode: code })
+      return NextResponse.json({
+        success: true,
+        message: 'Email was not sent because RESEND_API_KEY is not configured. Use the dev code (printed to the server terminal) or set RESEND_API_KEY and resend.',
+        delivered: false,
+        deliveryProvider: 'none',
+        devCode: code,
+      })
     }
     return NextResponse.json({ success: false, message: 'Email provider not configured. Set RESEND_API_KEY.' }, { status: 500 })
   } catch (err) {

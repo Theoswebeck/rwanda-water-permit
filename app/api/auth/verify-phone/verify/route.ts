@@ -4,9 +4,9 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, phoneNumber, code, requestId } = body;
+    const { userId, phoneNumber, code, requestId, accountType } = body;
 
-    console.log('🔍 Simple verify API: Checking code for:', { userId, phoneNumber, code });
+    console.log('🔍 Simple verify API: Checking code for:', { hasUserId: !!userId, phoneSuffix: String(phoneNumber || '').slice(-3) });
 
     // Validate required fields - code is required, userId or phoneNumber needed
     if (!code || (!userId && !phoneNumber)) {
@@ -19,64 +19,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check development mode
-    const isDevelopmentMode = process.env.PINDO_DEVELOPMENT_MODE === 'true';
-    const devCode = process.env.PINDO_DEV_CODE || '123456';
-    
-    console.log('🔧 Verify environment status:', {
-      isDevelopmentMode,
-      devCode,
-      submittedCode: code,
-    });
-
-    if (isDevelopmentMode) {
-      console.log('🔧 Development mode: Checking against test code');
-      
-      if (code === devCode) {
-        console.log('✅ Development verification successful');
-        
-        // Try to mark as verified in database (optional)
-        try {
-          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-          const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-          
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            serviceRoleKey && serviceRoleKey !== 'your_supabase_service_role_key_here' 
-              ? serviceRoleKey 
-              : anonKey!
-          );
-
-          await supabase
-            .from('users')
-            .update({
-              phone_verified: true,
-              phone_verification_code: null,
-              phone_verification_expires_at: null,
-              phone_verification_attempts: 0,
-            })
-            .eq('id', userId);
-        } catch (dbError) {
-          console.log('⚠️ Database update failed (non-critical):', dbError);
-        }
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Phone number verified successfully (development mode)',
-          verified: true,
-        });
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            message: `Invalid code. Expected: ${devCode}`,
-            error: 'INVALID_CODE',
-            verified: false,
-          },
-          { status: 400 }
-        );
-      }
-    }
+    // In development mode we still verify against the stored code in the database.
+    // (We print the generated code to the server terminal from the send endpoint.)
 
     // Production mode - check against database
     try {
@@ -203,14 +147,21 @@ export async function POST(request: NextRequest) {
 
       if (userId) {
         // Update users table if userId provided
+        const update: Record<string, any> = {
+          phone_verified: true,
+          phone_verification_code: null,
+          phone_verification_expires_at: null,
+          phone_verification_attempts: 0,
+          // update phone on account after verification
+          phone: phoneNumber,
+        };
+        if (accountType === 'company') {
+          update.company_phone = phoneNumber;
+        }
+
         await supabase
           .from('users')
-          .update({
-            phone_verified: true,
-            phone_verification_code: null,
-            phone_verification_expires_at: null,
-            phone_verification_attempts: 0,
-          })
+          .update(update)
           .eq('id', userId);
       }
 

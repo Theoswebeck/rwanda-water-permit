@@ -2,7 +2,6 @@
 
 import { useSearchParams } from "next/navigation";
 import { EmailVerificationPending } from "@/components/auth/email-verification-pending";
-import { createClient } from "@/lib/supabase/client";
 
 export function EmailVerificationPendingHandler() {
   const searchParams = useSearchParams();
@@ -14,27 +13,20 @@ export function EmailVerificationPendingHandler() {
     }
 
     try {
-      const supabase = createClient();
-      
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/verify-email`
-        }
+      // We use custom OTP-by-email via our API (Resend), not Supabase auth email links.
+      const resp = await fetch('/api/auth/email/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, purpose: 'signup' }),
       });
-
-      if (error) {
-        console.error('Resend email error:', error);
-        return { 
-          success: false, 
-          message: error.message || 'Failed to resend verification email' 
-        };
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data?.success) {
+        return { success: false, message: data?.message || 'Failed to send verification code' };
       }
 
       return { 
         success: true, 
-        message: 'Verification email sent successfully! Please check your inbox.' 
+        message: 'Verification code sent successfully! Please check your inbox.' 
       };
     } catch (error) {
       console.error('Unexpected resend error:', error);

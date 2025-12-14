@@ -84,7 +84,7 @@ export function EmailVerificationPending({
               Check Your Email
             </CardTitle>
             <CardDescription className="text-base">
-              We&apos;ve sent a verification link to verify your email address.
+              We&apos;ve sent a 6-digit verification code to verify your email address.
             </CardDescription>
           </div>
         </CardHeader>
@@ -103,7 +103,7 @@ export function EmailVerificationPending({
           <div className="space-y-3">
             <div className="flex items-start gap-3 text-sm text-gray-600">
               <div className="w-2 h-2 rounded-full bg-blue-400 mt-2"></div>
-              <p>Click the verification link in your email to activate your account</p>
+              <p>Enter the 6-digit code from your email to continue</p>
             </div>
             
             <div className="flex items-start gap-3 text-sm text-gray-600">
@@ -113,7 +113,7 @@ export function EmailVerificationPending({
             
             <div className="flex items-start gap-3 text-sm text-gray-600">
               <div className="w-2 h-2 rounded-full bg-blue-400 mt-2"></div>
-              <p>The verification link will expire in 24 hours</p>
+              <p>The verification code expires after a short time</p>
             </div>
           </div>
 

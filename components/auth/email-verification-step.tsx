@@ -20,6 +20,7 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState<string>("");
   const [resendCountdown, setResendCountdown] = useState(0);
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
@@ -45,6 +46,7 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
   const handleSendCode = async () => {
     setIsSending(true);
     setError("");
+    setInfo("");
 
     try {
       const response = await fetch('/api/auth/email/send-code', {
@@ -66,6 +68,11 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
 
       setCodeSent(true);
       setResendCountdown(60); // 60 second countdown before resend
+
+      // If the API says the email wasn't actually delivered (missing/failed provider), show a friendly warning.
+      if (data.delivered === false && data.message) {
+        setInfo(data.message);
+      }
       
       // Store dev code if provided (for development mode)
       if (data.devCode) {
@@ -149,10 +156,8 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
       // Success!
       setVerificationSuccess(true);
       
-      // Brief delay to show success state, then continue
-      setTimeout(() => {
-        onContinue(code);
-      }, 1000);
+      // Continue immediately (parent should redirect to dashboard)
+      onContinue(code);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Verification failed';
@@ -203,12 +208,13 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
             </div>
           )}
 
-          {/* Dev mode code display */}
-          {devCode && (
-            <div className="p-3 text-sm text-blue-600 bg-blue-50 border border-blue-200 rounded-md">
-              <strong>Dev Mode:</strong> Your code is <code className="font-mono bg-blue-100 px-2 py-1 rounded">{devCode}</code>
+          {info && !error && (
+            <div className="p-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
+              {info}
             </div>
           )}
+
+          {/* Dev code is intentionally not displayed in UI */}
 
           {verificationSuccess ? (
             <div className="flex flex-col items-center justify-center py-8">
@@ -222,7 +228,7 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
                 </div>
               </motion.div>
               <p className="mt-4 text-lg font-medium text-green-600">Email Verified!</p>
-              <p className="text-sm text-muted-foreground">Creating your account...</p>
+              <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
             </div>
           ) : isSending ? (
             <div className="flex flex-col items-center justify-center py-8">

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { PhoneVerification } from "@/components/auth/phone-verification";
+import { EmailVerificationStep } from "@/components/auth/email-verification-step";
 import { SuccessConfirmation } from "@/components/auth/success-confirmation";
 import { SignUpForm, SignUpFormData } from "@/components/auth/sign-up-form";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,14 +13,16 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function ApplyPage() {
   const router = useRouter();
   const { signUp, isAuthenticated, isApplicant, loading } = useAuth();
-  const [step, setStep] = useState<"signup" | "verify" | "success">("signup");
+  const [step, setStep] = useState<"signup" | "phone" | "email" | "success">("signup");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const authRedirectCheckedRef = useRef(false);
   const [userData, setUserData] = useState<{
     email: string;
     accountType: string;
     details: Record<string, unknown>;
     phoneNumber?: string;
+    userId?: string;
   }>({
     email: "",
     accountType: "",
@@ -38,11 +41,13 @@ export default function ApplyPage() {
     return v;
   };
 
-  // Redirect authenticated applicants to dashboard
+  // Redirect authenticated applicants to dashboard ONLY if they were already authenticated
+  // when this page loaded. (Avoid redirecting mid-signup flow.)
   useEffect(() => {
-    if (!loading && isAuthenticated && isApplicant) {
-      router.push('/dashboard');
-    }
+    if (authRedirectCheckedRef.current) return;
+    if (loading) return;
+    authRedirectCheckedRef.current = true;
+    if (isAuthenticated && isApplicant) router.push("/dashboard");
   }, [loading, isAuthenticated, isApplicant, router]);
 
   // Show loading or redirect early to prevent flash
@@ -111,7 +116,8 @@ export default function ApplyPage() {
         email: formData.email,
         accountType: formData.accountType,
         details: formData,
-        phoneNumber
+        phoneNumber,
+        userId: result.userId
       });
       
       console.log("✅ Application registration successful");
@@ -123,13 +129,13 @@ export default function ApplyPage() {
       }
 
       // #region agent log
-      fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/apply/page.tsx:handleContinue',message:'sending phone verification code',data:{hasPhone:true},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'PHONE-VERIFY'})}).catch(()=>{});
+      // Disabled: writing debug logs during dev can create rebuild loops.
       // #endregion
 
       const sendRes = await fetch('/api/auth/verify-phone/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber })
+        body: JSON.stringify({ phoneNumber, userId: result.userId })
       });
       const sendJson = await sendRes.json().catch(() => null);
       if (!sendRes.ok || !sendJson?.success) {
@@ -137,7 +143,7 @@ export default function ApplyPage() {
         return;
       }
 
-      setStep("verify");
+      setStep("phone");
       
     } catch (err) {
       console.error("❌ Application registration error:", err);
@@ -154,14 +160,16 @@ export default function ApplyPage() {
       const res = await fetch('/api/auth/verify-phone/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber, code })
+        body: JSON.stringify({ phoneNumber, code, userId: userData.userId, accountType: userData.accountType })
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
         setError(json?.message || json?.error || 'Invalid verification code');
         return;
       }
-      setStep("success");
+      // Next: email verification
+      setError("");
+      setStep("email");
     } finally {
       setIsLoading(false);
     }
@@ -170,11 +178,42 @@ export default function ApplyPage() {
   const handleResendPhoneCode = async () => {
     const phoneNumber = userData.phoneNumber || "";
     if (!phoneNumber) return;
-    await fetch('/api/auth/verify-phone/send', {
+    const res = await fetch('/api/auth/verify-phone/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phoneNumber })
-    }).catch(() => {});
+      body: JSON.stringify({ phoneNumber, userId: userData.userId })
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      setError(json?.message || json?.error || 'Failed to resend phone verification code');
+      throw new Error(json?.message || json?.error || 'Failed to resend phone verification code');
+    }
+  };
+
+  const handleEditPhone = async (newPhoneRaw: string) => {
+    const phoneNumber = normalizeRwandaPhone(newPhoneRaw);
+    setError("");
+    setIsLoading(true);
+    try {
+      setUserData((prev) => ({ ...prev, phoneNumber }));
+      const sendRes = await fetch('/api/auth/verify-phone/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber, userId: userData.userId })
+      });
+      const sendJson = await sendRes.json().catch(() => null);
+      if (!sendRes.ok || !sendJson?.success) {
+        setError(sendJson?.error || sendJson?.message || 'Failed to send phone verification code');
+        return;
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailVerified = async (_emailCode: string) => {
+    // EmailVerificationStep already verifies the code via API.
+    router.push("/dashboard");
   };
 
   const handleSuccessComplete = () => {
@@ -198,24 +237,39 @@ export default function ApplyPage() {
         </motion.div>
       )}
       
-      {step === "verify" && (
+      {step === "phone" && (
         <PhoneVerification
           phoneNumber={userData.phoneNumber || ""}
           onSubmit={handleVerifyPhoneCode}
           onResendCode={handleResendPhoneCode}
+          onEditPhone={handleEditPhone}
           isLoading={isLoading}
           error={error}
           onClearError={() => setError("")}
+        />
+      )}
+
+      {step === "email" && (
+        <EmailVerificationStep
+          email={userData.email}
+          isLoading={isLoading}
+          onBack={() => setStep("phone")}
+          onContinue={() => {
+            setError("");
+            router.push("/dashboard");
+          }}
         />
       )}
       
       {step === "success" && (
         <SuccessConfirmation 
           email={userData.email} 
-          onComplete={handleSuccessComplete}
           title="Welcome to Water Permit Portal!"
           message="Your account has been successfully created. You can now apply for water permits and track your applications."
-          redirectLabel="Start Dashboard"
+          showPrimaryButton={true}
+          redirectUrl="/dashboard"
+          redirectLabel="Continue"
+          showApplyButton={false}
         />
       )}
     </AuthLayout>

@@ -11,7 +11,8 @@ import { Loader2 } from "lucide-react";
 interface PhoneVerificationProps {
   phoneNumber: string;
   onSubmit: (code: string) => void;
-  onResendCode: () => void;
+  onResendCode: () => void | Promise<void>;
+  onEditPhone?: (newPhone: string) => void | Promise<void>;
   isLoading?: boolean;
   error?: string;
   onClearError?: () => void;
@@ -27,6 +28,7 @@ export function PhoneVerification({
   phoneNumber,
   onSubmit,
   onResendCode,
+  onEditPhone,
   isLoading = false,
   error,
   onClearError,
@@ -36,6 +38,15 @@ export function PhoneVerification({
   const [isResending, setIsResending] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [phoneDraft, setPhoneDraft] = useState("");
+  const [phoneEditError, setPhoneEditError] = useState<string>("");
+  const [isUpdatingPhone, setIsUpdatingPhone] = useState(false);
+
+  useEffect(() => {
+    // keep draft in sync when opening editor
+    if (isEditingPhone) setPhoneDraft(phoneNumber || "");
+  }, [isEditingPhone, phoneNumber]);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -77,15 +88,44 @@ export function PhoneVerification({
     onSubmit(full);
   };
 
-  const resend = () => {
+  const resend = async () => {
     if (countdown > 0 || isResending) return;
     if (error) onClearError?.();
     setIsResending(true);
-    onResendCode();
-    setTimeout(() => {
-      setIsResending(false);
+    try {
+      await Promise.resolve(onResendCode());
       setCountdown(30);
-    }, 800);
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const savePhone = async () => {
+    if (!onEditPhone) return;
+    const v = phoneDraft.trim();
+    setPhoneEditError("");
+    if (!v) {
+      setPhoneEditError("Please enter a phone number.");
+      return;
+    }
+    // basic sanity check; full normalization/validation is handled by parent
+    if (v.replace(/\D/g, "").length < 9) {
+      setPhoneEditError("Phone number looks too short.");
+      return;
+    }
+    try {
+      setIsUpdatingPhone(true);
+      if (error) onClearError?.();
+      setCode(Array.from({ length: CODE_LEN }, () => "")); // invalidate current attempt in UI
+      await onEditPhone(v);
+      setCountdown(30);
+      setIsEditingPhone(false);
+      setTimeout(() => inputRefs.current[0]?.focus(), 50);
+    } catch {
+      // parent sets error; keep user in edit mode only if they want to adjust further
+    } finally {
+      setIsUpdatingPhone(false);
+    }
   };
 
   return (
@@ -100,9 +140,72 @@ export function PhoneVerification({
           <CardTitle className="text-2xl font-bold text-center">Verify your phone</CardTitle>
           <CardDescription className="text-center">
             We&apos;ve sent a verification code to <span className="font-medium">{maskPhone(phoneNumber)}</span>
+            {onEditPhone && (
+              <>
+                {" "}
+                <button
+                  type="button"
+                  className="text-primary hover:underline font-medium"
+                  onClick={() => {
+                    setPhoneEditError("");
+                    setIsEditingPhone(true);
+                  }}
+                  disabled={isLoading || isUpdatingPhone}
+                >
+                  Edit
+                </button>
+              </>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {isEditingPhone && (
+            <div className="mb-4 space-y-2">
+              {phoneEditError && (
+                <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                  {phoneEditError}
+                </div>
+              )}
+              <Label htmlFor="phoneEdit">Phone number</Label>
+              <Input
+                id="phoneEdit"
+                type="tel"
+                value={phoneDraft}
+                onChange={(e) => setPhoneDraft(e.target.value)}
+                placeholder="+2507XXXXXXXX or 07XXXXXXXX"
+                disabled={isLoading || isUpdatingPhone}
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  className="flex-1"
+                  onClick={savePhone}
+                  disabled={isLoading || isUpdatingPhone}
+                >
+                  {isUpdatingPhone ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Sending...
+                    </span>
+                  ) : (
+                    "Save & Send Code"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setPhoneEditError("");
+                    setIsEditingPhone(false);
+                    setPhoneDraft(phoneNumber || "");
+                  }}
+                  disabled={isLoading || isUpdatingPhone}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
           {!!error && (
             <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
               {error}
@@ -145,6 +248,20 @@ export function PhoneVerification({
           </div>
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
+          {onEditPhone && !isEditingPhone && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setPhoneEditError("");
+                setIsEditingPhone(true);
+              }}
+              disabled={isLoading || isUpdatingPhone}
+            >
+              Change phone number
+            </Button>
+          )}
           <div className="text-sm text-center text-muted-foreground">
             Didn&apos;t receive the code?{" "}
             <button

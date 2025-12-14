@@ -30,30 +30,27 @@ export async function POST(request: NextRequest) {
       senderName: process.env.PINDO_SENDER_NAME,
     });
 
-    if (isDevelopmentMode) {
-      console.log('🔧 Development mode: Using test code 123456');
-      
-      // In development mode, just return success
-      return NextResponse.json({
-        success: true,
-        message: 'Development mode: Use code 123456 to verify',
-        requestId: undefined,
-      });
+    // Generate verification code (always real/random)
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // In dev, we don't require Pindo to be reachable; we will log the code to the server terminal.
+    if (isDevelopmentMode || process.env.NODE_ENV !== 'production') {
+      console.log(`📟 Phone verification code (dev): code=${verificationCode} phoneSuffix=${String(phoneNumber || '').slice(-3)}`)
     }
 
     // Production mode - send real SMS
-    if (!apiKey) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Pindo API key not configured' 
-        },
-        { status: 400 }
-      );
+    if (!isDevelopmentMode) {
+      if (!apiKey) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Pindo API key not configured' 
+          },
+          { status: 400 }
+        );
+      }
     }
 
-    // Generate verification code
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const senderName = process.env.PINDO_SENDER_NAME || 'Pindo';
     const message = `Your Rwanda Water Board verification code is: ${verificationCode}. Valid for 10 minutes. Do not share this code.`;
 
@@ -63,6 +60,10 @@ export async function POST(request: NextRequest) {
     let smsResponse: Response | null = null;
     let smsResult: any = null;
     try {
+      if (isDevelopmentMode) {
+        // Skip external SMS in development mode; proceed to DB storage.
+        smsResponse = { ok: true } as any;
+      } else {
       smsResponse = await fetch('https://api.pindo.io/v1/sms/', {
         method: 'POST',
         headers: {
@@ -77,20 +78,18 @@ export async function POST(request: NextRequest) {
       });
       smsResult = await smsResponse.json().catch(() => null);
       console.log('📱 Pindo response received');
-    } catch (networkError) {
-      // In local/dev environments, Pindo may be unreachable (no network). Fall back to dev code.
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn('⚠️ Pindo unreachable in dev; falling back to test code 123456');
-        return NextResponse.json({
-          success: true,
-          message: 'Development fallback: Use code 123456 to verify',
-          requestId: undefined,
-        });
       }
+    } catch (networkError) {
+      // In local/dev environments, Pindo may be unreachable (no network). Still proceed with DB storage.
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️ Pindo unreachable in dev; proceeding without SMS delivery');
+        smsResponse = { ok: true } as any;
+      } else {
       throw networkError;
+      }
     }
 
-    if (!smsResponse.ok) {
+    if (!smsResponse || !smsResponse.ok) {
       console.error('❌ Pindo API Error:', smsResult);
       
       // Check for specific sender ID error
@@ -126,6 +125,22 @@ export async function POST(request: NextRequest) {
       );
 
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Invalidate any previous pending codes (best effort)
+      try {
+        if (userId) {
+          await supabase
+            .from('phone_verification_logs')
+            .update({ status: 'superseded' })
+            .eq('status', 'sent')
+            .eq('user_id', userId);
+        }
+        await supabase
+          .from('phone_verification_logs')
+          .update({ status: 'superseded' })
+          .eq('status', 'sent')
+          .eq('phone_number', phoneNumber);
+      } catch {}
 
       // Store in phone_verification_logs table for registration flow
       console.log('📝 Storing verification in database:', {

@@ -27,7 +27,7 @@ interface AuthContextType {
   loading: boolean
   isAuthenticated: boolean
   signIn: (email: string, password: string) => Promise<{ error?: string }>
-  signUp: (data: SignUpData & { emailCode?: string }) => Promise<{ error?: string, needsEmailVerification?: boolean, email?: string }>
+  signUp: (data: SignUpData & { emailCode?: string }) => Promise<{ error?: string, userId?: string }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   updateProfile: (updates: Partial<User>) => Promise<{ error?: string }>
@@ -227,9 +227,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const message = userError.message || '';
           const status = (userError as any).status;
 
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/29592803-9713-4a4b-88f7-651d6eb5bc85',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:getInitialUser',message:'getUser() returned error',data:{status,message},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'AUTH-SESSION'},)}).catch(()=>{});
-          // #endregion
+        // #region agent log
+        // Disabled: writing debug logs during dev can create rebuild loops.
+        // #endregion
 
           const isMissingSession =
             message.includes('Auth session missing') ||
@@ -618,107 +618,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const msg = result.message || 'Signup failed';
 
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/29592803-9713-4a4b-88f7-651d6eb5bc85',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AuthContext.tsx:signUp',message:'signup API failed',data:{status:res.status,message:msg},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'SIGNUP-ENV'},)}).catch(()=>{});
+        // Disabled: writing debug logs during dev can create rebuild loops.
         // #endregion
 
-        const isMissingServiceKey = msg.includes('SUPABASE_SERVICE_ROLE_KEY is missing');
-
-        // Dev-only fallback: allow local testing without service role key by using anon client signup + profile insert
-        if (isMissingServiceKey && process.env.NODE_ENV !== 'production') {
-          console.warn('⚠️ Missing SUPABASE_SERVICE_ROLE_KEY. Using dev fallback signup via anon key.');
-
-          const { data: signUpResult, error: signUpError } = await supabase.auth.signUp({
-            email: data.email,
-            password: data.password,
-            options: {
-              data: {
-                role: 'applicant',
-                status: 'active',
-                account_type: data.accountType,
-              }
-            }
-          });
-
-          if (signUpError || !signUpResult.user) {
-            return { error: signUpError?.message || 'Signup failed (dev fallback)' };
-          }
-
-          const newUserId = signUpResult.user.id;
-
-          // Check for an existing profile row by email (can cause unique users_email_key violation)
-          // NOTE: Do NOT log email (PII)
-          let existingProfileId: string | null = null;
-          try {
-            const { data: existingProfile } = await supabase
-              .from('users')
-              .select('id')
-              .eq('email', data.email)
-              .maybeSingle();
-            existingProfileId = (existingProfile as any)?.id || null;
-          } catch {}
-
-          // #region agent log
-          fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'contexts/AuthContext.tsx:signUp(dev-fallback)',message:'pre profile upsert',data:{newUserIdSuffix:String(newUserId).slice(-6),existingProfileIdSuffix:existingProfileId?String(existingProfileId).slice(-6):null,existingProfileFound:!!existingProfileId,idsMatch:existingProfileId===newUserId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'DUP-EMAIL'})}).catch(()=>{});
-          // #endregion
-
-          if (existingProfileId && existingProfileId !== newUserId) {
-            // This means public.users has a row for this email tied to a DIFFERENT auth user id.
-            // The DB trigger + unique email constraint will block creating the correct profile.
-            return {
-              error:
-                'Profile conflict: a users row already exists for this email with a different id. ' +
-                `Existing profile id (suffix): ${String(existingProfileId).slice(-6)}, new auth id (suffix): ${String(newUserId).slice(-6)}. ` +
-                'Delete the stale row from public.users (and its matching auth.users if present), then retry.'
-            };
-          }
-
-          // Create profile using authenticated session (RLS-friendly)
-          const profile: Record<string, any> = {
-            id: newUserId,
-            email: data.email,
-            role: 'applicant',
-            status: 'active',
-            account_type: data.accountType,
-            applications_count: 0,
-            reviews_count: 0,
-            inspections_count: 0,
-            email_verified: false,
-            profile_completed: false,
-            phone: data.phone,
-            company_phone: data.companyPhone,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
-
-          if (data.accountType === 'individual') {
-            profile.first_name = data.firstName || 'User';
-            profile.last_name = data.lastName || 'Profile';
-            profile.id_number = data.idNumber || data.identification?.number;
-            profile.id_type = 'national_id';
-          } else {
-            profile.company_name = data.companyName;
-            profile.company_tin = data.companyTIN;
-            profile.company_address = data.companyAddress;
-            profile.company_phone = data.companyPhone;
-            profile.id_type = 'tin';
-            profile.id_number = data.companyTIN;
-          }
-
-          const { error: profileError } = await supabase.from('users').upsert(profile, { onConflict: 'id' });
-          if (profileError) {
-            // #region agent log
-            fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'contexts/AuthContext.tsx:signUp(dev-fallback)',message:'profile upsert failed',data:{code:(profileError as any)?.code,message:profileError.message,newUserIdSuffix:String(newUserId).slice(-6)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'DUP-EMAIL'})}).catch(()=>{});
-            // #endregion
-            return { error: `Profile create failed (dev fallback): ${profileError.message}` };
-          }
-
-          return {};
+        // We intentionally do NOT fall back to client-side `supabase.auth.signUp()`:
+        // that path triggers Supabase's built-in email confirmation flow, but this app uses Resend OTP codes instead.
+        if (msg.includes('SUPABASE_SERVICE_ROLE_KEY is missing')) {
+          return { error: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing. Add it to .env.local to create users without Supabase email confirmation.' };
         }
 
         return { error: msg };
       }
 
-      return {};
+      return { userId: result.userId };
     } catch (err) {
       console.error('❌ Unexpected signup error:', err);
       return { error: 'An unexpected error occurred during signup' };

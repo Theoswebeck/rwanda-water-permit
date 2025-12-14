@@ -42,27 +42,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     console.log('🔍 DEBUG SignUpForm mounted - onContinue type:', typeof onContinue, 'hasOnContinue:', !!onContinue);
   }, [onContinue]);
   // #endregion
-  // #region agent log
-  useEffect(() => {
-    try {
-      // NDJSON log (workaround if ingest server isn't reachable)
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      fetch('/api/debug/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'components/auth/sign-up-form.tsx:SignUpForm',
-          message: 'mounted',
-          data: { onContinueType: typeof onContinue, hasOnContinue: !!onContinue },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'pre-fix',
-          hypothesisId: 'ONCONTINUE'
-        })
-      }).catch(() => {});
-    } catch {}
-  }, [onContinue]);
-  // #endregion
   // Common fields
   const [email, setEmail] = useState(initialData?.email || "");
   const [password, setPassword] = useState(initialData?.password || "");
@@ -91,6 +70,8 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
   const [passwordError, setPasswordError] = useState("");
   const [idNumberError, setIdNumberError] = useState("");
   const [companyTINError, setCompanyTINError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [companyPhoneError, setCompanyPhoneError] = useState("");
 
   const validateEmail = (email: string) => {
     if (!email) {
@@ -196,8 +177,34 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     return true;
   };
 
+  const isValidRwandaPhone = (raw: string) => {
+    const v = (raw || "").trim();
+    if (!v) return false;
+    const digits = v.replace(/\D/g, "");
+    // Accepted formats:
+    // - 07XXXXXXXX (10 digits)
+    // - 2507XXXXXXXX (12 digits)
+    // - +2507XXXXXXXX (will become 2507XXXXXXXX after stripping non-digits)
+    if (digits.length === 10 && digits.startsWith("07")) return true;
+    if (digits.length === 12 && digits.startsWith("2507")) return true;
+    return false;
+  };
+
+  const validateRwandaPhone = (raw: string, setErr: (msg: string) => void) => {
+    if (!raw?.trim()) {
+      setErr("Phone number is required.");
+      return false;
+    }
+    if (!isValidRwandaPhone(raw)) {
+      setErr("Invalid Rwanda phone format. Use 07XXXXXXXX or +2507XXXXXXXX.");
+      return false;
+    }
+    setErr("");
+    return true;
+  };
+
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newEmail = e.target.value;
+    const newEmail = e.target.value.toLowerCase();
     setEmail(newEmail);
     validateEmail(newEmail);
   };
@@ -229,10 +236,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
       if (!validateCompanyTIN(companyTIN)) {
         return;
       }
-      if (!companyPhone.trim()) {
-        setLocalError("Company phone number is required.");
-        return;
-      }
+      if (!validateRwandaPhone(companyPhone, setCompanyPhoneError)) return;
       if (!companyAddress.trim()) {
         setLocalError("Company address is required.");
         return;
@@ -246,10 +250,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
         setLocalError("Date of birth is required.");
         return;
       }
-      if (!phone.trim()) {
-        setLocalError("Phone number is required.");
-        return;
-      }
+      if (!validateRwandaPhone(phone, setPhoneError)) return;
       if (!validateNationalId(idNumber)) {
         return;
       }
@@ -281,24 +282,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     // #region agent log
     console.log('🔍 DEBUG: onContinue type:', typeof onContinue, 'value:', onContinue);
     // #endregion
-    // #region agent log
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      fetch('/api/debug/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: 'components/auth/sign-up-form.tsx:handleSubmit',
-          message: 'before onContinue call',
-          data: { onContinueType: typeof onContinue, hasOnContinue: !!onContinue, accountType: formData.accountType },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'pre-fix',
-          hypothesisId: 'ONCONTINUE'
-        })
-      }).catch(() => {});
-    } catch {}
-    // #endregion
     // Pass data to parent component - with safeguard
     if (typeof onContinue === 'function') {
       onContinue(formData);
@@ -307,6 +290,33 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
       throw new Error(`onContinue is not a function. Received type: ${typeof onContinue}. Please ensure onContinue prop is passed to SignUpForm.`);
     }
   };
+
+  const companyFormReady =
+    !!companyName.trim() &&
+    !!companyTIN.trim() &&
+    companyTIN.replace(/\D/g, "").length === 9 &&
+    !companyTINError &&
+    !!companyPhone.trim() &&
+    !companyPhoneError &&
+    !!companyAddress.trim() &&
+    !!email.trim() &&
+    !emailError &&
+    !!password &&
+    !passwordError;
+
+  const individualFormReady =
+    !!firstName.trim() &&
+    !!lastName.trim() &&
+    !!dateOfBirth &&
+    !!phone.trim() &&
+    !phoneError &&
+    !!idNumber.trim() &&
+    idNumber.replace(/\D/g, "").length === 16 &&
+    !idNumberError &&
+    !!email.trim() &&
+    !emailError &&
+    !!password &&
+    !passwordError;
 
   const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -433,10 +443,21 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                     placeholder="+2507XXXXXXXX or 07XXXXXXXX"
                     required
                     value={companyPhone}
-                    onChange={(e) => setCompanyPhone(e.target.value)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCompanyPhone(v);
+                      // Live-validate once the user starts typing
+                      if (companyPhoneError) validateRwandaPhone(v, setCompanyPhoneError);
+                      else if (v.trim()) validateRwandaPhone(v, setCompanyPhoneError);
+                    }}
+                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                      companyPhoneError ? 'border-red-500 focus:ring-red-500' : ''
+                    }`}
                     disabled={isLoading}
                   />
+                  {companyPhoneError && (
+                    <p className="text-xs text-red-500 mt-1">{companyPhoneError}</p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">
@@ -499,7 +520,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading}
+                  disabled={isLoading || !companyFormReady}
                 >
                   {isLoading ? "Please wait..." : (
                     <>
@@ -564,10 +585,20 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                     placeholder="+2507XXXXXXXX or 07XXXXXXXX"
                     required
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setPhone(v);
+                      if (phoneError) validateRwandaPhone(v, setPhoneError);
+                      else if (v.trim()) validateRwandaPhone(v, setPhoneError);
+                    }}
+                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                      phoneError ? 'border-red-500 focus:ring-red-500' : ''
+                    }`}
                     disabled={isLoading}
                   />
+                  {phoneError && (
+                    <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -657,7 +688,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isLoading}
+                  disabled={isLoading || !individualFormReady}
                 >
                   {isLoading ? "Please wait..." : (
                     <>

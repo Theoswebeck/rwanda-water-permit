@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { SignUpForm, SignUpFormData } from "@/components/auth/sign-up-form";
 import { PhoneVerification } from "@/components/auth/phone-verification";
+import { EmailVerificationStep } from "@/components/auth/email-verification-step";
 import { SuccessConfirmation } from "@/components/auth/success-confirmation";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function RegisterPage() {
   const router = useRouter();
   const { signUp } = useAuth();
-  const [step, setStep] = useState<"signup" | "verify" | "success">("signup");
+  const [step, setStep] = useState<"signup" | "phone" | "email" | "success">("signup");
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [userData, setUserData] = useState<{
@@ -19,6 +20,7 @@ export default function RegisterPage() {
     accountType: string;
     details: any;
     phoneNumber?: string;
+    userId?: string;
   }>({
     email: "",
     accountType: "",
@@ -76,7 +78,8 @@ export default function RegisterPage() {
         email: formData.email,
         accountType: formData.accountType,
         details: formData,
-        phoneNumber
+        phoneNumber,
+        userId: result.userId
       });
       
       console.log("✅ Registration successful");
@@ -88,13 +91,13 @@ export default function RegisterPage() {
       }
 
       // #region agent log
-      fetch('/api/debug/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/(auth)/register/page.tsx:handleContinue',message:'sending phone verification code',data:{hasPhone:true},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'PHONE-VERIFY'})}).catch(()=>{});
+      // Disabled: writing debug logs during dev can create rebuild loops.
       // #endregion
 
       const sendRes = await fetch('/api/auth/verify-phone/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber })
+        body: JSON.stringify({ phoneNumber, userId: result.userId })
       });
       const sendJson = await sendRes.json().catch(() => null);
       if (!sendRes.ok || !sendJson?.success) {
@@ -102,7 +105,7 @@ export default function RegisterPage() {
         return;
       }
 
-      setStep("verify");
+      setStep("phone");
       
     } catch (err) {
       console.error("❌ Registration error:", err);
@@ -119,14 +122,15 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/verify-phone/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber, code })
+        body: JSON.stringify({ phoneNumber, code, userId: userData.userId, accountType: userData.accountType })
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
         setError(json?.message || json?.error || 'Invalid verification code');
         return;
       }
-      setStep("success");
+      setError("");
+      setStep("email");
     } finally {
       setIsLoading(false);
     }
@@ -135,16 +139,45 @@ export default function RegisterPage() {
   const handleResendPhoneCode = async () => {
     const phoneNumber = userData.phoneNumber || "";
     if (!phoneNumber) return;
-    await fetch('/api/auth/verify-phone/send', {
+    const res = await fetch('/api/auth/verify-phone/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phoneNumber })
-    }).catch(() => {});
+      body: JSON.stringify({ phoneNumber, userId: userData.userId })
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      setError(json?.message || json?.error || 'Failed to resend phone verification code');
+      throw new Error(json?.message || json?.error || 'Failed to resend phone verification code');
+    }
+  };
+
+  const handleEditPhone = async (newPhoneRaw: string) => {
+    const phoneNumber = normalizeRwandaPhone(newPhoneRaw);
+    setError("");
+    setIsLoading(true);
+    try {
+      setUserData((prev) => ({ ...prev, phoneNumber }));
+      const sendRes = await fetch('/api/auth/verify-phone/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber, userId: userData.userId })
+      });
+      const sendJson = await sendRes.json().catch(() => null);
+      if (!sendRes.ok || !sendJson?.success) {
+        setError(sendJson?.error || sendJson?.message || 'Failed to send phone verification code');
+        return;
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmailVerified = async (_emailCode: string) => {
+    router.push("/dashboard");
   };
 
   const handleSuccessComplete = () => {
-    // Redirect to login page after successful registration
-    router.push("/login");
+    router.push("/dashboard");
   };
 
   return (
@@ -164,15 +197,28 @@ export default function RegisterPage() {
           </motion.div>
         )}
         
-        {step === "verify" && (
+        {step === "phone" && (
         <PhoneVerification
           phoneNumber={userData.phoneNumber || ""}
           onSubmit={handleVerifyPhoneCode}
           onResendCode={handleResendPhoneCode}
+          onEditPhone={handleEditPhone}
           isLoading={isLoading}
           error={error}
           onClearError={() => setError("")}
         />
+        )}
+
+        {step === "email" && (
+          <EmailVerificationStep
+            email={userData.email}
+            isLoading={isLoading}
+            onBack={() => setStep("phone")}
+            onContinue={() => {
+              setError("");
+              router.push("/dashboard");
+            }}
+          />
         )}
         
         {step === "success" && (
@@ -181,7 +227,7 @@ export default function RegisterPage() {
             onComplete={handleSuccessComplete}
             showApplyButton={false}
             redirectUrl="/dashboard"
-            redirectLabel="Go to Dashboard"
+            redirectLabel="Continue"
           />
         )}
       </div>

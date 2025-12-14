@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: false
----
-Do not push to git unless the user explicitly asks you to. 
