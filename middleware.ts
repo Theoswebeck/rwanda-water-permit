@@ -108,9 +108,19 @@ export async function middleware(request: NextRequest) {
 
   // For auth pages, redirect authenticated users to their dashboard
   if (isAuthPage && user) {
-    const userRole = user.user_metadata?.role || 'applicant'
-    const redirectPath = ROLE_DASHBOARDS[userRole] || '/dashboard'
-    return NextResponse.redirect(new URL(redirectPath, request.url))
+    // IMPORTANT:
+    // Next.js App Router uses RSC navigation requests (`?_rsc=...`). If we redirect those,
+    // and the browser-side auth validation is timing out, it can cause an infinite loop:
+    // dashboard -> client redirects to /login -> middleware redirects back to /dashboard -> repeat.
+    // Also, when `redirect=` is present, the user was explicitly sent to login from a protected route.
+    // In both cases, allow the login/register page to render instead of forcing a redirect.
+    const hasRscParam = request.nextUrl.searchParams.has('_rsc')
+    const hasRedirectParam = request.nextUrl.searchParams.has('redirect')
+    if (!hasRscParam && !hasRedirectParam) {
+      const userRole = user.user_metadata?.role || 'applicant'
+      const redirectPath = ROLE_DASHBOARDS[userRole] || '/dashboard'
+      return NextResponse.redirect(new URL(redirectPath, request.url))
+    }
   }
 
   return response
