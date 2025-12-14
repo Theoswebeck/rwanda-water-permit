@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { RefreshCw } from "lucide-react";
 
@@ -26,7 +27,11 @@ export function ProtectedRoute({
 
     // If not authenticated, redirect to login
     if (!isAuthenticated || !user) {
-      router.push('/login');
+      const redirect =
+        typeof window !== "undefined"
+          ? encodeURIComponent(window.location.pathname + window.location.search)
+          : encodeURIComponent("/dashboard");
+      router.replace(`/login?redirect=${redirect}`);
       return;
     }
 
@@ -62,12 +67,64 @@ export function ProtectedRoute({
   }, [user, userProfile, loading, isAuthenticated, allowedRoles, redirectTo, requireProfile, router]);
 
   // Show loading state
-  if (loading || !user || (requireProfile && !userProfile)) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex items-center space-x-2">
           <RefreshCw className="h-6 w-6 animate-spin" />
           <span>Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Not authenticated: don't spin forever, show an actionable fallback
+  if (!isAuthenticated || !user) {
+    const redirect =
+      typeof window !== "undefined"
+        ? encodeURIComponent(window.location.pathname + window.location.search)
+        : encodeURIComponent("/dashboard");
+
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <div className="text-center max-w-md">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <RefreshCw className="h-5 w-5 animate-spin" />
+            <span className="font-medium">Redirecting to login…</span>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            If this doesn’t move forward, your session check may be timing out. Click below to continue.
+          </p>
+          <Link
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-primary-foreground text-sm"
+            href={`/login?redirect=${redirect}`}
+          >
+            Go to login
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Authenticated but profile not ready: show a better state than infinite spinner
+  if (requireProfile && !userProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-6">
+        <div className="text-center max-w-md">
+          <div className="flex items-center justify-center gap-2 mb-3">
+            <RefreshCw className="h-5 w-5 animate-spin" />
+            <span className="font-medium">Loading your profile…</span>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            This can happen if the database is slow or unreachable. Try reloading the page.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm"
+          >
+            Reload
+          </button>
         </div>
       </div>
     );

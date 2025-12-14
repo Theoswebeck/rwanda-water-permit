@@ -61,6 +61,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Create Supabase client instance
   const supabase = createClient();
 
+  const withTimeout = async <T,>(promise: PromiseLike<T>, timeoutMs: number, label: string): Promise<T> => {
+    const timeoutError = new Error(`timeout:${label}`);
+    return (await Promise.race([
+      Promise.resolve(promise),
+      new Promise<T>((_, reject) => setTimeout(() => reject(timeoutError), timeoutMs)),
+    ])) as T;
+  };
+
   const isProtectedPath = (pathname: string) => {
     return (
       pathname.startsWith('/dashboard') ||
@@ -559,7 +567,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: authData, error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        8000,
+        'signInWithPassword'
+      );
       if (error) {
         console.error('❌ Sign in error:', error.message);
         return { error: error.message };
@@ -572,11 +584,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('✅ Authentication successful, checking user status...');
 
       // Fetch user profile to check status
-      const { data: userProfile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authData.user.id)
-        .single();
+      const { data: userProfile, error: profileError } = await withTimeout(
+        supabase.from('users').select('*').eq('id', authData.user.id).single(),
+        8000,
+        'fetchUserProfileForSignIn'
+      );
 
       if (profileError) {
         console.error('❌ Error fetching user profile:', profileError);
@@ -601,9 +613,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             phone_verification_attempts: 0, // Verification attempts
           };
 
-          const { error: createError } = await supabase
-            .from('users')
-            .insert([basicProfile]);
+          const { error: createError } = await withTimeout(
+            supabase.from('users').insert([basicProfile]),
+            8000,
+            'createUserProfileForSignIn'
+          );
 
           if (createError) {
             console.error('❌ Error creating user profile:', createError);
@@ -633,7 +647,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             message: profileError.message,
             details: profileError.details
           });
-          await supabase.auth.signOut();
+          try {
+            await withTimeout(supabase.auth.signOut(), 5000, 'signOutAfterProfileFetchError');
+          } catch {}
           return { error: `Unable to verify account status: ${profileError.message}` };
         }
       }
@@ -642,11 +658,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       let finalProfile = userProfile;
       if (profileError && profileError.code === 'PGRST116') {
         // Fetch the newly created profile
-        const { data: newProfile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
+        const { data: newProfile } = await withTimeout(
+          supabase.from('users').select('*').eq('id', authData.user.id).single(),
+          8000,
+          'refetchUserProfileForSignIn'
+        );
         finalProfile = newProfile;
       }
 
@@ -683,6 +699,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('✅ Successfully signed in with active account');
       return {};
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isTimeout = msg.startsWith('timeout:');
+      if (isTimeout) {
+        console.warn('⚠️ Login timed out:', msg);
+        try {
+          await withTimeout(supabase.auth.signOut(), 5000, 'signOutAfterSignInTimeout');
+        } catch {}
+        return { error: 'Login is taking too long (network timeout). Please check your connection and try again.' };
+      }
       console.error('❌ Unexpected sign in error:', err);
       return { error: 'An unexpected error occurred' };
     }
