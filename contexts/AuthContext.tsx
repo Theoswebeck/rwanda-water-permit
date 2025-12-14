@@ -616,7 +616,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(authData.user);
 
       // Fast-path: use JWT metadata if present (no DB call)
-      const metaStatus = authData.user.user_metadata?.status as string | undefined;
+      const meta = authData.user.user_metadata || {};
+      const metaStatus = meta.status as string | undefined;
+      const metaRole = meta.role as string | undefined;
       if (metaStatus === 'suspended' || metaStatus === 'inactive') {
         try { await withTimeout(supabase.auth.signOut(), 5000, 'signOutSuspendedUser'); } catch {}
         setUser(null);
@@ -626,14 +628,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           : 'Your account is inactive. Please contact support to reactivate your account.' };
       }
 
+      // If metadata has role/status, hydrate a fast profile so guards can proceed even if DB is blocked.
+      if (metaRole && metaStatus) {
+        const fastProfile = {
+          id: authData.user.id,
+          email: authData.user.email || email,
+          role: metaRole as any,
+          status: metaStatus as any,
+          account_type: (meta.account_type || 'individual') as any,
+          first_name: meta.first_name || 'User',
+          last_name: meta.last_name || 'Profile',
+          applications_count: 0,
+          reviews_count: 0,
+          inspections_count: 0,
+          profile_completed: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as User;
+        setUserProfile(fastProfile);
+      }
+
       console.log('✅ Authentication successful, checking user status...');
 
       // Fetch user profile to check status
-      const { data: userProfile, error: profileError } = await withTimeout(
-        supabase.from('users').select('*').eq('id', authData.user.id).single(),
-        12000,
-        'fetchUserProfileForSignIn'
-      );
+      let userProfile: User | null = null;
+      let profileError: any = null;
+      try {
+        const res = await withTimeout(
+          supabase.from('users').select('*').eq('id', authData.user.id).single(),
+          12000,
+          'fetchUserProfileForSignIn'
+        );
+        userProfile = (res as any).data ?? null;
+        profileError = (res as any).error ?? null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // If the profile fetch times out (common with stale browser state or extensions),
+        // do not block login — allow the session and let the app continue.
+        if (msg === 'timeout:fetchUserProfileForSignIn') {
+          console.warn('⚠️ Profile fetch timed out during login; proceeding without DB verification.');
+          return {};
+        }
+        throw err;
+      }
 
       if (profileError) {
         console.error('❌ Error fetching user profile:', profileError);
@@ -658,11 +695,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             phone_verification_attempts: 0, // Verification attempts
           };
 
-          const { error: createError } = await withTimeout(
-            supabase.from('users').insert([basicProfile]),
-            12000,
-            'createUserProfileForSignIn'
-          );
+          let createError: any = null;
+          try {
+            const createRes = await withTimeout(
+              supabase.from('users').insert([basicProfile]),
+              12000,
+              'createUserProfileForSignIn'
+            );
+            createError = (createRes as any).error ?? null;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg === 'timeout:createUserProfileForSignIn') {
+              console.warn('⚠️ Profile creation timed out during login; proceeding without DB verification.');
+              return {};
+            }
+            throw err;
+          }
 
           if (createError) {
             console.error('❌ Error creating user profile:', createError);
@@ -703,12 +751,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       let finalProfile = userProfile;
       if (profileError && profileError.code === 'PGRST116') {
         // Fetch the newly created profile
-        const { data: newProfile } = await withTimeout(
-          supabase.from('users').select('*').eq('id', authData.user.id).single(),
-          12000,
-          'refetchUserProfileForSignIn'
-        );
-        finalProfile = newProfile;
+        try {
+          const refetchRes = await withTimeout(
+            supabase.from('users').select('*').eq('id', authData.user.id).single(),
+            12000,
+            'refetchUserProfileForSignIn'
+          );
+          finalProfile = (refetchRes as any).data ?? null;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg === 'timeout:refetchUserProfileForSignIn') {
+            console.warn('⚠️ Profile refetch timed out during login; proceeding without DB verification.');
+            return {};
+          }
+          throw err;
+        }
       }
 
       // If profile fetch couldn't complete (network/timeout), do not block login.
@@ -757,11 +814,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const msg = err instanceof Error ? err.message : String(err);
       const isTimeout = msg.startsWith('timeout:');
       if (isTimeout) {
-        console.warn('⚠️ Login timed out:', msg);
-        try {
-          await withTimeout(supabase.auth.signOut(), 5000, 'signOutAfterSignInTimeout');
-        } catch {}
-        return { error: 'Login is taking too long (network timeout). Please try again.' };
+        // Only fail login if the credential exchange timed out.
+        // Timeouts during DB/profile checks should not block login.
+        if (msg === 'timeout:signInWithPassword') {
+          console.warn('⚠️ Login timed out:', msg);
+          try {
+            await withTimeout(supabase.auth.signOut(), 5000, 'signOutAfterSignInTimeout');
+          } catch {}
+          return { error: 'Login is taking too long (network timeout). Please try again.' };
+        }
+        console.warn('⚠️ Non-fatal login timeout:', msg);
+        return {};
       }
       console.error('❌ Unexpected sign in error:', err);
       return { error: 'An unexpected error occurred' };

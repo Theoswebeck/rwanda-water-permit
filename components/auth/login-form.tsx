@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn, resendEmailVerification } = useAuth();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>("");
@@ -22,6 +22,42 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showEmailVerificationHelp, setShowEmailVerificationHelp] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [isClearingSession, setIsClearingSession] = useState(false);
+
+  const clearSavedSession = async () => {
+    setIsClearingSession(true);
+    try {
+      // Clear Supabase storage (normal vs incognito difference is primarily cookies/localStorage/extensions).
+      // This fixes corrupted/stale sessions that can block profile fetches in regular Chrome.
+      const lsKeys = Object.keys(window.localStorage || {});
+      for (const k of lsKeys) {
+        if (k.startsWith("sb-") || k.includes("supabase")) {
+          window.localStorage.removeItem(k);
+        }
+      }
+
+      const ssKeys = Object.keys(window.sessionStorage || {});
+      for (const k of ssKeys) {
+        if (k.startsWith("sb-") || k.includes("supabase")) {
+          window.sessionStorage.removeItem(k);
+        }
+      }
+
+      // Remove cookies that look like Supabase auth cookies
+      const cookies = document.cookie.split(";").map((c) => c.trim());
+      for (const c of cookies) {
+        const name = c.split("=")[0];
+        if (name.startsWith("sb-") || name.includes("supabase")) {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        }
+      }
+
+      // Force reload to reinitialize auth state cleanly
+      window.location.href = "/login";
+    } finally {
+      setIsClearingSession(false);
+    }
+  };
 
   useEffect(() => {
     // Check for messages from URL params
@@ -101,14 +137,18 @@ export function LoginForm() {
     setError("");
     
     try {
-      const result = await resendEmailVerification(email);
-      
-      if (result.error) {
-        setError(result.error);
-      } else {
-        setSuccess("Verification email sent successfully! Please check your inbox.");
-        setShowEmailVerificationHelp(false);
+      const res = await fetch('/api/auth/email/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setError(json?.message || json?.error || 'Failed to send verification email. Please try again.');
+        return;
       }
+      setSuccess("Verification email sent successfully! Please check your inbox.");
+      setShowEmailVerificationHelp(false);
     } catch (error) {
       setError("Failed to send verification email. Please try again.");
     } finally {
@@ -209,6 +249,17 @@ export function LoginForm() {
           <Link href="/register" className="underline">
             Sign up
           </Link>
+        </div>
+        <div className="mt-3 text-center text-xs text-muted-foreground">
+          Having trouble in a regular browser window?{" "}
+          <button
+            type="button"
+            onClick={clearSavedSession}
+            disabled={isClearingSession || isLoading}
+            className="underline"
+          >
+            {isClearingSession ? "Clearing saved session…" : "Clear saved session"}
+          </button>
         </div>
       </CardContent>
     </Card>
