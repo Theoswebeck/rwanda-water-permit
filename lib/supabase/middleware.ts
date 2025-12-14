@@ -7,6 +7,22 @@ export async function createClient(request: NextRequest) {
     request,
   })
 
+  const clearSupabaseCookies = () => {
+    // When Supabase sees a broken refresh token it can throw `refresh_token_not_found`.
+    // Clearing cookies lets the user sign in again instead of crashing middleware.
+    const all = request.cookies.getAll()
+    for (const c of all) {
+      if (c.name.startsWith('sb-')) {
+        supabaseResponse.cookies.set({
+          name: c.name,
+          value: '',
+          path: '/',
+          expires: new Date(0),
+        })
+      }
+    }
+  }
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -55,9 +71,26 @@ export async function createClient(request: NextRequest) {
 
   // SECURITY: Do not trust user objects from getSession()/storage.
   // getUser() validates with Supabase Auth and is the recommended approach.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  return { supabase, response: supabaseResponse, user: user || null }
+    return { supabase, response: supabaseResponse, user: user || null }
+  } catch (err: any) {
+    const code = err?.code
+    const status = err?.status
+    const msg = err?.message || ''
+
+    const isRefreshTokenNotFound =
+      code === 'refresh_token_not_found' || msg.includes('Refresh Token Not Found')
+
+    if (isRefreshTokenNotFound || status === 400) {
+      console.warn('⚠️ Supabase session invalid in middleware; clearing cookies.', { code, status })
+      clearSupabaseCookies()
+      return { supabase, response: supabaseResponse, user: null }
+    }
+
+    throw err
+  }
 }
