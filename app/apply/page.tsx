@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { AuthLayout } from "@/components/auth/auth-layout";
@@ -16,17 +16,16 @@ export default function ApplyPage() {
   const [step, setStep] = useState<"signup" | "phone" | "email" | "success">("signup");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
-  const authRedirectCheckedRef = useRef(false);
   const [userData, setUserData] = useState<{
     email: string;
     accountType: string;
-    details: Record<string, unknown>;
+    details: SignUpFormData | null;
     phoneNumber?: string;
     userId?: string;
   }>({
     email: "",
     accountType: "",
-    details: {}
+    details: null
   });
 
   const normalizeRwandaPhone = (raw?: string) => {
@@ -41,14 +40,12 @@ export default function ApplyPage() {
     return v;
   };
 
-  // Redirect authenticated applicants to dashboard ONLY if they were already authenticated
-  // when this page loaded. (Avoid redirecting mid-signup flow.)
+  // Redirect authenticated applicants to dashboard, but avoid redirecting mid-signup flow.
   useEffect(() => {
-    if (authRedirectCheckedRef.current) return;
     if (loading) return;
-    authRedirectCheckedRef.current = true;
+    if (step !== "signup") return;
     if (isAuthenticated && isApplicant) router.push("/dashboard");
-  }, [loading, isAuthenticated, isApplicant, router]);
+  }, [loading, isAuthenticated, isApplicant, step, router]);
 
   // Show loading or redirect early to prevent flash
   if (loading) {

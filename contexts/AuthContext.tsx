@@ -61,6 +61,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Create Supabase client instance
   const supabase = createClient();
 
+  const isProtectedPath = (pathname: string) => {
+    return (
+      pathname.startsWith('/dashboard') ||
+      pathname.startsWith('/admin') ||
+      pathname.startsWith('/review') ||
+      pathname.startsWith('/inspection') ||
+      pathname.startsWith('/assessment') ||
+      pathname.startsWith('/approver') ||
+      pathname.startsWith('/technical-assessment')
+    );
+  };
+
+  const getUserWithTimeout = async (timeoutMs = 8000) => {
+    // Supabase's getUser() can hang indefinitely on bad networking/DNS.
+    // We use a timeout to ensure UI isn't blocked forever.
+    const timeoutResult = {
+      data: { user: null as SupabaseUser | null },
+      error: { message: 'timeout', status: 0 },
+    };
+
+    try {
+      return (await Promise.race([
+        supabase.auth.getUser(),
+        new Promise<any>((resolve) => setTimeout(() => resolve(timeoutResult), timeoutMs)),
+      ])) as { data: { user: SupabaseUser | null }; error: any };
+    } catch (e: any) {
+      return {
+        data: { user: null },
+        error: { message: e?.message || 'Network error', status: e?.status || 0 },
+      };
+    }
+  };
+
   // Function to fetch user profile
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -121,19 +154,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           console.log('📝 Profile not found, creating basic profile...');
           
           // Get the current user's email from auth
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
           
           if (userError) {
             console.error('❌ Error getting current user:', userError);
             return null;
           }
           
-          if (user && user.email) {
-            console.log('📧 Creating profile for user:', user.email);
+          const email = authUser?.email;
+          if (authUser && email) {
+            console.log('📧 Creating profile for user:', email);
             
             const basicProfile = {
               id: userId,
-              email: user.email,
+              email,
               role: 'applicant' as const,
               status: 'active' as const,
               account_type: 'individual' as const,
@@ -155,13 +189,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               .select()
               .single();
 
-            if (createError) {
-              console.error('❌ Error creating profile during fetch:', createError);
+            if (createError != null) {
+              const err = createError as NonNullable<typeof createError>;
+              console.error('❌ Error creating profile during fetch:', err);
               console.log('Create error details:', {
-                code: createError.code,
-                message: createError.message,
-                hint: createError.hint,
-                details: createError.details
+                code: err.code,
+                message: err.message,
+                hint: err.hint,
+                details: err.details
               });
               
               // Try one more time to fetch in case it was created by trigger
@@ -212,7 +247,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         let userError = null;
         
         try {
-          const result = await supabase.auth.getUser();
+          const result = await getUserWithTimeout(8000);
           user = result.data?.user;
           userError = result.error;
         } catch (fetchError: any) {
@@ -247,13 +282,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
           console.error('❌ Error getting user from auth:', message);
           
-          const isAuthError = 
-            status === 403 || 
-            status === 401 ||
-            message.includes('Forbidden') ||
+          const isNetworkError =
+            status === 0 ||
             message.includes('Failed to fetch') ||
             message.includes('Network') ||
             message.includes('timeout');
+
+          const isAuthError =
+            status === 403 ||
+            status === 401 ||
+            message.includes('Forbidden');
+
+          // If we can't validate due to network issues, don't force sign-out / redirects.
+          if (isNetworkError && !isAuthError) {
+            console.warn('⚠️ Auth validation unavailable (network/timeout). Continuing unauthenticated for now.');
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
+            return;
+          }
           
           if (isAuthError) {
             console.log('🚨 Auth error detected. Clearing session and redirecting...');
@@ -270,9 +317,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             
             // Redirect to login if on a protected page
             if (typeof window !== 'undefined' && 
-                !window.location.pathname.includes('/login') &&
-                !window.location.pathname.includes('/register') &&
-                window.location.pathname !== '/') {
+                isProtectedPath(window.location.pathname)) {
               window.location.href = '/login?error=session_expired';
             }
             return;
@@ -360,11 +405,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('🔍 Fetching verified user from auth server...');
         let currentUser: SupabaseUser | null = null;
         try {
-          const { data, error: userError } = await supabase.auth.getUser();
+          const { data, error: userError } = await getUserWithTimeout(8000);
 
           if (userError) {
             const msg = userError.message || '';
             const status = (userError as any).status;
+            const isNetworkError =
+              status === 0 ||
+              msg.includes('Failed to fetch') ||
+              msg.includes('Network') ||
+              msg.includes('timeout');
 
             const isMissingSession =
               msg.includes('Auth session missing') ||
@@ -379,6 +429,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               return;
             }
 
+            if (isNetworkError) {
+              console.warn('⚠️ Auth state validation unavailable (network/timeout). Keeping current state.');
+              setLoading(false);
+              return;
+            }
+
             console.error('❌ Session validation failed:', msg);
 
             // Clear invalid session and redirect if needed
@@ -389,9 +445,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
             if (
               typeof window !== 'undefined' &&
-              !window.location.pathname.includes('/login') &&
-              !window.location.pathname.includes('/register') &&
-              window.location.pathname !== '/' &&
+              isProtectedPath(window.location.pathname) &&
               (status === 401 || status === 403 || msg.includes('Forbidden'))
             ) {
               window.location.href = '/login?error=session_expired';

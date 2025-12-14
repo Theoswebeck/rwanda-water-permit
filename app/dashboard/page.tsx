@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, Suspense, useCallback } from "react";
+import { useState, useEffect, Suspense, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { ApplicationsList } from "@/components/dashboard/applications-list";
 import { ApplicationStatus } from "@/components/dashboard/application-status";
-import { PermitsList, Permit as PermitListItem } from "@/components/dashboard/permits-list";
+import type { Permit as PermitListItem } from "@/components/dashboard/permits-list";
 import { PermitStatus } from "@/components/dashboard/permits-status";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { Button } from "@/components/ui/button";
@@ -15,16 +14,44 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, CheckCircle } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 // ⚡ PERFORMANCE: Use React Query hooks for automatic caching
 import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useApplicationsQuery";
 import { usePermitsQuery } from "@/hooks/usePermitsQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Permit as DatabasePermit } from "@/types/database";
 
+const ApplicationsList = dynamic(
+  () => import("@/components/dashboard/applications-list").then((mod) => mod.ApplicationsList),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <span className="ml-3 text-sm text-muted-foreground">Loading applications…</span>
+      </div>
+    ),
+  }
+);
+
+const PermitsList = dynamic(
+  () => import("@/components/dashboard/permits-list").then((mod) => mod.PermitsList),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <span className="ml-3 text-sm text-muted-foreground">Loading permits…</span>
+      </div>
+    ),
+  }
+);
+
 function DashboardContent() {
   const searchParams = useSearchParams();
   const { user, userProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<"applications" | "permits">("applications");
+  const initialTab = searchParams.get('tab') === 'permits' ? 'permits' : 'applications';
+  const [activeTab, setActiveTab] = useState<"applications" | "permits">(initialTab);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   
@@ -32,12 +59,13 @@ function DashboardContent() {
   useEffect(() => {
     const success = searchParams.get('success');
     const tab = searchParams.get('tab');
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     
     if (success === 'application-created') {
       setSuccessMessage('🎉 Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.');
       setShowSuccessAlert(true);
       // Auto-hide success message after 5 seconds
-      setTimeout(() => setShowSuccessAlert(false), 5000);
+      timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     }
     
     if (tab === 'applications') {
@@ -45,6 +73,10 @@ function DashboardContent() {
     } else if (tab === 'permits') {
       setActiveTab('permits');
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [searchParams]);
   
   // ⚡ PERFORMANCE: Use React Query hooks - automatic caching, no manual refresh needed
@@ -62,7 +94,7 @@ function DashboardContent() {
     isLoading: permitsLoading,
     error: permitsQueryError,
     isFetching: permitsFetching
-  } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id });
+  } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id && activeTab === 'permits' });
 
   // ⚡ PERFORMANCE: Use mutation for deleting applications
   const deleteApplicationMutation = useDeleteApplicationMutation();
@@ -71,33 +103,33 @@ function DashboardContent() {
   const applicationsError = applicationsQueryError?.message || null;
   const permitsError = permitsQueryError?.message || null;
 
-  // Transform database permits to component format
-  const transformPermitForDisplay = (dbPermit: DatabasePermit): PermitListItem => {
-    // Calculate status based on expiry date
-    const now = new Date();
-    const expiryDate = new Date(dbPermit.expiry_date);
-    const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
-    
-    let displayStatus: "active" | "expired" | "expiring-soon" = "active";
-    if (expiryDate < now) {
-      displayStatus = "expired";
-    } else if (expiryDate <= thirtyDaysFromNow) {
-      displayStatus = "expiring-soon";
-    }
+  const permits = useMemo(() => {
+    // Transform database permits to component format
+    return databasePermits.map((dbPermit: DatabasePermit): PermitListItem => {
+      // Calculate status based on expiry date
+      const now = new Date();
+      const expiryDate = new Date(dbPermit.expiry_date);
+      const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
 
-    return {
-      id: dbPermit.id,
-      title: `${dbPermit.purpose} Water Permit`, // Create a title from purpose
-      issueDate: dbPermit.issued_date,
-      expiryDate: dbPermit.expiry_date,
-      status: displayStatus,
-      type: dbPermit.purpose, // Use purpose as type
-      location: "N/A", // We'll need to get this from related application
-      permitNumber: dbPermit.permit_number,
-    };
-  };
+      let displayStatus: "active" | "expired" | "expiring-soon" = "active";
+      if (expiryDate < now) {
+        displayStatus = "expired";
+      } else if (expiryDate <= thirtyDaysFromNow) {
+        displayStatus = "expiring-soon";
+      }
 
-  const permits = databasePermits.map(transformPermitForDisplay);
+      return {
+        id: dbPermit.id,
+        title: `${dbPermit.purpose} Water Permit`, // Create a title from purpose
+        issueDate: dbPermit.issued_date,
+        expiryDate: dbPermit.expiry_date,
+        status: displayStatus,
+        type: dbPermit.purpose, // Use purpose as type
+        location: "N/A", // We'll need to get this from related application
+        permitNumber: dbPermit.permit_number,
+      };
+    });
+  }, [databasePermits]);
 
   // ⚡ PERFORMANCE: Bulk delete handler using React Query mutation
   const handleBulkDeleteApplications = useCallback(async (applicationIds: string[]) => {
