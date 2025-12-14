@@ -136,10 +136,7 @@ export function Footer() {
         
         <div className="border-t border-white/20 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-white/70">
           <p>© {new Date().getFullYear()} Rwanda Water Board. All rights reserved.</p>
-          <div className="mt-4 md:mt-0 flex space-x-4">
-            <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-            <Link href="/terms" className="hover:text-white transition-colors">Terms of Use</Link>
-          </div>
+          {/* Privacy/Terms removed: routes are not part of public site */}
         </div>
       </div>
     </footer>

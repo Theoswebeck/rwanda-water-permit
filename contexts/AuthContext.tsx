@@ -250,16 +250,50 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const getInitialUser = async () => {
       try {
         setLoading(true);
-        
-        let user = null;
-        let userError = null;
-        
+
+        // Fast-path: getSession() is local and does not require a network round-trip.
+        // This prevents "infinite loading" when Supabase auth endpoints are slow/unreachable.
+        const { data: sessionData } = await supabase.auth.getSession();
+        const sessionUser = sessionData?.session?.user ?? null;
+        setUser(sessionUser);
+
+        if (sessionUser) {
+          const metadata = sessionUser.user_metadata;
+          if (metadata && metadata.role && metadata.status) {
+            console.log('⚡ Using cached metadata for fast load');
+            const fastProfile = {
+              id: sessionUser.id,
+              email: sessionUser.email || '',
+              role: metadata.role as any,
+              status: metadata.status as any,
+              account_type: (metadata.account_type || 'individual') as any,
+              first_name: metadata.first_name || 'User',
+              last_name: metadata.last_name || 'Profile',
+              applications_count: 0,
+              reviews_count: 0,
+              inspections_count: 0,
+              profile_completed: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as User;
+
+            setUserProfile(fastProfile);
+          }
+        } else {
+          setUserProfile(null);
+        }
+
+        // Unblock UI immediately; validation happens after.
+        setLoading(false);
+
+        // Validate in background via getUser() (network) with timeout.
+        let user = sessionUser;
+        let userError: any = null;
         try {
           const result = await getUserWithTimeout(8000);
-          user = result.data?.user;
+          user = result.data?.user ?? null;
           userError = result.error;
         } catch (fetchError: any) {
-          // ⚡ FIX: Catch network errors like "Failed to fetch" or timeouts
           console.error('❌ Network error getting user:', fetchError?.message || fetchError);
           userError = { message: fetchError?.message || 'Network error', status: 0 };
         }
@@ -306,7 +340,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             console.warn('⚠️ Auth validation unavailable (network/timeout). Continuing unauthenticated for now.');
             setUser(null);
             setUserProfile(null);
-            setLoading(false);
             return;
           }
           
@@ -321,7 +354,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             
             setUser(null);
             setUserProfile(null);
-            setLoading(false);
             
             // Redirect to login if on a protected page
             if (typeof window !== 'undefined' && 
@@ -360,7 +392,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             } as User;
             
             setUserProfile(fastProfile);
-            setLoading(false); // Unblock UI immediately
           }
           
           try {
@@ -389,7 +420,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUserProfile(null);
         }
       } finally {
-        // Ensure loading is false if it wasn't set in the fast path
+        // Ensure loading is false (should already be false from fast-path)
         setLoading(false);
       }
     };
@@ -569,7 +600,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const { data: authData, error } = await withTimeout(
         supabase.auth.signInWithPassword({ email, password }),
-        8000,
+        20000,
         'signInWithPassword'
       );
       if (error) {
@@ -581,12 +612,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: 'Authentication failed' };
       }
 
+      // Immediately set local auth state (prevents UI blocking on slow profile/auth verification)
+      setUser(authData.user);
+
+      // Fast-path: use JWT metadata if present (no DB call)
+      const metaStatus = authData.user.user_metadata?.status as string | undefined;
+      if (metaStatus === 'suspended' || metaStatus === 'inactive') {
+        try { await withTimeout(supabase.auth.signOut(), 5000, 'signOutSuspendedUser'); } catch {}
+        setUser(null);
+        setUserProfile(null);
+        return { error: metaStatus === 'suspended'
+          ? 'Your account has been suspended. Please contact support for assistance.'
+          : 'Your account is inactive. Please contact support to reactivate your account.' };
+      }
+
       console.log('✅ Authentication successful, checking user status...');
 
       // Fetch user profile to check status
       const { data: userProfile, error: profileError } = await withTimeout(
         supabase.from('users').select('*').eq('id', authData.user.id).single(),
-        8000,
+        12000,
         'fetchUserProfileForSignIn'
       );
 
@@ -615,7 +660,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
           const { error: createError } = await withTimeout(
             supabase.from('users').insert([basicProfile]),
-            8000,
+            12000,
             'createUserProfileForSignIn'
           );
 
@@ -660,11 +705,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Fetch the newly created profile
         const { data: newProfile } = await withTimeout(
           supabase.from('users').select('*').eq('id', authData.user.id).single(),
-          8000,
+          12000,
           'refetchUserProfileForSignIn'
         );
         finalProfile = newProfile;
       }
+
+      // If profile fetch couldn't complete (network/timeout), do not block login.
+      // Middleware/ProtectedRoute will handle profile-required screens gracefully.
+      if (!finalProfile) {
+        console.warn('⚠️ Could not verify profile status during login (network/timeout). Proceeding.');
+        return {};
+      }
+
+      // Cache profile locally for immediate route guards
+      setUserProfile(finalProfile);
 
       // Check if user is suspended
       if (finalProfile && finalProfile.status === 'suspended') {
@@ -706,7 +761,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
           await withTimeout(supabase.auth.signOut(), 5000, 'signOutAfterSignInTimeout');
         } catch {}
-        return { error: 'Login is taking too long (network timeout). Please check your connection and try again.' };
+        return { error: 'Login is taking too long (network timeout). Please try again.' };
       }
       console.error('❌ Unexpected sign in error:', err);
       return { error: 'An unexpected error occurred' };

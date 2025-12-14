@@ -721,14 +721,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
             </span>
           </div>
           <div className="text-xs text-center text-muted-foreground">
-            By registering, you agree to our{" "}
-            <Link href="/terms" className="hover:underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" className="hover:underline">
-              Privacy Policy
-            </Link>
+            By registering, you agree to our terms and privacy practices.
           </div>
         </CardFooter>
       </Card>
