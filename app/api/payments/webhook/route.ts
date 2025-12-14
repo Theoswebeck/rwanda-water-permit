@@ -10,21 +10,36 @@ import { getIremboPayClient } from '@/lib/irembopay-client';
 import { mapIremboPayStatus, getApplicationStatusFromPayment, generateReceiptNumber } from '@/lib/payment-utils';
 import type { IremboPayWebhookPayload, WebhookProcessingResult } from '@/types/payment';
 
-// Use service role client for webhook processing (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
+// IMPORTANT:
+// Do NOT create Supabase clients at module scope.
+// Next.js may import route modules during build to collect route data; if env vars
+// aren't available at build-time, this would throw and fail the build.
+const getSupabaseAdmin = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    return null;
+  }
+  return createClient(url, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
-  }
-);
+  });
+};
 
 export async function POST(request: NextRequest) {
   try {
     console.log('🔔 [WEBHOOK] Payment webhook received');
+
+    const supabaseAdmin = getSupabaseAdmin();
+    if (!supabaseAdmin) {
+      console.error('❌ [WEBHOOK] Server misconfiguration: missing Supabase keys');
+      return NextResponse.json(
+        { success: false, error: 'Server misconfiguration: missing Supabase keys' },
+        { status: 500 }
+      );
+    }
 
     // =============================================
     // 1. EXTRACT WEBHOOK DATA
