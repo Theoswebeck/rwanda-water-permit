@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { RefreshCw } from "lucide-react";
 
+const SUPERUSER_EMAILS = new Set(["nizzogentl1@gmail.com", "nshutidavy@gmail.com"]);
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
@@ -21,6 +23,7 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const router = useRouter();
   const { user, userProfile, loading, isAuthenticated } = useAuth();
+  const isSuperuser = SUPERUSER_EMAILS.has(String(user?.email ?? "").trim().toLowerCase());
 
   useEffect(() => {
     if (loading) return; // Wait for auth state to load
@@ -34,6 +37,9 @@ export function ProtectedRoute({
       router.replace(`/login?redirect=${redirect}`);
       return;
     }
+
+    // Superusers can access all pages regardless of role/profile.
+    if (isSuperuser) return;
 
     // If profile is required but not loaded, wait or redirect
     if (requireProfile && !userProfile) {
@@ -107,7 +113,7 @@ export function ProtectedRoute({
   }
 
   // Authenticated but profile not ready: show a better state than infinite spinner
-  if (requireProfile && !userProfile) {
+  if (!isSuperuser && requireProfile && !userProfile) {
     return (
       <div className="flex items-center justify-center min-h-screen p-6">
         <div className="text-center max-w-md">
@@ -131,7 +137,7 @@ export function ProtectedRoute({
   }
 
   // Check role access again (redundant but safe)
-  if (allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role)) {
+  if (!isSuperuser && allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">

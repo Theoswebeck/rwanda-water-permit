@@ -2,16 +2,35 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/middleware'
 import type { User } from '@supabase/supabase-js'
 
+const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
+
+// Normalize roles coming from JWT/DB (case, whitespace, aliases).
+// This prevents accidental fallbacks to `/dashboard` when role strings differ (e.g. "Approver", " assessor ").
+function normalizeRole(input: unknown): string {
+  const raw = String(input ?? '').trim().toLowerCase()
+  if (!raw) return 'applicant'
+
+  // Backward/forward compatibility aliases
+  // - Some environments/docs refer to "assessor" while DB/scripts keep "reviewer" as canonical.
+  // - Inspector role may still exist in legacy data; treat it as part of the assessment workflow.
+  const aliases: Record<string, string> = {
+    assessor: 'reviewer',
+  }
+
+  return aliases[raw] ?? raw
+}
+
 // ⚡ PERFORMANCE: Define protected routes statically to avoid repeated checks
-const PROTECTED_ROUTES = ['/dashboard', '/admin', '/approver', '/inspection', '/inspector', '/review', '/assessment']
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/approver', '/inspection', '/inspector', '/review', '/assessment', '/apply']
 const AUTH_PAGES = ['/login', '/register']
 
 // ⚡ PERFORMANCE: Role-based route access defined statically
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: ['/admin'],
   approver: ['/approver'],
-  inspector: ['/inspection', '/inspector', '/assessment'],
+  inspector: ['/inspection', '/inspector'],
   reviewer: ['/review', '/assessment'],
+  assessor: ['/review', '/assessment'],
   applicant: ['/dashboard', '/apply']
 }
 
@@ -21,6 +40,7 @@ const ROLE_DASHBOARDS: Record<string, string> = {
   approver: '/approver',
   inspector: '/inspection',
   reviewer: '/review',
+  assessor: '/review',
   applicant: '/dashboard'
 }
 
@@ -45,9 +65,16 @@ export async function middleware(request: NextRequest) {
     response = client.response;
     user = client.user;
   } catch (error) {
-    // If there's a fetch error (network issue), allow the request to continue
-    console.warn('⚠️ Middleware auth check failed (network issue), allowing request');
-    return NextResponse.next();
+    // If we can't validate auth, do NOT allow protected pages to render (some pages may not have a client guard).
+    // Redirect to login with a redirect back to the originally requested path.
+    console.warn('⚠️ Middleware auth check failed; redirecting to login');
+    if (isProtectedRoute) {
+      const redirectUrl = new URL('/login', request.url)
+      redirectUrl.searchParams.set('redirect', pathname)
+      redirectUrl.searchParams.set('error', 'auth_check_failed')
+      return NextResponse.redirect(redirectUrl)
+    }
+    return NextResponse.next()
   }
 
   // If it's a protected route and no user, redirect to login
@@ -59,6 +86,9 @@ export async function middleware(request: NextRequest) {
 
   // If user exists, check role-based access
   if (user && isProtectedRoute) {
+    const userEmail = String(user.email ?? '').trim().toLowerCase()
+    const isSuperuser = SUPERUSER_EMAILS.has(userEmail)
+
     // ⚡ PERFORMANCE: Get role from JWT metadata first (no DB call needed)
     let userRole = user.user_metadata?.role;
     let userStatus = user.user_metadata?.status;
@@ -95,13 +125,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
+    // Superusers can access all protected pages regardless of role.
+    if (isSuperuser) {
+      return response
+    }
+
     // ⚡ PERFORMANCE: Simplified role-based access check
-    const allowedRoutes = ROLE_ROUTES[userRole] || []
+    const normalizedRole = normalizeRole(userRole)
+    const allowedRoutes = ROLE_ROUTES[normalizedRole] || []
     const hasAccess = allowedRoutes.some(route => pathname.startsWith(route))
 
     // If no access, redirect to appropriate dashboard
     if (!hasAccess) {
-      const redirectPath = ROLE_DASHBOARDS[userRole] || '/dashboard'
+      const redirectPath = ROLE_DASHBOARDS[normalizedRole] || '/dashboard'
       return NextResponse.redirect(new URL(redirectPath, request.url))
     }
   }
@@ -117,7 +153,7 @@ export async function middleware(request: NextRequest) {
     const hasRscParam = request.nextUrl.searchParams.has('_rsc')
     const hasRedirectParam = request.nextUrl.searchParams.has('redirect')
     if (!hasRscParam && !hasRedirectParam) {
-      const userRole = user.user_metadata?.role || 'applicant'
+      const userRole = normalizeRole(user.user_metadata?.role)
       const redirectPath = ROLE_DASHBOARDS[userRole] || '/dashboard'
       return NextResponse.redirect(new URL(redirectPath, request.url))
     }
