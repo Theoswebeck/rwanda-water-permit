@@ -39,8 +39,17 @@ export async function POST(req: NextRequest) {
         .rpc('create_email_verification_code', { p_email: email.toLowerCase(), p_purpose: purpose, p_ttl_minutes: 15 })
 
       if (codeError) throw codeError
-      const codeRow: any = Array.isArray(rows) ? rows[0] : rows
-      code = codeRow?.code || codeRow?.out_code
+      const firstRow = Array.isArray(rows) ? rows[0] : rows
+      if (firstRow && typeof firstRow === 'object') {
+        const rec = firstRow as Record<string, unknown>
+        const maybe = rec.code ?? rec.out_code
+        if (typeof maybe === 'string' && maybe.trim()) {
+          code = maybe
+        }
+      }
+      if (!code) {
+        throw new Error('Email code RPC returned no code')
+      }
     } catch (rpcErr) {
       console.warn('⚠️ Email code RPC failed:', rpcErr)
 
@@ -81,19 +90,30 @@ export async function POST(req: NextRequest) {
     const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev' // Use Resend's onboarding domain
     
     if (resendKey) {
-      const subject = 'Your verification code - Rwanda Water Board'
+      const isPasswordReset = String(purpose) === 'password_reset'
+      const subject = isPasswordReset
+        ? 'Your password reset code - Rwanda Water Board'
+        : 'Your verification code - Rwanda Water Board'
+      const heading = isPasswordReset ? 'Password Reset' : 'Email Verification'
+      const bodyText = isPasswordReset
+        ? 'Use this code to reset your password:'
+        : 'Use this code to verify your email address:'
+      const ignoreText = isPasswordReset
+        ? "If you didn't request a password reset, you can safely ignore this email."
+        : "If you didn't request this verification, you can safely ignore this email."
+
       const html = `
         <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:600px;margin:0 auto;padding:20px">
           <div style="text-align:center;margin-bottom:30px">
             <h1 style="color:#1f2937;margin:0">Rwanda Water Board</h1>
-            <h2 style="color:#4b5563;margin:10px 0">Email Verification</h2>
+            <h2 style="color:#4b5563;margin:10px 0">${heading}</h2>
           </div>
-          <p style="font-size:16px;color:#374151">Use this code to verify your email address:</p>
+          <p style="font-size:16px;color:#374151">${bodyText}</p>
           <div style="text-align:center;margin:30px 0">
             <div style="font-size:36px;font-weight:700;letter-spacing:8px;background:#f3f4f6;color:#1f2937;padding:20px;border-radius:12px;display:inline-block;border:2px solid #e5e7eb">${code}</div>
           </div>
           <p style="color:#6b7280;font-size:14px;margin:20px 0">This code expires in 15 minutes.</p>
-          <p style="color:#6b7280;font-size:14px">If you didn't request this verification, you can safely ignore this email.</p>
+          <p style="color:#6b7280;font-size:14px">${ignoreText}</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:30px 0">
           <p style="color:#9ca3af;font-size:12px;text-align:center">Rwanda Water Board - Water Permit Application System</p>
         </div>`

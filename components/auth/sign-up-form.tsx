@@ -34,9 +34,11 @@ interface SignUpFormProps {
   onContinue: (data: SignUpFormData) => void;
   initialData?: SignUpFormData | null;
   isLoading?: boolean;
+  error?: string;
+  onClearError?: () => void;
 }
 
-export function SignUpForm({ onContinue, initialData, isLoading = false }: SignUpFormProps) {
+export function SignUpForm({ onContinue, initialData, isLoading = false, error, onClearError }: SignUpFormProps) {
   // #region agent log
   useEffect(() => {
     console.log('🔍 DEBUG SignUpForm mounted - onContinue type:', typeof onContinue, 'hasOnContinue:', !!onContinue);
@@ -106,7 +108,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
       return false;
     }
 
-    // Remove spaces and validate format: 1 19XX X XXXXXXX X XX
+    // Remove spaces and validate that the ID contains exactly 16 digits
     const digits = idNumber.replace(/\s/g, '');
     
     // Check if it has exactly 16 digits
@@ -118,33 +120,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     // Check if all characters are digits
     if (!/^\d{16}$/.test(digits)) {
       setIdNumberError("National ID must contain only numbers.");
-      return false;
-    }
-
-    // Validate format: 1 19XX X XXXXXXX X XX
-    // First digit must be 1
-    if (digits[0] !== '1') {
-      setIdNumberError("National ID must start with 1.");
-      return false;
-    }
-
-    // Second and third digits must be 19 (birth year prefix)
-    if (digits.slice(1, 3) !== '19') {
-      setIdNumberError("Invalid birth year format. Must start with 19.");
-      return false;
-    }
-
-    // Validate year (1900-1999)
-    const year = parseInt(digits.slice(1, 5));
-    if (year < 1900 || year > 1999) {
-      setIdNumberError("Invalid birth year. Must be between 1900-1999.");
-      return false;
-    }
-
-    // Validate that the format matches: 1 19XX X XXXXXXX X XX
-    const formattedPattern = /^1 19\d{2} \d \d{7} \d \d{2}$/;
-    if (!formattedPattern.test(idNumber)) {
-      setIdNumberError("Invalid National ID format. Expected: 1 19XX X XXXXXXX X XX");
       return false;
     }
 
@@ -181,12 +156,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     const v = (raw || "").trim();
     if (!v) return false;
     const digits = v.replace(/\D/g, "");
-    // Accepted formats:
+    // Accepted format:
     // - 07XXXXXXXX (10 digits)
-    // - 2507XXXXXXXX (12 digits)
-    // - +2507XXXXXXXX (will become 2507XXXXXXXX after stripping non-digits)
     if (digits.length === 10 && digits.startsWith("07")) return true;
-    if (digits.length === 12 && digits.startsWith("2507")) return true;
     return false;
   };
 
@@ -196,7 +168,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
       return false;
     }
     if (!isValidRwandaPhone(raw)) {
-      setErr("Invalid Rwanda phone format. Use 07XXXXXXXX or +2507XXXXXXXX.");
+      setErr("Invalid phone number format. Use 07XXXXXXXX (10 digits).");
       return false;
     }
     setErr("");
@@ -207,12 +179,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     const newEmail = e.target.value.toLowerCase();
     setEmail(newEmail);
     validateEmail(newEmail);
+    if (error) onClearError?.();
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPassword = e.target.value;
     setPassword(newPassword);
     validatePassword(newPassword);
+    if (error) onClearError?.();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -321,25 +295,26 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
   const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Only format National ID
-    const digits = value.replace(/\D/g, '').slice(0, 16); // Limit to 16 digits for National ID
+    // Format National ID as: X XXXX X XXXXXXX X XX (16 digits total)
+    const digits = value.replace(/\D/g, '').slice(0, 16);
     
     let formatted = '';
     if (digits.length <= 1) {
       formatted = digits;
     } else if (digits.length <= 4) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1)}`; // 1 19XX
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1)}`; // X XXXX
     } else if (digits.length <= 6) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5)}`; // 1 19XX X
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5)}`; // X XXXX X
     } else if (digits.length <= 13) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6)}`; // 1 19XX X XXXXXXX
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6)}`; // X XXXX X XXXXXXX
     } else if (digits.length <= 14) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13)}`; // 1 19XX X XXXXXXX X
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13)}`; // X XXXX X XXXXXXX X
     } else {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13, 14)} ${digits.slice(14, 16)}`; // 1 19XX X XXXXXXX X XX
+      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13, 14)} ${digits.slice(14, 16)}`; // X XXXX X XXXXXXX X XX
     }
     
     setIdNumber(formatted);
+    if (error) onClearError?.();
     
     // Validate if the field is complete (16 digits)
     if (digits.length === 16) {
@@ -357,6 +332,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
     const digits = value.replace(/\D/g, '').slice(0, 9);
     
     setCompanyTIN(digits);
+    if (error) onClearError?.();
     
     // Validate if the field is complete (9 digits)
     if (digits.length === 9) {
@@ -382,6 +358,23 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {error && (
+            <div
+              className="mb-4 p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
+              role="alert"
+              aria-live="polite"
+            >
+              <div className="font-medium mb-1">Registration failed</div>
+              <div className="text-red-700/90">{error}</div>
+              {error.toLowerCase().includes("already exists") && (
+                <div className="mt-2">
+                  <Link href="/login" className="text-primary underline underline-offset-2 font-medium">
+                    Go to login
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
           {localError && (
             <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
               {localError}
@@ -389,7 +382,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
           )}
           <Tabs 
             defaultValue={accountType} 
-            onValueChange={(value) => setAccountType(value as 'individual' | 'company')} 
+            onValueChange={(value) => {
+              setAccountType(value as 'individual' | 'company');
+              if (error) onClearError?.();
+            }} 
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2 mb-6">
@@ -440,7 +436,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                   <Input
                     id="companyPhone"
                     type="tel"
-                    placeholder="+2507XXXXXXXX or 07XXXXXXXX"
+                    placeholder="07XXXXXXXX"
                     required
                     value={companyPhone}
                     onChange={(e) => {
@@ -449,6 +445,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                       // Live-validate once the user starts typing
                       if (companyPhoneError) validateRwandaPhone(v, setCompanyPhoneError);
                       else if (v.trim()) validateRwandaPhone(v, setCompanyPhoneError);
+                      if (error) onClearError?.();
                     }}
                     className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
                       companyPhoneError ? 'border-red-500 focus:ring-red-500' : ''
@@ -582,7 +579,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                   <Input
                     id="phone"
                     type="tel"
-                    placeholder="+2507XXXXXXXX or 07XXXXXXXX"
+                    placeholder="07XXXXXXXX"
                     required
                     value={phone}
                     onChange={(e) => {
@@ -590,6 +587,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                       setPhone(v);
                       if (phoneError) validateRwandaPhone(v, setPhoneError);
                       else if (v.trim()) validateRwandaPhone(v, setPhoneError);
+                      if (error) onClearError?.();
                     }}
                     className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
                       phoneError ? 'border-red-500 focus:ring-red-500' : ''
@@ -606,7 +604,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                     <Label htmlFor="idType">ID Type</Label>
                     <Select 
                       value={idType} 
-                      onValueChange={setIdType}
+                      onValueChange={(v) => {
+                        setIdType(v);
+                        if (error) onClearError?.();
+                      }}
                       defaultValue="nationalId"
                       disabled={isLoading}
                     >
@@ -637,7 +638,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false }: SignU
                       <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
                     )}
                     {!idNumberError && idType === "nationalId" && (
-                      <p className="text-xs text-muted-foreground mt-1">Format: 1 19XX X XXXXXXX X XX</p>
+                      <p className="text-xs text-muted-foreground mt-1">Format: 1 1990 9 0000000 2 00</p>
                     )}
                   </div>
                 </div>

@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const [userData, setUserData] = useState<{
     email: string;
     accountType: string;
-    details: any;
+    details: SignUpFormData | Record<string, unknown>;
     phoneNumber?: string;
     userId?: string;
   }>({
@@ -172,10 +172,6 @@ export default function RegisterPage() {
     }
   };
 
-  const handleEmailVerified = async (_emailCode: string) => {
-    router.push("/dashboard");
-  };
-
   const handleSuccessComplete = () => {
     router.push("/dashboard");
   };
@@ -193,6 +189,8 @@ export default function RegisterPage() {
             <SignUpForm 
               onContinue={handleContinue}
               isLoading={isLoading}
+              error={error}
+              onClearError={() => setError("")}
             />
           </motion.div>
         )}

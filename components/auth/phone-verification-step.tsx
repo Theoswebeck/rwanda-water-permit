@@ -40,9 +40,9 @@ export function PhoneVerificationStep({ onContinue, onBack, isLoading = false }:
       setPhoneError("Phone number is required.");
       return false;
     }
-    const phoneRegex = /^(\+250|0)7\d{8}$/;
-    if (!phoneRegex.test(phone)) {
-      setPhoneError("Invalid Rwandan phone number format. Use +2507XXXXXXXX or 07XXXXXXXX");
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length !== 10 || !digits.startsWith("07")) {
+      setPhoneError("Invalid phone number format. Use 07XXXXXXXX (10 digits).");
       return false;
     }
     setPhoneError("");
@@ -245,7 +245,7 @@ export function PhoneVerificationStep({ onContinue, onBack, isLoading = false }:
                 <Input
                   id="phoneNumber"
                   type="tel"
-                  placeholder="+250 7XX XXX XXX"
+                  placeholder="07XXXXXXXX"
                   value={phoneNumber}
                   onChange={handlePhoneChange}
                   className={`text-lg ${phoneError ? 'border-red-500' : ''}`}
@@ -255,7 +255,7 @@ export function PhoneVerificationStep({ onContinue, onBack, isLoading = false }:
                   <p className="text-xs text-red-500">{phoneError}</p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Enter your Rwandan phone number (e.g., +250788123456)
+                  Enter your phone number (e.g., 0788123456)
                 </p>
               </div>
 

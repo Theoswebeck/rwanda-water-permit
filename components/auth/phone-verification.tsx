@@ -108,9 +108,10 @@ export function PhoneVerification({
       setPhoneEditError("Please enter a phone number.");
       return;
     }
-    // basic sanity check; full normalization/validation is handled by parent
-    if (v.replace(/\D/g, "").length < 9) {
-      setPhoneEditError("Phone number looks too short.");
+    // Basic sanity check; full normalization/validation is handled by parent
+    const digits = v.replace(/\D/g, "");
+    if (digits.length !== 10 || !digits.startsWith("07")) {
+      setPhoneEditError("Invalid phone number format. Use 07XXXXXXXX (10 digits).");
       return;
     }
     try {
@@ -172,7 +173,7 @@ export function PhoneVerification({
                 type="tel"
                 value={phoneDraft}
                 onChange={(e) => setPhoneDraft(e.target.value)}
-                placeholder="+2507XXXXXXXX or 07XXXXXXXX"
+                placeholder="07XXXXXXXX"
                 disabled={isLoading || isUpdatingPhone}
               />
               <div className="flex gap-2">

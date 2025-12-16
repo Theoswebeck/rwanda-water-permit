@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+function normalizeRwandaPhoneToE164(raw: string): string | null {
+  const v = String(raw || '').trim();
+  if (!v) return null;
+  const digits = v.replace(/\D/g, '');
+
+  if (digits.length === 10 && digits.startsWith('07')) {
+    return `+250${digits.substring(1)}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith('2507')) return `+${digits}`;
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -14,6 +28,19 @@ export async function POST(request: NextRequest) {
         { 
           success: false, 
           error: 'Missing required fields: code and (userId or phoneNumber)' 
+        },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPhone = phoneNumber ? normalizeRwandaPhoneToE164(phoneNumber) : null;
+    if (phoneNumber && !normalizedPhone) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid phone number format. Use 07XXXXXXXX (10 digits).',
+          error: 'INVALID_PHONE_FORMAT',
+          verified: false,
         },
         { status: 400 }
       );
@@ -43,12 +70,12 @@ export async function POST(request: NextRequest) {
 
       // Try to get verification from phone_verification_logs table first (for registration)
       if (phoneNumber) {
-        console.log('🔍 Looking up verification for phone:', phoneNumber);
+        console.log('🔍 Looking up verification for phone (suffix):', String(normalizedPhone || '').slice(-3));
         
         const { data: phoneVerification, error: phoneError } = await supabase
           .from('phone_verification_logs')
           .select('verification_code, expires_at, status')
-          .eq('phone_number', phoneNumber)
+          .eq('phone_number', normalizedPhone)
           .eq('status', 'sent')
           .order('sent_at', { ascending: false })
           .limit(1)
@@ -57,7 +84,7 @@ export async function POST(request: NextRequest) {
         console.log('📊 Database lookup result:', {
           data: phoneVerification,
           error: phoneError,
-          phoneNumber
+          phoneSuffix: String(normalizedPhone || '').slice(-3)
         });
 
         if (!phoneError && phoneVerification) {
@@ -141,7 +168,7 @@ export async function POST(request: NextRequest) {
         await supabase
           .from('phone_verification_logs')
           .update({ status: 'verified' })
-          .eq('phone_number', phoneNumber)
+          .eq('phone_number', normalizedPhone)
           .eq('status', 'sent');
       }
 
@@ -153,10 +180,10 @@ export async function POST(request: NextRequest) {
           phone_verification_expires_at: null,
           phone_verification_attempts: 0,
           // update phone on account after verification
-          phone: phoneNumber,
+          phone: normalizedPhone || phoneNumber,
         };
         if (accountType === 'company') {
-          update.company_phone = phoneNumber;
+          update.company_phone = normalizedPhone || phoneNumber;
         }
 
         await supabase

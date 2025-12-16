@@ -35,9 +35,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Mark profile email_verified (best effort). If service role is configured, also confirm in auth.
+    // Only do this for signup/email verification purposes, not other OTP purposes like password reset.
     try {
       const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      if (adminKey) {
+      const shouldMarkVerified = purpose === 'signup' || purpose === 'email_verification'
+      if (adminKey && shouldMarkVerified) {
         const admin = createClient(url, adminKey)
 
         // Update public.users (service role bypasses RLS)
@@ -48,12 +50,12 @@ export async function POST(req: NextRequest) {
 
         // Confirm email in auth so login doesn't block on "Email not confirmed"
         if (userId) {
-          await admin.auth.admin.updateUserById(userId, { email_confirm: true } as any)
+          await admin.auth.admin.updateUserById(userId, { email_confirm: true })
         } else {
           // Fallback: no userId provided; best-effort update profile only
         }
       }
-    } catch (e) {
+    } catch {
       // Non-fatal: code verification succeeded, but auth/profile confirmation may require service role key
       console.warn('⚠️ Post-verify updates skipped/failed')
     }

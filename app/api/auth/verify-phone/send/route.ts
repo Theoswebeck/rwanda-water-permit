@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+function normalizeRwandaPhoneToE164(raw: string): string | null {
+  const v = String(raw || '').trim();
+  if (!v) return null;
+  const digits = v.replace(/\D/g, '');
+
+  // UI expects: 07XXXXXXXX (10 digits) -> +2507XXXXXXXX
+  if (digits.length === 10 && digits.startsWith('07')) {
+    return `+250${digits.substring(1)}`;
+  }
+
+  // Backward-compatible: +2507XXXXXXXX / 2507XXXXXXXX
+  if (digits.length === 12 && digits.startsWith('2507')) return `+${digits}`;
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -15,6 +31,17 @@ export async function POST(request: NextRequest) {
         { 
           success: false, 
           error: 'Missing required field: phoneNumber' 
+        },
+        { status: 400 }
+      );
+    }
+
+    const normalizedPhone = normalizeRwandaPhoneToE164(phoneNumber);
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid phone number format. Use 07XXXXXXXX (10 digits).',
         },
         { status: 400 }
       );
@@ -71,7 +98,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          to: phoneNumber,
+          to: normalizedPhone,
           text: message,
           sender: senderName,
         }),
@@ -139,12 +166,12 @@ export async function POST(request: NextRequest) {
           .from('phone_verification_logs')
           .update({ status: 'superseded' })
           .eq('status', 'sent')
-          .eq('phone_number', phoneNumber);
+          .eq('phone_number', normalizedPhone);
       } catch {}
 
       // Store in phone_verification_logs table for registration flow
       console.log('📝 Storing verification in database:', {
-        phone_number: phoneNumber,
+        phone_number: normalizedPhone,
         verification_code: verificationCode,
         expires_at: expiresAt.toISOString(),
         user_id: userId || null,
@@ -153,7 +180,7 @@ export async function POST(request: NextRequest) {
       const { data: insertResult, error: insertError } = await supabase
         .from('phone_verification_logs')
         .insert({
-          phone_number: phoneNumber,
+          phone_number: normalizedPhone,
           verification_code: verificationCode,
           expires_at: expiresAt.toISOString(),
           attempts: 1,
