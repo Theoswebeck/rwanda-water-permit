@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SessionInitializer } from "@/components/auth/session-initializer";
 import { ReactQueryProvider } from "@/lib/react-query-provider";
+import { KeepWarmHeartbeat } from "@/components/shared/keep-warm-heartbeat";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,6 +33,7 @@ export default function RootLayout({
           <ReactQueryProvider>
             <AuthProvider>
               <SessionInitializer />
+              <KeepWarmHeartbeat />
               <Header />
               <main>{children}</main>
               <Footer />

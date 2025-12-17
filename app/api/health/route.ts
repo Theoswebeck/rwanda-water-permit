@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import packageJson from '@/package.json'
 
 /**
  * ⚡ PERFORMANCE: Health check endpoint for:
@@ -13,11 +14,17 @@ export const runtime = 'nodejs' // Use nodejs for consistency with the rest of t
 export const dynamic = 'force-dynamic' // Don't cache this response
 
 export async function GET() {
+  const uptimeSeconds = process.uptime()
   const healthCheck = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
+    uptime: `${uptimeSeconds}s`,
     environment: process.env.NODE_ENV || 'development',
+    version:
+      process.env.npm_package_version ||
+      process.env.NEXT_PUBLIC_APP_VERSION ||
+      packageJson.version ||
+      '1.0.0',
   }
 
   return NextResponse.json(healthCheck, {
