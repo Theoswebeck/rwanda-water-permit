@@ -10,6 +10,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
     }
 
+    // Validate ID number for individual signups (must be exactly 19 digits)
+    if (accountType === 'individual') {
+      const rawId = String(rest?.identification?.number ?? rest?.idNumber ?? '')
+      const idDigits = rawId.replace(/\D/g, '')
+      if (idDigits.length !== 19 || !/^\d{19}$/.test(idDigits)) {
+        return NextResponse.json({ success: false, message: 'invalid ID number' }, { status: 400 })
+      }
+    }
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!serviceKey) {
@@ -84,7 +93,8 @@ export async function POST(req: NextRequest) {
       profile.first_name = rest.firstName || 'User'
       profile.last_name = rest.lastName || 'Profile'
       profile.phone = rest.phone
-      profile.id_number = rest?.identification?.number || rest.idNumber
+      // Store normalized digits (avoid persisting spaces or separators)
+      profile.id_number = String(rest?.identification?.number || rest.idNumber || '').replace(/\D/g, '')
       profile.id_type = 'national_id'
       profile.company_name = undefined
     } else {

@@ -119,45 +119,58 @@ export async function POST(req: NextRequest) {
         </div>`
 
       console.log(`📤 Sending email via Resend API...`)
-      
-      const resp = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${resendKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ 
-          from: fromEmail, 
-          to: email, 
-          subject, 
-          html 
+
+      try {
+        const resp = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${resendKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: fromEmail,
+            to: email,
+            subject,
+            html,
+          }),
         })
-      })
 
-      const responseText = await resp.text()
-      console.log(`📬 Resend response: status=${resp.status}, body=${responseText}`)
+        const responseText = await resp.text()
+        console.log(`📬 Resend response: status=${resp.status}, body=${responseText}`)
 
-      if (!resp.ok) {
-        console.error('❌ Resend API error:', responseText)
-        // Still return success because code was created; user can use devCode
-        return NextResponse.json({ 
-          success: true, 
-          message: `Email sending failed but code created. ${isDev ? 'Use devCode below.' : 'Try resending.'}`, 
+        if (!resp.ok) {
+          console.error('❌ Resend API error:', responseText)
+          // Still return success because code was created; user can use devCode
+          return NextResponse.json({
+            success: true,
+            message: `Email sending failed but code created. ${isDev ? 'Use devCode below.' : 'Try resending.'}`,
+            delivered: false,
+            deliveryProvider: 'resend',
+            devCode: isDev ? code : undefined,
+            debug: isDev ? { resendError: responseText } : undefined,
+          })
+        }
+
+        // Email sent successfully
+        return NextResponse.json({
+          success: true,
+          message: 'Verification email sent successfully!',
+          delivered: true,
+          deliveryProvider: 'resend',
+          devCode: isDev ? code : undefined,
+        })
+      } catch (fetchErr) {
+        console.error('❌ Resend fetch failed:', fetchErr)
+        // DNS / outbound network issues (common in sandboxed dev envs) shouldn't break the flow.
+        return NextResponse.json({
+          success: true,
+          message: `Email sending failed but code created. ${isDev ? 'Use devCode below.' : 'Try resending.'}`,
           delivered: false,
           deliveryProvider: 'resend',
           devCode: isDev ? code : undefined,
-          debug: isDev ? { resendError: responseText } : undefined
+          debug: isDev ? { resendError: String(fetchErr) } : undefined,
         })
       }
-      
-      // Email sent successfully
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Verification email sent successfully!', 
-        delivered: true,
-        deliveryProvider: 'resend',
-        devCode: isDev ? code : undefined 
-      })
     }
 
     // No provider configured

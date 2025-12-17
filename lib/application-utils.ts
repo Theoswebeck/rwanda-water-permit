@@ -65,27 +65,39 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'irrigation': 'agricultural',
     'water_supply': 'domestic',
     'aquaculture': 'agricultural',
+    'fish_farming_lakes': 'agricultural',
+    'fish_farming_ponds': 'agricultural',
     'coffee_washing': 'industrial',
     'industry': 'industrial',
-    'electricity': 'industrial', // electricity generation projects are industrial
+    'electricity': 'industrial', // legacy
+    'electricity_generation': 'industrial',
     'mining': 'mining_water_use',
-    'construction': 'industrial',
+    'construction': 'industrial', // legacy
+    'construction_of_dam': 'industrial',
+    'construction_of_infrastructures': 'industrial',
     'navigation': 'commercial', // navigation is commercial activity
-    'recreation': 'commercial', // recreation is commercial activity
+    'recreation': 'commercial', // legacy
+    'recreation_activities': 'commercial',
     'other': 'domestic'
   };
 
   const activityPurposeMap: Record<string, Application['water_purpose']> = {
     'irrigation': 'irrigation',
     'water_supply': 'domestic',
-    'aquaculture': 'aquaculture',
+    'aquaculture': 'fish_farming_lakes', // legacy -> migrated enum
+    'fish_farming_lakes': 'fish_farming_lakes',
+    'fish_farming_ponds': 'fish_farming_ponds',
     'coffee_washing': 'industrial',
     'industry': 'industrial',
-    'electricity': 'electricity_generation',
+    'electricity': 'electricity_generation', // legacy
+    'electricity_generation': 'electricity_generation',
     'mining': 'mining',
-    'construction': 'industrial',
+    'construction': 'industrial', // legacy
+    'construction_of_dam': 'industrial',
+    'construction_of_infrastructures': 'industrial',
     'navigation': 'recreation', // navigation falls under recreation
-    'recreation': 'recreation',
+    'recreation': 'recreation', // legacy
+    'recreation_activities': 'recreation',
     'other': 'domestic'
   };
 
@@ -249,6 +261,9 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       
       // Fish farming fields
       fishLakeAreaHectares: formData.fishLakeAreaHectares,
+      fishLakeNumberOfCages: formData.fishLakeNumberOfCages,
+      fishLakeCageCapacity: formData.fishLakeCageCapacity,
+      fishLakeConcessionCoordinates: formData.fishLakeConcessionCoordinates,
       fishPondsDiscardWaterQuantityM3PerDay: formData.fishPondsDiscardWaterQuantityM3PerDay,
       
       // Terms & Conditions

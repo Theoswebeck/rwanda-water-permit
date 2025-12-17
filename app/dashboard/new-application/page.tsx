@@ -94,6 +94,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       aquacultureGeneralRequirements: 'other',
       aquacultureEIA: 'environmental_impact_doc',
       aquacultureManagementPlan: 'other',
+      aquacultureRecommendationLetter: 'other',
       // Coffee Washing documents
       coffeeWashingGeneralRequirements: 'other',
       coffeeWashingEIA: 'environmental_impact_doc',
@@ -341,7 +342,9 @@ function NewApplicationContent() {
       
       if (draftId) {
         // Update existing draft
-        result = await updateApplication(draftId, applicationData);
+        // Never attempt to update ownership fields from the client (can violate RLS/policies)
+        const { applicant_id, ...updateData } = applicationData as any;
+        result = await updateApplication(draftId, updateData);
       } else {
         // Create new draft
         result = await createApplication(applicationData);

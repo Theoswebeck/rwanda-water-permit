@@ -139,18 +139,43 @@ export function useApplications({
           throw new Error('Approved or rejected applications cannot be edited. Please contact an administrator if changes are needed.')
         }
       }
+
+      // 🔒 Safety: normalize legacy enum values before hitting PostgREST.
+      // Some environments previously stored/used "aquaculture" but DB enum was migrated.
+      const safeData: Partial<Application> = { ...data }
+      if ((safeData as any).water_purpose === 'aquaculture') {
+        ;(safeData as any).water_purpose = 'fish_farming_lakes'
+      }
+
+      const isFetchFailure = (e: unknown) =>
+        e instanceof TypeError ||
+        (e && typeof e === 'object' && 'message' in e && typeof (e as any).message === 'string' && (e as any).message.includes('Failed to fetch'))
+
+      const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
       
-      const { data: updatedApplication, error } = await supabase
-        .from('applications')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single()
+      // Use maybeSingle() so we can provide a clearer error when 0 rows are updated (common with RLS or wrong ID)
+      const attemptUpdate = async () =>
+        supabase
+          .from('applications')
+          .update(safeData)
+          .eq('id', id)
+          .select()
+          .maybeSingle()
+
+      let resp = await attemptUpdate()
+      // 🚑 Retry once on transient network errors (sequential, no races).
+      if (resp.error && isFetchFailure(resp.error)) {
+        console.warn('⚠️ Supabase update fetch failed; retrying once...', resp.error)
+        await delay(600)
+        resp = await attemptUpdate()
+      }
+
+      const { data: updatedApplication, error } = resp
 
       if (error) throw error
 
       if (!updatedApplication) {
-        throw new Error('No application data returned from database update');
+        throw new Error('Update returned no rows. The application may not exist or you may not have permission to update it.');
       }
 
       // Type the updated application correctly
@@ -165,9 +190,20 @@ export function useApplications({
 
       return typedApplication
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update application')
-      console.error('Error updating application:', err)
-      return null
+      const message =
+        err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string'
+          ? (err as any).message
+          : (err instanceof Error ? err.message : 'Failed to update application')
+
+      setError(message)
+
+      // PostgrestError often shows as {} in Next overlay; log key fields explicitly.
+      const details = err && typeof err === 'object' && 'details' in err ? (err as any).details : undefined
+      const hint = err && typeof err === 'object' && 'hint' in err ? (err as any).hint : undefined
+      const code = err && typeof err === 'object' && 'code' in err ? (err as any).code : undefined
+      console.error('Error updating application:', { message, details, hint, code, err })
+      // Propagate the error to callers so UI can show the real reason (RLS, constraints, invalid enums, etc.)
+      throw new Error(message)
     }
   }, [])
 

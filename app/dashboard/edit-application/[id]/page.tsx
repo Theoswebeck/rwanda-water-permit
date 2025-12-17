@@ -88,27 +88,39 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     'irrigation': 'agricultural',
     'water_supply': 'domestic',
     'aquaculture': 'agricultural',
+    'fish_farming_lakes': 'agricultural',
+    'fish_farming_ponds': 'agricultural',
     'coffee_washing': 'industrial',
     'industry': 'industrial',
-    'electricity': 'industrial', // electricity generation projects are industrial
+    'electricity': 'industrial', // legacy
+    'electricity_generation': 'industrial',
     'mining': 'mining_water_use',
-    'construction': 'industrial',
+    'construction': 'industrial', // legacy
+    'construction_of_dam': 'industrial',
+    'construction_of_infrastructures': 'industrial',
     'navigation': 'commercial', // navigation is commercial activity
-    'recreation': 'commercial', // recreation is commercial activity
+    'recreation': 'commercial', // legacy
+    'recreation_activities': 'commercial',
     'other': 'domestic'
   };
 
   const activityPurposeMap: Record<string, Application['water_purpose']> = {
     'irrigation': 'irrigation',
     'water_supply': 'domestic',
-    'aquaculture': 'aquaculture',
+    'aquaculture': 'fish_farming_lakes', // legacy -> migrated enum
+    'fish_farming_lakes': 'fish_farming_lakes',
+    'fish_farming_ponds': 'fish_farming_ponds',
     'coffee_washing': 'industrial',
     'industry': 'industrial',
-    'electricity': 'electricity_generation',
+    'electricity': 'electricity_generation', // legacy
+    'electricity_generation': 'electricity_generation',
     'mining': 'mining',
-    'construction': 'industrial',
+    'construction': 'industrial', // legacy
+    'construction_of_dam': 'industrial',
+    'construction_of_infrastructures': 'industrial',
     'navigation': 'recreation', // navigation falls under recreation
-    'recreation': 'recreation',
+    'recreation': 'recreation', // legacy
+    'recreation_activities': 'recreation',
     'other': 'domestic'
   };
 
@@ -271,6 +283,9 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       
       // Fish farming fields
       fishLakeAreaHectares: formData.fishLakeAreaHectares,
+      fishLakeNumberOfCages: formData.fishLakeNumberOfCages,
+      fishLakeCageCapacity: formData.fishLakeCageCapacity,
+      fishLakeConcessionCoordinates: formData.fishLakeConcessionCoordinates,
       fishPondsDiscardWaterQuantityM3PerDay: formData.fishPondsDiscardWaterQuantityM3PerDay,
       
       // Terms & Conditions
@@ -505,11 +520,13 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   const purposeToActivity: Record<string, string> = {
     'domestic': 'water_supply',
     'irrigation': 'irrigation', 
-    'aquaculture': 'aquaculture',
+    'aquaculture': 'fish_farming_lakes', // legacy
+    'fish_farming_lakes': 'fish_farming_lakes',
+    'fish_farming_ponds': 'fish_farming_ponds',
     'industrial': 'industry',
-    'electricity_generation': 'electricity',
+    'electricity_generation': 'electricity_generation',
     'mining': 'mining',
-    'recreation': 'recreation'
+    'recreation': 'recreation_activities'
   };
   
   const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
@@ -586,6 +603,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       aquacultureGeneralRequirements: 'other',
       aquacultureEIA: 'environmental_impact_doc',
       aquacultureManagementPlan: 'other',
+      aquacultureRecommendationLetter: 'other',
       // Coffee Washing documents
       coffeeWashingGeneralRequirements: 'other',
       coffeeWashingEIA: 'environmental_impact_doc',
@@ -795,6 +813,7 @@ export default function EditApplicationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
@@ -1036,6 +1055,7 @@ export default function EditApplicationPage() {
     try {
       setIsLoading(true);
       setError(null);
+      setDraftSaved(false);
       
       console.log('Updating draft, form data received:', formData);
       console.log('Current application state:', application);
@@ -1044,8 +1064,10 @@ export default function EditApplicationPage() {
       
       // Map form data to application schema with draft status
       const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
+      // Never attempt to update ownership fields from the client (can violate RLS/policies)
+      const { applicant_id, ...updateData } = applicationData as any;
       
-      console.log('Mapped draft application data:', applicationData);
+      console.log('Mapped draft application data:', updateData);
       
       // Check if application exists
       if (!application?.id) {
@@ -1055,8 +1077,8 @@ export default function EditApplicationPage() {
       }
       
       // Update the application as draft
-      const updatedApplication = await updateApplication(application.id, applicationData);
-      
+      const updatedApplication = await updateApplication(application.id, updateData);
+
       if (updatedApplication) {
         console.log('✅ Application updated as draft successfully:', updatedApplication);
         
@@ -1071,14 +1093,13 @@ export default function EditApplicationPage() {
             console.error('⚠️ Full error details:', docError);
           });
         
-        // Always show success for manual saves
-          setSuccess(true);
-          
-          // Redirect to dashboard after a brief success message
-          setTimeout(() => {
-            router.push("/dashboard?tab=applications&success=draft-updated");
-        }, 1500);
+        // ✅ Draft save UX + redirect to dashboard
+        setDraftSaved(true);
+        setTimeout(() => {
+          router.push("/dashboard?tab=applications&success=draft-updated");
+        }, 800);
       } else {
+        // If updateApplication returned null, it has already set a more specific error in the hook.
         throw new Error('Failed to save draft');
       }
     } catch (error) {
@@ -1171,6 +1192,18 @@ export default function EditApplicationPage() {
           transition={{ duration: 0.5 }}
           className="space-y-8"
         >
+          {(isLoading || draftSaved) && (
+            <Alert className={draftSaved ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"}>
+              {draftSaved ? (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              ) : (
+                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+              )}
+              <AlertDescription className={draftSaved ? "text-green-800" : "text-blue-800"}>
+                {draftSaved ? "✅ Draft saved. Redirecting…" : "Saving draft…"}
+              </AlertDescription>
+            </Alert>
+          )}
           <div>
             <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Edit Water Permit Application</h1>
             <p className="text-muted-foreground mt-2">
@@ -1233,6 +1266,7 @@ export default function EditApplicationPage() {
               initialData={initialFormData}
               initialDocuments={initialDocuments}
               mode="edit"
+              currentApplication={application}
             />
           )}
         </motion.div>

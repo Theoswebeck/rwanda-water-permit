@@ -108,18 +108,18 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       return false;
     }
 
-    // Remove spaces and validate that the ID contains exactly 16 digits
-    const digits = idNumber.replace(/\s/g, '');
+    // Validate that the ID contains exactly 19 digits
+    const digits = idNumber.replace(/\D/g, '');
     
-    // Check if it has exactly 16 digits
-    if (digits.length !== 16) {
-      setIdNumberError("National ID must have exactly 16 digits.");
+    // Check if it has exactly 19 digits
+    if (digits.length !== 19) {
+      setIdNumberError("invalid ID number");
       return false;
     }
 
     // Check if all characters are digits
-    if (!/^\d{16}$/.test(digits)) {
-      setIdNumberError("National ID must contain only numbers.");
+    if (!/^\d{19}$/.test(digits)) {
+      setIdNumberError("invalid ID number");
       return false;
     }
 
@@ -285,7 +285,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     !!phone.trim() &&
     !phoneError &&
     !!idNumber.trim() &&
-    idNumber.replace(/\D/g, "").length === 16 &&
+    idNumber.replace(/\D/g, "").length === 19 &&
     !idNumberError &&
     !!email.trim() &&
     !emailError &&
@@ -295,32 +295,18 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Format National ID as: X XXXX X XXXXXXX X XX (16 digits total)
-    const digits = value.replace(/\D/g, '').slice(0, 16);
-    
-    let formatted = '';
-    if (digits.length <= 1) {
-      formatted = digits;
-    } else if (digits.length <= 4) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1)}`; // X XXXX
-    } else if (digits.length <= 6) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5)}`; // X XXXX X
-    } else if (digits.length <= 13) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6)}`; // X XXXX X XXXXXXX
-    } else if (digits.length <= 14) {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13)}`; // X XXXX X XXXXXXX X
-    } else {
-      formatted = `${digits.slice(0, 1)} ${digits.slice(1, 5)} ${digits.slice(5, 6)} ${digits.slice(6, 13)} ${digits.slice(13, 14)} ${digits.slice(14, 16)}`; // X XXXX X XXXXXXX X XX
-    }
-    
-    setIdNumber(formatted);
+    // Allow digits only, up to 19 digits
+    const digits = value.replace(/\D/g, '').slice(0, 19);
+
+    setIdNumber(digits);
     if (error) onClearError?.();
     
-    // Validate if the field is complete (16 digits)
-    if (digits.length === 16) {
-      validateNationalId(formatted);
-    } else if (idNumberError) {
-      // Clear error if user is still typing
+    // Prompt user whenever the ID is not exactly 19 digits
+    if (digits.length === 19) {
+      validateNationalId(digits);
+    } else if (digits.length > 0) {
+      setIdNumberError("invalid ID number");
+    } else {
       setIdNumberError("");
     }
   };
@@ -625,7 +611,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                     <Input 
                       id="idNumber" 
                       type="text" 
-                      placeholder="Enter your National ID number"
+                      inputMode="numeric"
+                      pattern="\d*"
+                      maxLength={19}
+                      placeholder="Enter your ID number (19 digits)"
                       required 
                       value={idNumber}
                       onChange={handleIdNumberChange}
@@ -638,7 +627,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
                     )}
                     {!idNumberError && idType === "nationalId" && (
-                      <p className="text-xs text-muted-foreground mt-1">Format: 1 1990 9 0000000 2 00</p>
+                      <p className="text-xs text-muted-foreground mt-1">Must be exactly 19 digits.</p>
                     )}
                   </div>
                 </div>

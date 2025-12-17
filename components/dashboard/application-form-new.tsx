@@ -145,6 +145,9 @@ const applicationFormSchema = z.object({
 
   // Fish farming (replacing Aquaculture)
   fishLakeAreaHectares: z.number().optional(),
+  fishLakeNumberOfCages: z.number().optional(),
+  fishLakeCageCapacity: z.number().optional(),
+  fishLakeConcessionCoordinates: z.string().optional(),
   fishPondsDiscardWaterQuantityM3PerDay: z.number().optional(),
   
   // Irrigation specific fields
@@ -261,8 +264,18 @@ export const ApplicationForm = memo(function ApplicationForm({
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
+  const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
+
+  const formatPolygonCoordinatesForDisplay = useCallback((coords?: Array<{ latitude: string; longitude: string }>) => {
+    if (!coords || !Array.isArray(coords) || coords.length === 0) return "";
+    const pairs = coords
+      .filter((c) => c && typeof c.latitude === "string" && typeof c.longitude === "string")
+      .map((c) => `${c.latitude},${c.longitude}`)
+      .filter(Boolean);
+    return pairs.join("; ");
+  }, []);
   
   // ⚡ PERFORMANCE: Memoize location states to reduce re-renders
   const [selectedProvince, setSelectedProvince] = useState("");
@@ -376,8 +389,11 @@ export const ApplicationForm = memo(function ApplicationForm({
       miningQuantityPerMonth: "",
       miningMineralsType: "",
       miningProductionCapacityTonsPerYear: 0,
-      fishLakeAreaHectares: 0,
-      fishPondsDiscardWaterQuantityM3PerDay: 0,
+      fishLakeAreaHectares: undefined,
+      fishLakeNumberOfCages: undefined,
+      fishLakeCageCapacity: undefined,
+      fishLakeConcessionCoordinates: "",
+      fishPondsDiscardWaterQuantityM3PerDay: undefined,
       irrigationTotalArea: 0,
       additionalDocuments: [],
       waterSourceCoordinates: [
@@ -620,7 +636,9 @@ export const ApplicationForm = memo(function ApplicationForm({
             return false;
           }
           break;
-        case 'aquaculture':
+        case 'aquaculture': // legacy compatibility
+        case 'fish_farming_lakes':
+        case 'fish_farming_ponds':
           if (!files.aquacultureGeneralRequirements && !uploadedFileUrls.aquacultureGeneralRequirements) {
             return false;
           }
@@ -628,6 +646,9 @@ export const ApplicationForm = memo(function ApplicationForm({
             return false;
           }
           if (!files.aquacultureManagementPlan && !uploadedFileUrls.aquacultureManagementPlan) {
+            return false;
+          }
+          if (!files.aquacultureRecommendationLetter && !uploadedFileUrls.aquacultureRecommendationLetter) {
             return false;
           }
           break;
@@ -778,6 +799,78 @@ export const ApplicationForm = memo(function ApplicationForm({
     return errors;
   };
 
+  const getTabs = () => {
+    // Payment tab should only be available for draft/pending_payment AND never for staff views (review/assessment/approver)
+    const shouldShowPayment =
+      !isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
+
+    return shouldShowPayment
+      ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
+      : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+  };
+
+  const handleTabChange = async (nextTab: string) => {
+    if (readOnly) {
+      setActiveTab(nextTab);
+      return;
+    }
+
+    const tabs = getTabs();
+    const currentIndex = tabs.indexOf(activeTab);
+    const nextIndex = tabs.indexOf(nextTab);
+
+    if (nextIndex === -1) return;
+
+    // Always allow going backwards (or re-selecting the same tab)
+    if (nextIndex <= currentIndex) {
+      setValidationError(null);
+      setActiveTab(nextTab);
+      return;
+    }
+
+    if (isTabSwitching) return;
+    setIsTabSwitching(true);
+
+    const tabLabels: Record<string, string> = {
+      "applicant-info": "Applicant",
+      "water-source": "Water Source",
+      "intended-activity": "Activity",
+      "land-ownership": "Land",
+      payment: "Payment",
+    };
+
+    const validateByTab: Record<string, (() => Promise<boolean>) | undefined> = {
+      "applicant-info": validateApplicantTab,
+      "water-source": validateWaterSourceTab,
+      "intended-activity": validateIntendedActivityTab,
+      "land-ownership": validateLandOwnershipTab,
+    };
+
+    try {
+      setValidationError(null);
+
+      // Validate all prerequisite tabs before allowing forward navigation
+      for (let i = 0; i < nextIndex; i += 1) {
+        const tab = tabs[i];
+        const validate = validateByTab[tab];
+        if (!validate) continue;
+
+        const ok = await validate();
+        if (!ok) {
+          // Keep the user on (or move them to) the first invalid section to make fixes obvious
+          setActiveTab(tab);
+          setValidationError(`Please complete all required fields in ${tabLabels[tab] || 'this'} section before proceeding.`);
+          setTimeout(() => setValidationError(null), 5000);
+          return;
+        }
+      }
+
+      setActiveTab(nextTab);
+    } finally {
+      setIsTabSwitching(false);
+    }
+  };
+
   // Function to check if Next button should be disabled
   const isNextButtonDisabled = () => {
     switch (activeTab) {
@@ -829,11 +922,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   };
 
   const handleNextTab = async () => {
-    // Only include payment tab for draft or pending_payment status
-    const shouldShowPayment = !currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status);
-    const tabs = shouldShowPayment 
-      ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
-      : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+    const tabs = getTabs();
     const currentIndex = tabs.indexOf(activeTab);
     
     if (currentIndex >= tabs.length - 1) return;
@@ -870,6 +959,23 @@ export const ApplicationForm = memo(function ApplicationForm({
   // Reset form with initial data when it becomes available
   useEffect(() => {
     if (initialData) {
+      const normalizedInitialData: Partial<FormValues> = { ...initialData };
+      // Normalize legacy activity values (older drafts) to current select values
+      if (Array.isArray(normalizedInitialData.intendedActivities)) {
+        normalizedInitialData.intendedActivities = normalizedInitialData.intendedActivities.map((a) => {
+          if (a === "aquaculture") return "fish_farming_lakes";
+          if (a === "recreation") return "recreation_activities";
+          if (a === "electricity") return "electricity_generation";
+          return a;
+        });
+      }
+      if (
+        (!normalizedInitialData.fishLakeConcessionCoordinates || normalizedInitialData.fishLakeConcessionCoordinates.trim() === "") &&
+        Array.isArray(normalizedInitialData.waterSourceCoordinates)
+      ) {
+        normalizedInitialData.fishLakeConcessionCoordinates = formatPolygonCoordinatesForDisplay(normalizedInitialData.waterSourceCoordinates);
+      }
+
       form.reset({
         // Start with defaults
         fullNameApplicant: "",
@@ -927,11 +1033,14 @@ export const ApplicationForm = memo(function ApplicationForm({
         miningMineralsType: "",
         miningProductionCapacityTonsPerYear: undefined,
         fishLakeAreaHectares: undefined,
+        fishLakeNumberOfCages: undefined,
+        fishLakeCageCapacity: undefined,
+        fishLakeConcessionCoordinates: "",
         fishPondsDiscardWaterQuantityM3PerDay: undefined,
         irrigationTotalArea: undefined,
         certificationAgreement: true,
         // Override with loaded data
-        ...initialData
+        ...normalizedInitialData
       });
       
       // Update dropdown selection states to enable cascading
@@ -962,7 +1071,7 @@ export const ApplicationForm = memo(function ApplicationForm({
         setAdditionalDocuments(initialData.additionalDocuments);
       }
     }
-  }, [initialData, form]);
+  }, [initialData, form, formatPolygonCoordinatesForDisplay]);
 
   // Load initial documents when provided
   useEffect(() => {
@@ -1523,7 +1632,13 @@ export const ApplicationForm = memo(function ApplicationForm({
               </Alert>
             )}
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
-              <Tabs defaultValue="applicant-info" value={activeTab} onValueChange={setActiveTab}>
+              <Tabs
+                defaultValue="applicant-info"
+                value={activeTab}
+                onValueChange={(value) => {
+                  void handleTabChange(value);
+                }}
+              >
                 <TabsList className={`grid w-full ${isStaffView || (currentApplication?.status && !['draft', 'pending_payment'].includes(currentApplication.status)) ? 'grid-cols-4 md:grid-cols-4' : 'grid-cols-5 md:grid-cols-5'}`}>
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
@@ -2833,31 +2948,96 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   <tbody>
                                     <tr>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Lake name" className="border-0 bg-transparent" />
+                                        <FormField
+                                          control={form.control}
+                                          name="nameSourceWater"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                {...field}
+                                                value={field.value ?? ""}
+                                                placeholder="Lake name"
+                                                className="border-0 bg-transparent"
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Number of cages" className="border-0 bg-transparent" />
+                                        <FormField
+                                          control={form.control}
+                                          name="fishLakeNumberOfCages"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                type="number"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => {
+                                                  const v = e.target.value;
+                                                  field.onChange(v === "" ? undefined : Number(v));
+                                                }}
+                                                placeholder="Number of cages"
+                                                className="border-0 bg-transparent"
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Fishes per cage" className="border-0 bg-transparent" />
+                                        <FormField
+                                          control={form.control}
+                                          name="fishLakeCageCapacity"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                type="number"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => {
+                                                  const v = e.target.value;
+                                                  field.onChange(v === "" ? undefined : Number(v));
+                                                }}
+                                                placeholder="Fishes per cage"
+                                                className="border-0 bg-transparent"
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
                           <FormField
                             control={form.control}
                             name="fishLakeAreaHectares"
                             render={({ field }) => (
-                                            <Input 
-                                              type="number" 
-                                              {...field} 
-                                              onChange={(e) => field.onChange(Number(e.target.value))}
-                                              placeholder="Area" 
-                                              className="border-0 bg-transparent" 
-                                            />
+                              <FormControl>
+                                <Input 
+                                  type="number"
+                                  value={field.value ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    field.onChange(v === "" ? undefined : Number(v));
+                                  }}
+                                  placeholder="Area" 
+                                  className="border-0 bg-transparent" 
+                                />
+                              </FormControl>
                                           )}
                                         />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Coordinates" className="border-0 bg-transparent" />
+                                        <FormField
+                                          control={form.control}
+                                          name="fishLakeConcessionCoordinates"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                {...field}
+                                                value={field.value ?? ""}
+                                                placeholder="Coordinates"
+                                                className="border-0 bg-transparent"
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                     </tr>
                                   </tbody>
@@ -2909,13 +3089,18 @@ export const ApplicationForm = memo(function ApplicationForm({
                             control={form.control}
                             name="fishPondsDiscardWaterQuantityM3PerDay"
                             render={({ field }) => (
-                                            <Input 
-                                              type="number" 
-                                              {...field} 
-                                              onChange={(e) => field.onChange(Number(e.target.value))}
-                                              placeholder="Monthly usage (m³)" 
-                                              className="border-0 bg-transparent" 
-                                            />
+                              <FormControl>
+                                <Input 
+                                  type="number"
+                                  value={field.value ?? ""}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    field.onChange(v === "" ? undefined : Number(v));
+                                  }}
+                                  placeholder="Monthly usage (m³)" 
+                                  className="border-0 bg-transparent" 
+                                />
+                              </FormControl>
                                           )}
                                         />
                                       </td>
@@ -3863,15 +4048,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                     {activeTab === "land-ownership" && !readOnly && (
                       <Button 
                         type="button"
-                        onClick={async () => {
+                        onClick={async (e) => {
                           try {
-                            // Show loading state
-                            const btn = event?.currentTarget as HTMLButtonElement;
-                            if (btn) {
-                              btn.disabled = true;
-                              btn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-2 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing...';
-                            }
-                            
                             // Automatically save as draft (like airline booking)
                             const draftData = { 
                               ...form.getValues(), 
@@ -3881,9 +4059,6 @@ export const ApplicationForm = memo(function ApplicationForm({
                             
                             // Save and wait for completion
                             await onSaveAsDraft(draftData, 'draft');
-                            
-                            // Small delay to ensure state updates
-                            await new Promise(resolve => setTimeout(resolve, 500));
                             
                             // Navigate to payment tab smoothly
                             setActiveTab('payment');
@@ -3899,7 +4074,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                         className={!canSubmit ? "opacity-50 cursor-not-allowed" : ""}
                       >
                         <CreditCard className="h-4 w-4 mr-2" />
-                        Continue to Payment
+                        {isLoading ? 'Saving…' : 'Continue to Payment'}
                         {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
                           <span className="ml-2 text-xs">(Fix coordinate conflicts first)</span>
                         )}

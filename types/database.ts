@@ -61,7 +61,11 @@ export type WaterPurpose =
   | 'irrigation' 
   | 'industrial' 
   | 'livestock'
-  | 'aquaculture' 
+  // NOTE: DB enum migrated from 'aquaculture' to explicit fish-farming purposes.
+  // Keep 'aquaculture' ONLY for legacy records / older environments.
+  | 'aquaculture'
+  | 'fish_farming_lakes'
+  | 'fish_farming_ponds'
   | 'recreation' 
   | 'electricity_generation'
   | 'mining' 
