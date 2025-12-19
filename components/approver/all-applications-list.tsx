@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
+import { formatDate } from "@/lib/utils";
 
 interface ApplicationWithApplicant extends Application {
   applicant?: {
@@ -258,6 +259,7 @@ export function AllApplicationsList() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Date</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Type & Source</TableHead>
@@ -270,14 +272,13 @@ export function AllApplicationsList() {
               <TableBody>
                 {filteredApplications.map((application) => (
                   <TableRow key={application.id}>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {formatDate(application.submitted_at || application.created_at)}
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1">
                         <div className="font-medium">{application.application_number}</div>
                         <div className="text-sm text-muted-foreground">{application.project_title}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(application.created_at).toLocaleDateString()}
-                        </div>
                       </div>
                     </TableCell>
                     <TableCell>

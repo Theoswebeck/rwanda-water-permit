@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -164,6 +164,9 @@ export default function InspectorApplicationView() {
     recommendation: null,
     explanationText: ""
   });
+
+  // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
+  const actionInFlightRef = useRef(false);
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -305,8 +308,6 @@ export default function InspectorApplicationView() {
     if (!application) return;
     
     try {
-      setSubmitLoading(true);
-      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
@@ -331,12 +332,31 @@ export default function InspectorApplicationView() {
 
       let result;
       
-      if (assessmentId) {
+      // If state wasn't hydrated (or a previous save happened in another tab),
+      // re-check for an existing assessment before inserting a new one.
+      let existingId = assessmentId;
+      if (!existingId) {
+        const { data: existingAssessment, error: existingErr } = await supabase
+          .from('technical_assessments')
+          .select('id')
+          .eq('application_id', application.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingErr) throw existingErr;
+        if (existingAssessment?.id) {
+          existingId = existingAssessment.id;
+          setAssessmentId(existingAssessment.id);
+        }
+      }
+
+      if (existingId) {
         // Update existing
         result = await supabase
           .from('technical_assessments')
           .update(assessmentData)
-          .eq('id', assessmentId)
+          .eq('id', existingId)
           .select()
           .single();
       } else {
@@ -358,13 +378,13 @@ export default function InspectorApplicationView() {
     } catch (err) {
       console.error('Error saving assessment:', err);
       throw err;
-    } finally {
-      setSubmitLoading(false);
     }
   };
 
   const handleForwardToApprover = async () => {
     if (!application) return;
+
+    if (actionInFlightRef.current) return;
     
     // Validation
     if (!recommendation.recommendation) {
@@ -379,6 +399,7 @@ export default function InspectorApplicationView() {
 
     try {
       setSubmitLoading(true);
+      actionInFlightRef.current = true;
       
       // 1. Save assessment with forwarded status
       await saveAssessment('forwarded_to_approver');
@@ -411,17 +432,25 @@ export default function InspectorApplicationView() {
       
     } catch (err) {
       console.error('Error forwarding application:', err);
-      alert('Failed to forward application. Please try again.');
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
+          ? (err as any).message
+          : "Failed to forward application. Please try again.";
+      alert(msg);
     } finally {
       setSubmitLoading(false);
+      actionInFlightRef.current = false;
     }
   };
 
   const handleReturnForRevision = async () => {
     if (!application || !revisionNotes.trim()) return;
+
+    if (actionInFlightRef.current) return;
     
     try {
       setSubmitLoading(true);
+      actionInFlightRef.current = true;
       
       // 1. Save assessment with revision status
       await saveAssessment('returned_for_revision');
@@ -457,9 +486,14 @@ export default function InspectorApplicationView() {
       
     } catch (err) {
       console.error('Error returning application:', err);
-      alert('Failed to return application. Please try again.');
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
+          ? (err as any).message
+          : "Failed to return application. Please try again.";
+      alert(msg);
     } finally {
       setSubmitLoading(false);
+      actionInFlightRef.current = false;
     }
   };
 

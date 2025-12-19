@@ -25,6 +25,7 @@ import {
 import { getApplicationsPendingApproval, supabase } from "@/lib/supabase";
 // Removed notification-service import - using API route instead
 import type { Application } from "@/types/database";
+import { formatDate } from "@/lib/utils";
 
 interface FinalReviewApplication {
   id: string;
@@ -91,7 +92,7 @@ export function FinalDecisions() {
           applicationType: app.application_type,
           waterSource: app.water_source,
           location: `${app.district}, ${app.province}`,
-          submittedDate: app.created_at,
+          submittedDate: app.submitted_at || app.created_at,
           reviewCompletedDate: app.reviewed_at,
           inspectionCompletedDate: app.inspected_at,
           estimatedValue: app.project_value,
@@ -511,6 +512,7 @@ export function FinalDecisions() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Date</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Type & Source</TableHead>
@@ -523,14 +525,13 @@ export function FinalDecisions() {
               <TableBody>
                 {filteredApplications.map((application) => (
                   <TableRow key={application.id}>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {formatDate(application.submittedDate)}
+                    </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">{application.application_number || application.id}</div>
                         <div className="text-sm text-muted-foreground">{application.project_title}</div>
-                        <div className="text-xs text-muted-foreground flex items-center mt-1">
-                          <Calendar className="h-3 w-3 mr-1" />
-                          {new Date(application.submittedDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' })}
-                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
