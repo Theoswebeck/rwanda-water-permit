@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { qrToSvgString } from "@/lib/qr/qr-svg";
 
 type Permit = {
   id: string;
@@ -65,6 +66,107 @@ type Application = {
     account_type: string;
   };
 };
+
+const PERMIT_VERIFY_BASE_URL = "https://rwanda-water-permit-production.up.railway.app";
+
+function buildPermitVerificationUrl(permitNumber: string): string {
+  return `${PERMIT_VERIFY_BASE_URL}/permit/view/${encodeURIComponent(permitNumber)}`;
+}
+
+async function qrPngDataUrl(text: string, px: number): Promise<string> {
+  // Client-only: jsPDF generation runs in the browser. Keep this helper here to avoid server-side usage.
+  const svg = qrToSvgString(text, {
+    scale: 6,
+    border: 4,
+    ariaLabel: "Permit verification QR",
+    darkColor: "#0f172a",
+    lightColor: "#ffffff",
+  });
+
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  try {
+    const img = new Image();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = px;
+          canvas.height = px;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas context unavailable");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, px, px);
+          ctx.drawImage(img, 0, 0, px, px);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = () => reject(new Error("Failed to load QR SVG image"));
+      img.src = url;
+    });
+    return dataUrl;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function drawPermitQrFooter(opts: {
+  doc: jsPDF;
+  permitNumber: string;
+}): Promise<void> {
+  const { doc, permitNumber } = opts;
+  const verifyUrl = buildPermitVerificationUrl(permitNumber);
+
+  // Layout constants (jsPDF default is A4 in mm)
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 15;
+
+  // Keep clear of existing footer text at y=285 and y=295
+  const footerBottomPadding = 14;
+  const footerY = pageHeight - 50 - footerBottomPadding; // ~246 on A4
+  const footerH = 36;
+  const footerW = pageWidth - marginX * 2;
+
+  const qrBox = 34;
+  const qrPadding = 2.5;
+  const qrX = marginX + footerW - qrBox;
+  const qrY = footerY + (footerH - qrBox) / 2;
+  const qrSize = qrBox - qrPadding * 2;
+
+  // Background container
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(251, 253, 255);
+  doc.roundedRect(marginX, footerY, footerW, footerH, 2, 2, "FD");
+
+  // Left text block (kept narrow to avoid crowding QR)
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(10);
+  doc.text("Verify this permit", marginX + 8, footerY + 12);
+
+  doc.setTextColor(71, 85, 105);
+  doc.setFontSize(8);
+  const desc = "Scan the QR code to view this permit in the system.";
+  const descLines = doc.splitTextToSize(desc, footerW - qrBox - 18);
+  doc.text(descLines, marginX + 8, footerY + 18);
+
+  doc.setTextColor(7, 89, 133);
+  doc.setFontSize(8);
+  const urlLines = doc.splitTextToSize(verifyUrl, footerW - qrBox - 18);
+  doc.text(urlLines, marginX + 8, footerY + 30);
+
+  // QR "card"
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(qrX, qrY, qrBox, qrBox, 2, 2, "FD");
+
+  return qrPngDataUrl(verifyUrl, 512).then((png) => {
+    doc.addImage(png, "PNG", qrX + qrPadding, qrY + qrPadding, qrSize, qrSize);
+  });
+}
 
 export const generateDigitalWaterPermit = async (
   application: Application,
@@ -352,6 +454,14 @@ export const generateDigitalWaterPermit = async (
   doc.text('Acknowledgment', 145, currentY + 20, { align: 'center' });
   doc.text('Date and Signature', 145, currentY + 35, { align: 'center' });
 
+  // If signature blocks push too low, add a clean page for the QR footer
+  if (currentY + 50 > 235) {
+    doc.addPage();
+  }
+
+  // Add QR footer on the last page only
+  await drawPermitQrFooter({ doc, permitNumber });
+
   // Footer with security features
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -362,8 +472,8 @@ export const generateDigitalWaterPermit = async (
     // Security footer
     const securityText = "This is an official water permit certificate issued by the Rwanda Water Board. " +
                         "Unauthorized modification is prohibited by law. Verify authenticity at rwb.gov.rw";
-    
-    doc.text(securityText, 15, 285, { maxWidth: 180 });
+    // On the last page, keep the line a little narrower to avoid feeling cramped with the QR footer above.
+    doc.text(securityText, 15, 285, { maxWidth: i === pageCount ? 165 : 180 });
     
     // Page numbers and metadata
     doc.text(`Page ${i} of ${pageCount}`, 195, 295, { align: 'right' });
@@ -457,6 +567,13 @@ export const generatePermitPDF = async (permit: Permit): Promise<void> => {
       fillColor: [240, 240, 240],
     },
   });
+
+  // Add QR footer on the last page (ensure it doesn't collide with table end)
+  const lastY = (doc as any).lastAutoTable?.finalY ?? 0;
+  if (lastY > 235) {
+    doc.addPage();
+  }
+  await drawPermitQrFooter({ doc, permitNumber: permit.permitNumber });
   
   // Open the PDF in a new tab
   const pdfBlob = doc.output('blob');
