@@ -137,9 +137,6 @@ export function ApplicationsDataTable() {
                 <TableRow key={application.id}>
                   <TableCell>
                     <div className="font-medium">{application.application_number}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {application.project_title}
-                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{getApplicantName(application)}</div>

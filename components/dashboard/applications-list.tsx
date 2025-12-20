@@ -345,7 +345,6 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Date</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Project Title</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Type</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Status</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Location</TableHead>
@@ -372,11 +371,6 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                     <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-md font-medium">
                       {application.application_number || `RWB-${application.id.slice(-6)}`}
                     </span>
-                  </TableCell>
-                  <TableCell className="font-medium text-gray-900 px-6 py-4 max-w-xs">
-                    <div className="truncate" title={application.project_title}>
-                      {application.project_title}
-                    </div>
                   </TableCell>
                   <TableCell className="text-gray-600 px-6 py-4">
                     <div className="text-sm">

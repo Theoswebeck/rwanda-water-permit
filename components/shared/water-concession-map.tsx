@@ -344,7 +344,7 @@ export function LegacyWaterConcessionMap() {
                     <div className="p-2 min-w-[300px]">
                       <div className="space-y-3">
                         <div>
-                          <h4 className="font-semibold text-sm mb-1">{permit.project_title}</h4>
+                          <h4 className="font-semibold text-sm mb-1">{permit.application_number}</h4>
                           <p className="text-xs text-gray-600">{permit.permit_number}</p>
                         </div>
                         
@@ -397,7 +397,7 @@ export function LegacyWaterConcessionMap() {
                   
                   <Tooltip>
                     <div className="text-xs">
-                      <strong>{permit.project_title}</strong><br />
+                      <strong>{permit.application_number}</strong><br />
                       Usage: {formatUsage(permit.water_allowance, permit.allowance_unit)}<br />
                       Area: {formatSurfaceArea(permit.water_body_surface_area, permit.surface_area_unit)}
                     </div>

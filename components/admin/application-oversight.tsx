@@ -432,7 +432,6 @@ export function ApplicationOversight() {
             <TableRow className="hover:bg-transparent bg-gray-50/50">
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Date</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Project Title</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Type</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Status</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Location</TableHead>
@@ -452,11 +451,6 @@ export function ApplicationOversight() {
                     <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-md font-medium">
                       {application.applicationNumber || `RWB-${application.id.slice(-6)}`}
                     </span>
-                  </TableCell>
-                  <TableCell className="font-medium text-gray-900 px-6 py-4 max-w-xs">
-                    <div className="truncate" title={application.projectTitle}>
-                      {application.projectTitle}
-                    </div>
                   </TableCell>
                   <TableCell className="text-gray-600 px-6 py-4">
                     <div className="text-sm">

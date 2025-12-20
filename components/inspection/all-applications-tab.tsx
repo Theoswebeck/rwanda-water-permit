@@ -354,9 +354,6 @@ export function AllApplicationsTab() {
                     >
                       <TableCell className="p-4">
                         <div className="font-medium text-slate-900 dark:text-slate-100">{app.application_number}</div>
-                        <div className="text-sm text-slate-600 dark:text-slate-400">
-                          {app.project_title}
-                        </div>
                       </TableCell>
                       <TableCell className="p-4">
                         <div className="font-medium text-slate-900 dark:text-slate-100">{getApplicantName(app)}</div>

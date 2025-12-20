@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,22 +9,47 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   CheckCircle2, 
   XCircle, 
   Eye, 
-  Calendar,
   MapPin,
   AlertTriangle,
   Search,
   Loader2,
   User
 } from "lucide-react";
-import { getApplicationsPendingApproval, supabase } from "@/lib/supabase";
-// Removed notification-service import - using API route instead
-import type { Application } from "@/types/database";
+import { getApplicationsPendingApproval } from "@/lib/supabase";
 import { formatDate } from "@/lib/utils";
+
+type RawPendingApprovalApplication = {
+  id: string
+  application_number?: string | null
+  application_type: string
+  water_source: string
+  district: string
+  province: string
+  status: string
+  created_at: string
+  submitted_at?: string | null
+  reviewed_at?: string | null
+  inspected_at?: string | null
+  project_value?: number | null
+  project_title?: string | null
+  sla_status?: string | null
+  due_date?: string | null
+  applicant?: {
+    account_type?: "individual" | "company" | string | null
+    first_name?: string | null
+    last_name?: string | null
+    company_name?: string | null
+  } | null
+  assigned_reviewer?: { first_name?: string | null; last_name?: string | null } | null
+  assigned_inspector?: { first_name?: string | null; last_name?: string | null } | null
+  reviews?: Array<{ recommendation?: string | null; risk_assessment?: "low" | "medium" | "high" | null }> | null
+  inspections?: Array<{ result?: string | null }> | null
+}
 
 interface FinalReviewApplication {
   id: string;
@@ -73,9 +97,9 @@ export function FinalDecisions() {
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const data = await getApplicationsPendingApproval();
+      const data = (await getApplicationsPendingApproval()) as RawPendingApprovalApplication[];
       
-      const formattedApplications: FinalReviewApplication[] = data.map((app: any) => {
+      const formattedApplications: FinalReviewApplication[] = data.map((app) => {
         const applicantName = app.applicant?.account_type === 'individual' 
           ? `${app.applicant.first_name} ${app.applicant.last_name}`
           : app.applicant?.company_name || 'Unknown';
@@ -86,26 +110,26 @@ export function FinalDecisions() {
 
         return {
           id: app.id,
-          application_number: app.application_number,
+          application_number: app.application_number || undefined,
           applicantName,
           applicantType: app.applicant?.account_type === 'individual' ? 'individual' : 'company',
           applicationType: app.application_type,
           waterSource: app.water_source,
           location: `${app.district}, ${app.province}`,
           submittedDate: app.submitted_at || app.created_at,
-          reviewCompletedDate: app.reviewed_at,
-          inspectionCompletedDate: app.inspected_at,
-          estimatedValue: app.project_value,
+          reviewCompletedDate: app.reviewed_at || undefined,
+          inspectionCompletedDate: app.inspected_at || undefined,
+          estimatedValue: app.project_value || undefined,
           assignedReviewer: app.assigned_reviewer ? `${app.assigned_reviewer.first_name} ${app.assigned_reviewer.last_name}` : undefined,
           assignedInspector: app.assigned_inspector ? `${app.assigned_inspector.first_name} ${app.assigned_inspector.last_name}` : undefined,
           reviewerRecommendation: app.reviews?.[0]?.recommendation === 'approve' ? 'approve' : 'reject',
           inspectorRecommendation: app.inspections?.[0]?.result === 'passed' ? 'approve' : 'reject',
           riskLevel: app.reviews?.[0]?.risk_assessment || 'medium',
           daysInSystem,
-          project_title: app.project_title,
+          project_title: app.project_title || '',
           status: app.status,
-          sla_status: app.sla_status,
-          due_date: app.due_date
+          sla_status: app.sla_status || undefined,
+          due_date: app.due_date || undefined
         };
       });
 
@@ -188,223 +212,26 @@ export function FinalDecisions() {
       setSubmitting(true);
       setError(null);
       console.log(`🔄 Processing ${decision} decision for application ${applicationId}`);
-      
-      // Fetch a real approver UUID from the users table
-      const { data: approverData, error: approverError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('role', 'approver')
-        .limit(1)
-        .single() as { data: any; error: any };
-      if (approverError || !approverData) throw approverError || new Error('No approver found');
-      const approverId = approverData.id;
 
-      // Get application details for SMS notification (including all possible phone fields)
-      const { data: applicationData, error: appError } = await supabase
-        .from('applications')
-        .select(`
-          *
-        `)
-        .eq('id', applicationId)
-        .single() as { data: any; error: any };
+      const resp = await fetch('/api/approver/final-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId,
+          decision,
+          reason: decisionReason,
+          conditions,
+        }),
+      });
 
-      if (appError) {
-        console.error('❌ Error fetching application details:', appError);
-        throw appError;
+      const result = await resp.json();
+      if (!resp.ok || !result?.success) {
+        throw new Error(result?.message || 'Failed to process decision');
       }
-
-      // Get applicant details and phone from users table
-      let applicantName = 'Unknown';
-      let applicantPhone = null;
-      
-      console.log('📱 Getting applicant details from users table for applicant_id:', applicationData.applicant_id);
-      
-      if (applicationData.applicant_id) {
-        const { data: applicantData, error: userError } = await supabase
-          .from('users')
-          .select('first_name, last_name, company_name, phone, account_type, mobile_phone, landline_phone, company_phone')
-          .eq('id', applicationData.applicant_id)
-          .single() as { data: any; error: any };
-          
-        console.log('📱 User data retrieved:', applicantData);
-        console.log('📱 User query error:', userError);
-          
-        if (applicantData) {
-          applicantName = applicantData.account_type === 'individual' 
-            ? `${applicantData.first_name} ${applicantData.last_name}`
-            : applicantData.company_name || 'Unknown';
-          
-          // Try multiple phone fields from users table
-          applicantPhone = applicantData.phone || 
-                           applicantData.mobile_phone || 
-                           applicantData.landline_phone || 
-                           applicantData.company_phone;
-          
-          console.log('📱 Phone extraction from user:', {
-            phone: applicantData.phone,
-            mobile_phone: applicantData.mobile_phone,
-            landline_phone: applicantData.landline_phone,
-            company_phone: applicantData.company_phone,
-            selected: applicantPhone
-          });
-        } else {
-          console.error('❌ No user data found for applicant_id:', applicationData.applicant_id);
-        }
-      } else {
-        console.error('❌ No applicant_id found in application data');
-      }
-      
-      if (decision === 'approve') {
-        // Update application status to approved
-        const updateData: any = {
-          status: 'approved',
-          assigned_approver_id: approverId,
-          approved_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        
-        if (conditions) {
-          updateData.approval_conditions = conditions;
-        }
-        
-        const { error: approveError } = await supabase
-          .from('applications')
-          .update(updateData)
-          .eq('id', applicationId);
-        
-        if (approveError) throw approveError;
-        
-        // Send approval SMS notification via API
-        if (applicantPhone) {
-          console.log('📱 Sending approval SMS notification via API...');
-          try {
-            const notificationResponse = await fetch('/api/notifications/send-approval', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                applicationNumber: applicationData.application_number || applicationId,
-                applicantPhone: applicantPhone,
-                applicantName: applicantName,
-                decision: 'approved',
-                projectTitle: applicationData.project_title
-              }),
-            });
-            
-            const smsResult = await notificationResponse.json();
-            if (smsResult.success) {
-              console.log('✅ Approval SMS sent successfully');
-            } else {
-              console.error('❌ Failed to send approval SMS:', smsResult.error);
-              throw new Error(`SMS notification failed: ${smsResult.error || 'Unknown error'}`);
-            }
-          } catch (smsError) {
-            console.error('❌ SMS notification failed:', smsError);
-            throw smsError; // Re-throw to fail the approval
-          }
-        } else {
-          console.error('❌ No phone number available for SMS notification');
-          throw new Error('Cannot process approval: Applicant phone number not found. SMS notification is required.');
-        }
-        
-      } else if (decision === 'reject') {
-        // Update application status to rejected
-        const { error: rejectError } = await supabase
-          .from('applications')
-          .update({ 
-            status: 'rejected',
-            assigned_approver_id: approverId,
-            rejection_reason: decisionReason,
-            rejected_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', applicationId);
-        
-        if (rejectError) throw rejectError;
-        
-        // Send rejection SMS notification via API
-        if (applicantPhone) {
-          console.log('📱 Sending rejection SMS notification via API...');
-          try {
-            const notificationResponse = await fetch('/api/notifications/send-approval', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                applicationNumber: applicationData.application_number || applicationId,
-                applicantPhone: applicantPhone,
-                applicantName: applicantName,
-                decision: 'rejected',
-                reason: decisionReason
-              }),
-            });
-            
-            const smsResult = await notificationResponse.json();
-            if (smsResult.success) {
-              console.log('✅ Rejection SMS sent successfully');
-            } else {
-              console.error('❌ Failed to send rejection SMS:', smsResult.error);
-              throw new Error(`SMS notification failed: ${smsResult.error || 'Unknown error'}`);
-            }
-          } catch (smsError) {
-            console.error('❌ SMS notification failed:', smsError);
-            throw smsError; // Re-throw to fail the approval
-          }
-        } else {
-          console.error('❌ No phone number available for SMS notification');
-          throw new Error('Cannot process approval: Applicant phone number not found. SMS notification is required.');
-        }
-        
-      } else if (decision === 'return_to_review') {
-        // Return application to revision_required status
-        const { error: revisionError } = await supabase
-          .from('applications')
-          .update({ 
-            status: 'revision_required',
-            revision_notes: decisionReason,
-            assigned_approver_id: approverId,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', applicationId);
-        
-        if (revisionError) throw revisionError;
-        
-        // Send revision SMS notification via API
-        if (applicantPhone) {
-          console.log('📱 Sending revision SMS notification via API...');
-          try {
-            const notificationResponse = await fetch('/api/notifications/send-approval', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                applicationNumber: applicationData.application_number || applicationId,
-                applicantPhone: applicantPhone,
-                applicantName: applicantName,
-                decision: 'revision_required',
-                reason: decisionReason
-              }),
-            });
-            
-            const smsResult = await notificationResponse.json();
-            if (smsResult.success) {
-              console.log('✅ Revision SMS sent successfully');
-            } else {
-              console.error('❌ Failed to send revision SMS:', smsResult.error);
-              throw new Error(`SMS notification failed: ${smsResult.error || 'Unknown error'}`);
-            }
-          } catch (smsError) {
-            console.error('❌ SMS notification failed:', smsError);
-            throw smsError; // Re-throw to fail the approval
-          }
-        } else {
-          console.error('❌ No phone number available for SMS notification');
-          throw new Error('Cannot process approval: Applicant phone number not found. SMS notification is required.');
-        }
-      }
-
-      console.log(`✅ ${decision} decision processed successfully with SMS notification`);
       
       // Show success message
       const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to review';
-      setSuccessMessage(`Application ${actionText} successfully! ${applicantPhone ? 'SMS notification sent.' : 'No phone number available for SMS.'}`);
+      setSuccessMessage(`Application ${actionText} successfully! SMS and email notifications sent.`);
       
       // Refresh applications list
       await fetchApplications();
@@ -417,9 +244,10 @@ export function FinalDecisions() {
       
       // Clear success message after 5 seconds
       setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('❌ Failed to process decision:', err);
-      setError(`Failed to process ${decision}: ${err?.message || err}`);
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(`Failed to process ${decision}: ${msg}`);
     } finally {
       setSubmitting(false);
     }
@@ -462,6 +290,11 @@ export function FinalDecisions() {
 
   return (
     <div className="space-y-8">
+      {successMessage && (
+        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          {successMessage}
+        </div>
+      )}
       <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">
@@ -531,7 +364,6 @@ export function FinalDecisions() {
                     <TableCell>
                       <div>
                         <div className="font-medium">{application.application_number || application.id}</div>
-                        <div className="text-sm text-muted-foreground">{application.project_title}</div>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -577,10 +409,8 @@ export function FinalDecisions() {
                         {application.status === 'pending_final_approval' && (
                           <Select
                             onValueChange={(value) => {
-                              if (value === "return_to_review") {
-                                openDecisionDialog(application, value as any);
-                              } else {
-                                openDecisionDialog(application, value as "approve" | "reject");
+                              if (value === "approve" || value === "reject" || value === "return_to_review") {
+                                openDecisionDialog(application, value);
                               }
                             }}
                           >

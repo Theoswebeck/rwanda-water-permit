@@ -263,9 +263,6 @@ export function AssessmentTab() {
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
                           {app.application_number}
                         </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {app.project_title}
-                        </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
