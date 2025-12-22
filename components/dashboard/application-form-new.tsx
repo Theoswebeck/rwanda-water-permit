@@ -545,6 +545,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   const watchedWaterSourceType = form.watch("waterSourceType");
   const watchedIntendedActivities = form.watch("intendedActivities");
   const watchedOwnsAllLand = form.watch("ownsAllLand");
+  const watchedCertificationAgreement = form.watch("certificationAgreement");
   const watchedIrrigationTotalArea = form.watch("irrigationTotalArea");
   const [additionalDocuments, setAdditionalDocuments] = useState<Array<{
     id: string;
@@ -735,11 +736,10 @@ export const ApplicationForm = memo(function ApplicationForm({
   // Helper function to check land access documents
   const checkLandAccessDocuments = () => {
     const ownsAllLand = form.getValues('ownsAllLand');
-    const hasLandAccess = form.getValues('hasLandAccess');
     
-    // If user doesn't own all land and doesn't have land access, or if hasLandAccess is true, require documents
-    if (ownsAllLand === false && hasLandAccess === true) {
-      return files.landAccessDocuments || uploadedFileUrls.landAccessDocuments;
+    // If user does NOT own all required land, proof of access is required.
+    if (ownsAllLand === false) {
+      return Boolean(files.landAccessDocuments || uploadedFileUrls.landAccessDocuments);
     }
     
     return true;
@@ -787,14 +787,19 @@ export const ApplicationForm = memo(function ApplicationForm({
   };
 
   const validateLandOwnershipTab = async () => {
-    const fields = ['ownsAllLand'];
+    const fields = ['ownsAllLand', 'certificationAgreement'];
     const errors = await form.trigger(fields as any);
     
     // Check land access documents if required
     if (!checkLandAccessDocuments()) {
+      form.setError('landAccessDocuments' as any, {
+        type: 'manual',
+        message: 'Proof of land access is required when you do not own all the required land.'
+      });
       setValidationError("Please upload the required land access documents before proceeding.");
       return false;
     }
+    form.clearErrors('landAccessDocuments' as any);
     
     return errors;
   };
@@ -914,7 +919,8 @@ export const ApplicationForm = memo(function ApplicationForm({
         // Check required fields and documents for land ownership tab
         const ownsAllLand = form.getValues('ownsAllLand');
         const hasLandDocs = checkLandAccessDocuments();
-        return ownsAllLand === undefined || !hasLandDocs;
+        const hasCertified = Boolean(form.getValues('certificationAgreement'));
+        return ownsAllLand === undefined || !hasLandDocs || !hasCertified;
         
       default:
         return false;
@@ -3833,98 +3839,105 @@ export const ApplicationForm = memo(function ApplicationForm({
                       />
 
                       {/* Land access documents */}
-                      <div className="space-y-4">
-                        <Label className="text-base font-medium">
-                          18. Attach proof of land access (easement, consent, lease, etc.)
-                        </Label>
-                        
-                      <div>
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                          <input
-                            type="file"
-                            ref={fileInputRefs.landAccessDocuments}
-                            onChange={(e) => handleFileChange(e, "landAccessDocuments")}
-                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                            multiple
-                            className="hidden"
-                          />
-                          <div className="space-y-2">
-                            <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                      <FormField
+                        control={form.control}
+                        name={"landAccessDocuments" as any}
+                        render={() => (
+                          <FormItem className="space-y-4">
+                            <FormLabel className="text-base font-medium">
+                              18. Attach proof of land access (easement, consent, lease, etc.) <span className="text-red-500">*</span>
+                            </FormLabel>
+
                             <div>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={readOnly ? undefined : () => fileInputRefs.landAccessDocuments.current?.click()}
-                                disabled={readOnly}
-                              >
-                                Choose Files
-                              </Button>
+                              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                                <input
+                                  type="file"
+                                  ref={fileInputRefs.landAccessDocuments}
+                                  onChange={(e) => handleFileChange(e, "landAccessDocuments")}
+                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  multiple
+                                  className="hidden"
+                                />
+                                <div className="space-y-2">
+                                  <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                                  <div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={readOnly ? undefined : () => fileInputRefs.landAccessDocuments.current?.click()}
+                                      disabled={readOnly}
+                                    >
+                                      Choose Files
+                                    </Button>
+                                  </div>
+                                  <p className="text-xs text-gray-500">
+                                    PDF, JPG, PNG, DOC (max 10MB each)
+                                  </p>
+                                  {/* Show newly uploaded file */}
+                                  {files.landAccessDocuments && (
+                                    <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+                                      <Check className="h-4 w-4" />
+                                      {files.landAccessDocuments.name}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={readOnly ? undefined : () => removeFile("landAccessDocuments")}
+                                        disabled={readOnly}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Show previously uploaded file */}
+                                  {!files.landAccessDocuments && uploadedFileUrls.landAccessDocuments && (
+                                    <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
+                                      <FileText className="h-4 w-4" />
+                                      <a
+                                        href={uploadedFileUrls.landAccessDocuments}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:underline"
+                                      >
+                                        {(() => {
+                                          // Try to get document name from initialDocuments
+                                          const docInfo = initialDocuments?.landAccessDocuments;
+                                          if (docInfo && typeof docInfo === 'object') {
+                                            return docInfo.name;
+                                          }
+                                          // Fallback: extract filename from URL
+                                          try {
+                                            const urlPath = new URL(uploadedFileUrls.landAccessDocuments).pathname;
+                                            return urlPath.split('/').pop() || 'Land access document';
+                                          } catch {
+                                            return 'Land access document';
+                                          }
+                                        })()}
+                                      </a>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={readOnly ? undefined : () => {
+                                          setUploadedFileUrls(prev => {
+                                            const { landAccessDocuments, ...rest } = prev;
+                                            return rest;
+                                          });
+                                        }}
+                                        disabled={readOnly}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                            <p className="text-xs text-gray-500">
-                              PDF, JPG, PNG, DOC (max 10MB each)
-                            </p>
-                            {/* Show newly uploaded file */}
-                            {files.landAccessDocuments && (
-                              <div className="flex items-center justify-center gap-2 text-sm text-green-600">
-                                <Check className="h-4 w-4" />
-                                {files.landAccessDocuments.name}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={readOnly ? undefined : () => removeFile("landAccessDocuments")}
-                                  disabled={readOnly}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                            
-                            {/* Show previously uploaded file */}
-                            {!files.landAccessDocuments && uploadedFileUrls.landAccessDocuments && (
-                              <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
-                                <FileText className="h-4 w-4" />
-                                <a 
-                                  href={uploadedFileUrls.landAccessDocuments} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="hover:underline"
-                                >
-                                  {(() => {
-                                    // Try to get document name from initialDocuments
-                                    const docInfo = initialDocuments?.landAccessDocuments;
-                                    if (docInfo && typeof docInfo === 'object') {
-                                      return docInfo.name;
-                                    }
-                                    // Fallback: extract filename from URL
-                                    try {
-                                      const urlPath = new URL(uploadedFileUrls.landAccessDocuments).pathname;
-                                      return urlPath.split('/').pop() || 'Land access document';
-                                    } catch {
-                                      return 'Land access document';
-                                    }
-                                  })()}
-                                </a>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={readOnly ? undefined : () => {
-                                    setUploadedFileUrls(prev => {
-                                      const { landAccessDocuments, ...rest } = prev;
-                                      return rest;
-                                    });
-                                  }}
-                                  disabled={readOnly}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </>
                   )}
 
@@ -4050,6 +4063,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                         type="button"
                         onClick={async (e) => {
                           try {
+                            // Enforce Land tab requirements before proceeding to payment
+                            const ok = await validateLandOwnershipTab();
+                            if (!ok) {
+                              setTimeout(() => setValidationError(null), 5000);
+                              return;
+                            }
+
                             // Automatically save as draft (like airline booking)
                             const draftData = { 
                               ...form.getValues(), 
@@ -4071,7 +4091,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                           }
                         }}
                         disabled={isLoading || !canSubmit}
-                        className={!canSubmit ? "opacity-50 cursor-not-allowed" : ""}
+                        className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}
                       >
                         <CreditCard className="h-4 w-4 mr-2" />
                         {isLoading ? 'Saving…' : 'Continue to Payment'}
