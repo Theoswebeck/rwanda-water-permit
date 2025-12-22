@@ -266,6 +266,17 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       fishLakeConcessionCoordinates: formData.fishLakeConcessionCoordinates,
       fishPondsDiscardWaterQuantityM3PerDay: formData.fishPondsDiscardWaterQuantityM3PerDay,
       
+      // Irrigation structured fields
+      irrigationCropType: formData.irrigationCropType,
+      irrigationGrowingSeasonFrom: formData.irrigationGrowingSeasonFrom,
+      irrigationGrowingSeasonTo: formData.irrigationGrowingSeasonTo,
+      irrigationProductionSystem: formData.irrigationProductionSystem,
+      irrigationMethod: formData.irrigationMethod,
+      irrigationTotalArea: formData.irrigationTotalArea,
+      irrigationWaterDemand: formData.irrigationWaterDemand,
+      irrigationStorageFacilities: formData.irrigationStorageFacilities,
+      irrigationStorageCapacity: formData.irrigationStorageCapacity,
+      
       // Terms & Conditions
       certificationAgreement: formData.certificationAgreement,
       

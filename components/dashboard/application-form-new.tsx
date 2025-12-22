@@ -151,7 +151,15 @@ const applicationFormSchema = z.object({
   fishPondsDiscardWaterQuantityM3PerDay: z.number().optional(),
   
   // Irrigation specific fields
+  irrigationCropType: z.string().optional(),
+  irrigationGrowingSeasonFrom: z.string().optional(),
+  irrigationGrowingSeasonTo: z.string().optional(),
+  irrigationProductionSystem: z.string().optional(),
+  irrigationMethod: z.string().optional(),
   irrigationTotalArea: z.number().optional(),
+  irrigationWaterDemand: z.number().optional(),
+  irrigationStorageFacilities: z.string().optional(),
+  irrigationStorageCapacity: z.number().optional(),
   
   // Core application documents
   identificationDoc: z.any().optional(),
@@ -395,7 +403,15 @@ export const ApplicationForm = memo(function ApplicationForm({
       fishLakeCageCapacity: undefined,
       fishLakeConcessionCoordinates: "",
       fishPondsDiscardWaterQuantityM3PerDay: undefined,
+      irrigationCropType: "",
+      irrigationGrowingSeasonFrom: "",
+      irrigationGrowingSeasonTo: "",
+      irrigationProductionSystem: "",
+      irrigationMethod: "",
       irrigationTotalArea: 0,
+      irrigationWaterDemand: undefined,
+      irrigationStorageFacilities: "",
+      irrigationStorageCapacity: undefined,
       additionalDocuments: [],
       waterSourceCoordinates: [
         { latitude: "", longitude: "" },
@@ -1078,7 +1094,15 @@ export const ApplicationForm = memo(function ApplicationForm({
         fishLakeCageCapacity: undefined,
         fishLakeConcessionCoordinates: "",
         fishPondsDiscardWaterQuantityM3PerDay: undefined,
+        irrigationCropType: "",
+        irrigationGrowingSeasonFrom: "",
+        irrigationGrowingSeasonTo: "",
+        irrigationProductionSystem: "",
+        irrigationMethod: "",
         irrigationTotalArea: undefined,
+        irrigationWaterDemand: undefined,
+        irrigationStorageFacilities: "",
+        irrigationStorageCapacity: undefined,
         certificationAgreement: true,
         // Override with loaded data
         ...normalizedInitialData
@@ -2546,74 +2570,119 @@ export const ApplicationForm = memo(function ApplicationForm({
                               <tbody>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Type of crops" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="irrigationCropType"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            {...field}
+                                            placeholder="Type of crops" 
+                                            className="border-0 bg-transparent"
+                                            disabled={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <div className="flex gap-1 items-center">
-                                      <Select>
-                                        <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
-                                          <SelectValue placeholder="From" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="january">January</SelectItem>
-                                          <SelectItem value="february">February</SelectItem>
-                                          <SelectItem value="march">March</SelectItem>
-                                          <SelectItem value="april">April</SelectItem>
-                                          <SelectItem value="may">May</SelectItem>
-                                          <SelectItem value="june">June</SelectItem>
-                                          <SelectItem value="july">July</SelectItem>
-                                          <SelectItem value="august">August</SelectItem>
-                                          <SelectItem value="september">September</SelectItem>
-                                          <SelectItem value="october">October</SelectItem>
-                                          <SelectItem value="november">November</SelectItem>
-                                          <SelectItem value="december">December</SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                      <FormField
+                                        control={form.control}
+                                        name="irrigationGrowingSeasonFrom"
+                                        render={({ field }) => (
+                                          <FormControl>
+                                            <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                              <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
+                                                <SelectValue placeholder="From" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="january">January</SelectItem>
+                                                <SelectItem value="february">February</SelectItem>
+                                                <SelectItem value="march">March</SelectItem>
+                                                <SelectItem value="april">April</SelectItem>
+                                                <SelectItem value="may">May</SelectItem>
+                                                <SelectItem value="june">June</SelectItem>
+                                                <SelectItem value="july">July</SelectItem>
+                                                <SelectItem value="august">August</SelectItem>
+                                                <SelectItem value="september">September</SelectItem>
+                                                <SelectItem value="october">October</SelectItem>
+                                                <SelectItem value="november">November</SelectItem>
+                                                <SelectItem value="december">December</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </FormControl>
+                                        )}
+                                      />
                                       <span className="self-center text-xs">-</span>
-                                      <Select>
-                                        <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
-                                          <SelectValue placeholder="To" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          <SelectItem value="january">January</SelectItem>
-                                          <SelectItem value="february">February</SelectItem>
-                                          <SelectItem value="march">March</SelectItem>
-                                          <SelectItem value="april">April</SelectItem>
-                                          <SelectItem value="may">May</SelectItem>
-                                          <SelectItem value="june">June</SelectItem>
-                                          <SelectItem value="july">July</SelectItem>
-                                          <SelectItem value="august">August</SelectItem>
-                                          <SelectItem value="september">September</SelectItem>
-                                          <SelectItem value="october">October</SelectItem>
-                                          <SelectItem value="november">November</SelectItem>
-                                          <SelectItem value="december">December</SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                      <FormField
+                                        control={form.control}
+                                        name="irrigationGrowingSeasonTo"
+                                        render={({ field }) => (
+                                          <FormControl>
+                                            <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                              <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
+                                                <SelectValue placeholder="To" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="january">January</SelectItem>
+                                                <SelectItem value="february">February</SelectItem>
+                                                <SelectItem value="march">March</SelectItem>
+                                                <SelectItem value="april">April</SelectItem>
+                                                <SelectItem value="may">May</SelectItem>
+                                                <SelectItem value="june">June</SelectItem>
+                                                <SelectItem value="july">July</SelectItem>
+                                                <SelectItem value="august">August</SelectItem>
+                                                <SelectItem value="september">September</SelectItem>
+                                                <SelectItem value="october">October</SelectItem>
+                                                <SelectItem value="november">November</SelectItem>
+                                                <SelectItem value="december">December</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </FormControl>
+                                        )}
+                                      />
                                     </div>
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select>
-                                      <SelectTrigger className="border-0 bg-transparent h-8">
-                                        <SelectValue placeholder="Select system" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="outdoor">Outdoor</SelectItem>
-                                        <SelectItem value="greenhouse">Green House</SelectItem>
-                                        <SelectItem value="hydroponics">Hydroponics</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                    <FormField
+                                      control={form.control}
+                                      name="irrigationProductionSystem"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                            <SelectTrigger className="border-0 bg-transparent h-8">
+                                              <SelectValue placeholder="Select system" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="outdoor">Outdoor</SelectItem>
+                                              <SelectItem value="greenhouse">Green House</SelectItem>
+                                              <SelectItem value="hydroponics">Hydroponics</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select>
-                                      <SelectTrigger className="border-0 bg-transparent h-8">
-                                        <SelectValue placeholder="Select method" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="surface">Surface</SelectItem>
-                                        <SelectItem value="sprinkler">Sprinkler</SelectItem>
-                                        <SelectItem value="drip">Drip</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                    <FormField
+                                      control={form.control}
+                                      name="irrigationMethod"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                            <SelectTrigger className="border-0 bg-transparent h-8">
+                                              <SelectValue placeholder="Select method" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="surface">Surface</SelectItem>
+                                              <SelectItem value="sprinkler">Sprinkler</SelectItem>
+                                              <SelectItem value="drip">Drip</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <FormField
@@ -2625,16 +2694,35 @@ export const ApplicationForm = memo(function ApplicationForm({
                                             type="number"
                                             step="0.01"
                                             {...field}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                            value={field.value || ""}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                             placeholder="Area in ha" 
-                                            className="border-0 bg-transparent" 
+                                            className="border-0 bg-transparent"
+                                            disabled={readOnly}
                                           />
                                         </FormControl>
                                       )}
                                     />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Water demand (m³)" className="border-0 bg-transparent" />
+                                    <FormField
+                                      control={form.control}
+                                      name="irrigationWaterDemand"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input 
+                                            type="number"
+                                            step="0.01"
+                                            {...field}
+                                            value={field.value || ""}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                            placeholder="Water demand (m³)" 
+                                            className="border-0 bg-transparent"
+                                            disabled={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
@@ -2642,14 +2730,43 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                              <label className="block text-sm font-medium mb-2">Storage facilities (if any): Reservoirs, Tanks, etc.</label>
-                              <Textarea placeholder="Describe storage facilities..." className="min-h-[80px]" />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium mb-2">Storage capacity (m³)</label>
-                              <Input placeholder="Enter storage capacity (m³)" />
-                            </div>
+                            <FormField
+                              control={form.control}
+                              name="irrigationStorageFacilities"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Storage facilities (if any): Reservoirs, Tanks, etc.</FormLabel>
+                                  <FormControl>
+                                    <Textarea 
+                                      {...field}
+                                      placeholder="Describe storage facilities..." 
+                                      className="min-h-[80px]"
+                                      disabled={readOnly}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="irrigationStorageCapacity"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Storage capacity (m³)</FormLabel>
+                                  <FormControl>
+                                    <Input 
+                                      type="number"
+                                      step="0.01"
+                                      {...field}
+                                      value={field.value || ""}
+                                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                      placeholder="Enter storage capacity (m³)"
+                                      disabled={readOnly}
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
                           </div>
 
                           <DocumentRequirementsInfo documents={[
