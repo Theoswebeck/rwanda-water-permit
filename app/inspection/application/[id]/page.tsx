@@ -80,20 +80,24 @@ interface StaffMember {
   email: string;
 }
 
-// Transform Application data back to form format for viewing (copied from main application page)
+// Transform Application data back to form format for viewing
 function mapApplicationToFormData(application: Application, userProfile?: any): any {
   const formData: any = {};
   
   // Parse internal notes to extract form-specific data
+  // Try to parse as JSON first (new format), fallback to legacy format
   let storedFormData: any = {};
   let legacyNotesMap: Record<string, string> = {};
   
   const notes = application.internal_notes || '';
   
   try {
+    // Try parsing as JSON (new comprehensive format)
     storedFormData = JSON.parse(notes);
+    console.log('✅ Successfully parsed stored form data from JSON');
   } catch (error) {
     // Fallback to legacy format parsing
+    console.log('📄 Using legacy notes format parsing');
     const notesParts = notes.split(' | ');
     notesParts.forEach(part => {
       const [key, value] = part.split(': ');
@@ -105,19 +109,180 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   
   // If we have comprehensive stored data, use it directly
   if (Object.keys(storedFormData).length > 0 && storedFormData.fullNameApplicant !== undefined) {
+    // New format: restore all form fields directly from stored data
+    console.log('🔄 Restoring form data from comprehensive JSON storage');
+    
+    // Copy all stored form data
     Object.assign(formData, storedFormData);
     
+    // Override with profile data for contact information if available
     if (userProfile) {
       formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
       formData.emailAddress = userProfile.email || formData.emailAddress;
     }
+    
+    // Ensure coordinates are properly formatted
+    if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
+      // Coordinates are already properly stored
+    } else {
+      // Initialize empty coordinates if missing
+      formData.waterSourceCoordinates = [
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" }
+      ];
+    }
+    
   } else {
-    // Legacy format
+    // Legacy format: reconstruct from basic database fields and legacy notes
+    console.log('🔄 Restoring form data from legacy format');
+    
+    // Basic applicant information (using internal notes and project title)
     formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
     formData.categoryApplicant = legacyNotesMap['Category']?.toLowerCase() || 'individual';
+  
+    // Office address (from application location) - reverse the province mapping
+    // Map database province names to Rwanda administrative data keys
+    const provinceReverseMap: Record<string, string> = {
+      'Kigali': 'Kigali',
+      'Northern': 'North',
+      'Southern': 'South',
+      'Eastern': 'East',
+      'Western': 'West'
+    };
+    formData.officeProvince = provinceReverseMap[application.province] || application.province || '';
+    formData.officeDistrict = application.district || '';
+    formData.officeSector = application.sector || '';
+    formData.officeCell = application.cell || '';
+    formData.officeVillage = application.village || '';
+    
+    // Contact information - use profile data if available, otherwise try to extract from notes
+    formData.telephoneContact = userProfile?.phone || userProfile?.company_phone || '';
+    formData.emailAddress = userProfile?.email || legacyNotesMap['Contact']?.replace('Not provided', '') || '';
+  
+    // Water source information
+    const waterSourceMap: Record<string, string> = {
+      'surface_water': 'stream_river',
+      'groundwater': 'borehole'
+    };
+    formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
     formData.nameSourceWater = application.water_body_name || '';
     formData.tributaryToMain = application.tributary_name || '';
-    formData.waterSourceType = 'stream_river';
+    
+    // Water source location (same as office for now) - reverse the province mapping
+    formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
+    formData.waterSourceDistrict = application.district || '';
+    formData.waterSourceSector = application.sector || '';
+    formData.waterSourceCell = application.cell || '';
+    formData.waterSourceVillage = application.village || '';
+  
+    // Coordinates - handle both old Point format and new Polygon format
+    if (application.coordinates && typeof application.coordinates === 'object') {
+      try {
+        const coords = application.coordinates as any;
+        if (coords.type === 'Polygon' && Array.isArray(coords.coordinates) && coords.coordinates[0]) {
+          // New polygon format - extract the 5 points
+          const polygonPoints = coords.coordinates[0];
+          formData.waterSourceCoordinates = polygonPoints.slice(0, 5).map((point: number[]) => ({
+            latitude: point[1].toString(),
+            longitude: point[0].toString()
+          }));
+          // Fill remaining slots if less than 5 points
+          while (formData.waterSourceCoordinates.length < 5) {
+            formData.waterSourceCoordinates.push({ latitude: "", longitude: "" });
+          }
+        } else if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
+          // Legacy point format - convert to first coordinate of polygon
+          formData.waterSourceCoordinates = [
+            { latitude: coords.coordinates[1].toString(), longitude: coords.coordinates[0].toString() },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" }
+          ];
+        } else {
+          // Invalid format - initialize empty
+          formData.waterSourceCoordinates = [
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" }
+          ];
+        }
+      } catch (error) {
+        console.warn('Error parsing coordinates:', error);
+        formData.waterSourceCoordinates = [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ];
+      }
+    } else {
+      formData.waterSourceCoordinates = [
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" }
+      ];
+    }
+  
+    // Water reliability
+    formData.waterReliability = 'water_always_available'; // Default
+    
+    // Intended activities - reverse map from application_type and water_purpose
+    const purposeToActivity: Record<string, string> = {
+      'domestic': 'water_supply',
+      'irrigation': 'irrigation',
+      'fish_farming_lakes': 'fish_farming_lakes',
+      'fish_farming_ponds': 'fish_farming_ponds',
+      'industrial': 'industry',
+      'electricity_generation': 'electricity_generation',
+      'mining': 'mining',
+      'recreation': 'recreation_activities'
+    };
+    
+    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+    formData.intendedActivities = [mappedActivity];
+    
+    // Water abstraction details
+    if (application.estimated_usage_volume) {
+      formData.waterAbstractionDetails = [{
+        activity: mappedActivity,
+        flowRate: '',
+        flowRateUnit: 'm³/s',
+        maxAverageYearly: application.estimated_usage_volume,
+        abstractionMethod: application.water_taking_method || 'pump'
+      }];
+    } else {
+      formData.waterAbstractionDetails = [{
+        activity: mappedActivity,
+        flowRate: '',
+        flowRateUnit: 'm³/s',
+        maxAverageYearly: 0,
+        abstractionMethod: 'pump'
+      }];
+    }
+    
+    // Land ownership
+    formData.ownsAllLand = true; // Default
+    formData.hasLandAccess = true; // Default
+    
+    // Annexes - extract from specific fields
+    if (application.electricity_generation_capacity) {
+      formData.annexF_electricityDetails = application.electricity_generation_capacity;
+    }
+    if (application.mining_operations_type) {
+      formData.annexG_miningDetails = application.mining_operations_type;
+    }
+  
+    // Certification
+    formData.certificationAgreement = true; // Must be true for saved applications
   }
   
   return formData;
