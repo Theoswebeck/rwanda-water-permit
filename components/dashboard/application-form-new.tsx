@@ -897,7 +897,9 @@ export const ApplicationForm = memo(function ApplicationForm({
         if (!ok) {
           // Keep the user on (or move them to) the first invalid section to make fixes obvious
           setActiveTab(tab);
-          setValidationError(`Please complete all required fields in ${tabLabels[tab] || 'this'} section before proceeding.`);
+          // IMPORTANT: preserve any more specific error set by the tab validator (e.g. polygon outside Rwanda),
+          // and only fall back to the generic message if none was set.
+          setValidationError((prev) => prev || `Please complete all required fields in ${tabLabels[tab] || 'this'} section before proceeding.`);
           setTimeout(() => setValidationError(null), 5000);
           return;
         }
