@@ -278,10 +278,15 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString()
     if (decision === 'approve') {
       const update: Record<string, unknown> = {
-        status: 'approved',
+        // Important workflow: approval should move to "approved_pending_permit"
+        // so the applicant must accept Terms & Conditions before the permit is issued.
+        status: 'approved_pending_permit',
         assigned_approver_id: approver.id,
         approved_at: now,
         updated_at: now,
+        // Terms tracking (added by DB migration). Keep these consistent so the dashboard can drive the flow.
+        terms_status: 'pending',
+        terms_presented_at: now,
       }
       if (isNonEmptyString(conditions)) update.approval_conditions = conditions.trim()
 
