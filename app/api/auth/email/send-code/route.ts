@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     // Send the email via Resend if configured
     const resendKey = process.env.RESEND_API_KEY
-    const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev' // Use Resend's onboarding domain
+    const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
     
     if (resendKey) {
       const isPasswordReset = String(purpose) === 'password_reset'

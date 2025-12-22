@@ -145,7 +145,7 @@ function renderDecisionEmailHtml(params: { title: string; text: string }) {
 
 async function sendEmail(params: { to: string; subject: string; title: string; text: string }) {
   const resendKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.EMAIL_FROM || 'onboarding@resend.dev'
+  const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
   if (!resendKey) {
     throw new Error('Email provider not configured. Set RESEND_API_KEY.')
   }
