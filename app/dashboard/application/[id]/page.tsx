@@ -603,7 +603,6 @@ export default function ApplicationDetailPage() {
                         <p className="text-green-700 whitespace-pre-line">{application.approval_conditions}</p>
                       </div>
                     )}
-                    <p className="text-green-600 text-sm">You will receive your official permit documents shortly. Please visit our office to complete the final permit issuance process.</p>
                   </div>
                 </div>
               </AlertDescription>

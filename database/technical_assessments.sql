@@ -55,29 +55,24 @@ CREATE INDEX IF NOT EXISTS idx_technical_assessments_assessor_id ON technical_as
 CREATE INDEX IF NOT EXISTS idx_technical_assessments_status ON technical_assessments(status);
 CREATE INDEX IF NOT EXISTS idx_technical_assessments_created_at ON technical_assessments(created_at DESC);
 
--- Create function to generate assessment number
+-- Create sequence-backed generator to avoid duplicates under concurrency
+-- NOTE: This uses a single monotonically increasing sequence (not reset yearly).
+CREATE SEQUENCE IF NOT EXISTS assessment_number_seq START 1;
+
 CREATE OR REPLACE FUNCTION generate_assessment_number()
 RETURNS TRIGGER AS $$
 DECLARE
     year_suffix TEXT;
-    sequence_num INTEGER;
-    new_number TEXT;
+    seq_val BIGINT;
 BEGIN
-    -- Get current year (last 2 digits)
+    IF NEW.assessment_number IS NOT NULL THEN
+        RETURN NEW;
+    END IF;
+
     year_suffix := TO_CHAR(CURRENT_DATE, 'YY');
-    
-    -- Get the next sequence number for this year
-    SELECT COALESCE(MAX(
-        CAST(SUBSTRING(assessment_number FROM 'TA-' || year_suffix || '-(\d+)') AS INTEGER)
-    ), 0) + 1
-    INTO sequence_num
-    FROM technical_assessments
-    WHERE assessment_number LIKE 'TA-' || year_suffix || '-%';
-    
-    -- Generate new assessment number
-    new_number := 'TA-' || year_suffix || '-' || LPAD(sequence_num::TEXT, 5, '0');
-    
-    NEW.assessment_number := new_number;
+    seq_val := NEXTVAL('assessment_number_seq');
+
+    NEW.assessment_number := 'TA-' || year_suffix || '-' || LPAD(seq_val::TEXT, 6, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

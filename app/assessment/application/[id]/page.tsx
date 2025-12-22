@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -158,6 +158,9 @@ export default function AssessmentApplicationPage() {
     recommendation: null,
     explanationText: ""
   });
+
+  // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
+  const actionInFlightRef = useRef(false);
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -299,8 +302,6 @@ export default function AssessmentApplicationPage() {
     if (!application) return;
     
     try {
-      setSubmitLoading(true);
-      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
@@ -324,13 +325,32 @@ export default function AssessmentApplicationPage() {
       };
 
       let result;
-      
-      if (assessmentId) {
+
+      // If state wasn't hydrated (or a previous save happened in another tab),
+      // re-check for an existing assessment before inserting a new one.
+      let existingId = assessmentId;
+      if (!existingId) {
+        const { data: existingAssessment, error: existingErr } = await supabase
+          .from('technical_assessments')
+          .select('id')
+          .eq('application_id', application.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingErr) throw existingErr;
+        if (existingAssessment?.id) {
+          existingId = existingAssessment.id;
+          setAssessmentId(existingAssessment.id);
+        }
+      }
+
+      if (existingId) {
         // Update existing
         result = await supabase
           .from('technical_assessments')
           .update(assessmentData)
-          .eq('id', assessmentId)
+          .eq('id', existingId)
           .select()
           .single();
       } else {
@@ -352,13 +372,13 @@ export default function AssessmentApplicationPage() {
     } catch (err) {
       console.error('Error saving assessment:', err);
       throw err;
-    } finally {
-      setSubmitLoading(false);
     }
   };
 
   const handleForwardToApprover = async () => {
     if (!application) return;
+
+    if (actionInFlightRef.current) return;
     
     // Validation
     if (!recommendation.recommendation) {
@@ -373,6 +393,7 @@ export default function AssessmentApplicationPage() {
 
     try {
       setSubmitLoading(true);
+      actionInFlightRef.current = true;
       
       // 1. Save assessment with forwarded status
       await saveAssessment('forwarded_to_approver');
@@ -404,17 +425,25 @@ export default function AssessmentApplicationPage() {
       
     } catch (err) {
       console.error('Error forwarding application:', err);
-      alert('Failed to forward application. Please try again.');
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
+          ? (err as any).message
+          : "Failed to forward application. Please try again.";
+      alert(msg);
     } finally {
       setSubmitLoading(false);
+      actionInFlightRef.current = false;
     }
   };
 
   const handleReturnForRevision = async () => {
     if (!application || !revisionNotes.trim()) return;
+
+    if (actionInFlightRef.current) return;
     
     try {
       setSubmitLoading(true);
+      actionInFlightRef.current = true;
       
       // 1. Save assessment with revision status
       await saveAssessment('returned_for_revision');
@@ -450,9 +479,14 @@ export default function AssessmentApplicationPage() {
       
     } catch (err) {
       console.error('Error returning application:', err);
-      alert('Failed to return application. Please try again.');
+      const msg =
+        err && typeof err === "object" && "message" in err && typeof (err as any).message === "string"
+          ? (err as any).message
+          : "Failed to return application. Please try again.";
+      alert(msg);
     } finally {
       setSubmitLoading(false);
+      actionInFlightRef.current = false;
     }
   };
 
@@ -552,6 +586,11 @@ export default function AssessmentApplicationPage() {
   }
   
   if (!application) return null;
+
+  // Only allow assessment edits while the application is actively pending assessment.
+  // Once it's forwarded to approver (pending_final_approval) it must be view-only.
+  const isEditableAssessment = application.status === "pending_assessment";
+  const isReadOnly = !isEditableAssessment;
   
   return (
     <DashboardLayout>
@@ -600,62 +639,75 @@ export default function AssessmentApplicationPage() {
           {/* Action Buttons Bar */}
           <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
             <div className="flex items-center gap-2 mr-auto">
-              <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-blue-50 text-blue-700 border-blue-200">
+              <Badge
+                variant="outline"
+                className={
+                  isReadOnly
+                    ? "h-7 px-3 text-sm font-normal bg-gray-50 text-gray-700 border-gray-200"
+                    : "h-7 px-3 text-sm font-normal bg-blue-50 text-blue-700 border-blue-200"
+                }
+              >
                 <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
-                Assessment Mode
+                {isReadOnly ? "View Only" : "Assessment Mode"}
               </Badge>
             </div>
-            
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setShowRevisionDialog(true)}
-              disabled={submitLoading} 
-              className="gap-2"
-            >
-              <X className="h-4 w-4" />
-              Return for Revision
-            </Button>
-            
-            <Button 
-              size="sm" 
-              onClick={handleForwardToApprover}
-              disabled={submitLoading || !recommendation.recommendation}
-              className="gap-2 bg-black hover:bg-gray-800 text-white"
-            >
-              {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Send for Final Approval
-            </Button>
+
+            {isReadOnly ? null : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowRevisionDialog(true)}
+                  disabled={submitLoading}
+                  className="gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Return for Revision
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={handleForwardToApprover}
+                  disabled={submitLoading || !recommendation.recommendation}
+                  className="gap-2 bg-black hover:bg-gray-800 text-white"
+                >
+                  {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send for Final Approval
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Inspector Actions / Transfer */}
-          <div className="flex items-center gap-3 p-4 bg-muted/30 border rounded-lg">
-            <span className="text-sm font-medium">Transfer ownership:</span>
-            <Select value={selectedAction} onValueChange={setSelectedAction}>
-              <SelectTrigger className="w-[220px] h-9">
-                <SelectValue placeholder="Select inspector..." />
-              </SelectTrigger>
-              <SelectContent>
-                {staff.filter(s => s.role === 'inspector').map((staffMember) => (
-                  <SelectItem key={staffMember.id} value={staffMember.id}>
-                    {staffMember.first_name} {staffMember.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {!isReadOnly && (
+            <div className="flex items-center gap-3 p-4 bg-muted/30 border rounded-lg">
+              <span className="text-sm font-medium">Transfer ownership:</span>
+              <Select value={selectedAction} onValueChange={setSelectedAction}>
+                <SelectTrigger className="w-[220px] h-9">
+                  <SelectValue placeholder="Select inspector..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {staff.filter(s => s.role === 'inspector').map((staffMember) => (
+                    <SelectItem key={staffMember.id} value={staffMember.id}>
+                      {staffMember.first_name} {staffMember.last_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Button 
-              onClick={handleTransferApplication}
-              variant="secondary"
-              size="sm"
-              disabled={!selectedAction || transferLoading}
-            >
-              {transferLoading ? 'Transferring...' : 'Transfer'}
-            </Button>
-          </div>
+              <Button
+                onClick={handleTransferApplication}
+                variant="secondary"
+                size="sm"
+                disabled={!selectedAction || transferLoading}
+              >
+                {transferLoading ? 'Transferring...' : 'Transfer'}
+              </Button>
+            </div>
+          )}
 
           {/* Main Content with Tabs */}
-          <Tabs defaultValue="doc_verification" className="space-y-6">
+          <Tabs defaultValue={isReadOnly ? "application_details" : "doc_verification"} className="space-y-6">
             <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
@@ -698,6 +750,7 @@ export default function AssessmentApplicationPage() {
                 documents={application.documents || []}
                 verifications={documentVerifications}
                 onVerificationsChange={setDocumentVerifications}
+                readOnly={isReadOnly}
               />
             </TabsContent>
 
@@ -713,6 +766,7 @@ export default function AssessmentApplicationPage() {
                 onSummaryChange={setFieldReportSummary}
                 onInspectorNameChange={setInspectorName}
                 onInspectionDateChange={setInspectionDate}
+                readOnly={isReadOnly}
               />
             </TabsContent>
             
@@ -723,6 +777,7 @@ export default function AssessmentApplicationPage() {
                 recommendation={recommendation}
                 onChecklistChange={setChecklist}
                 onRecommendationChange={setRecommendation}
+                readOnly={isReadOnly}
               />
             </TabsContent>
 

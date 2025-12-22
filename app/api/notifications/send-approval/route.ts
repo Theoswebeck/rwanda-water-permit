@@ -85,8 +85,6 @@ export async function POST(request: NextRequest) {
 
 Congratulations! Your water permit application ${applicationNumber}${projectInfo} has been APPROVED by Rwanda Water Board.
 
-You will receive your official permit documents shortly. Please visit our office to complete the final permit issuance process.
-
 For inquiries: contact@rwb.rw
 Rwanda Water Board`;
         break;

@@ -274,7 +274,7 @@ export function EnhancedWaterConcessionMap({
     <div className="p-2 min-w-[300px] space-y-2">
       <div className="border-b pb-2">
         <h3 className="font-semibold text-sm">{permit.permit_number}</h3>
-        <p className="text-xs text-muted-foreground">{permit.project_title}</p>
+        <p className="text-xs text-muted-foreground">{permit.application_number}</p>
       </div>
       
       <div className="grid grid-cols-2 gap-2 text-xs">
@@ -598,7 +598,7 @@ export function EnhancedWaterConcessionMap({
                     <Tooltip>
                       <div className="text-xs">
                         <strong>{permit.permit_number}</strong><br />
-                        {permit.project_title}
+                        {permit.application_number}
                       </div>
                     </Tooltip>
                   </CircleMarker>

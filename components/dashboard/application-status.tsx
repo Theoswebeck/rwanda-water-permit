@@ -226,10 +226,10 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
                         </div>
                         <div>
                           <h4 className="font-medium text-sm">
-                            {application.project_title}
+                            {application.application_number || application.id.slice(0, 8)}
                           </h4>
                           <p className="text-xs text-muted-foreground">
-                            {application.application_number || application.id.slice(0, 8)} • {formatApplicationType(application.application_type)}
+                            {formatApplicationType(application.application_type)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {application.district}, {application.province}

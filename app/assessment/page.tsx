@@ -24,6 +24,7 @@ import { useApplications } from "@/hooks/useApplications";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
+import { formatDate } from "@/lib/utils";
 
 interface AssessmentApplication extends Application {
   applicant_name?: string;
@@ -256,6 +257,10 @@ export default function AssessmentDashboard() {
       return app.applicant_name || 'Unknown Applicant';
     };
 
+    const getSubmittedDate = (app: AssessmentApplication) => {
+      return app.submitted_at || app.created_at;
+    };
+
     const getLocationString = (app: AssessmentApplication) => {
       return `${app.district || 'N/A'}, ${app.sector || 'N/A'}`;
     };
@@ -350,6 +355,7 @@ export default function AssessmentDashboard() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
@@ -360,7 +366,7 @@ export default function AssessmentDashboard() {
               <TableBody>
                 {filteredApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -377,6 +383,11 @@ export default function AssessmentDashboard() {
                       key={app.id} 
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
                     >
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {formatDate(getSubmittedDate(app))}
+                        </div>
+                      </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
                           {app.application_number}

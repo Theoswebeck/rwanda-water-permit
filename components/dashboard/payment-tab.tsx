@@ -17,6 +17,7 @@ import { PaymentStatusDisplay } from '@/components/payments/payment-status';
 import { usePayment } from '@/hooks/usePayment';
 import { getApplicationFee } from '@/lib/payment-utils';
 import type { Application } from '@/types/database';
+import type { InitiatePaymentRequest } from '@/types/payment';
 
 // Get public key from environment
 const IREMBOPAY_PUBLIC_KEY = process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || '';
@@ -30,19 +31,32 @@ if (typeof window !== 'undefined') {
   });
 }
 
+type DraftFormData = {
+  emailAddress?: string
+  telephoneContact?: string
+  fullNameApplicant?: string
+  [key: string]: unknown
+}
+
+type CompletedApplication = {
+  application_number?: string
+  applicant?: { email?: string }
+  [key: string]: unknown
+}
+
 interface PaymentTabProps {
   application?: Application; // Optional - may not exist yet
-  formData?: any; // Unsaved form data for new applications
-  onPaymentComplete?: (paymentId: string) => Promise<any>; // Save app after payment
+  formData?: DraftFormData; // Unsaved form data for new applications
+  onPaymentComplete?: (paymentId: string) => Promise<unknown>; // Optional callback for callers
   onBack?: () => void;
 }
 
-export function PaymentTab({ application, formData, onPaymentComplete, onBack }: PaymentTabProps) {
+export function PaymentTab({ application, formData, onBack }: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
-  const [completedApplication, setCompletedApplication] = useState<any>(null);
+  const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
   
   const {
@@ -86,7 +100,7 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
 
       console.log('🚀 Initiating payment...');
 
-      const requestData: any = {
+      const requestData: InitiatePaymentRequest = {
           amount: applicationFee,
           currency: 'RWF',
       };
@@ -240,7 +254,7 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
         <Alert className="bg-green-50 border-green-200 max-w-md">
           <CheckCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            Your application is now being reviewed. You'll receive updates via email at <strong>{completedApplication.applicant?.email || payment?.customer_email}</strong>
+            Your application is now being reviewed. You will receive updates via email at <strong>{completedApplication.applicant?.email || payment?.customer_email}</strong>
           </AlertDescription>
         </Alert>
 
@@ -307,8 +321,8 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
               <p className="text-sm font-medium">{application?.application_number || 'Pending'}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Project Title</p>
-              <p className="text-sm font-medium">{application?.project_title || 'N/A'}</p>
+              <p className="text-xs text-muted-foreground">Application Type</p>
+              <p className="text-sm font-medium">{application?.application_type || 'N/A'}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Application Fee</p>
@@ -415,7 +429,7 @@ export function PaymentTab({ application, formData, onPaymentComplete, onBack }:
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>You'll receive a payment receipt via email</span>
+                    <span>You will receive a payment receipt via email</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />

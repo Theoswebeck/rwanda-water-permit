@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
+import { formatDate } from "@/lib/utils";
 
 interface ApplicationWithApplicant extends Application {
   applicant?: {
@@ -87,11 +88,15 @@ export function AllApplicationsList() {
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
-    const statusColors: Record<ApplicationStatus, string> = {
+    // Keep flexible to avoid runtime issues if DB gains new statuses.
+    const statusColors: Record<string, string> = {
       draft: "bg-gray-100 text-gray-700 border-gray-200",
       submitted: "bg-blue-100 text-blue-700 border-blue-200",
       under_review: "bg-yellow-100 text-yellow-700 border-yellow-200",
       pending_inspection: "bg-orange-100 text-orange-700 border-orange-200",
+      pending_assessment: "bg-purple-100 text-purple-700 border-purple-200",
+      pending_final_approval: "bg-purple-100 text-purple-700 border-purple-200",
+      approved_pending_permit: "bg-green-100 text-green-700 border-green-200",
       approved: "bg-green-100 text-green-700 border-green-200",
       rejected: "bg-red-100 text-red-700 border-red-200",
       revision_required: "bg-amber-100 text-amber-700 border-amber-200",
@@ -258,6 +263,7 @@ export function AllApplicationsList() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Date</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Applicant</TableHead>
                   <TableHead>Type & Source</TableHead>
@@ -270,14 +276,12 @@ export function AllApplicationsList() {
               <TableBody>
                 {filteredApplications.map((application) => (
                   <TableRow key={application.id}>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {formatDate(application.submitted_at || application.created_at)}
+                    </TableCell>
                     <TableCell>
                       <div className="space-y-1">
                         <div className="font-medium">{application.application_number}</div>
-                        <div className="text-sm text-muted-foreground">{application.project_title}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(application.created_at).toLocaleDateString()}
-                        </div>
                       </div>
                     </TableCell>
                     <TableCell>

@@ -402,8 +402,8 @@ export function InspectionBuilder() {
                 <div className="text-sm text-blue-900 dark:text-blue-100">{applicationData.application_number}</div>
               </div>
               <div className="space-y-1">
-                <div className="text-sm font-medium text-blue-700 dark:text-blue-300">Project Title</div>
-                <div className="text-sm text-blue-900 dark:text-blue-100">{applicationData.project_title}</div>
+                <div className="text-sm font-medium text-blue-700 dark:text-blue-300">Application Number</div>
+                <div className="text-sm text-blue-900 dark:text-blue-100">{applicationData.application_number || applicationData.id}</div>
               </div>
               <div className="space-y-1">
                 <div className="text-sm font-medium text-blue-700 dark:text-blue-300">Applicant</div>
@@ -750,7 +750,7 @@ export function InspectionBuilder() {
                             <div className="flex items-center gap-2">
                               <Info className="h-4 w-4 text-slate-500" />
                               <span className="font-medium">
-                                {applicationData.project_title || 'Not specified'}
+                                {applicationData.application_number || applicationData.id}
                               </span>
                             </div>
                             {applicationData.project_description && (

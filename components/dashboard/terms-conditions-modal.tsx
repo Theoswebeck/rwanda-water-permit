@@ -51,6 +51,7 @@ export function TermsConditionsModal({
   const [feedback, setFeedback] = useState<string>("");
 
   const handleAcceptTerms = async () => {
+    if (isProcessing) return;
     if (!acceptedTerms) {
       console.error("Please accept the terms and conditions to proceed");
       return;
@@ -139,14 +140,15 @@ export function TermsConditionsModal({
       }
       console.log('✅ Permit created successfully:', permitData.permit_number);
 
-      // Update application status to approved_pending_permit and track terms acceptance
-      console.log('📋 Updating application status to approved_pending_permit...');
+      // Finalize the workflow: once terms are accepted and permit is created, mark application as approved
+      console.log('📋 Updating application status to approved...');
       const { error: updateError } = await (supabase as any)
         .from('applications')
         .update({
-          status: 'approved_pending_permit',
+          status: 'approved',
           terms_status: 'accepted',
-          terms_accepted_at: new Date().toISOString()
+          terms_accepted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', applicationId);
 
