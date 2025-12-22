@@ -6,6 +6,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { Payment, PaymentStatus, InitiatePaymentRequest } from '@/types/payment';
 
+const isDev = process.env.NODE_ENV !== 'production';
+const debugLog = (...args: any[]) => {
+  if (isDev) console.log(...args);
+};
+
 interface UsePaymentOptions {
   applicationId?: string;
   autoFetch?: boolean;
@@ -63,7 +68,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       setLoading(true);
       setError(null);
 
-      console.log('🚀 Initiating payment...', data);
+      debugLog('🚀 Initiating payment...', data);
 
       const response = await fetch('/api/payments/initiate', {
         method: 'POST',
@@ -89,7 +94,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
 
       if (result.success && result.payment) {
         setPayment(result.payment);
-        console.log('✅ Payment initiated successfully');
+        debugLog('✅ Payment initiated successfully');
         return {
           success: true,
           payment: result.payment,
@@ -126,7 +131,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       setLoading(true);
       setError(null);
 
-      console.log('🔍 Checking payment status...', paymentId);
+      debugLog('🔍 Checking payment status...', paymentId);
 
       const response = await fetch(`/api/payments/${paymentId}/status`);
       const result = await response.json();
@@ -137,7 +142,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
 
       if (result.success && result.payment) {
         setPayment(result.payment);
-        console.log('✅ Payment status:', result.payment.status);
+        debugLog('✅ Payment status:', result.payment.status);
         return result.payment;
       } else {
         throw new Error(result.error || 'Status check failed');
@@ -185,19 +190,18 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
     const shouldPoll = payment.status === 'pending' || payment.status === 'processing';
     
     if (!shouldPoll) {
-      console.log('⏹️  Not polling - payment status is:', payment.status);
+      debugLog('⏹️  Not polling - payment status is:', payment.status);
       return;
     }
 
-    console.log('🔄 Starting payment status polling for payment:', payment.id);
+    debugLog('🔄 Starting payment status polling for payment:', payment.id);
 
     const intervalId = setInterval(() => {
-      console.log('🔄 Polling payment status...');
       checkStatus(payment.id);
     }, pollInterval);
 
     return () => {
-      console.log('⏹️  Stopping payment status polling');
+      debugLog('⏹️  Stopping payment status polling');
       clearInterval(intervalId);
     };
   }, [pollInterval, payment?.id, payment?.status, checkStatus]);

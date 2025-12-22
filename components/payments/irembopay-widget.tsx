@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import Script from 'next/script';
 
+const DEFAULT_SCRIPT_TIMEOUT_MS = 15000;
+const getScriptTimeoutMs = () => {
+  const raw = process.env.NEXT_PUBLIC_IREMBOPAY_SCRIPT_TIMEOUT_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SCRIPT_TIMEOUT_MS;
+};
+
 // Declare IremboPay global
 declare global {
   interface Window {
@@ -80,7 +87,8 @@ export function IremboPayWidget({
   }, [invoiceNumber, publicKey]);
 
   /**
-   * Add timeout for script loading (5 seconds)
+   * Add timeout for script loading (configurable)
+   * Also detect if the SDK is already present (e.g. cached / already loaded on the page).
    */
   useEffect(() => {
     console.log('📊 IremboPay Widget mounted:', {
@@ -90,17 +98,24 @@ export function IremboPayWidget({
       paymentUrl,
     });
 
+    // If SDK is already available, don't wait on <Script> events.
+    if (typeof window !== 'undefined' && window.IremboPay) {
+      setScriptLoaded(true);
+      return;
+    }
+
+    const timeoutMs = getScriptTimeoutMs();
     const timer = setTimeout(() => {
       if (!scriptLoaded) {
-        console.warn('⚠️ IremboPay script loading timeout after 5 seconds');
+        console.warn(`⚠️ IremboPay script loading timeout after ${Math.round(timeoutMs / 1000)} seconds`);
         console.warn('   Script URL:', scriptUrl);
         console.warn('   Fallback to direct payment URL:', paymentUrl);
         setLoadingTimeout(true);
       }
-    }, 5000); // 5 seconds
+    }, timeoutMs);
 
     return () => clearTimeout(timer);
-  }, [scriptLoaded]);
+  }, [invoiceNumber, paymentUrl, publicKey, scriptLoaded, scriptUrl]);
 
   /**
    * Initiate payment when script is loaded
@@ -165,10 +180,10 @@ export function IremboPayWidget({
    */
   useEffect(() => {
     if (scriptLoaded && invoiceNumber && publicKey && !error && paymentStatus === 'idle') {
-      // Small delay to ensure IremboPay is fully initialized
+      // Initiate as soon as possible once the SDK is ready.
       const timer = setTimeout(() => {
         initiatePayment();
-      }, 500);
+      }, 50);
 
       return () => clearTimeout(timer);
     }
@@ -177,7 +192,20 @@ export function IremboPayWidget({
   // Handle script load
   const handleScriptLoad = () => {
     console.log('✅ IremboPay script loaded');
+    // Some environments fire `onLoad` earlier than `onReady`. Mark loaded ASAP.
     setScriptLoaded(true);
+  };
+
+  // `onReady` is more reliable than `onLoad` in Next.js (fires even if cached).
+  const handleScriptReady = () => {
+    console.log('✅ IremboPay script ready');
+    setScriptLoaded(true);
+
+    // Kick off the modal immediately (don’t wait for the effect cycle).
+    // Guarded to avoid double-init.
+    if (invoiceNumber && publicKey && !error && paymentStatus === 'idle') {
+      setTimeout(() => initiatePayment(), 0);
+    }
   };
 
   const handleScriptError = () => {
@@ -219,6 +247,7 @@ export function IremboPayWidget({
       <Script
         src={scriptUrl}
         onLoad={handleScriptLoad}
+        onReady={handleScriptReady}
         onError={handleScriptError}
         strategy="afterInteractive"
       />

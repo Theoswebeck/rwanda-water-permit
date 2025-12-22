@@ -16,6 +16,12 @@ import type {
 // =============================================
 
 const getIsSandbox = (): boolean => {
+  // 0. If the API key clearly indicates environment, trust it.
+  // This prevents mismatches like using `sk_live_...` against sandbox endpoints (modal/widget can fail).
+  const apiKey = process.env.IREMBOPAY_SECRET_KEY || process.env.IREMBOPAY_API_KEY || '';
+  if (apiKey.startsWith('sk_live')) return false;
+  if (apiKey.startsWith('sk_sandbox')) return true;
+
   // 1. Explicitly check for sandbox URL
   if (process.env.IREMBOPAY_API_URL) {
     return process.env.IREMBOPAY_API_URL.includes('sandbox');
@@ -67,10 +73,19 @@ export class IremboPayClient {
   constructor(apiKey?: string, isSandbox?: boolean) {
     this.apiKey = apiKey || IREMBOPAY_CONFIG.apiKey;
     this.isSandbox = isSandbox ?? IREMBOPAY_CONFIG.isSandbox;
-    this.baseUrl = getCurrentConfig().apiUrl;
+    // Allow explicit override (useful for debugging / staging)
+    this.baseUrl = process.env.IREMBOPAY_API_URL || getCurrentConfig().apiUrl;
 
     if (!this.apiKey) {
       throw new Error('IremboPay API key is required');
+    }
+
+    // Warn loudly if env/key look inconsistent (common root cause of widget/modal failing)
+    if (this.isSandbox && this.apiKey.startsWith('sk_live')) {
+      console.warn('⚠️ IremboPay config mismatch: sandbox=true but secret key looks LIVE (sk_live...).');
+    }
+    if (!this.isSandbox && this.apiKey.startsWith('sk_sandbox')) {
+      console.warn('⚠️ IremboPay config mismatch: sandbox=false but secret key looks SANDBOX (sk_sandbox...).');
     }
     
     // Debug logging
@@ -205,7 +220,7 @@ export class IremboPayClient {
       );
 
       if (response.success && response.data) {
-        console.log('✅ Payment status:', response.data.status);
+        console.log('✅ Payment status:', response.data.paymentStatus);
       }
 
       return response;

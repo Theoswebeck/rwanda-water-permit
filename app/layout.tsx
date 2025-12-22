@@ -23,6 +23,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Speed up IremboPay SDK + checkout by warming connections early */}
+        <link rel="dns-prefetch" href="https://dashboard.sandbox.irembopay.com" />
+        <link rel="preconnect" href="https://dashboard.sandbox.irembopay.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://checkout.sandbox.irembopay.com" />
+        <link rel="preconnect" href="https://checkout.sandbox.irembopay.com" crossOrigin="" />
+
+        <link rel="dns-prefetch" href="https://dashboard.irembopay.com" />
+        <link rel="preconnect" href="https://dashboard.irembopay.com" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://checkout.irembopay.com" />
+        <link rel="preconnect" href="https://checkout.irembopay.com" crossOrigin="" />
+      </head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"

@@ -21,6 +21,12 @@ import type { InitiatePaymentRequest } from '@/types/payment';
 
 // Get public key from environment
 const IREMBOPAY_PUBLIC_KEY = process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || '';
+const IREMBOPAY_IS_SANDBOX_FROM_KEY =
+  IREMBOPAY_PUBLIC_KEY.startsWith('pk_sandbox') || IREMBOPAY_PUBLIC_KEY.includes('sandbox');
+const IREMBOPAY_IS_SANDBOX =
+  typeof process.env.NEXT_PUBLIC_IREMBOPAY_SANDBOX === 'string'
+    ? process.env.NEXT_PUBLIC_IREMBOPAY_SANDBOX === 'true'
+    : IREMBOPAY_IS_SANDBOX_FROM_KEY || process.env.NODE_ENV === 'development';
 
 // Debug: Log public key availability
 if (typeof window !== 'undefined') {
@@ -92,6 +98,19 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       }, 4000);
     }
   }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
+
+  /**
+   * If a user comes back to an existing pending payment, automatically show the widget
+   * (the widget itself auto-opens the Irembo modal when the script loads).
+   */
+  useEffect(() => {
+    const isPendingWithRef =
+      (payment?.status === 'pending' || payment?.status === 'processing') && !!payment?.irembo_payment_ref;
+
+    if (isPendingWithRef && !showWidget) {
+      setShowWidget(true);
+    }
+  }, [payment?.status, payment?.irembo_payment_ref, showWidget]);
 
   /**
    * Handle payment initiation
@@ -438,7 +457,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
                     publicKey={IREMBOPAY_PUBLIC_KEY}
                     amount={payment.amount}
                     currency={payment.currency}
-                    isSandbox={true}
+                    isSandbox={IREMBOPAY_IS_SANDBOX}
                     onSuccess={handlePaymentSuccess}
                     onFailed={handlePaymentFailed}
                     onClose={() => console.log('Payment modal closed')}
@@ -505,7 +524,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
               publicKey={IREMBOPAY_PUBLIC_KEY}
               amount={payment.amount}
               currency={payment.currency}
-              isSandbox={true}
+              isSandbox={IREMBOPAY_IS_SANDBOX}
               onSuccess={handlePaymentSuccess}
               onFailed={handlePaymentFailed}
               onClose={() => setShowWidget(false)}
