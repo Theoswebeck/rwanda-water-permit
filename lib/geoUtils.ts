@@ -7,10 +7,12 @@ import * as turf from '@turf/turf';
 import type { 
   Feature, 
   Polygon, 
+  MultiPolygon,
   Point, 
   GeoJsonProperties, 
   Position 
 } from 'geojson';
+import { RWANDA_BOUNDARY } from '@/lib/rwandaBoundary';
 
 // =============================================
 // TYPES AND INTERFACES
@@ -35,7 +37,7 @@ export interface IntersectionDetail {
   intersectionType: IntersectionType;
   intersectionArea: number; // in square meters
   overlapPercentage: number;
-  intersectionGeometry?: Feature<Polygon>;
+  intersectionGeometry?: Feature<Polygon | MultiPolygon>;
 }
 
 export type IntersectionType = 
@@ -73,16 +75,31 @@ export function isValidCoordinate(coord: CoordinatePoint): boolean {
 }
 
 /**
- * Validates that coordinates are within Rwanda's approximate boundaries
+ * Validates that a coordinate point is within Rwanda's national boundary
  */
 export function isWithinRwanda(coord: CoordinatePoint): boolean {
   const lat = typeof coord.latitude === 'string' ? parseFloat(coord.latitude) : coord.latitude;
   const lng = typeof coord.longitude === 'string' ? parseFloat(coord.longitude) : coord.longitude;
   
-  // Rwanda approximate bounds: 
-  // Latitude: -2.91 to -1.05
-  // Longitude: 28.86 to 30.90
-  return lat >= -2.91 && lat <= -1.05 && lng >= 28.86 && lng <= 30.90;
+  if (isNaN(lat) || isNaN(lng)) return false;
+  try {
+    const p = turf.point([lng, lat]);
+    return turf.booleanPointInPolygon(p, RWANDA_BOUNDARY);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates that the entire polygon is within Rwanda's national boundary.
+ * This is stronger than checking just the vertices (prevents edges crossing outside the border).
+ */
+export function isPolygonWithinRwanda(polygon: Feature<Polygon>): boolean {
+  try {
+    return turf.booleanWithin(polygon, RWANDA_BOUNDARY) || turf.booleanContains(RWANDA_BOUNDARY, polygon);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -199,31 +216,15 @@ export function validatePolygon(polygon: Feature<Polygon>): { isValid: boolean; 
       errors.push('Polygon geometry is not valid');
     }
 
-    // Check for minimum area (e.g., 100 square meters)
-    const area = turf.area(polygon);
-    if (area < 100) {
-      errors.push('Polygon area is too small (minimum 100 m²)');
-    }
-
-    // Check for maximum area (e.g., 10 square kilometers)
-    if (area > 10000000) {
-      errors.push('Polygon area is too large (maximum 10 km²)');
-    }
-
     // Check if polygon is self-intersecting
     const kinks = turf.kinks(polygon);
     if (kinks.features.length > 0) {
       errors.push('Polygon has self-intersections');
     }
 
-    // Check if all coordinates are within Rwanda
-    const coords = polygon.geometry.coordinates[0];
-    for (let i = 0; i < coords.length - 1; i++) {
-      const coord = { longitude: coords[i][0], latitude: coords[i][1] };
-      if (!isWithinRwanda(coord)) {
-        errors.push(`Coordinate ${i + 1} is outside Rwanda boundaries`);
-        break;
-      }
+    // Check polygon is fully within Rwanda boundary (robust)
+    if (!isPolygonWithinRwanda(polygon)) {
+      errors.push('Polygon is outside Rwanda boundaries');
     }
 
     return { isValid: errors.length === 0, errors };
@@ -302,7 +303,7 @@ export function analyzePolygonIntersection(
     }
 
     // Calculate intersection geometry and area
-    const intersection = turf.intersect(polygon1, polygon2);
+    const intersection = turf.intersect(turf.featureCollection([polygon1, polygon2]));
     const intersectionArea = intersection ? turf.area(intersection) : 0;
     
     // Calculate overlap percentage (relative to smaller polygon)

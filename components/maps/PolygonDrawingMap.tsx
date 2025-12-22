@@ -250,7 +250,7 @@ export function PolygonDrawingMap({
     return (
       <Badge variant="destructive" className="flex items-center gap-1">
         <AlertTriangle className="h-3 w-3" />
-        Invalid ({validation.intersections.length} conflicts)
+        Invalid
       </Badge>
     );
   };
@@ -332,22 +332,6 @@ export function PolygonDrawingMap({
                 </ul>
               </AlertDescription>
             </Alert>
-
-            {validation.intersections.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">Conflicting Permits:</h4>
-                {validation.intersections.map((intersection, index) => (
-                  <div key={index} className="p-2 bg-red-50 rounded text-sm">
-                    <strong>{intersection.permitNumber}</strong> - {intersection.projectTitle}<br />
-                    <span className="text-xs text-muted-foreground">
-                      {intersection.intersectionType.replace(/_/g, ' ')} • 
-                      {intersection.overlapPercentage.toFixed(1)}% overlap • 
-                      {formatArea(intersection.intersectionArea)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -357,7 +341,7 @@ export function PolygonDrawingMap({
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                ✅ Polygon is valid! No intersections with existing permits found.
+                ✅ Polygon is valid! It is within Rwanda and does not duplicate an existing application polygon.
                 {currentPolygon && (
                   <div className="mt-2 text-sm text-muted-foreground">
                     Area: {getPolygonSummary(currentPolygon).area}
@@ -375,7 +359,7 @@ export function PolygonDrawingMap({
               <Info className="h-4 w-4" />
               <AlertDescription>
                 Click "Start Drawing" then click on the map to place exactly 5 points to define your water source area. 
-                The system will automatically validate against existing permits.
+                The system will validate that the polygon is within Rwanda and unique across applications.
               </AlertDescription>
             </Alert>
           </div>

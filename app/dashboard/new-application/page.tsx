@@ -174,7 +174,8 @@ function NewApplicationContent() {
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
   const [loadingDraft, setLoadingDraft] = useState(!!draftId);
   const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
@@ -310,13 +311,14 @@ function NewApplicationContent() {
           });
         
         // Show success message (redirect is handled by useEffect)
-        setSuccess(true);
+        setSubmitSuccess(true);
       } else {
         throw new Error('Failed to submit application');
       }
     } catch (error) {
       console.error('❌ Error submitting application:', error);
       setError(error instanceof Error ? error.message : 'Failed to submit application');
+    } finally {
       setIsLoading(false);
     }
   }, [createApplication, userProfile?.id, router]);
@@ -364,8 +366,9 @@ function NewApplicationContent() {
           setCurrentApplication(result);
         }
         
-        // Show success message (redirect is handled by useEffect)
-        setSuccess(true);
+        // Draft saves should NOT redirect away (payment flow depends on staying on this page)
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2000);
         
         return result;
       } else {
@@ -382,16 +385,16 @@ function NewApplicationContent() {
     }
   }, [createApplication, updateApplication, userProfile?.id, router]);
 
-  // Auto-redirect on success - must be before any conditional returns!
+  // Auto-redirect ONLY after submit (draft saves must not redirect)
   useEffect(() => {
-    if (success) {
+    if (submitSuccess) {
       const timer = setTimeout(() => {
-        router.push("/dashboard?tab=applications&success=draft-saved");
-      }, 1000); // Redirect after 1 second
-      
+        router.push("/dashboard?tab=applications&success=application-submitted");
+      }, 1000);
+
       return () => clearTimeout(timer);
     }
-  }, [success, router]);
+  }, [submitSuccess, router]);
   
   if (loadingDraft) {
     return (
@@ -419,7 +422,7 @@ function NewApplicationContent() {
     );
   }
 
-  if (success) {
+  if (submitSuccess) {
     return (
       <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
         <DashboardLayout>
@@ -435,7 +438,7 @@ function NewApplicationContent() {
               </div>
               <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-green-900 mb-2">Success!</h2>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-green-700 mb-4">
-                Your application has been saved as a draft.
+                Your application has been submitted successfully.
               </p>
               <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -494,6 +497,16 @@ function NewApplicationContent() {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 {error}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Draft Saved Alert (non-blocking) */}
+          {draftSaved && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                ✅ Draft saved.
               </AlertDescription>
             </Alert>
           )}

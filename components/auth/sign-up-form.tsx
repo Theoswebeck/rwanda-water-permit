@@ -108,18 +108,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       return false;
     }
 
-    // Validate that the ID contains exactly 19 digits
-    const digits = idNumber.replace(/\D/g, '');
-    
-    // Check if it has exactly 19 digits
-    if (digits.length !== 19) {
-      setIdNumberError("invalid ID number");
-      return false;
-    }
-
-    // Check if all characters are digits
-    if (!/^\d{19}$/.test(digits)) {
-      setIdNumberError("invalid ID number");
+    // Validate that the ID contains exactly 16 digits
+    const digits = idNumber.replace(/\D/g, "");
+    if (!/^\d{16}$/.test(digits)) {
+      setIdNumberError("ID number must be exactly 16 digits.");
       return false;
     }
 
@@ -285,7 +277,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     !!phone.trim() &&
     !phoneError &&
     !!idNumber.trim() &&
-    idNumber.replace(/\D/g, "").length === 19 &&
+    idNumber.replace(/\D/g, "").length === 16 &&
     !idNumberError &&
     !!email.trim() &&
     !emailError &&
@@ -295,20 +287,15 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const handleIdNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     
-    // Allow digits only, up to 19 digits
-    const digits = value.replace(/\D/g, '').slice(0, 19);
+    // Allow digits only, up to 16 digits
+    const digits = value.replace(/\D/g, "").slice(0, 16);
 
     setIdNumber(digits);
     if (error) onClearError?.();
-    
-    // Prompt user whenever the ID is not exactly 19 digits
-    if (digits.length === 19) {
-      validateNationalId(digits);
-    } else if (digits.length > 0) {
-      setIdNumberError("invalid ID number");
-    } else {
-      setIdNumberError("");
-    }
+
+    // Don't show an "invalid" error while the user is still typing.
+    // We validate on blur and on submit.
+    if (idNumberError) setIdNumberError("");
   };
 
   const handleCompanyTINChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -613,11 +600,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       type="text" 
                       inputMode="numeric"
                       pattern="\d*"
-                      maxLength={19}
-                      placeholder="Enter your ID number (19 digits)"
+                      maxLength={16}
+                      placeholder="Enter your ID number (16 digits)"
                       required 
                       value={idNumber}
                       onChange={handleIdNumberChange}
+                      onBlur={() => {
+                        if (idNumber.trim()) validateNationalId(idNumber);
+                      }}
                       className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
                         idNumberError ? 'border-red-500 focus:ring-red-500' : ''
                       }`}
@@ -627,7 +617,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
                     )}
                     {!idNumberError && idType === "nationalId" && (
-                      <p className="text-xs text-muted-foreground mt-1">Must be exactly 19 digits.</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Must be exactly 16 digits ({idNumber.length}/16).
+                      </p>
                     )}
                   </div>
                 </div>

@@ -4,7 +4,7 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchApprovedPermitPolygons } from '@/lib/polygonValidation';
+import { fetchApprovedPermitPolygons } from '@/lib/permitPolygons';
 import { z } from 'zod';
 
 // =============================================

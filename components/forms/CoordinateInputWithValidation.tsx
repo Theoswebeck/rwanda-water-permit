@@ -225,7 +225,7 @@ export function CoordinateInputWithValidation({
     return (
       <Badge variant="destructive" className="flex items-center gap-1">
         <AlertTriangle className="h-3 w-3" />
-        {validation.intersections.length} conflict(s)
+        Invalid polygon
       </Badge>
     );
   };
@@ -247,7 +247,7 @@ export function CoordinateInputWithValidation({
         
         <div className="text-sm text-muted-foreground">
           Define the exact area of your water source by providing 5 coordinate points that form a polygon. 
-          The system will validate that your polygon doesn't intersect with existing water permits.
+          The system will validate that your polygon is within Rwanda and does not duplicate an existing application polygon.
         </div>
       </CardHeader>
 
@@ -414,23 +414,6 @@ export function CoordinateInputWithValidation({
                 </ul>
               </AlertDescription>
             </Alert>
-
-            {validation.intersections.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">Conflicting Permits:</h4>
-                {validation.intersections.map((intersection, index) => (
-                  <div key={index} className="p-3 bg-red-50 border border-red-200 rounded text-sm">
-                    <div className="font-medium">{intersection.permitNumber}</div>
-                    <div className="text-muted-foreground">{intersection.projectTitle}</div>
-                    <div className="text-xs text-red-600 mt-1">
-                      {intersection.intersectionType.replace(/_/g, ' ')} • 
-                      {intersection.overlapPercentage.toFixed(1)}% overlap • 
-                      {intersection.intersectionArea.toFixed(0)} m² affected area
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -440,12 +423,7 @@ export function CoordinateInputWithValidation({
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                ✅ <strong>Polygon is valid!</strong> No intersections with existing permits found.
-                {validation.summary && (
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Polygon area validated against {validation.summary.totalIntersections === 0 ? 'all' : validation.summary.totalIntersections} existing permits.
-                  </div>
-                )}
+                ✅ <strong>Polygon is valid!</strong> It is within Rwanda and does not duplicate an existing application polygon.
               </AlertDescription>
             </Alert>
           </div>
@@ -462,7 +440,7 @@ export function CoordinateInputWithValidation({
                   <li>• Enter 5 coordinate points that define the boundary of your water source area</li>
                   <li>• Use the Interactive Map tab for easier point placement</li>
                   <li>• All coordinates must be within Rwanda boundaries</li>
-                  <li>• The system will automatically validate against existing permits</li>
+                  <li>• The system will validate that the polygon is unique across applications</li>
                   <li>• Points will be connected to form a closed polygon</li>
                 </ul>
               </AlertDescription>

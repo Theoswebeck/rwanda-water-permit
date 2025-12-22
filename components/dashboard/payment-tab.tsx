@@ -49,9 +49,12 @@ interface PaymentTabProps {
   formData?: DraftFormData; // Unsaved form data for new applications
   onPaymentComplete?: (paymentId: string) => Promise<unknown>; // Optional callback for callers
   onBack?: () => void;
+  isSavingApplication?: boolean;
+  saveError?: string | null;
+  onRetrySave?: () => void;
 }
 
-export function PaymentTab({ application, formData, onBack }: PaymentTabProps) {
+export function PaymentTab({ application, formData, onBack, isSavingApplication, saveError, onRetrySave }: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -266,6 +269,25 @@ export function PaymentTab({ application, formData, onBack }: PaymentTabProps) {
     );
   }
 
+  // If the caller is saving the application in the background, block payment until we have an application id
+  if (isSavingApplication && !application?.id) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col items-center justify-center py-16 space-y-4"
+      >
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        <div className="text-center space-y-2">
+          <p className="text-lg font-medium">Saving your application…</p>
+          <p className="text-sm text-muted-foreground">
+            Please wait — we’re preparing payment.
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
   // Show completing payment loader
   if (isCompletingPayment) {
     return (
@@ -292,6 +314,21 @@ export function PaymentTab({ application, formData, onBack }: PaymentTabProps) {
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
+      {saveError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Couldn’t save your application</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <div>{saveError}</div>
+            {onRetrySave && (
+              <Button type="button" variant="outline" onClick={onRetrySave} className="mt-2">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Retry save
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -4,8 +4,9 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
-import { validateCoordinates, updateApplicationValidation } from '@/lib/polygonValidation';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { coordinatesToGeoJSON, validatePolygon } from '@/lib/geoUtils';
+import { polygonToKey } from '@/lib/polygonKey';
 import { z } from 'zod';
 
 // =============================================
@@ -18,6 +19,7 @@ const ParamsSchema = z.object({
 
 const QueryParamsSchema = z.object({
   updateRecord: z.boolean().optional().default(true),
+  // kept for backwards compatibility, but ignored in the new implementation
   useServerValidation: z.boolean().optional().default(true)
 });
 
@@ -71,11 +73,14 @@ export async function POST(
     }
 
     const { updateRecord, useServerValidation } = queryValidation.data;
+    void useServerValidation;
 
     console.log(`📋 Validating application ${applicationId}, updateRecord: ${updateRecord}`);
 
+    const admin = createAdminClient();
+
     // Fetch application coordinates
-    const { data: application, error: fetchError } = await supabase
+    const { data: application, error: fetchError } = await admin
       .from('applications')
       .select('id, coordinates, status, project_title')
       .eq('id', applicationId)
@@ -108,7 +113,6 @@ export async function POST(
 
     // Extract coordinates from PostGIS geometry
     const coordinates = extractCoordinatesFromGeometry(application.coordinates);
-    
     if (!coordinates || coordinates.length !== 5) {
       return NextResponse.json(
         {
@@ -122,28 +126,73 @@ export async function POST(
       );
     }
 
-    console.log('✅ Application coordinates extracted, proceeding with validation');
+    const polygon = coordinatesToGeoJSON(coordinates);
+    if (!polygon) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Invalid coordinate data',
+          isValid: false,
+          intersections: [],
+          errors: ['Failed to create valid polygon from stored coordinates']
+        },
+        { status: 400 }
+      );
+    }
 
-    // Perform validation
-    const validationResult = await validateCoordinates(
-      {
-        coordinates,
-        applicationId
-      },
-      useServerValidation
-    );
+    const basic = validatePolygon(polygon);
+    const errors: string[] = [...basic.errors];
+
+    // Duplicate polygon check against other applications
+    if (basic.isValid) {
+      const candidateKey = polygonToKey(polygon);
+      const { data: apps, error: appsError } = await admin
+        .from('applications')
+        .select('id, project_title, coordinates')
+        .not('coordinates', 'is', null)
+        .neq('id', applicationId);
+
+      if (appsError) {
+        throw new Error(`Failed to check existing applications: ${appsError.message}`);
+      }
+
+      const match = (apps || []).find((app: any) => {
+        const geom = app?.coordinates;
+        if (!geom || geom.type !== 'Polygon' || !geom.coordinates?.[0]) return false;
+        const feature = {
+          type: 'Feature',
+          properties: {},
+          geometry: geom
+        } as const;
+        return polygonToKey(feature) === candidateKey;
+      });
+
+      if (match) {
+        errors.push('Duplicate polygon detected: this polygon already exists in another application.');
+      }
+    }
+
+    const isValid = errors.length === 0;
 
     console.log('📊 Validation completed:', {
-      isValid: validationResult.isValid,
-      intersectionCount: validationResult.intersections.length,
-      errorCount: validationResult.errors.length
+      isValid,
+      errorCount: errors.length
     });
 
-    // Update application record if requested
+    // Update application record if requested (reuse existing columns for status)
     if (updateRecord) {
-      const updateSuccess = await updateApplicationValidation(applicationId, validationResult);
-      if (!updateSuccess) {
-        console.warn('⚠️ Failed to update application validation status');
+      const { error: updateError } = await admin
+        .from('applications')
+        .update({
+          intersection_validation_status: isValid ? 'valid' : 'invalid',
+          intersecting_permits: [],
+          intersection_details: [],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', applicationId);
+
+      if (updateError) {
+        console.warn('⚠️ Failed to update application validation status:', updateError.message);
       } else {
         console.log('✅ Application validation status updated');
       }
@@ -154,15 +203,15 @@ export async function POST(
       success: true,
       applicationId,
       applicationTitle: application.project_title,
-      isValid: validationResult.isValid,
-      intersections: validationResult.intersections,
-      errors: validationResult.errors,
-      summary: validationResult.summary,
-      polygon: validationResult.polygon ? {
-        type: validationResult.polygon.type,
-        geometry: validationResult.polygon.geometry,
-        properties: validationResult.polygon.properties
-      } : null,
+      isValid,
+      intersections: [],
+      errors,
+      summary: { ruleSet: 'rwanda_bounds_and_no_duplicate_polygon' },
+      polygon: {
+        type: polygon.type,
+        geometry: polygon.geometry,
+        properties: polygon.properties
+      },
       validatedAt: new Date().toISOString(),
       recordUpdated: updateRecord
     });

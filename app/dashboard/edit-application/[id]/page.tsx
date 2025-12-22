@@ -1093,11 +1093,11 @@ export default function EditApplicationPage() {
             console.error('⚠️ Full error details:', docError);
           });
         
-        // ✅ Draft save UX + redirect to dashboard
+        // ✅ Draft save UX (do NOT redirect; payment flow depends on staying here)
         setDraftSaved(true);
-        setTimeout(() => {
-          router.push("/dashboard?tab=applications&success=draft-updated");
-        }, 800);
+        setTimeout(() => setDraftSaved(false), 2000);
+
+        return updatedApplication;
       } else {
         // If updateApplication returned null, it has already set a more specific error in the hook.
         throw new Error('Failed to save draft');
@@ -1200,7 +1200,7 @@ export default function EditApplicationPage() {
                 <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
               )}
               <AlertDescription className={draftSaved ? "text-green-800" : "text-blue-800"}>
-                {draftSaved ? "✅ Draft saved. Redirecting…" : "Saving draft…"}
+                {draftSaved ? "✅ Draft saved." : "Saving draft…"}
               </AlertDescription>
             </Alert>
           )}

@@ -4,7 +4,9 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { validateCoordinates, type ValidationRequest } from '@/lib/polygonValidation';
+import { coordinatesToGeoJSON, validatePolygon, isWithinRwanda, type CoordinatePoint } from '@/lib/geoUtils';
+import { polygonToKey } from '@/lib/polygonKey';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { z } from 'zod';
 
 // =============================================
@@ -33,6 +35,7 @@ const ValidationRequestSchema = z.object({
     message: 'Exactly 5 coordinate points are required'
   }),
   applicationId: z.string().uuid().optional(),
+  // kept for backwards compatibility, but ignored in the new implementation
   useServerValidation: z.boolean().optional().default(true)
 });
 
@@ -69,69 +72,132 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { coordinates, applicationId, useServerValidation } = validationResult.data;
+    const { coordinates, applicationId } = validationResult.data;
 
-    // Validate coordinates are within Rwanda bounds
-    const rwandaBounds = {
-      minLat: -2.91,
-      maxLat: -1.05,
-      minLng: 28.86,
-      maxLng: 30.90
-    };
+    const outsidePoints: Array<{ idx: number; lat: number; lng: number }> = [];
 
     for (let i = 0; i < coordinates.length; i++) {
-      const lat = typeof coordinates[i].latitude === 'string' 
-        ? parseFloat(coordinates[i].latitude as string) 
+      const lat = typeof coordinates[i].latitude === 'string'
+        ? parseFloat(coordinates[i].latitude as string)
         : coordinates[i].latitude as number;
-      const lng = typeof coordinates[i].longitude === 'string' 
-        ? parseFloat(coordinates[i].longitude as string) 
+      const lng = typeof coordinates[i].longitude === 'string'
+        ? parseFloat(coordinates[i].longitude as string)
         : coordinates[i].longitude as number;
 
-      if (lat < rwandaBounds.minLat || lat > rwandaBounds.maxLat ||
-          lng < rwandaBounds.minLng || lng > rwandaBounds.maxLng) {
-        console.warn(`⚠️ Coordinate ${i + 1} outside Rwanda bounds: ${lat}, ${lng}`);
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Coordinate ${i + 1} is outside Rwanda boundaries`,
-            isValid: false,
-            intersections: [],
-            errors: [`Coordinate ${i + 1} (${lat.toFixed(6)}, ${lng.toFixed(6)}) is outside Rwanda boundaries`]
-          },
-          { status: 400 }
-        );
+      if (!isWithinRwanda({ latitude: lat, longitude: lng })) {
+        outsidePoints.push({ idx: i + 1, lat, lng });
       }
+    }
+
+    if (outsidePoints.length > 0) {
+      outsidePoints.forEach((p) => {
+        console.warn(`⚠️ Coordinate ${p.idx} outside Rwanda boundary: ${p.lat}, ${p.lng}`);
+      });
+
+      return NextResponse.json({
+        success: true,
+        isValid: false,
+        intersections: [],
+        errors: outsidePoints.map(
+          (p) => `Coordinate ${p.idx} (${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}) is outside Rwanda boundaries`
+        ),
+        summary: null,
+        polygon: null,
+        validatedAt: new Date().toISOString()
+      });
     }
 
     console.log('✅ Request validation passed, proceeding with polygon validation');
 
-    // Perform polygon intersection validation
-    const validationRequest: ValidationRequest = {
-      coordinates,
-      applicationId
-    };
+    const polygon = coordinatesToGeoJSON(coordinates as CoordinatePoint[]);
+    if (!polygon) {
+      return NextResponse.json({
+        success: true,
+        isValid: false,
+        intersections: [],
+        errors: ['Failed to create valid polygon from coordinates'],
+        summary: null,
+        polygon: null,
+        validatedAt: new Date().toISOString()
+      });
+    }
 
-    const result = await validateCoordinates(validationRequest, useServerValidation);
+    // Basic polygon validity (geometry + within Rwanda) – no area constraints.
+    const basic = validatePolygon(polygon);
+    if (!basic.isValid) {
+      return NextResponse.json({
+        success: true,
+        isValid: false,
+        intersections: [],
+        errors: basic.errors,
+        summary: null,
+        polygon: {
+          type: polygon.type,
+          geometry: polygon.geometry,
+          properties: polygon.properties
+        },
+        validatedAt: new Date().toISOString()
+      });
+    }
 
-    console.log('📊 Validation result:', {
-      isValid: result.isValid,
-      intersectionCount: result.intersections.length,
-      errorCount: result.errors.length,
-      hasPolygon: !!result.polygon
+    // Duplicate polygon check across existing applications (excluding self if applicationId provided).
+    const candidateKey = polygonToKey(polygon);
+    const admin = createAdminClient();
+
+    let query = admin
+      .from('applications')
+      .select('id, project_title, coordinates')
+      .not('coordinates', 'is', null);
+
+    if (applicationId) {
+      query = query.neq('id', applicationId);
+    }
+
+    const { data: apps, error: appsError } = await query;
+    if (appsError) {
+      throw new Error(`Failed to check existing applications: ${appsError.message}`);
+    }
+
+    const match = (apps || []).find((app: any) => {
+      const geom = app?.coordinates;
+      if (!geom || geom.type !== 'Polygon' || !geom.coordinates?.[0]) return false;
+      const feature = {
+        type: 'Feature',
+        properties: {},
+        geometry: geom
+      } as const;
+      return polygonToKey(feature) === candidateKey;
     });
 
-    // Return successful validation result
+    if (match) {
+      return NextResponse.json({
+        success: true,
+        isValid: false,
+        intersections: [],
+        errors: ['Duplicate polygon detected: this polygon already exists in another application.'],
+        summary: null,
+        polygon: {
+          type: polygon.type,
+          geometry: polygon.geometry,
+          properties: polygon.properties
+        },
+        validatedAt: new Date().toISOString()
+      });
+    }
+
     return NextResponse.json({
       success: true,
-      isValid: result.isValid,
-      intersections: result.intersections,
-      errors: result.errors,
-      summary: result.summary,
-      polygon: result.polygon ? {
-        type: result.polygon.type,
-        geometry: result.polygon.geometry,
-        properties: result.polygon.properties
-      } : null,
+      isValid: true,
+      intersections: [],
+      errors: [],
+      summary: {
+        ruleSet: 'rwanda_bounds_and_no_duplicate_polygon'
+      },
+      polygon: {
+        type: polygon.type,
+        geometry: polygon.geometry,
+        properties: polygon.properties
+      },
       validatedAt: new Date().toISOString()
     });
 
@@ -191,10 +257,6 @@ export async function GET() {
       errors: 'array of error messages',
       summary: 'validation summary object',
       polygon: 'GeoJSON polygon feature'
-    },
-    rwandaBounds: {
-      latitude: { min: -2.91, max: -1.05 },
-      longitude: { min: 28.86, max: 30.90 }
     }
   });
 }

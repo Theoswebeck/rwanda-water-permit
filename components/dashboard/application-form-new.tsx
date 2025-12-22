@@ -47,7 +47,7 @@ import {
   getFormattedVillageOptions
 } from '@/lib/rwanda-administrative-data';
 import { CoordinateInputWithValidation } from '@/components/forms/CoordinateInputWithValidation';
-import type { ValidationResponse } from '@/lib/polygonValidation';
+import { validateCoordinates, type ValidationResponse } from '@/lib/polygonValidation';
 import { PaymentTab } from '@/components/dashboard/payment-tab';
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
@@ -265,6 +265,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
   const [isTabSwitching, setIsTabSwitching] = useState(false);
+  const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
 
@@ -770,7 +771,39 @@ export const ApplicationForm = memo(function ApplicationForm({
       'waterSourceCoordinates'
     ];
     const errors = await form.trigger(fields as any);
-    return errors;
+    if (!errors) return false;
+
+    // Enforce polygon validation when user tries to move past Water Source
+    const coordinates = form.getValues('waterSourceCoordinates') || [];
+    const hasValidCoordinates = coordinates.length === 5 && coordinates.every((coord: any) => {
+      return coord.latitude && coord.latitude.toString().trim() !== '' &&
+             coord.longitude && coord.longitude.toString().trim() !== '';
+    });
+
+    if (!hasValidCoordinates) {
+      setValidationError('Please provide all 5 coordinate points for the polygon before proceeding.');
+      return false;
+    }
+
+    try {
+      const validation = await validateCoordinates({
+        coordinates,
+        applicationId: currentApplication?.id
+      });
+
+      setCoordinateValidation(validation);
+
+      if (!validation.isValid) {
+        const msg = validation.errors?.[0] || 'Polygon validation failed. Please review your coordinates.';
+        setValidationError(msg);
+        return false;
+      }
+    } catch (e) {
+      setValidationError(`Polygon validation failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      return false;
+    }
+
+    return true;
   };
 
   const validateIntendedActivityTab = async () => {
@@ -2367,10 +2400,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                               }}
                               onValidationChange={(validation) => {
                                 setCoordinateValidation(validation);
-                                // Allow submission even if validation fails - coordinates are optional
+                                // Coordinates are required and validated before moving to Activity.
+                                // We still allow saving drafts independently of this flag.
                                 setCanSubmit(true);
                               }}
-                              applicationId={undefined}
+                              applicationId={currentApplication?.id}
                               disabled={false}
                               showValidation={true}
                               autoValidate={false}
@@ -3986,6 +4020,20 @@ export const ApplicationForm = memo(function ApplicationForm({
                         additionalDocuments
                       } : undefined}
                       onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
+                      isSavingApplication={isLoading}
+                      saveError={paymentPrepError}
+                      onRetrySave={() => {
+                        setPaymentPrepError(null);
+                        const draftData = {
+                          ...form.getValues(),
+                          ...files,
+                          additionalDocuments
+                        };
+                        void onSaveAsDraft(draftData, 'draft').catch((error) => {
+                          console.error('Error saving application:', error);
+                          setPaymentPrepError('Please try saving your application again before proceeding to payment.');
+                        });
+                      }}
                       onBack={() => setActiveTab('land-ownership')}
                     />
                   </TabsContent>
@@ -4076,15 +4124,19 @@ export const ApplicationForm = memo(function ApplicationForm({
                               ...files, 
                               additionalDocuments 
                             };
-                            
-                            // Save and wait for completion
-                            await onSaveAsDraft(draftData, 'draft');
-                            
-                            // Navigate to payment tab smoothly
+
+                            // Navigate to payment tab immediately; save happens in the background
+                            setPaymentPrepError(null);
                             setActiveTab('payment');
                             
                             // Scroll to top for better UX
                             window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                            // Save in background (do not block navigation)
+                            void onSaveAsDraft(draftData, 'draft').catch((error) => {
+                              console.error('Error saving application:', error);
+                              setPaymentPrepError('Please try saving your application again before proceeding to payment.');
+                            });
                           } catch (error) {
                             console.error('Error saving application:', error);
                             alert('Please try saving your application again before proceeding to payment.');
@@ -4096,7 +4148,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                         <CreditCard className="h-4 w-4 mr-2" />
                         {isLoading ? 'Saving…' : 'Continue to Payment'}
                         {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
-                          <span className="ml-2 text-xs">(Fix coordinate conflicts first)</span>
+                          <span className="ml-2 text-xs">(Fix polygon validation first)</span>
                         )}
                       </Button>
                     )}

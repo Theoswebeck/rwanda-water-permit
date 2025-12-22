@@ -10,11 +10,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
     }
 
-    // Validate ID number for individual signups (must be exactly 19 digits)
+    // Validate ID number for individual signups (must be exactly 16 digits)
     if (accountType === 'individual') {
       const rawId = String(rest?.identification?.number ?? rest?.idNumber ?? '')
       const idDigits = rawId.replace(/\D/g, '')
-      if (idDigits.length !== 19 || !/^\d{19}$/.test(idDigits)) {
+      if (idDigits.length !== 16 || !/^\d{16}$/.test(idDigits)) {
         return NextResponse.json({ success: false, message: 'invalid ID number' }, { status: 400 })
       }
     }
