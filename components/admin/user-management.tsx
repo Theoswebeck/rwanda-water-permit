@@ -68,7 +68,7 @@ interface User {
 const userValidationSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().optional(),
-  role: z.enum(["applicant", "reviewer", "inspector", "admin", "approver"]),
+  role: z.enum(["applicant", "assessor", "reviewer", "inspector", "admin", "approver"]),
   status: z.enum(["active", "inactive", "suspended"]),
   account_type: z.enum(["individual", "company", "cooperative", "organization", "institution"]),
   first_name: z.string().optional(),
