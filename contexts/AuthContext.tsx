@@ -834,6 +834,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signUp = async (data: SignUpData & { emailCode?: string }) => {
     try {
       console.log('📝 Starting signup process (custom API)...', data.accountType);
+      // DEBUG: Log what AuthContext receives and sends
+      console.log('📨 AuthContext signUp data:', JSON.stringify({
+        accountType: data.accountType,
+        companyPhone: data.companyPhone,
+        keys: Object.keys(data)
+      }));
 
       // Call our server route which validates email code, creates user, and profile
       const res = await fetch('/api/auth/signup', {

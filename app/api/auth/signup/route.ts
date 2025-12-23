@@ -1,13 +1,46 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+function getSupabaseProjectRef(supabaseUrl: string): string | null {
+  try {
+    const u = new URL(supabaseUrl)
+    const host = u.hostname || ''
+    // Typical: https://<ref>.supabase.co
+    const first = host.split('.')[0]
+    return first || null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+    // DEBUG: Log the raw body to see exactly what frontend is sending
+    console.log('📥 signup raw body:', JSON.stringify(body, null, 2))
     const { email, password, accountType, emailCode, ...rest } = body || {}
 
     if (!email || !password || !accountType) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Validate required fields for organizational signups (DB constraint chk_organizational_fields)
+    if (accountType !== 'individual') {
+      const missing: string[] = []
+      const companyName = String(rest?.companyName ?? '').trim()
+      const companyTIN = String(rest?.companyTIN ?? '').trim()
+      const companyAddress = String(rest?.companyAddress ?? '').trim()
+      const companyPhone = String(rest?.companyPhone ?? '').trim()
+      if (!companyName) missing.push('companyName')
+      if (!companyTIN) missing.push('companyTIN')
+      if (!companyAddress) missing.push('companyAddress')
+      if (!companyPhone) missing.push('companyPhone')
+      if (missing.length) {
+        return NextResponse.json(
+          { success: false, message: `Missing required company fields: ${missing.join(', ')}` },
+          { status: 400 }
+        )
+      }
     }
 
     // Validate ID number for individual signups (must be exactly 16 digits)
@@ -27,6 +60,14 @@ export async function POST(req: NextRequest) {
     const supabase = createClient(url, serviceKey)
 
     const emailLower = String(email).trim().toLowerCase()
+    const supabaseRef = getSupabaseProjectRef(url)
+    const supabaseHost = (() => {
+      try { return new URL(url).hostname } catch { return null }
+    })()
+
+    // Debug: when users report "email already exists" but DB shows none,
+    // it's usually because the app is pointed at a different Supabase project/environment.
+    console.log('🔎 signup: supabaseHost=', supabaseHost, 'projectRef=', supabaseRef, 'email=', emailLower)
 
     // Pre-check: if a profile already exists for this email (case-insensitive),
     // fail early with a friendly message instead of creating an auth user then crashing on unique(email).
@@ -38,11 +79,15 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       if (existing?.id) {
+        console.log('🔎 signup: existing profile found for email=', emailLower, 'id=', existing.id)
         return NextResponse.json(
           {
             success: false,
             message:
               'An account with this email already exists. Please log in instead, or delete the existing user before signing up again.',
+            ...(process.env.NODE_ENV !== 'production'
+              ? { debug: { supabaseHost, supabaseProjectRef: supabaseRef } }
+              : {}),
           },
           { status: 409 }
         )

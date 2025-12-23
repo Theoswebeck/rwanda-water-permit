@@ -42,7 +42,18 @@ export default function RegisterPage() {
     setIsLoading(true);
     
     try {
+      // DEBUG v2: Log ALL formData keys immediately
       console.log("🔄 Starting registration for:", formData.email);
+      console.log("📋 formData keys:", Object.keys(formData));
+      console.log("📋 formData.companyPhone:", formData.companyPhone);
+      
+      const rawCompanyPhone =
+        formData.companyPhone ||
+        (formData as any)?.companyPhoneNumber ||
+        (formData as any)?.company_phone ||
+        (formData as any)?.company_phone_number;
+      
+      console.log("📞 rawCompanyPhone after fallbacks:", rawCompanyPhone);
       
       // Prepare signup data based on account type
       const signUpData = {
@@ -54,12 +65,22 @@ export default function RegisterPage() {
           lastName: formData.lastName,
           idNumber: formData.idNumber,
           idType: formData.idType,
+          phone: normalizeRwandaPhone(formData.phone),
         } : {
           companyName: formData.companyName,
           companyTIN: formData.companyTIN,
           companyAddress: formData.companyAddress,
+          companyPhone: normalizeRwandaPhone(rawCompanyPhone),
         })
       };
+      // Debug (safe): confirm payload includes companyPhone
+      console.log('🧾 signup payload (masked):', {
+        accountType: signUpData.accountType,
+        email: signUpData.email,
+        companyPhone: (signUpData as any).companyPhone,
+        normalizedPhone: normalizeRwandaPhone(rawCompanyPhone),
+        hasPassword: !!signUpData.password,
+      });
 
       const result = await signUp(signUpData);
       

@@ -245,6 +245,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       )
     };
 
+    // DEBUG: Log exactly what SignUpForm is passing
+    console.log('📤 SignUpForm formData:', JSON.stringify({
+      accountType: formData.accountType,
+      companyPhone: formData.companyPhone,
+      companyPhoneFromState: companyPhone,
+      hasAllCompanyFields: !!formData.companyName && !!formData.companyTIN && !!formData.companyPhone && !!formData.companyAddress
+    }));
     // #region agent log
     console.log('🔍 DEBUG: onContinue type:', typeof onContinue, 'value:', onContinue);
     // #endregion

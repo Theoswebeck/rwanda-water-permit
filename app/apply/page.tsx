@@ -78,6 +78,11 @@ export default function ApplyPage() {
     
     try {
       console.log("🔄 Starting application registration for:", formData.email);
+      const rawCompanyPhone =
+        formData.companyPhone ||
+        (formData as any)?.companyPhoneNumber ||
+        (formData as any)?.company_phone ||
+        (formData as any)?.company_phone_number;
       
       // Prepare signup data based on account type
       const signUpData = {
@@ -89,10 +94,12 @@ export default function ApplyPage() {
           lastName: formData.lastName,
           idNumber: formData.idNumber,
           idType: formData.idType,
+          phone: normalizeRwandaPhone(formData.phone),
         } : {
           companyName: formData.companyName,
           companyTIN: formData.companyTIN,
           companyAddress: formData.companyAddress,
+          companyPhone: normalizeRwandaPhone(rawCompanyPhone),
         })
       };
 
