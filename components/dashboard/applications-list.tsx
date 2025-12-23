@@ -163,6 +163,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           icon: <FileText className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
         };
+      case "expired":
+        return {
+          label: "Expired",
+          icon: <AlertCircle className="h-4 w-4" />,
+          className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
+        };
       case "pending_final_approval":
         return {
           label: "Pending Approval",
@@ -276,6 +282,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
               <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
               <SelectItem value="pending_final_approval">Pending Approval</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="expired">Expired</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="revision_required">Revision Required</SelectItem>
             </SelectContent>
@@ -423,7 +430,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                      {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && onDeleteApplications && (
+                      {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && application.status !== 'expired' && onDeleteApplications && (
                         <Button 
                           variant="ghost" 
                           size="sm" 

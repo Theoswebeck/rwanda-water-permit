@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Application, ApplicationFilters } from '@/types/database'
+import { getApplicationExpiration } from '@/lib/application-expiration'
 
 interface UseApplicationsOptions {
   userId?: string
@@ -124,25 +125,60 @@ export function useApplications({
   const updateApplication = useCallback(async (id: string, data: Partial<Application>): Promise<Application | null> => {
     try {
       setError(null)
+      let workingData: Partial<Application> = data
       
-      // First, check if the application is approved or rejected (if we're not just updating status through admin/reviewer workflow)
-      if (!data.status || (data.status !== 'approved' && data.status !== 'rejected')) {
+      // First, check if the application is immutable (approved/rejected/expired), and enforce expiration rule.
+      // We fetch submitted_at so we can apply the 6-month expiry rule from the time of submission.
+      if (!workingData.status || (workingData.status !== 'approved' && workingData.status !== 'rejected' && workingData.status !== 'expired')) {
         const { data: currentApp, error: fetchError } = await supabase
           .from('applications')
-          .select('status')
+          .select('status, submitted_at')
           .eq('id', id)
           .single()
         
         if (fetchError) throw fetchError
-        
-        if (currentApp?.status === 'approved' || currentApp?.status === 'rejected') {
-          throw new Error('Approved or rejected applications cannot be edited. Please contact an administrator if changes are needed.')
+
+        // Permit issuance is represented by a row in `permits` tied to the application.
+        // This is the most reliable signal that the permit was actually issued.
+        const { data: permitRow } = await supabase
+          .from('permits')
+          .select('id')
+          .eq('application_id', id)
+          .limit(1)
+          .maybeSingle()
+
+        const expiration = getApplicationExpiration({
+          submitted_at: (currentApp as any)?.submitted_at ?? null,
+          hasPermit: Boolean(permitRow?.id),
+        })
+
+        if (expiration.isExpired) {
+          // Best-effort: mark as expired in DB (requires enum value + RLS allowing it).
+          try {
+            await supabase
+              .from('applications')
+              .update({ status: 'expired' as any, updated_at: new Date().toISOString() })
+              .eq('id', id)
+          } catch (e) {
+            console.warn('⚠️ Failed to set status=expired (best-effort). Continuing to block edits.', e)
+          }
+          throw new Error('This application has expired (6 months since submission) and can no longer be edited or submitted.')
+        }
+
+        if (currentApp?.status === 'approved' || currentApp?.status === 'rejected' || currentApp?.status === 'expired') {
+          throw new Error('Approved, rejected, or expired applications cannot be edited. Please contact an administrator if changes are needed.')
+        }
+
+        // If the caller is attempting to submit and this record never had a submission timestamp,
+        // set it exactly once (first submission timestamp should not move on resubmissions).
+        if ((workingData as any)?.status === 'submitted' && !(currentApp as any)?.submitted_at) {
+          workingData = { ...workingData, submitted_at: new Date().toISOString() }
         }
       }
 
       // 🔒 Safety: normalize legacy enum values before hitting PostgREST.
       // Some environments previously stored/used "aquaculture" but DB enum was migrated.
-      const safeData: Partial<Application> = { ...data }
+      const safeData: Partial<Application> = { ...workingData }
       if ((safeData as any).water_purpose === 'aquaculture') {
         ;(safeData as any).water_purpose = 'fish_farming_lakes'
       }

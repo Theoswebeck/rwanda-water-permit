@@ -43,7 +43,7 @@ interface Application {
   location: string;
   district: string;
   province: string;
-  status: "submitted" | "under_review" | "pending_assessment" | "pending_final_approval" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled";
+  status: "submitted" | "under_review" | "pending_assessment" | "pending_final_approval" | "approved" | "rejected" | "revision_required" | "draft" | "cancelled" | "expired";
   submittedDate: string;
   lastUpdated: string;
   assignedReviewer?: string;

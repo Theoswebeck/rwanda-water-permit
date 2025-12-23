@@ -29,6 +29,7 @@ export type ApplicationStatus =
   | 'pending_final_approval'
   | 'approved' 
   | 'approved_pending_permit'
+  | 'expired'
   | 'rejected' 
   | 'revision_required' 
   | 'cancelled'

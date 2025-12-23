@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadPermitPdf } from "@/lib/supabase-storage";
+import { getApplicationExpiration } from "@/lib/application-expiration";
 
 interface TermsConditionsModalProps {
   isOpen: boolean;
@@ -80,6 +81,32 @@ export function TermsConditionsModal({
         throw new Error('Application not found');
       }
       console.log('✅ Application data loaded:', applicationData.application_number);
+
+      // Enforce expiration: if more than 6 months since submission and permit not yet issued, block issuance.
+      // (Permit issuance happens in THIS handler, so there should not be a permit yet.)
+      const expiration = getApplicationExpiration({
+        submitted_at: applicationData.submitted_at ?? null,
+        hasPermit: false,
+      });
+      if (expiration.isExpired) {
+        console.warn('⛔ Application is expired; blocking permit issuance:', {
+          application_id: applicationId,
+          submitted_at: applicationData.submitted_at,
+          expires_at: expiration.expiresAt?.toISOString(),
+        });
+
+        // Best-effort: mark the application as expired in DB.
+        try {
+          await (supabase as any)
+            .from('applications')
+            .update({ status: 'expired', updated_at: new Date().toISOString() })
+            .eq('id', applicationId);
+        } catch (e) {
+          console.warn('⚠️ Failed to set status=expired (best-effort).', e);
+        }
+
+        throw new Error('This application has expired (6 months since submission). The permit can no longer be issued.');
+      }
 
       // Generate permit number
       const permitNumber = `RWBP-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
@@ -229,6 +256,9 @@ export function TermsConditionsModal({
       // Provide more specific error messages
       let errorMessage = "❌ Failed to accept terms. Please try again.";
       if (error instanceof Error) {
+        if (error.message.includes('expired')) {
+          errorMessage = "❌ This application has expired (6 months since submission) and can no longer proceed.";
+        } else
         if (error.message.includes('Authentication')) {
           errorMessage = "❌ Please log in again and try accepting the terms.";
         } else if (error.message.includes('not found')) {
