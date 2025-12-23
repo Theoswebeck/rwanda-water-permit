@@ -456,7 +456,10 @@ export const ApplicationForm = memo(function ApplicationForm({
 
   const form = useForm<FormValues>({
     resolver: zodResolver(applicationFormSchema),
-    defaultValues: getDefaultValues
+    defaultValues: getDefaultValues,
+    // Validate when the user leaves a field (click outside / tab away), and re-validate to clear errors.
+    mode: "onBlur",
+    reValidateMode: "onChange"
   });
 
   /**
@@ -2000,6 +2003,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   form.setValue("officeDistrict", "");
                                   form.setValue("officeSector", "");
                                   form.setValue("officeCell", "");
+                                  // Clear stale errors that may have been set on Next/previous validation runs
+                                  form.clearErrors(["officeProvince", "officeDistrict", "officeSector", "officeCell"]);
                                   setSelectedOfficeDistrict("");
                                   setSelectedOfficeSector("");
                                 }} 
@@ -2037,6 +2042,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   // Reset dependent fields
                                   form.setValue("officeSector", "");
                                   form.setValue("officeCell", "");
+                                  form.clearErrors(["officeDistrict", "officeSector", "officeCell"]);
                                   setSelectedOfficeSector("");
                                 }}
                                 value={field.value}
@@ -2073,6 +2079,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   // Reset cell field and state
                                   form.setValue("officeCell", "");
                                   setSelectedOfficeCell("");
+                                  form.clearErrors(["officeSector", "officeCell"]);
                                 }}
                                 value={field.value}
                                 disabled={readOnly || (!selectedOfficeDistrict && !officeDistrict)}
@@ -2105,6 +2112,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedOfficeCell(value);
+                                  form.clearErrors("officeCell");
                                 }}
                                 value={field.value}
                                 disabled={readOnly || (!selectedOfficeSector && !officeSector)}
@@ -2298,6 +2306,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   form.setValue("waterSourceDistrict", "");
                                   form.setValue("waterSourceSector", "");
                                   form.setValue("waterSourceCell", "");
+                                  form.clearErrors(["waterSourceProvince", "waterSourceDistrict", "waterSourceSector", "waterSourceCell"]);
                                   setSelectedWaterSourceDistrict("");
                                   setSelectedWaterSourceSector("");
                                 }} 
@@ -2335,6 +2344,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   // Reset dependent fields
                                   form.setValue("waterSourceSector", "");
                                   form.setValue("waterSourceCell", "");
+                                  form.clearErrors(["waterSourceDistrict", "waterSourceSector", "waterSourceCell"]);
                                   setSelectedWaterSourceSector("");
                                 }}
                                 value={field.value}
@@ -2370,6 +2380,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedWaterSourceSector(value);
                                   // Reset cell field
                                   form.setValue("waterSourceCell", "");
+                                  form.clearErrors(["waterSourceSector", "waterSourceCell"]);
                                 }}
                                 value={field.value}
                                 disabled={readOnly || !selectedWaterSourceDistrict}
