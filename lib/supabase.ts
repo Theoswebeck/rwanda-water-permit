@@ -1046,7 +1046,7 @@ export const getAdminReportsData = async () => {
           totalValue: 0,
           avgProcessingTime: 0,
           userSatisfaction: 0,
-          systemUptime: 99.5
+          systemUptime: 0 // Return 0 instead of mock value
         },
         byType: {},
         byLocation: {},
@@ -1074,7 +1074,7 @@ export const getAdminReportsData = async () => {
           totalValue: 0,
           avgProcessingTime: 0,
           userSatisfaction: 0,
-          systemUptime: 99.5
+          systemUptime: 0 // Return 0 instead of mock value
         },
         byType: {},
         byLocation: {},
@@ -1185,8 +1185,10 @@ export const getAdminReportsData = async () => {
       return new Date(app.due_date) < now
     }).length
 
-    // Calculate system uptime (mock but realistic)
-    const systemUptime = 99.2 + Math.random() * 0.6 // Between 99.2% and 99.8%
+    // Calculate system uptime from actual system logs/events if available
+    // For now, return a default value since we don't have uptime tracking
+    // TODO: Implement actual uptime tracking from system events/logs
+    const systemUptime = 99.5 // Default value until uptime tracking is implemented
 
     // Calculate staff utilization based on active assignments
     let staffUtilization = 0
@@ -1242,6 +1244,153 @@ export const getAdminReportsData = async () => {
   } catch (error) {
     console.warn('Failed to fetch admin reports data:', error)
     return null
+  }
+}
+
+// Get monthly application statistics
+export const getMonthlyApplicationStats = async () => {
+  try {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+
+    // Get applications this month
+    const { count: thisMonthCount } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', startOfMonth.toISOString())
+
+    // Get applications last month
+    const { count: lastMonthCount } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', startOfLastMonth.toISOString())
+      .lt('created_at', startOfMonth.toISOString())
+
+    // Calculate percentage change
+    const change = lastMonthCount && lastMonthCount > 0
+      ? ((thisMonthCount || 0) - lastMonthCount) / lastMonthCount * 100
+      : 0
+
+    return {
+      thisMonth: thisMonthCount || 0,
+      lastMonth: lastMonthCount || 0,
+      change: Math.round(change * 10) / 10
+    }
+  } catch (error) {
+    console.warn('Failed to fetch monthly application stats:', error)
+    return { thisMonth: 0, lastMonth: 0, change: 0 }
+  }
+}
+
+// Get monthly user statistics
+export const getMonthlyUserStats = async () => {
+  try {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
+
+    // Get total users
+    const { count: totalUsers } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+
+    // Get active users (users who have logged in within last 30 days)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const { data: recentLogins } = await supabase
+      .from('users')
+      .select('id, last_login')
+      .not('last_login', 'is', null)
+      .gte('last_login', thirtyDaysAgo.toISOString())
+
+    // Get new users this month
+    const { count: newThisMonth } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', startOfMonth.toISOString())
+
+    // Get new users last month
+    const { count: newLastMonth } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', startOfLastMonth.toISOString())
+      .lt('created_at', startOfMonth.toISOString())
+
+    // Calculate percentage change
+    const change = newLastMonth && newLastMonth > 0
+      ? ((newThisMonth || 0) - newLastMonth) / newLastMonth * 100
+      : 0
+
+    return {
+      total: totalUsers || 0,
+      active: recentLogins?.length || 0,
+      newThisMonth: newThisMonth || 0,
+      change: Math.round(change * 10) / 10
+    }
+  } catch (error) {
+    console.warn('Failed to fetch monthly user stats:', error)
+    return { total: 0, active: 0, newThisMonth: 0, change: 0 }
+  }
+}
+
+// Get processing time statistics with improvement calculation
+export const getProcessingTimeStats = async () => {
+  try {
+    const now = new Date()
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
+
+    // Get completed applications in last 30 days
+    const { data: recentCompleted } = await supabase
+      .from('applications')
+      .select('created_at, updated_at, status')
+      .in('status', ['approved', 'rejected'])
+      .gte('updated_at', thirtyDaysAgo.toISOString())
+
+    // Get completed applications from 30-60 days ago
+    const { data: previousCompleted } = await supabase
+      .from('applications')
+      .select('created_at, updated_at, status')
+      .in('status', ['approved', 'rejected'])
+      .gte('updated_at', sixtyDaysAgo.toISOString())
+      .lt('updated_at', thirtyDaysAgo.toISOString())
+
+    // Calculate average processing time for recent period
+    let avgRecent = 0
+    if (recentCompleted && recentCompleted.length > 0) {
+      const totalDays = recentCompleted.reduce((sum, app) => {
+        const created = new Date(app.created_at)
+        const updated = new Date(app.updated_at)
+        const days = Math.ceil((updated.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+        return sum + Math.max(0, days)
+      }, 0)
+      avgRecent = totalDays / recentCompleted.length
+    }
+
+    // Calculate average processing time for previous period
+    let avgPrevious = 0
+    if (previousCompleted && previousCompleted.length > 0) {
+      const totalDays = previousCompleted.reduce((sum, app) => {
+        const created = new Date(app.created_at)
+        const updated = new Date(app.updated_at)
+        const days = Math.ceil((updated.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+        return sum + Math.max(0, days)
+      }, 0)
+      avgPrevious = totalDays / previousCompleted.length
+    }
+
+    // Calculate improvement
+    const improvement = avgPrevious > 0 ? avgPrevious - avgRecent : 0
+
+    return {
+      avgProcessingTime: Math.round(avgRecent * 10) / 10,
+      improvement: Math.round(improvement * 10) / 10
+    }
+  } catch (error) {
+    console.warn('Failed to fetch processing time stats:', error)
+    return { avgProcessingTime: 0, improvement: 0 }
   }
 }
 

@@ -105,20 +105,41 @@ export function ApplicationOversight() {
         const reviewerName = undefined;
         const inspectorName = undefined;
 
-        // Calculate SLA status and days remaining (mock calculation)
-        const submittedDate = new Date(app.created_at);
+        // Use SLA status and due_date from database
         const now = new Date();
-        const daysSinceSubmitted = Math.floor((now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60 * 24));
-        const slaTarget = 30; // 30 days SLA
-        const daysRemaining = slaTarget - daysSinceSubmitted;
+        let daysRemaining = 0;
+        let slaStatus: "on_time" | "due_soon" | "overdue" = "on_time";
         
-        let slaStatus: "on_time" | "due_soon" | "overdue";
-        if (daysRemaining < 0) {
-          slaStatus = "overdue";
-        } else if (daysRemaining <= 5) {
-          slaStatus = "due_soon";
+        if (app.due_date) {
+          const dueDate = new Date(app.due_date);
+          daysRemaining = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          // Use database sla_status if available, otherwise calculate
+          if (app.sla_status) {
+            slaStatus = app.sla_status as "on_time" | "due_soon" | "overdue";
+          } else {
+            // Calculate if not set in database
+            if (daysRemaining < 0) {
+              slaStatus = "overdue";
+            } else if (daysRemaining <= 5) {
+              slaStatus = "due_soon";
+            } else {
+              slaStatus = "on_time";
+            }
+          }
         } else {
-          slaStatus = "on_time";
+          // If no due_date, calculate from created_at + 30 days SLA
+          const submittedDate = new Date(app.created_at);
+          const defaultDueDate = new Date(submittedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+          daysRemaining = Math.floor((defaultDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (daysRemaining < 0) {
+            slaStatus = "overdue";
+          } else if (daysRemaining <= 5) {
+            slaStatus = "due_soon";
+          } else {
+            slaStatus = "on_time";
+          }
         }
 
         return {

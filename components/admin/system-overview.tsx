@@ -20,7 +20,11 @@ import {
   getAdminDashboardStats, 
   getApplicationStatusDistribution, 
   getRecentSystemActivity,
-  getTeamWorkload
+  getTeamWorkload,
+  getMonthlyApplicationStats,
+  getMonthlyUserStats,
+  getProcessingTimeStats,
+  supabase
 } from "@/lib/supabase";
 
 interface SystemMetrics {
@@ -40,6 +44,7 @@ interface SystemMetrics {
   };
   performance: {
     avgProcessingTime: number;
+    improvement: number;
     uptime: number;
     responseTime: number;
     errorRate: number;
@@ -101,35 +106,55 @@ export function SystemOverview() {
         setLoading(true);
         
         // Fetch all data in parallel
-        const [adminStats, statusDist, activity, workloadData] = await Promise.all([
+        const [
+          adminStats, 
+          statusDist, 
+          activity, 
+          workloadData,
+          monthlyApps,
+          monthlyUsers,
+          processingTime
+        ] = await Promise.all([
           getAdminDashboardStats(),
           getApplicationStatusDistribution(),
           getRecentSystemActivity(),
-          getTeamWorkload()
+          getTeamWorkload(),
+          getMonthlyApplicationStats(),
+          getMonthlyUserStats(),
+          getProcessingTimeStats()
         ]);
 
-        // Transform admin stats to system metrics format
+        // Get approved and rejected counts from database
+        const { data: applications } = await supabase
+          .from('applications')
+          .select('status')
+
+        const approvedCount = applications?.filter(app => app.status === 'approved').length || 0
+        const rejectedCount = applications?.filter(app => app.status === 'rejected').length || 0
+
+        // Transform admin stats to system metrics format using real DB data
         if (adminStats) {
           setSystemMetrics({
             applications: {
               total: adminStats.totalApplications,
-              thisMonth: Math.floor(adminStats.totalApplications * 0.15), // Estimate monthly
-              change: 12.5, // Mock change percentage
+              thisMonth: monthlyApps.thisMonth,
+              change: monthlyApps.change,
               pending: adminStats.pendingReviews,
-              approved: Math.floor(adminStats.totalApplications * 0.85), // Estimate
-              rejected: Math.floor(adminStats.totalApplications * 0.05) // Estimate
+              approved: approvedCount,
+              rejected: rejectedCount
             },
             users: {
               total: adminStats.totalUsers,
-              active: Math.floor(adminStats.totalUsers * 0.85), // Estimate active users
-              newThisMonth: Math.floor(adminStats.totalUsers * 0.05), // Estimate new users
-              change: 3.5 // Mock change percentage
+              active: monthlyUsers.active,
+              newThisMonth: monthlyUsers.newThisMonth,
+              change: monthlyUsers.change
             },
             performance: {
-              avgProcessingTime: 12.3,
-              uptime: 99.8,
-              responseTime: 145,
-              errorRate: 0.02
+              avgProcessingTime: processingTime.avgProcessingTime,
+              improvement: processingTime.improvement,
+              uptime: 0, // Not tracked yet - would need system logs
+              responseTime: 0, // Not tracked yet - would need API monitoring
+              errorRate: 0 // Not tracked yet - would need error logging
             },
             workload: {
               reviewersAvg: workloadData.reviewers.avgWorkload,
@@ -237,11 +262,18 @@ export function SystemOverview() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{systemMetrics.performance.avgProcessingTime} days</div>
-            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-              <TrendingDown className="h-3 w-3 text-green-600" />
-              <span className="text-green-600">-2.1 days</span>
-              <span>improvement</span>
-            </div>
+            {systemMetrics.performance.improvement > 0 && (
+              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                <TrendingDown className="h-3 w-3 text-green-600" />
+                <span className="text-green-600">-{systemMetrics.performance.improvement.toFixed(1)} days</span>
+                <span>improvement</span>
+              </div>
+            )}
+            {systemMetrics.performance.improvement <= 0 && systemMetrics.performance.avgProcessingTime > 0 && (
+              <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                <span>Average processing time</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

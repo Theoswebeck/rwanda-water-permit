@@ -3,10 +3,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-// import { ProtectedRoute } from "@/components/auth/protected-route"; // TEMPORARY: Disabled for testing
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { UserManagement } from "@/components/admin/user-management";
 import { SystemOverview } from "@/components/admin/system-overview";
 import { ApplicationOversight } from "@/components/admin/application-oversight";
@@ -104,16 +102,6 @@ export default function AdminDashboard() {
                 Manage users, monitor system performance, and oversee all water permit operations
               </p>
             </div>
-            <Badge variant="secondary" className="px-3 py-1">
-              Admin Access (Temporarily Unprotected)
-            </Badge>
-          </div>
-
-          {/* Testing Component (Disabled - Auth not enabled) */}
-          <div className="mb-4 p-4 border rounded-lg bg-red-50 border-red-200">
-            <p className="text-sm text-red-800">
-              🚨 TEMPORARY: Admin page authentication disabled for testing
-            </p>
           </div>
 
           {/* Quick Stats */}
