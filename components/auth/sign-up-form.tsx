@@ -59,7 +59,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const [companyAddress, setCompanyAddress] = useState(initialData?.companyAddress || "");
   const [companyPhone, setCompanyPhone] = useState(initialData?.companyPhone || "");
 
-  // Person fields
+  // Individual fields
   const [firstName, setFirstName] = useState(initialData?.firstName || "");
   const [lastName, setLastName] = useState(initialData?.lastName || "");
   const [dateOfBirth, setDateOfBirth] = useState(initialData?.dateOfBirth || "");
@@ -121,7 +121,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validateCompanyTIN = (tin: string) => {
     if (!tin) {
-      setCompanyTINError("TIN is required for company registration.");
+      setCompanyTINError("TIN is required for organisation registration.");
       return false;
     }
 
@@ -196,7 +196,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     // Validate account-specific fields
     if (accountType === 'company') {
       if (!companyName.trim()) {
-        setLocalError("Company name is required.");
+        setLocalError("Organisation name is required.");
         return;
       }
       if (!validateCompanyTIN(companyTIN)) {
@@ -204,7 +204,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       }
       if (!validateRwandaPhone(companyPhone, setCompanyPhoneError)) return;
       if (!companyAddress.trim()) {
-        setLocalError("Company address is required.");
+        setLocalError("Organisation address is required.");
         return;
       }
     } else {
@@ -369,14 +369,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="company">Company</TabsTrigger>
-              <TabsTrigger value="individual">Person</TabsTrigger>
+              <TabsTrigger value="company">Organisation</TabsTrigger>
+              <TabsTrigger value="individual">Individual</TabsTrigger>
             </TabsList>
             
             <TabsContent value="company">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="companyName">Company Name</Label>
+                  <Label htmlFor="companyName">Organisation Name</Label>
                   <Input 
                     id="companyName" 
                     type="text" 
@@ -412,7 +412,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="companyPhone">Company Phone Number</Label>
+                  <Label htmlFor="companyPhone">Organisation Phone Number</Label>
                   <Input
                     id="companyPhone"
                     type="tel"
@@ -438,7 +438,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="companyAddress">Company Address</Label>
+                  <Label htmlFor="companyAddress">Organisation Address</Label>
                   <Input 
                     id="companyAddress" 
                     type="text" 
