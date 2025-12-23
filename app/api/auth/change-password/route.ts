@@ -70,9 +70,16 @@ export async function POST(req: NextRequest) {
     const supabaseAdmin = createClient(url, serviceKey)
 
     // Since user is already authenticated, directly update password using admin API
+    // Also clear the must_change_password flag in user_metadata
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.id,
-      { password: newPassword }
+      { 
+        password: newPassword,
+        user_metadata: {
+          ...user.user_metadata,
+          must_change_password: false
+        }
+      }
     )
 
     if (updateError) {
@@ -81,6 +88,23 @@ export async function POST(req: NextRequest) {
         success: false, 
         message: 'Failed to update password' 
       }, { status: 500 })
+    }
+
+    // Update public.users to mark account as confirmed and clear must_change_password flag
+    const { error: profileUpdateError } = await supabaseAdmin
+      .from('users')
+      .update({
+        must_change_password: false,
+        account_confirmed: true,
+        confirmed_at: new Date().toISOString(),
+      })
+      .eq('id', user.id)
+
+    if (profileUpdateError) {
+      // Log but don't fail - password was already updated successfully
+      console.warn('⚠️ Failed to update user profile flags:', profileUpdateError)
+    } else {
+      console.log('✅ User profile flags updated (must_change_password=false, account_confirmed=true)')
     }
 
     const res = NextResponse.json({ 

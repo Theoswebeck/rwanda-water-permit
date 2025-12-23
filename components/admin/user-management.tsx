@@ -43,7 +43,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getAllUsers, createUser, updateUser } from "@/lib/supabase";
+import { getAllUsers, updateUser } from "@/lib/supabase";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { User as UserType } from "@/types/database";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
 
@@ -100,6 +101,9 @@ export function UserManagement() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const { handleErrorWithBack } = useErrorHandler();
 
@@ -108,7 +112,7 @@ export function UserManagement() {
     defaultValues: {
       email: "",
       phone: "",
-      role: "applicant",
+      role: "assessor", // Default to assessor (staff role) - applicants must self-register
       status: "active",
       account_type: "individual",
       first_name: "",
@@ -173,31 +177,59 @@ export function UserManagement() {
   };
 
   const handleAddUser = async (data: UserFormValues) => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    
     try {
-      // Clean the data based on account type to match database constraints
-      const cleanedData = {
-        ...data,
-        // For individual accounts, ensure first_name and last_name are not empty
-        // For organizational accounts, ensure company_name is not empty
-        first_name: data.account_type === 'individual' ? (data.first_name?.trim() || null) : (data.first_name?.trim() || null),
-        last_name: data.account_type === 'individual' ? (data.last_name?.trim() || null) : (data.last_name?.trim() || null),
-        company_name: ['company', 'cooperative', 'organization', 'institution'].includes(data.account_type) 
-          ? (data.company_name?.trim() || null) 
-          : null, // Set to null for individual accounts
-        phone: data.phone?.trim() || null,
-        profile_completed: false,
-        applications_count: 0,
-        reviews_count: 0,
-        inspections_count: 0,
-      };
+      // Staff users are created via API (which creates auth user + sends invite email)
+      // Applicants must self-register
+      if (data.role === 'applicant') {
+        setErrorMessage('Applicants must register themselves through the public registration page. Admin can only create staff accounts (reviewer, inspector, admin, approver).');
+        setIsSubmitting(false);
+        return;
+      }
 
-      await createUser(cleanedData);
+      const response = await fetch('/api/admin/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          first_name: data.first_name?.trim() || null,
+          last_name: data.last_name?.trim() || null,
+          phone: data.phone?.trim() || null,
+          role: data.role,
+          status: data.status,
+          account_type: 'individual', // Staff accounts are always individual
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        setErrorMessage(result.message || 'Failed to create user');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Show success message
+      if (result.emailSent) {
+        setSuccessMessage(`✅ Staff account created! Invite email sent to ${result.email} with login credentials.`);
+      } else {
+        setSuccessMessage(`✅ Staff account created for ${result.email}. Email could not be sent - please share credentials manually.`);
+      }
       
       await fetchUsers(); // Refresh the users list
       setIsAddDialogOpen(false);
       form.reset();
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
-      handleErrorWithBack(err, 'create user');
+      console.error('Error creating user:', err);
+      setErrorMessage(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -259,6 +291,7 @@ export function UserManagement() {
     }
   };
 
+
   // Filter users based on search term and active tab
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -283,6 +316,14 @@ export function UserManagement() {
 
   return (
     <div className="space-y-6">
+      {/* Success Message */}
+      {successMessage && (
+        <Alert className="bg-green-50 border-green-200">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-700">{successMessage}</AlertDescription>
+        </Alert>
+      )}
+
       {/* User Statistics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -361,11 +402,17 @@ export function UserManagement() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Add New User</DialogTitle>
+                  <DialogTitle>Add New Staff User</DialogTitle>
                   <DialogDescription>
-                    Create a new user account and assign their role
+                    Create a new staff account. An invite email with login credentials will be sent to the user.
                   </DialogDescription>
                 </DialogHeader>
+                {errorMessage && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>{errorMessage}</AlertDescription>
+                  </Alert>
+                )}
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(handleAddUser)} className="space-y-4">
                     <FormField
@@ -450,11 +497,10 @@ export function UserManagement() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="applicant">Applicant</SelectItem>
-                              <SelectItem value="reviewer">Reviewer</SelectItem>
+                              <SelectItem value="assessor">Assessor</SelectItem>
                               <SelectItem value="inspector">Inspector</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="approver">Approver</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                           </Select>
                           <FormMessage />
@@ -462,47 +508,6 @@ export function UserManagement() {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="account_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Account Type</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select account type" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="individual">Individual</SelectItem>
-                              <SelectItem value="company">Company</SelectItem>
-                              <SelectItem value="cooperative">Cooperative</SelectItem>
-                              <SelectItem value="organization">Organization</SelectItem>
-                              <SelectItem value="institution">Institution</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="company_name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Company Name</FormLabel>
-                          <FormControl>
-                            <Input 
-                              placeholder="Enter company name" 
-                              {...field} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
 
                     <FormField
                       control={form.control}
@@ -531,15 +536,27 @@ export function UserManagement() {
                       <Button 
                         type="button" 
                         variant="outline" 
+                        disabled={isSubmitting}
                         onClick={() => {
                           form.reset();
+                          setErrorMessage(null);
                           setIsAddDialogOpen(false);
                         }}
                       >
                         Cancel
                       </Button>
-                      <Button type="submit">
-                        Add User
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating & Sending Invite...
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Create & Send Invite
+                          </>
+                        )}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -897,7 +914,6 @@ export function UserManagement() {
           </DialogContent>
         </Dialog>
       )}
-
 
     </div>
   );

@@ -117,6 +117,13 @@ export function LoginForm() {
         return;
       }
       
+      // Check if user needs to change password (admin-created staff accounts)
+      if (result.mustChangePassword) {
+        console.log("🔐 Password change required, redirecting...");
+        router.push("/change-password-required");
+        return;
+      }
+      
       console.log("✅ Login successful, redirecting to dashboard");
       router.push("/dashboard");
     } catch (error) {

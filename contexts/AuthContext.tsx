@@ -26,7 +26,7 @@ interface AuthContextType {
   userProfile: User | null
   loading: boolean
   isAuthenticated: boolean
-  signIn: (email: string, password: string) => Promise<{ error?: string }>
+  signIn: (email: string, password: string) => Promise<{ error?: string; mustChangePassword?: boolean }>
   signUp: (data: SignUpData & { emailCode?: string }) => Promise<{ error?: string, userId?: string }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -809,6 +809,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Note: Removed last login timestamp update for faster login
 
       console.log('✅ Successfully signed in with active account');
+      
+      // Check if user must change password (admin-created staff accounts)
+      if (finalProfile && finalProfile.must_change_password) {
+        console.log('🔐 User must change password before continuing');
+        return { mustChangePassword: true };
+      }
+      
       return {};
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

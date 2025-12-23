@@ -55,6 +55,7 @@ export function ProtectedRoute({
           admin: '/admin',
           approver: '/approver',
           inspector: '/inspection',
+          assessor: '/assessment',
           reviewer: '/review',
           applicant: '/dashboard'
         };
@@ -69,6 +70,16 @@ export function ProtectedRoute({
     if (userProfile && (userProfile.status === 'suspended' || userProfile.status === 'inactive')) {
       router.push('/login?error=' + userProfile.status);
       return;
+    }
+
+    // Check if user must change password (admin-created staff accounts)
+    // Skip this check if already on the change-password-required page
+    if (userProfile && userProfile.must_change_password) {
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      if (!currentPath.includes('/change-password-required')) {
+        router.push('/change-password-required');
+        return;
+      }
     }
   }, [user, userProfile, loading, isAuthenticated, allowedRoles, redirectTo, requireProfile, router]);
 
