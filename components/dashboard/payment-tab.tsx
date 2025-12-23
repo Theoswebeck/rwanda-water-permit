@@ -35,6 +35,17 @@ if (typeof window !== 'undefined') {
     keyPrefix: IREMBOPAY_PUBLIC_KEY ? IREMBOPAY_PUBLIC_KEY.substring(0, 15) + '...' : 'NOT SET',
     keyLength: IREMBOPAY_PUBLIC_KEY.length,
   });
+
+  // Fail loudly in the console if client env looks inconsistent. This is a common cause of
+  // checkout/modal failures even when invoice creation succeeds.
+  const keyLooksLive = IREMBOPAY_PUBLIC_KEY.startsWith('pk_live');
+  const keyLooksSandbox = IREMBOPAY_PUBLIC_KEY.startsWith('pk_sandbox') || IREMBOPAY_PUBLIC_KEY.includes('sandbox');
+  if (IREMBOPAY_IS_SANDBOX && keyLooksLive) {
+    console.error('❌ IremboPay config mismatch: NEXT_PUBLIC_IREMBOPAY_SANDBOX=true but public key looks LIVE (pk_live...).');
+  }
+  if (!IREMBOPAY_IS_SANDBOX && keyLooksSandbox) {
+    console.error('❌ IremboPay config mismatch: NEXT_PUBLIC_IREMBOPAY_SANDBOX=false but public key looks SANDBOX.');
+  }
 }
 
 type DraftFormData = {
@@ -91,6 +102,13 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       console.log('✅ Payment completed detected via polling');
       setCompletedApplication(payment.application);
       setPaymentCompleted(true);
+
+      // Close Irembo modal if it is open (helps demo flow)
+      try {
+        window.IremboPay?.closeModal?.();
+      } catch {
+        // ignore
+      }
       
       // Auto-redirect to dashboard after 4 seconds
       setTimeout(() => {
@@ -153,7 +171,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
 
       if (result.success && result.payment) {
         console.log('✅ Payment initialized successfully');
-        setShowWidget(true);
+        setShowWidget(true); // always open modal so demo can "attempt to pay"
       } else {
         console.error('❌ Payment initialization failed:', result.error);
       }
@@ -168,32 +186,44 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
    * Handle payment success
    */
   const handlePaymentSuccess = async () => {
-    console.log('✅ Payment successful - checking final status');
+    console.log('✅ [PAYMENT TAB] Widget onSuccess callback triggered at:', new Date().toISOString());
+    console.log('✅ [PAYMENT TAB] Current payment state:', {
+      paymentId: payment?.id,
+      status: payment?.status,
+      invoiceNumber: payment?.irembo_payment_ref,
+    });
+    console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
     
     try {
       setIsCompletingPayment(true);
-      console.log('💾 Verifying payment status...');
+      console.log('💾 [PAYMENT TAB] Verifying payment status...');
 
       // Check status one final time to get the latest payment data
       if (payment?.id) {
         const finalPayment = await checkStatus(payment.id);
         
+        console.log('💾 [PAYMENT TAB] Status check result:', {
+          paymentId: finalPayment?.id,
+          status: finalPayment?.status,
+          applicationNumber: finalPayment?.application?.application_number,
+        });
+        
         if (finalPayment && finalPayment.status === 'completed') {
           setCompletedApplication(finalPayment.application);
           setPaymentCompleted(true);
-          console.log('✅ Application submitted:', finalPayment.application?.application_number);
+          console.log('✅ [PAYMENT TAB] Application submitted:', finalPayment.application?.application_number);
 
           // Auto-redirect to dashboard after 4 seconds
           setTimeout(() => {
             router.push('/dashboard?tab=applications');
           }, 4000);
         } else {
-          console.log('⏳ Payment not yet completed, waiting for status update...');
+          console.log('⏳ [PAYMENT TAB] Payment not yet completed, waiting for status update...');
           // The hook's polling will handle the rest
         }
       }
     } catch (error) {
-      console.error('❌ Error completing payment:', error);
+      console.error('❌ [PAYMENT TAB] Error completing payment:', error);
     } finally {
       setIsCompletingPayment(false);
     }
@@ -202,8 +232,17 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   /**
    * Handle payment failure
    */
-  const handlePaymentFailed = () => {
-    console.log('❌ Payment failed');
+  const handlePaymentFailed = (error?: any) => {
+    console.log('❌ [PAYMENT TAB] Widget onFailed callback triggered at:', new Date().toISOString());
+    console.log('❌ [PAYMENT TAB] Error object received:', error);
+    console.log('❌ [PAYMENT TAB] Error details:', {
+      message: error?.message,
+      detail: error?.detail,
+      code: error?.code,
+      errors: error?.errors,
+      fullError: error ? JSON.stringify(error, null, 2) : 'no error object',
+    });
+    console.log('❌ [PAYMENT TAB] Payment failed');
     
     if (payment?.id) {
       checkStatus(payment.id);

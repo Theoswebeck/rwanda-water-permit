@@ -54,6 +54,15 @@ export async function POST(request: NextRequest) {
     const body: InitiatePaymentRequest = await request.json();
     const { application_id, amount, currency, customer, application_data } = body;
 
+    // ==========================================================
+    // DEMO MODE (for demos when gateway checkout is unreliable)
+    // When enabled, we will mark payment as completed right after
+    // invoice creation succeeds (no real money movement).
+    // ==========================================================
+    const demoMode =
+      process.env.PAYMENT_DEMO_MODE === 'true' ||
+      process.env.NEXT_PUBLIC_PAYMENT_DEMO_MODE === 'true';
+
     console.log('📋 [PAYMENT INITIATE] Request data:', {
       application_id,
       amount,
@@ -200,7 +209,23 @@ export async function POST(request: NextRequest) {
     // 4. INITIATE PAYMENT WITH IREMBOPAY
     // =============================================
 
-    const iremboPayClient = getIremboPayClient();
+    let iremboPayClient: ReturnType<typeof getIremboPayClient>;
+    try {
+      iremboPayClient = getIremboPayClient();
+    } catch (e) {
+      console.error('❌ [PAYMENT INITIATE] IremboPay configuration error:', e);
+      const message =
+        e instanceof Error
+          ? e.message
+          : 'IremboPay configuration error. Please contact support.';
+      return NextResponse.json(
+        {
+          success: false,
+          error: message,
+        },
+        { status: 500 }
+      );
+    }
     
     // Get product code from environment (must exist in IremboPay dashboard)
     const productCode = process.env.IREMBOPAY_PRODUCT_CODE || 'WATER_PERMIT_FEE';
@@ -253,6 +278,7 @@ export async function POST(request: NextRequest) {
     // =============================================
 
     const initiatedAt = new Date();
+    const initiatedAtIso = initiatedAt.toISOString();
     const expiresAt = getPaymentExpiryTime(initiatedAt);
 
     // Build payment record data - application_id may be null initially
@@ -270,8 +296,11 @@ export async function POST(request: NextRequest) {
       customer_phone: normalizedPhone,
       customer_name: customerName,
       gateway_response: iremboResponse.data as any,
-      gateway_metadata: (iremboPayRequest as any).metadata || {},
-      initiated_at: initiatedAt.toISOString(),
+      gateway_metadata: {
+        ...((iremboPayRequest as any).metadata || {}),
+        demo_mode: demoMode,
+      },
+      initiated_at: initiatedAtIso,
       expires_at: expiresAt.toISOString(),
       created_by: userId,
     };
@@ -306,10 +335,11 @@ export async function POST(request: NextRequest) {
     // =============================================
 
     if (application) {
+      const nextStatus = 'pending_payment';
       const updateResult = await supabase
         .from('applications')
         // @ts-ignore - Type inference issue with conditional query
-        .update({ status: 'pending_payment' })
+        .update({ status: nextStatus })
         .eq('id', applicationIdToUse);
       
       const { error: updateError } = updateResult as any;
@@ -318,7 +348,7 @@ export async function POST(request: NextRequest) {
         console.error('⚠️  [PAYMENT INITIATE] Failed to update application status:', updateError);
         // Not a critical error, continue
       } else {
-        console.log('✅ [PAYMENT INITIATE] Application status updated to pending_payment');
+        console.log('✅ [PAYMENT INITIATE] Application status updated to', nextStatus);
       }
     } else {
       console.log('ℹ️  [PAYMENT INITIATE] No application to update - payment can be linked later');
@@ -336,7 +366,7 @@ export async function POST(request: NextRequest) {
       currency: paymentCurrency,
       status: 'pending',
       provider_response: iremboResponse.data as any,
-      initiated_at: initiatedAt.toISOString(),
+      initiated_at: initiatedAtIso,
     } as any);
 
     // =============================================
@@ -347,10 +377,14 @@ export async function POST(request: NextRequest) {
       success: true,
       payment: paymentRecord as any,
       payment_url: paymentUrl,
+      demo_mode: demoMode,
     };
 
     console.log('✅ [PAYMENT INITIATE] Payment initiated successfully');
     console.log('🔗 [PAYMENT INITIATE] Payment URL:', response.payment_url);
+    if (demoMode) {
+      console.warn('🧪 [PAYMENT INITIATE] DEMO MODE ENABLED: will auto-complete during status polling (not at invoice creation).');
+    }
 
     return NextResponse.json(response, { status: 200 });
 

@@ -343,6 +343,9 @@ export interface InitiatePaymentResponse {
   success: boolean;
   payment?: Payment;
   payment_url?: string;
+  // When enabled, the server will auto-complete payment after invoice creation
+  // (demo-only; no real money movement).
+  demo_mode?: boolean;
   error?: string;
 }
 

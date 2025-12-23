@@ -143,10 +143,41 @@ export function IremboPayWidget({
         invoiceNumber,
         locale: window.IremboPay.locale.EN,
         callback: (err, resp) => {
-          console.log('📨 IremboPay callback received:', { err, resp });
+          console.log('📨 [IREMBOPAY WIDGET] Callback received at:', new Date().toISOString());
+          console.log('📨 [IREMBOPAY WIDGET] Error object:', err);
+          console.log('📨 [IREMBOPAY WIDGET] Response object:', resp);
+          console.log('📨 [IREMBOPAY WIDGET] Error type:', typeof err);
+          console.log('📨 [IREMBOPAY WIDGET] Response type:', typeof resp);
+          console.log('📨 [IREMBOPAY WIDGET] Error keys:', err ? Object.keys(err) : 'null');
+          console.log('📨 [IREMBOPAY WIDGET] Response keys:', resp ? Object.keys(resp) : 'null');
+          
+          // Log full error structure if it exists
+          if (err) {
+            console.log('📨 [IREMBOPAY WIDGET] Error details:', {
+              message: err.message,
+              detail: err.detail,
+              code: err.code,
+              errors: err.errors,
+              status: err.status,
+              statusCode: err.statusCode,
+              fullError: JSON.stringify(err, null, 2),
+            });
+          }
+          
+          // Log full response structure if it exists
+          if (resp) {
+            console.log('📨 [IREMBOPAY WIDGET] Response details:', {
+              success: resp.success,
+              status: resp.status,
+              paymentStatus: resp.paymentStatus,
+              invoiceNumber: resp.invoiceNumber,
+              transactionId: resp.transactionId,
+              fullResponse: JSON.stringify(resp, null, 2),
+            });
+          }
 
           if (err) {
-            console.error('❌ Payment failed:', err);
+            console.error('❌ [IREMBOPAY WIDGET] Payment failed:', err);
             setPaymentStatus('error');
             setError(
               err.message || 
@@ -156,7 +187,7 @@ export function IremboPayWidget({
             );
             onFailed?.(err);
           } else {
-            console.log('✅ Payment successful:', resp);
+            console.log('✅ [IREMBOPAY WIDGET] Payment successful:', resp);
             setPaymentStatus('success');
             onSuccess?.();
             
