@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, Download, AlertCircle, Search } from "lucide-react";
-import Link from "next/link";
+import { downloadFromDocumentsBucket } from "@/lib/supabase-storage";
 
 export interface Permit {
   id: string;
@@ -35,6 +35,11 @@ export interface Permit {
   type: string;
   location: string;
   permitNumber: string;
+  /**
+   * Storage path or URL for the generated permit PDF.
+   * Expected to match `permits.permit_pdf_url` (storage path preferred).
+   */
+  pdfPath?: string | null;
 }
 
 interface PermitsListProps {
@@ -45,6 +50,8 @@ export function PermitsList({ permits }: PermitsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [busyPermitId, setBusyPermitId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<"view" | "download" | null>(null);
 
   // Filter permits based on search and filters
   const filteredPermits = useMemo(() => {
@@ -169,17 +176,79 @@ export function PermitsList({ permits }: PermitsListProps) {
                   <TableCell className="py-4 px-6">{getStatusBadge(permit.status, permit.expiryDate)}</TableCell>
                   <TableCell className="text-center py-4 px-6">
                     <div className="flex justify-center gap-2">
-                      <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-600 hover:text-gray-900"
+                        disabled={busyPermitId === permit.id}
+                        onClick={async () => {
+                          if (!permit.pdfPath) {
+                            alert("No PDF is available for this permit yet.");
+                            return;
+                          }
+                          try {
+                            setBusyPermitId(permit.id);
+                            setBusyAction("download");
+                            const blob = await downloadFromDocumentsBucket(permit.pdfPath);
+                            if (!blob) throw new Error("Failed to download permit PDF");
+
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `permit-${permit.permitNumber}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                          } catch (e) {
+                            console.error("❌ Failed to download permit PDF:", e);
+                            alert("Failed to download permit PDF. Please try again.");
+                          } finally {
+                            setBusyPermitId(null);
+                            setBusyAction(null);
+                          }
+                        }}
+                      >
                         <Download className="h-4 w-4" />
                         <span className="sr-only">Download</span>
                       </Button>
-                      <Link href={`/dashboard/permit/${permit.id}`}>
-                        <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                          <Eye className="h-4 w-4" />
-                          <span className="sr-only">View</span>
-                        </Button>
-                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-600 hover:text-gray-900"
+                        disabled={busyPermitId === permit.id}
+                        onClick={async () => {
+                          if (!permit.pdfPath) {
+                            alert("No PDF is available for this permit yet.");
+                            return;
+                          }
+                          try {
+                            setBusyPermitId(permit.id);
+                            setBusyAction("view");
+                            const blob = await downloadFromDocumentsBucket(permit.pdfPath);
+                            if (!blob) throw new Error("Failed to download permit PDF");
+
+                            const url = URL.createObjectURL(blob);
+                            window.open(url, "_blank");
+                            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                          } catch (e) {
+                            console.error("❌ Failed to open permit PDF:", e);
+                            alert("Failed to open permit PDF. Please try again.");
+                          } finally {
+                            setBusyPermitId(null);
+                            setBusyAction(null);
+                          }
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                        <span className="sr-only">View</span>
+                      </Button>
                     </div>
+                    {busyPermitId === permit.id ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {busyAction === "download" ? "Downloading…" : "Opening…"}
+                      </div>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))

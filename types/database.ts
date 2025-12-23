@@ -15,7 +15,7 @@ export type Json =
 // ENUMS
 // =============================================
 
-export type UserRole = 'applicant' | 'reviewer' | 'inspector' | 'admin' | 'approver'
+export type UserRole = 'applicant' | 'assessor' | 'reviewer' | 'inspector' | 'admin' | 'approver'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
 export type AccountType = 'individual' | 'company' | 'cooperative' | 'organization' | 'institution'
 export type IdType = 'national_id' | 'tin'
@@ -160,6 +160,11 @@ export interface User {
   
   // Profile completion
   profile_completed: boolean
+  
+  // Admin-invited staff password change flow
+  must_change_password: boolean
+  account_confirmed: boolean
+  confirmed_at?: string | null
 }
 
 export interface Application {
@@ -313,6 +318,10 @@ export interface Permit {
   // Monitoring requirements
   monitoring_frequency?: string
   reporting_requirements?: string
+
+  // Digital Document
+  // May be a Supabase Storage path (recommended) or a full URL.
+  permit_pdf_url?: string | null
   
   // Audit fields
   created_at: string

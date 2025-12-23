@@ -8,6 +8,12 @@ import { supabase } from './supabase';
 const DOCUMENTS_BUCKET = 'application-documents';
 
 /**
+ * Normalize a stored file path (strip leading slash).
+ */
+const normalizeStoragePath = (filePath: string) =>
+  filePath.startsWith('/') ? filePath.substring(1) : filePath;
+
+/**
  * Get public URL for a document using Supabase CDN
  * @param filePath - The file path stored in the database
  * @returns Public URL for the document
@@ -106,7 +112,7 @@ export const uploadDocument = async (
  */
 export const deleteDocument = async (filePath: string): Promise<boolean> => {
   try {
-    const normalizedPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+    const normalizedPath = normalizeStoragePath(filePath);
     
     const { error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
@@ -131,7 +137,7 @@ export const deleteDocument = async (filePath: string): Promise<boolean> => {
  */
 export const getDocumentInfo = async (filePath: string) => {
   try {
-    const normalizedPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
+    const normalizedPath = normalizeStoragePath(filePath);
     
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
@@ -205,3 +211,73 @@ export const formatFileSize = (bytes: number | null | undefined): string => {
   
   return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
 }; 
+
+/**
+ * Upload a generated permit PDF to Supabase Storage.
+ *
+ * We store it in the same bucket as other documents to avoid additional setup.
+ * Path format:
+ *   permits/{permitId}/permit-{permitNumber}.pdf
+ */
+export const uploadPermitPdf = async (opts: {
+  permitId: string;
+  permitNumber: string;
+  pdfBlob: Blob;
+}): Promise<{ path: string; url: string } | null> => {
+  const { permitId, permitNumber, pdfBlob } = opts;
+
+  try {
+    const safePermitNumber = permitNumber.replace(/[^a-zA-Z0-9-_]/g, "_");
+    const filePath = `permits/${permitId}/permit-${safePermitNumber}.pdf`;
+
+    console.log("📤 Uploading permit PDF to storage:", { bucket: DOCUMENTS_BUCKET, filePath });
+
+    const { data, error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(filePath, pdfBlob, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: "application/pdf",
+      });
+
+    if (error || !data?.path) {
+      console.error("❌ Failed to upload permit PDF:", error);
+      return null;
+    }
+
+    const url = getDocumentUrl(data.path) || "";
+    return { path: data.path, url };
+  } catch (error) {
+    console.error("❌ Error uploading permit PDF:", error);
+    return null;
+  }
+};
+
+/**
+ * Download a file from the documents bucket (works for private buckets too if policies allow).
+ */
+export async function downloadFromDocumentsBucket(filePath: string): Promise<Blob | null> {
+  try {
+    // If this is a full URL, fetch it directly.
+    // (Useful if older rows stored a CDN URL instead of a storage path.)
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      const res = await fetch(filePath);
+      if (!res.ok) {
+        console.error("❌ Direct fetch failed:", res.status, res.statusText);
+        return null;
+      }
+      return await res.blob();
+    }
+
+    const normalizedPath = normalizeStoragePath(filePath);
+    const { data, error } = await supabase.storage.from(DOCUMENTS_BUCKET).download(normalizedPath);
+    if (error || !data) {
+      console.error("❌ Storage download failed:", error);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.error("❌ Error downloading from storage:", error);
+    return null;
+  }
+}

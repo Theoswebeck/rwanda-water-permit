@@ -127,6 +127,7 @@ function DashboardContent() {
         type: dbPermit.purpose, // Use purpose as type
         location: "N/A", // We'll need to get this from related application
         permitNumber: dbPermit.permit_number,
+        pdfPath: dbPermit.permit_pdf_url ?? null,
       };
     });
   }, [databasePermits]);

@@ -25,6 +25,7 @@ import {
   Star
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { uploadPermitPdf } from "@/lib/supabase-storage";
 
 interface TermsConditionsModalProps {
   isOpen: boolean;
@@ -140,6 +141,60 @@ export function TermsConditionsModal({
       }
       console.log('✅ Permit created successfully:', permitData.permit_number);
 
+      // Generate the exact PDF and persist it to Supabase Storage + save path in DB
+      try {
+        const conditionsForPdf: string[] = Array.isArray((permitData_insert as any)?.conditions?.conditions)
+          ? ((permitData_insert as any).conditions.conditions as string[])
+          : [
+              'Comply with all environmental regulations',
+              'Submit quarterly usage reports',
+              'Allow inspections as required',
+            ];
+
+        console.log('📄 Generating PDF permit (for storage + view)...');
+        const { generateDigitalWaterPermitBlob } = await import('@/lib/pdf-generator');
+        const pdfBlob = await generateDigitalWaterPermitBlob(
+          applicationData,
+          permitNumber,
+          conditionsForPdf,
+          5
+        );
+        console.log('✅ PDF permit generated');
+
+        console.log('📤 Uploading PDF to Supabase Storage...');
+        const upload = await uploadPermitPdf({
+          permitId: permitData.id,
+          permitNumber,
+          pdfBlob,
+        });
+
+        if (upload?.path) {
+          console.log('✅ PDF uploaded:', upload.path);
+
+          const { error: permitPdfUpdateError } = await (supabase as any)
+            .from('permits')
+            .update({
+              permit_pdf_url: upload.path, // store the storage path (preferred)
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', permitData.id);
+
+          if (permitPdfUpdateError) {
+            console.warn('⚠️ Failed to persist permit_pdf_url on permit:', permitPdfUpdateError);
+          } else {
+            console.log('✅ permit_pdf_url saved on permit record');
+          }
+        } else {
+          console.warn('⚠️ PDF upload failed (no path returned).');
+        }
+
+        // Open the generated PDF immediately for the user
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        window.open(pdfUrl, '_blank');
+      } catch (pdfStoreError) {
+        console.warn('⚠️ PDF generation/upload failed, but permit was created:', pdfStoreError);
+      }
+
       // Finalize the workflow: once terms are accepted and permit is created, mark application as approved
       console.log('📋 Updating application status to approved...');
       const { error: updateError } = await (supabase as any)
@@ -157,22 +212,6 @@ export function TermsConditionsModal({
         // Continue anyway - permit was created successfully
       } else {
         console.log('✅ Application status updated successfully');
-      }
-
-      // Import and generate PDF (make this optional to avoid blocking the flow)
-      try {
-        console.log('📄 Generating PDF permit...');
-        const { generateDigitalWaterPermit } = await import('@/lib/pdf-generator');
-        await generateDigitalWaterPermit(
-          applicationData,
-          permitNumber,
-          ['Comply with all environmental regulations', 'Submit quarterly usage reports', 'Allow inspections as required'],
-          5
-        );
-        console.log('✅ PDF permit generated successfully');
-      } catch (pdfError) {
-        console.warn('⚠️ PDF generation failed, but permit was created:', pdfError);
-        // Continue anyway - PDF generation failure shouldn't block the flow
       }
 
       console.log("✅ Terms accepted successfully! Your permit has been generated...");

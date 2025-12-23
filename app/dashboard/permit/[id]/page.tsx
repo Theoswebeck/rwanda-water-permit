@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Calendar, Download, FileCheck, Clock, AlertCircle, MapPin } from "lucide-react";
 import Link from "next/link";
-import { generatePermitPDF } from "@/lib/pdf-generator";
+import { supabase } from "@/lib/supabase";
+import { downloadFromDocumentsBucket } from "@/lib/supabase-storage";
 
 export default function PermitDetailPage() {
   const params = useParams();
@@ -20,220 +21,103 @@ export default function PermitDetailPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   
   useEffect(() => {
-    // Simulate API call to fetch permit details
     const fetchPermitDetails = async () => {
       setIsLoading(true);
-      
-      // Mock data - in a real app, this would be an API call
-      setTimeout(() => {
-        // Simulate different permit data based on ID
+
+      try {
         const permitId = params.id as string;
-        let mockPermit;
-        
-        if (permitId === "PER-001") {
-          mockPermit = {
-            id: "PER-001",
-            title: "Commercial Water Extraction",
-            issueDate: "2023-05-15",
-            expiryDate: "2025-05-15", // Valid for 2 years
-            status: "active",
-            type: "Commercial",
-            location: "Kigali, Gasabo",
-            permitNumber: "WP-2023-05-001",
-            waterSource: "Groundwater",
-            purpose: "Commercial Supply",
-            waterAllowance: "150 m³/day",
-            issuingAuthority: "Rwanda Water Resources Board",
-            applicationDetails: {
-              applicantName: "Kigali Business Group",
-              applicantType: "Corporation",
-              contactEmail: "info@kbg.rw",
-              contactPhone: "+250 78 123 4567",
-              landOwnership: "Property Deed #KG-2022-04-123",
-              environmentalAssessment: "Approved on April 10, 2023"
-            },
-            conditions: [
-              "Monthly water quality testing required",
-              "Quarterly reporting of extraction volumes",
-              "Annual environmental impact assessment",
-              "No extraction during drought periods as notified by the Authority"
-            ],
-            inspections: [
-              { date: "2023-08-10", status: "Passed", notes: "All conditions met. Water quality within acceptable parameters." },
-              { date: "2023-11-15", status: "Scheduled", notes: "Routine quarterly inspection" }
-            ]
-          };
-        } else if (permitId === "PER-002") {
-          mockPermit = {
-            id: "PER-002",
-            title: "Industrial Water Usage",
-            issueDate: "2022-11-10",
-            expiryDate: "2023-11-10", // Valid for 1 year - expired
-            status: "expired",
-            type: "Industrial",
-            location: "Musanze, Northern Province",
-            permitNumber: "WP-2022-11-002",
-            waterSource: "River",
-            purpose: "Manufacturing Process",
-            waterAllowance: "350 m³/day",
-            issuingAuthority: "Rwanda Water Resources Board",
-            applicationDetails: {
-              applicantName: "Musanze Industrial Ltd",
-              applicantType: "Corporation",
-              contactEmail: "operations@musanzeindustrial.rw",
-              contactPhone: "+250 78 987 6543",
-              landOwnership: "Industrial Zone Allocation #MZ-2021-09-078",
-              environmentalAssessment: "Approved on October 5, 2022"
-            },
-            conditions: [
-              "Daily effluent monitoring",
-              "Treatment of all wastewater before discharge",
-              "Monthly water quality reporting",
-              "Maintenance of 50-meter riparian buffer zone"
-            ],
-            inspections: [
-              { date: "2023-01-20", status: "Passed", notes: "All conditions met." },
-              { date: "2023-05-15", status: "Warning", notes: "Effluent treatment not meeting standards. Corrective action required within 30 days." },
-              { date: "2023-06-20", status: "Passed", notes: "Corrective actions implemented successfully." }
-            ],
-            renewalStatus: "Pending",
-            renewalSubmitted: "2023-10-05"
-          };
-        } else if (permitId === "PER-003") {
-          mockPermit = {
-            id: "PER-003",
-            title: "Agricultural Irrigation",
-            issueDate: "2023-08-25",
-            expiryDate: "2024-02-25", // Expires in less than 30 days
-            status: "expiring-soon",
-            type: "Agricultural",
-            location: "Nyagatare, Eastern Province",
-            permitNumber: "WP-2023-08-003",
-            waterSource: "Lake",
-            purpose: "Crop Irrigation",
-            waterAllowance: "500 m³/day (seasonal)",
-            issuingAuthority: "Rwanda Water Resources Board",
-            applicationDetails: {
-              applicantName: "Nyagatare Farms Cooperative",
-              applicantType: "Cooperative",
-              contactEmail: "info@nyagatarefarms.rw",
-              contactPhone: "+250 73 456 7890",
-              landOwnership: "Community Land Title #NG-2023-02-345",
-              environmentalAssessment: "Approved on July 30, 2023"
-            },
-            conditions: [
-              "No irrigation during rainy season (March-May, September-November)",
-              "Implementation of water-efficient irrigation techniques",
-              "Maintenance of lake buffer zone",
-              "Quarterly water quality testing"
-            ],
-            inspections: [
-              { date: "2023-09-30", status: "Passed", notes: "Irrigation systems comply with efficiency requirements." }
-            ],
-            renewalReminder: "Permit expires in less than 30 days. Please submit a renewal application as soon as possible."
-          };
-        } else if (permitId === "PER-004") {
-          mockPermit = {
-            id: "PER-004",
-            title: "Residential Water Supply",
-            issueDate: "2023-03-05",
-            expiryDate: "2024-03-05", // Expiring in about 3 months
-            status: "active",
-            type: "Residential",
-            location: "Rubavu, Western Province",
-            permitNumber: "WP-2023-03-004",
-            waterSource: "Groundwater",
-            purpose: "Community Water Supply",
-            waterAllowance: "75 m³/day",
-            issuingAuthority: "Rwanda Water Resources Board",
-            applicationDetails: {
-              applicantName: "Rubavu Community Association",
-              applicantType: "Community Organization",
-              contactEmail: "water@rubavucommunity.rw",
-              contactPhone: "+250 78 234 5678",
-              landOwnership: "Community Trust Land #RB-2022-12-567",
-              environmentalAssessment: "Approved on February 15, 2023"
-            },
-            conditions: [
-              "Weekly water quality testing",
-              "Maintenance of community access points",
-              "Monthly reporting of extraction volumes",
-              "Implementation of water conservation measures during dry seasons"
-            ],
-            inspections: [
-              { date: "2023-06-15", status: "Passed", notes: "All conditions met." },
-              { date: "2023-09-20", status: "Passed", notes: "Water quality tests within acceptable parameters." }
-            ]
-          };
-        } else if (permitId === "PER-005") {
-          mockPermit = {
-            id: "PER-005",
-            title: "Mining Operation Water Usage",
-            issueDate: "2021-10-15",
-            expiryDate: "2023-10-15", // Recently expired
-            status: "expired",
-            type: "Industrial",
-            location: "Rulindo, Northern Province",
-            permitNumber: "WP-2021-10-005",
-            waterSource: "Groundwater",
-            purpose: "Mining Operations",
-            waterAllowance: "200 m³/day",
-            issuingAuthority: "Rwanda Water Resources Board",
-            applicationDetails: {
-              applicantName: "Rulindo Mining Corporation",
-              applicantType: "Corporation",
-              contactEmail: "operations@rulindomining.rw",
-              contactPhone: "+250 72 345 6789",
-              landOwnership: "Mining Concession #RL-2021-07-123",
-              environmentalAssessment: "Approved on September 30, 2021"
-            },
-            conditions: [
-              "Continuous monitoring of groundwater levels",
-              "Treatment of all process water before discharge",
-              "Rehabilitation of water sources upon mine closure",
-              "Quarterly environmental impact assessment"
-            ],
-            inspections: [
-              { date: "2022-01-20", status: "Passed", notes: "All conditions met." },
-              { date: "2022-05-15", status: "Warning", notes: "Groundwater levels dropping below acceptable threshold. Reduced extraction required." },
-              { date: "2022-08-10", status: "Passed", notes: "Corrective actions implemented." },
-              { date: "2023-01-25", status: "Passed", notes: "Compliance with all conditions." },
-              { date: "2023-06-30", status: "Passed", notes: "Final inspection before permit expiry." }
-            ],
-            renewalStatus: "Not Submitted",
-            expiryNotice: "Your permit has expired. Operations must cease until a new permit is granted."
-          };
-        } else {
-          // Default generic permit
-          mockPermit = {
-            id: permitId,
-            title: "Water Permit",
-            issueDate: "2023-01-01",
-            expiryDate: "2024-01-01",
-            status: "active",
-            type: "Unknown",
-            location: "Unknown",
-            permitNumber: "WP-XXXX-XX-XXX",
-            waterSource: "Unknown",
-            purpose: "Unknown",
-            waterAllowance: "Unknown",
-            issuingAuthority: "Rwanda Water Resources Board",
-            applicationDetails: {
-              applicantName: "Unknown",
-              applicantType: "Unknown",
-              contactEmail: "unknown@example.com",
-              contactPhone: "Unknown",
-              landOwnership: "Unknown",
-              environmentalAssessment: "Unknown"
-            },
-            conditions: [],
-            inspections: []
-          };
-        }
-        
-        setPermit(mockPermit);
+        const { data, error } = await supabase
+          .from("permits")
+          .select(
+            `
+              id,
+              permit_number,
+              status,
+              water_source,
+              purpose,
+              water_allowance,
+              allowance_unit,
+              issuing_authority,
+              issued_date,
+              expiry_date,
+              permit_pdf_url,
+              conditions,
+              application:applications(
+                id,
+                application_number,
+                project_title,
+                province,
+                district,
+                sector,
+                cell,
+                village,
+                environmental_assessment,
+                applicant:users!applicant_id(
+                  first_name,
+                  last_name,
+                  company_name,
+                  email,
+                  phone,
+                  account_type
+                )
+              )
+            `
+          )
+          .eq("id", permitId)
+          .single();
+
+        if (error) throw error;
+
+        const app = (data as any)?.application;
+        const applicant = app?.applicant;
+
+        const applicantName =
+          applicant?.account_type === "individual"
+            ? `${applicant?.first_name ?? ""} ${applicant?.last_name ?? ""}`.trim() || "N/A"
+            : applicant?.company_name ?? "N/A";
+
+        const locationParts = [app?.village, app?.cell, app?.sector, app?.district, app?.province].filter(Boolean);
+        const location = locationParts.length ? locationParts.join(", ") : "N/A";
+
+        const conditions = (() => {
+          const c = (data as any)?.conditions;
+          if (!c) return [];
+          if (Array.isArray(c)) return c;
+          if (typeof c === "object" && Array.isArray((c as any).conditions)) return (c as any).conditions;
+          return [];
+        })();
+
+        setPermit({
+          id: data.id,
+          title: app?.project_title || `${data.purpose} Water Permit`,
+          issueDate: data.issued_date,
+          expiryDate: data.expiry_date,
+          status: data.status,
+          type: data.purpose,
+          location,
+          permitNumber: data.permit_number,
+          waterSource: data.water_source,
+          purpose: data.purpose,
+          waterAllowance: `${data.water_allowance} ${data.allowance_unit}`,
+          issuingAuthority: data.issuing_authority,
+          permitPdfPath: (data as any).permit_pdf_url ?? null,
+          applicationDetails: {
+            applicantName,
+            applicantType: applicant?.account_type === "individual" ? "Individual" : "Organization",
+            contactEmail: applicant?.email ?? "N/A",
+            contactPhone: applicant?.phone ?? "N/A",
+            landOwnership: "N/A",
+            environmentalAssessment: app?.environmental_assessment ?? "N/A",
+          },
+          conditions,
+          inspections: [],
+        });
+      } catch (e) {
+        console.error("❌ Failed to load permit details:", e);
+        setPermit(null);
+      } finally {
         setIsLoading(false);
-      }, 1000);
+      }
     };
     
     fetchPermitDetails();
@@ -245,10 +129,25 @@ export default function PermitDetailPage() {
     
     try {
       setIsDownloading(true);
-      await generatePermitPDF(permit);
+      if (!permit.permitPdfPath) {
+        alert("No PDF is available for this permit yet.");
+        return;
+      }
+
+      const blob = await downloadFromDocumentsBucket(permit.permitPdfPath);
+      if (!blob) throw new Error("Failed to download permit PDF");
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `permit-${permit.permitNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (error) {
       console.error('Error generating PDF:', error);
-      alert('Failed to generate PDF. Please try again later.');
+      alert('Failed to download PDF. Please try again later.');
     } finally {
       setIsDownloading(false);
     }
