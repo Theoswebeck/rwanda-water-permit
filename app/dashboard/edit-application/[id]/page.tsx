@@ -16,7 +16,9 @@ import { DocumentViewer } from "@/components/documents/document-viewer";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
+import { getApplicationExpiration } from "@/lib/application-expiration";
 import type { Application, Document, User as UserType } from "@/types/database";
+import { geometryToCoordinatePolygons, polygonsToGeoJSON, type CoordinatePoint } from "@/lib/geoUtils";
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -38,39 +40,20 @@ function formatProvinceForDB(province: string): Application['province'] | undefi
 
 // Mapping function to transform form data to database schema - UPDATED TO MATCH NEW-APPLICATION
 function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft', userId?: string): Partial<Application> {
-  // Handle coordinates - now expecting 5 points for a polygon
-  let coordinates = undefined;
-  if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
-    try {
-      const validCoordinates = formData.waterSourceCoordinates
-        .filter((coord: any) => coord.latitude && coord.longitude)
-        .map((coord: any) => {
-          const lat = parseFloat(coord.latitude);
-          const lon = parseFloat(coord.longitude);
-          if (!isNaN(lat) && !isNaN(lon)) {
-            return [lon, lat]; // GeoJSON uses [longitude, latitude] order
-          }
-          return null;
-        })
-        .filter((coord: any) => coord !== null);
+  // Handle coordinates: support multi-polygons (waterSourcePolygons) and legacy single polygon (waterSourceCoordinates)
+  let coordinates: any = undefined;
+  try {
+    const polys: CoordinatePoint[][] =
+      Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0
+        ? formData.waterSourcePolygons
+        : Array.isArray(formData.waterSourceCoordinates)
+          ? [formData.waterSourceCoordinates]
+          : [];
 
-      if (validCoordinates.length === 5) {
-        // Ensure the polygon is closed by making the last point same as first if needed
-        const firstPoint = validCoordinates[0];
-        const lastPoint = validCoordinates[4];
-        if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
-          validCoordinates.push(firstPoint); // Close the polygon
-        }
-        
-        // Store as GeoJSON polygon for PostGIS compatibility
-        coordinates = {
-          type: 'Polygon',
-          coordinates: [validCoordinates] // Polygon requires array of linear rings
-        };
-      }
-    } catch (error) {
-      console.warn('Invalid coordinates provided:', error);
-    }
+    const geometry = polygonsToGeoJSON(polys);
+    if (geometry) coordinates = geometry.geometry;
+  } catch (error) {
+    console.warn('Invalid coordinates provided:', error);
   }
 
   // Map intended activities to application type and purpose
@@ -234,7 +217,16 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       waterSourceVillage: formData.waterSourceVillage,
       
       // Coordinates are stored in main coordinates field, but save reference
-      waterSourceCoordinates: formData.waterSourceCoordinates,
+      waterSourceCoordinates: Array.isArray(formData.waterSourceCoordinates)
+        ? formData.waterSourceCoordinates
+        : Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons[0]
+          ? formData.waterSourcePolygons[0]
+          : undefined,
+      waterSourcePolygons: Array.isArray(formData.waterSourcePolygons)
+        ? formData.waterSourcePolygons
+        : Array.isArray(formData.waterSourceCoordinates)
+          ? [formData.waterSourceCoordinates]
+          : undefined,
       
       // Reliability
       waterReliability: formData.waterReliability,
@@ -386,17 +378,18 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       formData.emailAddress = userProfile.email || formData.emailAddress;
     }
     
-    // Ensure coordinates are properly formatted
-    if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
-      // Coordinates are already properly stored
+    // Ensure polygons are properly formatted (back-compat with legacy waterSourceCoordinates)
+    if (Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0) {
+      // ok
+    } else if (Array.isArray(formData.waterSourceCoordinates)) {
+      formData.waterSourcePolygons = [formData.waterSourceCoordinates];
     } else {
-      // Initialize empty coordinates if missing
-      formData.waterSourceCoordinates = [
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" }
+      formData.waterSourcePolygons = [
+        [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ]
       ];
     }
     
@@ -450,57 +443,27 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   formData.waterSourceCell = application.cell || '';
   formData.waterSourceVillage = application.village || '';
 
-  // Coordinates - handle both old Point format and new Polygon format
-  if (application.coordinates && typeof application.coordinates === 'object') {
-    try {
-      const coords = application.coordinates as any;
-      if (coords.type === 'Polygon' && Array.isArray(coords.coordinates) && coords.coordinates[0]) {
-        // New polygon format - extract the 5 points
-        const polygonPoints = coords.coordinates[0];
-        formData.waterSourceCoordinates = polygonPoints.slice(0, 5).map((point: number[]) => ({
-          latitude: point[1].toString(),
-          longitude: point[0].toString()
-        }));
-        // Fill remaining slots if less than 5 points
-        while (formData.waterSourceCoordinates.length < 5) {
-          formData.waterSourceCoordinates.push({ latitude: "", longitude: "" });
-        }
-      } else if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
-        // Legacy point format - convert to first coordinate of polygon
-        formData.waterSourceCoordinates = [
-          { latitude: coords.coordinates[1].toString(), longitude: coords.coordinates[0].toString() },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" }
-        ];
-      } else {
-        // Invalid format - initialize empty
-        formData.waterSourceCoordinates = [
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" }
-        ];
-      }
-    } catch (error) {
-      console.warn('Error parsing coordinates:', error);
-      formData.waterSourceCoordinates = [
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
+  // Coordinates - normalize Polygon/MultiPolygon/Point into waterSourcePolygons
+  try {
+    const polys = geometryToCoordinatePolygons(application.coordinates);
+    formData.waterSourcePolygons =
+      polys && polys.length > 0
+        ? polys
+        : [
+            [
+              { latitude: "", longitude: "" },
+              { latitude: "", longitude: "" },
+              { latitude: "", longitude: "" }
+            ]
+          ];
+  } catch (error) {
+    console.warn('Error parsing coordinates:', error);
+    formData.waterSourcePolygons = [
+      [
         { latitude: "", longitude: "" },
         { latitude: "", longitude: "" },
         { latitude: "", longitude: "" }
-      ];
-    }
-  } else {
-    formData.waterSourceCoordinates = [
-      { latitude: "", longitude: "" },
-      { latitude: "", longitude: "" },
-      { latitude: "", longitude: "" },
-      { latitude: "", longitude: "" },
-      { latitude: "", longitude: "" }
+      ]
     ];
   }
 
@@ -818,6 +781,8 @@ export default function EditApplicationPage() {
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const [loadingApplication, setLoadingApplication] = useState(true);
+  const [isExpired, setIsExpired] = useState(false);
+  const [expiresAtIso, setExpiresAtIso] = useState<string | null>(null);
   
   const { getApplication, updateApplication } = useApplications({
     userId: userProfile?.id,
@@ -862,19 +827,55 @@ export default function EditApplicationPage() {
         
         const app = await getApplication(applicationId);
         if (app) {
+          // Determine whether a permit has been issued (permits row exists) and apply expiry rule.
+          const { data: permitRow } = await supabase
+            .from('permits')
+            .select('id')
+            .eq('application_id', app.id)
+            .limit(1)
+            .maybeSingle();
+
+          const expiration = getApplicationExpiration({
+            submitted_at: (app as any).submitted_at ?? null,
+            hasPermit: Boolean(permitRow?.id),
+          });
+
+          if (expiration.isExpired) {
+            setIsExpired(true);
+            setExpiresAtIso(expiration.expiresAt ? expiration.expiresAt.toISOString() : null);
+
+            // Best-effort: mark the application as expired in DB (requires enum + policies).
+            try {
+              await supabase
+                .from('applications')
+                .update({ status: 'expired' as any, updated_at: new Date().toISOString() })
+                .eq('id', app.id);
+            } catch (e) {
+              console.warn('⚠️ Failed to set status=expired (best-effort).', e);
+            }
+          } else {
+            setIsExpired(false);
+            setExpiresAtIso(null);
+          }
+
           // Check if application is editable - approved or rejected applications cannot be edited by anyone
           if (app.status === 'approved' || app.status === 'rejected') {
             setError('Approved or rejected applications cannot be edited. Please contact an administrator if changes are needed.');
             return;
           }
           
-          // Check if application is editable (draft or revision_required status)
-          if (app.status !== 'draft' && app.status !== 'revision_required') {
+          // Expired applications are view-only.
+          if (app.status === 'expired' || expiration.isExpired) {
+            setError('⛔ This application has expired (6 months since submission) and can no longer be edited or submitted.');
+          }
+
+          // Check if application is editable (draft or revision_required status), unless expired (view-only)
+          if (!expiration.isExpired && app.status !== 'draft' && app.status !== 'revision_required') {
             setError('Only draft applications and applications returned for revision can be edited');
             return;
           }
           
-          setApplication(app);
+          setApplication(expiration.isExpired ? ({ ...(app as any), status: 'expired' } as any) : app);
           
           // ⚡ PERFORMANCE: Load application and documents in parallel
           const [formData, documents] = await Promise.all([
@@ -1207,9 +1208,46 @@ export default function EditApplicationPage() {
           <div>
             <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Edit Water Permit Application</h1>
             <p className="text-muted-foreground mt-2">
-              Update your draft application below. You can save changes as a draft or submit for review.
+              {isExpired
+                ? 'This application has expired and is now view-only.'
+                : 'Update your draft application below. You can save changes as a draft or submit for review.'}
             </p>
           </div>
+
+          {/* Expired Notice */}
+          {isExpired && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mb-6"
+            >
+              <Alert className="border-slate-300 bg-gradient-to-r from-slate-50 to-slate-100 shadow-sm">
+                <AlertCircle className="h-5 w-5 text-slate-700" />
+                <AlertDescription>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-slate-900 text-lg">⛔ Application Expired</h3>
+                      <Badge className="border border-slate-300 text-slate-700 bg-slate-200">
+                        Expired
+                      </Badge>
+                    </div>
+                    <p className="text-slate-800">
+                      This application expired 6 months after submission and can no longer be edited or submitted.
+                    </p>
+                    {expiresAtIso && (
+                      <p className="text-sm text-slate-700">
+                        Expired on: <span className="font-medium">{new Date(expiresAtIso).toLocaleDateString()}</span>
+                      </p>
+                    )}
+                    <p className="text-sm text-slate-700">
+                      You can still view the submitted information and documents below.
+                    </p>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
 
           {/* Revision Requirements - Prominent Notice */}
           {application?.status === 'revision_required' && application.revision_notes && (
@@ -1265,7 +1303,8 @@ export default function EditApplicationPage() {
               isLoading={isLoading}
               initialData={initialFormData}
               initialDocuments={initialDocuments}
-              mode="edit"
+              mode={isExpired ? "view" : "edit"}
+              readOnly={isExpired}
               currentApplication={application}
             />
           )}

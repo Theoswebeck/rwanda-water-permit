@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { coordinatesToGeoJSON, validatePolygon } from '@/lib/geoUtils';
+import { geometryToCoordinatePolygons, coordinatesToGeoJSON, validatePolygon } from '@/lib/geoUtils';
 import { polygonToKey } from '@/lib/polygonKey';
 import { z } from 'zod';
 
@@ -111,23 +111,26 @@ export async function POST(
       );
     }
 
-    // Extract coordinates from PostGIS geometry
-    const coordinates = extractCoordinatesFromGeometry(application.coordinates);
-    if (!coordinates || coordinates.length !== 5) {
+    // Extract polygons from PostGIS geometry (Polygon/MultiPolygon/Point -> polygons[])
+    const polygons = geometryToCoordinatePolygons(application.coordinates);
+    if (!polygons || polygons.length === 0) {
       return NextResponse.json(
         {
           success: false,
           error: 'Invalid coordinate data',
           isValid: false,
           intersections: [],
-          errors: ['Application coordinates are not in the expected 5-point polygon format']
+          errors: ['Application coordinates are not in a valid polygon format']
         },
         { status: 400 }
       );
     }
 
-    const polygon = coordinatesToGeoJSON(coordinates);
-    if (!polygon) {
+    const polyFeatures = polygons
+      .map((p) => coordinatesToGeoJSON(p))
+      .filter((f): f is NonNullable<typeof f> => Boolean(f));
+
+    if (polyFeatures.length !== polygons.length) {
       return NextResponse.json(
         {
           success: false,
@@ -140,12 +143,15 @@ export async function POST(
       );
     }
 
-    const basic = validatePolygon(polygon);
-    const errors: string[] = [...basic.errors];
+    const errors: string[] = [];
+    for (let i = 0; i < polyFeatures.length; i += 1) {
+      const basic = validatePolygon(polyFeatures[i]);
+      errors.push(...basic.errors.map((e) => `Polygon ${i + 1}: ${e}`));
+    }
 
     // Duplicate polygon check against other applications
-    if (basic.isValid) {
-      const candidateKey = polygonToKey(polygon);
+    if (errors.length === 0) {
+      const candidateKeys = polyFeatures.map((p) => polygonToKey(p));
       const { data: apps, error: appsError } = await admin
         .from('applications')
         .select('id, project_title, coordinates')
@@ -156,19 +162,29 @@ export async function POST(
         throw new Error(`Failed to check existing applications: ${appsError.message}`);
       }
 
-      const match = (apps || []).find((app: any) => {
+      const match = (apps || []).some((app: any) => {
         const geom = app?.coordinates;
-        if (!geom || geom.type !== 'Polygon' || !geom.coordinates?.[0]) return false;
-        const feature = {
-          type: 'Feature',
-          properties: {},
-          geometry: geom
-        } as const;
-        return polygonToKey(feature) === candidateKey;
+        if (!geom) return false;
+
+        const existingPolys: any[] = [];
+        if (geom.type === 'Polygon' && geom.coordinates?.[0]) {
+          existingPolys.push(geom);
+        } else if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)) {
+          for (const poly of geom.coordinates) {
+            if (poly?.[0]) existingPolys.push({ type: 'Polygon', coordinates: poly });
+          }
+        } else {
+          return false;
+        }
+
+        return existingPolys.some((g) => {
+          const feature = { type: 'Feature', properties: {}, geometry: g } as const;
+          return candidateKeys.includes(polygonToKey(feature as any));
+        });
       });
 
       if (match) {
-        errors.push('Duplicate polygon detected: this polygon already exists in another application.');
+        errors.push('Duplicate polygon detected: at least one polygon already exists in another application.');
       }
     }
 
@@ -208,9 +224,9 @@ export async function POST(
       errors,
       summary: { ruleSet: 'rwanda_bounds_and_no_duplicate_polygon' },
       polygon: {
-        type: polygon.type,
-        geometry: polygon.geometry,
-        properties: polygon.properties
+        type: polyFeatures[0].type,
+        geometry: polyFeatures[0].geometry,
+        properties: polyFeatures[0].properties
       },
       validatedAt: new Date().toISOString(),
       recordUpdated: updateRecord
@@ -325,42 +341,3 @@ export async function GET(
   }
 }
 
-// =============================================
-// UTILITY FUNCTIONS
-// =============================================
-
-/**
- * Extract coordinates from PostGIS geometry object
- */
-function extractCoordinatesFromGeometry(geometry: any): Array<{latitude: string; longitude: string}> | null {
-  try {
-    if (!geometry || !geometry.coordinates) return null;
-
-    if (geometry.type === 'Polygon' && geometry.coordinates[0]) {
-      const coords = geometry.coordinates[0];
-      return coords.slice(0, 5).map((coord: number[]) => ({
-        longitude: coord[0].toString(),
-        latitude: coord[1].toString()
-      }));
-    }
-
-    // Handle legacy Point format
-    if (geometry.type === 'Point' && geometry.coordinates.length >= 2) {
-      return [
-        {
-          longitude: geometry.coordinates[0].toString(),
-          latitude: geometry.coordinates[1].toString()
-        },
-        { longitude: '', latitude: '' },
-        { longitude: '', latitude: '' },
-        { longitude: '', latitude: '' },
-        { longitude: '', latitude: '' }
-      ];
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error extracting coordinates from geometry:', error);
-    return null;
-  }
-}

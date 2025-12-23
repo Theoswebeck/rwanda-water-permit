@@ -23,6 +23,37 @@ export interface CoordinatePoint {
   longitude: string | number;
 }
 
+function toNumber(v: string | number): number {
+  return typeof v === 'string' ? parseFloat(v) : v;
+}
+
+function isFiniteNumber(n: number): boolean {
+  return Number.isFinite(n) && !Number.isNaN(n);
+}
+
+function normalizePoint(coord: CoordinatePoint): { lat: number; lng: number } | null {
+  const lat = toNumber(coord.latitude);
+  const lng = toNumber(coord.longitude);
+  if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) return null;
+  return { lat, lng };
+}
+
+function closeRing(ring: Position[]): Position[] {
+  if (ring.length === 0) return ring;
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) return [...ring, [first[0], first[1]]];
+  return ring;
+}
+
+function removeClosingPoint(ring: Position[]): Position[] {
+  if (ring.length < 2) return ring;
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] === last[0] && first[1] === last[1]) return ring.slice(0, -1);
+  return ring;
+}
+
 export interface ValidationResult {
   isValid: boolean;
   intersections: IntersectionDetail[];
@@ -103,37 +134,32 @@ export function isPolygonWithinRwanda(polygon: Feature<Polygon>): boolean {
 }
 
 /**
- * Converts array of 5 coordinate points to a closed GeoJSON polygon
+ * Converts an array of coordinate points (>= 3) to a closed GeoJSON polygon.
+ *
+ * Legacy parts of the system used to require exactly 5 points; that restriction is now lifted
+ * to allow more accurate shapes and multiple polygons per application.
  */
 export function coordinatesToGeoJSON(coordinates: CoordinatePoint[]): Feature<Polygon> | null {
   try {
-    // Validate we have exactly 5 coordinates
-    if (!coordinates || coordinates.length !== 5) {
-      throw new Error('Exactly 5 coordinate points are required for a polygon');
+    if (!coordinates || coordinates.length < 3) {
+      throw new Error('At least 3 coordinate points are required for a polygon');
     }
 
-    // Validate each coordinate
-    const validCoordinates = coordinates.filter(coord => 
-      coord.latitude && coord.longitude && isValidCoordinate(coord)
-    );
+    // Normalize + validate each coordinate
+    const normalized = coordinates
+      .map((c) => normalizePoint(c))
+      .filter((c): c is { lat: number; lng: number } => Boolean(c))
+      .map((c) => ({ latitude: c.lat, longitude: c.lng }));
 
-    if (validCoordinates.length !== 5) {
-      console.warn('coordinatesToGeoJSON: Not all 5 coordinates are valid');
+    const validCoordinates = normalized.filter((coord) => isValidCoordinate(coord));
+    if (validCoordinates.length < 3) {
+      console.warn('coordinatesToGeoJSON: Fewer than 3 valid coordinates provided');
       return null;
     }
 
     // Convert to GeoJSON coordinate format [longitude, latitude]
-    const geoCoords: Position[] = validCoordinates.map(coord => [
-      typeof coord.longitude === 'string' ? parseFloat(coord.longitude) : coord.longitude,
-      typeof coord.latitude === 'string' ? parseFloat(coord.latitude) : coord.latitude
-    ]);
-
-    // Close the polygon by adding the first point at the end if not already closed
-    const firstPoint = geoCoords[0];
-    const lastPoint = geoCoords[geoCoords.length - 1];
-    if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
-      geoCoords.push([firstPoint[0], firstPoint[1]]);
-    }
+    const openRing: Position[] = validCoordinates.map((coord) => [coord.longitude as number, coord.latitude as number]);
+    const geoCoords = closeRing(openRing);
 
     // Create the polygon feature
     const polygon: Feature<Polygon> = {
@@ -167,13 +193,93 @@ export function geoJSONToCoordinates(polygon: Feature<Polygon>): CoordinatePoint
     }
 
     const coords = polygon.geometry.coordinates[0];
-    // Take first 5 points (excluding the closing point)
-    return coords.slice(0, 5).map(coord => ({
+    const openRing = removeClosingPoint(coords);
+    return openRing.map((coord) => ({
       longitude: coord[0].toString(),
       latitude: coord[1].toString()
     }));
   } catch (error) {
     console.error('Error converting GeoJSON to coordinates:', error);
+    return [];
+  }
+}
+
+/**
+ * Convert an array of polygons (each polygon = array of points) into a GeoJSON geometry.
+ * Returns Polygon when a single polygon is provided, otherwise returns MultiPolygon.
+ */
+export function polygonsToGeoJSON(
+  polygons: CoordinatePoint[][]
+): Feature<Polygon | MultiPolygon> | null {
+  try {
+    const normalizedPolys = (polygons || []).filter((p) => Array.isArray(p) && p.length >= 3);
+    if (normalizedPolys.length === 0) return null;
+
+    if (normalizedPolys.length === 1) {
+      return coordinatesToGeoJSON(normalizedPolys[0]) as Feature<Polygon> | null;
+    }
+
+    const multiCoords: Position[][][] = [];
+
+    for (const poly of normalizedPolys) {
+      const feature = coordinatesToGeoJSON(poly);
+      if (!feature) return null;
+      multiCoords.push(feature.geometry.coordinates);
+    }
+
+    const multi = turf.multiPolygon(multiCoords) as Feature<MultiPolygon>;
+    if (!turf.booleanValid(multi)) return null;
+    return multi;
+  } catch (error) {
+    console.error('Error converting polygons to GeoJSON:', error);
+    return null;
+  }
+}
+
+/**
+ * Extract polygon point arrays from a GeoJSON geometry stored in PostGIS (Polygon/MultiPolygon/Point).
+ * - Polygon -> [points]
+ * - MultiPolygon -> [points, points, ...]
+ * - Point -> [[point]]
+ */
+export function geometryToCoordinatePolygons(geometry: any): CoordinatePoint[][] {
+  try {
+    if (!geometry || typeof geometry !== 'object') return [];
+
+    if (geometry.type === 'Polygon' && Array.isArray(geometry.coordinates) && geometry.coordinates[0]) {
+      const ring = removeClosingPoint(geometry.coordinates[0] as Position[]);
+      return [
+        ring.map((coord) => ({
+          longitude: coord[0].toString(),
+          latitude: coord[1].toString()
+        }))
+      ];
+    }
+
+    if (geometry.type === 'MultiPolygon' && Array.isArray(geometry.coordinates)) {
+      const out: CoordinatePoint[][] = [];
+      for (const poly of geometry.coordinates as Position[][][]) {
+        const ring = poly?.[0];
+        if (!ring) continue;
+        const open = removeClosingPoint(ring);
+        out.push(
+          open.map((coord) => ({
+            longitude: coord[0].toString(),
+            latitude: coord[1].toString()
+          }))
+        );
+      }
+      return out;
+    }
+
+    if (geometry.type === 'Point' && Array.isArray(geometry.coordinates) && geometry.coordinates.length >= 2) {
+      const [lng, lat] = geometry.coordinates as [number, number];
+      return [[{ longitude: lng.toString(), latitude: lat.toString() }]];
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error extracting polygons from geometry:', error);
     return [];
   }
 }

@@ -1,4 +1,5 @@
 import type { Application } from '@/types/database';
+import { polygonsToGeoJSON, type CoordinatePoint } from '@/lib/geoUtils';
 
 // Helper function to map Rwanda administrative data province names to database enum
 export function formatProvinceForDB(province: string): Application['province'] | undefined {
@@ -15,39 +16,23 @@ export function formatProvinceForDB(province: string): Application['province'] |
 
 // Mapping function to transform form data to database schema
 export function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft', userId?: string): Partial<Application> {
-  // Handle coordinates - now expecting 5 points for a polygon
-  let coordinates = undefined;
-  if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
-    try {
-      const validCoordinates = formData.waterSourceCoordinates
-        .filter((coord: any) => coord.latitude && coord.longitude)
-        .map((coord: any) => {
-          const lat = parseFloat(coord.latitude);
-          const lon = parseFloat(coord.longitude);
-          if (!isNaN(lat) && !isNaN(lon)) {
-            return [lon, lat]; // GeoJSON uses [longitude, latitude] order
-          }
-          return null;
-        })
-        .filter((coord: any) => coord !== null);
+  // Handle coordinates: support single polygon (legacy waterSourceCoordinates) and multi-polygons (waterSourcePolygons)
+  let coordinates: any = undefined;
+  try {
+    const polygons: CoordinatePoint[][] =
+      Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0
+        ? formData.waterSourcePolygons
+        : Array.isArray(formData.waterSourceCoordinates)
+          ? [formData.waterSourceCoordinates]
+          : [];
 
-      if (validCoordinates.length === 5) {
-        // Ensure the polygon is closed by making the last point same as first if needed
-        const firstPoint = validCoordinates[0];
-        const lastPoint = validCoordinates[4];
-        if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
-          validCoordinates.push(firstPoint); // Close the polygon
-        }
-        
-        // Store as GeoJSON polygon for PostGIS compatibility
-        coordinates = {
-          type: 'Polygon',
-          coordinates: [validCoordinates] // Polygon requires array of linear rings
-        };
-      }
-    } catch (error) {
-      console.warn('Invalid coordinates provided:', error);
+    const geometry = polygonsToGeoJSON(polygons);
+    if (geometry) {
+      // Store GeoJSON geometry for PostGIS compatibility
+      coordinates = geometry.geometry;
     }
+  } catch (error) {
+    console.warn('Invalid coordinates provided:', error);
   }
 
   // Map intended activities to application type and purpose
@@ -212,7 +197,16 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       waterSourceVillage: formData.waterSourceVillage,
       
       // Coordinates are stored in main coordinates field, but save reference
-      waterSourceCoordinates: formData.waterSourceCoordinates,
+      waterSourceCoordinates: Array.isArray(formData.waterSourceCoordinates)
+        ? formData.waterSourceCoordinates
+        : Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons[0]
+          ? formData.waterSourcePolygons[0]
+          : undefined,
+      waterSourcePolygons: Array.isArray(formData.waterSourcePolygons)
+        ? formData.waterSourcePolygons
+        : Array.isArray(formData.waterSourceCoordinates)
+          ? [formData.waterSourceCoordinates]
+          : undefined,
       
       // Reliability
       waterReliability: formData.waterReliability,

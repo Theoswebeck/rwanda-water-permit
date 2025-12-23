@@ -205,9 +205,36 @@ function NewApplicationContent() {
         if (application) {
           setCurrentApplication(application);
           
-          // ⚡ PERFORMANCE: Transform data only once and memoize
-          const formData = mapFormDataToApplication(application, userProfile);
-          setInitialFormData(formData);
+          // ✅ Restore form state from stored internal_notes JSON (drafts store the full form payload there)
+          const restored: any = (() => {
+            try {
+              const parsed = JSON.parse((application as any).internal_notes || "{}");
+              return parsed && typeof parsed === "object" ? parsed : {};
+            } catch {
+              return {};
+            }
+          })();
+
+          // Back-compat: normalize legacy single polygon into waterSourcePolygons
+          if (!Array.isArray(restored.waterSourcePolygons) || restored.waterSourcePolygons.length === 0) {
+            if (Array.isArray(restored.waterSourceCoordinates)) {
+              restored.waterSourcePolygons = [restored.waterSourceCoordinates];
+            } else {
+              restored.waterSourcePolygons = [
+                [
+                  { latitude: "", longitude: "" },
+                  { latitude: "", longitude: "" },
+                  { latitude: "", longitude: "" }
+                ]
+              ];
+            }
+          }
+
+          if (!Array.isArray(restored.additionalDocuments)) {
+            restored.additionalDocuments = [];
+          }
+
+          setInitialFormData(restored);
           
           // ⚡ PERFORMANCE: Process documents efficiently
           const documentMap: Record<string, { url: string; name: string }> = {};

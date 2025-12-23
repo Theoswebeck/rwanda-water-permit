@@ -46,8 +46,8 @@ import {
   getFormattedCellOptions,
   getFormattedVillageOptions
 } from '@/lib/rwanda-administrative-data';
-import { CoordinateInputWithValidation } from '@/components/forms/CoordinateInputWithValidation';
-import { validateCoordinates, type ValidationResponse } from '@/lib/polygonValidation';
+import { MultiPolygonInputWithValidation } from "@/components/forms/MultiPolygonInputWithValidation";
+import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidation';
 import { PaymentTab } from '@/components/dashboard/payment-tab';
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
@@ -86,11 +86,15 @@ const applicationFormSchema = z.object({
   waterSourceCell: z.string().min(1, { message: "Water source cell is required" }),
   waterSourceVillage: z.string().optional(),
   
-  // Coordinates of water source (5 points for polygon - REQUIRED)
-  waterSourceCoordinates: z.array(z.object({
-    latitude: z.string().min(1, { message: "Latitude is required" }),
-    longitude: z.string().min(1, { message: "Longitude is required" })
-  })).length(5, { message: "Exactly 5 coordinate points are required to define the polygon" }),
+  // Water activity polygons (multiple polygons, variable points)
+  waterSourcePolygons: z.array(
+    z.array(
+      z.object({
+        latitude: z.string().min(1, { message: "Latitude is required" }),
+        longitude: z.string().min(1, { message: "Longitude is required" })
+      })
+    ).min(3, { message: "Each polygon must have at least 3 coordinate points" })
+  ).min(1, { message: "At least one polygon is required" }),
   
   // Reliability
   waterReliability: z.enum(["water_always_available", "frequently_dry", "dry_during_certain_season"]),
@@ -413,12 +417,12 @@ export const ApplicationForm = memo(function ApplicationForm({
       irrigationStorageFacilities: "",
       irrigationStorageCapacity: undefined,
       additionalDocuments: [],
-      waterSourceCoordinates: [
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" }
+      waterSourcePolygons: [
+        [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ]
       ],
     };
 
@@ -784,26 +788,32 @@ export const ApplicationForm = memo(function ApplicationForm({
     const fields = [
       'waterSourceType', 'nameSourceWater', 'waterSourceProvince',
       'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability',
-      'waterSourceCoordinates'
+      'waterSourcePolygons'
     ];
     const errors = await form.trigger(fields as any);
     if (!errors) return false;
 
     // Enforce polygon validation when user tries to move past Water Source
-    const coordinates = form.getValues('waterSourceCoordinates') || [];
-    const hasValidCoordinates = coordinates.length === 5 && coordinates.every((coord: any) => {
-      return coord.latitude && coord.latitude.toString().trim() !== '' &&
-             coord.longitude && coord.longitude.toString().trim() !== '';
-    });
+    const polygons = form.getValues('waterSourcePolygons') || [];
+    const hasValidPolygons =
+      Array.isArray(polygons) &&
+      polygons.length > 0 &&
+      polygons.every((poly: any) => {
+        return (
+          Array.isArray(poly) &&
+          poly.length >= 3 &&
+          poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
+        );
+      });
 
-    if (!hasValidCoordinates) {
-      setValidationError('Please provide all 5 coordinate points for the polygon before proceeding.');
+    if (!hasValidPolygons) {
+      setValidationError('Please provide at least one polygon with 3+ coordinate points before proceeding.');
       return false;
     }
 
     try {
-      const validation = await validateCoordinates({
-        coordinates,
+      const validation = await validatePolygons({
+        polygons,
         applicationId: currentApplication?.id
       });
 
@@ -949,14 +959,19 @@ export const ApplicationForm = memo(function ApplicationForm({
           return value && value.toString().trim() !== '';
         });
         
-        // Check if all 5 coordinate points are filled
-        const coordinates = form.getValues('waterSourceCoordinates') || [];
-        const hasValidCoordinates = coordinates.length === 5 && coordinates.every((coord: any) => {
-          return coord.latitude && coord.latitude.toString().trim() !== '' &&
-                 coord.longitude && coord.longitude.toString().trim() !== '';
-        });
-        
-        return !hasWaterSourceFields || !hasValidCoordinates;
+        const polygons = form.getValues('waterSourcePolygons') || [];
+        const hasValidPolygons =
+          Array.isArray(polygons) &&
+          polygons.length > 0 &&
+          polygons.every((poly: any) => {
+            return (
+              Array.isArray(poly) &&
+              poly.length >= 3 &&
+              poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
+            );
+          });
+
+        return !hasWaterSourceFields || !hasValidPolygons;
         
       case "intended-activity":
         // Check required fields and documents for intended activity tab
@@ -1028,9 +1043,15 @@ export const ApplicationForm = memo(function ApplicationForm({
       }
       if (
         (!normalizedInitialData.fishLakeConcessionCoordinates || normalizedInitialData.fishLakeConcessionCoordinates.trim() === "") &&
-        Array.isArray(normalizedInitialData.waterSourceCoordinates)
+        (Array.isArray((normalizedInitialData as any).waterSourcePolygons) || Array.isArray((normalizedInitialData as any).waterSourceCoordinates))
       ) {
-        normalizedInitialData.fishLakeConcessionCoordinates = formatPolygonCoordinatesForDisplay(normalizedInitialData.waterSourceCoordinates);
+        const firstPoly =
+          Array.isArray((normalizedInitialData as any).waterSourcePolygons) && (normalizedInitialData as any).waterSourcePolygons?.[0]
+            ? (normalizedInitialData as any).waterSourcePolygons[0]
+            : (normalizedInitialData as any).waterSourceCoordinates;
+        if (Array.isArray(firstPoly)) {
+          normalizedInitialData.fishLakeConcessionCoordinates = formatPolygonCoordinatesForDisplay(firstPoly);
+        }
       }
 
       form.reset({
@@ -1053,12 +1074,12 @@ export const ApplicationForm = memo(function ApplicationForm({
         waterSourceSector: "",
         waterSourceCell: "",
         waterSourceVillage: "",
-        waterSourceCoordinates: [
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" }
+        waterSourcePolygons: [
+          [
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" },
+            { latitude: "", longitude: "" }
+          ]
         ],
         waterReliability: "water_always_available",
         intendedActivities: ["water_supply"],
@@ -1107,6 +1128,20 @@ export const ApplicationForm = memo(function ApplicationForm({
         // Override with loaded data
         ...normalizedInitialData
       });
+
+      // Backwards compatibility: if older data only has waterSourceCoordinates (single polygon),
+      // normalize it into the new waterSourcePolygons field.
+      const currentPolys = form.getValues('waterSourcePolygons');
+      if (
+        (!currentPolys || !Array.isArray(currentPolys) || currentPolys.length === 0) &&
+        Array.isArray((normalizedInitialData as any).waterSourceCoordinates)
+      ) {
+        form.setValue('waterSourcePolygons', [(normalizedInitialData as any).waterSourceCoordinates as any], {
+          shouldDirty: false,
+          shouldTouch: false,
+          shouldValidate: false
+        } as any);
+      }
       
       // Update dropdown selection states to enable cascading
       if (initialData.officeProvince) {
@@ -2405,35 +2440,36 @@ export const ApplicationForm = memo(function ApplicationForm({
                     </div>
                   </div>
 
-                  {/* 11. Coordinates of water source (5 points for polygon) */}
+                  {/* 11. Water activity polygons (one or more polygons) */}
                   <div className="space-y-4">
                     <FormField
                       control={form.control}
-                      name="waterSourceCoordinates"
+                      name="waterSourcePolygons"
                       render={({ field }) => (
                         <FormItem>
                           <FormControl>
-                            <CoordinateInputWithValidation
-                              coordinates={field.value || [
-                                { latitude: "", longitude: "" },
-                                { latitude: "", longitude: "" },
-                                { latitude: "", longitude: "" },
-                                { latitude: "", longitude: "" },
-                                { latitude: "", longitude: "" }
-                              ]}
-                              onCoordinatesChange={(coordinates) => {
-                                field.onChange(coordinates);
-                              }}
+                            <MultiPolygonInputWithValidation
+                              polygons={
+                                field.value?.length
+                                  ? field.value
+                                  : [
+                                      [
+                                        { latitude: "", longitude: "" },
+                                        { latitude: "", longitude: "" },
+                                        { latitude: "", longitude: "" }
+                                      ]
+                                    ]
+                              }
+                              onPolygonsChange={(polygons) => field.onChange(polygons)}
                               onValidationChange={(validation) => {
                                 setCoordinateValidation(validation);
-                                // Coordinates are required and validated before moving to Activity.
+                                // Polygons are required and validated before moving to Activity.
                                 // We still allow saving drafts independently of this flag.
                                 setCanSubmit(true);
                               }}
                               applicationId={currentApplication?.id}
-                              disabled={false}
+                              disabled={Boolean(readOnly)}
                               showValidation={true}
-                              autoValidate={false}
                             />
                           </FormControl>
                           <FormMessage />
@@ -2443,8 +2479,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                     
                     <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <p className="text-sm text-yellow-800">
-                        <strong>Note:</strong> The 5 coordinate points should form a closed polygon around your water source area. 
-                        Point 1 and Point 5 should be close to each other to complete the polygon.
+                        <strong>Note:</strong> Each polygon needs at least 3 points. Add more points for a better boundary.
+                        If you have multiple separate areas, add multiple polygons.
                       </p>
                     </div>
                   </div>

@@ -23,6 +23,7 @@ import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
+import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -86,17 +87,18 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       formData.emailAddress = userProfile.email || formData.emailAddress;
     }
     
-    // Ensure coordinates are properly formatted
-    if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
-      // Coordinates are already properly stored
+    // Ensure polygons are properly formatted (back-compat with legacy waterSourceCoordinates)
+    if (Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0) {
+      // ok
+    } else if (Array.isArray(formData.waterSourceCoordinates)) {
+      formData.waterSourcePolygons = [formData.waterSourceCoordinates];
     } else {
-      // Initialize empty coordinates if missing
-      formData.waterSourceCoordinates = [
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" }
+      formData.waterSourcePolygons = [
+        [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ]
       ];
     }
     
@@ -143,57 +145,27 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     formData.waterSourceCell = application.cell || '';
     formData.waterSourceVillage = application.village || '';
   
-    // Coordinates - handle both old Point format and new Polygon format
-    if (application.coordinates && typeof application.coordinates === 'object') {
-      try {
-        const coords = application.coordinates as any;
-        if (coords.type === 'Polygon' && Array.isArray(coords.coordinates) && coords.coordinates[0]) {
-          // New polygon format - extract the 5 points
-          const polygonPoints = coords.coordinates[0];
-          formData.waterSourceCoordinates = polygonPoints.slice(0, 5).map((point: number[]) => ({
-            latitude: point[1].toString(),
-            longitude: point[0].toString()
-          }));
-          // Fill remaining slots if less than 5 points
-          while (formData.waterSourceCoordinates.length < 5) {
-            formData.waterSourceCoordinates.push({ latitude: "", longitude: "" });
-          }
-        } else if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
-          // Legacy point format - convert to first coordinate of polygon
-          formData.waterSourceCoordinates = [
-            { latitude: coords.coordinates[1].toString(), longitude: coords.coordinates[0].toString() },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" }
-          ];
-        } else {
-          // Invalid format - initialize empty
-          formData.waterSourceCoordinates = [
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" }
-          ];
-        }
-      } catch (error) {
-        console.warn('Error parsing coordinates:', error);
-        formData.waterSourceCoordinates = [
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
+    // Coordinates - normalize Polygon/MultiPolygon/Point into waterSourcePolygons
+    try {
+      const polys = geometryToCoordinatePolygons(application.coordinates);
+      formData.waterSourcePolygons =
+        polys && polys.length > 0
+          ? polys
+          : [
+              [
+                { latitude: "", longitude: "" },
+                { latitude: "", longitude: "" },
+                { latitude: "", longitude: "" }
+              ]
+            ];
+    } catch (error) {
+      console.warn('Error parsing coordinates:', error);
+      formData.waterSourcePolygons = [
+        [
           { latitude: "", longitude: "" },
           { latitude: "", longitude: "" },
           { latitude: "", longitude: "" }
-        ];
-      }
-    } else {
-      formData.waterSourceCoordinates = [
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" }
+        ]
       ];
     }
   
@@ -412,10 +384,15 @@ export default function ApplicationDetailPage() {
           return `${lat.toFixed(6)}°N, ${lng.toFixed(6)}°E`;
         }
         
-        // Handle PostGIS Polygon geometry (new format)
+        // Handle PostGIS Polygon geometry
         if (coordinates.type === 'Polygon' && coordinates.coordinates && coordinates.coordinates[0]) {
           const polygonPoints = coordinates.coordinates[0];
           return `Polygon with ${polygonPoints.length} points`;
+        }
+
+        // Handle PostGIS MultiPolygon geometry
+        if (coordinates.type === 'MultiPolygon' && Array.isArray(coordinates.coordinates)) {
+          return `MultiPolygon with ${coordinates.coordinates.length} polygons`;
         }
       }
       return JSON.stringify(coordinates);
@@ -435,12 +412,44 @@ export default function ApplicationDetailPage() {
               Water Source Area (Polygon - {points.length} points):
             </div>
             <div className="grid gap-2">
-              {points.slice(0, 5).map((point: number[], index: number) => (
+              {points.slice(0, 10).map((point: number[], index: number) => (
                 <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
                   <span className="font-medium">Point {index + 1}:</span>
                   <span>{point[1].toFixed(6)}°N, {point[0].toFixed(6)}°E</span>
                 </div>
               ))}
+            </div>
+          </div>
+        );
+      }
+
+      if (coordinates?.type === 'MultiPolygon' && Array.isArray(coordinates.coordinates)) {
+        const polys = coordinates.coordinates as number[][][][];
+        return (
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-muted-foreground">
+              Water Source Area (MultiPolygon - {polys.length} polygons):
+            </div>
+            <div className="space-y-4">
+              {polys.map((poly, polyIdx) => {
+                const ring = poly?.[0] || [];
+                return (
+                  <div key={polyIdx} className="space-y-2">
+                    <div className="text-sm font-medium">Polygon {polyIdx + 1} ({ring.length} points)</div>
+                    <div className="grid gap-2">
+                      {ring.slice(0, 10).map((point: number[], index: number) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm"
+                        >
+                          <span className="font-medium">Point {index + 1}:</span>
+                          <span>{point[1].toFixed(6)}°N, {point[0].toFixed(6)}°E</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

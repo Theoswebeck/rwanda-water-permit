@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { 
   ArrowLeft, 
   X, 
@@ -115,17 +116,18 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       formData.emailAddress = userProfile.email || formData.emailAddress;
     }
     
-    // Ensure coordinates are properly formatted
-    if (formData.waterSourceCoordinates && Array.isArray(formData.waterSourceCoordinates)) {
-      // Coordinates are already properly stored
+    // Ensure polygons are properly formatted (back-compat with legacy waterSourceCoordinates)
+    if (Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0) {
+      // ok
+    } else if (Array.isArray(formData.waterSourceCoordinates)) {
+      formData.waterSourcePolygons = [formData.waterSourceCoordinates];
     } else {
-      // Initialize empty coordinates if missing
-      formData.waterSourceCoordinates = [
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" },
-        { latitude: "", longitude: "" }
+      formData.waterSourcePolygons = [
+        [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ]
       ];
     }
     
@@ -171,36 +173,28 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     formData.waterSourceCell = application.cell || '';
     formData.waterSourceVillage = application.village || '';
   
-    // Coordinates handling
-    if (application.coordinates && typeof application.coordinates === 'object') {
-      try {
-        const coords = application.coordinates as any;
-        if (coords.type === 'Polygon' && Array.isArray(coords.coordinates) && coords.coordinates[0]) {
-          const polygonPoints = coords.coordinates[0];
-          formData.waterSourceCoordinates = polygonPoints.slice(0, 5).map((point: number[]) => ({
-            latitude: point[1].toString(),
-            longitude: point[0].toString()
-          }));
-          while (formData.waterSourceCoordinates.length < 5) {
-            formData.waterSourceCoordinates.push({ latitude: "", longitude: "" });
-          }
-        } else if (coords.type === 'Point' && Array.isArray(coords.coordinates) && coords.coordinates.length >= 2) {
-          formData.waterSourceCoordinates = [
-            { latitude: coords.coordinates[1].toString(), longitude: coords.coordinates[0].toString() },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" },
-            { latitude: "", longitude: "" }
-          ];
-        } else {
-          formData.waterSourceCoordinates = Array(5).fill(null).map(() => ({ latitude: "", longitude: "" }));
-        }
-      } catch (error) {
-        console.warn('Error parsing coordinates:', error);
-        formData.waterSourceCoordinates = Array(5).fill(null).map(() => ({ latitude: "", longitude: "" }));
-      }
-    } else {
-      formData.waterSourceCoordinates = Array(5).fill(null).map(() => ({ latitude: "", longitude: "" }));
+    // Coordinates - normalize Polygon/MultiPolygon/Point into waterSourcePolygons
+    try {
+      const polys = geometryToCoordinatePolygons(application.coordinates);
+      formData.waterSourcePolygons =
+        polys && polys.length > 0
+          ? polys
+          : [
+              [
+                { latitude: "", longitude: "" },
+                { latitude: "", longitude: "" },
+                { latitude: "", longitude: "" }
+              ]
+            ];
+    } catch (error) {
+      console.warn('Error parsing coordinates:', error);
+      formData.waterSourcePolygons = [
+        [
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" },
+          { latitude: "", longitude: "" }
+        ]
+      ];
     }
   
     // Water reliability

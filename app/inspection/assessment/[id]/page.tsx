@@ -37,6 +37,7 @@ import {
   Info,
   Settings
 } from "lucide-react";
+import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus, User, Document } from "@/types/database";
@@ -151,14 +152,24 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   formData.hasLandAccess = true;
   formData.certificationAgreement = true;
   
-  // Coordinates (try to extract from stored data or use empty array)
-  formData.waterSourceCoordinates = storedFormData.waterSourceCoordinates || [
-    { latitude: "", longitude: "" },
-    { latitude: "", longitude: "" },
-    { latitude: "", longitude: "" },
-    { latitude: "", longitude: "" },
-    { latitude: "", longitude: "" }
-  ];
+  // Polygons (prefer storedFormData, fallback to DB geometry, fallback to empty)
+  if (Array.isArray(storedFormData.waterSourcePolygons) && storedFormData.waterSourcePolygons.length > 0) {
+    formData.waterSourcePolygons = storedFormData.waterSourcePolygons;
+  } else if (Array.isArray(storedFormData.waterSourceCoordinates)) {
+    formData.waterSourcePolygons = [storedFormData.waterSourceCoordinates];
+  } else {
+    const polys = geometryToCoordinatePolygons((application as any).coordinates);
+    formData.waterSourcePolygons =
+      polys && polys.length > 0
+        ? polys
+        : [
+            [
+              { latitude: "", longitude: "" },
+              { latitude: "", longitude: "" },
+              { latitude: "", longitude: "" }
+            ]
+          ];
+  }
   
   // Additional form fields from stored data
   Object.keys(storedFormData).forEach(key => {
