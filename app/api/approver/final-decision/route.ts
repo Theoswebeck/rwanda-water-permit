@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { PindoClient } from '@/lib/pindo-client'
+import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
+import { sendResendEmail, renderAppEmailHtml } from '@/lib/notifications/resend-email'
 
 type Decision = 'approve' | 'reject' | 'return_to_review'
-
-type ApplicantContact = {
-  id: string
-  email: string
-  first_name?: string | null
-  last_name?: string | null
-  company_name?: string | null
-  account_type?: string | null
-  phone?: string | null
-  mobile_phone?: string | null
-  landline_phone?: string | null
-  company_phone?: string | null
-}
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
@@ -26,16 +15,6 @@ const getSupabaseAdmin = () => {
   // Note: this repo's `types/database.ts` is app-domain types, not Supabase-generated Database types.
   // Using generics here collapses to `never`, so keep the client untyped and validate at runtime.
   return createClient(url, serviceKey)
-}
-
-const getApplicantName = (u: ApplicantContact) => {
-  const acct = String(u.account_type || '').toLowerCase()
-  if (acct === 'individual') return `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'Applicant'
-  return (u.company_name || '').trim() || 'Applicant'
-}
-
-const getApplicantPhone = (u: ApplicantContact) => {
-  return u.phone || u.mobile_phone || u.landline_phone || u.company_phone || null
 }
 
 const clamp = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1)}…`)
@@ -51,16 +30,16 @@ function buildDecisionCopy(params: {
 
   const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://permit.rwb.rw'
   const supportEmail = process.env.SUPPORT_EMAIL || 'contact@rwb.rw'
-  const orgName = 'Rwanda Water Board'
+  const orgName = 'Rwanda Water Resources Board'
 
   if (decision === 'approve') {
-    const sms = `Rwanda Water Board: Dear ${applicantName}, your water permit application ${applicationNumber} has been APPROVED. Please log in and accept the Terms and Conditions for the permit to be issued. Once issued, you will be able to download the permit from your dashboard. Support: ${supportEmail}.`
+    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} has been APPROVED. Please log in and accept the Terms and Conditions for the permit to be issued. Once issued, you will be able to download the permit from your dashboard. Support: ${supportEmail}.`
     const subject = `Application approved — ${applicationNumber}`
     const title = 'Application Approved'
     const text = [
       `Dear ${applicantName},`,
       ``,
-      `We are pleased to inform you that your water permit application (${applicationNumber}) has been approved by Rwanda Water Board.`,
+      `We are pleased to inform you that your water permit application (${applicationNumber}) has been approved by Rwanda Water Resources Board.`,
       ``,
       `Next steps:`,
       `- Please log in and accept the Terms and Conditions for the permit to be issued.`,
@@ -76,7 +55,7 @@ function buildDecisionCopy(params: {
 
   if (decision === 'return_to_review') {
     const reasonLine = reason ? ` Feedback: ${reason}` : ''
-    const sms = `Rwanda Water Board: Dear ${applicantName}, your water permit application ${applicationNumber} requires revisions.${clamp(reasonLine, 220)} Please log in to your portal to view the details and resubmit. Support: ${supportEmail}.`
+    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} requires revisions.${clamp(reasonLine, 220)} Please log in to your portal to view the details and resubmit. Support: ${supportEmail}.`
     const subject = `Revisions required — ${applicationNumber}`
     const title = 'Revisions Required'
     const text = [
@@ -101,13 +80,13 @@ function buildDecisionCopy(params: {
 
   // reject
   const reasonLine = reason ? `Reason provided: ${reason}` : `Reason provided: (not specified)`
-  const sms = `Rwanda Water Board: Dear ${applicantName}, your water permit application ${applicationNumber} has been REJECTED. ${clamp(reasonLine, 220)} Support: ${supportEmail}.`
+  const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} has been REJECTED. ${clamp(reasonLine, 220)} Support: ${supportEmail}.`
   const subject = `Application rejected — ${applicationNumber}`
   const title = 'Application Rejected'
   const text = [
     `Dear ${applicantName},`,
     ``,
-    `We regret to inform you that your water permit application (${applicationNumber}) has been rejected by Rwanda Water Board.`,
+    `We regret to inform you that your water permit application (${applicationNumber}) has been rejected by Rwanda Water Resources Board.`,
     ``,
     `Reason:`,
     reason ? reason : '(not specified)',
@@ -122,54 +101,8 @@ function buildDecisionCopy(params: {
   return { sms, email: { subject, title, text, type: 'error' as const } }
 }
 
-function renderDecisionEmailHtml(params: { title: string; text: string }) {
-  const escaped = params.text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br/>')
-  return `
-    <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:680px;margin:0 auto;padding:24px">
-      <div style="text-align:center;margin-bottom:20px">
-        <h1 style="color:#111827;margin:0">Rwanda Water Board</h1>
-        <h2 style="color:#374151;margin:10px 0">${params.title}</h2>
-      </div>
-      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:18px;color:#111827">
-        ${escaped}
-      </div>
-      <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
-      <p style="color:#6b7280;font-size:12px;text-align:center;margin:0">Rwanda Water Board - Water Permit Application System</p>
-    </div>
-  `
-}
-
-async function sendEmail(params: { to: string; subject: string; title: string; text: string }) {
-  const resendKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
-  if (!resendKey) {
-    throw new Error('Email provider not configured. Set RESEND_API_KEY.')
-  }
-
-  const html = renderDecisionEmailHtml({ title: params.title, text: params.text })
-  const resp = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: params.to,
-      subject: params.subject,
-      html,
-    }),
-  })
-
-  const responseText = await resp.text()
-  if (!resp.ok) {
-    throw new Error(`Resend API error: status=${resp.status}, body=${responseText}`)
-  }
-}
+// Use shared Resend + HTML helpers (avoid duplicating email logic across routes)
+const renderDecisionEmailHtml = renderAppEmailHtml
 
 export async function POST(req: NextRequest) {
   try {
@@ -254,7 +187,7 @@ export async function POST(req: NextRequest) {
 
     // Send Email
     console.log(`✉️ Sending decision email: to=${applicantEmail} application=${applicationNumber}`)
-    await sendEmail({
+    await sendResendEmail({
       to: applicantEmail,
       subject: copy.email.subject,
       title: copy.email.title,

@@ -1,5 +1,5 @@
 /**
- * Pindo.io SMS API Client for Rwanda Water Board
+ * Pindo.io SMS API Client for Rwanda Water Resources Board
  * Handles SMS verification and communication via Pindo.io API
  */
 

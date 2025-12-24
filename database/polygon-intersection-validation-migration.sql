@@ -1,6 +1,6 @@
 -- =============================================
 -- Polygon Intersection Validation Migration
--- Rwanda Water Board - Water Permit System
+-- Rwanda Water Resources Board - Water Permit System
 -- =============================================
 
 -- 1. Add coordinates column to permits table to store approved permit polygons

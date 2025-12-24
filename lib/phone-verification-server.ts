@@ -1,5 +1,5 @@
 /**
- * Server-side Phone Verification Service for Rwanda Water Board
+ * Server-side Phone Verification Service for Rwanda Water Resources Board
  * For use in API routes with server-side Supabase client
  */
 
@@ -134,7 +134,7 @@ export class ServerPhoneVerificationService {
         console.log('✅ Mock SMS sent successfully (no actual SMS sent)');
       } else {
         // Send SMS with our verification code
-        const message = `Your Rwanda Water Board verification code is: ${verificationCode}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
+        const message = `Your Rwanda Water Resources Board verification code is: ${verificationCode}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
         
         try {
           const smsResponse = await pindoClient.sendSMS(phoneNumber, message, 'RWB');

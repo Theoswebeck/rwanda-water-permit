@@ -6,7 +6,7 @@
 
 ## 📦 What Was Implemented
 
-I've successfully integrated IremboPay payment processing into your Rwanda Water Board Water Permit System. Here's what has been delivered:
+I've successfully integrated IremboPay payment processing into your Rwanda Water Resources Board Water Permit System. Here's what has been delivered:
 
 ### 🗄️ Database Layer (Fully Implemented)
 - ✅ Comprehensive payment schema with 5 tables

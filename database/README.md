@@ -1,8 +1,8 @@
-# Rwanda Water Board Water Permit System Database Schema
+# Rwanda Water Resources Board Water Permit System Database Schema
 
 ## Overview
 
-This comprehensive PostgreSQL schema is designed for the Rwanda Water Board (RWB) water permit management system. It supports the complete workflow from application submission through review, inspection, and final approval, with robust data tracking and audit capabilities.
+This comprehensive PostgreSQL schema is designed for the Rwanda Water Resources Board (RWB) water permit management system. It supports the complete workflow from application submission through review, inspection, and final approval, with robust data tracking and audit capabilities.
 
 ## Schema Features
 

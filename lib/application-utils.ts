@@ -102,6 +102,8 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
   const mappedData = {
     // Set status based on action
     status,
+    // When creating a submitted application directly (non-payment flows), stamp submission time.
+    ...(status === 'submitted' ? { submitted_at: new Date().toISOString() } : {}),
     
     // Application type and water details - with defaults for drafts
     application_type: defaultsForDrafts.application_type,

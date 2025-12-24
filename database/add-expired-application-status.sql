@@ -1,6 +1,6 @@
 -- =============================================
 -- Add "expired" application status + 6-month expiry support
--- Rwanda Water Board Database Update (Supabase)
+-- Rwanda Water Resources Board Database Update (Supabase)
 -- =============================================
 --
 -- Rule:

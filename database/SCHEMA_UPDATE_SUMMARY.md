@@ -1,4 +1,4 @@
-# 🏗️ Rwanda Water Board - Database Schema Update Summary
+# 🏗️ Rwanda Water Resources Board - Database Schema Update Summary
 
 ## 🎯 **Overview**
 This comprehensive schema update adds **33 new fields** to achieve **100% compliance** with the official "Application for Water Concession (Part A)" form requirements, excluding payment and certification sections as requested.
@@ -167,7 +167,7 @@ psql -h localhost -d rwanda_water_permit -U your_username
 The script includes a summary report that will display:
 ```
 =============================================
-RWANDA WATER BOARD SCHEMA UPDATE COMPLETE
+RWANDA WATER RESOURCES BOARD SCHEMA UPDATE COMPLETE
 =============================================
 • Enhanced Applicant Info: 6 new fields
 • Water Source Details: 6 new fields  
@@ -208,4 +208,4 @@ After running the SQL script, you'll need to regenerate the TypeScript types in 
 4. **Update inspection forms** to verify new application data
 5. **Test the enhanced system** with complete form data
 
-This update transforms your database from **60% compliance** to **100% compliance** with the official Rwanda Water Board application requirements! 🎉 
+This update transforms your database from **60% compliance** to **100% compliance** with the official Rwanda Water Resources Board application requirements! 🎉 

@@ -1,5 +1,5 @@
 -- =============================================
--- Rwanda Water Board - Comprehensive Sample Data
+-- Rwanda Water Resources Board - Comprehensive Sample Data
 -- Demonstrates All UX Branching Paths and New Fields
 -- =============================================
 

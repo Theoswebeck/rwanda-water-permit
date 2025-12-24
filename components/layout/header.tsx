@@ -43,7 +43,7 @@ export function Header() {
             transition={{ duration: 0.5 }}
           >
             <Link href="/" className="flex items-center">
-              {/* Black and white Rwanda Water Board logo */}
+              {/* Black and white Rwanda Water Resources Board logo */}
               <div className="relative w-12 h-12 mr-3 grayscale">
                 <svg width="48" height="48" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {/* Blue circle background */}
@@ -164,7 +164,7 @@ export function Header() {
             <SheetContent side="right" className="border-l border-border">
               <div className="flex items-center justify-between mb-8 mt-2">
                 <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
-                  {/* Black and white Rwanda Water Board logo (smaller for mobile) */}
+                  {/* Black and white Rwanda Water Resources Board logo (smaller for mobile) */}
                   <div className="relative w-8 h-8 mr-2 grayscale">
                     <svg width="32" height="32" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
                       {/* Blue circle background */}

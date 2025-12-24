@@ -1,6 +1,6 @@
 -- =============================================
 -- Update Existing Approved Applications 
--- Rwanda Water Board Database Update (Part 2)
+-- Rwanda Water Resources Board Database Update (Part 2)
 -- Run this AFTER the main schema update has been committed
 -- =============================================
 

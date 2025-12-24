@@ -140,7 +140,7 @@ export function HeroSection() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.7 }}
             >
-              Welcome to the official Rwanda Water Board permit application portal. Apply, track, and manage your water concession permits through our secure digital platform for sustainable water resource management in Rwanda.
+              Welcome to the official Rwanda Water Resources Board permit application portal. Apply, track, and manage your water concession permits through our secure digital platform for sustainable water resource management in Rwanda.
             </motion.p>
             
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-8">

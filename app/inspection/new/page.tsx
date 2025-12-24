@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 
 export const metadata: Metadata = {
-  title: "New Inspection | Rwanda Water Board",
+  title: "New Inspection | Rwanda Water Resources Board",
   description: "Create a comprehensive water permit inspection report",
 }
 

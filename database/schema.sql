@@ -1,5 +1,5 @@
 -- =============================================
--- Rwanda Water Board (RWB) Water Permit System
+-- Rwanda Water Resources Board (RWB) Water Permit System
 -- Comprehensive PostgreSQL Schema
 -- =============================================
 
@@ -272,7 +272,7 @@ CREATE TABLE permits (
     allowance_unit VARCHAR(20) NOT NULL,
     
     -- Authority and validity
-    issuing_authority VARCHAR(255) NOT NULL DEFAULT 'Rwanda Water Board',
+    issuing_authority VARCHAR(255) NOT NULL DEFAULT 'Rwanda Water Resources Board',
     issued_date DATE NOT NULL,
     expiry_date DATE NOT NULL,
     
@@ -903,5 +903,5 @@ INSERT INTO system_settings (key, value, description, category) VALUES
 ('password_min_length', '8', 'Minimum password length', 'security'),
 ('session_timeout_minutes', '60', 'Session timeout in minutes', 'security');
 
--- Rwanda Water Board Water Permit Management System Database
+-- Rwanda Water Resources Board Water Permit Management System Database
 -- Schema successfully applied! 

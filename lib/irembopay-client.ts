@@ -1,6 +1,6 @@
 // =============================================
 // IremboPay API Client
-// Rwanda Water Board Water Permit System
+// Rwanda Water Resources Board Water Permit System
 // =============================================
 
 import crypto from 'crypto';

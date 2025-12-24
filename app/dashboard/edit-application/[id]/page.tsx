@@ -1024,6 +1024,15 @@ export default function EditApplicationPage() {
       
       if (updatedApplication) {
         console.log('✅ Application updated and submitted successfully:', updatedApplication);
+
+        // Fire-and-forget: send submission SMS + email (idempotent server-side)
+        try {
+          fetch('/api/notifications/send-submission', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: updatedApplication.id }),
+          }).catch(() => null)
+        } catch {}
         
         // Upload documents in background, don't block UI
         console.log('🚀 Starting document upload process...');

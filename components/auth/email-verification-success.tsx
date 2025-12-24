@@ -103,7 +103,7 @@ export function EmailVerificationSuccess({
 
           <div className="text-center">
             <p className="text-xs text-muted-foreground">
-              Welcome to Rwanda Water Board Water Permit System
+              Welcome to Rwanda Water Resources Board Water Permit System
             </p>
           </div>
         </CardContent>

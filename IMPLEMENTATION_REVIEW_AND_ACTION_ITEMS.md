@@ -79,11 +79,11 @@ Subject: Water Permit System Payment Integration Request
 
 Dear IremboPay Team,
 
-We are the Rwanda Water Board and would like to integrate IremboPay 
+We are the Rwanda Water Resources Board and would like to integrate IremboPay 
 into our Water Permit Application System to collect application fees.
 
 Project Details:
-- Organization: Rwanda Water Board
+- Organization: Rwanda Water Resources Board
 - Purpose: Water permit application fees (35,000 RWF per application)
 - Expected Volume: [Your estimate] applications per month
 - Integration Type: API Integration with webhook callbacks
@@ -102,7 +102,7 @@ Required Documents:
 Thank you,
 [Your Name]
 [Your Title]
-Rwanda Water Board
+Rwanda Water Resources Board
 ```
 
 **What You'll Receive:**

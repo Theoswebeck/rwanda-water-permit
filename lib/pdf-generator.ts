@@ -208,7 +208,7 @@ export const generateDigitalWaterPermit = async (
     const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
     const moeLogoUrl = `${window.location.origin}/assets/ministry_of_env_logo.png`;
     
-    // Left logo - Rwanda Water Board (circular logo)
+    // Left logo - Rwanda Water Resources Board (circular logo)
     doc.addImage(rwbLogoUrl, 'PNG', 15, 10, 35, 35);
     
     // Right logo - Ministry of Environment (also circular)
@@ -218,7 +218,7 @@ export const generateDigitalWaterPermit = async (
     // Fallback to text headers
     doc.setFontSize(12);
     doc.setTextColor(0, 75, 135);
-    doc.text('Rwanda Water Board', 15, 25);
+    doc.text('Rwanda Water Resources Board', 15, 25);
     doc.text('Ministry of Environment', 195, 25, { align: 'right' });
   }
 
@@ -227,7 +227,7 @@ export const generateDigitalWaterPermit = async (
   doc.setTextColor(0, 75, 135);
   doc.text('REPUBLIC OF RWANDA', 105, 20, { align: 'center' });
   doc.setFontSize(14);
-  doc.text('RWANDA WATER BOARD', 105, 28, { align: 'center' });
+  doc.text('RWANDA WATER RESOURCES BOARD', 105, 28, { align: 'center' });
   doc.setFontSize(12);
   doc.text('Ministry of Environment', 105, 35, { align: 'center' });
 
@@ -421,8 +421,8 @@ export const generateDigitalWaterPermit = async (
     "1. This permit is issued under the Water Law of Rwanda and is subject to all applicable regulations.",
     "2. The permit holder must comply with all conditions specified herein and maintain accurate records.",
     "3. Water extraction must not exceed authorized volumes and must be used only for specified purposes.",
-    "4. The Rwanda Water Board reserves the right to conduct periodic inspections.",
-    "5. This permit is non-transferable without prior written approval from the Rwanda Water Board.",
+    "4. The Rwanda Water Resources Board reserves the right to conduct periodic inspections.",
+    "5. This permit is non-transferable without prior written approval from the Rwanda Water Resources Board.",
     "6. Violation of any condition may result in permit suspension or revocation."
   ];
 
@@ -444,7 +444,7 @@ export const generateDigitalWaterPermit = async (
   doc.setLineWidth(0.1);
   doc.rect(30, currentY, 70, 40);
   doc.setFontSize(10);
-  doc.text('Rwanda Water Board', 65, currentY + 8, { align: 'center' });
+  doc.text('Rwanda Water Resources Board', 65, currentY + 8, { align: 'center' });
   doc.text('Authorized Officer', 65, currentY + 20, { align: 'center' });
   doc.text('Date and Signature', 65, currentY + 35, { align: 'center' });
 
@@ -470,7 +470,7 @@ export const generateDigitalWaterPermit = async (
     doc.setTextColor(100, 100, 100);
     
     // Security footer
-    const securityText = "This is an official water permit certificate issued by the Rwanda Water Board. " +
+    const securityText = "This is an official water permit certificate issued by the Rwanda Water Resources Board. " +
                         "Unauthorized modification is prohibited by law. Verify authenticity at rwb.gov.rw";
     // On the last page, keep the line a little narrower to avoid feeling cramped with the QR footer above.
     doc.text(securityText, 15, 285, { maxWidth: i === pageCount ? 165 : 180 });
@@ -531,7 +531,7 @@ export const generateDigitalWaterPermitBlob = async (
     const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
     const moeLogoUrl = `${window.location.origin}/assets/ministry_of_env_logo.png`;
     
-    // Left logo - Rwanda Water Board (circular logo)
+    // Left logo - Rwanda Water Resources Board (circular logo)
     doc.addImage(rwbLogoUrl, 'PNG', 15, 10, 35, 35);
     
     // Right logo - Ministry of Environment (also circular)
@@ -541,7 +541,7 @@ export const generateDigitalWaterPermitBlob = async (
     // Fallback to text headers
     doc.setFontSize(12);
     doc.setTextColor(0, 75, 135);
-    doc.text('Rwanda Water Board', 15, 25);
+    doc.text('Rwanda Water Resources Board', 15, 25);
     doc.text('Ministry of Environment', 195, 25, { align: 'right' });
   }
 
@@ -550,7 +550,7 @@ export const generateDigitalWaterPermitBlob = async (
   doc.setTextColor(0, 75, 135);
   doc.text('REPUBLIC OF RWANDA', 105, 20, { align: 'center' });
   doc.setFontSize(14);
-  doc.text('RWANDA WATER BOARD', 105, 28, { align: 'center' });
+  doc.text('RWANDA WATER RESOURCES BOARD', 105, 28, { align: 'center' });
   doc.setFontSize(12);
   doc.text('Ministry of Environment', 105, 35, { align: 'center' });
 
@@ -744,8 +744,8 @@ export const generateDigitalWaterPermitBlob = async (
     "1. This permit is issued under the Water Law of Rwanda and is subject to all applicable regulations.",
     "2. The permit holder must comply with all conditions specified herein and maintain accurate records.",
     "3. Water extraction must not exceed authorized volumes and must be used only for specified purposes.",
-    "4. The Rwanda Water Board reserves the right to conduct periodic inspections.",
-    "5. This permit is non-transferable without prior written approval from the Rwanda Water Board.",
+    "4. The Rwanda Water Resources Board reserves the right to conduct periodic inspections.",
+    "5. This permit is non-transferable without prior written approval from the Rwanda Water Resources Board.",
     "6. Violation of any condition may result in permit suspension or revocation."
   ];
 
@@ -767,7 +767,7 @@ export const generateDigitalWaterPermitBlob = async (
   doc.setLineWidth(0.1);
   doc.rect(30, currentY, 70, 40);
   doc.setFontSize(10);
-  doc.text('Rwanda Water Board', 65, currentY + 8, { align: 'center' });
+  doc.text('Rwanda Water Resources Board', 65, currentY + 8, { align: 'center' });
   doc.text('Authorized Officer', 65, currentY + 20, { align: 'center' });
   doc.text('Date and Signature', 65, currentY + 35, { align: 'center' });
 
@@ -793,7 +793,7 @@ export const generateDigitalWaterPermitBlob = async (
     doc.setTextColor(100, 100, 100);
     
     // Security footer
-    const securityText = "This is an official water permit certificate issued by the Rwanda Water Board. " +
+    const securityText = "This is an official water permit certificate issued by the Rwanda Water Resources Board. " +
                         "Unauthorized modification is prohibited by law. Verify authenticity at rwb.gov.rw";
     // On the last page, keep the line a little narrower to avoid feeling cramped with the QR footer above.
     doc.text(securityText, 15, 285, { maxWidth: i === pageCount ? 165 : 180 });

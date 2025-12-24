@@ -1,4 +1,4 @@
-# Rwanda Water Board - Comprehensive Sample Data Setup
+# Rwanda Water Resources Board - Comprehensive Sample Data Setup
 
 ## Overview ✨
 

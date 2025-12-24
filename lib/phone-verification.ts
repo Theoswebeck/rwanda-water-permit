@@ -1,5 +1,5 @@
 /**
- * Phone Verification Service for Rwanda Water Board
+ * Phone Verification Service for Rwanda Water Resources Board
  * Integrates Pindo.io SMS service with Supabase database
  */
 
@@ -130,7 +130,7 @@ export class PhoneVerificationService {
 
       if (useCustomCode) {
         // Send custom SMS with our verification code
-        const message = `Your Rwanda Water Board verification code is: ${verificationCode}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
+        const message = `Your Rwanda Water Resources Board verification code is: ${verificationCode}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
         
         try {
           const smsResponse = await pindoClient.sendSMS(phoneNumber, message, 'RWB');
@@ -166,7 +166,7 @@ export class PhoneVerificationService {
           
           // Fallback to custom SMS
           console.log('🔄 Falling back to custom SMS...');
-          const message = `Your Rwanda Water Board verification code is: ${verificationCode}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
+          const message = `Your Rwanda Water Resources Board verification code is: ${verificationCode}. Valid for ${expiryMinutes} minutes. Do not share this code.`;
           
           try {
             await pindoClient.sendSMS(phoneNumber, message, 'RWB');

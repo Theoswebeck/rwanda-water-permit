@@ -31,7 +31,7 @@ import {
 export function SystemSettings() {
   const [settings, setSettings] = useState({
     general: {
-      systemName: "Rwanda Water Board Permit System",
+      systemName: "Rwanda Water Resources Board Permit System",
       systemEmail: "noreply@rwb.gov.rw",
       supportEmail: "support@rwb.gov.rw",
       timezone: "Africa/Kigali",

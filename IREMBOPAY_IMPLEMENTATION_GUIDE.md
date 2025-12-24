@@ -4,7 +4,7 @@
 
 **Completed:** ✅ Backend + Frontend + Database Schema
 
-This guide explains the IremboPay payment integration for the Rwanda Water Board Water Permit System.
+This guide explains the IremboPay payment integration for the Rwanda Water Resources Board Water Permit System.
 
 ---
 

@@ -66,7 +66,7 @@ After applying the SQL fix:
 ## 📋 **Application Number Format**
 
 The format is: `RWB-YYYY-NNNNNN`
-- **RWB**: Rwanda Water Board prefix
+- **RWB**: Rwanda Water Resources Board prefix
 - **YYYY**: Current year (e.g., 2025)
 - **NNNNNN**: 6-digit sequential counter (000001, 000002, etc.)
 

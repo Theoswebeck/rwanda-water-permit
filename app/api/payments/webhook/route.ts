@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getIremboPayClient } from '@/lib/irembopay-client';
 import { mapIremboPayStatus, getApplicationStatusFromPayment, generateReceiptNumber } from '@/lib/payment-utils';
+import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
 import type { IremboPayWebhookPayload, WebhookProcessingResult } from '@/types/payment';
 
 // IMPORTANT:
@@ -230,6 +231,16 @@ export async function POST(request: NextRequest) {
         console.error('⚠️  [WEBHOOK] Failed to update application status:', appUpdateError);
       } else {
         console.log('✅ [WEBHOOK] Application status updated to:', newApplicationStatus);
+        if (newApplicationStatus === 'submitted' && payment.application_id) {
+          try {
+            const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+            if (!notifyResult.ok) {
+              console.warn('⚠️ [WEBHOOK] Submission notifications failed (non-blocking):', notifyResult.message);
+            }
+          } catch (e) {
+            console.warn('⚠️ [WEBHOOK] Submission notifications crashed (non-blocking):', e);
+          }
+        }
       }
 
       // =============================================

@@ -110,7 +110,7 @@ export default function ContactPage() {
               Contact Us
             </h1>
             <p className="mt-6 text-lg text-primary-foreground/90 leading-relaxed">
-              Get in touch with Rwanda Water Board for permits, support, and inquiries. 
+              Get in touch with Rwanda Water Resources Board for permits, support, and inquiries. 
               We're here to help you with all your water resource needs.
             </p>
           </motion.div>

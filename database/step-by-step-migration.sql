@@ -1,5 +1,5 @@
 -- =============================================
--- Rwanda Water Board (RWB) Water Permit System
+-- Rwanda Water Resources Board (RWB) Water Permit System
 -- Step-by-Step Migration for New Workflow
 -- =============================================
 -- 

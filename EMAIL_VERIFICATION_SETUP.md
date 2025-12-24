@@ -36,7 +36,7 @@ In **Authentication** → **Email Templates**, customize:
 ```html
 <h2>Confirm your email</h2>
 <p>Hello,</p>
-<p>Thank you for registering with Rwanda Water Board Water Permit System.</p>
+<p>Thank you for registering with Rwanda Water Resources Board Water Permit System.</p>
 <p>Please click the link below to verify your email address:</p>
 <p><a href="{{ .ConfirmationURL }}">Verify Email Address</a></p>
 <p>This link will expire in 24 hours.</p>
@@ -65,7 +65,7 @@ SMTP Port: 587
 SMTP User: your-email@domain.com
 SMTP Pass: your-app-password
 From Email: noreply@your-domain.com
-From Name: Rwanda Water Board
+From Name: Rwanda Water Resources Board
 ```
 
 #### For Development (Supabase Default)

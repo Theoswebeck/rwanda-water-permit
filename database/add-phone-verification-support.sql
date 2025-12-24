@@ -135,7 +135,7 @@ INSERT INTO system_settings (key, value, description, category) VALUES
 ('phone_verification_cooldown_minutes', '"1"', 'Minutes between verification code requests', 'phone_verification'),
 ('pindo_api_enabled', '"true"', 'Enable Pindo.io SMS API integration', 'sms'),
 ('pindo_sender_name', '"RWB"', 'Default sender name for SMS messages', 'sms'),
-('sms_verification_message', '"Your Rwanda Water Board verification code is: {{code}}. Valid for {{minutes}} minutes."', 'SMS verification message template', 'sms')
+('sms_verification_message', '"Your Rwanda Water Resources Board verification code is: {{code}}. Valid for {{minutes}} minutes."', 'SMS verification message template', 'sms')
 ON CONFLICT (key) DO NOTHING;
 
 -- Success message

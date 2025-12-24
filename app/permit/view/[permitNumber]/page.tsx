@@ -150,14 +150,14 @@ export default async function PublicPermitViewPage({
                   <div className="relative h-10 w-10 overflow-hidden rounded-full border bg-white">
                     <Image
                       src="/assets/rwanda_water_board_Logo.png"
-                      alt="Rwanda Water Board"
+                      alt="Rwanda Water Resources Board"
                       fill
                       sizes="40px"
                       className="object-contain p-1"
                     />
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">Rwanda Water Board</div>
+                    <div className="text-sm font-semibold text-slate-900">Rwanda Water Resources Board</div>
                     <div className="text-xs text-slate-500">Permit verification</div>
                   </div>
                 </div>

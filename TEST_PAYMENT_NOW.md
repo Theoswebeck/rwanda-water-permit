@@ -161,7 +161,7 @@ Run these checks in Supabase SQL Editor:
 
 ```sql
 -- 1. Check merchant is configured
-SELECT * FROM merchants WHERE name = 'Rwanda Water Board';
+SELECT * FROM merchants WHERE name = 'Rwanda Water Resources Board';
 -- Should return 1 row with your API keys
 
 -- 2. Check payments table exists

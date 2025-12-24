@@ -335,7 +335,7 @@ export function PhoneVerificationDialog({
             <div className="text-sm text-blue-800">
               <p className="font-medium">Security Notice</p>
               <p className="text-blue-700">
-                Never share your verification code with anyone. Rwanda Water Board will never ask for your code.
+                Never share your verification code with anyone. Rwanda Water Resources Board will never ask for your code.
               </p>
             </div>
           </div>

@@ -1,6 +1,6 @@
 -- =============================================
 -- IremboPay Payment Integration Schema
--- Rwanda Water Board Water Permit System
+-- Rwanda Water Resources Board Water Permit System
 -- =============================================
 -- 
 -- This migration adds payment processing capabilities
@@ -350,7 +350,7 @@ INSERT INTO merchants (
     is_sandbox,
     is_active
 ) VALUES (
-    'Rwanda Water Board',
+    'Rwanda Water Resources Board',
     'payments@rwb.gov.rw',
     '+250788000000',
     'your_irembopay_api_key_here',

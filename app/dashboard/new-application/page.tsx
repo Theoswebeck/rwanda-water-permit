@@ -327,6 +327,15 @@ function NewApplicationContent() {
       
       if (newApplication) {
         console.log('✅ Application created successfully:', newApplication);
+
+        // Fire-and-forget: send submission SMS + email (idempotent server-side)
+        try {
+          fetch('/api/notifications/send-submission', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: newApplication.id }),
+          }).catch(() => null)
+        } catch {}
         
         // ⚡ PERFORMANCE: Upload documents in background, don't block UI
         uploadApplicationDocuments(newApplication.id, formData)

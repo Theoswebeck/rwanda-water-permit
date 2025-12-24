@@ -1,7 +1,7 @@
 # Pindo.io SMS Verification Integration Setup Guide
 
 ## Overview
-This guide covers the integration of Pindo.io SMS verification service into the Rwanda Water Board water permit system. Users must now verify their phone numbers during registration using SMS codes sent via Pindo.io.
+This guide covers the integration of Pindo.io SMS verification service into the Rwanda Water Resources Board water permit system. Users must now verify their phone numbers during registration using SMS codes sent via Pindo.io.
 
 ## ✅ What's Been Implemented
 

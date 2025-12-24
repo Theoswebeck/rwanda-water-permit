@@ -95,7 +95,7 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
                 Account Suspended
               </h2>
               <p className="text-gray-700 text-sm leading-relaxed">
-                Your account has been temporarily suspended. You cannot access the Rwanda Water Board portal at this time.
+                Your account has been temporarily suspended. You cannot access the Rwanda Water Resources Board portal at this time.
               </p>
             </div>
 
@@ -154,7 +154,7 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
             {/* Footer */}
             <div className="text-center pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-500">
-                Rwanda Water Board Portal
+                Rwanda Water Resources Board Portal
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 For assistance: info@rwb.rw

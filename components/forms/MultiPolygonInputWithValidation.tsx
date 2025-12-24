@@ -2,7 +2,7 @@
 
 // =============================================
 // Multi-Polygon Input with Validation
-// Rwanda Water Board - Water Permit System
+// Rwanda Water Resources Board - Water Permit System
 // =============================================
 
 import { useMemo, useState } from "react";

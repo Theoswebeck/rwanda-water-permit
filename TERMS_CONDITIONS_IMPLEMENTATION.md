@@ -2,7 +2,7 @@
 
 ## 📋 **Overview**
 
-A comprehensive Terms & Conditions workflow with digital permit generation has been implemented for the Rwanda Water Board permit system. This system ensures legal compliance and provides professional, digitally signed permits with official logos.
+A comprehensive Terms & Conditions workflow with digital permit generation has been implemented for the Rwanda Water Resources Board permit system. This system ensures legal compliance and provides professional, digitally signed permits with official logos.
 
 ---
 
@@ -21,7 +21,7 @@ A comprehensive Terms & Conditions workflow with digital permit generation has b
 - **Loading States**: Professional loading indicators
 
 ### 📄 **3. Enhanced PDF Generation**
-- **Official Logos**: Rwanda Water Board + Ministry of Environment
+- **Official Logos**: Rwanda Water Resources Board + Ministry of Environment
 - **Professional Layout**: Multi-section comprehensive permit
 - **Detailed Information**: All application data included
 - **Legal Framework**: Complete terms and conditions
@@ -132,7 +132,7 @@ Ensure the following are properly configured:
 
 ### **Professional Layout:**
 - Official Government Headers
-- Rwanda Water Board + Ministry logos
+- Rwanda Water Resources Board + Ministry logos
 - Multi-section comprehensive information
 - Legal disclaimers and conditions
 - Official signature areas

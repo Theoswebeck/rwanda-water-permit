@@ -6,7 +6,7 @@ import { CheckCircle } from "lucide-react";
 const featuresData = [
   {
     title: "Application Tracking",
-    description: "Monitor your water permit application status in real-time through our Rwanda Water Board online dashboard.",
+    description: "Monitor your water permit application status in real-time through our Rwanda Water Resources Board online dashboard.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bar-chart-3">
         <path d="M3 3v18h18" />
@@ -18,7 +18,7 @@ const featuresData = [
   },
   {
     title: "Secure Processing",
-    description: "The Rwanda Water Board ensures your application data is protected with advanced security measures compliant with national regulations.",
+    description: "The Rwanda Water Resources Board ensures your application data is protected with advanced security measures compliant with national regulations.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shield-check">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
@@ -28,7 +28,7 @@ const featuresData = [
   },
   {
     title: "Efficient Service",
-    description: "The Rwanda Water Board digital system streamlines the water permit process to reduce processing time and administrative barriers.",
+    description: "The Rwanda Water Resources Board digital system streamlines the water permit process to reduce processing time and administrative barriers.",
     icon: (
       <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-zap">
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -49,9 +49,9 @@ export function FeaturesSection() {
           className="text-center mb-16"
         >
           <div className="text-sm font-medium text-primary mb-3">SERVICE FEATURES</div>
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl mb-6">Rwanda Water Board Portal Services</h2>
+          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl mb-6">Rwanda Water Resources Board Portal Services</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            The official Rwanda Water Board portal provides essential services for managing water resources. 
+            The official Rwanda Water Resources Board portal provides essential services for managing water resources. 
             Our platform ensures compliance with Rwanda's water regulations while offering a transparent process.
           </p>
         </motion.div>

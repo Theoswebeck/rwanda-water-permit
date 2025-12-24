@@ -83,22 +83,22 @@ export async function POST(request: NextRequest) {
         const projectInfo = projectTitle ? ` for ${projectTitle}` : '';
         message = `Dear ${applicantName}, 
 
-Congratulations! Your water permit application ${applicationNumber}${projectInfo} has been APPROVED by Rwanda Water Board.
+Congratulations! Your water permit application ${applicationNumber}${projectInfo} has been APPROVED by Rwanda Water Resources Board.
 
 For inquiries: contact@rwb.rw
-Rwanda Water Board`;
+Rwanda Water Resources Board`;
         break;
 
       case 'rejected':
         const reasonInfo = reason ? ` Reason: ${reason.substring(0, 100)}...` : '';
         message = `Dear ${applicantName},
 
-Your water permit application ${applicationNumber} has been REJECTED by Rwanda Water Board.${reasonInfo}
+Your water permit application ${applicationNumber} has been REJECTED by Rwanda Water Resources Board.${reasonInfo}
 
 You may resubmit with corrections or contact us for guidance.
 
 For support: contact@rwb.rw
-Rwanda Water Board`;
+Rwanda Water Resources Board`;
         break;
 
       case 'revision_required':
@@ -109,7 +109,7 @@ Your water permit application ${applicationNumber} requires REVISIONS.
 Please log into your dashboard to view detailed feedback and resubmit your application.
 
 Portal: https://permit.rwb.rw
-Rwanda Water Board`;
+Rwanda Water Resources Board`;
         break;
 
       default:

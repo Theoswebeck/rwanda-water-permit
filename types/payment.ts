@@ -1,6 +1,6 @@
 // =============================================
 // IremboPay Payment System Types
-// Rwanda Water Board Water Permit System
+// Rwanda Water Resources Board Water Permit System
 // =============================================
 
 export type PaymentStatus = 

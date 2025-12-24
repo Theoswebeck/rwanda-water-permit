@@ -101,7 +101,7 @@ export function SuccessConfirmation({
           </div>
         </CardContent>
         <CardFooter className="text-xs text-center text-muted-foreground">
-          You can now access all the features of the Rwanda Water Board permit application system.
+          You can now access all the features of the Rwanda Water Resources Board permit application system.
         </CardFooter>
       </Card>
     </motion.div>

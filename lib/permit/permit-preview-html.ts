@@ -33,7 +33,7 @@ export function getSamplePermitPreviewData(origin = "http://localhost:3000"): Pe
     purpose: "Commercial Supply",
     authorizedVolume: "150 m³/day",
     location: "Kigali, Gasabo District",
-    issuingAuthority: "Rwanda Water Board",
+    issuingAuthority: "Rwanda Water Resources Board",
     verificationUrl: `${origin}/permit/view/${encodeURIComponent(permitNumber)}`,
   };
 }

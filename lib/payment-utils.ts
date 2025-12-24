@@ -1,6 +1,6 @@
 // =============================================
 // Payment Utility Functions
-// Rwanda Water Board Water Permit System
+// Rwanda Water Resources Board Water Permit System
 // =============================================
 
 import type { Payment, PaymentStatus, PaymentReceipt } from '@/types/payment';

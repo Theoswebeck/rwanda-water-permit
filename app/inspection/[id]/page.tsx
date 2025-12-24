@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { InspectionDetail } from "@/components/inspection/inspection-detail"
 
 export const metadata: Metadata = {
-  title: "Inspection Details | Rwanda Water Board",
+  title: "Inspection Details | Rwanda Water Resources Board",
   description: "View water permit inspection details",
 }
 

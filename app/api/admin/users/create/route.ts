@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
       const html = `
         <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:600px;margin:0 auto;padding:20px">
           <div style="text-align:center;margin-bottom:30px">
-            <h1 style="color:#1f2937;margin:0">Rwanda Water Board</h1>
+            <h1 style="color:#1f2937;margin:0">Rwanda Water Resources Board</h1>
             <h2 style="color:#4b5563;margin:10px 0">Staff Account Created</h2>
           </div>
           
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
           
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:30px 0">
           <p style="color:#9ca3af;font-size:12px;text-align:center">
-            Rwanda Water Board - Water Permit Application System
+            Rwanda Water Resources Board - Water Permit Application System
           </p>
         </div>`
 
@@ -236,7 +236,7 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             from: fromEmail,
             to: emailLower,
-            subject: 'Your Rwanda Water Board Staff Account',
+            subject: 'Your Rwanda Water Resources Board Staff Account',
             html,
           }),
         })

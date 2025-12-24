@@ -206,7 +206,7 @@ Check that these tables have data after testing:
 
 ```sql
 -- Check merchant configuration
-SELECT * FROM merchants WHERE name = 'Rwanda Water Board';
+SELECT * FROM merchants WHERE name = 'Rwanda Water Resources Board';
 
 -- Check payment records
 SELECT * FROM payments ORDER BY created_at DESC LIMIT 5;

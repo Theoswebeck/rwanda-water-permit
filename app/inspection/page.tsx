@@ -3,7 +3,7 @@ import { InspectionDashboard } from "@/components/inspection/inspection-dashboar
 // import { ProtectedRoute } from "@/components/auth/protected-route" // TEMPORARY: Disabled for testing
 
 export const metadata: Metadata = {
-  title: "Inspection Dashboard | Rwanda Water Board",
+  title: "Inspection Dashboard | Rwanda Water Resources Board",
   description: "Manage water permit applications and track inspection progress",
 }
 

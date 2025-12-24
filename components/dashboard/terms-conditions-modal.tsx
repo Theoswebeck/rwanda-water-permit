@@ -122,7 +122,7 @@ export function TermsConditionsModal({
         purpose: applicationData.water_purpose,
         water_allowance: applicationData.estimated_usage_volume || 0,
         allowance_unit: applicationData.usage_unit || 'm³',
-        issuing_authority: 'Rwanda Water Board',
+        issuing_authority: 'Rwanda Water Resources Board',
         issued_date: new Date().toISOString().split('T')[0],
         expiry_date: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 years
         conditions: { 
@@ -356,7 +356,7 @@ export function TermsConditionsModal({
                     <p className="text-gray-700 leading-relaxed">
                       Water extraction must not exceed the authorized volume and must be used only for the 
                       purposes specified in this permit. Any changes to water usage patterns or purposes 
-                      require prior approval from the Rwanda Water Board.
+                      require prior approval from the Rwanda Water Resources Board.
                     </p>
                   </div>
                   
@@ -376,7 +376,7 @@ export function TermsConditionsModal({
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-3 text-lg">4. Inspections and Monitoring</h4>
                     <p className="text-gray-700 leading-relaxed">
-                      The Rwanda Water Board reserves the right to conduct periodic inspections of the 
+                      The Rwanda Water Resources Board reserves the right to conduct periodic inspections of the 
                       permitted facility. The permit holder must provide access to authorized personnel 
                       and maintain all required documentation and monitoring equipment.
                     </p>
@@ -400,7 +400,7 @@ export function TermsConditionsModal({
                     <p className="text-gray-700 leading-relaxed">
                       This permit is non-transferable without prior approval. Any modifications to the 
                       permitted activities require a formal application and approval process through 
-                      the Rwanda Water Board.
+                      the Rwanda Water Resources Board.
                     </p>
                   </div>
                   

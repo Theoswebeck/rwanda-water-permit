@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Test SMS sending directly
-    const message = `Test SMS from Rwanda Water Board. Code: 123456`;
+    const message = `Test SMS from Rwanda Water Resources Board. Code: 123456`;
     
     const response = await fetch('https://api.pindo.io/v1/sms/', {
       method: 'POST',

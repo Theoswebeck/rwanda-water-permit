@@ -87,7 +87,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
               />
             </motion.svg>
             <Link href="/" className="text-xl font-bold">
-              Rwanda Water Board
+              Rwanda Water Resources Board
             </Link>
           </motion.div>
         </div>
@@ -110,7 +110,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         </motion.div>
         
         <div className="text-sm opacity-70">
-          &copy; {new Date().getFullYear()} Rwanda Water Board. All rights reserved.
+          &copy; {new Date().getFullYear()} Rwanda Water Resources Board. All rights reserved.
         </div>
       </div>
 

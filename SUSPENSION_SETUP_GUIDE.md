@@ -2,7 +2,7 @@
 
 ## Overview
 
-The suspension system prevents suspended users from accessing any information in the Rwanda Water Board portal with a beautiful, informative UI.
+The suspension system prevents suspended users from accessing any information in the Rwanda Water Resources Board portal with a beautiful, informative UI.
 
 ## ✨ Features
 
@@ -106,7 +106,7 @@ export default function YourProtectedPage() {
   - Clear suspension message
   - Contact support options
   - Logout functionality
-  - Rwanda Water Board branding
+  - Rwanda Water Resources Board branding
 
 ## 🧪 Testing the System
 

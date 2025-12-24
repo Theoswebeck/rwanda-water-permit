@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getIremboPayClient } from '@/lib/irembopay-client';
 import { getApplicationStatusFromPayment, mapIremboPayStatus } from '@/lib/payment-utils';
+import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
 import type { PaymentStatusResponse } from '@/types/payment';
 
 const getDemoAutoCompleteDelayMs = () => {
@@ -174,6 +175,16 @@ export async function GET(
               if (payment.applications) {
                 payment.applications.status = newApplicationStatus as any;
               }
+              if (newApplicationStatus === 'submitted') {
+                try {
+                  const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+                  if (!notifyResult.ok) {
+                    console.warn('⚠️ [PAYMENT STATUS] Submission notifications failed (non-blocking):', notifyResult.message);
+                  }
+                } catch (e) {
+                  console.warn('⚠️ [PAYMENT STATUS] Submission notifications crashed (non-blocking):', e);
+                }
+              }
             }
 
             // Mutate response object so client sees completion immediately
@@ -257,6 +268,16 @@ export async function GET(
                 // Update the payment.applications object if it exists
                 if (payment.applications) {
                   payment.applications.status = newApplicationStatus as any;
+                }
+                if (newApplicationStatus === 'submitted') {
+                  try {
+                    const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+                    if (!notifyResult.ok) {
+                      console.warn('⚠️ [PAYMENT STATUS] Submission notifications failed (non-blocking):', notifyResult.message);
+                    }
+                  } catch (e) {
+                    console.warn('⚠️ [PAYMENT STATUS] Submission notifications crashed (non-blocking):', e);
+                  }
                 }
               }
             } else if (mappedStatus === 'completed' && !payment.application_id) {

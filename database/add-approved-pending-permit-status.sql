@@ -1,6 +1,6 @@
 -- =============================================
 -- Add approved_pending_permit status and Terms & Conditions fields
--- Rwanda Water Board Database Update
+-- Rwanda Water Resources Board Database Update
 -- =============================================
 
 -- Add the new status to the enum (must be committed before use)

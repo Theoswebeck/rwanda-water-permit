@@ -9,7 +9,7 @@ BEGIN
   -- Try to update existing merchant
   UPDATE merchants 
   SET 
-    name = 'Rwanda Water Board',
+    name = 'Rwanda Water Resources Board',
     email = 'payments@rwb.gov.rw',
     phone = '+250788000000',
     api_key = 'sk_live_37dc025062934cf9809cd90ea1c89614',
@@ -36,7 +36,7 @@ BEGIN
       is_sandbox,
       is_active
     ) VALUES (
-      'Rwanda Water Board',
+      'Rwanda Water Resources Board',
       'payments@rwb.gov.rw',
       '+250788000000',
       'sk_live_37dc025062934cf9809cd90ea1c89614',

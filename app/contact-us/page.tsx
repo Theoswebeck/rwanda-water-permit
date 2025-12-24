@@ -98,7 +98,7 @@ function ContactUsContent() {
               <h1 className="text-2xl font-bold text-gray-900">Contact Support</h1>
             </div>
             <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-              Rwanda Water Board
+              Rwanda Water Resources Board
             </Badge>
           </div>
         </div>

@@ -1,5 +1,5 @@
 -- =============================================
--- Rwanda Water Board Storage Setup
+-- Rwanda Water Resources Board Storage Setup
 -- Create storage bucket for application documents
 -- =============================================
 

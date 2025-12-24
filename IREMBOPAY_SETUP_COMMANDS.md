@@ -72,7 +72,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 -- Update merchant with your IremboPay credentials
 UPDATE merchants 
 SET 
-  name = 'Rwanda Water Board',
+  name = 'Rwanda Water Resources Board',
   email = 'payments@rwb.gov.rw',
   api_key = 'sk_live_37dc025062934cf9809cd90ea1c89614',
   public_key = 'pk_live_e554eff2d06c4c95b621dd99d6e4cf40',
@@ -96,7 +96,7 @@ INSERT INTO merchants (
   is_active
 )
 SELECT 
-  'Rwanda Water Board',
+  'Rwanda Water Resources Board',
   'payments@rwb.gov.rw',
   'sk_live_37dc025062934cf9809cd90ea1c89614',
   'pk_live_e554eff2d06c4c95b621dd99d6e4cf40',

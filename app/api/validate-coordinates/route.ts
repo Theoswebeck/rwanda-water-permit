@@ -1,6 +1,6 @@
 // =============================================
 // API Route: Validate Coordinates
-// Rwanda Water Board - Water Permit System
+// Rwanda Water Resources Board - Water Permit System
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';

@@ -16,7 +16,7 @@ INSERT INTO merchants (
   is_sandbox,
   is_active
 ) VALUES (
-  'Rwanda Water Board',
+  'Rwanda Water Resources Board',
   'payments@rwb.gov.rw',
   '+250788000000',
   'sk_live_37dc025062934cf9809cd90ea1c89614',

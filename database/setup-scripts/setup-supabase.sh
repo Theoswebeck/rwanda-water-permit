@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # =============================================
-# Rwanda Water Board Database Setup Script
+# Rwanda Water Resources Board Database Setup Script
 # For Supabase Integration
 # =============================================
 
 set -e  # Exit on any error
 
-echo "🚀 Setting up Rwanda Water Board Database Schema..."
+echo "🚀 Setting up Rwanda Water Resources Board Database Schema..."
 
 # Colors for output
 RED='\033[0;31m'

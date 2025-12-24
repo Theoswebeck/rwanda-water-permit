@@ -1,5 +1,5 @@
 -- =============================================
--- Rwanda Water Board - Comprehensive Schema Update
+-- Rwanda Water Resources Board - Comprehensive Schema Update
 -- Adding Missing Fields from Official Application Form (Part A)
 -- Excludes: Payment Information & Certification 
 -- =============================================
@@ -244,7 +244,7 @@ END $$;
 DO $$
 BEGIN
     RAISE NOTICE '=============================================';
-    RAISE NOTICE 'RWANDA WATER BOARD SCHEMA UPDATE COMPLETE';
+    RAISE NOTICE 'RWANDA WATER RESOURCES BOARD SCHEMA UPDATE COMPLETE';
     RAISE NOTICE '=============================================';
     RAISE NOTICE 'Added Fields Summary:';
     RAISE NOTICE '• Enhanced Applicant Info: 6 new fields';

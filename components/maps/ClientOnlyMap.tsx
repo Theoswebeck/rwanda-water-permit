@@ -2,7 +2,7 @@
 
 // =============================================
 // Client-Only Map Component
-// Rwanda Water Board - Water Permit System
+// Rwanda Water Resources Board - Water Permit System
 // =============================================
 
 import { MapContainer, TileLayer, Marker, Polygon, Popup, useMapEvents } from "react-leaflet";

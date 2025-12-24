@@ -92,8 +92,8 @@ export async function POST(req: NextRequest) {
     if (resendKey) {
       const isPasswordReset = String(purpose) === 'password_reset'
       const subject = isPasswordReset
-        ? 'Your password reset code - Rwanda Water Board'
-        : 'Your verification code - Rwanda Water Board'
+        ? 'Your password reset code - Rwanda Water Resources Board'
+        : 'Your verification code - Rwanda Water Resources Board'
       const heading = isPasswordReset ? 'Password Reset' : 'Email Verification'
       const bodyText = isPasswordReset
         ? 'Use this code to reset your password:'
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
       const html = `
         <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:600px;margin:0 auto;padding:20px">
           <div style="text-align:center;margin-bottom:30px">
-            <h1 style="color:#1f2937;margin:0">Rwanda Water Board</h1>
+            <h1 style="color:#1f2937;margin:0">Rwanda Water Resources Board</h1>
             <h2 style="color:#4b5563;margin:10px 0">${heading}</h2>
           </div>
           <p style="font-size:16px;color:#374151">${bodyText}</p>
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
           <p style="color:#6b7280;font-size:14px;margin:20px 0">This code expires in 15 minutes.</p>
           <p style="color:#6b7280;font-size:14px">${ignoreText}</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:30px 0">
-          <p style="color:#9ca3af;font-size:12px;text-align:center">Rwanda Water Board - Water Permit Application System</p>
+          <p style="color:#9ca3af;font-size:12px;text-align:center">Rwanda Water Resources Board - Water Permit Application System</p>
         </div>`
 
       console.log(`📤 Sending email via Resend API...`)

@@ -1,5 +1,5 @@
 -- =============================================
--- Rwanda Water Board (RWB) Water Permit System
+-- Rwanda Water Resources Board (RWB) Water Permit System
 -- Supabase Migration - Initial Schema
 -- =============================================
 
@@ -217,7 +217,7 @@ CREATE TABLE public.permits (
     allowance_unit VARCHAR(20) NOT NULL,
     
     -- Authority and validity
-    issuing_authority VARCHAR(255) NOT NULL DEFAULT 'Rwanda Water Board',
+    issuing_authority VARCHAR(255) NOT NULL DEFAULT 'Rwanda Water Resources Board',
     issued_date DATE NOT NULL,
     expiry_date DATE NOT NULL,
     

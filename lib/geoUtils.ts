@@ -1,6 +1,6 @@
 // =============================================
 // Geospatial Utilities for Water Permit System
-// Rwanda Water Board - Polygon Intersection Validation
+// Rwanda Water Resources Board - Polygon Intersection Validation
 // =============================================
 
 import * as turf from '@turf/turf';

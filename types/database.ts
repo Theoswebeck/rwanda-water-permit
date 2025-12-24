@@ -1,5 +1,5 @@
 // =============================================
-// Rwanda Water Board Database Types
+// Rwanda Water Resources Board Database Types
 // Generated from PostgreSQL Schema
 // =============================================
 

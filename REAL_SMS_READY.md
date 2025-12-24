@@ -30,7 +30,7 @@ I've disabled development mode - your app will now send **REAL SMS** messages!
 
 ## 📋 **SMS Content:**
 ```
-Your Rwanda Water Board verification code is: 456789. Valid for 10 minutes. Do not share this code.
+Your Rwanda Water Resources Board verification code is: 456789. Valid for 10 minutes. Do not share this code.
 
 From: PindoTest
 ```

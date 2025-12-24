@@ -1,4 +1,4 @@
--- Sample data for testing the Rwanda Water Board system
+-- Sample data for testing the Rwanda Water Resources Board system
 -- This includes applications in different review stages
 
 -- First, let's add some sample users

@@ -62,7 +62,7 @@ npm run dev
 
 ### 📱 **SMS Content:**
 ```
-Your Rwanda Water Board verification code is: 123456. Valid for 10 minutes. Do not share this code.
+Your Rwanda Water Resources Board verification code is: 123456. Valid for 10 minutes. Do not share this code.
 ```
 *Sender: PindoTest*
 
