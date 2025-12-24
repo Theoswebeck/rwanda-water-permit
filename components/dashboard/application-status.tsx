@@ -111,6 +111,8 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "draft":
+        return <Badge variant="outline" className="bg-gray-100 text-gray-700">Draft</Badge>;
       case "submitted":
         return <Badge variant="outline" className="bg-blue-100 text-blue-700">Submitted</Badge>;
       case "under_review":

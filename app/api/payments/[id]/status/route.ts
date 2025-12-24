@@ -282,6 +282,27 @@ export async function GET(
               }
             } else if (mappedStatus === 'completed' && !payment.application_id) {
               console.warn('⚠️  [PAYMENT STATUS] Payment completed but no application_id linked!');
+            } else if ((mappedStatus === 'failed' || mappedStatus === 'cancelled') && payment.application_id) {
+              // ✅ Requirement: if payment fails, application should still be draft.
+              // Race-safety: only revert if app is still pending payment (avoid clobbering submitted).
+              const { data: updatedApp, error: revertError } = await supabase
+                .from('applications')
+                .update({ status: 'draft' })
+                .eq('id', payment.application_id)
+                .in('status', ['pending_payment', 'draft'])
+                .select('id,status')
+                .maybeSingle();
+
+              if (revertError) {
+                console.error('⚠️  [PAYMENT STATUS] Failed to revert application to draft:', revertError);
+              } else if (updatedApp) {
+                console.log('✅ [PAYMENT STATUS] Application status reverted to draft');
+                if (payment.applications) {
+                  payment.applications.status = 'draft' as any;
+                }
+              } else {
+                console.log('ℹ️  [PAYMENT STATUS] Application not reverted (already progressed beyond payment stage)');
+              }
             }
           }
         }

@@ -290,15 +290,27 @@ export async function POST(request: NextRequest) {
         // Non-critical, continue
       }
     } else if (internalStatus === 'failed' || internalStatus === 'cancelled') {
-      // Update application back to draft or keep pending_payment
-      const newStatus = internalStatus === 'cancelled' ? 'draft' : 'pending_payment';
-      
-      await supabaseAdmin
-        .from('applications')
-        .update({ status: newStatus })
-        .eq('id', payment.application_id);
+      // ✅ Requirement: if payment fails, application should still be draft.
+      // Race-safety: only revert if the application is still in the payment stage.
+      const newStatus = 'draft';
 
-      console.log('✅ [WEBHOOK] Application status updated to:', newStatus);
+      if (payment.application_id) {
+        const { data: updatedApp, error: revertError } = await supabaseAdmin
+          .from('applications')
+          .update({ status: newStatus })
+          .eq('id', payment.application_id)
+          .in('status', ['pending_payment', 'draft'])
+          .select('id,status')
+          .maybeSingle();
+
+        if (revertError) {
+          console.error('⚠️  [WEBHOOK] Failed to revert application to draft:', revertError);
+        } else if (updatedApp) {
+          console.log('✅ [WEBHOOK] Application status updated to:', newStatus);
+        } else {
+          console.log('ℹ️  [WEBHOOK] Application not reverted (already progressed beyond payment stage)');
+        }
+      }
     }
 
     // =============================================

@@ -307,7 +307,8 @@ export const getApplicationStatusFromPayment = (paymentStatus: PaymentStatus): s
     'pending': 'pending_payment',
     'processing': 'pending_payment',
     'completed': 'submitted',
-    'failed': 'pending_payment',
+    // If payment fails, the application should remain a draft so the applicant can retry.
+    'failed': 'draft',
     'cancelled': 'draft',
     'refunded': 'pending_payment',
   };
