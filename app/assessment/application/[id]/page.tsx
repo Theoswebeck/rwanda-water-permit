@@ -288,6 +288,7 @@ export default function AssessmentApplicationPage() {
   // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
   const actionInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState<string>("");
+  const tabTouchedRef = useRef(false);
 
   // Allow assessment edits while the application is actively under review or pending assessment.
   // Once it's forwarded to approver (pending_final_approval) it must be view-only.
@@ -298,17 +299,9 @@ export default function AssessmentApplicationPage() {
   const defaultTabValue = isReadOnly ? "application_details" : "doc_verification";
 
   useEffect(() => {
-    setActiveTab((prev) => (prev ? prev : defaultTabValue));
+    if (tabTouchedRef.current) return;
+    setActiveTab(defaultTabValue);
   }, [defaultTabValue]);
-
-  // Ensure Inspector Name is not editable (locks the specific input when the Field Report tab is active)
-  useEffect(() => {
-    if (activeTab !== "field_report") return;
-    const el = document.getElementById("inspector-name") as HTMLInputElement | null;
-    if (!el) return;
-    el.readOnly = true;
-    el.setAttribute("aria-readonly", "true");
-  }, [activeTab]);
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -885,7 +878,10 @@ export default function AssessmentApplicationPage() {
           {/* Main Content with Tabs */}
           <Tabs
             value={activeTab || defaultTabValue}
-            onValueChange={setActiveTab}
+            onValueChange={(next) => {
+              tabTouchedRef.current = true;
+              setActiveTab(next);
+            }}
             className="space-y-6"
           >
             <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
@@ -944,9 +940,9 @@ export default function AssessmentApplicationPage() {
                 inspectionDate={inspectionDate}
                 onFilesChange={setFieldReportFiles}
                 onSummaryChange={setFieldReportSummary}
-                // Intentionally read-only: auto-filled from currently logged-in user / saved assessment
-                onInspectorNameChange={() => {}}
+                onInspectorNameChange={setInspectorName}
                 onInspectionDateChange={setInspectionDate}
+                inspectorNameReadOnly={true}
                 readOnly={isReadOnly}
               />
             </TabsContent>

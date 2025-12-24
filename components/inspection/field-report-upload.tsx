@@ -58,6 +58,7 @@ interface FieldReportUploadProps {
   onSummaryChange: (summary: string) => void;
   onInspectorNameChange: (name: string) => void;
   onInspectionDateChange: (date: string) => void;
+  inspectorNameReadOnly?: boolean;
   readOnly?: boolean;
 }
 
@@ -91,6 +92,7 @@ export function FieldReportUpload({
   onSummaryChange,
   onInspectorNameChange,
   onInspectionDateChange,
+  inspectorNameReadOnly = false,
   readOnly = false
 }: FieldReportUploadProps) {
   const [uploading, setUploading] = useState(false);
@@ -247,8 +249,10 @@ export function FieldReportUpload({
                 value={inspectorName}
                 onChange={(e) => onInspectorNameChange(e.target.value)}
                 placeholder="Enter inspector name"
+                readOnly={readOnly || inspectorNameReadOnly}
+                aria-readonly={readOnly || inspectorNameReadOnly}
                 disabled={readOnly}
-                className="mt-1"
+                className={`mt-1${!readOnly && inspectorNameReadOnly ? " bg-muted/50" : ""}`}
               />
             </div>
             <div>
