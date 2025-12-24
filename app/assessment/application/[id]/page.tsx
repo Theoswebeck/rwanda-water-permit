@@ -287,6 +287,16 @@ export default function AssessmentApplicationPage() {
 
   // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
   const actionInFlightRef = useRef(false);
+  const [activeTab, setActiveTab] = useState<string>("");
+
+  // Ensure Inspector Name is not editable (locks the specific input when the Field Report tab is active)
+  useEffect(() => {
+    if (activeTab !== "field_report") return;
+    const el = document.getElementById("inspector-name") as HTMLInputElement | null;
+    if (!el) return;
+    el.readOnly = true;
+    el.setAttribute("aria-readonly", "true");
+  }, [activeTab]);
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -295,6 +305,17 @@ export default function AssessmentApplicationPage() {
         setError(null);
 
         const applicationNumber = params.id as string;
+
+        const formatFullName = (u?: { first_name?: string | null; last_name?: string | null }) => {
+          const first = (u?.first_name || "").trim();
+          const last = (u?.last_name || "").trim();
+          const full = `${first} ${last}`.trim();
+          return full;
+        };
+
+        // Current logged-in user (assessor)
+        const { data: { user: authUser }, error: authErr } = await supabase.auth.getUser();
+        if (authErr) throw authErr;
         
         // Fetch application with related data
         const { data: appData, error: appError } = await supabase
@@ -311,6 +332,7 @@ export default function AssessmentApplicationPage() {
         if (appError) throw appError;
 
         // If there's an assigned inspector, fetch the assigned user information
+        let assignedInspectorName = "";
         if (appData.assigned_inspector_id) {
           const { data: assignedUserData } = await supabase
             .from('users')
@@ -320,11 +342,7 @@ export default function AssessmentApplicationPage() {
             
           if (assignedUserData) {
             (appData as any).assigned_to_user = assignedUserData;
-            
-            // Pre-fill inspector name if not set
-            if (!inspectorName) {
-              setInspectorName(`${assignedUserData.first_name} ${assignedUserData.last_name}`);
-            }
+            assignedInspectorName = formatFullName(assignedUserData);
           }
         }
 
@@ -339,13 +357,38 @@ export default function AssessmentApplicationPage() {
           .limit(1)
           .maybeSingle();
 
+        // Compute default inspector name (priority: saved assessment -> current logged-in user -> assigned inspector)
+        let currentAssessorName = "";
+        if (authUser?.id) {
+          const { data: currentUserData } = await supabase
+            .from('users')
+            .select('first_name, last_name')
+            .eq('id', authUser.id)
+            .maybeSingle();
+          currentAssessorName =
+            formatFullName(currentUserData || undefined) ||
+            (typeof (authUser.user_metadata as any)?.full_name === "string"
+              ? String((authUser.user_metadata as any).full_name).trim()
+              : "") ||
+            (authUser.email || "");
+        }
+
+        const defaultInspectorName =
+          (existingAssessment?.inspector_name || "").trim() ||
+          currentAssessorName ||
+          assignedInspectorName;
+
+        // Only set if still empty, so we don't overwrite manual edits
+        if (defaultInspectorName) {
+          setInspectorName((prev) => (prev ? prev : defaultInspectorName));
+        }
+
         if (existingAssessment) {
           setAssessmentId(existingAssessment.id);
           setDocumentVerifications(existingAssessment.document_verifications || {});
           
           // Restore field report data
           setFieldReportSummary(existingAssessment.field_report_summary || "");
-          setInspectorName(existingAssessment.inspector_name || inspectorName);
           if (existingAssessment.inspection_date) {
             setInspectionDate(existingAssessment.inspection_date);
           }
@@ -719,6 +762,11 @@ export default function AssessmentApplicationPage() {
     application.status === "pending_assessment" || 
     application.status === "under_review";
   const isReadOnly = !isEditableAssessment;
+  const defaultTabValue = isReadOnly ? "application_details" : "doc_verification";
+
+  useEffect(() => {
+    setActiveTab((prev) => (prev ? prev : defaultTabValue));
+  }, [defaultTabValue]);
   
   return (
     <DashboardLayout>
@@ -835,7 +883,11 @@ export default function AssessmentApplicationPage() {
           )}
 
           {/* Main Content with Tabs */}
-          <Tabs defaultValue={isReadOnly ? "application_details" : "doc_verification"} className="space-y-6">
+          <Tabs
+            value={activeTab || defaultTabValue}
+            onValueChange={setActiveTab}
+            className="space-y-6"
+          >
             <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
@@ -892,7 +944,8 @@ export default function AssessmentApplicationPage() {
                 inspectionDate={inspectionDate}
                 onFilesChange={setFieldReportFiles}
                 onSummaryChange={setFieldReportSummary}
-                onInspectorNameChange={setInspectorName}
+                // Intentionally read-only: auto-filled from currently logged-in user / saved assessment
+                onInspectorNameChange={() => {}}
                 onInspectionDateChange={setInspectionDate}
                 readOnly={isReadOnly}
               />
