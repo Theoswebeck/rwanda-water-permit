@@ -289,6 +289,18 @@ export default function AssessmentApplicationPage() {
   const actionInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState<string>("");
 
+  // Allow assessment edits while the application is actively under review or pending assessment.
+  // Once it's forwarded to approver (pending_final_approval) it must be view-only.
+  const isEditableAssessment =
+    application?.status === "pending_assessment" ||
+    application?.status === "under_review";
+  const isReadOnly = application ? !isEditableAssessment : true;
+  const defaultTabValue = isReadOnly ? "application_details" : "doc_verification";
+
+  useEffect(() => {
+    setActiveTab((prev) => (prev ? prev : defaultTabValue));
+  }, [defaultTabValue]);
+
   // Ensure Inspector Name is not editable (locks the specific input when the Field Report tab is active)
   useEffect(() => {
     if (activeTab !== "field_report") return;
@@ -755,18 +767,6 @@ export default function AssessmentApplicationPage() {
   }
   
   if (!application) return null;
-
-  // Allow assessment edits while the application is actively under review or pending assessment.
-  // Once it's forwarded to approver (pending_final_approval) it must be view-only.
-  const isEditableAssessment = 
-    application.status === "pending_assessment" || 
-    application.status === "under_review";
-  const isReadOnly = !isEditableAssessment;
-  const defaultTabValue = isReadOnly ? "application_details" : "doc_verification";
-
-  useEffect(() => {
-    setActiveTab((prev) => (prev ? prev : defaultTabValue));
-  }, [defaultTabValue]);
   
   return (
     <DashboardLayout>
