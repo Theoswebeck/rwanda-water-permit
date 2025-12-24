@@ -20,6 +20,7 @@ import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useA
 import { usePermitsQuery } from "@/hooks/usePermitsQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Permit as DatabasePermit } from "@/types/database";
+import type { Application, ApplicationStatus as DbApplicationStatus } from "@/types/database";
 
 const ApplicationsList = dynamic(
   () => import("@/components/dashboard/applications-list").then((mod) => mod.ApplicationsList),
@@ -47,9 +48,26 @@ const PermitsList = dynamic(
   }
 );
 
+type ApplicantDashboardApplication = Application & {
+  /**
+   * Applicant-safe status for UI only.
+   * Raw `status` is preserved for behavior (edit, accept terms, etc).
+   */
+  display_status?: DbApplicationStatus;
+};
+
+function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationStatus {
+  // Applicants should only see: submitted, under_review, approved, expired.
+  // Any other status is mapped to under_review on the dashboard UI.
+  if (status === "submitted" || status === "under_review" || status === "approved" || status === "expired") {
+    return status;
+  }
+  return "under_review";
+}
+
 function DashboardContent() {
   const searchParams = useSearchParams();
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const initialTab = searchParams.get('tab') === 'permits' ? 'permits' : 'applications';
   const [activeTab, setActiveTab] = useState<"applications" | "permits">(initialTab);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
@@ -102,6 +120,13 @@ function DashboardContent() {
   // Convert React Query errors to strings for display
   const applicationsError = applicationsQueryError?.message || null;
   const permitsError = permitsQueryError?.message || null;
+
+  const applicantDashboardApplications = useMemo((): ApplicantDashboardApplication[] => {
+    return applications.map((app) => ({
+      ...app,
+      display_status: mapApplicantDisplayStatus(app.status),
+    }));
+  }, [applications]);
 
   const permits = useMemo(() => {
     // Transform database permits to component format
@@ -211,7 +236,7 @@ function DashboardContent() {
               <TabsList>
                 <TabsTrigger value="applications" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Applications ({applications.length})
+                  Applications ({applicantDashboardApplications.length})
                 </TabsTrigger>
                 <TabsTrigger value="permits" className="flex items-center gap-2">
                   <FileCheck className="h-4 w-4" />
@@ -222,7 +247,7 @@ function DashboardContent() {
               <TabsContent value="applications" className="space-y-4">
                 {/* Applications Status Overview */}
                 <ApplicationStatus 
-                  applications={applications} 
+                  applications={applicantDashboardApplications} 
                   loading={applicationsLoading}
                   onRefresh={() => refreshApplications()}
                 />
@@ -241,7 +266,7 @@ function DashboardContent() {
                     </CardHeader>
                     <CardContent>
                       <ApplicationsList 
-                        applications={applications} 
+                        applications={applicantDashboardApplications} 
                         loading={applicationsLoading}
                         onDeleteApplications={handleBulkDeleteApplications}
                       />

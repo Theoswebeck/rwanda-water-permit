@@ -55,9 +55,16 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
   const [isDeleting, setIsDeleting] = useState(false);
   const pageSize = 10;
 
+  const getDisplayStatus = (app: Application): string => {
+    // UI-only status mapping from parent (e.g., applicant dashboard).
+    // We must keep raw `app.status` for behavior (edit, accept terms, delete rules).
+    return (app as any).display_status ?? app.status;
+  };
+
   // Filter applications based on search and filters
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
+      const displayStatus = getDisplayStatus(app);
       const matchesSearch = 
         app.project_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.application_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -65,7 +72,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
         app.province?.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesType = typeFilter === "all" || app.application_type === typeFilter;
-      const matchesStatus = statusFilter === "all" || app.status === statusFilter;
+      const matchesStatus = statusFilter === "all" || displayStatus === statusFilter;
       
       return matchesSearch && matchesType && matchesStatus;
     });
@@ -275,16 +282,10 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
-              <SelectItem value="pending_assessment">Pending Assessment</SelectItem>
-              <SelectItem value="pending_inspection">Pending Inspection</SelectItem>
-              <SelectItem value="pending_final_approval">Pending Approval</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="revision_required">Revision Required</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -385,7 +386,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                     </div>
                   </TableCell>
                   <TableCell className="px-6 py-4">
-                    {getStatusBadge(application.status)}
+                    {getStatusBadge(getDisplayStatus(application))}
                   </TableCell>
                   <TableCell className="text-gray-600 px-6 py-4">
                     <div className="text-sm">

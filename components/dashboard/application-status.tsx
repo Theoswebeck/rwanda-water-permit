@@ -24,14 +24,18 @@ interface ApplicationStatusProps {
 }
 
 export function ApplicationStatus({ applications, loading = false, onRefresh }: ApplicationStatusProps) {
+  const getDisplayStatus = (app: Application): string => {
+    // UI-only status mapping from parent (e.g., applicant dashboard).
+    // Fall back to raw status if not provided.
+    return (app as any).display_status ?? app.status;
+  };
+
   // Calculate statistics from applications
   const stats = {
     total: applications.length,
-    pending: applications.filter(app => ['submitted', 'under_review', 'pending_assessment'].includes(app.status)).length,
-    approved: applications.filter(app => app.status === 'approved').length,
-    rejected: applications.filter(app => app.status === 'rejected').length,
-    draft: applications.filter(app => app.status === 'draft').length,
-    revisionRequired: applications.filter(app => app.status === 'revision_required').length,
+    inProgress: applications.filter(app => ['submitted', 'under_review'].includes(getDisplayStatus(app))).length,
+    approved: applications.filter(app => getDisplayStatus(app) === 'approved').length,
+    expired: applications.filter(app => getDisplayStatus(app) === 'expired').length,
   };
 
   // Calculate this month's activity
@@ -42,9 +46,9 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
     return appDate.getMonth() === currentMonth && appDate.getFullYear() === currentYear;
   }).length;
 
-  // Calculate approval rate
-  const totalProcessed = stats.approved + stats.rejected;
-  const approvalRate = totalProcessed > 0 ? Math.round((stats.approved / totalProcessed) * 100) : 0;
+  // Applicants only see: submitted, under_review, approved, expired.
+  // Keep the "Approved" card metric meaningful without relying on internal-only statuses.
+  const approvedRateOfTotal = stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0;
 
   const statusCards = [
     {
@@ -61,12 +65,12 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
     },
     {
       title: "In Progress",
-      value: stats.pending,
+      value: stats.inProgress,
       description: "Applications under review",
       detail: "Awaiting processing",
-      change: stats.pending > 0 ? `${Math.round((stats.pending / stats.total) * 100)}%` : "0%",
+      change: stats.inProgress > 0 ? `${Math.round((stats.inProgress / stats.total) * 100)}%` : "0%",
       changeLabel: "Of total applications",
-      trend: stats.pending > stats.total * 0.7 ? "down" : "up",
+      trend: stats.inProgress > stats.total * 0.7 ? "down" : "up",
       icon: Clock,
       color: "text-amber-600",
       bgColor: "bg-amber-50",
@@ -76,44 +80,48 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
       value: stats.approved,
       description: "Successfully approved applications",
       detail: "Ready for permit issuance",
-      change: approvalRate > 0 ? `${approvalRate}%` : "0%",
-      changeLabel: "Approval rate",
-      trend: approvalRate > 80 ? "up" : approvalRate > 60 ? "neutral" : "down",
+      change: approvedRateOfTotal > 0 ? `${approvedRateOfTotal}%` : "0%",
+      changeLabel: "Of total applications",
+      trend: approvedRateOfTotal > 80 ? "up" : approvedRateOfTotal > 60 ? "neutral" : "down",
       icon: CheckCircle,
       color: "text-green-600",
       bgColor: "bg-green-50",
+    },
+    {
+      title: "Expired",
+      value: stats.expired,
+      description: "Expired applications",
+      detail: "Past validity period",
+      change: stats.expired > 0 ? `${Math.round((stats.expired / stats.total) * 100)}%` : "0%",
+      changeLabel: "Of total applications",
+      trend: stats.expired > 0 ? "down" : "neutral",
+      icon: AlertCircle,
+      color: "text-slate-700",
+      bgColor: "bg-slate-50",
     },
     // Removed Processing Time panel per RWB request
   ];
 
   const getRecentApplications = () => {
     return applications
+      .slice()
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 3);
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "draft":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700">Draft</Badge>;
       case "submitted":
         return <Badge variant="outline" className="bg-blue-100 text-blue-700">Submitted</Badge>;
       case "under_review":
         return <Badge variant="outline" className="bg-amber-100 text-amber-700">Under Review</Badge>;
-      case "pending_assessment":
-        return <Badge variant="outline" className="bg-purple-100 text-purple-700">Pending Assessment</Badge>;
-      case "pending_final_approval":
-        return <Badge variant="outline" className="bg-purple-100 text-purple-700">Pending Approval</Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700">Approved</Badge>;
-      case "rejected":
-        return <Badge variant="outline" className="bg-red-100 text-red-700">Rejected</Badge>;
-      case "revision_required":
-        return <Badge variant="outline" className="bg-orange-100 text-orange-700">Revision Required</Badge>;
-      case "cancelled":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700">Cancelled</Badge>;
+      case "expired":
+        return <Badge variant="outline" className="bg-slate-200 text-slate-700">Expired</Badge>;
       default:
-        return <Badge variant="outline">Unknown</Badge>;
+        // For safety: unknown/internal statuses should not be surfaced to applicants.
+        return <Badge variant="outline" className="bg-amber-100 text-amber-700">Under Review</Badge>;
     }
   };
 
@@ -238,7 +246,7 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
                       </div>
                     </div>
                     <div className="text-right">
-                      {getStatusBadge(application.status)}
+                      {getStatusBadge(getDisplayStatus(application))}
                       <p className="text-xs text-muted-foreground mt-1">
                         {formatDate(application.created_at)}
                       </p>
