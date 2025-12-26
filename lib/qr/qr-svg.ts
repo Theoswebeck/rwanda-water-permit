@@ -55,3 +55,5 @@ export function qrToSvgString(text: string, opts: QrSvgOptions = {}): string {
 
 
 
+
+

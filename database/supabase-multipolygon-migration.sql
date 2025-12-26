@@ -170,3 +170,5 @@ GRANT SELECT ON application_coordinates_view TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION validate_water_source_polygon(GEOMETRY) TO authenticated, anon;
 
 
+
+

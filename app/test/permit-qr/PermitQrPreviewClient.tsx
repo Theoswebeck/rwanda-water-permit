@@ -67,3 +67,5 @@ export function PermitQrPreviewClient({ html }: PermitQrPreviewClientProps) {
 
 
 
+
+
