@@ -719,7 +719,9 @@ export default function AssessmentDashboard() {
                     </div>
                   </div>
                   <ApplicationTable 
-                    applications={assessmentApplications.filter(app => app.status === 'submitted')}
+                    applications={assessmentApplications.filter(
+                      (app) => app.status === 'submitted' || app.status === 'pending_assessment'
+                    )}
                     emptyMessage="Applications for Assessment"
                   />
                 </TabsContent>
