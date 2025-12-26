@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { MessageSquare, Send, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Comment {
   id: string;
@@ -19,6 +20,9 @@ interface Comment {
   content: string;
   timestamp: string;
   created_at: string;
+  authorId: string | null;
+  source: "review" | "approval";
+  editable: boolean;
 }
 
 interface ApproverCommentsProps {
@@ -44,6 +48,10 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user, userProfile } = useAuth();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
   const fetchComments = useCallback(async () => {
     if (!applicationId) return;
@@ -90,7 +98,10 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
               avatar: initials,
               content: review.overall_comments || review.technical_review || 'No comments',
               timestamp: new Date(review.created_at).toLocaleString(),
-              created_at: review.created_at
+              created_at: review.created_at,
+              authorId: review.reviewer_id ?? null,
+              source: "review",
+              editable: false,
             });
           }
         });
@@ -104,6 +115,7 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
           const initials = approver ? `${approver.first_name?.[0] || ''}${approver.last_name?.[0] || ''}`.toUpperCase() : 'UA';
           
           if (approval.decision_reason) {
+            const isComment = approval.decision === "comment";
             allComments.push({
               id: approval.id,
               author: name,
@@ -111,7 +123,10 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
               avatar: initials,
               content: `${approval.decision.toUpperCase()}: ${approval.decision_reason}`,
               timestamp: new Date(approval.created_at).toLocaleString(),
-              created_at: approval.created_at
+              created_at: approval.created_at,
+              authorId: approval.approver_id ?? null,
+              source: "approval",
+              editable: isComment,
             });
           }
         });
@@ -140,27 +155,31 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
 
     try {
       setSubmitting(true);
+      setError(null);
       
-      // Get current approver (in real app, this would come from auth context)
-      const { data: approverData, error: approverError } = await supabase
-        .from('users')
-        .select('id, first_name, last_name')
-        .eq('role', 'approver')
-        .limit(1)
-        .single();
-
-      if (approverError) {
-        console.error('Failed to find approver account:', approverError);
-        setError('Failed to find approver account');
+      if (!user) {
+        setError("Not authenticated");
         return;
       }
+
+      const profile =
+        userProfile ??
+        (await (async () => {
+          const { data, error } = await supabase
+            .from("users")
+            .select("id, first_name, last_name, role")
+            .eq("id", user.id)
+            .single();
+          if (error) throw error;
+          return data;
+        })());
 
       // Add comment to approvals table
       const { data, error } = await supabase
         .from('approvals')
         .insert([{
           application_id: applicationId,
-          approver_id: approverData.id,
+          approver_id: user.id,
           decision: 'comment',
           decision_reason: newComment
         }])
@@ -172,20 +191,105 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
       // Add to local comments
       const newCommentObj: Comment = {
         id: data.id,
-        author: `${approverData.first_name} ${approverData.last_name}`,
+        author: `${profile.first_name} ${profile.last_name}`.trim() || "Unknown User",
         role: "approver",
-        avatar: `${approverData.first_name?.[0] || ''}${approverData.last_name?.[0] || ''}`.toUpperCase(),
-        content: newComment,
+        avatar: `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() || "UU",
+        content: `COMMENT: ${newComment}`,
         timestamp: "Just now",
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        authorId: user.id,
+        source: "approval",
+        editable: true,
       };
-      setComments([newCommentObj, ...comments]);
+      setComments((prev) => [newCommentObj, ...prev]);
       setNewComment("");
     } catch (err) {
       console.error('Error adding comment:', err);
       setError('Failed to add comment');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startEdit = (comment: Comment) => {
+    setError(null);
+    setEditingId(comment.id);
+    // Stored as "COMMENT: ..." - edit only the note part.
+    const prefix = "COMMENT:";
+    const raw = comment.content.startsWith(prefix) ? comment.content.slice(prefix.length) : comment.content;
+    setEditingText(raw.trim());
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  const saveEdit = async (comment: Comment) => {
+    if (!user) {
+      setError("Not authenticated");
+      return;
+    }
+    const nextText = editingText.trim();
+    if (!nextText) return;
+
+    try {
+      setRowBusyId(comment.id);
+      setError(null);
+
+      const { data, error } = await supabase
+        .from("approvals")
+        .update({ decision_reason: nextText })
+        .eq("id", comment.id)
+        .eq("approver_id", user.id)
+        .eq("decision", "comment")
+        .select("id, decision, decision_reason, updated_at, created_at")
+        .single();
+      if (error) throw error;
+
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === comment.id
+            ? {
+                ...c,
+                content: `${String(data.decision).toUpperCase()}: ${data.decision_reason ?? nextText}`,
+                timestamp: new Date(data.updated_at ?? data.created_at ?? new Date().toISOString()).toLocaleString(),
+              }
+            : c
+        )
+      );
+      cancelEdit();
+    } catch (e) {
+      console.error("❌ [ApproverComments] Failed to edit comment:", e);
+      setError("Failed to edit comment");
+    } finally {
+      setRowBusyId(null);
+    }
+  };
+
+  const deleteComment = async (comment: Comment) => {
+    if (!user) {
+      setError("Not authenticated");
+      return;
+    }
+    try {
+      setRowBusyId(comment.id);
+      setError(null);
+      const { error } = await supabase
+        .from("approvals")
+        .delete()
+        .eq("id", comment.id)
+        .eq("approver_id", user.id)
+        .eq("decision", "comment");
+      if (error) throw error;
+
+      setComments((prev) => prev.filter((c) => c.id !== comment.id));
+      if (editingId === comment.id) cancelEdit();
+    } catch (e) {
+      console.error("❌ [ApproverComments] Failed to delete comment:", e);
+      setError("Failed to delete comment");
+    } finally {
+      setRowBusyId(null);
     }
   };
 
@@ -222,9 +326,7 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
       </CardHeader>
       <CardContent>
         {error && (
-          <div className="text-red-600 text-sm mb-4 p-3 bg-red-50 rounded-md">
-            {error}
-          </div>
+          <p className="text-red-600 text-sm mb-4">{error}</p>
         )}
         
         {/* Comments Display */}
@@ -242,10 +344,62 @@ export function ApproverComments({ applicationId, applicationNumber }: ApproverC
                       {comment.role.charAt(0).toUpperCase() + comment.role.slice(1)}
                     </Badge>
                     <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
+                    {user?.id && comment.authorId === user.id && comment.source === "approval" && comment.editable && (
+                      <div className="ml-auto flex items-center gap-2">
+                        {editingId === comment.id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={rowBusyId === comment.id || !editingText.trim()}
+                              onClick={() => saveEdit(comment)}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={rowBusyId === comment.id}
+                              onClick={cancelEdit}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={rowBusyId === comment.id}
+                              onClick={() => startEdit(comment)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={rowBusyId === comment.id}
+                              onClick={() => deleteComment(comment)}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    {comment.content}
-                  </p>
+                  {editingId === comment.id ? (
+                    <Textarea
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      className="min-h-[90px]"
+                      disabled={rowBusyId === comment.id}
+                    />
+                  ) : (
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {comment.content}
+                    </p>
+                  )}
                 </div>
               </div>
             ))

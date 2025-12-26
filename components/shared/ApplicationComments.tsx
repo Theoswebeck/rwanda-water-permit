@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { MessageSquare, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Comment {
   id: string;
@@ -19,6 +20,8 @@ interface Comment {
   content: string;
   timestamp: string;
   created_at: string;
+  authorId: string | null;
+  editable: boolean;
 }
 
 interface ApplicationCommentsProps {
@@ -31,6 +34,10 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user, userProfile } = useAuth();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchComments = async () => {
@@ -82,6 +89,7 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
             const initials = reviewer ? 
               `${reviewer.first_name?.[0] || ''}${reviewer.last_name?.[0] || ''}`.toUpperCase() : 'UU';
             
+            const isInternalNote = review.review_stage === "internal" && !!review.overall_comments;
             return {
               id: review.id,
               author: name,
@@ -89,7 +97,9 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
               avatar: initials,
               content: review.overall_comments || review.technical_review || 'No comments',
               timestamp: new Date(review.created_at).toLocaleString(),
-              created_at: review.created_at
+              created_at: review.created_at,
+              authorId: review.reviewer_id ?? null,
+              editable: isInternalNote,
             };
           })
         );
@@ -104,28 +114,36 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
       }
     };
     if (applicationId) fetchComments();
-  }, [applicationId]);
+  }, [applicationId, user?.id]);
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !applicationId) return;
     try {
       setSubmitting(true);
-      // For now, use a default reviewer ID until authentication is implemented
-      const { data: reviewerData, error: reviewerError } = await supabase
-        .from('users')
-        .select('id, first_name, last_name, role')
-        .eq('role', 'reviewer')
-        .limit(1)
-        .single();
-      if (reviewerError) {
-        setError('Failed to find reviewer account');
+      setError(null);
+
+      if (!user) {
+        setError("Not authenticated");
         return;
       }
+
+      const profile =
+        userProfile ??
+        (await (async () => {
+          const { data, error } = await supabase
+            .from("users")
+            .select("id, first_name, last_name, role")
+            .eq("id", user.id)
+            .single();
+          if (error) throw error;
+          return data;
+        })());
+
       const { data, error } = await supabase
         .from('reviews')
         .insert([{
           application_id: applicationId,
-          reviewer_id: reviewerData.id,
+          reviewer_id: user.id,
           review_stage: 'internal',
           overall_comments: newComment,
           status: 'completed'
@@ -135,19 +153,101 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
       if (error) throw error;
       const newCommentObj: Comment = {
         id: data.id,
-        author: `${reviewerData.first_name} ${reviewerData.last_name}`,
-        role: reviewerData.role || 'reviewer',
-        avatar: `${reviewerData.first_name?.[0] || ''}${reviewerData.last_name?.[0] || ''}`.toUpperCase(),
+        author: `${profile.first_name} ${profile.last_name}`.trim() || "Unknown User",
+        role: profile.role || 'reviewer',
+        avatar: `${profile.first_name?.[0] || ''}${profile.last_name?.[0] || ''}`.toUpperCase() || "UU",
         content: newComment,
         timestamp: "Just now",
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        authorId: user.id,
+        editable: true,
       };
-      setComments([newCommentObj, ...comments]);
+      setComments((prev) => [newCommentObj, ...prev]);
       setNewComment("");
     } catch (err) {
+      console.error("❌ [ApplicationComments] Error adding comment:", err);
       setError('Failed to add comment');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const startEdit = (comment: Comment) => {
+    setError(null);
+    setEditingId(comment.id);
+    setEditingText(comment.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  const saveEdit = async (comment: Comment) => {
+    if (!user) {
+      setError("Not authenticated");
+      return;
+    }
+    const nextText = editingText.trim();
+    if (!nextText) return;
+
+    try {
+      setRowBusyId(comment.id);
+      setError(null);
+
+      const { data, error } = await supabase
+        .from("reviews")
+        .update({ overall_comments: nextText })
+        .eq("id", comment.id)
+        .eq("reviewer_id", user.id)
+        .eq("review_stage", "internal")
+        .select("id, overall_comments, updated_at, created_at")
+        .single();
+      if (error) throw error;
+
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === comment.id
+            ? {
+                ...c,
+                content: data.overall_comments ?? nextText,
+                timestamp: new Date(data.updated_at ?? data.created_at ?? new Date().toISOString()).toLocaleString(),
+              }
+            : c
+        )
+      );
+      cancelEdit();
+    } catch (e) {
+      console.error("❌ [ApplicationComments] Failed to edit comment:", e);
+      setError("Failed to edit comment");
+    } finally {
+      setRowBusyId(null);
+    }
+  };
+
+  const deleteComment = async (comment: Comment) => {
+    if (!user) {
+      setError("Not authenticated");
+      return;
+    }
+    try {
+      setRowBusyId(comment.id);
+      setError(null);
+      const { error } = await supabase
+        .from("reviews")
+        .delete()
+        .eq("id", comment.id)
+        .eq("reviewer_id", user.id)
+        .eq("review_stage", "internal");
+      if (error) throw error;
+
+      setComments((prev) => prev.filter((c) => c.id !== comment.id));
+      if (editingId === comment.id) cancelEdit();
+    } catch (e) {
+      console.error("❌ [ApplicationComments] Failed to delete comment:", e);
+      setError("Failed to delete comment");
+    } finally {
+      setRowBusyId(null);
     }
   };
 
@@ -161,6 +261,7 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Loading comments...</div>
           ) : comments.length > 0 ? (
@@ -174,10 +275,62 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
                     <span className="text-sm font-medium">{comment.author}</span>
                     <Badge variant="outline" className="text-xs">{comment.role}</Badge>
                     <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
+                    {user?.id && comment.authorId === user.id && comment.editable && (
+                      <div className="ml-auto flex items-center gap-2">
+                        {editingId === comment.id ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              disabled={rowBusyId === comment.id || !editingText.trim()}
+                              onClick={() => saveEdit(comment)}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={rowBusyId === comment.id}
+                              onClick={cancelEdit}
+                            >
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={rowBusyId === comment.id}
+                              onClick={() => startEdit(comment)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={rowBusyId === comment.id}
+                              onClick={() => deleteComment(comment)}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">
-                    {comment.content}
-                  </p>
+                  {editingId === comment.id ? (
+                    <Textarea
+                      value={editingText}
+                      onChange={(e) => setEditingText(e.target.value)}
+                      className="min-h-[90px]"
+                      disabled={rowBusyId === comment.id}
+                    />
+                  ) : (
+                    <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">
+                      {comment.content}
+                    </p>
+                  )}
                 </div>
               </div>
             ))
