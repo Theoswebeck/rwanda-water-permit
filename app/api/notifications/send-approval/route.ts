@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
 
 Congratulations! Your water permit application ${applicationNumber}${projectInfo} has been APPROVED by Rwanda Water Resources Board.
 
-For inquiries: contact@rwb.rw
+For inquiries: info@rwb.rw
 Rwanda Water Resources Board`;
         break;
 
@@ -97,7 +97,7 @@ Your water permit application ${applicationNumber} has been REJECTED by Rwanda W
 
 You may resubmit with corrections or contact us for guidance.
 
-For support: contact@rwb.rw
+For support: info@rwb.rw
 Rwanda Water Resources Board`;
         break;
 
@@ -108,7 +108,8 @@ Your water permit application ${applicationNumber} requires REVISIONS.
 
 Please log into your dashboard to view detailed feedback and resubmit your application.
 
-Portal: https://permit.rwb.rw
+Portal: https://rwanda-water-permit-production.up.railway.app/
+TODO: Replace portal link with the final RWB server URL before go-live.
 Rwanda Water Resources Board`;
         break;
 

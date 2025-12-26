@@ -178,6 +178,7 @@ export async function GET(
               if (newApplicationStatus === 'submitted') {
                 try {
                   const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+                  console.log('📣 [PAYMENT STATUS] Submission notification result:', notifyResult);
                   if (!notifyResult.ok) {
                     console.warn('⚠️ [PAYMENT STATUS] Submission notifications failed (non-blocking):', notifyResult.message);
                   }
@@ -272,6 +273,7 @@ export async function GET(
                 if (newApplicationStatus === 'submitted') {
                   try {
                     const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+                    console.log('📣 [PAYMENT STATUS] Submission notification result:', notifyResult);
                     if (!notifyResult.ok) {
                       console.warn('⚠️ [PAYMENT STATUS] Submission notifications failed (non-blocking):', notifyResult.message);
                     }
