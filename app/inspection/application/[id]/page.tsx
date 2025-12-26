@@ -522,6 +522,13 @@ export default function InspectorApplicationView() {
     if (!application) return;
 
     if (actionInFlightRef.current) return;
+
+    if (fieldReportFiles.length === 0 || !fieldReportSummary.trim()) {
+      alert("⚠️ Field Report Documents and Field Report Summary are required before sending for final approval.");
+      tabTouchedRef.current = true;
+      setActiveTab("field_report");
+      return;
+    }
     
     // Validation
     if (!recommendation.recommendation) {

@@ -154,10 +154,14 @@ export function DocumentVerificationComponent({
   };
 
   const getVerificationStats = () => {
+    // Only compute stats for documents that exist on this application.
+    // This also lets callers store metadata inside the verifications object (e.g. "__meta")
+    // without breaking counts.
     const total = documents.length;
-    const verified = Object.values(verifications).filter(v => v.status === "verified").length;
-    const incomplete = Object.values(verifications).filter(v => v.status === "incomplete").length;
-    const missing = Object.values(verifications).filter(v => v.status === "missing").length;
+    const statuses = documents.map((doc) => verifications[doc.id]?.status || "pending");
+    const verified = statuses.filter((s) => s === "verified").length;
+    const incomplete = statuses.filter((s) => s === "incomplete").length;
+    const missing = statuses.filter((s) => s === "missing").length;
     const pending = total - verified - incomplete - missing;
     
     return { total, verified, incomplete, missing, pending };
