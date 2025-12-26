@@ -14,11 +14,11 @@ import {
   CheckCircle2, 
   XCircle, 
   Eye, 
-  MapPin,
-  AlertTriangle,
-  Search,
-  Loader2,
-  User
+  MapPin, 
+  AlertTriangle, 
+  Search, 
+  Loader2, 
+  User 
 } from "lucide-react";
 import { getApplicationsPendingApproval } from "@/lib/supabase";
 import { formatDate } from "@/lib/utils";
@@ -83,7 +83,7 @@ export function FinalDecisions() {
   const [filterRisk, setFilterRisk] = useState("all");
   const [selectedApplication, setSelectedApplication] = useState<FinalReviewApplication | null>(null);
   const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
-  const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_review">("approve");
+  const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_assessment">("approve");
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
   const [conditions, setConditions] = useState("");
@@ -207,7 +207,7 @@ export function FinalDecisions() {
     );
   };
 
-  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject" | "return_to_review") => {
+  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject" | "return_to_assessment") => {
     try {
       setSubmitting(true);
       setError(null);
@@ -230,8 +230,9 @@ export function FinalDecisions() {
       }
       
       // Show success message
-      const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to review';
-      setSuccessMessage(`Application ${actionText} successfully! SMS and email notifications sent.`);
+      const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to assessment';
+      const notificationSuffix = decision === 'return_to_assessment' ? '' : ' SMS and email notifications sent.';
+      setSuccessMessage(`Application ${actionText} successfully!${notificationSuffix}`);
       
       // Refresh applications list
       await fetchApplications();
@@ -253,7 +254,7 @@ export function FinalDecisions() {
     }
   };
 
-  const openDecisionDialog = (application: FinalReviewApplication, decision: "approve" | "reject" | "return_to_review") => {
+  const openDecisionDialog = (application: FinalReviewApplication, decision: "approve" | "reject" | "return_to_assessment") => {
     setSelectedApplication(application);
     setDecisionType(decision);
     setIsDecisionDialogOpen(true);
@@ -409,8 +410,8 @@ export function FinalDecisions() {
                         {application.status === 'pending_final_approval' && (
                           <Select
                             onValueChange={(value) => {
-                              if (value === "approve" || value === "reject" || value === "return_to_review") {
-                                openDecisionDialog(application, value);
+                              if (value === "approve" || value === "reject" || value === "return_to_assessment") {
+                                openDecisionDialog(application, value as any);
                               }
                             }}
                           >
@@ -430,10 +431,10 @@ export function FinalDecisions() {
                                   Reject
                                 </div>
                               </SelectItem>
-                              <SelectItem value="return_to_review">
+                              <SelectItem value="return_to_assessment">
                                 <div className="flex items-center gap-2">
                                   <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                  Return to Review
+                                  Return to Assessment
                                 </div>
                               </SelectItem>
                             </SelectContent>
@@ -458,14 +459,14 @@ export function FinalDecisions() {
                 ? "Approve Application" 
                 : decisionType === "reject" 
                   ? "Reject Application" 
-                  : "Return Application to Review"}
+                  : "Return Application to Assessment"}
             </DialogTitle>
             <DialogDescription>
               {decisionType === "approve" 
                 ? "You are about to approve this water permit application. This decision is final."
                 : decisionType === "reject"
                   ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the review stage. Please provide specific instructions for the reviewers."
+                  : "You are about to return this application to the assessment stage. Please provide specific instructions for the assessors."
               }
             </DialogDescription>
           </DialogHeader>
@@ -474,7 +475,7 @@ export function FinalDecisions() {
                               <div className="grid grid-cols-2 gap-4 text-sm bg-muted/50 p-4 rounded-lg">
                 <div>
                   <span className="font-medium text-muted-foreground">Application ID:</span>
-                  <p className="mt-1 font-medium">{selectedApplication.id}</p>
+                  <p className="mt-1 font-medium">{selectedApplication.application_number || selectedApplication.id}</p>
                 </div>
                 <div>
                   <span className="font-medium text-muted-foreground">Applicant:</span>
@@ -503,7 +504,7 @@ export function FinalDecisions() {
               ) : (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Review Instructions (Required)"}
+                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Assessment Instructions (Required)"}
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Select value={decisionReasonPreset} onValueChange={(v)=>{ setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>
@@ -514,7 +515,7 @@ export function FinalDecisions() {
                         <SelectItem value="incomplete_documentation">Incomplete documentation</SelectItem>
                         <SelectItem value="non_compliance_requirements">Non-compliance with requirements</SelectItem>
                         <SelectItem value="inconsistent_information">Inconsistent information provided</SelectItem>
-                        <SelectItem value="requires_further_review">Requires further technical review</SelectItem>
+                        <SelectItem value="requires_further_review">Requires further technical assessment</SelectItem>
                         <SelectItem value="other">Other...</SelectItem>
                       </SelectContent>
                     </Select>
@@ -536,7 +537,7 @@ export function FinalDecisions() {
             </Button>
             <Button
               onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
-              disabled={submitting || ((decisionType === "reject" || decisionType === "return_to_review") && !decisionReason.trim())}
+              disabled={submitting || ((decisionType === "reject" || decisionType === "return_to_assessment") && !decisionReason.trim())}
               variant={
                 decisionType === "approve" 
                   ? "default" 
@@ -555,7 +556,7 @@ export function FinalDecisions() {
                   ? "Approve Application" 
                   : decisionType === "reject" 
                     ? "Reject Application"
-                    : "Return to Review"
+                    : "Return to Assessment"
               )}
             </Button>
           </DialogFooter>

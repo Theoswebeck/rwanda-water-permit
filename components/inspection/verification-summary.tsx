@@ -32,12 +32,14 @@ interface VerificationSummaryProps {
   onChecklistChange: (checklist: VerificationChecklist) => void;
   onRecommendationChange: (recommendation: RecommendationData) => void;
   readOnly?: boolean;
+  assessorName?: string;
 }
 
 export function VerificationSummary({
   recommendation,
   onRecommendationChange,
-  readOnly = false
+  readOnly = false,
+  assessorName
 }: VerificationSummaryProps) {
   const handleRecommendationChange = (value: "yes" | "no") => {
     onRecommendationChange({
@@ -101,11 +103,6 @@ export function VerificationSummary({
                     }`} />
                     Yes - Recommend for Approval
                   </Label>
-                  <p className={`text-sm ${
-                    recommendation.recommendation === "yes" ? 'text-green-700' : 'text-muted-foreground'
-                  }`}>
-                    The application meets all requirements and should proceed to final approval
-                  </p>
                 </div>
               </div>
 
@@ -129,11 +126,6 @@ export function VerificationSummary({
                     }`} />
                     No - Do Not Recommend for Approval
                   </Label>
-                  <p className={`text-sm ${
-                    recommendation.recommendation === "no" ? 'text-red-700' : 'text-muted-foreground'
-                  }`}>
-                    The application has issues that need to be addressed before approval
-                  </p>
                 </div>
               </div>
             </RadioGroup>
@@ -149,13 +141,13 @@ export function VerificationSummary({
                 id="explanation"
                 value={recommendation.explanationText}
                 onChange={(e) => handleExplanationChange(e.target.value)}
-                placeholder="Please explain the reasons for not recommending approval. Include specific issues, missing requirements, or concerns identified during the assessment..."
+                placeholder="Please explain the reasons for not recommending approval. Include specific concerns or observations for the approver to consider..."
                 rows={5}
                 disabled={readOnly}
                 required
               />
               <p className="text-xs text-muted-foreground">
-                This explanation will be shared with the approver and may be communicated to the applicant.
+                This explanation is provided for the approver's consideration.
               </p>
             </div>
           )}
@@ -172,14 +164,18 @@ export function VerificationSummary({
                   <>
                     <CheckCircle className="h-5 w-5 text-green-700" />
                     <span className="font-medium text-green-900">
-                      You are recommending this application for approval
+                      {readOnly && assessorName 
+                        ? `${assessorName} is recommending this application for approval`
+                        : "You are recommending this application for approval"}
                     </span>
                   </>
                 ) : (
                   <>
                     <XCircle className="h-5 w-5 text-red-700" />
                     <span className="font-medium text-red-900">
-                      You are NOT recommending this application for approval
+                      {readOnly && assessorName 
+                        ? `${assessorName} is not recommending this application for approval`
+                        : "You are not recommending this application for approval"}
                     </span>
                   </>
                 )}
@@ -193,8 +189,9 @@ export function VerificationSummary({
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          <strong>Important:</strong> Your recommendation will be reviewed by the approver before a final 
-          decision is made. Ensure your recommendation is based on complete field assessment data.
+          <strong>Important:</strong> {readOnly 
+            ? "This recommendation is provided by the assessor for your final review. Final decision-making remains with the approver." 
+            : "Your recommendation will be reviewed by the approver before a final decision is made. Ensure your recommendation is based on complete field assessment data."}
         </AlertDescription>
       </Alert>
     </div>

@@ -2,26 +2,33 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   ArrowLeft, 
-  Loader2
+  Loader2,
+  XCircle,
+  ClipboardCheck,
+  FileText
 } from "lucide-react";
 import Link from "next/link";
-import { useApplications } from "@/hooks/useApplications";
-import { ApplicationComments } from "@/components/shared/ApplicationComments";
-import { AssessorRecommendation } from "@/components/approver/assessor-recommendation";
+import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase } from "@/lib/supabase";
-import type { Application, User as UserType, Document, Review } from "@/types/database";
+import { getDocumentUrl } from "@/lib/supabase-storage";
+import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
+import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
+import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
+import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
+import { VerificationSummary, VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
 
-// Dynamically import ApplicationForm to avoid SSR issues
-import dynamic from 'next/dynamic';
-
+// Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
-  () => import('@/components/dashboard/application-form-new').then(mod => ({ default: mod.ApplicationForm })),
+  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
   {
     loading: () => (
       <div className="flex items-center justify-center py-12">
@@ -39,12 +46,11 @@ interface ApplicationWithRelations extends Application {
   reviews?: Review[];
 }
 
-// Transform Application data back to form format for viewing (copied from review page)
+// Transform Application data back to form format for viewing
 function mapApplicationToFormData(application: Application, userProfile?: any): any {
   const formData: any = {};
   
   // Parse internal notes to extract form-specific data
-  // Try to parse as JSON first (new format), fallback to legacy format
   let storedFormData: any = {};
   let legacyNotesMap: Record<string, string> = {};
   
@@ -56,240 +62,354 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     console.log('✅ Successfully parsed stored form data from JSON');
   } catch (error) {
     // Fallback to legacy format parsing
-    console.log('⚠️ Falling back to legacy notes format');
-    const notesLines = notes.split('\n').filter(line => line.includes(':'));
-    notesLines.forEach(line => {
-      const [key, ...valueParts] = line.split(':');
-      legacyNotesMap[key.trim()] = valueParts.join(':').trim();
+    console.log('📄 Using legacy notes format parsing');
+    const notesParts = notes.split(' | ');
+    notesParts.forEach(part => {
+      const [key, value] = part.split(': ');
+      if (key && value) {
+        legacyNotesMap[key] = value;
+      }
     });
   }
-
-  // Map basic application data
-  formData.projectTitle = application.project_title || '';
-  formData.applicationType = application.application_type || 'surface_water';
-  formData.waterSource = application.water_source || 'lake';
-  formData.waterPurpose = application.water_purpose || 'industrial';
-  formData.estimatedUsage = application.estimated_usage_volume || '';
-  formData.usageUnit = application.usage_unit || 'm3_per_day';
-  formData.projectDescription = application.project_description || '';
-  formData.projectValue = application.project_value || '';
-
-  // Location data
-  formData.province = application.province || '';
-  formData.district = application.district || '';
-  formData.sector = application.sector || '';
-  formData.cell = application.cell || '';
-  formData.village = application.village || '';
-
-  // GPS coordinates handling
-  if (application.coordinates) {
+  
+  // If we have comprehensive stored data, use it directly
+  if (Object.keys(storedFormData).length > 0 && storedFormData.fullNameApplicant !== undefined) {
+    Object.assign(formData, storedFormData);
+    
+    if (userProfile) {
+      formData.telephoneContact = userProfile.phone || userProfile.company_phone || formData.telephoneContact;
+      formData.emailAddress = userProfile.email || formData.emailAddress;
+    }
+    
+    if (Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0) {
+      // ok
+    } else if (Array.isArray(formData.waterSourceCoordinates)) {
+      formData.waterSourcePolygons = [formData.waterSourceCoordinates];
+    } else {
+      formData.waterSourcePolygons = [[{ latitude: "", longitude: "" }, { latitude: "", longitude: "" }, { latitude: "", longitude: "" }]];
+    }
+  } else {
+    // Legacy format
+    formData.fullNameApplicant = application.project_title?.replace(' Water Permit Application', '') || 'Draft Application';
+    formData.categoryApplicant = legacyNotesMap['Category']?.toLowerCase() || 'individual';
+  
+    const provinceReverseMap: Record<string, string> = {
+      'Kigali': 'Kigali', 'Northern': 'North', 'Southern': 'South', 'Eastern': 'East', 'Western': 'West'
+    };
+    formData.officeProvince = provinceReverseMap[application.province] || application.province || '';
+    formData.officeDistrict = application.district || '';
+    formData.officeSector = application.sector || '';
+    formData.officeCell = application.cell || '';
+    formData.officeVillage = application.village || '';
+    
+    formData.telephoneContact = userProfile?.phone || userProfile?.company_phone || '';
+    formData.emailAddress = userProfile?.email || legacyNotesMap['Contact']?.replace('Not provided', '') || '';
+  
+    const waterSourceMap: Record<string, string> = { 'surface_water': 'stream_river', 'groundwater': 'borehole' };
+    formData.waterSourceType = waterSourceMap[application.water_source] || 'stream_river';
+    formData.nameSourceWater = application.water_body_name || '';
+    formData.tributaryToMain = application.tributary_name || '';
+    
+    formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
+    formData.waterSourceDistrict = application.district || '';
+    formData.waterSourceSector = application.sector || '';
+    formData.waterSourceCell = application.cell || '';
+    formData.waterSourceVillage = application.village || '';
+  
     try {
-      if (typeof application.coordinates === 'object' && application.coordinates !== null) {
-        const coords = application.coordinates as any;
-        if (coords.type === 'Point' && coords.coordinates) {
-          const [lng, lat] = coords.coordinates;
-          formData.gpsCoordinates = `${lat}, ${lng}`;
-        }
-      } else if (typeof application.coordinates === 'string') {
-        formData.gpsCoordinates = application.coordinates;
-      }
-    } catch (e) {
-      console.warn('Error parsing coordinates:', e);
+      const polys = geometryToCoordinatePolygons(application.coordinates);
+      formData.waterSourcePolygons = polys && polys.length > 0 ? polys : [[{ latitude: "", longitude: "" }, { latitude: "", longitude: "" }, { latitude: "", longitude: "" }]];
+    } catch (error) {
+      formData.waterSourcePolygons = [[{ latitude: "", longitude: "" }, { latitude: "", longitude: "" }, { latitude: "", longitude: "" }]];
     }
+  
+    formData.waterReliability = 'water_always_available';
+    const purposeToActivity: Record<string, string> = {
+      'domestic': 'water_supply', 'irrigation': 'irrigation', 'fish_farming_lakes': 'fish_farming_lakes',
+      'fish_farming_ponds': 'fish_farming_ponds', 'industrial': 'industry', 'electricity_generation': 'electricity_generation',
+      'mining': 'mining', 'recreation': 'recreation_activities'
+    };
+    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+    formData.intendedActivities = [mappedActivity];
+    formData.waterAbstractionDetails = [{
+      activity: mappedActivity, flowRate: '', flowRateUnit: 'm³/s',
+      maxAverageYearly: application.estimated_usage_volume || 0,
+      abstractionMethod: application.water_taking_method || 'pump'
+    }];
+    formData.ownsAllLand = true;
+    formData.hasLandAccess = true;
+    formData.certificationAgreement = true;
   }
-
-  // Use stored form data or legacy notes if available
-  const sourceData = Object.keys(storedFormData).length > 0 ? storedFormData : legacyNotesMap;
-
-  // Apply stored/legacy data with fallbacks
-  Object.entries(sourceData).forEach(([key, value]) => {
-    if (value && typeof value === 'string' && value.trim()) {
-      formData[key] = value;
-    }
-  });
 
   return formData;
 }
 
 export default function ApproverApplicationPage() {
   const params = useParams();
+  const router = useRouter();
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  const { getApplicationByNumber, loading } = useApplications();
+  
+  // Assessment State
+  const [documentVerifications, setDocumentVerifications] = useState<Record<string, { status: VerificationStatus; notes: string }>>({});
+  
+  // Field Report State
+  const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
+  const [fieldReportSummary, setFieldReportSummary] = useState("");
+  const [inspectorName, setInspectorName] = useState("");
+  const [inspectionDate, setInspectionDate] = useState("");
+  
+  // Verification Checklist State
+  const [checklist, setChecklist] = useState<VerificationChecklist>({
+    locationVerified: false,
+    waterSourceAccessible: false,
+    environmentalImpactAssessed: false,
+    technicalFeasibilityConfirmed: false,
+    infrastructureAdequate: false
+  });
+  
+  // Recommendation State
+  const [recommendation, setRecommendation] = useState<RecommendationData>({
+    recommendation: null,
+    explanationText: ""
+  });
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
         const applicationNumber = params.id as string;
-        console.log('🔍 Fetching application details for number:', applicationNumber);
-        
-        const app = await getApplicationByNumber(applicationNumber);
-        console.log('📥 Raw application data received:', app);
-        
-        if (app) {
-          const appWithRelations = app as ApplicationWithRelations;
-          setApplication(appWithRelations);
+
+        // Fetch application with related data
+        const { data: appData, error: appError } = await supabase
+          .from('applications')
+          .select(`
+            *,
+            applicant:users!applicant_id(*),
+            documents(*),
+            reviews:reviews!application_id(*)
+          `)
+          .eq('application_number', applicationNumber)
+          .single();
+
+        if (appError) throw appError;
+        setApplication(appData);
+
+        // Fetch existing assessment
+        const { data: existingAssessment } = await supabase
+          .from('technical_assessments')
+          .select('*')
+          .eq('application_id', appData.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingAssessment) {
+          setDocumentVerifications(existingAssessment.document_verifications || {});
+          setFieldReportSummary(existingAssessment.field_report_summary || "");
+          setInspectorName(existingAssessment.inspector_name || "");
+          setInspectionDate(existingAssessment.inspection_date || "");
+          
+          setChecklist({
+            locationVerified: existingAssessment.location_verified || false,
+            waterSourceAccessible: existingAssessment.water_source_accessible || false,
+            environmentalImpactAssessed: existingAssessment.environmental_impact_assessed || false,
+            technicalFeasibilityConfirmed: existingAssessment.technical_feasibility_confirmed || false,
+            infrastructureAdequate: existingAssessment.infrastructure_adequate || false
+          });
+          
+          setRecommendation({
+            recommendation: existingAssessment.recommendation as "yes" | "no" | null,
+            explanationText: existingAssessment.explanation_text || ""
+          });
+
+          // Restore field report files
+          if (existingAssessment.field_report_files && Array.isArray(existingAssessment.field_report_files)) {
+            const files = existingAssessment.field_report_files.map((path: string) => {
+              const name = path.split('/').pop() || 'File';
+              const timestampMatch = name.match(/^(\d+)-/);
+              const uploadedAt = timestampMatch 
+                ? new Date(parseInt(timestampMatch[1])).toISOString() 
+                : existingAssessment.created_at;
+                
+              return {
+                id: Math.random().toString(36).substr(2, 9),
+                name: name.replace(/^\d+-/, ''),
+                path: path,
+                size: 0,
+                type: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+                uploadedAt: uploadedAt
+              };
+            });
+            setFieldReportFiles(files);
+          }
+        }
 
           // Transform application data to form format
-          const formData = mapApplicationToFormData(appWithRelations, null);
+        const formData = mapApplicationToFormData(appData, null);
           setInitialFormData(formData);
-          console.log('✅ Form data mapped:', formData);
 
           // Process documents for form
-          if (appWithRelations.documents && appWithRelations.documents.length > 0) {
-            const documentsMap: Record<string, { url: string; name: string }> = {};
-            
-            appWithRelations.documents.forEach((doc: Document) => {
+        const documentMap: Record<string, { url: string; name: string }> = {};
+        if (appData.documents && Array.isArray(appData.documents)) {
+          for (const doc of appData.documents) {
               if (doc.file_path && doc.name) {
-                // Use the document type as the key for the form
-                const docKey = doc.type || 'other';
-                documentsMap[docKey] = {
-                  url: doc.file_path,
-                  name: doc.name
-                };
+              const publicUrl = getDocumentUrl(doc.file_path);
+              if (publicUrl) {
+                const pathParts = doc.file_path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                if (fieldNameMatch) {
+                  const fieldName = fieldNameMatch[1];
+                  if (!fieldName.startsWith('additional_')) {
+                    documentMap[fieldName] = { url: publicUrl, name: doc.name };
+                  }
+                } else {
+                  documentMap[doc.type] = { url: publicUrl, name: doc.name };
+                }
               }
-            });
-            
-            setInitialDocuments(documentsMap);
-            console.log('✅ Documents processed for form:', documentsMap);
+            }
           }
-        } else {
-          console.log('❌ No application data received');
-          setError('Application not found');
         }
+        setInitialDocuments(documentMap);
+
       } catch (err) {
-        console.error('❌ Error fetching application:', err);
-        setError('Failed to load application details');
+        console.error('Error fetching application:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch application');
+      } finally {
+        setLoading(false);
       }
     };
     
     if (params.id) {
       fetchApplicationDetails();
     }
-  }, [params.id, getApplicationByNumber]);
+  }, [params.id]);
 
-  // Function to render the correct status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "draft":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Draft</Badge>;
-      case "submitted":
-        return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">Submitted</Badge>;
-      case "under_review":
-        return <Badge variant="outline" className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">Under Review</Badge>;
-      case "pending_inspection":
-        return <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-purple-200">Pending Inspection</Badge>;
-      case "pending_final_approval":
-        return <Badge variant="outline" className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-blue-200">Pending Approval</Badge>;
-      case "approved":
-        return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved</Badge>;
-      case "rejected":
-        return <Badge variant="outline" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Rejected</Badge>;
-      case "revision_required":
-        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Revision Required</Badge>;
-      case "cancelled":
-        return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Cancelled</Badge>;
-      default:
-        return <Badge variant="outline">Unknown</Badge>;
-    }
-  };
-  
-  // Format date to be more readable
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  // Helper function to format application ID
-  const formatApplicationId = (application: ApplicationWithRelations) => {
-    // Only show the RWB format application number, no UUID fallback
-    return application.application_number || 'Pending Assignment';
+  const getStatusBadge = (status: ApplicationStatus) => {
+    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+      draft: { label: "Draft", variant: "outline" },
+      submitted: { label: "Submitted", variant: "secondary" },
+      under_review: { label: "Under Review", variant: "default" },
+      pending_assessment: { label: "Pending Assessment", variant: "outline" },
+      pending_final_approval: { label: "Pending Approval", variant: "default" },
+      pending_payment: { label: "Pending Payment", variant: "secondary" },
+      approved: { label: "Approved", variant: "default" },
+      approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
+      rejected: { label: "Rejected", variant: "destructive" },
+      revision_required: { label: "Needs Revision", variant: "secondary" },
+      cancelled: { label: "Cancelled", variant: "outline" },
+    };
+    const config = statusConfig[status] || { label: status, variant: "outline" };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin mr-2" />
-          <span>Loading application details...</span>
+      <DashboardLayout>
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading application details...</p>
         </div>
       </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="text-center py-12">
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl text-red-600 mb-4">Error</h2>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mb-6">{error}</p>
-          <Link href="/approver">
-            <Button>Back to Dashboard</Button>
-          </Link>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
   
-  if (!application) {
+  if (error || !application) {
     return (
-      <div className="container mx-auto px-4 py-6">
-        <div className="text-center py-12">
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl mb-4">Application Not Found</h2>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mb-6">
-            Application not found. Please check the application ID and try again.
-          </p>
-          <Link href="/approver">
-            <Button>Back to Dashboard</Button>
-          </Link>
+      <DashboardLayout>
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-center min-h-[400px]">
+            <div className="text-center">
+              <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <p className="text-destructive font-medium">Error loading application</p>
+              <p className="text-muted-foreground text-sm mt-1">{error || "Application not found"}</p>
+              <Button onClick={() => router.push('/approver')} className="mt-4" variant="outline">
+                Back to Approver Dashboard
+              </Button>
+            </div>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
   
   return (
-    <div className="container mx-auto px-4 py-6">
-      <div className="flex items-center mb-6">
+    <DashboardLayout>
+      <div className="flex justify-end p-6">
+        <UserProfileButton />
+      </div>
+      
+      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6 pb-8"
+        >
+          {/* Header */}
+          <div className="space-y-6">
+            <div className="flex items-center">
         <Link href="/approver">
-          <Button variant="ghost" className="gap-1">
+                <Button variant="ghost" size="sm" className="gap-2">
             <ArrowLeft className="h-4 w-4" />
-            Back to Approver Dashboard
+                  Back to Dashboard
           </Button>
         </Link>
       </div>
       
-      <Tabs defaultValue="application_details" className="space-y-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{application.project_title}</h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-              Executive Review - Application submitted on {formatDate(application.created_at)}
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 md:items-end">
-            <div className="flex items-center gap-2">
-              {getStatusBadge(application.status)}
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <h1 className="text-primary text-3xl font-semibold tracking-tight">
+                  Executive Review: {application.application_number}
+                </h1>
+                {getStatusBadge(application.status)}
+              </div>
+              <p className="text-muted-foreground">
+                Review complete assessment and field evidence for final decision
+              </p>
             </div>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-sm text-muted-foreground">
-              Application ID: <span className="font-mono text-foreground font-semibold">{formatApplicationId(application)}</span>
-            </p>
           </div>
+
+          <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
+            <div className="flex items-center gap-2 mr-auto">
+              <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-gray-50 text-gray-700 border-gray-200">
+                <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                Executive View-Only
+              </Badge>
+            </div>
+            
+            <Link href={`/approver?id=${application.id}`}>
+              <Button size="sm" className="bg-black hover:bg-gray-800 text-white gap-2">
+                <FileText className="h-4 w-4" />
+                Make Final Decision
+              </Button>
+            </Link>
         </div>
 
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="application_details">Application Details</TabsTrigger>
-          <TabsTrigger value="assessor_recommendation">Assessor Recommendation</TabsTrigger>
-          <TabsTrigger value="comments_history">Comments & History</TabsTrigger>
+          {/* Main Content with Tabs */}
+          <Tabs defaultValue="application_details" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
+              <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
+              <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
+              <TabsTrigger value="field_report" className="py-2.5">Field Report</TabsTrigger>
+              <TabsTrigger value="summary" className="py-2.5">Assessor Recommendation</TabsTrigger>
+              <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="application_details" className="space-y-6">
-          {/* Application Form in Read-only Mode */}
-          {initialFormData && application && (
+            <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
+              {initialFormData && (
             <ApplicationForm 
               userData={{
                 email: application.applicant?.email || "",
@@ -303,8 +423,8 @@ export default function ApproverApplicationPage() {
                 id_number: "",
                 company_tin: "",
               }}
-              onSubmit={async () => {}} // Dummy handler for read-only form
-              onSaveAsDraft={async () => {}} // Dummy handler for read-only form
+                  onSubmit={async () => {}} 
+                  onSaveAsDraft={async () => {}}
               isLoading={false}
               initialData={initialFormData}
               initialDocuments={initialDocuments}
@@ -315,14 +435,48 @@ export default function ApproverApplicationPage() {
           )}
         </TabsContent>
 
-        <TabsContent value="assessor_recommendation" className="space-y-6">
-          <AssessorRecommendation applicationId={application.id} />
+            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
+              <DocumentVerificationComponent
+                documents={application.documents || []}
+                verifications={documentVerifications}
+                onVerificationsChange={() => {}}
+                readOnly={true}
+              />
+            </TabsContent>
+
+            <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
+              <FieldReportUpload
+                applicationId={application.id}
+                existingFiles={fieldReportFiles}
+                summary={fieldReportSummary}
+                inspectorName={inspectorName}
+                inspectionDate={inspectionDate}
+                onFilesChange={() => {}}
+                onSummaryChange={() => {}}
+                onInspectorNameChange={() => {}}
+                onInspectionDateChange={() => {}}
+                inspectorNameReadOnly={true}
+                readOnly={true}
+              />
         </TabsContent>
 
-        <TabsContent value="comments_history">
+            <TabsContent value="summary" className="space-y-6 focus-visible:outline-none">
+              <VerificationSummary
+                checklist={checklist}
+                recommendation={recommendation}
+                onChecklistChange={() => {}}
+                onRecommendationChange={() => {}}
+                readOnly={true}
+                assessorName={inspectorName}
+              />
+            </TabsContent>
+
+            <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
           {application.id && <ApplicationComments applicationId={application.id} />}
         </TabsContent>
       </Tabs>
+        </motion.div>
     </div>
+    </DashboardLayout>
   );
 } 

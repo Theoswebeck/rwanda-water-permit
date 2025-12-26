@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -35,7 +36,8 @@ import {
   AlertTriangle,
   Loader2,
   XCircle,
-  ClipboardCheck
+  ClipboardCheck,
+  CheckCircle
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
@@ -74,6 +76,13 @@ interface StaffMember {
   role: string;
   email: string;
 }
+
+type DocReviewMeta = {
+  eligibilityConfirmed: boolean;
+  eligibilityConfirmedAt?: string;
+  completenessConfirmed: boolean;
+  completenessConfirmedAt?: string;
+};
 
 // Transform Application data back to form format for viewing
 function mapApplicationToFormData(application: Application, userProfile?: any): any {
@@ -263,6 +272,11 @@ export default function AssessmentApplicationPage() {
   // Assessment State
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [documentVerifications, setDocumentVerifications] = useState<Record<string, { status: VerificationStatus; notes: string }>>({});
+  const [docReviewMeta, setDocReviewMeta] = useState<DocReviewMeta>({
+    eligibilityConfirmed: false,
+    completenessConfirmed: false,
+  });
+  const [docReviewSaveLoading, setDocReviewSaveLoading] = useState(false);
   
   // Field Report State
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
@@ -297,6 +311,11 @@ export default function AssessmentApplicationPage() {
     application?.status === "under_review";
   const isReadOnly = application ? !isEditableAssessment : true;
   const defaultTabValue = isReadOnly ? "application_details" : "doc_verification";
+  const docReviewLocked = !!docReviewMeta.completenessConfirmed;
+  const canProceedPastDocReview =
+    isReadOnly || (docReviewMeta.eligibilityConfirmed && docReviewMeta.completenessConfirmed);
+  const isFieldReportComplete =
+    isReadOnly || (fieldReportFiles.length > 0 && !!fieldReportSummary.trim());
 
   useEffect(() => {
     if (tabTouchedRef.current) return;
@@ -390,7 +409,26 @@ export default function AssessmentApplicationPage() {
 
         if (existingAssessment) {
           setAssessmentId(existingAssessment.id);
-          setDocumentVerifications(existingAssessment.document_verifications || {});
+          // document_verifications may contain metadata under "__meta"
+          const rawDocVerifications: any = existingAssessment.document_verifications || {};
+          const meta: any =
+            rawDocVerifications && typeof rawDocVerifications === "object"
+              ? (rawDocVerifications.__meta as any)
+              : undefined;
+          const cleaned: Record<string, { status: VerificationStatus; notes: string }> = {
+            ...(rawDocVerifications && typeof rawDocVerifications === "object" ? rawDocVerifications : {}),
+          };
+          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+          delete (cleaned as any).__meta;
+          setDocumentVerifications(cleaned);
+          if (meta && typeof meta === "object") {
+            setDocReviewMeta({
+              eligibilityConfirmed: !!meta.eligibilityConfirmed,
+              eligibilityConfirmedAt: typeof meta.eligibilityConfirmedAt === "string" ? meta.eligibilityConfirmedAt : undefined,
+              completenessConfirmed: !!meta.completenessConfirmed,
+              completenessConfirmedAt: typeof meta.completenessConfirmedAt === "string" ? meta.completenessConfirmedAt : undefined,
+            });
+          }
           
           // Restore field report data
           setFieldReportSummary(existingAssessment.field_report_summary || "");
@@ -413,9 +451,26 @@ export default function AssessmentApplicationPage() {
             explanationText: existingAssessment.explanation_text || ""
           });
 
-          // Fetch files if needed (paths are stored in existingAssessment.field_report_files)
-          // For now we'll rely on the uploaded files component to manage its state or fetch separately if needed
-          // A real implementation would map file paths back to objects
+          // Restore field report files
+          if (existingAssessment.field_report_files && Array.isArray(existingAssessment.field_report_files)) {
+            const files = existingAssessment.field_report_files.map((path: string) => {
+              const name = path.split('/').pop() || 'File';
+              const timestampMatch = name.match(/^(\d+)-/);
+              const uploadedAt = timestampMatch 
+                ? new Date(parseInt(timestampMatch[1])).toISOString() 
+                : existingAssessment.created_at;
+                
+              return {
+                id: Math.random().toString(36).substr(2, 9),
+                name: name.replace(/^\d+-/, ''),
+                path: path,
+                size: 0, // Size is not stored, but could be fetched if needed
+                type: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg', // Approximation
+                uploadedAt: uploadedAt
+              };
+            });
+            setFieldReportFiles(files);
+          }
         }
 
         // Transform application data to form format
@@ -472,17 +527,29 @@ export default function AssessmentApplicationPage() {
     }
   }, [params.id]);
 
-  const saveAssessment = async (status: 'draft' | 'submitted' | 'forwarded_to_approver' | 'returned_for_revision' = 'draft') => {
+  const saveAssessment = async (
+    status: 'draft' | 'submitted' | 'forwarded_to_approver' | 'returned_for_revision' = 'draft',
+    overrides?: {
+      documentVerifications?: Record<string, { status: VerificationStatus; notes: string }>;
+      docReviewMeta?: DocReviewMeta;
+    }
+  ) => {
     if (!application) return;
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      const mergedDocVerifications = overrides?.documentVerifications ?? documentVerifications;
+      const mergedDocReviewMeta = overrides?.docReviewMeta ?? docReviewMeta;
+
       const assessmentData = {
         application_id: application.id,
         assessor_id: user.id,
-        document_verifications: documentVerifications,
+        document_verifications: {
+          ...mergedDocVerifications,
+          __meta: mergedDocReviewMeta,
+        },
         field_report_summary: fieldReportSummary,
         field_report_files: fieldReportFiles.map(f => f.path),
         location_verified: checklist.locationVerified,
@@ -549,10 +616,100 @@ export default function AssessmentApplicationPage() {
     }
   };
 
+  const getDocsAllVerified = () => {
+    const docs = application?.documents || [];
+    if (!docs.length) return false;
+    return docs.every((d) => (documentVerifications[d.id]?.status || "pending") === "verified");
+  };
+
+  const getNonVerifiedDocs = () => {
+    const docs = application?.documents || [];
+    return docs
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        status: (documentVerifications[d.id]?.status || "pending") as VerificationStatus,
+      }))
+      .filter((d) => d.status !== "verified");
+  };
+
+  const handleSaveEligibility = async (nextEligibilityConfirmed: boolean) => {
+    if (!application) return;
+    if (docReviewLocked || isReadOnly) return;
+    if (docReviewSaveLoading) return;
+    try {
+      setDocReviewSaveLoading(true);
+      const nextMeta: DocReviewMeta = {
+        ...docReviewMeta,
+        eligibilityConfirmed: nextEligibilityConfirmed,
+        eligibilityConfirmedAt: nextEligibilityConfirmed ? new Date().toISOString() : undefined,
+      };
+      setDocReviewMeta(nextMeta);
+      await saveAssessment("draft", { docReviewMeta: nextMeta });
+      alert("✅ Eligibility confirmation saved.");
+    } catch (err) {
+      console.error("Error saving eligibility confirmation:", err);
+      alert("❌ Failed to save eligibility confirmation.");
+    } finally {
+      setDocReviewSaveLoading(false);
+    }
+  };
+
+  const handleConfirmCompletenessAndLock = async () => {
+    if (!application) return;
+    if (docReviewLocked || isReadOnly) return;
+    if (docReviewSaveLoading) return;
+
+    if (!docReviewMeta.eligibilityConfirmed) {
+      alert("⚠️ Please confirm eligibility first.");
+      return;
+    }
+
+    const nonVerified = getNonVerifiedDocs();
+    if (nonVerified.length > 0) {
+      const list = nonVerified
+        .map((d) => `- ${d.name} (${d.status})`)
+        .join("\n");
+      alert(
+        `⚠️ Please mark all uploaded documents as ✅ Verified before confirming completeness.\n\nNot verified yet:\n${list}`
+      );
+      return;
+    }
+
+    try {
+      setDocReviewSaveLoading(true);
+      const nextMeta: DocReviewMeta = {
+        ...docReviewMeta,
+        completenessConfirmed: true,
+        completenessConfirmedAt: new Date().toISOString(),
+      };
+      setDocReviewMeta(nextMeta);
+      await saveAssessment("draft", { docReviewMeta: nextMeta });
+      alert("✅ Application marked complete. Document review is now locked.");
+    } catch (err) {
+      console.error("Error confirming completeness:", err);
+      alert("❌ Failed to confirm completeness.");
+    } finally {
+      setDocReviewSaveLoading(false);
+    }
+  };
+
   const handleForwardToApprover = async () => {
     if (!application) return;
 
     if (actionInFlightRef.current) return;
+
+    if (!canProceedPastDocReview) {
+      alert("⚠️ Please confirm eligibility and application completeness in Document Verification before proceeding to Field Report / Recommendation.");
+      return;
+    }
+
+    if (!isFieldReportComplete) {
+      alert("⚠️ Field Report Documents and Field Report Summary are required before sending for final approval.");
+      tabTouchedRef.current = true;
+      setActiveTab("field_report");
+      return;
+    }
     
     // Validation
     if (!recommendation.recommendation) {
@@ -614,6 +771,11 @@ export default function AssessmentApplicationPage() {
     if (!application || !revisionNotes.trim()) return;
 
     if (actionInFlightRef.current) return;
+
+    if (docReviewLocked) {
+      alert("⚠️ This application has already been confirmed complete and can no longer be returned for revision.");
+      return;
+    }
     
     try {
       setSubmitLoading(true);
@@ -827,7 +989,7 @@ export default function AssessmentApplicationPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowRevisionDialog(true)}
-                  disabled={submitLoading}
+                  disabled={submitLoading || docReviewLocked}
                   className="gap-2"
                 >
                   <X className="h-4 w-4" />
@@ -879,6 +1041,16 @@ export default function AssessmentApplicationPage() {
           <Tabs
             value={activeTab || defaultTabValue}
             onValueChange={(next) => {
+              if (!canProceedPastDocReview && (next === "field_report" || next === "summary")) {
+                alert("⚠️ Please confirm eligibility and completeness in Document Verification before proceeding.");
+                return;
+              }
+              if (!isFieldReportComplete && next === "summary") {
+                alert("⚠️ Field Report Documents and Field Report Summary are required before proceeding to Final Recommendation.");
+                tabTouchedRef.current = true;
+                setActiveTab("field_report");
+                return;
+              }
               tabTouchedRef.current = true;
               setActiveTab(next);
             }}
@@ -887,8 +1059,12 @@ export default function AssessmentApplicationPage() {
             <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
-              <TabsTrigger value="field_report" className="py-2.5">Field Report</TabsTrigger>
-              <TabsTrigger value="summary" className="py-2.5">Final Recommendation</TabsTrigger>
+                  <TabsTrigger value="field_report" className="py-2.5" disabled={!canProceedPastDocReview}>
+                    Field Report
+                  </TabsTrigger>
+                  <TabsTrigger value="summary" className="py-2.5" disabled={!canProceedPastDocReview}>
+                    Final Recommendation
+                  </TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -926,8 +1102,76 @@ export default function AssessmentApplicationPage() {
                 documents={application.documents || []}
                 verifications={documentVerifications}
                 onVerificationsChange={setDocumentVerifications}
-                readOnly={isReadOnly}
+                readOnly={isReadOnly || docReviewLocked}
               />
+
+              {!isReadOnly && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Eligibility & Completeness</CardTitle>
+                    <CardDescription>
+                      Confirm eligibility and completeness before proceeding to Field Report. If incomplete, return the application for revision with comments.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {docReviewLocked && (
+                      <Alert>
+                        <CheckCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>Locked:</strong> Completeness confirmed{docReviewMeta.completenessConfirmedAt ? ` on ${new Date(docReviewMeta.completenessConfirmedAt).toLocaleString()}` : ""}. Document review is read-only and the application can no longer be returned for revision.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {!docReviewLocked && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          You can only proceed to <strong>Field Report</strong> and <strong>Final Recommendation</strong> after confirming both eligibility and completeness.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="eligibility-confirmed"
+                        checked={docReviewMeta.eligibilityConfirmed}
+                        disabled={docReviewLocked || docReviewSaveLoading}
+                        onCheckedChange={(checked) => handleSaveEligibility(!!checked)}
+                      />
+                      <div className="space-y-1">
+                        <Label htmlFor="eligibility-confirmed" className="text-sm font-medium">
+                          I confirm the application and documents are eligible for assessment
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          This is required before confirming completeness.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t">
+                      <div className="text-sm text-muted-foreground">
+                        <strong>Completeness requires:</strong> all uploaded documents marked as <strong>✅ Verified</strong>.
+                      </div>
+                      <Button
+                        onClick={handleConfirmCompletenessAndLock}
+                        disabled={docReviewLocked || docReviewSaveLoading || !docReviewMeta.eligibilityConfirmed || !getDocsAllVerified()}
+                      >
+                        {docReviewSaveLoading ? "Saving..." : "Confirm Completeness & Lock"}
+                      </Button>
+                    </div>
+
+                    {!docReviewLocked && docReviewMeta.eligibilityConfirmed && getNonVerifiedDocs().length > 0 && (
+                      <Alert>
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>Still pending:</strong> {getNonVerifiedDocs().length} document(s) are not marked as ✅ Verified yet. Please update their statuses above before confirming completeness.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             {/* Field Report Tab */}
@@ -955,6 +1199,7 @@ export default function AssessmentApplicationPage() {
                 onChecklistChange={setChecklist}
                 onRecommendationChange={setRecommendation}
                 readOnly={isReadOnly}
+                assessorName={inspectorName}
               />
             </TabsContent>
 

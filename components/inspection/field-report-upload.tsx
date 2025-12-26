@@ -99,6 +99,8 @@ export function FieldReportUpload({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isSummaryMissing = !summary.trim();
+  const isFilesMissing = existingFiles.length === 0;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -227,6 +229,11 @@ export function FieldReportUpload({
     }
   };
 
+  const isImage = (fileName: string) => {
+    const ext = fileName.toLowerCase().split('.').pop();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext || '');
+  };
+
   return (
     <div className="space-y-6">
       {/* Inspector Details */}
@@ -275,13 +282,22 @@ export function FieldReportUpload({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            Field Report Documents
+            Field Report Documents <span className="text-destructive">*</span>
           </CardTitle>
           <CardDescription>
             Upload field visit report (PDF, Word) and supporting photos
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {!readOnly && isFilesMissing && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Field report documents are required. Please upload at least one file.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Upload Area */}
           {!readOnly && (
             <div
@@ -354,7 +370,18 @@ export function FieldReportUpload({
                     className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border"
                   >
                     <div className="flex items-center gap-3">
-                      {getFileIcon(file.name)}
+                      {isImage(file.name) ? (
+                        <div className="h-12 w-12 rounded overflow-hidden border bg-background flex-shrink-0">
+                          <img 
+                            src={getDocumentUrl(file.path) || ""} 
+                            alt={file.name}
+                            className="h-full w-full object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => handleViewFile(file)}
+                          />
+                        </div>
+                      ) : (
+                        getFileIcon(file.name)
+                      )}
                       <div>
                         <p className="text-sm font-medium">{file.name}</p>
                         <p className="text-xs text-muted-foreground">
@@ -402,18 +429,29 @@ export function FieldReportUpload({
       {/* Field Report Summary */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Field Report Summary</CardTitle>
+          <CardTitle className="text-lg">
+            Field Report Summary <span className="text-destructive">*</span>
+          </CardTitle>
           <CardDescription>
             Provide a brief summary of the field visit findings
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!readOnly && isSummaryMissing && (
+            <Alert variant="destructive" className="mb-3">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Field report summary is required. Please provide a brief summary before proceeding.
+              </AlertDescription>
+            </Alert>
+          )}
           <Textarea
             value={summary}
             onChange={(e) => onSummaryChange(e.target.value)}
             placeholder="Enter a summary of the field visit findings, observations, and any issues identified during the inspection..."
             rows={6}
             disabled={readOnly}
+            aria-required={!readOnly}
           />
           <p className="text-xs text-muted-foreground mt-2">
             Include key observations about site conditions, water source accessibility, infrastructure status, and any environmental concerns.

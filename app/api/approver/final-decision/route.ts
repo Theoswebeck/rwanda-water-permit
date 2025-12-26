@@ -4,7 +4,7 @@ import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { sendResendEmail, renderAppEmailHtml } from '@/lib/notifications/resend-email'
 
-type Decision = 'approve' | 'reject' | 'return_to_review'
+type Decision = 'approve' | 'reject' | 'return_to_assessment'
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
@@ -54,29 +54,29 @@ function buildDecisionCopy(params: {
     return { sms, email: { subject, title, text, type: 'success' as const } }
   }
 
-  if (decision === 'return_to_review') {
-    const reasonLine = reason ? ` Feedback: ${reason}` : ''
-    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} requires revisions.${clamp(reasonLine, 220)} Please log in to your portal to view the details and resubmit. Support: ${supportEmail}.`
-    const subject = `Revisions required — ${applicationNumber}`
-    const title = 'Revisions Required'
+  if (decision === 'return_to_assessment') {
+    const reasonLine = reason ? ` Details: ${reason}` : ''
+    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} is undergoing further technical assessment. No action is required from you at this time. Support: ${supportEmail}.`
+    const subject = `Further assessment in progress — ${applicationNumber}`
+    const title = 'Further Assessment in Progress'
     const text = [
       `Dear ${applicantName},`,
       ``,
-      `Your water permit application (${applicationNumber}) requires revisions before it can proceed.`,
+      `Your water permit application (${applicationNumber}) has been returned for further technical assessment by the board.`,
       ``,
-      `Feedback:`,
-      reason ? reason : '(not specified)',
+      `Current Status:`,
+      `The application is being reviewed again to ensure all technical requirements are met. You do not need to take any action at this time.`,
       ``,
       `What to do next:`,
-      `- Log in to your portal to view the detailed feedback.`,
-      `- Update the required information/documents and resubmit your application.`,
+      `- We will notify you once the assessment is complete and a final decision is made.`,
+      `- You can continue to track your application status in the portal.`,
       ``,
       `Portal: ${portalUrl}`,
       `Support: ${supportEmail}`,
       ``,
       `${orgName}`,
     ].join('\n')
-    return { sms, email: { subject, title, text, type: 'warning' as const } }
+    return { sms, email: { subject, title, text, type: 'info' as const } }
   }
 
   // reject
@@ -121,11 +121,11 @@ export async function POST(req: NextRequest) {
     const reason = (body?.reason as string | undefined) || ''
     const conditions = (body?.conditions as string | undefined) || ''
 
-    if (!isNonEmptyString(applicationId) || !['approve', 'reject', 'return_to_review'].includes(decision)) {
+    if (!isNonEmptyString(applicationId) || !['approve', 'reject', 'return_to_assessment'].includes(decision)) {
       return NextResponse.json({ success: false, message: 'Invalid request: applicationId and decision are required' }, { status: 400 })
     }
     if (decision !== 'approve' && !isNonEmptyString(reason)) {
-      return NextResponse.json({ success: false, message: 'Reason is required for rejection or return-to-review' }, { status: 400 })
+      return NextResponse.json({ success: false, message: 'Reason is required for rejection or return-to-assessment' }, { status: 400 })
     }
 
     console.log(`🔄 Approver final decision requested: decision=${decision} applicationId=${applicationId}`)
@@ -176,24 +176,29 @@ export async function POST(req: NextRequest) {
       reason,
     })
 
-    // Send SMS
-    const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
-    const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-    if (!pindo.isValidRwandanPhone(applicantPhone)) {
-      return NextResponse.json({ success: false, message: 'Invalid applicant phone number format' }, { status: 400 })
+    // Skip SMS/Email for return_to_assessment as per user request
+    if (decision !== 'return_to_assessment') {
+      // Send SMS
+      const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
+      const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
+      if (!pindo.isValidRwandanPhone(applicantPhone)) {
+        return NextResponse.json({ success: false, message: 'Invalid applicant phone number format' }, { status: 400 })
+      }
+
+      console.log(`📱 Sending decision SMS: to=${applicantPhone} application=${applicationNumber}`)
+      await pindo.sendSMS(applicantPhone, copy.sms, senderName)
+
+      // Send Email
+      console.log(`✉️ Sending decision email: to=${applicantEmail} application=${applicationNumber}`)
+      await sendResendEmail({
+        to: applicantEmail,
+        subject: copy.email.subject,
+        title: copy.email.title,
+        text: copy.email.text,
+      })
+    } else {
+      console.log(`ℹ️ Skipping SMS/Email for return_to_assessment for application=${applicationNumber}`)
     }
-
-    console.log(`📱 Sending decision SMS: to=${applicantPhone} application=${applicationNumber}`)
-    await pindo.sendSMS(applicantPhone, copy.sms, senderName)
-
-    // Send Email
-    console.log(`✉️ Sending decision email: to=${applicantEmail} application=${applicationNumber}`)
-    await sendResendEmail({
-      to: applicantEmail,
-      subject: copy.email.subject,
-      title: copy.email.title,
-      text: copy.email.text,
-    })
 
     // Assign an approver id (fallback for environments without auth wired)
     const { data: approver, error: approverErr } = await supabase
@@ -239,11 +244,12 @@ export async function POST(req: NextRequest) {
         .eq('id', applicationId)
       if (updErr) throw updErr
     } else {
+      // return_to_assessment
       const { error: updErr } = await supabase
         .from('applications')
         .update({
-          status: 'revision_required',
-          revision_notes: reason.trim(),
+          status: 'pending_assessment',
+          internal_notes: `Returned from Approval for further assessment: ${reason.trim()}`,
           assigned_approver_id: approver.id,
           updated_at: now,
         })
@@ -253,7 +259,7 @@ export async function POST(req: NextRequest) {
 
     // Create in-app notification record
     const title =
-      decision === 'approve' ? 'Application Approved' : decision === 'reject' ? 'Application Rejected' : 'Revisions Required'
+      decision === 'approve' ? 'Application Approved' : decision === 'reject' ? 'Application Rejected' : 'Further Assessment in Progress'
     const message = copy.email.text
 
     const { error: notifErr } = await supabase.from('notifications').insert({
@@ -262,8 +268,8 @@ export async function POST(req: NextRequest) {
       message,
       type: copy.email.type,
       application_id: applicationId,
-      email_sent: true,
-      sms_sent: true,
+      email_sent: decision !== 'return_to_assessment',
+      sms_sent: decision !== 'return_to_assessment',
     })
     if (notifErr) {
       // Don’t fail the workflow for a non-critical dashboard notification record.
