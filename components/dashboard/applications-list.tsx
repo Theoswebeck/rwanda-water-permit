@@ -58,7 +58,14 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
   const getDisplayStatus = (app: Application): string => {
     // UI-only status mapping from parent (e.g., applicant dashboard).
     // We must keep raw `app.status` for behavior (edit, accept terms, delete rules).
-    return (app as any).display_status ?? app.status;
+    const fromParent = (app as any).display_status as string | undefined;
+    if (fromParent) return fromParent;
+
+    // Fallback: ensure internal statuses never leak to applicants even if parent forgets to attach `display_status`.
+    const raw = app.status;
+    if (raw === "draft") return "draft";
+    if (raw === "submitted" || raw === "under_review" || raw === "approved" || raw === "expired") return raw;
+    return "under_review";
   };
 
   // Filter applications based on search and filters
