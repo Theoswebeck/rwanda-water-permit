@@ -133,6 +133,8 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
   };
 
   // Function to get the appropriate status with icon and color
+  // Only handles applicant-visible statuses: draft, submitted, under_review, approved, expired
+  // All other statuses (internal) are mapped to "Under Review" for applicants
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "draft":
@@ -153,28 +155,10 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           icon: <AlertCircle className="h-4 w-4" />,
           className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
         };
-      case "pending_assessment":
-        return {
-          label: "Pending Assessment",
-          icon: <Eye className="h-4 w-4" />,
-          className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
-        };
-      case "pending_inspection":
-        return {
-          label: "Pending Inspection",
-          icon: <Eye className="h-4 w-4" />,
-          className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
-        };
       case "approved":
         return {
           label: "Approved",
           icon: <CheckCircle2 className="h-4 w-4" />,
-          className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
-        };
-      case "approved_pending_permit":
-        return {
-          label: "Pending Terms Acceptance",
-          icon: <FileText className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
         };
       case "expired":
@@ -183,35 +167,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           icon: <AlertCircle className="h-4 w-4" />,
           className: "bg-slate-200 text-slate-700 border-0 hover:bg-slate-200 px-3 py-2 rounded-full font-medium"
         };
-      case "pending_final_approval":
-        return {
-          label: "Pending Approval",
-          icon: <Clock className="h-4 w-4" />,
-          className: "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium"
-        };
-      case "rejected":
-        return {
-          label: "Rejected",
-          icon: <XCircle className="h-4 w-4" />,
-          className: "bg-red-100 text-red-700 border-0 hover:bg-red-100 px-3 py-2 rounded-full font-medium"
-        };
-      case "revision_required":
-        return {
-          label: "Revision Required",
-          icon: <AlertCircle className="h-4 w-4" />,
-          className: "bg-orange-100 text-orange-700 border-0 hover:bg-orange-100 px-3 py-2 rounded-full font-medium"
-        };
-      case "cancelled":
-        return {
-          label: "Cancelled",
-          icon: <XCircle className="h-4 w-4" />,
-          className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
-        };
       default:
+        // Safety fallback: any unmapped/internal status shows as "Under Review" for applicants
         return {
-          label: "Unknown",
-          icon: <Circle className="h-4 w-4" />,
-          className: "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium"
+          label: "Under Review",
+          icon: <AlertCircle className="h-4 w-4" />,
+          className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
         };
     }
   };
@@ -455,7 +416,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-16 text-gray-500">
+                <TableCell colSpan={7} className="text-center py-16 text-gray-500">
                   <div className="flex flex-col items-center gap-3">
                     <div className="p-3 bg-gray-100 rounded-full">
                       <FileText className="h-6 w-6 text-gray-400" />
