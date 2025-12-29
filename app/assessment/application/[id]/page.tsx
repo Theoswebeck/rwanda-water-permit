@@ -983,30 +983,6 @@ export default function AssessmentApplicationPage() {
               </Badge>
             </div>
 
-            {isReadOnly ? null : (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowRevisionDialog(true)}
-                  disabled={submitLoading || docReviewLocked}
-                  className="gap-2"
-                >
-                  <X className="h-4 w-4" />
-                  Return for Revision
-                </Button>
-
-                <Button
-                  size="sm"
-                  onClick={handleForwardToApprover}
-                  disabled={submitLoading || !recommendation.recommendation}
-                  className="gap-2 bg-black hover:bg-gray-800 text-white"
-                >
-                  {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  Send for Final Approval
-                </Button>
-              </>
-            )}
           </div>
 
           {/* Inspector Actions / Transfer */}
@@ -1153,12 +1129,23 @@ export default function AssessmentApplicationPage() {
                       <div className="text-sm text-muted-foreground">
                         <strong>Completeness requires:</strong> all uploaded documents marked as <strong>✅ Verified</strong>.
                       </div>
-                      <Button
-                        onClick={handleConfirmCompletenessAndLock}
-                        disabled={docReviewLocked || docReviewSaveLoading || !docReviewMeta.eligibilityConfirmed || !getDocsAllVerified()}
-                      >
-                        {docReviewSaveLoading ? "Saving..." : "Confirm Completeness & Lock"}
-                      </Button>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowRevisionDialog(true)}
+                          disabled={docReviewLocked || docReviewSaveLoading || submitLoading}
+                          className="gap-2"
+                        >
+                          <X className="h-4 w-4" />
+                          Return for Revision
+                        </Button>
+                        <Button
+                          onClick={handleConfirmCompletenessAndLock}
+                          disabled={docReviewLocked || docReviewSaveLoading || !docReviewMeta.eligibilityConfirmed || !getDocsAllVerified()}
+                        >
+                          {docReviewSaveLoading ? "Saving..." : "Confirm Completeness & Lock"}
+                        </Button>
+                      </div>
                     </div>
 
                     {!docReviewLocked && docReviewMeta.eligibilityConfirmed && getNonVerifiedDocs().length > 0 && (
@@ -1189,6 +1176,19 @@ export default function AssessmentApplicationPage() {
                 inspectorNameReadOnly={true}
                 readOnly={isReadOnly}
               />
+              {!isReadOnly && (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleForwardToApprover}
+                    disabled={submitLoading || !recommendation.recommendation}
+                    className="gap-2 bg-black hover:bg-gray-800 text-white"
+                  >
+                    {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Send for Final Approval
+                  </Button>
+                </div>
+              )}
             </TabsContent>
             
             {/* Verification Summary Tab */}
