@@ -48,6 +48,7 @@ import {
 } from '@/lib/rwanda-administrative-data';
 import { MultiPolygonInputWithValidation } from "@/components/forms/MultiPolygonInputWithValidation";
 import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidation';
+import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
 import { PaymentTab } from '@/components/dashboard/payment-tab';
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
@@ -86,7 +87,11 @@ const applicationFormSchema = z.object({
   waterSourceCell: z.string().min(1, { message: "Water source cell is required" }),
   waterSourceVillage: z.string().optional(),
   
-  // Water activity polygons (multiple polygons, variable points)
+  // Water abstraction point (LAT/LONG) - used for non-concession activities
+  waterSourceLatitude: z.string().optional(),
+  waterSourceLongitude: z.string().optional(),
+  
+  // Water activity polygons (multiple polygons, variable points) - optional, required only for fish farming
   waterSourcePolygons: z.array(
     z.array(
       z.object({
@@ -94,7 +99,7 @@ const applicationFormSchema = z.object({
         longitude: z.string().min(1, { message: "Longitude is required" })
       })
     ).min(3, { message: "Each polygon must have at least 3 coordinate points" })
-  ).min(1, { message: "At least one polygon is required" }),
+  ).optional(),
   
   // Reliability
   waterReliability: z.enum(["water_always_available", "frequently_dry", "dry_during_certain_season"]),
@@ -103,13 +108,13 @@ const applicationFormSchema = z.object({
   intendedActivities: z.array(z.string()).min(1, { message: "Select at least one activity" }),
   intendedActivityOther: z.string().optional(),
   
-  // Water Abstraction
+  // Water Abstraction - optional, required only for abstraction activities
   waterAbstractionDetails: z.array(z.object({
     flowRate: z.string().optional(),
     flowRateUnit: z.string().optional(),
     maxAverageYearly: z.number().optional(),
     abstractionMethod: z.string().optional(),
-  })).min(1),
+  })).optional(),
   
   // Water Concession (for Aquaculture)
   concessionArea: z.number().optional(),
@@ -243,6 +248,94 @@ const applicationFormSchema = z.object({
   certificationAgreement: z.boolean().refine((val) => val === true, {
     message: "You must certify the information is accurate"
   }),
+}).superRefine((data, ctx) => {
+  // Conditional validation based on activity type
+  // Note: This validation only runs on form submission, not on individual tab validation
+  const primaryActivity = data.intendedActivities?.[0];
+  if (!primaryActivity) return; // No validation if no activity selected
+  
+  const isFishFarming = primaryActivity === "fish_farming_lakes" || primaryActivity === "fish_farming_ponds";
+  
+  if (isFishFarming) {
+    // For fish farming, polygons are required (but only validated on Activity tab or final submission)
+    // Don't block if polygons are empty - let tab-specific validation handle it
+    if (data.waterSourcePolygons && data.waterSourcePolygons.length > 0) {
+      // Only validate format if polygons are provided
+      const hasValidPolygons = data.waterSourcePolygons.every((poly: any) => {
+        return (
+          Array.isArray(poly) &&
+          poly.length >= 3 &&
+          poly.every((coord: any) => 
+            coord?.latitude?.toString().trim() !== "" && 
+            coord?.longitude?.toString().trim() !== ""
+          )
+        );
+      });
+      
+      if (!hasValidPolygons) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourcePolygons"],
+          message: "Each polygon must have at least 3 complete coordinate points."
+        });
+      }
+    }
+  } else {
+    // For abstraction activities, validate LAT/LONG format if provided (but don't require them here)
+    // Tab-specific validation will handle the requirement
+    const latitude = String(data.waterSourceLatitude ?? "").trim();
+    const longitude = String(data.waterSourceLongitude ?? "").trim();
+    
+    // Only validate format if values are provided
+    if (latitude && longitude) {
+      // First check if values are valid numbers
+      const latNum = parseFloat(latitude);
+      const lngNum = parseFloat(longitude);
+      
+      if (isNaN(latNum) || isNaN(lngNum)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourceLatitude"],
+          message: "Latitude must be a valid number."
+        });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourceLongitude"],
+          message: "Longitude must be a valid number."
+        });
+        return;
+      }
+      
+      const point = { latitude, longitude };
+      if (!isValidCoordinate(point)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourceLatitude"],
+          message: `Invalid latitude. Must be between -90 and 90. Current value: ${latNum.toFixed(6)}`
+        });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourceLongitude"],
+          message: `Invalid longitude. Must be between -180 and 180. Current value: ${lngNum.toFixed(6)}`
+        });
+        return;
+      }
+      
+      // Check if within Rwanda boundaries using existing polygon verification
+      if (!isWithinRwanda(point)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourceLatitude"],
+          message: `Coordinates (${latNum.toFixed(6)}, ${lngNum.toFixed(6)}) are outside Rwanda boundaries. Please enter coordinates within Rwanda.`
+        });
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterSourceLongitude"],
+          message: `Coordinates (${latNum.toFixed(6)}, ${lngNum.toFixed(6)}) are outside Rwanda boundaries. Please enter coordinates within Rwanda.`
+        });
+      }
+    }
+  }
 });
 
 type FormValues = z.infer<typeof applicationFormSchema>;
@@ -386,6 +479,8 @@ export const ApplicationForm = memo(function ApplicationForm({
       waterSourceSector: "",
       waterSourceCell: "",
       waterSourceVillage: "",
+      waterSourceLatitude: "",
+      waterSourceLongitude: "",
       waterReliability: "water_always_available",
       waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: 0, abstractionMethod: "" }],
       intendedActivities: [],
@@ -788,61 +883,91 @@ export const ApplicationForm = memo(function ApplicationForm({
   };
 
   const validateWaterSourceTab = async () => {
+    // Only validate Water Source tab fields - LAT/LONG are validated in Activity tab
     const fields = [
       'waterSourceType', 'nameSourceWater', 'waterSourceProvince',
-      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability',
-      'waterSourcePolygons'
+      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'
     ];
+    
     const errors = await form.trigger(fields as any);
-    if (!errors) return false;
-
-    // Enforce polygon validation when user tries to move past Water Source
-    const polygons = form.getValues('waterSourcePolygons') || [];
-    const hasValidPolygons =
-      Array.isArray(polygons) &&
-      polygons.length > 0 &&
-      polygons.every((poly: any) => {
-        return (
-          Array.isArray(poly) &&
-          poly.length >= 3 &&
-          poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
-        );
-      });
-
-    if (!hasValidPolygons) {
-      setValidationError('Please provide at least one polygon with 3+ coordinate points before proceeding.');
-      return false;
-    }
-
-    try {
-      const validation = await validatePolygons({
-        polygons,
-        applicationId: currentApplication?.id
-      });
-
-      setCoordinateValidation(validation);
-
-      if (!validation.isValid) {
-        const msg = validation.errors?.[0] || 'Polygon validation failed. Please review your coordinates.';
-        setValidationError(msg);
-        return false;
-      }
-    } catch (e) {
-      setValidationError(`Polygon validation failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
-      return false;
-    }
-
-    return true;
+    return errors;
   };
 
   const validateIntendedActivityTab = async () => {
-    const fields = ['intendedActivities', 'waterAbstractionDetails'];
+    const fields = ['intendedActivities'];
     const errors = await form.trigger(fields as any);
     
     // Check if activity-specific required documents are uploaded
     if (!checkRequiredDocuments()) {
       setValidationError("Please upload all required documents for your selected activities before proceeding.");
       return false;
+    }
+
+    // For concession activities (fish farming), polygons are required and should be validated here
+    const intended = form.getValues('intendedActivities') || [];
+    const primary = intended?.[0];
+    const requiresConcessionPolygons = primary === 'fish_farming_lakes' || primary === 'fish_farming_ponds';
+    const requiresAbstractionDetails = primary && primary !== 'fish_farming_lakes' && primary !== 'fish_farming_ponds';
+    
+    // For abstraction activities, LAT/LONG and water abstraction details are required
+    if (requiresAbstractionDetails) {
+      // Validate LAT/LONG
+      const latLngErrors = await form.trigger(['waterSourceLatitude', 'waterSourceLongitude'] as any);
+      if (!latLngErrors) {
+        const lat = String(form.getValues('waterSourceLatitude') ?? '').trim();
+        const lng = String(form.getValues('waterSourceLongitude') ?? '').trim();
+        if (!lat || !lng) {
+          setValidationError("Water abstraction point (LAT/LONG) is required for abstraction activities.");
+          return false;
+        }
+      }
+      
+      // Validate water abstraction details
+      const abstractionErrors = await form.trigger('waterAbstractionDetails' as any);
+      if (!abstractionErrors) {
+        const details = form.getValues('waterAbstractionDetails') || [];
+        if (!details || details.length === 0) {
+          setValidationError("Water abstraction details are required for abstraction activities.");
+          return false;
+        }
+      }
+    }
+    
+    if (requiresConcessionPolygons) {
+      const polygons = form.getValues('waterSourcePolygons') || [];
+      const hasValidPolygons =
+        Array.isArray(polygons) &&
+        polygons.length > 0 &&
+        polygons.every((poly: any) => {
+          return (
+            Array.isArray(poly) &&
+            poly.length >= 3 &&
+            poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
+          );
+        });
+
+      if (!hasValidPolygons) {
+        setValidationError('Please provide at least one concession polygon with 3+ coordinate points before proceeding.');
+        return false;
+      }
+
+      try {
+        const validation = await validatePolygons({
+          polygons,
+          applicationId: currentApplication?.id
+        });
+
+        setCoordinateValidation(validation);
+
+        if (!validation.isValid) {
+          const msg = validation.errors?.[0] || 'Polygon validation failed. Please review your coordinates.';
+          setValidationError(msg);
+          return false;
+        }
+      } catch (e) {
+        setValidationError(`Polygon validation failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+        return false;
+      }
     }
     
     return errors;
@@ -955,26 +1080,15 @@ export const ApplicationForm = memo(function ApplicationForm({
         return !hasApplicantFields || !hasIdentificationDoc;
         
       case "water-source":
-        // Check required fields for water source tab
+        // Check required fields for water source tab only
+        // LAT/LONG are validated in Activity tab, not here
         const waterSourceFields = ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'];
         const hasWaterSourceFields = waterSourceFields.every(field => {
           const value = form.getValues(field as any);
           return value && value.toString().trim() !== '';
         });
-        
-        const polygons = form.getValues('waterSourcePolygons') || [];
-        const hasValidPolygons =
-          Array.isArray(polygons) &&
-          polygons.length > 0 &&
-          polygons.every((poly: any) => {
-            return (
-              Array.isArray(poly) &&
-              poly.length >= 3 &&
-              poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
-            );
-          });
 
-        return !hasWaterSourceFields || !hasValidPolygons;
+        return !hasWaterSourceFields;
         
       case "intended-activity":
         // Check required fields and documents for intended activity tab
@@ -982,6 +1096,25 @@ export const ApplicationForm = memo(function ApplicationForm({
         const waterAbstractionDetails = form.getValues('waterAbstractionDetails') || [];
         const hasActivityFields = intendedActivities.length > 0 && waterAbstractionDetails.length > 0;
         const hasRequiredDocs = checkRequiredDocuments();
+        
+        // For concession activities (fish farming), polygons are required
+        const primaryActivity = intendedActivities?.[0];
+        const requiresConcessionPolygons = primaryActivity === 'fish_farming_lakes' || primaryActivity === 'fish_farming_ponds';
+        if (requiresConcessionPolygons) {
+          const polygons = form.getValues('waterSourcePolygons') || [];
+          const hasValidPolygons =
+            Array.isArray(polygons) &&
+            polygons.length > 0 &&
+            polygons.every((poly: any) => {
+              return (
+                Array.isArray(poly) &&
+                poly.length >= 3 &&
+                poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
+              );
+            });
+          return !hasActivityFields || !hasRequiredDocs || !hasValidPolygons;
+        }
+        
         return !hasActivityFields || !hasRequiredDocs;
         
       case "land-ownership":
@@ -1077,6 +1210,8 @@ export const ApplicationForm = memo(function ApplicationForm({
         waterSourceSector: "",
         waterSourceCell: "",
         waterSourceVillage: "",
+        waterSourceLatitude: "",
+        waterSourceLongitude: "",
         waterSourcePolygons: [
           [
             { latitude: "", longitude: "" },
@@ -2451,51 +2586,6 @@ export const ApplicationForm = memo(function ApplicationForm({
                     </div>
                   </div>
 
-                  {/* 11. Water activity polygons (one or more polygons) */}
-                  <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name="waterSourcePolygons"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormControl>
-                            <MultiPolygonInputWithValidation
-                              polygons={
-                                field.value?.length
-                                  ? field.value
-                                  : [
-                                      [
-                                        { latitude: "", longitude: "" },
-                                        { latitude: "", longitude: "" },
-                                        { latitude: "", longitude: "" }
-                                      ]
-                                    ]
-                              }
-                              onPolygonsChange={(polygons) => field.onChange(polygons)}
-                              onValidationChange={(validation) => {
-                                setCoordinateValidation(validation);
-                                // Polygons are required and validated before moving to Activity.
-                                // We still allow saving drafts independently of this flag.
-                                setCanSubmit(true);
-                              }}
-                              applicationId={currentApplication?.id}
-                              disabled={Boolean(readOnly)}
-                              showValidation={true}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-sm text-yellow-800">
-                        <strong>Note:</strong> Each polygon needs at least 3 points. Add more points for a better boundary.
-                        If you have multiple separate areas, add multiple polygons.
-                      </p>
-                    </div>
-                  </div>
-
                   {/* Reliability of water source */}
                   <FormField
                     control={form.control}
@@ -2574,6 +2664,106 @@ export const ApplicationForm = memo(function ApplicationForm({
                     )}
                   />
 
+                  {/* Water Abstraction Point (LAT, LONG) - only for abstraction activities, right after Q13 */}
+                  {(() => {
+                    const primaryActivity = watchedIntendedActivities?.[0];
+                    const isFishFarming = primaryActivity === "fish_farming_lakes" || primaryActivity === "fish_farming_ponds";
+                    // Show only for abstraction activities (not fish farming)
+                    return primaryActivity && primaryActivity.trim() !== "" && !isFishFarming ? (
+                      <div className="space-y-4">
+                        <Label className="text-base font-medium">
+                          14. Water Abstraction Point * (LAT, LONG)
+                        </Label>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="waterSourceLatitude"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Latitude *</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    type="text"
+                                    value={(field.value ?? "").toString()}
+                                    placeholder="e.g., -1.9441"
+                                    disabled={readOnly}
+                                    onChange={(e) => {
+                                      // Only allow numbers, decimal point, and minus sign
+                                      const value = e.target.value;
+                                      // Allow: numbers, single decimal point, minus sign at start
+                                      const validPattern = /^-?\d*\.?\d*$/;
+                                      if (value === "" || validPattern.test(value)) {
+                                        field.onChange(value);
+                                        // Trigger validation after input
+                                        setTimeout(() => {
+                                          form.trigger("waterSourceLatitude");
+                                          form.trigger("waterSourceLongitude");
+                                        }, 100);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      // Validate on blur
+                                      form.trigger("waterSourceLatitude");
+                                      form.trigger("waterSourceLongitude");
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          <FormField
+                            control={form.control}
+                            name="waterSourceLongitude"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Longitude *</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    type="text"
+                                    value={(field.value ?? "").toString()}
+                                    placeholder="e.g., 29.8739"
+                                    disabled={readOnly}
+                                    onChange={(e) => {
+                                      // Only allow numbers, decimal point, and minus sign
+                                      const value = e.target.value;
+                                      // Allow: numbers, single decimal point, minus sign at start
+                                      const validPattern = /^-?\d*\.?\d*$/;
+                                      if (value === "" || validPattern.test(value)) {
+                                        field.onChange(value);
+                                        // Trigger validation after input
+                                        setTimeout(() => {
+                                          form.trigger("waterSourceLatitude");
+                                          form.trigger("waterSourceLongitude");
+                                        }, 100);
+                                      }
+                                    }}
+                                    onBlur={() => {
+                                      // Validate on blur
+                                      form.trigger("waterSourceLatitude");
+                                      form.trigger("waterSourceLongitude");
+                                    }}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm text-blue-800">
+                            <strong>Note:</strong> For water abstraction activities, only a single point is required (LAT/LONG).
+                          </p>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
                   {/* Other activity specification */}
                   {watchedIntendedActivities?.includes("other") && (
                     <FormField
@@ -2589,6 +2779,52 @@ export const ApplicationForm = memo(function ApplicationForm({
                         </FormItem>
                       )}
                     />
+                  )}
+
+                  {/* Water Concession Area (Multiple Polygons) - only for fish farming, after Q13 selection */}
+                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && 
+                   (watchedIntendedActivities.includes("fish_farming_lakes") || watchedIntendedActivities.includes("fish_farming_ponds")) && (
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="waterSourcePolygons"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <MultiPolygonInputWithValidation
+                                polygons={
+                                  field.value?.length
+                                    ? field.value
+                                    : [
+                                        [
+                                          { latitude: "", longitude: "" },
+                                          { latitude: "", longitude: "" },
+                                          { latitude: "", longitude: "" }
+                                        ]
+                                      ]
+                                }
+                                onPolygonsChange={(polygons) => field.onChange(polygons)}
+                                onValidationChange={(validation) => {
+                                  setCoordinateValidation(validation);
+                                  setCanSubmit(true);
+                                }}
+                                applicationId={currentApplication?.id}
+                                disabled={Boolean(readOnly)}
+                                showValidation={true}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm text-yellow-800">
+                          <strong>Note:</strong> This concession area is required for fish farming. Each polygon needs at least 3 points.
+                          If you have multiple separate areas, add multiple polygons.
+                        </p>
+                      </div>
+                    </div>
                   )}
 
                   {/* Activity-specific sections */}
@@ -3896,72 +4132,79 @@ export const ApplicationForm = memo(function ApplicationForm({
                     </div>
                   )}
 
-                  {/* 14. Water Abstraction Table */}
-                  <div className="space-y-4">
-                    <Label className="text-base font-medium">
-                      14. Water Abstraction Details *
-                    </Label>
-                    
-                    <div className="space-y-4">
-                      <div className="border rounded-lg p-4 space-y-4">
-                        <h4 className="font-medium">Water Use Details</h4>
+                  {/* 15. Water Abstraction Details - only show for abstraction activities (not fish farming) */}
+                  {(() => {
+                    const primaryActivity = watchedIntendedActivities?.[0];
+                    const isFishFarming = primaryActivity === "fish_farming_lakes" || primaryActivity === "fish_farming_ponds";
+                    // Show only if Q13 is selected and it's NOT fish farming (i.e., it's an abstraction activity)
+                    return primaryActivity && primaryActivity.trim() !== "" && !isFishFarming ? (
+                      <div className="space-y-4">
+                        <Label className="text-base font-medium">
+                          15. Water Abstraction Details *
+                        </Label>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="waterAbstractionDetails.0.flowRate"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Flow Rate (m³/s)</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    type="number"
-                                    step="0.001"
-                                    {...field} 
-                                    {...getInputProps({ value: field.value || "", placeholder: "Enter flow rate (m³/s)" })} 
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="waterAbstractionDetails.0.maxAverageYearly"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Maximum Average Yearly (m³/year)</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    type="number"
-                                    {...field}
-                                    onChange={(e) => field.onChange(Number(e.target.value))}
-                                    placeholder="Yearly average"
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="waterAbstractionDetails.0.abstractionMethod"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Method of Water Abstraction</FormLabel>
-                                <FormControl>
-                                  <Input {...field} placeholder="Abstraction method" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                        <div className="space-y-4">
+                          <div className="border rounded-lg p-4 space-y-4">
+                            <h4 className="font-medium">Water Use Details</h4>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="waterAbstractionDetails.0.flowRate"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Flow Rate (m³/s)</FormLabel>
+                                    <FormControl>
+                                      <Input 
+                                        type="number"
+                                        step="0.001"
+                                        {...field} 
+                                        {...getInputProps({ value: field.value || "", placeholder: "Enter flow rate (m³/s)" })} 
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={form.control}
+                                name="waterAbstractionDetails.0.maxAverageYearly"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Maximum Average Yearly (m³/year)</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        type="number"
+                                        {...field}
+                                        onChange={(e) => field.onChange(Number(e.target.value))}
+                                        placeholder="Yearly average"
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              
+                              <FormField
+                                control={form.control}
+                                name="waterAbstractionDetails.0.abstractionMethod"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Method of Water Abstraction</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} placeholder="Abstraction method" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    ) : null;
+                  })()}
 
                   {/* 15. Fish farming specific fields are shown above in respective sections */}
                 </TabsContent>
