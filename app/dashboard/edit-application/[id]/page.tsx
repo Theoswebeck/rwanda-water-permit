@@ -547,6 +547,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       paymentProof: 'payment_proof',
       identificationDoc: 'identification_doc', 
       landOwnershipDoc: 'land_ownership_doc',
+      landAccessDocuments: 'land_access_doc',
       technicalDrawings: 'technical_drawings',
       environmentalImpactDoc: 'environmental_impact_doc',
       intakeDischargeMap: 'intake_discharge_map',
@@ -636,7 +637,15 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
                 .single();
                 
               if (dbError) {
-                console.error(`Error updating document ${fieldName}:`, dbError);
+                console.error(`❌ Error updating document ${fieldName}:`, {
+                  fieldName,
+                  documentType,
+                  error: dbError,
+                  errorMessage: dbError.message,
+                  errorCode: dbError.code,
+                  errorDetails: dbError.details,
+                  errorHint: dbError.hint
+                });
               } else {
                 console.log(`✅ Updated existing document ${fieldName} successfully`);
                 uploadedDocuments.push(documentRecord);
@@ -653,7 +662,16 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
                   file_size: file.size,
                   mime_type: file.type,
                   verification_status: 'pending',
-                  is_required: ['paymentProof', 'identificationDoc'].includes(fieldName),
+                  is_required: [
+                    'paymentProof', 
+                    'identificationDoc', 
+                    'landAccessDocuments',
+                    'landOwnershipDoc',
+                    'miningGeneralRequirements',
+                    'miningLicense',
+                    'miningEIA',
+                    'miningHydrologicalReport'
+                  ].includes(fieldName),
                   uploaded_by: userId || '550e8400-e29b-41d4-a716-446655440001',
                   upload_date: new Date().toISOString()
                 })
@@ -661,7 +679,15 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
                 .single();
                 
               if (dbError) {
-                console.error(`Error saving document ${fieldName} to database:`, dbError);
+                console.error(`❌ Error saving document ${fieldName} to database:`, {
+                  fieldName,
+                  documentType,
+                  error: dbError,
+                  errorMessage: dbError.message,
+                  errorCode: dbError.code,
+                  errorDetails: dbError.details,
+                  errorHint: dbError.hint
+                });
               } else {
                 console.log(`✅ Created new document ${fieldName} successfully`);
                 uploadedDocuments.push(documentRecord);
@@ -891,7 +917,8 @@ export default function EditApplicationPage() {
           
           const typeMapping: Record<string, string> = {
             'identification_doc': 'identificationDoc',
-            'land_ownership_doc': 'landOwnershipDoc', 
+            'land_ownership_doc': 'landOwnershipDoc',
+            'land_access_doc': 'landAccessDocuments',
             'technical_drawings': 'technicalDrawings',
             'environmental_impact_doc': 'environmentalImpactDoc',
             'payment_proof': 'paymentProof',

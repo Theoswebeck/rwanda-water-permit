@@ -393,6 +393,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   
   const fileInputRefs = {
     identificationDoc: useRef<HTMLInputElement>(null),
+    landOwnershipDoc: useRef<HTMLInputElement>(null),
     landAccessDocuments: useRef<HTMLInputElement>(null),
     technicalDrawings: useRef<HTMLInputElement>(null),
     environmentalImpactDoc: useRef<HTMLInputElement>(null),
@@ -977,8 +978,24 @@ export const ApplicationForm = memo(function ApplicationForm({
     const fields = ['ownsAllLand', 'certificationAgreement'];
     const errors = await form.trigger(fields as any);
     
-    // Check land access documents if required
-    if (!checkLandAccessDocuments()) {
+    const ownsAllLand = form.getValues('ownsAllLand');
+    
+    // Check land ownership document if user owns all land
+    if (ownsAllLand) {
+      const hasLandOwnershipDoc = Boolean(files.landOwnershipDoc || uploadedFileUrls.landOwnershipDoc);
+      if (!hasLandOwnershipDoc) {
+        form.setError('landOwnershipDoc' as any, {
+          type: 'manual',
+          message: 'Proof of land ownership is required when you own all the required land.'
+        });
+        setValidationError("Please upload the land ownership document before proceeding.");
+        return false;
+      }
+      form.clearErrors('landOwnershipDoc' as any);
+    }
+    
+    // Check land access documents if user doesn't own all land
+    if (!ownsAllLand && !checkLandAccessDocuments()) {
       form.setError('landAccessDocuments' as any, {
         type: 'manual',
         message: 'Proof of land access is required when you do not own all the required land.'
@@ -4249,6 +4266,106 @@ export const ApplicationForm = memo(function ApplicationForm({
                       </FormItem>
                     )}
                   />
+
+                  {/* Land ownership document - shown when user owns all land */}
+                  {watchedOwnsAllLand && (
+                    <FormField
+                      control={form.control}
+                      name={"landOwnershipDoc" as any}
+                      render={() => (
+                        <FormItem className="space-y-4">
+                          <FormLabel className="text-base font-medium">
+                            Attach proof of land ownership (land title, certificate, etc.) <span className="text-red-500">*</span>
+                          </FormLabel>
+
+                          <div>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+                              <input
+                                type="file"
+                                ref={fileInputRefs.landOwnershipDoc}
+                                onChange={(e) => handleFileChange(e, "landOwnershipDoc")}
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                className="hidden"
+                              />
+                              <div className="space-y-2">
+                                <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                                <div>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={readOnly ? undefined : () => fileInputRefs.landOwnershipDoc.current?.click()}
+                                    disabled={readOnly}
+                                  >
+                                    Choose File
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  PDF, JPG, PNG, DOC (max 10MB)
+                                </p>
+                                {/* Show newly uploaded file */}
+                                {files.landOwnershipDoc && (
+                                  <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+                                    <Check className="h-4 w-4" />
+                                    {files.landOwnershipDoc.name}
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={readOnly ? undefined : () => removeFile("landOwnershipDoc")}
+                                      disabled={readOnly}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
+
+                                {/* Show previously uploaded file */}
+                                {!files.landOwnershipDoc && uploadedFileUrls.landOwnershipDoc && (
+                                  <div className="flex items-center justify-center gap-2 text-sm text-blue-600">
+                                    <FileText className="h-4 w-4" />
+                                    <a
+                                      href={uploadedFileUrls.landOwnershipDoc}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="hover:underline"
+                                    >
+                                      {(() => {
+                                        const docInfo = initialDocuments?.landOwnershipDoc;
+                                        if (docInfo && typeof docInfo === 'object') {
+                                          return docInfo.name;
+                                        }
+                                        try {
+                                          const urlPath = new URL(uploadedFileUrls.landOwnershipDoc).pathname;
+                                          return urlPath.split('/').pop() || 'Land ownership document';
+                                        } catch {
+                                          return 'Land ownership document';
+                                        }
+                                      })()}
+                                    </a>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={readOnly ? undefined : () => {
+                                        setUploadedFileUrls(prev => {
+                                          const { landOwnershipDoc, ...rest } = prev;
+                                          return rest;
+                                        });
+                                      }}
+                                      disabled={readOnly}
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   {/* 17. If no, do you have access to the land? */}
                   {!watchedOwnsAllLand && (

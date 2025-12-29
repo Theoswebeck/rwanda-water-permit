@@ -75,6 +75,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       paymentProof: 'payment_proof',
       identificationDoc: 'identification_doc', 
       landOwnershipDoc: 'land_ownership_doc',
+      landAccessDocuments: 'land_access_doc',
       technicalDrawings: 'technical_drawings',
       environmentalImpactDoc: 'environmental_impact_doc',
       intakeDischargeMap: 'intake_discharge_map',
@@ -137,16 +138,34 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
                 file_path: uploadResult.path,
                 file_size: file.size,
                 mime_type: file.type,
-                verification_status: 'pending' as const,
-                is_required: ['paymentProof', 'identificationDoc'].includes(fieldName),
-                uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
+                  verification_status: 'pending' as const,
+                  is_required: [
+                    'paymentProof', 
+                    'identificationDoc', 
+                    'landAccessDocuments',
+                    'landOwnershipDoc',
+                    'miningGeneralRequirements',
+                    'miningLicense',
+                    'miningEIA',
+                    'miningHydrologicalReport'
+                  ].includes(fieldName),
+                  uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
               } as any)
               .select()
               .single();
               
             if (dbError) {
-              console.error(`Error saving document ${fieldName} to database:`, dbError);
+              console.error(`❌ Error saving document ${fieldName} to database:`, {
+                fieldName,
+                documentType,
+                error: dbError,
+                errorMessage: dbError.message,
+                errorCode: dbError.code,
+                errorDetails: dbError.details,
+                errorHint: dbError.hint
+              });
             } else {
+              console.log(`✅ Successfully saved document ${fieldName} to database`);
               uploadedDocuments.push(documentRecord);
             }
           } else {

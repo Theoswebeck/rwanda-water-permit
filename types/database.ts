@@ -90,6 +90,7 @@ export type DocumentType =
   | 'payment_proof' 
   | 'identification_doc' 
   | 'land_ownership_doc'
+  | 'land_access_doc' // Added for land access documents (easement, consent, lease, etc.)
   | 'technical_drawings' 
   | 'environmental_impact_doc' 
   | 'intake_discharge_map'
