@@ -58,10 +58,11 @@ type ApplicantDashboardApplication = Application & {
 
 function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationStatus {
   // Applicant-visible statuses:
-  // - submitted, under_review, approved, expired
+  // - draft, submitted, under_review, approved, expired
   // - plus: approved_pending_permit (approved pending signature/terms acceptance)
   // Any other internal status is mapped to under_review on the dashboard UI.
   if (
+    status === "draft" ||
     status === "submitted" ||
     status === "under_review" ||
     status === "approved" ||
