@@ -56,6 +56,22 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     console.warn('Invalid coordinates provided:', error);
   }
 
+  // If polygons are not present/valid, fall back to single abstraction point (LAT/LONG)
+  // Stored as GeoJSON Point: [lng, lat]
+  if (!coordinates) {
+    const latRaw = String(formData.waterSourceLatitude ?? '').trim();
+    const lngRaw = String(formData.waterSourceLongitude ?? '').trim();
+    if (latRaw && lngRaw) {
+      const lat = Number.parseFloat(latRaw);
+      const lng = Number.parseFloat(lngRaw);
+      const isValidLat = Number.isFinite(lat) && lat >= -90 && lat <= 90;
+      const isValidLng = Number.isFinite(lng) && lng >= -180 && lng <= 180;
+      if (isValidLat && isValidLng) {
+        coordinates = { type: 'Point', coordinates: [lng, lat] };
+      }
+    }
+  }
+
   // Map intended activities to application type and purpose
   const primaryActivity = formData.intendedActivities?.[0] || 'domestic';
   const waterSourceTypeMap: Record<string, Application['water_source']> = {
@@ -215,6 +231,10 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       waterSourceSector: formData.waterSourceSector,
       waterSourceCell: formData.waterSourceCell,
       waterSourceVillage: formData.waterSourceVillage,
+
+      // Water abstraction point (single point for abstraction activities)
+      waterSourceLatitude: formData.waterSourceLatitude,
+      waterSourceLongitude: formData.waterSourceLongitude,
       
       // Coordinates are stored in main coordinates field, but save reference
       waterSourceCoordinates: Array.isArray(formData.waterSourceCoordinates)

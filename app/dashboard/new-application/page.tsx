@@ -249,6 +249,19 @@ function NewApplicationContent() {
             }
           }
 
+          // Backfill LAT/LONG from stored geometry if internal_notes didn't include it (older drafts)
+          if (
+            (restored.waterSourceLatitude == null || String(restored.waterSourceLatitude).trim() === "") &&
+            (restored.waterSourceLongitude == null || String(restored.waterSourceLongitude).trim() === "")
+          ) {
+            const geom: any = (application as any).coordinates;
+            if (geom && geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+              const [lng, lat] = geom.coordinates;
+              restored.waterSourceLatitude = String(lat ?? "");
+              restored.waterSourceLongitude = String(lng ?? "");
+            }
+          }
+
           if (!Array.isArray(restored.additionalDocuments)) {
             restored.additionalDocuments = [];
           }
