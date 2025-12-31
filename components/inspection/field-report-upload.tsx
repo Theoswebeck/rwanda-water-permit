@@ -60,6 +60,14 @@ interface FieldReportUploadProps {
   onInspectionDateChange: (date: string) => void;
   inspectorNameReadOnly?: boolean;
   readOnly?: boolean;
+  /** Optional content inserted after Field Visit Details and before Field Report Documents */
+  betweenDetailsAndDocuments?: React.ReactNode;
+  /** Optional content rendered after the Field Report Documents card (and after summary, if shown) */
+  afterDocuments?: React.ReactNode;
+  /** Hide the built-in Field Report Summary card (useful if summary is captured elsewhere) */
+  hideSummary?: boolean;
+  /** If false, do not show inline validation alerts (useful when validation should only happen on submit) */
+  showInlineValidation?: boolean;
 }
 
 const getFileIcon = (fileName: string) => {
@@ -93,7 +101,11 @@ export function FieldReportUpload({
   onInspectorNameChange,
   onInspectionDateChange,
   inspectorNameReadOnly = false,
-  readOnly = false
+  readOnly = false,
+  betweenDetailsAndDocuments,
+  afterDocuments,
+  hideSummary = false,
+  showInlineValidation = true
 }: FieldReportUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -277,6 +289,8 @@ export function FieldReportUpload({
         </CardContent>
       </Card>
 
+      {betweenDetailsAndDocuments}
+
       {/* Field Report Upload */}
       <Card>
         <CardHeader>
@@ -289,7 +303,7 @@ export function FieldReportUpload({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!readOnly && isFilesMissing && (
+          {showInlineValidation && !readOnly && isFilesMissing && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
@@ -427,37 +441,41 @@ export function FieldReportUpload({
       </Card>
 
       {/* Field Report Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">
-            Field Report Summary <span className="text-destructive">*</span>
-          </CardTitle>
-          <CardDescription>
-            Provide a brief summary of the field visit findings
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!readOnly && isSummaryMissing && (
-            <Alert variant="destructive" className="mb-3">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Field report summary is required. Please provide a brief summary before proceeding.
-              </AlertDescription>
-            </Alert>
-          )}
-          <Textarea
-            value={summary}
-            onChange={(e) => onSummaryChange(e.target.value)}
-            placeholder="Enter a summary of the field visit findings, observations, and any issues identified during the inspection..."
-            rows={6}
-            disabled={readOnly}
-            aria-required={!readOnly}
-          />
-          <p className="text-xs text-muted-foreground mt-2">
-            Include key observations about site conditions, water source accessibility, infrastructure status, and any environmental concerns.
-          </p>
-        </CardContent>
-      </Card>
+      {!hideSummary && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              Field Report Summary <span className="text-destructive">*</span>
+            </CardTitle>
+            <CardDescription>
+              Provide a brief summary of the field visit findings
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {showInlineValidation && !readOnly && isSummaryMissing && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Field report summary is required. Please provide a brief summary before proceeding.
+                </AlertDescription>
+              </Alert>
+            )}
+            <Textarea
+              value={summary}
+              onChange={(e) => onSummaryChange(e.target.value)}
+              placeholder="Enter a summary of the field visit findings, observations, and any issues identified during the inspection..."
+              rows={6}
+              disabled={readOnly}
+              aria-required={!readOnly}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Include key observations about site conditions, water source accessibility, infrastructure status, and any environmental concerns.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {afterDocuments}
     </div>
   );
 }

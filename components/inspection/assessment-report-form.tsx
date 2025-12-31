@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -81,12 +82,13 @@ export function AssessmentReportForm({
   };
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
+  const prefilledClass = `bg-muted/50${readOnly ? " cursor-not-allowed" : ""}`;
 
   return (
     <div className="space-y-6">
       {/* Section 1: Permit Applicant Identification */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
             1. Permit Applicant Identification
@@ -102,8 +104,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.applicantName || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div>
@@ -111,8 +112,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.applicantIdTin || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div className="md:col-span-2">
@@ -120,8 +120,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.residence || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div>
@@ -129,8 +128,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.typeOfActivity || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div>
@@ -138,8 +136,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.representative || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div>
@@ -148,15 +145,13 @@ export function AssessmentReportForm({
                 <Input
                   value={localData.contactTel || ''}
                   readOnly
-                  className={readOnlyClass}
-                  disabled={readOnly}
+                  className={prefilledClass}
                   placeholder="Tel:"
                 />
                 <Input
                   value={localData.contactEmail || ''}
                   readOnly
-                  className={readOnlyClass}
-                  disabled={readOnly}
+                  className={prefilledClass}
                   placeholder="e-mail:"
                 />
               </div>
@@ -167,7 +162,7 @@ export function AssessmentReportForm({
 
       {/* Section 2: Required Documents */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
             2. Required Documents
@@ -177,34 +172,114 @@ export function AssessmentReportForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {localData.requiredDocuments && localData.requiredDocuments.length > 0 ? (
-              <ul className="list-disc list-inside space-y-2 text-sm">
-                {localData.requiredDocuments.map((doc, index) => {
-                  const docName = typeof doc === 'string' ? doc : doc.name;
-                  const docUrl = typeof doc === 'string' ? null : doc.url;
-                  
-                  return (
-                    <li key={index} className="flex items-center gap-2">
-                      {docUrl && docUrl !== '#' ? (
+          <div className="space-y-4">
+            {Array.isArray(localData.requiredDocuments) && localData.requiredDocuments.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  List the provided documents as required (attached as annex)
+                </p>
+                <div className="space-y-2">
+                  {localData.requiredDocuments.map((d, idx) => {
+                    // Backward compatibility: if old saved data exists
+                    if (typeof (d as any) === "string") {
+                      return (
+                        <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                          <div className="text-sm">{String(d)}</div>
+                        </div>
+                      );
+                    }
+
+                    const doc = d as any;
+                    const label = String(doc.label || doc.name || "");
+                    const provided = Boolean(doc.provided);
+                    const url = typeof doc.url === "string" ? doc.url : undefined;
+                    const fileName = typeof doc.name === "string" ? doc.name : undefined;
+
+                    const setProvided = (nextProvided: boolean) => {
+                      const current = Array.isArray(localData.requiredDocuments) ? [...localData.requiredDocuments] : [];
+                      const next = current.map((x: any) => {
+                        if (!x || typeof x !== "object") return x;
+                        if (x.key === doc.key) return { ...x, provided: nextProvided };
+                        return x;
+                      });
+                      updateField("requiredDocuments" as any, next as any);
+                    };
+
+                    return (
+                      <div key={doc.key || idx} className="flex items-start justify-between gap-3 p-3 bg-muted/50 rounded-lg border">
+                        <div className="space-y-1">
+                          <div className="text-sm font-medium">{idx + 1}. {label}</div>
+                          {provided && fileName && (
+                            <div className="text-xs text-muted-foreground">
+                              Uploaded:{" "}
+                              {url ? (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:underline inline-flex items-center gap-1"
+                                >
+                                  {fileName}
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              ) : (
+                                fileName
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {readOnly ? (
+                          <Badge variant={provided ? "default" : "outline"} className={provided ? "bg-green-600 text-white" : ""}>
+                            {provided ? "Provided" : "Missing"}
+                          </Badge>
+                        ) : (
+                          <div className="w-[160px]">
+                            <Select
+                              value={provided ? "provided" : "missing"}
+                              onValueChange={(v) => setProvided(v === "provided")}
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="provided">Provided</SelectItem>
+                                <SelectItem value="missing">Missing</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No required document checklist available</p>
+            )}
+
+            {Array.isArray((localData as any).annexDocuments) && (localData as any).annexDocuments.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Annex (All uploaded documents)</Label>
+                <div className="space-y-2">
+                  {(localData as any).annexDocuments.map((ad: any, i: number) => (
+                    <div key={`${ad?.name || "doc"}-${i}`} className="flex items-center justify-between p-3 bg-background rounded-lg border">
+                      <div className="text-sm">{ad?.name}</div>
+                      {ad?.url ? (
                         <a
-                          href={docUrl}
+                          href={ad.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-primary hover:underline flex items-center gap-1"
+                          className="text-primary hover:underline inline-flex items-center gap-1 text-sm"
                         >
-                          {docName}
-                          <ExternalLink className="h-3 w-3" />
+                          Open <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : (
-                        <span>{docName}</span>
+                        <span className="text-xs text-muted-foreground">No URL</span>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="text-sm text-muted-foreground">No documents listed</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </CardContent>
@@ -212,7 +287,7 @@ export function AssessmentReportForm({
 
       {/* Section 3: Water Source */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Droplet className="h-5 w-5" />
             3. Water Source
@@ -228,8 +303,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.sourceName || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div>
@@ -237,8 +311,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.sourceLatitude || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div>
@@ -246,8 +319,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.sourceLongitude || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
             </div>
             <div className="md:col-span-2">
@@ -255,8 +327,7 @@ export function AssessmentReportForm({
               <Input
                 value={localData.sourceLocation || ''}
                 readOnly
-                className={readOnlyClass}
-                disabled={readOnly}
+                className={prefilledClass}
               />
               {localData.catchmentLevel1 && (
                 <p className="text-xs text-muted-foreground mt-1">
@@ -270,6 +341,35 @@ export function AssessmentReportForm({
               )}
             </div>
           </div>
+
+          {/* Abstraction template includes flow of the water source */}
+          {reportType === "abstraction" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="md:col-span-2">
+                <Label>Flow of the water source (attach field pictures)</Label>
+              </div>
+              <div>
+                <Label className="text-sm text-muted-foreground">L/sec</Label>
+                <Input
+                  value={(localData as any).sourceFlowLps || ''}
+                  onChange={(e) => updateField('sourceFlowLps' as any, e.target.value as any)}
+                  placeholder="L/sec"
+                  disabled={readOnly}
+                  className={readOnlyClass}
+                />
+              </div>
+              <div>
+                <Label className="text-sm text-muted-foreground">Equivalent to m³/day</Label>
+                <Input
+                  value={(localData as any).sourceFlowM3Day || ''}
+                  onChange={(e) => updateField('sourceFlowM3Day' as any, e.target.value as any)}
+                  placeholder="m³/day"
+                  disabled={readOnly}
+                  className={readOnlyClass}
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -278,7 +378,7 @@ export function AssessmentReportForm({
         <>
           {/* Amount of water to be abstracted */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Droplet className="h-5 w-5" />
                 4. Amount of water to be abstracted
@@ -339,7 +439,7 @@ export function AssessmentReportForm({
 
           {/* Water balance assessment */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Droplet className="h-5 w-5" />
                 5. Water balance assessment <span className="text-destructive">*</span>
@@ -348,6 +448,14 @@ export function AssessmentReportForm({
             <CardContent className="space-y-4">
               <div>
                 <Label>Description of the water balance</Label>
+                <Textarea
+                  value={(localData as any).waterBalanceDescription || ''}
+                  onChange={(e) => updateField('waterBalanceDescription' as any, e.target.value as any)}
+                  placeholder="Describe the water balance..."
+                  rows={3}
+                  disabled={readOnly}
+                  className={readOnlyClass}
+                />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <div>
                     <Label className="text-sm text-muted-foreground">Available water (Q)</Label>
@@ -419,7 +527,7 @@ export function AssessmentReportForm({
         <>
           {/* Surface area to be covered */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPin className="h-5 w-5" />
                 4. Surface area to be covered
@@ -496,7 +604,7 @@ export function AssessmentReportForm({
 
           {/* Other people's rights */}
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <AlertCircle className="h-5 w-5" />
                 5. Other people's rights <span className="text-destructive">*</span>
@@ -532,7 +640,7 @@ export function AssessmentReportForm({
 
       {/* Section 6: Planned wastewater management system */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Factory className="h-5 w-5" />
             {reportType === 'abstraction' ? '6' : '6'}. Planned wastewater management system <span className="text-destructive">*</span>
@@ -566,14 +674,17 @@ export function AssessmentReportForm({
 
       {/* Section 7: Field report Summary */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
             {reportType === 'abstraction' ? '7' : '7'}. Field report Summary <span className="text-destructive">*</span>
           </CardTitle>
+          <CardDescription>
+            Provide a brief summary of the field visit findings
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
+          <div className="space-y-2">
             <Label>Provide a general conclusion and recommendations</Label>
             <Textarea
               value={localData.conclusion || ''}

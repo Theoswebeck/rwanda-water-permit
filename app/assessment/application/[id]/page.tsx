@@ -47,7 +47,10 @@ import type { Application, ApplicationStatus, User as UserType, Document, Review
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
-import { VerificationSummary, VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
+import type { VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
+import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
+import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
+import { determineReportType, mergeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -299,6 +302,9 @@ export default function AssessmentApplicationPage() {
     explanationText: ""
   });
 
+  // Assessment Report State (template-backed)
+  const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
+
   // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
   const actionInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState<string>("");
@@ -315,7 +321,14 @@ export default function AssessmentApplicationPage() {
   const canProceedPastDocReview =
     isReadOnly || (docReviewMeta.eligibilityConfirmed && docReviewMeta.completenessConfirmed);
   const isFieldReportComplete =
-    isReadOnly || (fieldReportFiles.length > 0 && !!fieldReportSummary.trim());
+    isReadOnly ||
+    (fieldReportFiles.length > 0 &&
+      !!assessmentReportData.waterUseConflict &&
+      !!assessmentReportData.wastewaterSystemDescription &&
+      !!assessmentReportData.pollutionDescription &&
+      !!assessmentReportData.conclusion &&
+      !!recommendation.recommendation &&
+      (recommendation.recommendation === "yes" || !!recommendation.explanationText));
 
   useEffect(() => {
     if (tabTouchedRef.current) return;
@@ -380,6 +393,10 @@ export default function AssessmentApplicationPage() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // Keep saved report data for merge later (prefill always wins for app-derived read-only fields)
+        const savedAssessmentReportData =
+          (existingAssessment as any)?.assessment_report_data as Partial<AssessmentReportData> | null | undefined;
 
         // Compute default inspector name (priority: saved assessment -> current logged-in user -> assigned inspector)
         let currentAssessorName = "";
@@ -476,6 +493,11 @@ export default function AssessmentApplicationPage() {
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
         setInitialFormData(formData);
+
+        // Prefill the official assessment report template from application data and merge saved assessor inputs
+        const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
+        const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
+        setAssessmentReportData(mergedReport);
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
@@ -561,6 +583,7 @@ export default function AssessmentApplicationPage() {
         explanation_text: recommendation.explanationText,
         inspector_name: inspectorName,
         inspection_date: inspectionDate,
+        assessment_report_data: assessmentReportData,
         status: status,
         updated_at: new Date().toISOString()
       };
@@ -704,21 +727,29 @@ export default function AssessmentApplicationPage() {
       return;
     }
 
-    if (!isFieldReportComplete) {
-      alert("⚠️ Field Report Documents and Field Report Summary are required before sending for final approval.");
+    // Validate ONLY on submit click
+    const missing: string[] = [];
+    if (fieldReportFiles.length === 0) missing.push("Field Report Documents");
+    // Required documents (Section 2) must all be marked provided
+    const requiredDocs = Array.isArray((assessmentReportData as any).requiredDocuments)
+      ? ((assessmentReportData as any).requiredDocuments as any[])
+      : [];
+    const allRequiredDocsProvided =
+      requiredDocs.length > 0 && requiredDocs.every((d) => d && typeof d === "object" && d.provided === true);
+    if (!allRequiredDocsProvided) missing.push("Section 2: Required documents (mark all as Provided)");
+    if (!assessmentReportData.waterUseConflict) missing.push("Section 5: Water use conflict");
+    if (!assessmentReportData.wastewaterSystemDescription) missing.push("Section 6: Wastewater system description");
+    if (!assessmentReportData.pollutionDescription) missing.push("Section 6: Pollution description");
+    if (!assessmentReportData.conclusion) missing.push("Section 7: Field report Summary");
+    if (!recommendation.recommendation) missing.push("Section 8: Assessor Recommendation");
+    if (recommendation.recommendation === "no" && !recommendation.explanationText) {
+      missing.push("Section 8: Explanation for Recommendation");
+    }
+
+    if (missing.length > 0) {
+      alert(`⚠️ Please complete the following before sending for final approval:\n\n${missing.map((m) => `- ${m}`).join("\n")}`);
       tabTouchedRef.current = true;
       setActiveTab("field_report");
-      return;
-    }
-    
-    // Validation
-    if (!recommendation.recommendation) {
-      alert("Please select a recommendation (Yes/No) before forwarding.");
-      return;
-    }
-    
-    if (recommendation.recommendation === "no" && !recommendation.explanationText) {
-      alert("Please provide an explanation for rejection.");
       return;
     }
 
@@ -1017,14 +1048,8 @@ export default function AssessmentApplicationPage() {
           <Tabs
             value={activeTab || defaultTabValue}
             onValueChange={(next) => {
-              if (!canProceedPastDocReview && (next === "field_report" || next === "summary")) {
+              if (!canProceedPastDocReview && next === "field_report") {
                 alert("⚠️ Please confirm eligibility and completeness in Document Verification before proceeding.");
-                return;
-              }
-              if (!isFieldReportComplete && next === "summary") {
-                alert("⚠️ Field Report Documents and Field Report Summary are required before proceeding to Final Recommendation.");
-                tabTouchedRef.current = true;
-                setActiveTab("field_report");
                 return;
               }
               tabTouchedRef.current = true;
@@ -1032,14 +1057,11 @@ export default function AssessmentApplicationPage() {
             }}
             className="space-y-6"
           >
-            <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
+            <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
                   <TabsTrigger value="field_report" className="py-2.5" disabled={!canProceedPastDocReview}>
                     Field Report
-                  </TabsTrigger>
-                  <TabsTrigger value="summary" className="py-2.5" disabled={!canProceedPastDocReview}>
-                    Final Recommendation
                   </TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
@@ -1103,7 +1125,7 @@ export default function AssessmentApplicationPage() {
                       <Alert>
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
-                          You can only proceed to <strong>Field Report</strong> and <strong>Final Recommendation</strong> after confirming both eligibility and completeness.
+                          You can only proceed to <strong>Field Report</strong> after confirming both eligibility and completeness.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -1163,44 +1185,78 @@ export default function AssessmentApplicationPage() {
 
             {/* Field Report Tab */}
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
-              <FieldReportUpload
-                applicationId={application.id}
-                existingFiles={fieldReportFiles}
-                summary={fieldReportSummary}
-                inspectorName={inspectorName}
-                inspectionDate={inspectionDate}
-                onFilesChange={setFieldReportFiles}
-                onSummaryChange={setFieldReportSummary}
-                onInspectorNameChange={setInspectorName}
-                onInspectionDateChange={setInspectionDate}
-                inspectorNameReadOnly={true}
-                readOnly={isReadOnly}
-              />
-              {!isReadOnly && (
-                <div className="flex justify-end">
-                  <Button
-                    size="sm"
-                    onClick={handleForwardToApprover}
-                    disabled={submitLoading || !recommendation.recommendation}
-                    className="gap-2 bg-black hover:bg-gray-800 text-white"
-                  >
-                    {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    Send for Final Approval
-                  </Button>
-                </div>
-              )}
-            </TabsContent>
-            
-            {/* Verification Summary Tab */}
-            <TabsContent value="summary" className="space-y-6 focus-visible:outline-none">
-              <VerificationSummary
-                checklist={checklist}
-                recommendation={recommendation}
-                onChecklistChange={setChecklist}
-                onRecommendationChange={setRecommendation}
-                readOnly={isReadOnly}
-                assessorName={inspectorName}
-              />
+              {(() => {
+                const intended = (application as any)?.intended_activities as string[] | null | undefined;
+                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
+                return (
+                  <FieldReportUpload
+                    applicationId={application.id}
+                    existingFiles={fieldReportFiles}
+                    summary={fieldReportSummary}
+                    inspectorName={inspectorName}
+                    inspectionDate={inspectionDate}
+                    onFilesChange={setFieldReportFiles}
+                    onSummaryChange={setFieldReportSummary}
+                    onInspectorNameChange={setInspectorName}
+                    onInspectionDateChange={setInspectionDate}
+                    inspectorNameReadOnly={true}
+                    readOnly={isReadOnly}
+                    hideSummary={true}
+                    showInlineValidation={false}
+                    betweenDetailsAndDocuments={
+                      <AssessmentReportForm
+                        reportData={assessmentReportData}
+                        onReportDataChange={setAssessmentReportData}
+                        reportType={rt}
+                        readOnly={isReadOnly}
+                        inspectionDate={inspectionDate}
+                        recommendation={recommendation}
+                        onRecommendationChange={setRecommendation}
+                      />
+                    }
+                    afterDocuments={
+                      isReadOnly ? null : (() => {
+                        const reqDocs = Array.isArray((assessmentReportData as any).requiredDocuments)
+                          ? ((assessmentReportData as any).requiredDocuments as any[])
+                          : [];
+                        const allProvided = reqDocs.length > 0 && reqDocs.every((d) => d && typeof d === "object" && d.provided === true);
+
+                        // If any required doc missing, only allow Return for Revision.
+                        if (!allProvided) {
+                          return (
+                            <div className="flex justify-end">
+                              <Button
+                                variant="outline"
+                                size="lg"
+                                onClick={() => setShowRevisionDialog(true)}
+                                disabled={submitLoading || docReviewLocked}
+                                className="gap-2"
+                              >
+                                <X className="h-4 w-4" />
+                                Return for Revision
+                              </Button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="flex justify-end">
+                            <Button
+                              size="lg"
+                              onClick={handleForwardToApprover}
+                              disabled={submitLoading}
+                              className="gap-2 bg-black hover:bg-gray-800 text-white"
+                            >
+                              {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                              Send for Final Approval
+                            </Button>
+                          </div>
+                        );
+                      })()
+                    }
+                  />
+                );
+              })()}
             </TabsContent>
 
             {/* Internal Notes Tab */}

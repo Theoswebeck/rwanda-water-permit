@@ -36,7 +36,15 @@ export interface AssessmentReportData {
   contactEmail: string;
   
   // Section 2: Required Documents (prefilled)
-  requiredDocuments: Array<{ name: string; url: string }>;
+  requiredDocuments: Array<{
+    key: string;
+    label: string;
+    provided: boolean;
+    name?: string;
+    url?: string;
+  }>;
+  /** Full list of uploaded docs (annex) */
+  annexDocuments?: Array<{ name: string; url?: string }>;
   
   // Section 3: Water Source (prefilled + editable)
   sourceName: string;
@@ -45,12 +53,16 @@ export interface AssessmentReportData {
   sourceLocation: string; // "Village, Cell, Sector, District, Province"
   catchmentLevel1?: string;
   catchmentLevel2?: string;
+  /** Abstraction template: flow of the water source (attach field pictures) */
+  sourceFlowLps?: string;
+  sourceFlowM3Day?: string;
   
   // Abstraction-specific fields
   flowRateLps?: string;
   flowRateM3Day?: string;
   abstractionMethod?: string;
   returnFlow?: 'yes' | 'no';
+  waterBalanceDescription?: string;
   availableWaterQ?: string;
   waterDemandD?: string;
   existingDemandED?: string;
@@ -194,9 +206,12 @@ export function prefillAssessmentReportFromApplication(
     application.project_title?.replace(' Water Permit Application', '') ||
     'Not specified';
   
+  const applicantFromJoin = (application as unknown as { applicant?: any }).applicant;
   const applicantIdTin =
     getString(formData, 'nationalIdNumber') ||
     getString(formData, 'companyTin') ||
+    (typeof applicantFromJoin?.id_number === 'string' ? applicantFromJoin.id_number : undefined) ||
+    (typeof applicantFromJoin?.company_tin === 'string' ? applicantFromJoin.company_tin : undefined) ||
     'Not provided';
   
   // Extract residence from office address
@@ -214,11 +229,12 @@ export function prefillAssessmentReportFromApplication(
   // Extract contact information
   const contactTel =
     getString(formData, 'telephoneContact') ||
-    (application as unknown as { applicant?: { phone?: string | null } | null }).applicant?.phone ||
+    (typeof applicantFromJoin?.phone === 'string' ? applicantFromJoin.phone : undefined) ||
+    (typeof applicantFromJoin?.company_phone === 'string' ? applicantFromJoin.company_phone : undefined) ||
     'Not provided';
   const contactEmail =
     getString(formData, 'emailAddress') ||
-    (application as unknown as { applicant?: { email?: string | null } | null }).applicant?.email ||
+    (typeof applicantFromJoin?.email === 'string' ? applicantFromJoin.email : undefined) ||
     'Not provided';
   
   // Extract water source information
@@ -275,16 +291,70 @@ export function prefillAssessmentReportFromApplication(
   const catchmentLevel1 = getString(formData, 'catchmentNameLevel1') || application.catchment_name_level_1 || '';
   const catchmentLevel2 = getString(formData, 'catchmentNameLevel2') || application.catchment_name_level_2 || '';
   
-  // Extract required documents with URLs
-  const requiredDocuments: Array<{ name: string; url: string }> = [];
-  if (documents && documents.length > 0) {
-    documents.forEach(doc => {
-      if (doc.name && doc.file_path) {
-        const url = getDocumentUrl(doc.file_path) || '#';
-        requiredDocuments.push({ name: doc.name, url });
-      }
-    });
-  }
+  const docs = Array.isArray(documents) ? documents : [];
+
+  // Annex list: all documents with URLs (clickable)
+  const annexDocuments: Array<{ name: string; url?: string }> = docs
+    .filter((d) => typeof d?.name === 'string' && typeof d?.file_path === 'string')
+    .map((d) => ({
+      name: d.name,
+      url: d.file_path ? (getDocumentUrl(d.file_path) || undefined) : undefined,
+    }));
+
+  const findDoc = (keywords: RegExp[]) => {
+    for (const d of docs) {
+      const name = (d?.name || '').toLowerCase();
+      if (!name) continue;
+      if (keywords.every((re) => re.test(name))) return d;
+    }
+    return undefined;
+  };
+
+  // Required docs (template-fixed list) with best-effort matching to uploaded docs
+  const requiredDocuments: AssessmentReportData['requiredDocuments'] = [
+    {
+      key: 'application_letter_through_district',
+      label: 'Application letter through District',
+      ...(() => {
+        const d =
+          findDoc([/application/, /letter/]) ||
+          findDoc([/letter/, /district/]) ||
+          findDoc([/letter/]);
+        if (!d) return { provided: false as const };
+        return {
+          provided: true as const,
+          name: d.name,
+          url: d.file_path ? (getDocumentUrl(d.file_path) || undefined) : undefined,
+        };
+      })(),
+    },
+    {
+      key: 'registration_certificate',
+      label: 'Registration Certificate',
+      ...(() => {
+        const d = findDoc([/registration/, /certificate/]) || findDoc([/certificate/]);
+        if (!d) return { provided: false as const };
+        return {
+          provided: true as const,
+          name: d.name,
+          url: d.file_path ? (getDocumentUrl(d.file_path) || undefined) : undefined,
+        };
+      })(),
+    },
+    {
+      key: 'hydrological_report',
+      label: 'Hydrological Report',
+      ...(() => {
+        const d = findDoc([/hydro/]) || findDoc([/hydrological/]) || findDoc([/hydrology/]);
+        if (!d) return { provided: false as const };
+        return {
+          provided: true as const,
+          name: d.name,
+          url: d.file_path ? (getDocumentUrl(d.file_path) || undefined) : undefined,
+        };
+      })(),
+    },
+  ];
   
   // Extract abstraction-specific data if applicable
   const abstractionData: Partial<AssessmentReportData> = {};
@@ -336,6 +406,7 @@ export function prefillAssessmentReportFromApplication(
     contactTel,
     contactEmail,
     requiredDocuments,
+    annexDocuments,
     sourceName,
     sourceLatitude,
     sourceLongitude,
@@ -359,25 +430,26 @@ export function mergeAssessmentReportData(
     return prefilled;
   }
   
-  // Handle backward compatibility for requiredDocuments (might be string[] or Array<{name, url}>)
-  let mergedRequiredDocuments = prefilled.requiredDocuments;
-  if (existing.requiredDocuments) {
-    if (Array.isArray(existing.requiredDocuments) && existing.requiredDocuments.length > 0) {
-      // Check if it's the new format (array of objects)
-      if (typeof existing.requiredDocuments[0] === 'object' && 'name' in existing.requiredDocuments[0]) {
-        mergedRequiredDocuments = existing.requiredDocuments as Array<{ name: string; url: string }>;
-      } else {
-        // Old format (array of strings) - keep prefilled with URLs
-        mergedRequiredDocuments = prefilled.requiredDocuments;
-      }
-    }
-  }
+  // Merge requiredDocuments: keep template structure from prefill, but preserve assessor's provided/missing toggles.
+  const mergedRequiredDocuments = Array.isArray(prefilled.requiredDocuments)
+    ? prefilled.requiredDocuments.map((p) => {
+        const match = Array.isArray(existing.requiredDocuments)
+          ? (existing.requiredDocuments as any[]).find((e) => e && typeof e === "object" && "key" in e && (e as any).key === (p as any).key)
+          : undefined;
+        if (!match || typeof match !== "object") return p;
+        return {
+          ...(p as any),
+          provided: typeof (match as any).provided === "boolean" ? (match as any).provided : (p as any).provided,
+        };
+      })
+    : prefilled.requiredDocuments;
   
   return {
     ...prefilled,
     ...existing,
     // Use merged required documents
     requiredDocuments: mergedRequiredDocuments,
+    annexDocuments: existing.annexDocuments && existing.annexDocuments.length > 0 ? existing.annexDocuments : prefilled.annexDocuments,
     // Merge beacons array properly
     beacons: existing.beacons && existing.beacons.length > 0 
       ? existing.beacons 

@@ -1085,7 +1085,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   // Function to check if Next button should be disabled
   const isNextButtonDisabled = () => {
     switch (activeTab) {
-      case "applicant-info":
+      case "applicant-info": {
         // Check required fields for applicant tab
         const applicantFields = ['fullNameApplicant', 'categoryApplicant', 'officeProvince', 'officeDistrict', 'officeSector', 'officeCell', 'telephoneContact', 'emailAddress'];
         const hasApplicantFields = applicantFields.every(field => {
@@ -1095,8 +1095,9 @@ export const ApplicationForm = memo(function ApplicationForm({
         // Check identification document
         const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
         return !hasApplicantFields || !hasIdentificationDoc;
+      }
         
-      case "water-source":
+      case "water-source": {
         // Check required fields for water source tab only
         // LAT/LONG are validated in Activity tab, not here
         const waterSourceFields = ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'];
@@ -1106,8 +1107,9 @@ export const ApplicationForm = memo(function ApplicationForm({
         });
 
         return !hasWaterSourceFields;
+      }
         
-      case "intended-activity":
+      case "intended-activity": {
         // Check required fields and documents for intended activity tab
         const intendedActivities = form.getValues('intendedActivities') || [];
         const waterAbstractionDetails = form.getValues('waterAbstractionDetails') || [];
@@ -1133,13 +1135,15 @@ export const ApplicationForm = memo(function ApplicationForm({
         }
         
         return !hasActivityFields || !hasRequiredDocs;
+      }
         
-      case "land-ownership":
+      case "land-ownership": {
         // Check required fields and documents for land ownership tab
         const ownsAllLand = form.getValues('ownsAllLand');
         const hasLandDocs = checkLandAccessDocuments();
         const hasCertified = Boolean(form.getValues('certificationAgreement'));
         return ownsAllLand === undefined || !hasLandDocs || !hasCertified;
+      }
         
       default:
         return false;

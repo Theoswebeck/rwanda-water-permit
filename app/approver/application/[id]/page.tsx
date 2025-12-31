@@ -24,7 +24,10 @@ import type { Application, ApplicationStatus, User as UserType, Document, Review
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
-import { VerificationSummary, VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
+import type { RecommendationData } from "@/components/inspection/verification-summary";
+import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
+import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
+import { determineReportType, mergeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -178,6 +181,9 @@ export default function ApproverApplicationPage() {
     recommendation: null,
     explanationText: ""
   });
+
+  // Assessment Report State (template-backed)
+  const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -210,6 +216,9 @@ export default function ApproverApplicationPage() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        const savedAssessmentReportData =
+          (existingAssessment as any)?.assessment_report_data as Partial<AssessmentReportData> | null | undefined;
 
         if (existingAssessment) {
           setDocumentVerifications(existingAssessment.document_verifications || {});
@@ -252,9 +261,14 @@ export default function ApproverApplicationPage() {
           }
         }
 
-          // Transform application data to form format
+        // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
-          setInitialFormData(formData);
+        setInitialFormData(formData);
+
+        // Prefill the official assessment report template from application data and merge saved assessor inputs
+        const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
+        const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
+        setAssessmentReportData(mergedReport);
 
           // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
@@ -400,11 +414,10 @@ export default function ApproverApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
+          <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
               <TabsTrigger value="field_report" className="py-2.5">Field Report</TabsTrigger>
-              <TabsTrigger value="summary" className="py-2.5">Assessor Recommendation</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
         </TabsList>
 
@@ -445,31 +458,39 @@ export default function ApproverApplicationPage() {
             </TabsContent>
 
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
-              <FieldReportUpload
-                applicationId={application.id}
-                existingFiles={fieldReportFiles}
-                summary={fieldReportSummary}
-                inspectorName={inspectorName}
-                inspectionDate={inspectionDate}
-                onFilesChange={() => {}}
-                onSummaryChange={() => {}}
-                onInspectorNameChange={() => {}}
-                onInspectionDateChange={() => {}}
-                inspectorNameReadOnly={true}
-                readOnly={true}
-              />
+              {(() => {
+                const intended = (application as any)?.intended_activities as string[] | null | undefined;
+                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
+                return (
+                  <FieldReportUpload
+                    applicationId={application.id}
+                    existingFiles={fieldReportFiles}
+                    summary={fieldReportSummary}
+                    inspectorName={inspectorName}
+                    inspectionDate={inspectionDate}
+                    onFilesChange={() => {}}
+                    onSummaryChange={() => {}}
+                    onInspectorNameChange={() => {}}
+                    onInspectionDateChange={() => {}}
+                    inspectorNameReadOnly={true}
+                    readOnly={true}
+                    hideSummary={true}
+                    showInlineValidation={false}
+                    betweenDetailsAndDocuments={
+                      <AssessmentReportForm
+                        reportData={assessmentReportData}
+                        onReportDataChange={() => {}}
+                        reportType={rt}
+                        readOnly={true}
+                        inspectionDate={inspectionDate}
+                        recommendation={recommendation}
+                        onRecommendationChange={() => {}}
+                      />
+                    }
+                  />
+                );
+              })()}
         </TabsContent>
-
-            <TabsContent value="summary" className="space-y-6 focus-visible:outline-none">
-              <VerificationSummary
-                checklist={checklist}
-                recommendation={recommendation}
-                onChecklistChange={() => {}}
-                onRecommendationChange={() => {}}
-                readOnly={true}
-                assessorName={inspectorName}
-              />
-            </TabsContent>
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
           {application.id && <ApplicationComments applicationId={application.id} />}
