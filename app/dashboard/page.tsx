@@ -57,14 +57,17 @@ type ApplicantDashboardApplication = Application & {
 };
 
 function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationStatus {
-  // Applicants should see drafts as drafts so they can clearly continue editing.
-  if (status === "draft") {
-    return "draft";
-  }
-
-  // Applicants should only see: submitted, under_review, approved, expired (plus draft above).
-  // Any other status is mapped to under_review on the dashboard UI.
-  if (status === "submitted" || status === "under_review" || status === "approved" || status === "expired") {
+  // Applicant-visible statuses:
+  // - submitted, under_review, approved, expired
+  // - plus: approved_pending_permit (approved pending signature/terms acceptance)
+  // Any other internal status is mapped to under_review on the dashboard UI.
+  if (
+    status === "submitted" ||
+    status === "under_review" ||
+    status === "approved" ||
+    status === "expired" ||
+    status === "approved_pending_permit"
+  ) {
     return status;
   }
   return "under_review";

@@ -65,6 +65,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     const raw = app.status;
     if (raw === "draft") return "draft";
     if (raw === "submitted" || raw === "under_review" || raw === "approved" || raw === "expired") return raw;
+    if (raw === "approved_pending_permit") return raw;
     return "under_review";
   };
 
@@ -154,6 +155,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           label: "Under Review",
           icon: <AlertCircle className="h-4 w-4" />,
           className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "approved_pending_permit":
+        return {
+          label: "Approved (Pending Signature)",
+          icon: <FileText className="h-4 w-4" />,
+          className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
         };
       case "approved":
         return {
@@ -252,6 +259,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
+              <SelectItem value="approved_pending_permit">Approved (Pending Signature)</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
             </SelectContent>
