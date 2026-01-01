@@ -27,6 +27,8 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
   const getDisplayStatus = (app: Application): string => {
     // UI-only status mapping from parent (e.g., applicant dashboard).
     // Fall back to raw status if not provided.
+    // Critical: when the raw status is approved_pending_permit, always show it (do not map to under_review).
+    if (app.status === "approved_pending_permit") return "approved_pending_permit";
     return (app as any).display_status ?? app.status;
   };
 

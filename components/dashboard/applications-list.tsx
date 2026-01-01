@@ -58,6 +58,9 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
   const getDisplayStatus = (app: Application): string => {
     // UI-only status mapping from parent (e.g., applicant dashboard).
     // We must keep raw `app.status` for behavior (edit, accept terms, delete rules).
+    // Critical: when the raw status is approved_pending_permit, always show it (do not map to under_review).
+    if (app.status === "approved_pending_permit") return "approved_pending_permit";
+
     const fromParent = (app as any).display_status as string | undefined;
     if (fromParent) return fromParent;
 
@@ -65,7 +68,6 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     const raw = app.status;
     if (raw === "draft") return "draft";
     if (raw === "submitted" || raw === "under_review" || raw === "approved" || raw === "expired") return raw;
-    if (raw === "approved_pending_permit") return raw;
     return "under_review";
   };
 
