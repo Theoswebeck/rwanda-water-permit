@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +11,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -20,13 +18,15 @@ import {
   AlertTriangle, 
   FileCheck, 
   Shield, 
-  Clock,
   Loader2,
   Star
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { uploadPermitPdf } from "@/lib/supabase-storage";
 import { getApplicationExpiration } from "@/lib/application-expiration";
+import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
+import { contractTermsByVariant } from "@/lib/contract-terms";
+import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 
 interface TermsConditionsModalProps {
   isOpen: boolean;
@@ -51,6 +51,124 @@ export function TermsConditionsModal({
   const [showFeedback, setShowFeedback] = useState(false);
   const [rating, setRating] = useState<number>(0);
   const [feedback, setFeedback] = useState<string>("");
+  const [termsVariant, setTermsVariant] = useState<PermitVariant | null>(null);
+  const [isLoadingTerms, setIsLoadingTerms] = useState(false);
+  const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
+  const [termsApplication, setTermsApplication] = useState<any | null>(null);
+
+  const todayLabel = useMemo(() => {
+    // Use user's local timezone; format as DD/MM/YYYY (Rwanda-friendly).
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    }).format(new Date());
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    async function loadVariant() {
+      setIsLoadingTerms(true);
+      setTermsLoadError(null);
+      try {
+        const { data, error } = await supabase
+          .from("applications")
+          .select(
+            `
+            id,
+            province,
+            district,
+            sector,
+            cell,
+            village,
+            coordinates,
+            internal_notes,
+            water_source,
+            water_body_name,
+            max_daily_volume_m3,
+            max_yearly_volume_m3,
+            estimated_usage_volume,
+            usage_unit,
+            proposed_duration_years,
+            concession_area,
+            intended_activities,
+            applicant:users!applicant_id(account_type, first_name, last_name, company_name, id_number)
+          `
+          )
+          .eq("id", applicationId)
+          .single();
+
+        if (error) throw error;
+        if (!data) throw new Error("Application not found");
+
+        const variant = selectPermitVariant(data as any);
+        if (!cancelled) {
+          setTermsVariant(variant);
+          setTermsApplication(data);
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to load terms variant.";
+        if (!cancelled) {
+          setTermsVariant(null);
+          setTermsApplication(null);
+          setTermsLoadError(message);
+        }
+      } finally {
+        if (!cancelled) setIsLoadingTerms(false);
+      }
+    }
+
+    loadVariant();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, applicationId]);
+
+  const resolvedTerms = useMemo(() => {
+    if (!termsVariant) return null;
+    return contractTermsByVariant[termsVariant] ?? null;
+  }, [termsVariant]);
+
+  const inferLang = (title: string): "en" | "rw" => {
+    const t = title.trim();
+    if (!t) return "en";
+    // Heuristics: RW sections typically start with AMASEZERANO/IGICE/Ingingo/Imikono
+    if (
+      t.toUpperCase().includes("KINYARWANDA") ||
+      t.startsWith("AMASEZERANO") ||
+      t.startsWith("IGICE") ||
+      t.startsWith("Ingingo") ||
+      t.startsWith("Imikono") ||
+      t.startsWith("Ibisobanuro")
+    ) {
+      return "rw";
+    }
+    return "en";
+  };
+
+  const availableLangs = useMemo(() => {
+    const langs = new Set<"en" | "rw">();
+    for (const s of resolvedTerms?.sections ?? []) langs.add(inferLang(s.title));
+    return langs;
+  }, [resolvedTerms]);
+
+  const visibleSections = useMemo(() => {
+    if (!resolvedTerms) return [];
+    // Default to English for now (later: drive from logged-in user preference).
+    if (availableLangs.size <= 1) return resolvedTerms.sections;
+    return resolvedTerms.sections.filter((s) => inferLang(s.title) === "en");
+  }, [resolvedTerms, availableLangs]);
+
+  const placeholderCtx = useMemo(() => {
+    if (!termsApplication) return null;
+    try {
+      return buildContractPlaceholderContext(termsApplication, applicationNumber);
+    } catch {
+      return null;
+    }
+  }, [termsApplication, applicationNumber]);
 
   const handleAcceptTerms = async () => {
     if (isProcessing) return;
@@ -300,135 +418,177 @@ export function TermsConditionsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-green-100 rounded-full">
-              <CheckCircle className="h-6 w-6 text-green-600" />
-            </div>
-            <div>
-              <DialogTitle className="text-2xl font-semibold text-green-800">
-                🎉 Application Approved!
-              </DialogTitle>
-              <DialogDescription className="text-base text-gray-600 mt-1">
-                Application #{applicationNumber} - {projectTitle}
-              </DialogDescription>
-            </div>
-          </div>
-          
-          <Card className="bg-green-50 border-green-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-green-700">
-                <FileCheck className="h-5 w-5" />
-                <span className="font-medium">Your water permit application has been approved!</span>
-              </div>
-              <p className="text-sm text-green-600 mt-2">
-                Please review and accept the terms and conditions below to receive your digital water permit.
-              </p>
-            </CardContent>
-          </Card>
-        </DialogHeader>
-
-        {!showFeedback ? (
-        <div className="space-y-8">
-          <div>
-            <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
-              <Shield className="h-6 w-6 text-blue-600" />
-              Terms and Conditions for Water Permit
-            </h3>
-            
-            <Card className="border-blue-200">
-              <CardContent className="p-8 space-y-6">
-                <div className="space-y-6 text-base">
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">1. Permit Validity and Compliance</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      This permit is issued under the Water Law of Rwanda and is valid for the specified duration. 
-                      The permit holder must comply with all conditions set forth and maintain accurate records 
-                      of water usage as specified in the permit conditions.
-                    </p>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">2. Water Usage Limitations</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      Water extraction must not exceed the authorized volume and must be used only for the 
-                      purposes specified in this permit. Any changes to water usage patterns or purposes 
-                      require prior approval from the Rwanda Water Resources Board.
-                    </p>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">3. Environmental Protection</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      The permit holder must implement all environmental mitigation measures as specified 
-                      and ensure that water extraction does not negatively impact downstream users or 
-                      ecological systems. Regular environmental monitoring may be required.
-                    </p>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">4. Inspections and Monitoring</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      The Rwanda Water Resources Board reserves the right to conduct periodic inspections of the 
-                      permitted facility. The permit holder must provide access to authorized personnel 
-                      and maintain all required documentation and monitoring equipment.
-                    </p>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">5. Reporting Requirements</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      Regular reports on water usage, infrastructure maintenance, and environmental 
-                      impacts must be submitted as specified. Failure to submit required reports may 
-                      result in permit suspension or revocation.
-                    </p>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">6. Permit Transfer and Modification</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      This permit is non-transferable without prior approval. Any modifications to the 
-                      permitted activities require a formal application and approval process through 
-                      the Rwanda Water Resources Board.
-                    </p>
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-3 text-lg">7. Penalties and Enforcement</h4>
-                    <p className="text-gray-700 leading-relaxed">
-                      Non-compliance with permit conditions may result in penalties, permit suspension, 
-                      or revocation as provided under the Water Law of Rwanda. The permit holder is 
-                      responsible for understanding and complying with all applicable regulations.
-                    </p>
-                  </div>
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[95vw] md:max-w-6xl lg:max-w-7xl h-[92vh] max-h-[92vh] p-0 overflow-hidden">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="px-6 pt-6">
+            <DialogHeader>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-green-100 rounded-full">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
                 </div>
-                
-                <div className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-base font-medium text-amber-800">Important Notice</p>
-                      <p className="text-base text-amber-700 mt-1">
-                        By accepting these terms, you acknowledge that you have read, understood, and 
-                        agree to comply with all conditions. Violation of any condition may result in 
-                        immediate permit suspension or revocation.
-                      </p>
+                <div>
+                  <DialogTitle className="text-2xl font-semibold text-green-800">
+                    🎉 Application Approved!
+                  </DialogTitle>
+                  <DialogDescription className="text-base text-gray-600 mt-1">
+                    Application #{applicationNumber} - {projectTitle}
+                  </DialogDescription>
+                </div>
+              </div>
+
+              <Card className="bg-green-50 border-green-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <FileCheck className="h-5 w-5" />
+                    <span className="font-medium">Your water permit application has been approved!</span>
+                  </div>
+                  <p className="text-sm text-green-600 mt-2">
+                    Please review and accept the terms and conditions below to receive your digital water permit.
+                  </p>
+                </CardContent>
+              </Card>
+            </DialogHeader>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            {!showFeedback ? (
+              <div className="space-y-8 pt-4">
+                <div>
+                  <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                    <Shield className="h-6 w-6 text-blue-600" />
+                    {resolvedTerms?.heading ?? "Terms and Conditions for Water Permit"}
+                  </h3>
+
+                  <Card className="border-blue-200">
+                    <CardContent className="p-8 space-y-6">
+                {isLoadingTerms ? (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-base">Loading contract terms…</span>
+                  </div>
+                ) : termsLoadError ? (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-base font-medium text-amber-800">Could not load terms</p>
+                        <p className="text-base text-amber-700 mt-1">{termsLoadError}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : resolvedTerms ? (
+                  <>
+                    <div className="space-y-6 text-base">
+                      {visibleSections.map((section, idx) => (
+                        <div key={`${section.title}-${idx}`}>
+                          {section.title.toLowerCase().includes("signature") ? (
+                            <div className="space-y-4">
+                              <h4 className="font-semibold text-gray-900 text-lg">Signatures</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-2">
+                                  <div className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                                    The DIRECTOR GENERAL:
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    <div className="text-sm font-semibold text-gray-900">Signature:</div>
+                                    <div className="h-[64px] flex items-end">
+                                      <img
+                                        src="/signatures/director-general.svg"
+                                        alt="Director General signature"
+                                        className="h-[60px] w-auto"
+                                      />
+                                    </div>
+                                    <div className="border-b border-gray-400 w-full" />
+                                  </div>
+
+                                  <div className="pt-1 grid grid-cols-[64px_1fr] gap-x-3 gap-y-2">
+                                    <div className="font-semibold text-gray-900">Name:</div>
+                                    <div className="text-gray-900">Dr. Emmanuel RUKUNDO</div>
+                                    <div className="font-semibold text-gray-900">Title:</div>
+                                    <div className="text-gray-900">Director General</div>
+                                    <div className="font-semibold text-gray-900">Date:</div>
+                                    <div className="text-gray-900">{todayLabel}</div>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                                    The WATER USER:
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    <div className="text-sm font-semibold text-gray-900">Signature:</div>
+                                    <div className="h-[64px]" />
+                                    <div className="border-b border-gray-400 w-full" />
+                                  </div>
+
+                                  <div className="pt-1 grid grid-cols-[64px_1fr] gap-x-3 gap-y-2">
+                                    <div className="font-semibold text-gray-900">Name:</div>
+                                    <div className="text-gray-900">
+                                      {placeholderCtx
+                                        ? placeholderCtx.isIndividual
+                                          ? placeholderCtx.applicantName
+                                          : placeholderCtx.representativeName
+                                        : "N/A"}
+                                    </div>
+                                    <div className="font-semibold text-gray-900">Title:</div>
+                                    <div className="text-gray-900">
+                                      {placeholderCtx
+                                        ? placeholderCtx.isIndividual
+                                          ? "Water User"
+                                          : placeholderCtx.representativeTitle
+                                        : "N/A"}
+                                    </div>
+                                    <div className="font-semibold text-gray-900">Date:</div>
+                                    <div className="text-gray-900">{todayLabel}</div>
+                                  </div>
+                                </div>
+                              </div>
+                              {idx < visibleSections.length - 1 ? <Separator className="mt-6" /> : null}
+                            </div>
+                          ) : (
+                            <>
+                              <h4 className="font-semibold text-gray-900 mb-3 text-lg">{section.title}</h4>
+                              <div className="space-y-3">
+                                {section.paragraphs.map((p, pIdx) => (
+                                  <p key={pIdx} className="text-gray-700 leading-relaxed">
+                                    {placeholderCtx ? fillContractText(p, placeholderCtx) : p}
+                                  </p>
+                                ))}
+                              </div>
+                              {idx < visibleSections.length - 1 ? <Separator className="mt-6" /> : null}
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {resolvedTerms.importantNotice ? (
+                      <div className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-base font-medium text-amber-800">
+                              {resolvedTerms.importantNotice.title}
+                            </p>
+                            <p className="text-base text-amber-700 mt-1">{resolvedTerms.importantNotice.body}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-base font-medium text-amber-800">Terms not available</p>
+                        <p className="text-base text-amber-700 mt-1">
+                          We don&apos;t have contract terms configured for this application type yet.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -463,61 +623,87 @@ export function TermsConditionsModal({
               </label>
             </div>
           </div>
-        </div>
-        ) : (
-          <div className="space-y-6">
-            <h3 className="text-xl font-semibold">How was your experience?</h3>
-            <div className="flex items-center gap-2">
-              {[1,2,3,4,5].map((s) => (
-                <button key={s} onClick={()=>setRating(s)} aria-label={`Rate ${s} stars`}>
-                  <Star className={`h-6 w-6 ${rating >= s ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'}`} />
-                </button>
-              ))}
-            </div>
-            <textarea
-              className="w-full border rounded-md p-3"
-              rows={4}
-              placeholder="Share any feedback to help us improve..."
-              value={feedback}
-              onChange={(e)=>setFeedback(e.target.value)}
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={()=>{ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Skip</Button>
-              <Button onClick={()=>{ /* TODO: send feedback to supabase */ setShowFeedback(false); onTermsAccepted(); onClose(); }}>Submit Feedback</Button>
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-6 pt-4">
+                <h3 className="text-xl font-semibold">How was your experience?</h3>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <button key={s} onClick={() => setRating(s)} aria-label={`Rate ${s} stars`}>
+                      <Star
+                        className={`h-6 w-6 ${
+                          rating >= s ? "text-yellow-500 fill-yellow-500" : "text-gray-300"
+                        }`}
+                      />
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  className="w-full border rounded-md p-3"
+                  rows={4}
+                  placeholder="Share any feedback to help us improve..."
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                />
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowFeedback(false);
+                      onTermsAccepted();
+                      onClose();
+                    }}
+                  >
+                    Skip
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      /* TODO: send feedback to supabase */
+                      setShowFeedback(false);
+                      onTermsAccepted();
+                      onClose();
+                    }}
+                  >
+                    Submit Feedback
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
 
-        {!showFeedback && (
-          <DialogFooter className="gap-3 pt-8">
-            <Button 
-              variant="outline" 
-              onClick={handleRejectTerms}
-              disabled={isProcessing}
-              className="flex items-center gap-2 px-6 py-3"
-            >
-              {isProcessing ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <AlertTriangle className="h-5 w-5" />
-              )}
-              Reject Terms
-            </Button>
-            
-            <Button 
-              onClick={handleAcceptTerms}
-              disabled={!acceptedTerms || isProcessing}
-              className="bg-green-600 hover:bg-green-700 flex items-center gap-2 px-6 py-3"
-            >
-              {isProcessing ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <CheckCircle className="h-5 w-5" />
-              )}
-              Accept Terms & Generate Permit
-            </Button>
-          </DialogFooter>
-        )}
+          {!showFeedback && (
+            <div className="border-t bg-background px-6 py-4">
+              <DialogFooter className="gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleRejectTerms}
+                  disabled={isProcessing}
+                  className="flex items-center gap-2 px-6 py-3"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5" />
+                  )}
+                  Reject Terms
+                </Button>
+
+                <Button
+                  onClick={handleAcceptTerms}
+                  disabled={!acceptedTerms || isProcessing}
+                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2 px-6 py-3"
+                >
+                  {isProcessing ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <CheckCircle className="h-5 w-5" />
+                  )}
+                  Accept Terms & Generate Permit
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

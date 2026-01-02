@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="140" viewBox="0 0 520 140">
+  <defs>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.15" />
+    </filter>
+  </defs>
+  <!-- Handwritten-style dummy signature (vector path). -->
+  <path
+    d="M20,86
+       C44,58 70,56 94,74
+       C106,83 112,94 121,98
+       C136,105 150,92 156,78
+       C162,64 172,56 184,62
+       C196,68 196,84 188,98
+       C180,112 168,118 154,114
+       C142,111 134,100 132,88
+       C129,68 144,48 170,44
+       C199,39 222,58 238,82
+       C250,100 265,104 280,96
+       C296,88 300,72 292,58
+       C284,44 268,42 260,52
+       C252,62 258,78 274,92
+       C297,112 330,114 354,94
+       C372,79 384,58 404,56
+       C428,54 446,78 438,98
+       C429,122 394,124 372,108
+       C350,92 350,62 374,46
+       C401,28 440,36 472,58
+       C492,72 506,86 520,90"
+    fill="none"
+    stroke="#111827"
+    stroke-width="3.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#soft)"
+  />
+  <path
+    d="M72,104
+       C120,128 180,132 244,124
+       C310,116 372,104 444,108"
+    fill="none"
+    stroke="#111827"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    opacity="0.9"
+    filter="url(#soft)"
+  />
+</svg>
+
+

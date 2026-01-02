@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { qrToSvgString } from "@/lib/qr/qr-svg";
+import { isConcessionApplication, selectPermitVariant } from "@/lib/permit-variant";
 
 type Permit = {
   id: string;
@@ -145,10 +146,7 @@ function getIntendedActivities(application: Application): string[] {
   return normalizeActivities(notes.intendedActivities);
 }
 
-function isConcessionApplication(application: Application): boolean {
-  const acts = getIntendedActivities(application);
-  return acts.includes("fish_farming_lakes") || acts.includes("fish_farming_ponds");
-}
+// NOTE: concession detection is shared with the UI via `lib/permit-variant.ts`.
 
 function getActivityLabel(activity: string): string {
   const activityLabels: Record<string, string> = {
@@ -175,16 +173,7 @@ function formatActivitiesForPermit(application: Application): string {
   return acts.map(getActivityLabel).join(", ");
 }
 
-function selectPermitVariant(application: Application): PermitVariant {
-  const accountType = application.applicant?.account_type;
-  const isIndividual = accountType === "individual";
-  const isConcession = isConcessionApplication(application);
-  if (isIndividual && !isConcession) return "abstraction_individual";
-  if (isIndividual && isConcession) return "concession_individual";
-  if (!isIndividual && !isConcession) return "abstraction_organization";
-  if (!isIndividual && isConcession) return "concession_organization";
-  return "fallback_generic";
-}
+// NOTE: variant selection is shared with the UI via `lib/permit-variant.ts`.
 
 function resolveApplicantName(application: Application): string {
   return application.applicant?.account_type === "individual"
