@@ -169,8 +169,38 @@ function getActivityLabel(activity: string): string {
 
 function formatActivitiesForPermit(application: Application): string {
   const acts = getIntendedActivities(application);
-  if (!acts.length) return "N/A";
+  if (!acts.length) {
+    // Fallback for legacy records or environments where intended_activities isn't populated.
+    const purpose = typeof application.water_purpose === "string" ? application.water_purpose.trim() : "";
+    if (purpose) return getActivityLabel(purpose) || purpose.replaceAll("_", " ");
+    const appType = typeof application.application_type === "string" ? application.application_type.trim() : "";
+    if (appType) return appType.replaceAll("_", " ");
+    return "N/A";
+  }
   return acts.map(getActivityLabel).join(", ");
+}
+
+function derivePermitTitleNumber(application: Application): string | null {
+  const raw = typeof application.application_number === "string" ? application.application_number.trim() : "";
+  if (!raw) return null;
+  // Expected: RWB-2025-000025 => 000025/RWB/2025
+  const m = raw.match(/^RWB-(\d{4})-(\d{1,})$/i);
+  if (!m) return null;
+  const year = m[1];
+  const seq = m[2].padStart(6, "0");
+  return `${seq}/RWB/${year}`;
+}
+
+function resolvePermitTitleNumber(application: Application, fallbackPermitNumber: string): string {
+  return derivePermitTitleNumber(application) || fallbackPermitNumber;
+}
+
+function resolvePermitTitleLine(application: Application, permitNumber: string, headerYear: number): string {
+  const derived = derivePermitTitleNumber(application);
+  // If we can derive from application number, it already includes `/RWB/YYYY`.
+  if (derived) return derived;
+  // Otherwise fall back to the existing permit number + `/RWB/<year>` as used previously.
+  return `${permitNumber} /RWB/${headerYear}`;
 }
 
 // NOTE: variant selection is shared with the UI via `lib/permit-variant.ts`.
@@ -285,12 +315,33 @@ function resolveWaterSourceAdminLocation(application: Application): {
 
 function resolveLatLng(application: Application): { lat: string; lng: string } {
   const notes = getInternalNotes(application);
-  const latRaw = typeof notes?.waterSourceLatitude === "string" ? notes.waterSourceLatitude.trim() : "";
-  const lngRaw = typeof notes?.waterSourceLongitude === "string" ? notes.waterSourceLongitude.trim() : "";
-  const latNum = latRaw ? Number.parseFloat(latRaw) : NaN;
-  const lngNum = lngRaw ? Number.parseFloat(lngRaw) : NaN;
+  const latVal = notes?.waterSourceLatitude;
+  const lngVal = notes?.waterSourceLongitude;
+  const latNum =
+    typeof latVal === "number"
+      ? latVal
+      : typeof latVal === "string" && latVal.trim()
+        ? Number.parseFloat(latVal.trim())
+        : NaN;
+  const lngNum =
+    typeof lngVal === "number"
+      ? lngVal
+      : typeof lngVal === "string" && lngVal.trim()
+        ? Number.parseFloat(lngVal.trim())
+        : NaN;
   if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
     return { lat: latNum.toFixed(6), lng: lngNum.toFixed(6) };
+  }
+
+  // Fallback: if polygons exist in notes, use the first point of the first polygon.
+  const polys = Array.isArray(notes?.waterSourcePolygons) ? (notes?.waterSourcePolygons as any[]) : null;
+  const first = polys?.[0]?.[0];
+  if (first) {
+    const lat = typeof first.latitude === "string" ? Number.parseFloat(first.latitude) : Number(first.latitude);
+    const lng = typeof first.longitude === "string" ? Number.parseFloat(first.longitude) : Number(first.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
+    }
   }
 
   // Fallback: if coordinates stored as GeoJSON Point: [lng, lat]
@@ -299,6 +350,31 @@ function resolveLatLng(application: Application): { lat: string; lng: string } {
     const [lng, lat] = coords.coordinates;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       return { lat: Number(lat).toFixed(6), lng: Number(lng).toFixed(6) };
+    }
+  }
+
+  // If we stored a polygon/multipolygon, use the first coordinate as a representative point.
+  // GeoJSON order is [lng, lat].
+  if (coords && typeof coords === "object" && coords.type === "Polygon" && Array.isArray(coords.coordinates)) {
+    const first = coords.coordinates?.[0]?.[0];
+    if (Array.isArray(first) && first.length >= 2) {
+      const [lng, lat] = first;
+      const latN = Number(lat);
+      const lngN = Number(lng);
+      if (Number.isFinite(latN) && Number.isFinite(lngN)) {
+        return { lat: latN.toFixed(6), lng: lngN.toFixed(6) };
+      }
+    }
+  }
+  if (coords && typeof coords === "object" && coords.type === "MultiPolygon" && Array.isArray(coords.coordinates)) {
+    const first = coords.coordinates?.[0]?.[0]?.[0];
+    if (Array.isArray(first) && first.length >= 2) {
+      const [lng, lat] = first;
+      const latN = Number(lat);
+      const lngN = Number(lng);
+      if (Number.isFinite(latN) && Number.isFinite(lngN)) {
+        return { lat: latN.toFixed(6), lng: lngN.toFixed(6) };
+      }
     }
   }
 
@@ -463,11 +539,12 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   }
 
   const headerYear = issueDate.getFullYear();
+  const titlePermitNo = resolvePermitTitleLine(application, permitNumber, headerYear);
   doc.setTextColor(0, 0, 0);
   doc.setFont("times", "bold");
   doc.setFontSize(12);
   doc.text(
-    `WATER USE PERMIT N° ${permitNumber} /RWB/${headerYear} (for Individual Applicant )`,
+    `WATER USE PERMIT N° ${titlePermitNo} (for Individual Applicant )`,
     105,
     48,
     { align: "center" }
@@ -528,7 +605,7 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   doc.text("Director General", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On………./..……./${headerYear}`, rightX, y, { align: "right" });
+  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   // QR footer on last page only
   await drawPermitQrFooter({ doc, permitNumber });
@@ -572,7 +649,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.setTextColor(0, 0, 0);
   doc.setFont("times", "bold");
   doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${permitNumber} /RWB/${headerYear}`, 105, 48, { align: "center" });
+  doc.text(`WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`, 105, 48, { align: "center" });
 
   doc.setFont("times", "normal");
   doc.setFontSize(11);
@@ -637,7 +714,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text("Director General", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On ………./..……./${headerYear}`, rightX, y, { align: "right" });
+  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
@@ -679,7 +756,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   doc.setTextColor(0, 0, 0);
   doc.setFont("times", "bold");
   doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${permitNumber} /RWB/${headerYear}`, 105, 48, { align: "center" });
+  doc.text(`WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`, 105, 48, { align: "center" });
 
   doc.setFont("times", "normal");
   doc.setFontSize(11);
@@ -739,7 +816,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   doc.text("Director General", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On ………./..……./${headerYear}`, rightX, y, { align: "right" });
+  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
@@ -781,7 +858,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   doc.setTextColor(0, 0, 0);
   doc.setFont("times", "bold");
   doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${permitNumber} /RWB/${headerYear}`, 105, 48, { align: "center" });
+  doc.text(`WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`, 105, 48, { align: "center" });
 
   doc.setFont("times", "normal");
   doc.setFontSize(11);
@@ -843,7 +920,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   doc.text("Director General", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On………./..……./${headerYear}`, rightX, y, { align: "right" });
+  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
