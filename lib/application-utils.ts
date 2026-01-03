@@ -218,18 +218,6 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       waterSourceLatitude: formData.waterSourceLatitude,
       waterSourceLongitude: formData.waterSourceLongitude,
       
-      // Coordinates are stored in main coordinates field, but save reference
-      waterSourceCoordinates: Array.isArray(formData.waterSourceCoordinates)
-        ? formData.waterSourceCoordinates
-        : Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons[0]
-          ? formData.waterSourcePolygons[0]
-          : undefined,
-      waterSourcePolygons: Array.isArray(formData.waterSourcePolygons)
-        ? formData.waterSourcePolygons
-        : Array.isArray(formData.waterSourceCoordinates)
-          ? [formData.waterSourceCoordinates]
-          : undefined,
-      
       // Reliability
       waterReliability: formData.waterReliability,
       

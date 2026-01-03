@@ -146,28 +146,34 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     formData.waterSourceVillage = application.village || '';
   
     // Coordinates - normalize Polygon/MultiPolygon/Point into waterSourcePolygons
+    let waterSourcePolygons: any[] = [];
+    let singlePointLatitude: string | undefined = undefined;
+    let singlePointLongitude: string | undefined = undefined;
+    
     try {
       const polys = geometryToCoordinatePolygons(application.coordinates);
-      formData.waterSourcePolygons =
-        polys && polys.length > 0
-          ? polys
-          : [
-              [
-                { latitude: "", longitude: "" },
-                { latitude: "", longitude: "" },
-                { latitude: "", longitude: "" }
-              ]
-            ];
+      if (polys && polys.length > 0) {
+        waterSourcePolygons = polys;
+        // If it's a single point, extract lat/lng for direct use as well
+        if (polys.length === 1 && polys[0].length === 1) {
+          singlePointLatitude = polys[0][0].latitude?.toString();
+          singlePointLongitude = polys[0][0].longitude?.toString();
+        }
+      } else if ((application.coordinates as any)?.type === 'Point' && Array.isArray((application.coordinates as any)?.coordinates)) {
+        // Fallback for direct Point coordinates in the application object
+        const [lng, lat] = (application.coordinates as any).coordinates;
+        singlePointLatitude = lat.toString();
+        singlePointLongitude = lng.toString();
+        waterSourcePolygons = [[{ latitude: lat.toString(), longitude: lng.toString() }]];
+      }
     } catch (error) {
       console.warn('Error parsing coordinates:', error);
-      formData.waterSourcePolygons = [
-        [
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" }
-        ]
-      ];
     }
+    
+    formData.waterSourcePolygons = waterSourcePolygons.length > 0 ? waterSourcePolygons : [[{ latitude: "", longitude: "" }]];
+    // Also populate individual lat/lng fields if they aren't already set from internal notes
+    if (!formData.waterSourceLatitude && singlePointLatitude) formData.waterSourceLatitude = singlePointLatitude;
+    if (!formData.waterSourceLongitude && singlePointLongitude) formData.waterSourceLongitude = singlePointLongitude;
   
     // Water reliability
     formData.waterReliability = 'water_always_available'; // Default
