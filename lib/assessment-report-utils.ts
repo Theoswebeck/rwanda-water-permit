@@ -359,13 +359,36 @@ export function prefillAssessmentReportFromApplication(
   // Extract abstraction-specific data if applicable
   const abstractionData: Partial<AssessmentReportData> = {};
   if (reportType === 'abstraction' && formData?.waterAbstractionDetails) {
-    const abstractionDetail = formData.waterAbstractionDetails[0];
+    const detailsUnknown: any = (formData as any).waterAbstractionDetails;
+    const abstractionDetail: any = Array.isArray(detailsUnknown) ? detailsUnknown[0] : undefined;
+
     if (abstractionDetail) {
-      abstractionData.abstractionMethod = abstractionDetail.abstractionMethod || '';
-      if (abstractionDetail.maxAverageYearly) {
-        // Convert yearly to daily (approximate)
-        const dailyM3 = abstractionDetail.maxAverageYearly / 365;
-        abstractionData.waterDemandD = String(dailyM3.toFixed(2));
+      abstractionData.abstractionMethod = typeof abstractionDetail.abstractionMethod === "string" ? abstractionDetail.abstractionMethod : "";
+
+      // Q15: flowRate is entered in m³/s in the application form
+      const flowM3s = typeof abstractionDetail.flowRate === "number"
+        ? abstractionDetail.flowRate
+        : (typeof abstractionDetail.flowRate === "string" ? Number(abstractionDetail.flowRate) : NaN);
+
+      if (!Number.isNaN(flowM3s) && Number.isFinite(flowM3s) && flowM3s > 0) {
+        // Section 4 needs L/sec and m³/day equivalents
+        abstractionData.flowRateLps = String((flowM3s * 1000).toFixed(2));
+        abstractionData.flowRateM3Day = String((flowM3s * 86400).toFixed(2));
+        // Water balance uses m³/day (D)
+        abstractionData.waterDemandD = String((flowM3s * 86400).toFixed(2));
+      } else {
+        // Fallback: maxAverageYearly is m³/year
+        const yearly = typeof abstractionDetail.maxAverageYearly === "number"
+          ? abstractionDetail.maxAverageYearly
+          : (typeof abstractionDetail.maxAverageYearly === "string" ? Number(abstractionDetail.maxAverageYearly) : NaN);
+        if (!Number.isNaN(yearly) && Number.isFinite(yearly) && yearly > 0) {
+          const dailyM3 = yearly / 365;
+          abstractionData.flowRateM3Day = String(dailyM3.toFixed(2));
+          abstractionData.waterDemandD = String(dailyM3.toFixed(2));
+          // Approximate L/sec from m³/day
+          const m3sApprox = dailyM3 / 86400;
+          abstractionData.flowRateLps = String((m3sApprox * 1000).toFixed(2));
+        }
       }
     }
   }
@@ -381,8 +404,9 @@ export function prefillAssessmentReportFromApplication(
     }
     
     // Extract beacon coordinates
-    if (formData?.waterSourcePolygons) {
-      concessionData.beacons = extractBeaconCoordinates(formData.waterSourcePolygons);
+    const polysUnknown = (formData as any)?.waterSourcePolygons;
+    if (Array.isArray(polysUnknown)) {
+      concessionData.beacons = extractBeaconCoordinates(polysUnknown as any);
     } else {
       // Try to extract from application coordinates
       try {
@@ -444,16 +468,38 @@ export function mergeAssessmentReportData(
       })
     : prefilled.requiredDocuments;
   
-  return {
+  const merged: Partial<AssessmentReportData> = {
     ...prefilled,
     ...existing,
-    // Use merged required documents
     requiredDocuments: mergedRequiredDocuments,
-    annexDocuments: existing.annexDocuments && existing.annexDocuments.length > 0 ? existing.annexDocuments : prefilled.annexDocuments,
+    // Annex is derived from current application documents; keep prefilled.
+    annexDocuments: prefilled.annexDocuments,
     // Merge beacons array properly
-    beacons: existing.beacons && existing.beacons.length > 0 
-      ? existing.beacons 
-      : prefilled.beacons
+    beacons: existing.beacons && existing.beacons.length > 0 ? existing.beacons : prefilled.beacons,
   };
+
+  // Always enforce application-derived read-only fields from prefill (prevents stale/blank overrides)
+  const enforcedPrefilledKeys: Array<keyof AssessmentReportData> = [
+    "applicantName",
+    "applicantIdTin",
+    "residence",
+    "typeOfActivity",
+    "representative",
+    "contactTel",
+    "contactEmail",
+    "sourceName",
+    "sourceLatitude",
+    "sourceLongitude",
+    "sourceLocation",
+    "catchmentLevel1",
+    "catchmentLevel2",
+  ];
+  for (const k of enforcedPrefilledKeys) {
+    if (prefilled[k] !== undefined) {
+      (merged as any)[k] = (prefilled as any)[k];
+    }
+  }
+
+  return merged;
 }
 

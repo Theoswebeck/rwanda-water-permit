@@ -181,6 +181,11 @@ export interface Application {
   // Water permit details
   water_source: WaterSourceType
   water_purpose: WaterPurpose
+  /**
+   * Primary intended activities as stored by the application form (JSON array of activity codes).
+   * Used to determine whether this application is abstraction vs concession (fish farming).
+   */
+  intended_activities?: string[] | null
   estimated_usage_volume?: number
   usage_unit?: string
   
