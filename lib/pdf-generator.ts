@@ -74,7 +74,7 @@ type Application = {
   };
 };
 
-const PERMIT_VERIFY_BASE_URL = "https://rwanda-water-permit-production.up.railway.app";
+const PERMIT_VERIFY_BASE_URL = window.location.origin;
 
 function buildPermitVerificationUrl(permitNumber: string): string {
   return `${PERMIT_VERIFY_BASE_URL}/permit/view/${encodeURIComponent(permitNumber)}`;
@@ -598,6 +598,15 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   doc.text("Signature: …………………..", leftX, y);
   y += 18;
 
+  try {
+    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
+    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
+  } catch (error) {
+    console.error('Error loading signature image:', error);
+  }
+
+  y += 18; // Adjust Y to account for the image height
+
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
@@ -707,6 +716,15 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text("Signature: …………………..", leftX, y);
   y += 18;
 
+  try {
+    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
+    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
+  } catch (error) {
+    console.error('Error loading signature image:', error);
+  }
+
+  y += 18; // Adjust Y to account for the image height
+
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
@@ -808,6 +826,15 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
 
   doc.text("Signature/Umukono: …………………..", leftX, y);
   y += 22;
+
+  try {
+    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
+    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
+  } catch (error) {
+    console.error('Error loading signature image:', error);
+  }
+
+  y += 18; // Adjust Y to account for the image height
 
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
@@ -912,6 +939,15 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
 
   doc.text("Signature: …………………..", leftX, y);
   y += 22;
+
+  try {
+    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
+    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
+  } catch (error) {
+    console.error('Error loading signature image:', error);
+  }
+
+  y += 18; // Adjust Y to account for the image height
 
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
