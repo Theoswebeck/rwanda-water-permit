@@ -227,14 +227,11 @@ export function TermsConditionsModal({
       }
 
       // Generate permit number
-      const permitNumber = `RWBP-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-      console.log('🔢 Generated permit number:', permitNumber);
       
       // Create permit in database with comprehensive data
       console.log('📝 Creating permit in database...');
       const permitData_insert = {
         application_id: applicationId,
-        permit_number: permitNumber,
         status: 'active',
         water_source: applicationData.water_source,
         purpose: applicationData.water_purpose,
@@ -300,7 +297,7 @@ export function TermsConditionsModal({
         const { generateDigitalWaterPermitBlob } = await import('@/lib/pdf-generator');
         const pdfBlob = await generateDigitalWaterPermitBlob(
           applicationData,
-          permitNumber,
+          permitData.permit_number,
           conditionsForPdf,
           5
         );
@@ -309,7 +306,7 @@ export function TermsConditionsModal({
         console.log('📤 Uploading PDF to Supabase Storage...');
         const upload = await uploadPermitPdf({
           permitId: permitData.id,
-          permitNumber,
+          permitNumber: permitData.permit_number,
           pdfBlob,
         });
 
