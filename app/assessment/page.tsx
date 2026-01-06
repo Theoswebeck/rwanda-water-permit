@@ -524,6 +524,11 @@ export default function AssessmentDashboard() {
                 Assess and review water permit applications for technical compliance and field verification
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Link href="/management">
+                <Button variant="outline">Management Dashboard</Button>
+              </Link>
+            </div>
           </div>
 
           {/* Summary Stats */}

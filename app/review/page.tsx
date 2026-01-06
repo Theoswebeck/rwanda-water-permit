@@ -462,6 +462,11 @@ export default function ReviewerDashboard() {
                 Review and assess water permit applications for technical compliance
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Link href="/management">
+                <Button variant="outline">Management Dashboard</Button>
+              </Link>
+            </div>
           </div>
 
           {/* Summary Stats */}

@@ -357,6 +357,11 @@ export default function VerificationDashboard() {
                   Verify completeness and consistency before final approval
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Link href="/management">
+                <Button variant="outline">Management Dashboard</Button>
+              </Link>
+            </div>
           </div>
 
             {/* Summary Stats */}

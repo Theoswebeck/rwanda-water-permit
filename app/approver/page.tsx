@@ -20,6 +20,8 @@ import { ExecutiveOverview } from "@/components/approver/executive-overview";
 import { PerformanceMetrics } from "@/components/approver/performance-metrics";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { AllApplicationsList } from "@/components/approver/all-applications-list";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
 interface DashboardStats {
   pendingFinalApproval: number;
@@ -95,6 +97,11 @@ export default function ApproverDashboard() {
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
               Strategic oversight and final decision-making for water permit applications
             </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/management">
+              <Button variant="outline">Management Dashboard</Button>
+            </Link>
           </div>
         </div>
 

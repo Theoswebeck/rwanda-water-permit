@@ -27,11 +27,26 @@ export function Header() {
   const isApplicationPage = pathname.includes('/application');
   const isInspectionPage = pathname.startsWith('/inspection');
   const isReviewPage = pathname.startsWith('/review');
+  const isAssessmentPage = pathname.startsWith('/assessment');
+  const isVerificationPage = pathname.startsWith('/verification') || pathname.startsWith('/verifier');
   const isAdminPage = pathname.startsWith('/admin');
   const isApproverPage = pathname.startsWith('/approver');
+  const isManagementPage = pathname.startsWith('/management');
 
   // Helper to check if we should hide the Apply button
-  const shouldHideApplyButton = isApplyPage || isLoginPage || isRegisterPage || isDashboardPage || isApplicationPage || isInspectionPage || isReviewPage || isAdminPage || isApproverPage;
+  const shouldHideApplyButton =
+    isApplyPage ||
+    isLoginPage ||
+    isRegisterPage ||
+    isDashboardPage ||
+    isApplicationPage ||
+    isInspectionPage ||
+    isReviewPage ||
+    isAssessmentPage ||
+    isVerificationPage ||
+    isAdminPage ||
+    isApproverPage ||
+    isManagementPage;
   
   return (
     <header className="py-4 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
@@ -134,7 +149,7 @@ export function Header() {
                   HOME
                 </Button>
               </Link>
-            ) : isInspectionPage || isReviewPage || isAdminPage || isApproverPage ? (
+            ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage ? (
               /* Show profile icon on inspection, review, admin, and approver pages */
               <Link href="/dashboard/profile">
                 <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
@@ -245,7 +260,7 @@ export function Header() {
                         HOME
                       </Button>
                     </Link>
-                  ) : isInspectionPage || isReviewPage || isAdminPage ? (
+                  ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage ? (
                     /* Hide button on inspection, review, and admin pages */
                     null
                   ) : (
