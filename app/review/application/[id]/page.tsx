@@ -268,7 +268,6 @@ export default function ReviewApplicationPage() {
           'environmental_impact_doc': 'environmentalImpactDoc',
           'payment_proof': 'paymentProof',
           'intake_discharge_map': 'intakeDischargeMap',
-          'other': 'generalRequirements',
           'business_license': 'miningLicense',
           'geological_survey': 'miningHydrologicalReport',
           'water_quality_report': 'waterQualityReport'

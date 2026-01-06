@@ -723,10 +723,6 @@ export const ApplicationForm = memo(function ApplicationForm({
     for (const activity of intendedActivities) {
       switch (activity) {
         case 'irrigation':
-          // General requirements are always required for irrigation
-          if (!files.irrigationGeneralRequirements && !uploadedFileUrls.irrigationGeneralRequirements) {
-            return false;
-          }
           // For irrigation > 10 ha, also require EIA and feasibility study
           const irrigationArea = form.getValues('irrigationTotalArea') || 0;
           if (irrigationArea > 10) {
@@ -739,17 +735,11 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'water_supply':
-          if (!files.waterSupplyGeneralRequirements && !uploadedFileUrls.waterSupplyGeneralRequirements) {
-            return false;
-          }
           if (!files.waterSupplyFeasibilityStudy && !uploadedFileUrls.waterSupplyFeasibilityStudy) {
             return false;
           }
           break;
         case 'mining':
-          if (!files.miningGeneralRequirements && !uploadedFileUrls.miningGeneralRequirements) {
-            return false;
-          }
           if (!files.miningLicense && !uploadedFileUrls.miningLicense) {
             return false;
           }
@@ -760,9 +750,6 @@ export const ApplicationForm = memo(function ApplicationForm({
         case 'aquaculture': // legacy compatibility
         case 'fish_farming_lakes':
         case 'fish_farming_ponds':
-          if (!files.aquacultureGeneralRequirements && !uploadedFileUrls.aquacultureGeneralRequirements) {
-            return false;
-          }
           if (!files.aquacultureEIA && !uploadedFileUrls.aquacultureEIA) {
             return false;
           }
@@ -774,17 +761,11 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'coffee_washing':
-          if (!files.coffeeWashingGeneralRequirements && !uploadedFileUrls.coffeeWashingGeneralRequirements) {
-            return false;
-          }
           if (!files.coffeeWashingEIA && !uploadedFileUrls.coffeeWashingEIA) {
             return false;
           }
           break;
         case 'industry':
-          if (!files.industrialGeneralRequirements && !uploadedFileUrls.industrialGeneralRequirements) {
-            return false;
-          }
           if (!files.industrialEIA && !uploadedFileUrls.industrialEIA) {
             return false;
           }
@@ -793,9 +774,6 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'electricity_generation':
-          if (!files.hydropowerGeneralRequirements && !uploadedFileUrls.hydropowerGeneralRequirements) {
-            return false;
-          }
           if (!files.hydropowerEIA && !uploadedFileUrls.hydropowerEIA) {
             return false;
           }
@@ -804,9 +782,6 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'construction_of_dam':
-          if (!files.constructionDamGeneralRequirements && !uploadedFileUrls.constructionDamGeneralRequirements) {
-            return false;
-          }
           if (!files.constructionDamEIA && !uploadedFileUrls.constructionDamEIA) {
             return false;
           }
@@ -815,9 +790,6 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'construction_of_infrastructures':
-          if (!files.infrastructureGeneralRequirements && !uploadedFileUrls.infrastructureGeneralRequirements) {
-            return false;
-          }
           if (!files.infrastructureEIA && !uploadedFileUrls.infrastructureEIA) {
             return false;
           }
@@ -826,9 +798,6 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'navigation':
-          if (!files.navigationGeneralRequirements && !uploadedFileUrls.navigationGeneralRequirements) {
-            return false;
-          }
           if (!files.navigationEIA && !uploadedFileUrls.navigationEIA) {
             return false;
           }
@@ -837,9 +806,6 @@ export const ApplicationForm = memo(function ApplicationForm({
           }
           break;
         case 'recreation_activities':
-          if (!files.recreationGeneralRequirements && !uploadedFileUrls.recreationGeneralRequirements) {
-            return false;
-          }
           if (!files.recreationEIA && !uploadedFileUrls.recreationEIA) {
             return false;
           }
@@ -3074,7 +3040,6 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             ...(watchedIrrigationTotalArea && watchedIrrigationTotalArea > 10 ? [
                               "Environmental Impact Assessment certificate (required for > 10 ha)",
                               "Feasibility study (required for > 10 ha)"
@@ -3085,12 +3050,6 @@ export const ApplicationForm = memo(function ApplicationForm({
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="irrigationGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             {watchedIrrigationTotalArea && watchedIrrigationTotalArea > 10 && (
                               <>
                                 <DocumentUploadField
@@ -3250,17 +3209,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Feasibility study"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="waterSupplyGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="waterSupplyFeasibilityStudy"
                               label="Feasibility study"
@@ -3347,19 +3299,12 @@ export const ApplicationForm = memo(function ApplicationForm({
                           {/* Mining Attachments (same page) */}
                           <div className="mt-6 space-y-4">
                             <DocumentRequirementsInfo documents={[
-                              "General requirements document",
                               "Valid mining license",
                               "Environmental Impact Assessment certificate", 
                               "Hydrological report"
                             ]} />
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <DocumentUploadField
-                                fieldName="miningGeneralRequirements"
-                                label="General requirements"
-                                required={true}
-                              />
-                              
                               <DocumentUploadField
                                 fieldName="miningLicense"
                                 label="Mining license"
@@ -3575,19 +3520,12 @@ export const ApplicationForm = memo(function ApplicationForm({
                           )}
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Recommendation Letter from MINAGRI/RAB",
                             "Environmental Impact Assessment certificate",
                             "Management plan for aquaculture operations"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="aquacultureGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="aquacultureEIA"
                               label="Environmental Impact Assessment certificate"
@@ -3651,17 +3589,10 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="coffeeWashingGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="coffeeWashingEIA"
                               label="Environmental Impact Assessment certificate"
@@ -3717,18 +3648,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate",
                             "Waste management plan"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="industrialGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="industrialEIA"
                               label="Environmental Impact Assessment certificate"
@@ -3796,18 +3720,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate",
                             "Feasibility study (Hydrological assessment)"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="hydropowerGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="hydropowerEIA"
                               label="Environmental Impact Assessment certificate"
@@ -3883,18 +3800,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate",
                             "Engineering plans and drawings"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="constructionDamGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="constructionDamEIA"
                               label="Environmental Impact Assessment certificate"
@@ -3970,18 +3880,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate",
                             "Engineering plans and drawings"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="infrastructureGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="infrastructureEIA"
                               label="Environmental Impact Assessment certificate"
@@ -4054,18 +3957,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate",
                             "Navigation management plan"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="navigationGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="navigationEIA"
                               label="Environmental Impact Assessment certificate"
@@ -4119,18 +4015,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                           </div>
 
                           <DocumentRequirementsInfo documents={[
-                            "General requirements document",
                             "Environmental Impact Assessment certificate",
                             "Management plan for recreational activities"
                           ]} />
                           
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="recreationGeneralRequirements"
-                              label="General requirements"
-                              required={true}
-                            />
-                            
                             <DocumentUploadField
                               fieldName="recreationEIA"
                               label="Environmental Impact Assessment certificate"

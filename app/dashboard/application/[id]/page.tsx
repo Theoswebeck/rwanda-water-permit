@@ -271,7 +271,7 @@ export default function ApplicationDetailPage() {
           const formData = mapApplicationToFormData(appWithRelations, userProfile);
           setInitialFormData(formData);
           
-          // Process documents for form
+          // Process documents for form (smart classification by file path when possible)
           const documentMap: Record<string, { url: string; name: string }> = {};
           const typeMapping: Record<string, string> = {
             'identification_doc': 'identificationDoc',
@@ -280,22 +280,32 @@ export default function ApplicationDetailPage() {
             'environmental_impact_doc': 'environmentalImpactDoc',
             'payment_proof': 'paymentProof',
             'intake_discharge_map': 'intakeDischargeMap',
-            'other': 'generalRequirements', // Map 'other' type to a generic field name
             'business_license': 'miningLicense',
             'geological_survey': 'miningHydrologicalReport',
             'water_quality_report': 'waterQualityReport'
           };
           
           for (const doc of documents) {
-            const fieldName = typeMapping[doc.type] || doc.type;
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
-              if (publicUrl) {
-                documentMap[fieldName] = {
-                  url: publicUrl,
-                  name: doc.name
-                };
+              if (!publicUrl) continue;
+
+              // Extract field name from file path if it follows our naming convention
+              const pathParts = doc.file_path.split('/');
+              const fileName = pathParts[pathParts.length - 1];
+              const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+
+              if (fieldNameMatch) {
+                const fieldName = fieldNameMatch[1];
+                if (!fieldName.startsWith('additional_')) {
+                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
+                  continue;
+                }
               }
+
+              // Fallback to type-based mapping
+              const fieldName = typeMapping[doc.type] || doc.type;
+              documentMap[fieldName] = { url: publicUrl, name: doc.name };
             }
           }
           
