@@ -11,6 +11,7 @@ interface SignUpData {
   accountType: 'individual' | 'company';
   firstName?: string;
   lastName?: string;
+  dateOfBirth?: string;
   companyName?: string;
   companyTIN?: string;
   companyAddress?: string;

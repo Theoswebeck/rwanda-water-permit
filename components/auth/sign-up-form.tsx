@@ -70,10 +70,51 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   // Validation states
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [dateOfBirthError, setDateOfBirthError] = useState("");
   const [idNumberError, setIdNumberError] = useState("");
   const [companyTINError, setCompanyTINError] = useState("");
   const [phoneError, setPhoneError] = useState("");
   const [companyPhoneError, setCompanyPhoneError] = useState("");
+
+  const getMaxAdultDob = () => {
+    // Use UTC cutoffs to avoid timezone edge-cases around midnight.
+    const now = new Date();
+    const cutoffUtc = new Date(Date.UTC(
+      now.getUTCFullYear() - 18,
+      now.getUTCMonth(),
+      now.getUTCDate()
+    ));
+    return cutoffUtc.toISOString().slice(0, 10); // YYYY-MM-DD
+  };
+
+  const isAtLeast18 = (dobStr: string) => {
+    const v = (dobStr || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+    // Parse as UTC midnight for stability
+    const dobUtc = new Date(`${v}T00:00:00.000Z`);
+    if (Number.isNaN(dobUtc.getTime())) return false;
+
+    const now = new Date();
+    const cutoffUtc = new Date(Date.UTC(
+      now.getUTCFullYear() - 18,
+      now.getUTCMonth(),
+      now.getUTCDate()
+    ));
+    return dobUtc.getTime() <= cutoffUtc.getTime();
+  };
+
+  const validateDateOfBirth = (dobStr: string) => {
+    if (!dobStr) {
+      setDateOfBirthError("Date of birth is required.");
+      return false;
+    }
+    if (!isAtLeast18(dobStr)) {
+      setDateOfBirthError("You must be at least 18 years old to register.");
+      return false;
+    }
+    setDateOfBirthError("");
+    return true;
+  };
 
   const validateEmail = (email: string) => {
     if (!email) {
@@ -212,8 +253,8 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
         setLocalError("First name and last name are required.");
         return;
       }
-      if (!dateOfBirth) {
-        setLocalError("Date of birth is required.");
+      if (!validateDateOfBirth(dateOfBirth)) {
+        setLocalError(dateOfBirthError || "You must be at least 18 years old to register.");
         return;
       }
       if (!validateRwandaPhone(phone, setPhoneError)) return;
@@ -281,6 +322,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     !!firstName.trim() &&
     !!lastName.trim() &&
     !!dateOfBirth &&
+    !dateOfBirthError &&
     !!phone.trim() &&
     !phoneError &&
     !!idNumber.trim() &&
@@ -548,10 +590,25 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                     type="date" 
                     required 
                     value={dateOfBirth}
-                    onChange={(e) => setDateOfBirth(e.target.value)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    max={getMaxAdultDob()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDateOfBirth(v);
+                      // Validate as the user edits (gives fast feedback and gates submit)
+                      validateDateOfBirth(v);
+                      if (error) onClearError?.();
+                    }}
+                    onBlur={() => {
+                      if (dateOfBirth) validateDateOfBirth(dateOfBirth);
+                    }}
+                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                      dateOfBirthError ? 'border-red-500 focus:ring-red-500' : ''
+                    }`}
                     disabled={isLoading}
                   />
+                  {dateOfBirthError && (
+                    <p className="text-xs text-red-500 mt-1">{dateOfBirthError}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">

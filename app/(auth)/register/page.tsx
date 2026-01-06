@@ -63,6 +63,7 @@ export default function RegisterPage() {
         ...(formData.accountType === 'individual' ? {
           firstName: formData.firstName,
           lastName: formData.lastName,
+          dateOfBirth: formData.dateOfBirth,
           idNumber: formData.idNumber,
           idType: formData.idType,
           phone: normalizeRwandaPhone(formData.phone),

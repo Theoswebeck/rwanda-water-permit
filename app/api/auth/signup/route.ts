@@ -52,6 +52,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Validate date of birth for individual signups (must be 18+)
+    if (accountType === 'individual') {
+      const dob = String(rest?.dateOfBirth ?? '').trim()
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+        return NextResponse.json({ success: false, message: 'invalid date of birth' }, { status: 400 })
+      }
+      const dobUtc = new Date(`${dob}T00:00:00.000Z`)
+      if (Number.isNaN(dobUtc.getTime())) {
+        return NextResponse.json({ success: false, message: 'invalid date of birth' }, { status: 400 })
+      }
+      const now = new Date()
+      const cutoffUtc = new Date(Date.UTC(
+        now.getUTCFullYear() - 18,
+        now.getUTCMonth(),
+        now.getUTCDate()
+      ))
+      if (dobUtc.getTime() > cutoffUtc.getTime()) {
+        return NextResponse.json({ success: false, message: 'must be at least 18 years old' }, { status: 400 })
+      }
+    }
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!serviceKey) {
@@ -137,6 +158,7 @@ export async function POST(req: NextRequest) {
     if (accountType === 'individual') {
       profile.first_name = rest.firstName || 'User'
       profile.last_name = rest.lastName || 'Profile'
+      profile.date_of_birth = rest.dateOfBirth
       profile.phone = rest.phone
       // Store normalized digits (avoid persisting spaces or separators)
       profile.id_number = String(rest?.identification?.number || rest.idNumber || '').replace(/\D/g, '')
