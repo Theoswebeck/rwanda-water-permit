@@ -1248,7 +1248,7 @@ export default function AssessmentApplicationPage() {
                               className="gap-2 bg-black hover:bg-gray-800 text-white"
                             >
                               {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                              Send for Final Approval
+                              Send for review
                             </Button>
                           </div>
                         );
