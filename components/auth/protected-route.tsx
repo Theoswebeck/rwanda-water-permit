@@ -57,6 +57,7 @@ export function ProtectedRoute({
           inspector: '/inspection',
           assessor: '/assessment',
           reviewer: '/review',
+          verifier: '/verification',
           applicant: '/dashboard'
         };
         

@@ -35,7 +35,7 @@ interface AssessmentStatsData {
   newSubmissions: number;
   pendingAssessment: number;
   underAssessment: number;
-  readyForApproval: number;
+  readyForReview: number;
 }
 
 export default function AssessmentDashboard() {
@@ -65,7 +65,9 @@ export default function AssessmentDashboard() {
             *,
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
-          .in('status', ['submitted', 'under_review', 'pending_assessment', 'pending_final_approval', 'revision_required'])
+          // New flow: submitted -> pending_assessment/under_review -> pending_review
+          // Keep legacy status 'under_review' for in-progress assessments.
+          .in('status', ['submitted', 'pending_assessment', 'under_review'])
           .order('created_at', { ascending: sortBy === "earliest" });
 
         if (error) throw error;
@@ -147,11 +149,11 @@ export default function AssessmentDashboard() {
         
         if (assessmentError) throw assessmentError;
 
-        // Query for applications ready for approval
-        const { count: readyForApprovalCount, error: approvalError } = await supabase
+        // Query for applications ready for review (post-assessment handoff)
+        const { count: readyForReviewCount, error: approvalError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_final_approval');
+          .eq('status', 'pending_review');
         
         if (approvalError) throw approvalError;
 
@@ -159,7 +161,7 @@ export default function AssessmentDashboard() {
           newSubmissions: newSubmissionsCount || 0,
           pendingAssessment: pendingAssessmentCount || 0,
           underAssessment: underAssessmentCount || 0,
-          readyForApproval: readyForApprovalCount || 0
+          readyForReview: readyForReviewCount || 0
         });
       } catch (err) {
         console.error('Error fetching assessment stats:', err);
@@ -233,20 +235,25 @@ export default function AssessmentDashboard() {
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
-    const statusConfig: Record<ApplicationStatus, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+    // Keep flexible to avoid runtime issues if DB gains new statuses.
+    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Assessment", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
-      pending_final_approval: { label: "Ready for Approval", variant: "default" },
+      pending_review: { label: "Ready for Review", variant: "default" },
+      pending_verification: { label: "Pending Verification", variant: "outline" },
+      pending_final_approval: { label: "Pending Approval", variant: "default" },
+      pending_payment: { label: "Pending Payment", variant: "secondary" },
       approved: { label: "Approved", variant: "default" },
+      approved_pending_permit: { label: "Pending Terms Acceptance", variant: "default" },
+      expired: { label: "Expired", variant: "outline" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
-      approved_pending_permit: { label: "Pending Terms Acceptance", variant: "default" },
     };
     
-    const config = statusConfig[status];
+    const config = statusConfig[status] || { label: status, variant: "outline" as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -310,8 +317,8 @@ export default function AssessmentDashboard() {
           label: 'Pending Assessment', 
           className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
         },
-        'pending_final_approval': { 
-          label: 'Ready for Approval', 
+        'pending_review': { 
+          label: 'Ready for Review', 
           className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800' 
         },
         'revision_required': { 
@@ -594,7 +601,7 @@ export default function AssessmentDashboard() {
             <Card className="hover:shadow-md transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Ready for Approval
+                  Ready for Review
                 </CardTitle>
                 <CheckCircle className="h-4 w-4 text-green-600" />
               </CardHeader>
@@ -603,23 +610,23 @@ export default function AssessmentDashboard() {
                   {statsLoading ? (
                     <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
                   ) : (
-                    stats?.readyForApproval || 0
+                    stats?.readyForReview || 0
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Assessment complete, awaiting approval
+                  Assessment complete, awaiting review
                 </p>
                 {!statsLoading && stats && (
                   <div className="flex items-center mt-2">
                     <Badge 
                       variant="outline"
                       className={`text-xs ${
-                        stats.readyForApproval === 0 
+                        stats.readyForReview === 0 
                           ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
                           : "bg-green-100 text-green-800 hover:bg-green-100"
                       }`}
                     >
-                      {stats.readyForApproval === 0 ? "None ready" : `${stats.readyForApproval} ready`}
+                      {stats.readyForReview === 0 ? "None ready" : `${stats.readyForReview} ready`}
                     </Badge>
                   </div>
                 )}

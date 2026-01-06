@@ -230,7 +230,7 @@ export function FinalDecisions() {
       }
       
       // Show success message
-      const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to assessment';
+      const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to verification';
       const notificationSuffix = decision === 'return_to_assessment' ? '' : ' SMS and email notifications sent.';
       setSuccessMessage(`Application ${actionText} successfully!${notificationSuffix}`);
       
@@ -434,7 +434,7 @@ export function FinalDecisions() {
                               <SelectItem value="return_to_assessment">
                                 <div className="flex items-center gap-2">
                                   <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                  Return to Assessment
+                                  Return to Verification
                                 </div>
                               </SelectItem>
                             </SelectContent>
@@ -459,14 +459,14 @@ export function FinalDecisions() {
                 ? "Approve Application" 
                 : decisionType === "reject" 
                   ? "Reject Application" 
-                  : "Return Application to Assessment"}
+                  : "Return Application to Verification"}
             </DialogTitle>
             <DialogDescription>
               {decisionType === "approve" 
                 ? "You are about to approve this water permit application. This decision is final."
                 : decisionType === "reject"
                   ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the assessment stage. Please provide specific instructions for the assessors."
+                  : "You are about to return this application to the verification stage. Please provide specific instructions for the verifier."
               }
             </DialogDescription>
           </DialogHeader>
@@ -504,7 +504,7 @@ export function FinalDecisions() {
               ) : (
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Assessment Instructions (Required)"}
+                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Verification Instructions (Required)"}
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Select value={decisionReasonPreset} onValueChange={(v)=>{ setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>

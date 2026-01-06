@@ -54,21 +54,21 @@ function buildDecisionCopy(params: {
     return { sms, email: { subject, title, text, type: 'success' as const } }
   }
 
-  if (decision === 'return_to_assessment') {
+    if (decision === 'return_to_assessment') {
     const reasonLine = reason ? ` Details: ${reason}` : ''
-    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} is undergoing further technical assessment. No action is required from you at this time. Support: ${supportEmail}.`
-    const subject = `Further assessment in progress — ${applicationNumber}`
-    const title = 'Further Assessment in Progress'
+    const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} is undergoing further verification. No action is required from you at this time. Support: ${supportEmail}.`
+    const subject = `Further verification in progress — ${applicationNumber}`
+    const title = 'Further Verification in Progress'
     const text = [
       `Dear ${applicantName},`,
       ``,
-      `Your water permit application (${applicationNumber}) has been returned for further technical assessment by the board.`,
+      `Your water permit application (${applicationNumber}) has been returned for further verification by the board.`,
       ``,
       `Current Status:`,
-      `The application is being reviewed again to ensure all technical requirements are met. You do not need to take any action at this time.`,
+      `The application is being verified again to ensure all requirements are met. You do not need to take any action at this time.`,
       ``,
       `What to do next:`,
-      `- We will notify you once the assessment is complete and a final decision is made.`,
+      `- We will notify you once the verification is complete and a final decision is made.`,
       `- You can continue to track your application status in the portal.`,
       ``,
       `Portal: ${portalUrl}`,
@@ -244,12 +244,12 @@ export async function POST(req: NextRequest) {
         .eq('id', applicationId)
       if (updErr) throw updErr
     } else {
-      // return_to_assessment
+      // return_to_assessment (updated workflow: return to verification stage)
       const { error: updErr } = await supabase
         .from('applications')
         .update({
-          status: 'pending_assessment',
-          internal_notes: `Returned from Approval for further assessment: ${reason.trim()}`,
+          status: 'pending_verification',
+          internal_notes: `Returned from Approval for further verification: ${reason.trim()}`,
           assigned_approver_id: approver.id,
           updated_at: now,
         })

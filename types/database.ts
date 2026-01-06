@@ -15,7 +15,7 @@ export type Json =
 // ENUMS
 // =============================================
 
-export type UserRole = 'applicant' | 'assessor' | 'reviewer' | 'inspector' | 'admin' | 'approver'
+export type UserRole = 'applicant' | 'assessor' | 'reviewer' | 'verifier' | 'inspector' | 'admin' | 'approver'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
 export type AccountType = 'individual' | 'company' | 'cooperative' | 'organization' | 'institution'
 export type IdType = 'national_id' | 'tin'
@@ -26,6 +26,8 @@ export type ApplicationStatus =
   | 'submitted' 
   | 'under_review' 
   | 'pending_assessment'
+  | 'pending_review'
+  | 'pending_verification'
   | 'pending_final_approval'
   | 'approved' 
   | 'approved_pending_permit'

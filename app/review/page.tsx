@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-// import { ProtectedRoute } from "@/components/auth/protected-route"; // TEMPORARY: Disabled for testing
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -56,14 +56,14 @@ export default function ReviewerDashboard() {
         setLoading(true);
         setError(null);
 
-        // Fetch applications that are in review stages with applicant info
-         const { data, error } = await supabase
+        // Fetch all applications (powers the "All Applications" tab).
+        // We filter locally for the action queue (pending_review).
+        const { data, error } = await supabase
            .from('applications')
            .select(`
              *,
              applicant:users!applicant_id(first_name, last_name, company_name)
            `)
-           .in('status', ['submitted', 'under_review', 'pending_assessment', 'pending_final_approval', 'revision_required'])
            .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -122,11 +122,11 @@ export default function ReviewerDashboard() {
       try {
         setStatsLoading(true);
         
-        // Query for new submissions (submitted status)
+        // Query for applications pending review
         const { count: newSubmissionsCount, error: newError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'submitted');
+          .eq('status', 'pending_review');
         
         if (newError) throw newError;
 
@@ -172,7 +172,7 @@ export default function ReviewerDashboard() {
 
   // Filter applications by status
   const newSubmissions = useMemo(() => 
-    reviewApplications.filter(app => app.status === 'submitted'), 
+    reviewApplications.filter(app => app.status === 'pending_review'), 
     [reviewApplications]
   );
   
@@ -192,11 +192,14 @@ export default function ReviewerDashboard() {
   );
 
   const getStatusBadge = (status: ApplicationStatus) => {
-    const statusConfig: Record<ApplicationStatus, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+    // Keep flexible to avoid runtime issues if DB gains new statuses.
+    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
-      submitted: { label: "Submitted", variant: "secondary" },
+      submitted: { label: "Submitted", variant: "secondary" }, // legacy
       under_review: { label: "Under Review", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
+      pending_review: { label: "Pending Review", variant: "default" },
+      pending_verification: { label: "Pending Verification", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved: { label: "Approved", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
@@ -205,7 +208,7 @@ export default function ReviewerDashboard() {
       approved_pending_permit: { label: "Pending Terms Acceptance", variant: "default" },
     };
     
-    const config = statusConfig[status];
+    const config = statusConfig[status] || { label: status, variant: "outline" as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -220,28 +223,6 @@ export default function ReviewerDashboard() {
     try {
       setStartingReview(application.id);
       
-      // Update application status to under_review when starting review
-      const { error } = await supabase
-        .from('applications')
-        .update({ status: 'under_review' })
-        .eq('id', application.id);
-
-      if (error) {
-        console.error('Error updating application status:', error);
-        alert('Failed to start review. Please try again.');
-        setStartingReview(null);
-        return;
-      }
-
-      // Update the local state to reflect the status change
-      setReviewApplications(prevApps =>
-        prevApps.map(app =>
-          app.id === application.id 
-            ? { ...app, status: 'under_review' as ApplicationStatus }
-            : app
-        )
-      );
-
       // Navigate to the review page
       router.push(`/review/application/${application.application_number}`);
     } catch (err) {
@@ -309,6 +290,14 @@ export default function ReviewerDashboard() {
 
     const getReviewStatusBadge = (status: string) => {
       const statusConfig = {
+        'pending_review': {
+          label: 'Pending Review',
+          className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800'
+        },
+        'pending_verification': {
+          label: 'Pending Verification',
+          className: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800'
+        },
         'submitted': { 
           label: 'Submitted', 
           className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
@@ -429,7 +418,7 @@ export default function ReviewerDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                  {app.status === 'submitted' ? (
+                  {app.status === 'pending_review' ? (
                     <Button 
                       size="sm" 
                       onClick={() => handleStartReview(app)}
@@ -504,7 +493,7 @@ export default function ReviewerDashboard() {
   }
 
   return (
-    // <ProtectedRoute allowedRoles={['reviewer']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['reviewer', 'admin', 'approver']} requireProfile={true}>
       <DashboardLayout>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -758,7 +747,7 @@ export default function ReviewerDashboard() {
           </Card>
         </div>
       </motion.div>
-    </DashboardLayout>
-    // </ProtectedRoute>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

@@ -348,6 +348,12 @@ export default function ApplicationDetailPage() {
         return <Badge variant="outline" className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">Under Review</Badge>;
       case "pending_inspection":
         return <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-purple-200">Pending Inspection</Badge>;
+      case "pending_assessment":
+        return <Badge variant="outline" className="bg-purple-100 text-purple-700 hover:bg-purple-100 border-purple-200">Pending Assessment</Badge>;
+      case "pending_review":
+        return <Badge variant="outline" className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200">Pending Review</Badge>;
+      case "pending_verification":
+        return <Badge variant="outline" className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-indigo-200">Pending Verification</Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved</Badge>;
       case "approved_pending_permit":

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -388,18 +389,29 @@ export default function ReviewApplicationPage() {
     }
   };
 
-  const handleApproveForAssessment = async () => {
+  const handleRecommendForVerification = async () => {
     if (!application) return;
     
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       const { error } = await supabase
         .from('applications')
-        .update({ status: 'pending_assessment' })
+        .update({ status: 'pending_verification', updated_at: new Date().toISOString() })
         .eq('id', application.id);
 
       if (error) throw error;
 
-      alert("Application approved for technical assessment");
+      await supabase.from('workflow_history').insert({
+        application_id: application.id,
+        from_status: application.status,
+        to_status: 'pending_verification',
+        action: 'review_recommended',
+        comment: 'Reviewer recommended proceeding to verification.',
+        user_id: user?.id
+      });
+
+      alert("Application recommended and forwarded to verification");
       // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
       router.refresh();
     } catch (err) {
@@ -408,19 +420,40 @@ export default function ReviewApplicationPage() {
     }
   };
 
-  const handleReturnForRevision = async () => {
+  const handleReturnToAssessment = async () => {
     if (!application || !revisionNotes.trim()) return;
     
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('applications')
         .update({ 
-          status: 'revision_required',
-          revision_notes: revisionNotes.trim()
+          status: 'pending_assessment',
+          updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
 
       if (error) throw error;
+
+      // Persist the return reason as a review record so it shows up in ApplicationComments.
+      await supabase
+        .from('reviews')
+        .insert([{
+          application_id: application.id,
+          reviewer_id: user?.id,
+          review_stage: 'review',
+          overall_comments: revisionNotes.trim(),
+          status: 'returned'
+        }]);
+
+      await supabase.from('workflow_history').insert({
+        application_id: application.id,
+        from_status: application.status,
+        to_status: 'pending_assessment',
+        action: 'returned_to_assessment',
+        comment: `Returned to assessment: ${revisionNotes.trim()}`,
+        user_id: user?.id
+      });
 
       setShowRevisionDialog(false);
       setRevisionNotes("");
@@ -455,7 +488,8 @@ export default function ReviewApplicationPage() {
         .from('applications')
         .update({
           assigned_reviewer_id: selectedAction,
-          status: 'under_review',
+          // Keep the application in pending_review; assignment should not change workflow stage.
+          status: 'pending_review',
           updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
@@ -468,7 +502,7 @@ export default function ReviewApplicationPage() {
         .insert({
           application_id: application.id,
           from_status: application.status,
-          to_status: 'under_review',
+          to_status: 'pending_review',
           action: 'transfer',
           comment: `Application transferred to ${selectedStaff.first_name} ${selectedStaff.last_name} (${selectedStaff.role})`,
           user_id: selectedAction
@@ -491,27 +525,31 @@ export default function ReviewApplicationPage() {
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
-    const statusConfig: Record<ApplicationStatus, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+    // Keep flexible to avoid runtime issues if DB gains new statuses.
+    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
+      pending_review: { label: "Pending Review", variant: "default" },
+      pending_verification: { label: "Pending Verification", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       pending_payment: { label: "Pending Payment", variant: "secondary" },
       approved: { label: "Approved", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
+      expired: { label: "Expired", variant: "outline" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
     };
     
-    const config = statusConfig[status];
+    const config = statusConfig[status] || { label: status, variant: "outline" as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const shouldShowReviewActions = (status: ApplicationStatus): boolean => {
     // Only show review actions for applications that haven't been finalized
-    const reviewableStatuses: ApplicationStatus[] = ['submitted', 'under_review'];
+    const reviewableStatuses: ApplicationStatus[] = ['pending_review', 'under_review'];
     const finalizedStatuses: ApplicationStatus[] = ['approved', 'rejected'];
     return reviewableStatuses.includes(status) && !finalizedStatuses.includes(status);
   };
@@ -562,18 +600,19 @@ export default function ReviewApplicationPage() {
   const showReviewActions = shouldShowReviewActions(application.status);
 
   return (
-    <DashboardLayout>
-      <div className="flex justify-end p-6">
-        <UserProfileButton />
-      </div>
-      
-      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6 pb-8"
-        >
+    <ProtectedRoute allowedRoles={['reviewer', 'admin', 'approver']} requireProfile={true}>
+      <DashboardLayout>
+        <div className="flex justify-end p-6">
+          <UserProfileButton />
+        </div>
+        
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6 pb-8"
+          >
           {/* Header */}
           <div className="space-y-6">
             <div className="flex items-center">
@@ -653,7 +692,7 @@ export default function ReviewApplicationPage() {
           )}
 
           {/* Review Actions Section - Compact */}
-          {(application.status === 'submitted' || application.status === 'under_review') && (
+          {(application.status === 'pending_review' || application.status === 'under_review') && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -669,12 +708,12 @@ export default function ReviewApplicationPage() {
                     </div>
                     
                     <Button 
-                      onClick={handleApproveForAssessment}
+                      onClick={handleRecommendForVerification}
                       size="sm"
                       className="gap-1"
                     >
                       <Check className="h-3 w-3" />
-                      Approve for Assessment
+                      Recommend & Send to Verification
                     </Button>
                     
                     <Button 
@@ -684,7 +723,7 @@ export default function ReviewApplicationPage() {
                       className="gap-1"
                     >
                       <X className="h-3 w-3" />
-                      Return for Revision
+                      Return to Assessment
                     </Button>
 
                     <div className="flex items-center gap-2">
@@ -773,8 +812,8 @@ export default function ReviewApplicationPage() {
               {application.id && <ApplicationComments applicationId={application.id} />}
             </TabsContent>
           </Tabs>
-        </motion.div>
-      </div>
+          </motion.div>
+        </div>
 
       {/* Success Confirmation Dialog */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
@@ -782,11 +821,10 @@ export default function ReviewApplicationPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-600" />
-              Application Returned for Revision
+              Application Returned to Assessment
             </DialogTitle>
             <DialogDescription>
-              The application has been successfully returned to the applicant with your revision notes. 
-              They will be notified and can resubmit once the required changes are made.
+              The application has been successfully returned to the assessor team with your notes for correction.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -801,9 +839,9 @@ export default function ReviewApplicationPage() {
       <Dialog open={showRevisionDialog} onOpenChange={setShowRevisionDialog}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Return Application for Revision</DialogTitle>
+            <DialogTitle>Return Application to Assessment</DialogTitle>
             <DialogDescription>
-              Please provide detailed notes about what needs to be corrected or updated in this application.
+              Please provide a clear explanation of what needs to be corrected by the assessor before re-review.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -830,16 +868,17 @@ export default function ReviewApplicationPage() {
               Cancel
             </Button>
             <Button 
-              onClick={handleReturnForRevision}
+              onClick={handleReturnToAssessment}
               disabled={!revisionNotes.trim()}
               className="gap-2"
             >
               <X className="h-4 w-4" />
-              Return for Revision
+              Return to Assessment
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

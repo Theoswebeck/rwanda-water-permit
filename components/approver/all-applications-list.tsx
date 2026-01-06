@@ -95,6 +95,8 @@ export function AllApplicationsList() {
       under_review: "bg-yellow-100 text-yellow-700 border-yellow-200",
       pending_inspection: "bg-orange-100 text-orange-700 border-orange-200",
       pending_assessment: "bg-purple-100 text-purple-700 border-purple-200",
+      pending_review: "bg-amber-100 text-amber-700 border-amber-200",
+      pending_verification: "bg-indigo-100 text-indigo-700 border-indigo-200",
       pending_final_approval: "bg-purple-100 text-purple-700 border-purple-200",
       approved_pending_permit: "bg-green-100 text-green-700 border-green-200",
       approved: "bg-green-100 text-green-700 border-green-200",

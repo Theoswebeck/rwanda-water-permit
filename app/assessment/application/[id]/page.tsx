@@ -310,8 +310,8 @@ export default function AssessmentApplicationPage() {
   const [activeTab, setActiveTab] = useState<string>("");
   const tabTouchedRef = useRef(false);
 
-  // Allow assessment edits while the application is actively under review or pending assessment.
-  // Once it's forwarded to approver (pending_final_approval) it must be view-only.
+  // Allow assessment edits while the application is actively under assessment.
+  // Once it's forwarded to the next stage (pending_review or beyond) it must be view-only.
   const isEditableAssessment =
     application?.status === "pending_assessment" ||
     application?.status === "under_review";
@@ -764,7 +764,7 @@ export default function AssessmentApplicationPage() {
       const { error: appError } = await supabase
         .from('applications')
         .update({ 
-          status: 'pending_final_approval',
+          status: 'pending_review',
           updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
@@ -776,9 +776,9 @@ export default function AssessmentApplicationPage() {
       await supabase.from('workflow_history').insert({
         application_id: application.id,
         from_status: application.status,
-        to_status: 'pending_final_approval',
+        to_status: 'pending_review',
         action: 'assessment_completed',
-        comment: `Assessment completed. Recommendation: ${recommendation.recommendation === 'yes' ? 'Approve' : 'Reject'}.`,
+        comment: `Assessment completed. Recommendation: ${recommendation.recommendation === 'yes' ? 'Approve' : 'Reject'}. Forwarded to review.`,
         user_id: user?.id
       });
       

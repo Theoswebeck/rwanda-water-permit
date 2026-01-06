@@ -526,20 +526,25 @@ export default function AssessmentPage() {
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
-    const statusConfig: Record<ApplicationStatus, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
+    // Keep flexible to avoid runtime issues if DB gains new statuses.
+    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
+      pending_review: { label: "Pending Review", variant: "default" },
+      pending_verification: { label: "Pending Verification", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
+      pending_payment: { label: "Pending Payment", variant: "secondary" },
       approved: { label: "Approved", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
+      expired: { label: "Expired", variant: "outline" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
     };
     
-    const config = statusConfig[status];
+    const config = statusConfig[status] || { label: status, variant: "outline" as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
