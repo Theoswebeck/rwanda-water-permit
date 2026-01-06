@@ -314,10 +314,12 @@ export function prefillAssessmentReportFromApplication(
   const requiredDocuments: AssessmentReportData['requiredDocuments'] = [
     {
       key: 'application_letter_through_district',
-      label: 'Application letter through District',
+      label: 'Application letter',
       ...(() => {
         const d =
           findDoc([/application/, /letter/]) ||
+          findDoc([/cover/, /letter/]) ||
+          findDoc([/letter/, /rwb/]) ||
           findDoc([/letter/, /district/]) ||
           findDoc([/letter/]);
         if (!d) return { provided: false as const };
@@ -330,9 +332,21 @@ export function prefillAssessmentReportFromApplication(
     },
     {
       key: 'registration_certificate',
-      label: 'Registration Certificate',
+      label: 'Registration certificate',
       ...(() => {
-        const d = findDoc([/registration/, /certificate/]) || findDoc([/certificate/]);
+        const d =
+          // Explicit phrasing
+          findDoc([/registration/, /certificate/]) ||
+          findDoc([/certificate/, /registration/]) ||
+          findDoc([/certificate/, /incorporation/]) ||
+          findDoc([/incorporation/, /certificate/]) ||
+          findDoc([/certificate/, /company/]) ||
+          // Common Rwanda institutions for registration docs (RDB, RGB, RCA)
+          findDoc([/(rdb|rgb|rca)/, /(certificate|cert|registration)/]) ||
+          findDoc([/(rdb|rgb|rca)/]) ||
+          // Fallback: "certificate" alone is noisy, but keep as last resort
+          findDoc([/registration/]) ||
+          findDoc([/certificate/]);
         if (!d) return { provided: false as const };
         return {
           provided: true as const,
