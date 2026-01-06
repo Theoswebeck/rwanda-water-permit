@@ -653,7 +653,7 @@ export default function ReviewerDashboard() {
               </Select>
             </div>
                   <ApplicationTable 
-                    applications={reviewApplications.filter(app => app.status === 'pending_review' || app.status === 'submitted')}
+                    applications={reviewApplications.filter(app => app.status === 'pending_review')}
                     emptyMessage="Applications for Review"
                   />
             </TabsContent>

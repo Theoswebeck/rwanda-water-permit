@@ -7,34 +7,32 @@ import dynamic from "next/dynamic";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
+import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
+import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
+import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
+import { determineReportType, mergeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
+import type { RecommendationData } from "@/components/inspection/verification-summary";
+import { cn } from "@/lib/utils";
 import { 
   ArrowLeft, 
   Check, 
   X, 
   Send, 
   FileText, 
-  MessageSquare, 
-  Download,
-  AlertCircle,
   AlertTriangle,
   CheckCircle,
-  Clock,
-  User as UserIcon,
   Loader2,
   XCircle,
-  User,
-  MapPin,
-  Droplets
+  ClipboardCheck
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
@@ -42,6 +40,24 @@ import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+
+type BannerKind = "success" | "error" | "info";
+type UIBanner = {
+  scope: string;
+  kind: BannerKind;
+  title: string;
+  description?: string;
+};
+
+const BANNER_STORAGE_KEY = "waterpermit:uiBanner";
+
+function persistBanner(banner: UIBanner) {
+  try {
+    sessionStorage.setItem(BANNER_STORAGE_KEY, JSON.stringify({ ...banner, ts: Date.now() }));
+  } catch {
+    // ignore (storage may be unavailable)
+  }
+}
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -165,6 +181,35 @@ export default function ReviewApplicationPage() {
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
 
+  // Assessment evidence (read-only) - matches Assessment/Approver UX
+  const [documentVerifications, setDocumentVerifications] = useState<
+    Record<string, { status: VerificationStatus; notes: string }>
+  >({});
+  const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
+  const [fieldReportSummary, setFieldReportSummary] = useState("");
+  const [inspectorName, setInspectorName] = useState("");
+  const [inspectionDate, setInspectionDate] = useState("");
+  const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
+  const [recommendation, setRecommendation] = useState<RecommendationData>({ recommendation: null, explanationText: "" });
+  const [reportType, setReportType] = useState<ReportType>("abstraction");
+  const [banner, setBanner] = useState<Omit<UIBanner, "scope"> | null>(null);
+
+  useEffect(() => {
+    // Restore any persisted banner after a router.refresh()
+    try {
+      const raw = sessionStorage.getItem(BANNER_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<UIBanner> & { ts?: number };
+        if (parsed && parsed.scope && parsed.scope === (params.id as string) && parsed.kind && parsed.title) {
+          setBanner({ kind: parsed.kind, title: parsed.title, description: parsed.description });
+          sessionStorage.removeItem(BANNER_STORAGE_KEY);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [params.id]);
+
   useEffect(() => {
     const fetchApplicationDetails = async () => {
       try {
@@ -281,6 +326,56 @@ export default function ReviewApplicationPage() {
         setInitialDocuments(documentMap);
         console.log('📄 Final document map:', documentMap);
         console.log('📄 Documents found:', appData.documents?.length || 0, 'documents');
+
+        // Fetch existing assessment evidence (read-only)
+        const { data: existingAssessment } = await supabase
+          .from('technical_assessments')
+          .select('*')
+          .eq('application_id', appData.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const savedAssessmentReportData =
+          (existingAssessment as any)?.assessment_report_data as Partial<AssessmentReportData> | null | undefined;
+
+        if (existingAssessment) {
+          setDocumentVerifications(existingAssessment.document_verifications || {});
+          setFieldReportSummary(existingAssessment.field_report_summary || "");
+          setInspectorName(existingAssessment.inspector_name || "");
+          setInspectionDate(existingAssessment.inspection_date || "");
+          setRecommendation({
+            recommendation: existingAssessment.recommendation as "yes" | "no" | null,
+            explanationText: existingAssessment.explanation_text || ""
+          });
+
+          if (existingAssessment.field_report_files && Array.isArray(existingAssessment.field_report_files)) {
+            const files = existingAssessment.field_report_files.map((path: string) => {
+              const name = path.split('/').pop() || 'File';
+              const timestampMatch = name.match(/^(\d+)-/);
+              const uploadedAt = timestampMatch
+                ? new Date(parseInt(timestampMatch[1])).toISOString()
+                : existingAssessment.created_at;
+
+              return {
+                id: Math.random().toString(36).substr(2, 9),
+                name: name.replace(/^\d+-/, ''),
+                path,
+                size: 0,
+                type: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg',
+                uploadedAt
+              };
+            });
+            setFieldReportFiles(files);
+          }
+        }
+
+        // Prefill assessment report template from current application + merge saved assessor inputs
+        const rt: ReportType = determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null);
+        setReportType(rt);
+        const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
+        const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
+        setAssessmentReportData(mergedReport);
 
         // Fetch comments from reviews table
         const { data: reviewData, error: reviewError } = await supabase
@@ -411,12 +506,16 @@ export default function ReviewApplicationPage() {
         user_id: user?.id
       });
 
-      alert("Application recommended and forwarded to verification");
-      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
+      persistBanner({
+        scope: params.id as string,
+        kind: "success",
+        title: "Sent to verification",
+        description: "Application recommended and forwarded to verification.",
+      });
       router.refresh();
     } catch (err) {
       console.error('Error updating application:', err);
-      alert('Failed to update application');
+      setBanner({ kind: "error", title: "Action failed", description: "Failed to update application. Please try again." });
     }
   };
 
@@ -510,7 +609,12 @@ export default function ReviewApplicationPage() {
         
       if (workflowError) throw workflowError;
       
-      alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
+      persistBanner({
+        scope: params.id as string,
+        kind: "success",
+        title: "Transferred",
+        description: `Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}.`,
+      });
       setSelectedAction('');
       
       // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
@@ -518,7 +622,7 @@ export default function ReviewApplicationPage() {
       
     } catch (error) {
       console.error('Error transferring application:', error);
-      alert('Failed to transfer application. Please try again.');
+      setBanner({ kind: "error", title: "Transfer failed", description: "Failed to transfer application. Please try again." });
     } finally {
       setTransferLoading(false);
     }
@@ -691,95 +795,126 @@ export default function ReviewApplicationPage() {
             </Alert>
           )}
 
-          {/* Review Actions Section - Compact */}
+          {/* Review Actions (aligned with Assessment/Approver UX) */}
           {(application.status === 'pending_review' || application.status === 'under_review') && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, delay: 0.1 }}
-              className="mb-6"
+              className="space-y-4"
             >
-              <Card className="border border-border bg-background">
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <FileText className="h-4 w-4" />
-                      Review Actions:
-                    </div>
-                    
-                    <Button 
-                      onClick={handleRecommendForVerification}
-                      size="sm"
-                      className="gap-1"
-                    >
-                      <Check className="h-3 w-3" />
-                      Recommend & Send to Verification
-                    </Button>
-                    
-                    <Button 
-                      onClick={() => setShowRevisionDialog(true)}
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                    >
-                      <X className="h-3 w-3" />
-                      Return to Assessment
-                    </Button>
+              <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
+                <div className="flex items-center gap-2 mr-auto">
+                  <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-gray-50 text-gray-700 border-gray-200">
+                    <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                    Review Actions
+                  </Badge>
+                </div>
 
-                    <div className="flex items-center gap-2">
-                      <Select value={selectedAction} onValueChange={setSelectedAction}>
-                        <SelectTrigger className="w-[180px] h-8">
-                          <SelectValue placeholder="Transfer to..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {staff.map((staffMember) => (
-                            <SelectItem key={staffMember.id} value={staffMember.id}>
-                              {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
-                            </SelectItem>
-                          ))}
-                          {staff.length === 0 && (
-                            <SelectItem value="no-staff" disabled>
-                              No staff members available
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
+                <Button
+                  size="sm"
+                  className="bg-black hover:bg-gray-800 text-white gap-2"
+                  onClick={handleRecommendForVerification}
+                >
+                  <Check className="h-4 w-4" />
+                  Send to Verification
+                </Button>
 
-                      <Button 
-                        onClick={handleTransferApplication}
-                        variant="secondary"
-                        size="sm"
-                        disabled={!selectedAction || transferLoading || selectedAction === 'no-staff'}
-                        className="gap-1"
-                      >
-                        {transferLoading ? (
-                          <>
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Transferring...
-                          </>
-                        ) : (
-                          <>
-                            <Send className="h-3 w-3" />
-                            Transfer
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setShowRevisionDialog(true)}
+                >
+                  <X className="h-4 w-4" />
+                  Return to Assessment
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-3 p-4 bg-muted/30 border rounded-lg">
+                <span className="text-sm font-medium">Transfer ownership:</span>
+                <Select value={selectedAction} onValueChange={setSelectedAction}>
+                  <SelectTrigger className="w-[220px] h-9">
+                    <SelectValue placeholder="Select reviewer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {staff.map((staffMember) => (
+                      <SelectItem key={staffMember.id} value={staffMember.id}>
+                        {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
+                      </SelectItem>
+                    ))}
+                    {staff.length === 0 && (
+                      <SelectItem value="no-staff" disabled>
+                        No staff members available
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  onClick={handleTransferApplication}
+                  variant="secondary"
+                  size="sm"
+                  disabled={!selectedAction || transferLoading || selectedAction === "no-staff"}
+                  className="gap-2"
+                >
+                  {transferLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Transferring...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Transfer
+                    </>
+                  )}
+                </Button>
+              </div>
             </motion.div>
+          )}
+
+          {/* Success/Error Banner */}
+          {banner && (
+            <Alert
+              className={cn(
+                "flex items-start justify-between gap-4 border shadow-sm",
+                banner.kind === "success" && "border-green-200 bg-green-50/60",
+                banner.kind === "error" && "border-red-200 bg-red-50/60",
+                banner.kind === "info" && "border-slate-200 bg-slate-50/60"
+              )}
+            >
+              <CheckCircle
+                className={cn(
+                  "h-4 w-4",
+                  banner.kind === "success" && "text-green-700",
+                  banner.kind === "error" && "text-red-700",
+                  banner.kind === "info" && "text-slate-700"
+                )}
+              />
+              <div className="flex-1">
+                <AlertTitle className={cn(banner.kind === "success" && "text-green-900", banner.kind === "error" && "text-red-900")}>
+                  {banner.title}
+                </AlertTitle>
+                {banner.description ? <AlertDescription>{banner.description}</AlertDescription> : null}
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => setBanner(null)}>
+                Dismiss
+              </Button>
+            </Alert>
           )}
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
-              <TabsTrigger value="internal_notes">Internal Notes & History</TabsTrigger>
+              <TabsTrigger value="doc_verification">Document Verification</TabsTrigger>
+              <TabsTrigger value="field_report">Field Report</TabsTrigger>
+              <TabsTrigger value="internal_notes">History & Notes</TabsTrigger>
             </TabsList>
 
             {/* Application Details Tab */}
-            <TabsContent value="application_details" className="space-y-6">
+            <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
               {/* Application Form in Read-only Mode */}
               {initialFormData && (
                 <ApplicationForm 
@@ -807,8 +942,48 @@ export default function ReviewApplicationPage() {
               )}
             </TabsContent>
 
+            {/* Document Verification Tab (read-only) */}
+            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
+              <DocumentVerificationComponent
+                documents={application.documents || []}
+                verifications={documentVerifications}
+                onVerificationsChange={() => {}}
+                readOnly={true}
+              />
+            </TabsContent>
+
+            {/* Field Report Tab (read-only) */}
+            <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
+              <FieldReportUpload
+                applicationId={application.id}
+                existingFiles={fieldReportFiles}
+                summary={fieldReportSummary}
+                inspectorName={inspectorName}
+                inspectionDate={inspectionDate}
+                onFilesChange={() => {}}
+                onSummaryChange={() => {}}
+                onInspectorNameChange={() => {}}
+                onInspectionDateChange={() => {}}
+                inspectorNameReadOnly={true}
+                readOnly={true}
+                hideSummary={true}
+                showInlineValidation={false}
+                betweenDetailsAndDocuments={
+                  <AssessmentReportForm
+                    reportData={assessmentReportData}
+                    onReportDataChange={() => {}}
+                    reportType={reportType}
+                    readOnly={true}
+                    inspectionDate={inspectionDate}
+                    recommendation={recommendation}
+                    onRecommendationChange={() => {}}
+                  />
+                }
+              />
+            </TabsContent>
+
             {/* Internal Notes Tab */}
-            <TabsContent value="internal_notes" className="space-y-6">
+            <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               {application.id && <ApplicationComments applicationId={application.id} />}
             </TabsContent>
           </Tabs>
