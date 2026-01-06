@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -19,11 +19,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2, Droplets, FileCheck } from "lucide-react";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck } from "lucide-react";
 import Link from "next/link";
-import { useApplications } from "@/hooks/useApplications";
 import { supabase } from "@/lib/supabase";
-import type { Application, ApplicationStatus } from "@/types/database";
+import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 
 interface ReviewApplication extends Application {
@@ -169,55 +168,6 @@ export default function ReviewerDashboard() {
 
     fetchReviewStats();
   }, []);
-
-  // Filter applications by status
-  const newSubmissions = useMemo(() => 
-    reviewApplications.filter(app => app.status === 'pending_review'), 
-    [reviewApplications]
-  );
-  
-  const pendingAssessment = useMemo(() => 
-    reviewApplications.filter(app => app.status === 'pending_assessment'), 
-    [reviewApplications]
-  );
-  
-  const readyForFinalReview = useMemo(() => 
-    reviewApplications.filter(app => app.status === 'under_review'), 
-    [reviewApplications]
-  );
-  
-  const needsRevision = useMemo(() => 
-    reviewApplications.filter(app => app.status === 'revision_required'), 
-    [reviewApplications]
-  );
-
-  const getStatusBadge = (status: ApplicationStatus) => {
-    // Keep flexible to avoid runtime issues if DB gains new statuses.
-    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
-      draft: { label: "Draft", variant: "outline" },
-      submitted: { label: "Submitted", variant: "secondary" }, // legacy
-      under_review: { label: "Under Review", variant: "default" },
-      pending_assessment: { label: "Pending Assessment", variant: "outline" },
-      pending_review: { label: "Pending Review", variant: "default" },
-      pending_verification: { label: "Pending Verification", variant: "outline" },
-      pending_final_approval: { label: "Pending Approval", variant: "default" },
-      approved: { label: "Approved", variant: "default" },
-      rejected: { label: "Rejected", variant: "destructive" },
-      revision_required: { label: "Needs Revision", variant: "secondary" },
-      cancelled: { label: "Cancelled", variant: "outline" },
-      approved_pending_permit: { label: "Pending Terms Acceptance", variant: "default" },
-    };
-    
-    const config = statusConfig[status] || { label: status, variant: "outline" as const };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-
-  const getSLAStatus = (daysRemaining: number | null) => {
-    if (daysRemaining === null) return <span className="text-muted-foreground">N/A</span>;
-    if (daysRemaining < 0) return <Badge variant="destructive">Overdue</Badge>;
-    if (daysRemaining <= 1) return <Badge variant="outline">Due today</Badge>;
-    return <span className="text-muted-foreground">In {daysRemaining} days</span>;
-  };
 
   const handleStartReview = async (application: ReviewApplication) => {
     try {
@@ -703,7 +653,7 @@ export default function ReviewerDashboard() {
               </Select>
             </div>
                   <ApplicationTable 
-                    applications={reviewApplications.filter(app => app.status === 'submitted')}
+                    applications={reviewApplications.filter(app => app.status === 'pending_review' || app.status === 'submitted')}
                     emptyMessage="Applications for Review"
                   />
             </TabsContent>

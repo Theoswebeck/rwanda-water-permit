@@ -21,7 +21,8 @@ function normalizeRole(input: unknown): string {
 }
 
 // ⚡ PERFORMANCE: Define protected routes statically to avoid repeated checks
-const PROTECTED_ROUTES = ['/dashboard', '/admin', '/approver', '/inspection', '/inspector', '/review', '/assessment', '/apply']
+// NOTE: Keep this in sync with role dashboards/routes (e.g. verifier -> /verification).
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/approver', '/inspection', '/inspector', '/review', '/assessment', '/verification', '/apply']
 const AUTH_PAGES = ['/login', '/register']
 
 // ⚡ PERFORMANCE: Role-based route access defined statically
@@ -31,6 +32,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   inspector: ['/inspection', '/inspector'],
   reviewer: ['/review', '/assessment'],
   assessor: ['/review', '/assessment'],
+  verifier: ['/verification'],
   applicant: ['/dashboard', '/apply']
 }
 
@@ -41,6 +43,7 @@ const ROLE_DASHBOARDS: Record<string, string> = {
   inspector: '/inspection',
   reviewer: '/review',
   assessor: '/review',
+  verifier: '/verification',
   applicant: '/dashboard'
 }
 
@@ -173,6 +176,7 @@ export const config = {
     '/inspector/:path*',
     '/approver/:path*',
     '/assessment/:path*',
+    '/verification/:path*',
     '/apply/:path*',
     '/login',
     '/register'
