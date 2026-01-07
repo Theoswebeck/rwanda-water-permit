@@ -24,6 +24,10 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
+import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
+import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
+import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -39,6 +43,7 @@ interface ReviewStatsData {
 
 export default function ReviewerDashboard() {
   const router = useRouter();
+  const [topTab, setTopTab] = useState<"review" | "inspections">("review");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [reviewApplications, setReviewApplications] = useState<ReviewApplication[]>([]);
@@ -56,7 +61,7 @@ export default function ReviewerDashboard() {
         setError(null);
 
         // Fetch all applications (powers the "All Applications" tab).
-        // We filter locally for the action queue (pending_review).
+        // We filter locally for the action queue ("submitted" per role-scoped workflow).
         const { data, error } = await supabase
            .from('applications')
            .select(`
@@ -121,11 +126,11 @@ export default function ReviewerDashboard() {
       try {
         setStatsLoading(true);
         
-        // Query for applications pending review
+        // Query for new submissions (submitted status)
         const { count: newSubmissionsCount, error: newError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_review');
+          .eq('status', 'submitted');
         
         if (newError) throw newError;
 
@@ -487,7 +492,7 @@ export default function ReviewerDashboard() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Awaiting initial review
+                  Awaiting assignment to assessor
                 </p>
                 {!statsLoading && stats && (
                   <div className="flex items-center mt-2">
@@ -621,6 +626,24 @@ export default function ReviewerDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
+          <StaffTopTabs
+            value={topTab}
+            onValueChange={(v) => setTopTab(v as any)}
+            tabs={[
+              { value: "review", label: "Review" },
+              { value: "inspections", label: "Inspections" },
+            ]}
+          />
+
+          {topTab === "review" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck className="h-5 w-5" />
+                Review Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
                              <Tabs defaultValue="applications_to_review" className="w-full">
                  <TabsList className="grid w-full grid-cols-3">
                    <TabsTrigger value="applications_to_review">Applications for Review</TabsTrigger>
@@ -658,7 +681,7 @@ export default function ReviewerDashboard() {
               </Select>
             </div>
                   <ApplicationTable 
-                    applications={reviewApplications.filter(app => app.status === 'pending_review')}
+                    applications={reviewApplications.filter(app => app.status === 'submitted')}
                     emptyMessage="Applications for Review"
                   />
             </TabsContent>
@@ -700,6 +723,11 @@ export default function ReviewerDashboard() {
           </Tabs>
             </CardContent>
           </Card>
+          ) : (
+            <div className="space-y-6">
+              <InspectionsWorkbench />
+            </div>
+          )}
         </div>
       </motion.div>
       </DashboardLayout>

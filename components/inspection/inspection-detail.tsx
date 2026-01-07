@@ -20,6 +20,29 @@ interface Inspection {
   result?: string
   scheduled_date: string
   completed_date?: string
+  inspection_template?: string
+  operator_name?: string
+  operator_id_tin?: string
+  operator_residence?: string
+  catchment_level1?: string
+  catchment_level2?: string
+  allowed_quantity?: number
+  allowed_unit?: string
+  authorized_abstraction_method?: string
+  actual_quantity?: number
+  actual_unit?: string
+  actual_abstraction_method?: string
+  measurement_device_type?: string
+  authorized_surface_area_ha?: number
+  actual_surface_area_ha?: number
+  authorized_concession_boundaries?: any
+  actual_concession_boundaries?: any
+  employment_gender_breakdown?: any
+  ohs_gender_sensitive?: any
+  water_use_conflicts?: string
+  catchment_protection_initiatives?: string
+  general_conclusion?: string
+  recommendations?: string
   location_verified?: boolean
   coordinates_verified?: boolean
   site_plan_compliance?: boolean
@@ -130,6 +153,27 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
     return new Date(dateString).toLocaleDateString()
   }
 
+  const formatNum = (n: any) => {
+    const v = Number(n)
+    if (!Number.isFinite(v)) return "N/A"
+    return v.toLocaleString()
+  }
+
+  const renderBoundaries = (value: any) => {
+    if (!Array.isArray(value) || value.length === 0) return <p className="text-sm text-muted-foreground">N/A</p>
+    return (
+      <div className="space-y-2">
+        {value.map((row: any, idx: number) => (
+          <div key={idx} className="text-sm">
+            <span className="font-medium">{row?.beacon ?? `B${idx + 1}`}</span>
+            <span className="text-muted-foreground"> — </span>
+            <span>Lat: {row?.latitude ?? "N/A"}, Lng: {row?.longitude ?? "N/A"}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   const getApplicantName = (applicant: Inspection['application']['applicant']) => {
     return applicant.company_name || `${applicant.first_name} ${applicant.last_name}`
   }
@@ -235,6 +279,10 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
               <p className="text-sm font-medium text-muted-foreground">Status</p>
               <p className="capitalize">{inspection.status.replace('_', ' ')}</p>
             </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Template</p>
+              <p className="capitalize">{inspection.inspection_template?.replace('_', ' ') || "N/A"}</p>
+            </div>
           </div>
           {inspection.completed_date && (
             <div>
@@ -242,6 +290,142 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
               <p>{formatDate(inspection.completed_date)}</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Locked / identity fields */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Permit holder / operator</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Operator name</p>
+              <p>{inspection.operator_name || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Operator ID/TIN</p>
+              <p>{inspection.operator_id_tin || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Operator residence</p>
+              <p>{inspection.operator_residence || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Catchment Level I</p>
+              <p>{inspection.catchment_level1 || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Catchment Level II</p>
+              <p>{inspection.catchment_level2 || "N/A"}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Permit specifics */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Permit specifics</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {inspection.inspection_template === "concession" ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Authorized surface area (Ha)</p>
+                  <p>{inspection.authorized_surface_area_ha != null ? formatNum(inspection.authorized_surface_area_ha) : "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Actual surface area (Ha)</p>
+                  <p>{inspection.actual_surface_area_ha != null ? formatNum(inspection.actual_surface_area_ha) : "N/A"}</p>
+                </div>
+              </div>
+              <Separator />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Authorized concession boundaries</p>
+                {renderBoundaries(inspection.authorized_concession_boundaries)}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-2">Actual concession boundaries</p>
+                {renderBoundaries(inspection.actual_concession_boundaries)}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Allowed quantity</p>
+                  <p>
+                    {inspection.allowed_quantity != null ? formatNum(inspection.allowed_quantity) : "N/A"}{" "}
+                    {inspection.allowed_unit || ""}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Authorized abstraction method</p>
+                  <p>{inspection.authorized_abstraction_method || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Actual quantity</p>
+                  <p>
+                    {inspection.actual_quantity != null ? formatNum(inspection.actual_quantity) : "N/A"}{" "}
+                    {inspection.actual_unit || ""}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Actual abstraction method</p>
+                  <p>{inspection.actual_abstraction_method || "N/A"}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Measurement device type</p>
+                <p>{inspection.measurement_device_type || "N/A"}</p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Social & OHS */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Social & OHS</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Employment (gender-disaggregated)</p>
+            <pre className="mt-2 text-xs bg-muted p-3 rounded-md overflow-auto">{JSON.stringify(inspection.employment_gender_breakdown || {}, null, 2)}</pre>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">OHS (gender-sensitive)</p>
+            <pre className="mt-2 text-xs bg-muted p-3 rounded-md overflow-auto">{JSON.stringify(inspection.ohs_gender_sensitive || {}, null, 2)}</pre>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Narrative sections */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Conclusion & recommendations</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Water use conflicts</p>
+            <p className="whitespace-pre-wrap">{inspection.water_use_conflicts || "N/A"}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Initiatives to protect environment/catchment</p>
+            <p className="whitespace-pre-wrap">{inspection.catchment_protection_initiatives || "N/A"}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">General conclusion</p>
+            <p className="whitespace-pre-wrap">{inspection.general_conclusion || "N/A"}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">Recommendations</p>
+            <p className="whitespace-pre-wrap">{inspection.recommendations || "N/A"}</p>
+          </div>
         </CardContent>
       </Card>
 

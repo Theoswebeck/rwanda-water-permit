@@ -20,11 +20,16 @@ import {
 } from "@/components/ui/table";
 import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2, Droplets, FileCheck, Calendar, Filter } from "lucide-react";
 import Link from "next/link";
-import { useApplications } from "@/hooks/useApplications";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
+import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
+import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
 import { formatDate } from "@/lib/utils";
+import { ProtectedRoute } from "@/components/auth/protected-route";
+import { useAuth } from "@/contexts/AuthContext";
+import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 
 interface AssessmentApplication extends Application {
   applicant_name?: string;
@@ -40,6 +45,7 @@ interface AssessmentStatsData {
 
 export default function AssessmentDashboard() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortBy, setSortBy] = useState<"earliest" | "latest">("earliest");
@@ -50,24 +56,31 @@ export default function AssessmentDashboard() {
   const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
   const [stats, setStats] = useState<AssessmentStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [topTab, setTopTab] = useState<"assessment" | "inspections">("assessment");
 
   // Fetch applications for assessment
   useEffect(() => {
     const fetchAssessmentApplications = async () => {
       try {
+        if (authLoading) return;
+        if (!user?.id) {
+          setAssessmentApplications([]);
+          return;
+        }
+
         setLoading(true);
         setError(null);
 
-        // Fetch applications that are in assessment stages with applicant info
+        // Fetch only applications assigned to this assessor and in assessment stages
         const { data, error } = await supabase
           .from('applications')
           .select(`
             *,
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
-          // New flow: submitted -> pending_assessment/under_review -> pending_review
-          // Keep legacy status 'under_review' for in-progress assessments.
-          .in('status', ['submitted', 'pending_assessment', 'under_review'])
+          .eq('assigned_assessor_id', user.id)
+          // Assessment stages
+          .in('status', ['pending_assessment', 'under_review'])
           .order('created_at', { ascending: sortBy === "earliest" });
 
         if (error) throw error;
@@ -117,42 +130,49 @@ export default function AssessmentDashboard() {
     };
 
     fetchAssessmentApplications();
-  }, [sortBy]);
+  }, [sortBy, user?.id, authLoading]);
 
   // Fetch assessment statistics from database
   useEffect(() => {
     const fetchAssessmentStats = async () => {
       try {
+        if (authLoading) return;
+        if (!user?.id) return;
+
         setStatsLoading(true);
         
-        // Query for new submissions (submitted status)
+        // Query for assigned applications pending assessment
         const { count: newSubmissionsCount, error: newError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'submitted');
+          .eq('assigned_assessor_id', user.id)
+          .eq('status', 'pending_assessment');
         
         if (newError) throw newError;
 
-        // Query for applications pending assessment
+        // Query for applications under assessment
         const { count: pendingAssessmentCount, error: pendingError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_assessment');
+          .eq('assigned_assessor_id', user.id)
+          .eq('status', 'under_review');
         
         if (pendingError) throw pendingError;
 
-        // Query for applications under assessment
+        // Query for applications ready for review (post-assessment handoff)
         const { count: underAssessmentCount, error: assessmentError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'under_review');
+          .eq('assigned_assessor_id', user.id)
+          .eq('status', 'pending_review');
         
         if (assessmentError) throw assessmentError;
 
-        // Query for applications ready for review (post-assessment handoff)
+        // Keep legacy stat field for UI (readyForReview)
         const { count: readyForReviewCount, error: approvalError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
+          .eq('assigned_assessor_id', user.id)
           .eq('status', 'pending_review');
         
         if (approvalError) throw approvalError;
@@ -160,7 +180,7 @@ export default function AssessmentDashboard() {
         setStats({
           newSubmissions: newSubmissionsCount || 0,
           pendingAssessment: pendingAssessmentCount || 0,
-          underAssessment: underAssessmentCount || 0,
+          underAssessment: pendingAssessmentCount || 0,
           readyForReview: readyForReviewCount || 0
         });
       } catch (err) {
@@ -171,7 +191,7 @@ export default function AssessmentDashboard() {
     };
 
     fetchAssessmentStats();
-  }, []);
+  }, [user?.id, authLoading]);
 
   const handleStartAssessment = async (application: AssessmentApplication) => {
     try {
@@ -674,24 +694,33 @@ export default function AssessmentDashboard() {
             </Card>
           </div>
 
-          {/* Main Content with Tabs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileCheck className="h-5 w-5" />
-                Assessment Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="applications_to_assess" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="applications_to_assess">Applications for Assessment</TabsTrigger>
-                  <TabsTrigger value="all_applications">All Applications</TabsTrigger>
-                  <TabsTrigger value="map" className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Concession Map
-                  </TabsTrigger>
-                </TabsList>
+          <StaffTopTabs
+            value={topTab}
+            onValueChange={(v) => setTopTab(v as any)}
+            tabs={[
+              { value: "assessment", label: "Assessment" },
+              { value: "inspections", label: "Inspections" },
+            ]}
+          />
+
+          {topTab === "assessment" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileCheck className="h-5 w-5" />
+                  Assessment Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="applications_to_assess" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="applications_to_assess">Applications for Assessment</TabsTrigger>
+                    <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                    <TabsTrigger value="map" className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Concession Map
+                    </TabsTrigger>
+                  </TabsList>
 
                 {/* Tab Contents */}
                 <TabsContent value="applications_to_assess" className="space-y-4 mt-6">
@@ -783,9 +812,14 @@ export default function AssessmentDashboard() {
                 <TabsContent value="map" className="space-y-4 mt-6">
                   <WaterConcessionMap />
                 </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+                </Tabs>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              <InspectionsWorkbench />
+            </div>
+          )}
         </div>
       </motion.div>
     </DashboardLayout>

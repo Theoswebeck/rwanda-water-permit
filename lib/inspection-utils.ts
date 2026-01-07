@@ -6,6 +6,7 @@
 
 import { supabase } from './supabase';
 import type { Application, Permit, User } from '@/types/database';
+import { geometryToCoordinatePolygons } from '@/lib/geoUtils';
 
 export interface PermitInspectionData {
   application: Application & {
@@ -34,6 +35,9 @@ export interface PrepopulatedInspectionData {
   residence: string;
   representative: string;
   contacts: string;
+  operatorName?: string;
+  operatorIdTin?: string;
+  operatorResidence?: string;
   
   // Section 2: Activity Details
   activityType: string;
@@ -48,6 +52,8 @@ export interface PrepopulatedInspectionData {
   waterSourceName: string;
   waterSourceLocation: string;
   coordinates?: string;
+  catchmentLevel1?: string;
+  catchmentLevel2?: string;
   district: string;
   sector: string;
   cell: string;
@@ -150,6 +156,95 @@ async function fetchPaymentHistory(applicationId: string): Promise<PaymentRecord
   }
 }
 
+function safeParseInternalNotes(notes: unknown): Record<string, any> | null {
+  if (!notes) return null;
+  if (typeof notes !== 'string') return null;
+  try {
+    const parsed = JSON.parse(notes);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, any>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function pickFirstDefined<T>(...values: Array<T | undefined | null>): T | undefined {
+  return values.find(v => v !== undefined && v !== null) as T | undefined;
+}
+
+function getPrimaryLatLngFromGeometry(geometry: any): { lat: number; lng: number } | null {
+  try {
+    const polygons = geometryToCoordinatePolygons(geometry);
+    if (!polygons || polygons.length === 0) return null;
+
+    // If it's a single point, use it
+    if (polygons.length === 1 && polygons[0].length === 1) {
+      const p = polygons[0][0];
+      const lat = Number(p.latitude);
+      const lng = Number(p.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+      return null;
+    }
+
+    // Otherwise compute a simple centroid-ish average of the first polygon ring
+    const points = polygons[0];
+    const nums = points
+      .map(p => ({ lat: Number(p.latitude), lng: Number(p.longitude) }))
+      .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+    if (nums.length === 0) return null;
+    const lat = nums.reduce((s, p) => s + p.lat, 0) / nums.length;
+    const lng = nums.reduce((s, p) => s + p.lng, 0) / nums.length;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
+function extractLockedFieldsFromNotes(internal: Record<string, any> | null): {
+  operatorName?: string;
+  operatorIdTin?: string;
+  operatorResidence?: string;
+  catchmentLevel1?: string;
+  catchmentLevel2?: string;
+} {
+  if (!internal) return {};
+
+  const operatorName = pickFirstDefined(
+    internal.operatorName,
+    internal.operator_name,
+    internal.operator_full_name,
+    internal.nameOperator,
+    internal.name_operator
+  );
+  const operatorIdTin = pickFirstDefined(
+    internal.operatorIdTin,
+    internal.operator_id_tin,
+    internal.operatorIdTIN,
+    internal.operator_id,
+    internal.operatorTin,
+    internal.operator_tin
+  );
+  const operatorResidence = pickFirstDefined(
+    internal.operatorResidence,
+    internal.operator_residence,
+    internal.operatorAddress,
+    internal.operator_address
+  );
+  const catchmentLevel1 = pickFirstDefined(
+    internal.catchmentLevel1,
+    internal.catchment_level1,
+    internal.level1Catchment,
+    internal.level_one_catchment
+  );
+  const catchmentLevel2 = pickFirstDefined(
+    internal.catchmentLevel2,
+    internal.catchment_level2,
+    internal.level2Catchment,
+    internal.level_two_catchment
+  );
+
+  return { operatorName, operatorIdTin, operatorResidence, catchmentLevel1, catchmentLevel2 };
+}
+
 /**
  * Prepare pre-populated inspection data from application and permit records
  */
@@ -159,6 +254,8 @@ function prepareInspectionData(
   paymentHistory: PaymentRecord[]
 ): PrepopulatedInspectionData {
   const applicant = application.applicant;
+  const internal = safeParseInternalNotes(application.internal_notes);
+  const locked = extractLockedFieldsFromNotes(internal);
   
   // Section 1: Permit Holder Identification
   const permitHolderName = applicant?.company_name || 
@@ -186,9 +283,8 @@ function prepareInspectionData(
   
   // Section 4: Water Source
   const waterSourceName = application.water_source?.replace(/_/g, ' ')?.toUpperCase() || 'N/A';
-  const coordinates = application.coordinates 
-    ? `Lat: ${application.coordinates.lat}, Lng: ${application.coordinates.lng}`
-    : 'N/A';
+  const primary = getPrimaryLatLngFromGeometry(application.coordinates);
+  const coordinates = primary ? `Lat: ${primary.lat}, Lng: ${primary.lng}` : 'N/A';
   
   const waterSourceLocation = [
     application.village,
@@ -214,6 +310,9 @@ function prepareInspectionData(
     residence,
     representative,
     contacts,
+    operatorName: locked.operatorName,
+    operatorIdTin: locked.operatorIdTin,
+    operatorResidence: locked.operatorResidence,
     activityType,
     activityStartingDate,
     permitNumber,
@@ -222,6 +321,8 @@ function prepareInspectionData(
     waterSourceName,
     waterSourceLocation,
     coordinates,
+    catchmentLevel1: locked.catchmentLevel1,
+    catchmentLevel2: locked.catchmentLevel2,
     district: application.district,
     sector: application.sector,
     cell: application.cell,

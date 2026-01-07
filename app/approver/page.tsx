@@ -22,6 +22,10 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { AllApplicationsList } from "@/components/approver/all-applications-list";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
+import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
+import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 
 interface DashboardStats {
   pendingFinalApproval: number;
@@ -36,6 +40,7 @@ export default function ApproverDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [topTab, setTopTab] = useState<"approval" | "inspections">("approval");
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -148,24 +153,33 @@ export default function ApproverDashboard() {
           </Card>
         </div>
 
-        {/* Main Content with Tabs */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileCheck className="h-5 w-5" />
-              Approval Management
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="pending_approval" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="pending_approval">Pending Approval</TabsTrigger>
-                <TabsTrigger value="all_applications">All Applications</TabsTrigger>
-                <TabsTrigger value="map" className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4" />
-                  Concession Map
-                </TabsTrigger>
-              </TabsList>
+        <StaffTopTabs
+          value={topTab}
+          onValueChange={(v) => setTopTab(v as any)}
+          tabs={[
+            { value: "approval", label: "Application Approval" },
+            { value: "inspections", label: "Inspections" },
+          ]}
+        />
+
+        {topTab === "approval" ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileCheck className="h-5 w-5" />
+                Approval Management
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Tabs defaultValue="pending_approval" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="pending_approval">Pending Approval</TabsTrigger>
+                  <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                  <TabsTrigger value="map" className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    Concession Map
+                  </TabsTrigger>
+                </TabsList>
 
               {/* Tab Contents */}
               <TabsContent value="pending_approval" className="space-y-4 mt-6">
@@ -179,9 +193,14 @@ export default function ApproverDashboard() {
               <TabsContent value="map" className="space-y-4 mt-6">
                 <WaterConcessionMap />
               </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+              </Tabs>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            <InspectionsWorkbench />
+          </div>
+        )}
       </motion.div>
       </div>
     // </ProtectedRoute>

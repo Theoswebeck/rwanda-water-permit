@@ -96,13 +96,27 @@ CREATE INDEX IF NOT EXISTS idx_inspections_status ON public.inspections(status);
 -- NOTE: This makes the table usable immediately in the app once you start writing inspections.
 ALTER TABLE public.inspections ENABLE ROW LEVEL SECURITY;
 
--- Inspectors can manage their own inspections
-DROP POLICY IF EXISTS "Inspectors can manage their inspections" ON public.inspections;
-CREATE POLICY "Inspectors can manage their inspections"
+-- Assessors can manage their own inspections (assessor-only write)
+DROP POLICY IF EXISTS "Assessors can manage their inspections" ON public.inspections;
+CREATE POLICY "Assessors can manage their inspections"
   ON public.inspections
   FOR ALL
-  USING (auth.uid() = inspector_id)
-  WITH CHECK (auth.uid() = inspector_id);
+  USING (
+    auth.uid() = inspector_id
+    AND EXISTS (
+      SELECT 1 FROM public.users
+      WHERE public.users.id = auth.uid()
+        AND public.users.role = 'assessor'
+    )
+  )
+  WITH CHECK (
+    auth.uid() = inspector_id
+    AND EXISTS (
+      SELECT 1 FROM public.users
+      WHERE public.users.id = auth.uid()
+        AND public.users.role = 'assessor'
+    )
+  );
 
 -- Applicants can view inspections linked to their applications
 DROP POLICY IF EXISTS "Users can view inspections for their applications" ON public.inspections;
@@ -126,7 +140,7 @@ CREATE POLICY "Staff can view all inspections"
     EXISTS (
       SELECT 1 FROM public.users
       WHERE public.users.id = auth.uid()
-        AND public.users.role IN ('reviewer', 'inspector', 'admin', 'approver', 'verifier')
+        AND public.users.role IN ('assessor', 'reviewer', 'inspector', 'admin', 'approver', 'verifier')
     )
   );
 

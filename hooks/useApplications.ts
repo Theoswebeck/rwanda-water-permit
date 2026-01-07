@@ -69,6 +69,10 @@ export function useApplications({
         query = query.eq('assigned_reviewer_id', filters.assigned_reviewer_id)
       }
 
+      if (filters?.assigned_assessor_id) {
+        query = query.eq('assigned_assessor_id', filters.assigned_assessor_id)
+      }
+
       if (filters?.assigned_inspector_id) {
         query = query.eq('assigned_inspector_id', filters.assigned_inspector_id)
       }

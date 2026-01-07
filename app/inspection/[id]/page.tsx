@@ -1,6 +1,6 @@
 import { Metadata } from "next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { InspectionDetail } from "@/components/inspection/inspection-detail"
+import { InspectionDetailTabs } from "@/components/inspection/inspection-detail-tabs"
 
 export const metadata: Metadata = {
   title: "Inspection Details | Rwanda Water Resources Board",
@@ -27,7 +27,7 @@ export default async function InspectionDetailPage({ params }: { params: Promise
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <InspectionDetail inspectionId={id} />
+          <InspectionDetailTabs inspectionId={id} />
         </CardContent>
       </Card>
     </div>

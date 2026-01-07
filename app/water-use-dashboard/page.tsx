@@ -215,15 +215,6 @@ export default function WaterUseDashboardPage() {
     return items;
   }, [registry, sort]);
 
-  const momChip = useMemo(() => {
-    if (!snapshot) return null;
-    const pct = snapshot.permitsIssuedMoMPercent;
-    if (pct === null) return { label: "No last month baseline", tone: "neutral" as const };
-    if (pct > 0) return { label: `Increased ${pct.toFixed(0)}% from last month`, tone: "up" as const };
-    if (pct < 0) return { label: `Decreased ${Math.abs(pct).toFixed(0)}% from last month`, tone: "down" as const };
-    return { label: "No change from last month", tone: "neutral" as const };
-  }, [snapshot]);
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-muted/40">
       <div className="container mx-auto px-4 py-10">
@@ -286,21 +277,6 @@ export default function WaterUseDashboardPage() {
                   <div className="mt-1 text-3xl font-semibold">
                     {isLoading ? <Skeleton className="h-9 w-20" /> : formatNumber(snapshot?.statusCounts?.active ?? 0)}
                   </div>
-                  {momChip ? (
-                    <div className="mt-3 inline-flex items-center rounded-full border px-2 py-1 text-xs bg-background/60">
-                      <span
-                        className={
-                          momChip.tone === "up"
-                            ? "text-emerald-700"
-                            : momChip.tone === "down"
-                              ? "text-rose-700"
-                              : "text-muted-foreground"
-                        }
-                      >
-                        {momChip.label}
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
                 <div className="rounded-2xl border bg-muted/20 p-4 relative">
                   <div className="text-sm text-muted-foreground">Expired permits</div>

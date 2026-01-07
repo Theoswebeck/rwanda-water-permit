@@ -16,6 +16,10 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
+import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
+import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
+import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 
 interface VerificationApplication extends Application {
   applicant_name?: string;
@@ -37,6 +41,7 @@ export default function VerificationDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<VerificationStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [topTab, setTopTab] = useState<"verification" | "inspections">("verification");
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -423,24 +428,33 @@ export default function VerificationDashboard() {
               </Card>
             </div>
 
-            {/* Main Content with Tabs */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileCheck className="h-5 w-5" />
-                  Verification Management
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="applications_to_verify" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="applications_to_verify">Applications for Verification</TabsTrigger>
-                    <TabsTrigger value="all_applications">All Applications</TabsTrigger>
-                    <TabsTrigger value="map" className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Concession Map
-                    </TabsTrigger>
-                  </TabsList>
+            <StaffTopTabs
+              value={topTab}
+              onValueChange={(v) => setTopTab(v as any)}
+              tabs={[
+                { value: "verification", label: "Verification" },
+                { value: "inspections", label: "Inspections" },
+              ]}
+            />
+
+            {topTab === "verification" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileCheck className="h-5 w-5" />
+                    Verification Management
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue="applications_to_verify" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="applications_to_verify">Applications for Verification</TabsTrigger>
+                      <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                      <TabsTrigger value="map" className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Concession Map
+                      </TabsTrigger>
+                    </TabsList>
 
                   <TabsContent value="applications_to_verify" className="space-y-4 mt-6">
                     <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
@@ -508,9 +522,14 @@ export default function VerificationDashboard() {
                   <TabsContent value="map" className="space-y-4 mt-6">
                     <WaterConcessionMap />
                   </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6">
+                <InspectionsWorkbench />
+              </div>
+            )}
           </div>
         </motion.div>
     </DashboardLayout>

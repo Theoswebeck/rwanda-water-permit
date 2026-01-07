@@ -405,11 +405,11 @@ export default function ReviewApplicationPage() {
           setComments(formattedComments);
         }
         
-        // Fetch staff members for transfer functionality
+        // Fetch assessors for assignment functionality
         const { data: staffData, error: staffError } = await supabase
           .from('users')
           .select('id, first_name, last_name, role, email')
-          .in('role', ['reviewer', 'inspector', 'admin', 'approver'])
+          .in('role', ['assessor'])
           .eq('status', 'active')
           .order('role', { ascending: true })
           .order('first_name', { ascending: true });
@@ -573,11 +573,13 @@ export default function ReviewApplicationPage() {
     
     try {
       setTransferLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
       
       // Find the selected staff member
       const selectedStaff = staff.find(s => s.id === selectedAction);
       if (!selectedStaff) {
-        alert('Please select a valid reviewer');
+        alert('Please select a valid assessor');
         return;
       }
       
@@ -585,9 +587,9 @@ export default function ReviewApplicationPage() {
       const { error: updateError } = await supabase
         .from('applications')
         .update({
-          assigned_reviewer_id: selectedAction,
-          // Keep the application in pending_review; assignment should not change workflow stage.
-          status: 'pending_review',
+          assigned_assessor_id: selectedAction,
+          // Move submission to assessor queue
+          status: 'pending_assessment',
           updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
@@ -600,10 +602,10 @@ export default function ReviewApplicationPage() {
         .insert({
           application_id: application.id,
           from_status: application.status,
-          to_status: 'pending_review',
-          action: 'transfer',
-          comment: `Application transferred to ${selectedStaff.first_name} ${selectedStaff.last_name} (${selectedStaff.role})`,
-          user_id: selectedAction
+          to_status: 'pending_assessment',
+          action: 'assigned_to_assessor',
+          comment: `Application assigned to ${selectedStaff.first_name} ${selectedStaff.last_name} (${selectedStaff.role})`,
+          user_id: user?.id
         });
         
       if (workflowError) throw workflowError;
@@ -611,8 +613,8 @@ export default function ReviewApplicationPage() {
       persistBanner({
         scope: params.id as string,
         kind: "success",
-        title: "Transferred",
-        description: `Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}.`,
+        title: "Assigned",
+        description: `Application successfully assigned to ${selectedStaff.first_name} ${selectedStaff.last_name}.`,
       });
       setSelectedAction('');
       
@@ -620,8 +622,8 @@ export default function ReviewApplicationPage() {
       router.refresh();
       
     } catch (error) {
-      console.error('Error transferring application:', error);
-      setBanner({ kind: "error", title: "Transfer failed", description: "Failed to transfer application. Please try again." });
+      console.error('Error assigning application:', error);
+      setBanner({ kind: "error", title: "Assignment failed", description: "Failed to assign application. Please try again." });
     } finally {
       setTransferLoading(false);
     }
@@ -834,7 +836,7 @@ export default function ReviewApplicationPage() {
                 <span className="text-sm font-medium">Transfer ownership:</span>
                 <Select value={selectedAction} onValueChange={setSelectedAction}>
                   <SelectTrigger className="w-[220px] h-9">
-                    <SelectValue placeholder="Select reviewer..." />
+                    <SelectValue placeholder="Select assessor..." />
                   </SelectTrigger>
                   <SelectContent>
                     {staff.map((staffMember) => (
@@ -844,7 +846,7 @@ export default function ReviewApplicationPage() {
                     ))}
                     {staff.length === 0 && (
                       <SelectItem value="no-staff" disabled>
-                        No staff members available
+                        No assessors available
                       </SelectItem>
                     )}
                   </SelectContent>

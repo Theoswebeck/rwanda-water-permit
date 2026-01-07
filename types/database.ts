@@ -267,8 +267,10 @@ export interface Application {
   
   // Assignment tracking
   assigned_reviewer_id?: string
+  assigned_assessor_id?: string
   assigned_inspector_id?: string
   assigned_approver_id?: string
+  assigned_verifier_id?: string
   
   // SLA tracking
   sla_status: SlaStatus
@@ -292,8 +294,10 @@ export interface Application {
   // Joined relations (from Supabase queries with select joins)
   applicant?: any // User/applicant data when joined
   assigned_reviewer?: any
+  assigned_assessor?: any
   assigned_inspector?: any
   assigned_approver?: any
+  assigned_verifier?: any
   documents?: any[]
   payments?: any[]
 }
@@ -382,6 +386,14 @@ export interface Inspection {
   // Scheduling
   scheduled_date: string
   completed_date?: string
+
+  // Template selector + locked fields
+  inspection_template?: 'authorization' | 'concession'
+  operator_name?: string
+  operator_id_tin?: string
+  operator_residence?: string
+  catchment_level1?: string
+  catchment_level2?: string
   
   // Location verification
   location_verified?: boolean
@@ -467,6 +479,16 @@ export interface Inspection {
   // Section 12: Overall Assessment
   general_conclusion?: string
   compliance_status?: string
+
+  // Concession-specific (template = concession)
+  authorized_surface_area_ha?: number
+  actual_surface_area_ha?: number
+  authorized_concession_boundaries?: Json
+  actual_concession_boundaries?: Json
+
+  // Social/Gender + OHS
+  employment_gender_breakdown?: Json
+  ohs_gender_sensitive?: Json
   
   // Audit fields
   created_at: string
@@ -774,6 +796,7 @@ export interface ApplicationFilters {
   water_source?: WaterSourceType[]
   sla_status?: SlaStatus[]
   assigned_reviewer_id?: string
+  assigned_assessor_id?: string
   assigned_inspector_id?: string
   date_range?: {
     from: string
