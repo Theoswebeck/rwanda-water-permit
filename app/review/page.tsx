@@ -617,15 +617,7 @@ export default function ReviewerDashboard() {
             </Card>
           </div>
 
-          {/* Main Content with Tabs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileCheck className="h-5 w-5" />
-                Review Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          {/* Main Content */}
           <StaffTopTabs
             value={topTab}
             onValueChange={(v) => setTopTab(v as any)}
@@ -636,23 +628,23 @@ export default function ReviewerDashboard() {
           />
 
           {topTab === "review" ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileCheck className="h-5 w-5" />
-                Review Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-                             <Tabs defaultValue="applications_to_review" className="w-full">
-                 <TabsList className="grid w-full grid-cols-3">
-                   <TabsTrigger value="applications_to_review">Applications for Review</TabsTrigger>
-              <TabsTrigger value="all_applications">All Applications</TabsTrigger>
-              <TabsTrigger value="map" className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
-                Concession Map
-              </TabsTrigger>
-            </TabsList>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileCheck className="h-5 w-5" />
+                  Review Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="applications_to_review" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="applications_to_review">Applications for Review</TabsTrigger>
+                    <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                    <TabsTrigger value="map" className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Concession Map
+                    </TabsTrigger>
+                  </TabsList>
 
                 {/* Tab Contents */}
                 <TabsContent value="applications_to_review" className="space-y-4 mt-6">
@@ -719,10 +711,10 @@ export default function ReviewerDashboard() {
 
                 <TabsContent value="map" className="space-y-4 mt-6">
               <WaterConcessionMap />
-            </TabsContent>
-          </Tabs>
-            </CardContent>
-          </Card>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
           ) : (
             <div className="space-y-6">
               <InspectionsWorkbench />
