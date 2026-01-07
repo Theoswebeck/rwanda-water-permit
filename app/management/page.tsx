@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { ProvinceType, WaterPurpose, WaterSourceType } from "@/types/database";
 import { useManagementDashboardQuery } from "@/hooks/useManagementDashboardQuery";
+import { getDistricts, getSectors } from "@/lib/rwanda-administrative-data";
 
 type Period = "monthly" | "quarterly" | "annually";
 type SectionKey = "portfolio" | "allocation" | "compliance";
@@ -102,6 +103,16 @@ export default function ManagementDashboardPage() {
 
   const queryFilters = useMemo(() => filters, [filters]);
   const { data, isLoading, error, refetch, isFetching } = useManagementDashboardQuery(queryFilters);
+
+  const districtOptions = useMemo(() => {
+    if (filters.province === "all") return [];
+    return getDistricts(filters.province);
+  }, [filters.province]);
+
+  const sectorOptions = useMemo(() => {
+    if (filters.province === "all" || filters.district === "all") return [];
+    return getSectors(filters.province, filters.district);
+  }, [filters.province, filters.district]);
 
   return (
     <ProtectedRoute allowedRoles={["reviewer", "inspector", "verifier", "approver", "admin"]} requireProfile={true}>
@@ -213,7 +224,13 @@ export default function ManagementDashboardPage() {
 
                           <div className="space-y-2">
                             <div className="text-sm font-medium">Province</div>
-                            <Select value={filters.province} onValueChange={(v) => setFilters((p) => ({ ...p, province: v as FiltersState["province"] }))}>
+                            <Select
+                              value={filters.province}
+                              onValueChange={(v) => {
+                                // Changing province should reset district/sector to avoid invalid combinations.
+                                setFilters((p) => ({ ...p, province: v as FiltersState["province"], district: "all", sector: "all" }));
+                              }}
+                            >
                               <SelectTrigger>
                                 <SelectValue placeholder="All provinces" />
                               </SelectTrigger>
@@ -231,19 +248,46 @@ export default function ManagementDashboardPage() {
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2">
                               <div className="text-sm font-medium">District</div>
-                              <Input
-                                placeholder="All"
-                                value={filters.district === "all" ? "" : filters.district}
-                                onChange={(e) => setFilters((p) => ({ ...p, district: e.target.value ? e.target.value : "all" }))}
-                              />
+                              <Select
+                                value={filters.district}
+                                onValueChange={(v) => {
+                                  // Changing district should reset sector to avoid invalid combinations.
+                                  setFilters((p) => ({ ...p, district: v as FiltersState["district"], sector: "all" }));
+                                }}
+                                disabled={filters.province === "all"}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder={filters.province === "all" ? "Select province first" : "All"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All</SelectItem>
+                                  {districtOptions.map((d) => (
+                                    <SelectItem key={d} value={d}>
+                                      {d}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div className="space-y-2">
                               <div className="text-sm font-medium">Sector</div>
-                              <Input
-                                placeholder="All"
-                                value={filters.sector === "all" ? "" : filters.sector}
-                                onChange={(e) => setFilters((p) => ({ ...p, sector: e.target.value ? e.target.value : "all" }))}
-                              />
+                              <Select
+                                value={filters.sector}
+                                onValueChange={(v) => setFilters((p) => ({ ...p, sector: v as FiltersState["sector"] }))}
+                                disabled={filters.province === "all" || filters.district === "all"}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder={filters.district === "all" ? "Select district first" : "All"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">All</SelectItem>
+                                  {sectorOptions.map((s) => (
+                                    <SelectItem key={s} value={s}>
+                                      {s}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
 

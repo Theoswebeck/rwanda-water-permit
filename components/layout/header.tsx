@@ -12,6 +12,7 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
+  { label: "Water Use Dashboard", href: "/water-use-dashboard" },
   { label: "Regulations", href: "/regulations" },
   { label: "Resources", href: "/resources" },
   { label: "Contact", href: "/contact" },
