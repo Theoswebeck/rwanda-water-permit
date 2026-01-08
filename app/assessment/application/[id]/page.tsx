@@ -708,7 +708,6 @@ export default function AssessmentApplicationPage() {
 
     // Validate ONLY on submit click
     const missing: string[] = [];
-    if (fieldReportFiles.length === 0) missing.push("Field Report Documents");
     // Required documents (Section 2) must all be marked provided
     const requiredDocs = Array.isArray((assessmentReportData as any).requiredDocuments)
       ? ((assessmentReportData as any).requiredDocuments as any[])
@@ -749,17 +748,6 @@ export default function AssessmentApplicationPage() {
         .eq('id', application.id);
         
       if (appError) throw appError;
-      
-      // 3. Create workflow history
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: 'pending_review',
-        action: 'assessment_completed',
-        comment: `Assessment completed. Recommendation: ${recommendation.recommendation === 'yes' ? 'Approve' : 'Reject'}. Forwarded to review.`,
-        user_id: user?.id
-      });
       
       // Redirect to assessment dashboard
       router.push('/assessment');
@@ -805,17 +793,6 @@ export default function AssessmentApplicationPage() {
         .eq('id', application.id);
         
       if (appError) throw appError;
-      
-      // 3. Create workflow history
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: 'revision_required',
-        action: 'returned_for_revision',
-        comment: `Returned for revision: ${revisionNotes}`,
-        user_id: user?.id
-      });
       
       setShowRevisionDialog(false);
       setRevisionNotes("");
@@ -1123,6 +1100,9 @@ export default function AssessmentApplicationPage() {
                     onSummaryChange={setFieldReportSummary}
                     onInspectorNameChange={setInspectorName}
                     onInspectionDateChange={setInspectionDate}
+                    documentsTitle="Supporting Documents"
+                    documentsRequired={false}
+                    documentsDescription="Upload any supporting documents (optional): PDFs, Word docs, and photos"
                     inspectorNameReadOnly={true}
                     readOnly={isReadOnly}
                     hideSummary={true}

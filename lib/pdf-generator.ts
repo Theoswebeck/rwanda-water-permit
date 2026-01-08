@@ -501,11 +501,6 @@ function drawPermitQrFooter(opts: {
   const descLines = doc.splitTextToSize(desc, footerW - qrBox - 18);
   doc.text(descLines, marginX + 8, footerY + 18);
 
-  doc.setTextColor(7, 89, 133);
-  doc.setFontSize(8);
-  const urlLines = doc.splitTextToSize(verifyUrl, footerW - qrBox - 18);
-  doc.text(urlLines, marginX + 8, footerY + 30);
-
   // QR "card"
   doc.setDrawColor(226, 232, 240);
   doc.setFillColor(255, 255, 255);

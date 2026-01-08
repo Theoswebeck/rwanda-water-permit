@@ -182,7 +182,7 @@ export function NewInspectionForm() {
               name="inspectionDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Inspection Date</FormLabel>
+                  <FormLabel>Assessment Date</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -195,9 +195,9 @@ export function NewInspectionForm() {
               name="inspectorName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Inspector Name</FormLabel>
+                  <FormLabel>Assessment Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter inspector name" {...field} />
+                    <Input placeholder="Enter assessment name" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

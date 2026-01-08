@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
@@ -26,7 +25,6 @@ import {
   ArrowLeft, 
   Check, 
   X, 
-  Send, 
   FileText, 
   AlertTriangle,
   CheckCircle,
@@ -77,14 +75,6 @@ interface ApplicationWithRelations extends Application {
   applicant?: UserType;
   documents?: Document[];
   reviews?: Review[];
-}
-
-interface StaffMember {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  email: string;
 }
 
 interface Comment {
@@ -170,12 +160,9 @@ export default function ReviewApplicationPage() {
   const [error, setError] = useState<string | null>(null);
   const [newComment, setNewComment] = useState("");
   const [comments, setComments] = useState<Comment[]>([]);
-  const [selectedAction, setSelectedAction] = useState("");
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [transferLoading, setTransferLoading] = useState(false);
   
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
@@ -405,21 +392,6 @@ export default function ReviewApplicationPage() {
           setComments(formattedComments);
         }
         
-        // Fetch assessors for assignment functionality
-        const { data: staffData, error: staffError } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, role, email')
-          .in('role', ['assessor'])
-          .eq('status', 'active')
-          .order('role', { ascending: true })
-          .order('first_name', { ascending: true });
-          
-        if (staffError) {
-          console.error('Error fetching staff:', staffError);
-        } else {
-          setStaff(staffData || []);
-        }
-
       } catch (err) {
         console.error('Error fetching application:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch application');
@@ -496,15 +468,6 @@ export default function ReviewApplicationPage() {
 
       if (error) throw error;
 
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: 'pending_verification',
-        action: 'review_recommended',
-        comment: 'Reviewer recommended proceeding to verification.',
-        user_id: user?.id
-      });
-
       persistBanner({
         scope: params.id as string,
         kind: "success",
@@ -544,15 +507,6 @@ export default function ReviewApplicationPage() {
           status: 'returned'
         }]);
 
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: 'pending_assessment',
-        action: 'returned_to_assessment',
-        comment: `Returned to assessment: ${revisionNotes.trim()}`,
-        user_id: user?.id
-      });
-
       setShowRevisionDialog(false);
       setRevisionNotes("");
       setShowConfirmDialog(true);
@@ -566,67 +520,6 @@ export default function ReviewApplicationPage() {
     setShowConfirmDialog(false);
     // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
     router.refresh();
-  };
-
-  const handleTransferApplication = async () => {
-    if (!selectedAction || !application) return;
-    
-    try {
-      setTransferLoading(true);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Find the selected staff member
-      const selectedStaff = staff.find(s => s.id === selectedAction);
-      if (!selectedStaff) {
-        alert('Please select a valid assessor');
-        return;
-      }
-      
-      // Update application assignment in the database
-      const { error: updateError } = await supabase
-        .from('applications')
-        .update({
-          assigned_assessor_id: selectedAction,
-          // Move submission to assessor queue
-          status: 'pending_assessment',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', application.id);
-        
-      if (updateError) throw updateError;
-      
-      // Create a workflow record for the transfer
-      const { error: workflowError } = await supabase
-        .from('workflow_history')
-        .insert({
-          application_id: application.id,
-          from_status: application.status,
-          to_status: 'pending_assessment',
-          action: 'assigned_to_assessor',
-          comment: `Application assigned to ${selectedStaff.first_name} ${selectedStaff.last_name} (${selectedStaff.role})`,
-          user_id: user?.id
-        });
-        
-      if (workflowError) throw workflowError;
-      
-      persistBanner({
-        scope: params.id as string,
-        kind: "success",
-        title: "Assigned",
-        description: `Application successfully assigned to ${selectedStaff.first_name} ${selectedStaff.last_name}.`,
-      });
-      setSelectedAction('');
-      
-      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
-      router.refresh();
-      
-    } catch (error) {
-      console.error('Error assigning application:', error);
-      setBanner({ kind: "error", title: "Assignment failed", description: "Failed to assign application. Please try again." });
-    } finally {
-      setTransferLoading(false);
-    }
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {
@@ -832,46 +725,6 @@ export default function ReviewApplicationPage() {
                 </Button>
               </div>
 
-              <div className="flex items-center gap-3 p-4 bg-muted/30 border rounded-lg">
-                <span className="text-sm font-medium">Transfer ownership:</span>
-                <Select value={selectedAction} onValueChange={setSelectedAction}>
-                  <SelectTrigger className="w-[220px] h-9">
-                    <SelectValue placeholder="Select assessor..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {staff.map((staffMember) => (
-                      <SelectItem key={staffMember.id} value={staffMember.id}>
-                        {staffMember.first_name} {staffMember.last_name} ({staffMember.role})
-                      </SelectItem>
-                    ))}
-                    {staff.length === 0 && (
-                      <SelectItem value="no-staff" disabled>
-                        No assessors available
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  onClick={handleTransferApplication}
-                  variant="secondary"
-                  size="sm"
-                  disabled={!selectedAction || transferLoading || selectedAction === "no-staff"}
-                  className="gap-2"
-                >
-                  {transferLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Transferring...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4" />
-                      Transfer
-                    </>
-                  )}
-                </Button>
-              </div>
             </motion.div>
           )}
 

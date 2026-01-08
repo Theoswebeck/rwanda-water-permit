@@ -353,8 +353,8 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
       {/* Basic Information */}
       <SectionShell title="Basic Information">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ReadonlyField label="Inspector" value={`${inspection.inspector.first_name} ${inspection.inspector.last_name}`} />
-          <ReadonlyField label="Inspection Date" value={formatDate(inspection.completed_date || inspection.scheduled_date)} />
+          <ReadonlyField label="Assessment Name" value={`${inspection.inspector.first_name} ${inspection.inspector.last_name}`} />
+          <ReadonlyField label="Assessment Date" value={formatDate(inspection.completed_date || inspection.scheduled_date)} />
           <ReadonlyField label="Applicant" value={getApplicantName(inspection.application.applicant)} />
           <ReadonlyField label="Location" value={getLocationString(inspection.application)} />
           <ReadonlyField label="Water Source" value={getWaterSourceLabel(inspection.application.water_source)} />

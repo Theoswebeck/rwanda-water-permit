@@ -332,15 +332,6 @@ export default function VerificationApplicationPage() {
         status: "returned",
       }]);
 
-      await supabase.from("workflow_history").insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: "pending_review",
-        action: "returned_to_review",
-        comment: `Returned to review: ${returnNotes.trim()}`,
-        user_id: user?.id,
-      });
-
       setShowReturnDialog(false);
       setReturnNotes("");
       const nextBanner: UIBanner = {

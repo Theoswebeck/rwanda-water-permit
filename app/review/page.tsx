@@ -48,6 +48,12 @@ import { InspectionsWorkbench } from "@/components/inspection/inspections-workbe
 interface ReviewApplication extends Application {
   applicant_name?: string;
   sla_days_remaining?: number;
+  assigned_assessor_name?: string;
+  assigned_assessor?: {
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+  } | null;
 }
 
 interface ReviewStatsData {
@@ -88,6 +94,30 @@ export default function ReviewerDashboard() {
     return status === "submitted" || status === "pending_review" || status === "under_review";
   };
 
+  const isFinalizedStatus = (status: string | null | undefined) => {
+    return status === "approved" || status === "rejected";
+  };
+
+  const canAssignOrReassignFromReviewDashboard = (status: string | null | undefined) => {
+    // Per requirements: allow from queue + allow from All Applications for these workflow statuses.
+    return (
+      status === "submitted" ||
+      status === "pending_assessment" ||
+      status === "under_review"
+    );
+  };
+
+  const getAssessorLabelForApp = (app: ReviewApplication) => {
+    return app.assigned_assessor_name || "Unknown assessor";
+  };
+
+  const getAssignActionLabel = (app: ReviewApplication) => {
+    if (app.assigned_assessor_id) {
+      return `Reassign Assessor (from ${getAssessorLabelForApp(app)})`;
+    }
+    return "Assign to Assessor";
+  };
+
   // Fetch applications for review
   useEffect(() => {
     const fetchReviewApplications = async () => {
@@ -101,19 +131,26 @@ export default function ReviewerDashboard() {
            .from('applications')
            .select(`
              *,
-             applicant:users!applicant_id(first_name, last_name, company_name)
+             applicant:users!applicant_id(first_name, last_name, company_name),
+             assigned_assessor:users!assigned_assessor_id(first_name, last_name, email)
            `)
            .order('created_at', { ascending: false });
 
         if (error) throw error;
 
         // Process applications with calculated fields
-                 const processedApplications: ReviewApplication[] = data.map(app => {
+        const processedApplications: ReviewApplication[] = data.map(app => {
            const applicant = app.applicant as any;
            const applicantName = applicant?.company_name || 
                                 (applicant?.first_name && applicant?.last_name ? 
                                  `${applicant.first_name} ${applicant.last_name}` : 
                                  'Unknown Applicant');
+
+           const assignedAssessor = (app as any).assigned_assessor as ReviewApplication["assigned_assessor"];
+           const assignedAssessorName =
+             assignedAssessor?.first_name && assignedAssessor?.last_name
+               ? `${assignedAssessor.first_name} ${assignedAssessor.last_name}`
+               : assignedAssessor?.email || null;
 
            // Calculate SLA days remaining
            let slaRemaining: number | null = null;
@@ -128,7 +165,9 @@ export default function ReviewerDashboard() {
            return {
              ...app,
              applicant_name: applicantName,
-             sla_days_remaining: slaRemaining
+             sla_days_remaining: slaRemaining,
+             assigned_assessor: assignedAssessor ?? null,
+             assigned_assessor_name: assignedAssessorName ?? undefined
            };
          });
 
@@ -246,7 +285,8 @@ export default function ReviewerDashboard() {
   // Open the assignment dialog for a specific application
   const openAssignDialog = (application: ReviewApplication) => {
     setSelectedAppForAssignment(application);
-    setSelectedAssessorId("");
+    // Preselect current assessor when reassigning
+    setSelectedAssessorId(application.assigned_assessor_id || "");
     setAssignDialogOpen(true);
   };
 
@@ -266,27 +306,57 @@ export default function ReviewerDashboard() {
         return;
       }
 
-      // Update application with assigned assessor and status
-      const { error: updateError } = await supabase
+      const previousAssessorId = selectedAppForAssignment.assigned_assessor_id || null;
+      const previousAssessorLabel = selectedAppForAssignment.assigned_assessor_id
+        ? getAssessorLabelForApp(selectedAppForAssignment)
+        : null;
+
+      // Prevent no-op reassign
+      if (previousAssessorId && previousAssessorId === selectedAssessorId) {
+        alert('Please choose a different assessor to reassign this application.');
+        return;
+      }
+
+      const updatePayload = {
+        assigned_assessor_id: selectedAssessorId,
+        status: 'pending_assessment',
+        updated_at: new Date().toISOString()
+      };
+
+      // Atomic/conditional update to avoid overwriting concurrent changes
+      let updateQuery = supabase
         .from('applications')
-        .update({
-          assigned_assessor_id: selectedAssessorId,
-          status: 'pending_assessment',
-          updated_at: new Date().toISOString()
-        })
+        .update(updatePayload)
         .eq('id', selectedAppForAssignment.id);
 
+      if (previousAssessorId) {
+        updateQuery = updateQuery.eq('assigned_assessor_id', previousAssessorId);
+      } else {
+        updateQuery = updateQuery.is('assigned_assessor_id', null);
+      }
+
+      const { data: updatedRows, error: updateError } = await updateQuery.select('id, assigned_assessor_id, status');
       if (updateError) throw updateError;
+      if (!updatedRows || updatedRows.length === 0) {
+        alert('This application was updated by someone else (assignment changed). Please refresh and try again.');
+        return;
+      }
 
       // Create workflow history record
+      const isReassign = !!previousAssessorId;
+      const action = isReassign ? 'reassigned_assessor' : 'assigned_to_assessor';
+      const comment = isReassign
+        ? `Assessor reassigned from ${previousAssessorLabel || 'Unknown assessor'} to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`
+        : `Application assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`;
+
       const { error: workflowError } = await supabase
         .from('workflow_history')
         .insert({
           application_id: selectedAppForAssignment.id,
           from_status: selectedAppForAssignment.status,
           to_status: 'pending_assessment',
-          action: 'assigned_to_assessor',
-          comment: `Application assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`,
+          action,
+          comment,
           user_id: user?.id
         });
 
@@ -295,19 +365,31 @@ export default function ReviewerDashboard() {
         // Don't throw - the main update succeeded
       }
 
-      console.log(`✅ Application ${selectedAppForAssignment.application_number} assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name}`);
+      console.log(`✅ Application ${selectedAppForAssignment.application_number} ${isReassign ? 'reassigned' : 'assigned'} to ${selectedAssessor.first_name} ${selectedAssessor.last_name}`);
 
-      // Update local state to remove the assigned application from the list
+      // Update local state with the new assignment + forced status
       setReviewApplications(prev =>
         prev.map(app =>
           app.id === selectedAppForAssignment.id
-            ? { ...app, status: 'pending_assessment', assigned_assessor_id: selectedAssessorId }
+            ? {
+                ...app,
+                status: 'pending_assessment',
+                assigned_assessor_id: selectedAssessorId,
+                assigned_assessor: {
+                  first_name: selectedAssessor.first_name,
+                  last_name: selectedAssessor.last_name,
+                  email: selectedAssessor.email
+                },
+                assigned_assessor_name: `${selectedAssessor.first_name} ${selectedAssessor.last_name}`
+              }
             : app
         )
       );
 
-      // Update stats
-      if (stats) {
+      // Update stats conservatively: re-fetch is ideal, but keep this safe/minimal.
+      // - Assign from new submissions: shift counts.
+      // - Reassign or re-queue from other statuses: counts may already be in pending_assessment; leave unchanged.
+      if (stats && !isReassign && (selectedAppForAssignment.status === 'submitted' || selectedAppForAssignment.status === 'pending_review')) {
         setStats({
           ...stats,
           newSubmissions: Math.max(0, stats.newSubmissions - 1),
@@ -514,7 +596,7 @@ export default function ReviewerDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        {app.status === 'submitted' || app.status === 'pending_review' ? (
+                        {canAssignOrReassignFromReviewDashboard(app.status) && !isFinalizedStatus(app.status) ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -536,7 +618,7 @@ export default function ReviewerDashboard() {
                                 className="flex items-center cursor-pointer"
                               >
                                 <UserPlus className="h-4 w-4 mr-2" />
-                                Assign to Assessor
+                                {getAssignActionLabel(app)}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -876,10 +958,20 @@ export default function ReviewerDashboard() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5 text-blue-600" />
-                Assign to Assessor
+                {selectedAppForAssignment?.assigned_assessor_id ? "Reassign Assessor" : "Assign to Assessor"}
               </DialogTitle>
               <DialogDescription>
-                Assign application <span className="font-medium">{selectedAppForAssignment?.application_number}</span> to an assessor for review.
+                {selectedAppForAssignment?.assigned_assessor_id ? (
+                  <>
+                    Reassign application{" "}
+                    <span className="font-medium">{selectedAppForAssignment?.application_number}</span> from{" "}
+                    <span className="font-medium">{getAssessorLabelForApp(selectedAppForAssignment)}</span> to another assessor.
+                  </>
+                ) : (
+                  <>
+                    Assign application <span className="font-medium">{selectedAppForAssignment?.application_number}</span> to an assessor for review.
+                  </>
+                )}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
@@ -929,18 +1021,25 @@ export default function ReviewerDashboard() {
               </Button>
               <Button
                 onClick={handleAssignToAssessor}
-                disabled={!selectedAssessorId || assignLoading || selectedAssessorId === "no-assessors"}
+                disabled={
+                  !selectedAssessorId ||
+                  assignLoading ||
+                  selectedAssessorId === "no-assessors" ||
+                  (selectedAppForAssignment?.assigned_assessor_id
+                    ? selectedAssessorId === selectedAppForAssignment.assigned_assessor_id
+                    : false)
+                }
                 className="gap-2"
               >
                 {assignLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Assigning...
+                    {selectedAppForAssignment?.assigned_assessor_id ? "Reassigning..." : "Assigning..."}
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
-                    Assign
+                    {selectedAppForAssignment?.assigned_assessor_id ? "Reassign" : "Assign"}
                   </>
                 )}
               </Button>

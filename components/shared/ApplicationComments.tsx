@@ -8,7 +8,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Send } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowRight, Clock, MessageSquare, Send } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -28,6 +29,27 @@ interface ApplicationCommentsProps {
   applicationId: string;
 }
 
+type WorkflowEvent = {
+  id: string;
+  userId: string | null;
+  actorName: string;
+  actorRole: string;
+  avatar: string;
+  fromStatus: string | null;
+  toStatus: string;
+  action: string;
+  comment: string | null;
+  createdAt: string;
+};
+
+function humanizeStatus(s?: string | null) {
+  if (!s) return "—";
+  return s
+    .split("_")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 export function ApplicationComments({ applicationId }: ApplicationCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -38,6 +60,10 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
+
+  const [events, setEvents] = useState<WorkflowEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchComments = async () => {
@@ -115,6 +141,68 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
     };
     if (applicationId) fetchComments();
   }, [applicationId, user?.id]);
+
+  useEffect(() => {
+    const fetchWorkflow = async () => {
+      if (!applicationId) return;
+      try {
+        setEventsLoading(true);
+        setEventsError(null);
+
+        const { data, error } = await supabase
+          .from("workflow_history")
+          .select("id, application_id, user_id, from_status, to_status, action, comment, created_at")
+          .eq("application_id", applicationId)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        const rows = (data as any[]) || [];
+
+        const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
+        let usersById = new Map<string, any>();
+        if (userIds.length > 0) {
+          const { data: usersData, error: usersErr } = await supabase
+            .from("users")
+            .select("id, first_name, last_name, role")
+            .in("id", userIds);
+          if (usersErr) throw usersErr;
+          (usersData || []).forEach((u: any) => usersById.set(u.id, u));
+        }
+
+        const formatted: WorkflowEvent[] = rows.map((r) => {
+          const actor = r.user_id ? usersById.get(r.user_id) : null;
+          const first = actor?.first_name ?? "";
+          const last = actor?.last_name ?? "";
+          const name = actor ? `${first} ${last}`.trim() || "Unknown User" : "System";
+          const initials = actor
+            ? `${(first?.[0] || "")}${(last?.[0] || "")}`.toUpperCase() || "UU"
+            : "SY";
+
+          return {
+            id: r.id,
+            userId: r.user_id ?? null,
+            actorName: name,
+            actorRole: actor?.role || "system",
+            avatar: initials,
+            fromStatus: r.from_status ?? null,
+            toStatus: r.to_status,
+            action: r.action,
+            comment: r.comment ?? null,
+            createdAt: r.created_at,
+          };
+        });
+
+        setEvents(formatted);
+      } catch (e: any) {
+        console.error("❌ [ApplicationComments] Failed to fetch workflow history:", e);
+        setEventsError(e?.message || "Failed to load timeline");
+      } finally {
+        setEventsLoading(false);
+      }
+    };
+
+    if (applicationId) fetchWorkflow();
+  }, [applicationId]);
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !applicationId) return;
@@ -260,87 +348,158 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-          {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading comments...</div>
-          ) : comments.length > 0 ? (
-            comments.map((comment) => (
-              <div key={comment.id} className="flex gap-4">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">{comment.avatar}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{comment.author}</span>
-                    <Badge variant="outline" className="text-xs">{comment.role}</Badge>
-                    <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
-                    {user?.id && comment.authorId === user.id && comment.editable && (
-                      <div className="ml-auto flex items-center gap-2">
-                        {editingId === comment.id ? (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              disabled={rowBusyId === comment.id || !editingText.trim()}
-                              onClick={() => saveEdit(comment)}
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={rowBusyId === comment.id}
-                              onClick={cancelEdit}
-                            >
-                              Cancel
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={rowBusyId === comment.id}
-                              onClick={() => startEdit(comment)}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={rowBusyId === comment.id}
-                              onClick={() => deleteComment(comment)}
-                            >
-                              Delete
-                            </Button>
-                          </>
+        <Tabs defaultValue="timeline" className="w-full">
+          <TabsList className="w-fit justify-start">
+            <TabsTrigger value="timeline" className="flex-none px-4">
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger value="notes" className="flex-none px-4">
+              Internal notes
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="timeline" className="mt-6">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium">Timestamp timeline</h3>
+              </div>
+
+              {eventsError ? <p className="text-sm text-red-600">{eventsError}</p> : null}
+              {eventsLoading ? (
+                <div className="text-center py-6 text-muted-foreground">Loading timeline...</div>
+              ) : events.length > 0 ? (
+                <div className="space-y-4">
+                  {events.map((evt, idx) => (
+                    <div key={evt.id} className="relative flex gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                          {evt.avatar}
+                        </div>
+                        {idx < events.length - 1 ? <div className="w-px flex-1 bg-border mt-2" /> : null}
+                      </div>
+
+                      <div className="flex-1 pb-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium">{evt.actorName}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {evt.actorRole}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(evt.createdAt).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                          <Badge variant="secondary" className="text-xs">
+                            {humanizeStatus(evt.fromStatus)}
+                          </Badge>
+                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                          <Badge variant="default" className="text-xs">
+                            {humanizeStatus(evt.toStatus)}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">({evt.action})</span>
+                        </div>
+
+                        {evt.comment ? (
+                          <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap">{evt.comment}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No workflow events yet.</div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="notes" className="mt-6">
+            <div className="space-y-6">
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              {loading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading comments...</div>
+              ) : comments.length > 0 ? (
+                comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-4">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">{comment.avatar}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{comment.author}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {comment.role}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{comment.timestamp}</span>
+                        {user?.id && comment.authorId === user.id && comment.editable && (
+                          <div className="ml-auto flex items-center gap-2">
+                            {editingId === comment.id ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={rowBusyId === comment.id || !editingText.trim()}
+                                  onClick={() => saveEdit(comment)}
+                                >
+                                  Save
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={rowBusyId === comment.id}
+                                  onClick={cancelEdit}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={rowBusyId === comment.id}
+                                  onClick={() => startEdit(comment)}
+                                >
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  disabled={rowBusyId === comment.id}
+                                  onClick={() => deleteComment(comment)}
+                                >
+                                  Delete
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
+                      {editingId === comment.id ? (
+                        <Textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          className="min-h-[90px]"
+                          disabled={rowBusyId === comment.id}
+                        />
+                      ) : (
+                        <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">
+                          {comment.content}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {editingId === comment.id ? (
-                    <Textarea
-                      value={editingText}
-                      onChange={(e) => setEditingText(e.target.value)}
-                      className="min-h-[90px]"
-                      disabled={rowBusyId === comment.id}
-                    />
-                  ) : (
-                    <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base text-sm leading-6">
-                      {comment.content}
-                    </p>
-                  )}
+                ))
+              ) : (
+                <div className="text-center py-8">
+                  <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No comments yet</p>
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8">
-              <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No comments yet</p>
+              )}
             </div>
-          )}
-        </div>
+          </TabsContent>
+        </Tabs>
       </CardContent>
       <CardFooter className="pt-6">
         <div className="w-full space-y-4">

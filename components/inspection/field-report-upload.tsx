@@ -60,6 +60,12 @@ interface FieldReportUploadProps {
   onInspectionDateChange: (date: string) => void;
   inspectorNameReadOnly?: boolean;
   readOnly?: boolean;
+  /** Title for the document upload section */
+  documentsTitle?: string;
+  /** Whether at least one document is required (controls asterisk + validation messaging only) */
+  documentsRequired?: boolean;
+  /** Optional description shown under the document upload title */
+  documentsDescription?: string;
   /** Optional content inserted after Field Visit Details and before Field Report Documents */
   betweenDetailsAndDocuments?: React.ReactNode;
   /** Optional content rendered after the Field Report Documents card (and after summary, if shown) */
@@ -102,6 +108,9 @@ export function FieldReportUpload({
   onInspectionDateChange,
   inspectorNameReadOnly = false,
   readOnly = false,
+  documentsTitle = "Field Report Documents",
+  documentsRequired = true,
+  documentsDescription,
   betweenDetailsAndDocuments,
   afterDocuments,
   hideSummary = false,
@@ -248,7 +257,7 @@ export function FieldReportUpload({
 
   return (
     <div className="space-y-6">
-      {/* Inspector Details */}
+      {/* Assessment Details */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -256,18 +265,18 @@ export function FieldReportUpload({
             Field Visit Details
           </CardTitle>
           <CardDescription>
-            Enter information about the field inspection
+            Enter information about the field assessment
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="inspector-name">Inspector Name *</Label>
+              <Label htmlFor="inspector-name">Assessment Name *</Label>
               <Input
                 id="inspector-name"
                 value={inspectorName}
                 onChange={(e) => onInspectorNameChange(e.target.value)}
-                placeholder="Enter inspector name"
+                placeholder="Enter assessment name"
                 readOnly={readOnly || inspectorNameReadOnly}
                 aria-readonly={readOnly || inspectorNameReadOnly}
                 disabled={readOnly}
@@ -275,7 +284,7 @@ export function FieldReportUpload({
               />
             </div>
             <div>
-              <Label htmlFor="inspection-date">Inspection Date *</Label>
+              <Label htmlFor="inspection-date">Assessment Date *</Label>
               <Input
                 id="inspection-date"
                 type="date"
@@ -296,18 +305,22 @@ export function FieldReportUpload({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            Field Report Documents <span className="text-destructive">*</span>
+            {documentsTitle}
+            {documentsRequired && <span className="text-destructive">*</span>}
           </CardTitle>
           <CardDescription>
-            Upload field visit report (PDF, Word) and supporting photos
+            {documentsDescription ??
+              (documentsRequired
+                ? "Upload field visit report (PDF, Word) and supporting photos"
+                : "Upload supporting documents (optional): PDFs, Word docs, and photos")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {showInlineValidation && !readOnly && isFilesMissing && (
+          {documentsRequired && showInlineValidation && !readOnly && isFilesMissing && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                Field report documents are required. Please upload at least one file.
+                {documentsTitle} are required. Please upload at least one file.
               </AlertDescription>
             </Alert>
           )}
@@ -433,7 +446,7 @@ export function FieldReportUpload({
             <Alert>
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                No field report documents have been uploaded yet.
+                No {documentsTitle.toLowerCase()} have been uploaded yet.
               </AlertDescription>
             </Alert>
           )}

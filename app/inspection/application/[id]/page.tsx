@@ -12,13 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -71,14 +64,6 @@ interface ApplicationWithRelations extends Application {
   applicant?: UserType;
   documents?: Document[];
   reviews?: Review[];
-}
-
-interface StaffMember {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  email: string;
 }
 
 // Transform Application data back to form format for viewing
@@ -266,9 +251,6 @@ export default function InspectorApplicationView() {
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [transferLoading, setTransferLoading] = useState(false);
-  const [selectedAction, setSelectedAction] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
@@ -419,15 +401,6 @@ export default function InspectorApplicationView() {
         
         setInitialDocuments(documentMap);
         
-        // Fetch staff members for transfer functionality
-        const { data: staffData } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, role, email')
-          .in('role', ['reviewer', 'inspector', 'admin', 'approver'])
-          .eq('status', 'active');
-          
-        setStaff(staffData || []);
-
       } catch (err) {
         console.error('Error fetching application:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch application');
@@ -559,17 +532,6 @@ export default function InspectorApplicationView() {
         
       if (appError) throw appError;
       
-      // 3. Create workflow history
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: 'pending_final_approval',
-        action: 'assessment_completed',
-        comment: `Assessment completed. Recommendation: ${recommendation.recommendation === 'yes' ? 'Approve' : 'Reject'}.`,
-        user_id: user?.id
-      });
-      
       alert("Assessment submitted and application forwarded to approver.");
       // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
       router.refresh();
@@ -611,17 +573,6 @@ export default function InspectorApplicationView() {
         
       if (appError) throw appError;
       
-      // 3. Create workflow history
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: 'revision_required',
-        action: 'returned_for_revision',
-        comment: `Returned for revision: ${revisionNotes}`,
-        user_id: user?.id
-      });
-      
       setShowRevisionDialog(false);
       setRevisionNotes("");
       alert("Application returned to applicant for revision.");
@@ -638,48 +589,6 @@ export default function InspectorApplicationView() {
     } finally {
       setSubmitLoading(false);
       actionInFlightRef.current = false;
-    }
-  };
-
-  const handleTransferApplication = async () => {
-    if (!selectedAction || !application) return;
-    
-    try {
-      setTransferLoading(true);
-      
-      const selectedStaff = staff.find(s => s.id === selectedAction);
-      if (!selectedStaff) return;
-      
-      const { error: updateError } = await supabase
-        .from('applications')
-        .update({
-          assigned_inspector_id: selectedAction,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', application.id);
-        
-      if (updateError) throw updateError;
-      
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('workflow_history').insert({
-        application_id: application.id,
-        from_status: application.status,
-        to_status: application.status,
-        action: 'transfer',
-        comment: `Transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`,
-        user_id: user?.id
-      });
-      
-      alert(`Application successfully transferred to ${selectedStaff.first_name} ${selectedStaff.last_name}`);
-      setSelectedAction('');
-      // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
-      router.refresh();
-      
-    } catch (error) {
-      console.error('Error transferring application:', error);
-      alert('Failed to transfer application.');
-    } finally {
-      setTransferLoading(false);
     }
   };
 
@@ -821,32 +730,6 @@ export default function InspectorApplicationView() {
             >
               {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Submit to Approver
-            </Button>
-          </div>
-
-          {/* Inspector Actions / Transfer */}
-          <div className="flex items-center gap-3 p-4 bg-muted/30 border rounded-lg">
-            <span className="text-sm font-medium">Transfer ownership:</span>
-            <Select value={selectedAction} onValueChange={setSelectedAction}>
-              <SelectTrigger className="w-[220px] h-9">
-                <SelectValue placeholder="Select inspector..." />
-              </SelectTrigger>
-              <SelectContent>
-                {staff.filter(s => s.role === 'inspector').map((staffMember) => (
-                  <SelectItem key={staffMember.id} value={staffMember.id}>
-                    {staffMember.first_name} {staffMember.last_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button 
-              onClick={handleTransferApplication}
-              variant="secondary"
-              size="sm"
-              disabled={!selectedAction || transferLoading}
-            >
-              {transferLoading ? 'Transferring...' : 'Transfer'}
             </Button>
           </div>
 

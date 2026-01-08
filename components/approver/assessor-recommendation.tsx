@@ -150,7 +150,7 @@ export function AssessorRecommendation({ applicationId }: AssessorRecommendation
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
-                <span>Inspector</span>
+                <span>Assessment Name</span>
               </div>
               <p className="font-medium">{assessment.inspector_name}</p>
             </div>
@@ -158,7 +158,7 @@ export function AssessorRecommendation({ applicationId }: AssessorRecommendation
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>Inspection Date</span>
+                <span>Assessment Date</span>
               </div>
               <p className="font-medium">
                 {new Date(assessment.inspection_date).toLocaleDateString('en-US', {
