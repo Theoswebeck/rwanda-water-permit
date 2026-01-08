@@ -77,6 +77,10 @@ export interface Payment {
   application_id: string;
   applicant_id: string;
   merchant_id?: string;
+
+  // Payment context
+  purpose?: 'application_fee' | 'annual_report_fee';
+  water_use_report_id?: string | null;
   
   // Payment details
   amount: number;
@@ -332,6 +336,8 @@ export interface InitiatePaymentRequest {
   application_data?: any; // New field for unsaved application data
   amount?: number;
   currency?: string;
+  purpose?: 'application_fee' | 'annual_report_fee';
+  water_use_report_id?: string;
   customer?: {
     email?: string;
     phone?: string;

@@ -113,6 +113,13 @@ export type RecommendationType = 'approve' | 'reject' | 'require_revision' | 're
 export type ProvinceType = 'Kigali' | 'Northern' | 'Southern' | 'Eastern' | 'Western'
 
 // =============================================
+// WATER USE REPORTING (ANNUAL)
+// =============================================
+
+export type WaterUseReportTemplate = 'abstraction' | 'concession'
+export type WaterUseReportStatus = 'draft' | 'submitted'
+
+// =============================================
 // MAIN INTERFACES
 // =============================================
 
@@ -337,6 +344,37 @@ export interface Permit {
   permit_pdf_url?: string | null
   
   // Audit fields
+  created_at: string
+  updated_at: string
+}
+
+export interface WaterUseReport {
+  id: string
+
+  // Relations
+  permit_id: string
+  application_id: string
+  applicant_id: string
+
+  // Core fields
+  reporting_year: number
+  template: WaterUseReportTemplate
+  status: WaterUseReportStatus
+
+  // Section payloads (user-editable portions)
+  section3?: Json
+  section3_quarterly?: Json
+  section4?: Json
+  section5_monitoring?: Json
+  section5_incidents?: Json
+  section6_employment?: Json
+  section6_ohs?: Json
+  section7?: Json
+  section8?: Json
+  section9_declaration?: Json
+
+  // Audit
+  submitted_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -890,6 +928,11 @@ export interface Database {
         Row: Permit
         Insert: Omit<Permit, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Permit, 'id' | 'created_at' | 'updated_at'>>
+      }
+      water_use_reports: {
+        Row: WaterUseReport
+        Insert: Omit<WaterUseReport, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<WaterUseReport, 'id' | 'created_at' | 'updated_at'>>
       }
       documents: {
         Row: Document

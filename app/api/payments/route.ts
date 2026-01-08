@@ -15,10 +15,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const applicationId = searchParams.get('application_id');
+    const waterUseReportId = searchParams.get('water_use_report_id');
 
-    if (!applicationId) {
+    if (!applicationId && !waterUseReportId) {
       return NextResponse.json(
-        { error: 'application_id is required' },
+        { error: 'application_id or water_use_report_id is required' },
         { status: 400 }
       );
     }
@@ -27,10 +28,12 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
 
     // Fetch payment for this application
-    const { data: payment, error } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('application_id', applicationId)
+    const query = supabase.from('payments').select('*');
+    const filtered = waterUseReportId
+      ? query.eq('water_use_report_id', waterUseReportId)
+      : query.eq('application_id', applicationId);
+
+    const { data: payment, error } = await filtered
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

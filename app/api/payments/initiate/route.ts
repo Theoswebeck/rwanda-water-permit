@@ -52,7 +52,15 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body: InitiatePaymentRequest = await request.json();
-    const { application_id, amount, currency, customer, application_data } = body;
+    const {
+      application_id,
+      amount,
+      currency,
+      customer,
+      application_data,
+      purpose = 'application_fee',
+      water_use_report_id,
+    } = body;
 
     // ==========================================================
     // DEMO MODE (for demos when gateway checkout is unreliable)
@@ -73,6 +81,40 @@ export async function POST(request: NextRequest) {
 
     let application: any = null;
     let applicationIdToUse = application_id;
+
+    // If initiating an annual report fee, validate the report ownership and derive application_id from it.
+    if (purpose === 'annual_report_fee') {
+      if (!water_use_report_id) {
+        return NextResponse.json(
+          { success: false, error: 'water_use_report_id is required for annual_report_fee' },
+          { status: 400 }
+        );
+      }
+
+      const { data: reportRow, error: reportError } = await supabase
+        .from('water_use_reports')
+        .select('id, applicant_id, application_id')
+        .eq('id', water_use_report_id)
+        .single();
+
+      if (reportError || !reportRow) {
+        console.error('❌ [PAYMENT INITIATE] Failed to fetch water use report:', reportError);
+        return NextResponse.json(
+          { success: false, error: 'Water use report not found' },
+          { status: 404 }
+        );
+      }
+
+      if (reportRow.applicant_id !== userId) {
+        console.error('❌ [PAYMENT INITIATE] Access denied: User does not own this water use report');
+        return NextResponse.json(
+          { success: false, error: 'Access denied' },
+          { status: 403 }
+        );
+      }
+
+      applicationIdToUse = reportRow.application_id;
+    }
 
     // =============================================
     // 1. GET OR CREATE APPLICATION
@@ -131,24 +173,48 @@ export async function POST(request: NextRequest) {
     // 2. CHECK EXISTING PAYMENT
     // =============================================
 
-    if (applicationIdToUse) {
-      const { data: existingPayment } = await supabase
+    if (purpose === 'annual_report_fee') {
+      // Block duplicate completed report-fee payments for this report
+      const { data: existingReportPayment } = await supabase
         .from('payments')
         .select('*')
-        .eq('application_id', applicationIdToUse)
+        .eq('purpose', 'annual_report_fee')
+        .eq('water_use_report_id', water_use_report_id!)
         .eq('status', 'completed')
         .maybeSingle();
 
-      if (existingPayment) {
-        console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
+      if (existingReportPayment) {
+        console.warn('⚠️  [PAYMENT INITIATE] Annual report fee already completed for this report');
         return NextResponse.json(
           {
             success: false,
-            error: 'Payment already completed for this application',
-            payment: existingPayment,
+            error: 'Payment already completed for this annual report',
+            payment: existingReportPayment,
           },
           { status: 400 }
         );
+      }
+    } else {
+      // Default behavior: block duplicate completed application fee payments for this application
+      if (applicationIdToUse) {
+        const { data: existingPayment } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('application_id', applicationIdToUse)
+          .eq('status', 'completed')
+          .maybeSingle();
+
+        if (existingPayment) {
+          console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Payment already completed for this application',
+              payment: existingPayment,
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -228,20 +294,31 @@ export async function POST(request: NextRequest) {
     }
     
     // Get product code from environment (must exist in IremboPay dashboard)
-    const productCode = process.env.IREMBOPAY_PRODUCT_CODE || 'WATER_PERMIT_FEE';
+    const productCode =
+      purpose === 'annual_report_fee'
+        ? (process.env.IREMBOPAY_ANNUAL_REPORT_PRODUCT_CODE || process.env.IREMBOPAY_PRODUCT_CODE || 'WATER_PERMIT_FEE')
+        : (process.env.IREMBOPAY_PRODUCT_CODE || 'WATER_PERMIT_FEE');
     const paymentAccountId = process.env.IREMBOPAY_ACCOUNT_ID || 'RWANDA_WATER_BOARD';
+
+    const itemName = purpose === 'annual_report_fee'
+      ? 'Annual Water Use Report Fee'
+      : 'Water Permit Application Fee';
+
+    const itemDescription = purpose === 'annual_report_fee'
+      ? `Annual Water Use Report Fee - ${water_use_report_id}`
+      : `Water Permit Application Fee - ${application?.application_number || application_id}`;
 
     const iremboPayRequest = {
       paymentItems: [
         {
           code: productCode,
-          name: 'Water Permit Application Fee',
+          name: itemName,
           quantity: 1,
           unitAmount: paymentAmount,
         }
       ],
       paymentAccountIdentifier: paymentAccountId,
-      description: `Water Permit Application Fee - ${application?.application_number || application_id}`,
+      description: itemDescription,
       customer: {
         email: customerEmail,
         phone: normalizedPhone,
@@ -285,6 +362,8 @@ export async function POST(request: NextRequest) {
     const paymentData: any = {
       applicant_id: userId,
       application_id: applicationIdToUse || null,
+      purpose,
+      water_use_report_id: water_use_report_id || null,
       amount: paymentAmount,
       currency: paymentCurrency,
       description: iremboPayRequest.description,
@@ -334,7 +413,7 @@ export async function POST(request: NextRequest) {
     // 6. UPDATE APPLICATION STATUS (only if application exists)
     // =============================================
 
-    if (application) {
+    if (application && purpose !== 'annual_report_fee') {
       const nextStatus = 'pending_payment';
       const updateResult = await supabase
         .from('applications')
@@ -351,7 +430,7 @@ export async function POST(request: NextRequest) {
         console.log('✅ [PAYMENT INITIATE] Application status updated to', nextStatus);
       }
     } else {
-      console.log('ℹ️  [PAYMENT INITIATE] No application to update - payment can be linked later');
+      console.log('ℹ️  [PAYMENT INITIATE] No application status update required for this payment purpose');
     }
 
     // =============================================

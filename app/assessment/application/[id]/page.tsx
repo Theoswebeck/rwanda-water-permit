@@ -302,6 +302,12 @@ export default function AssessmentApplicationPage() {
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
   const canProceedPastDocReview =
     isReadOnly || (docReviewMeta.eligibilityConfirmed && docReviewMeta.completenessConfirmed);
+  const requiredDocuments = Array.isArray((assessmentReportData as any).requiredDocuments)
+    ? ((assessmentReportData as any).requiredDocuments as any[])
+    : [];
+  const allRequiredDocsProvided =
+    requiredDocuments.length > 0 &&
+    requiredDocuments.every((d) => d && typeof d === "object" && d.provided === true);
   const isFieldReportComplete =
     isReadOnly ||
     (fieldReportFiles.length > 0 &&
@@ -945,6 +951,21 @@ export default function AssessmentApplicationPage() {
               </Badge>
             </div>
 
+            {!isReadOnly && (
+              <Button
+                size="sm"
+                onClick={handleForwardToApprover}
+                disabled={submitLoading}
+                className="gap-2 bg-black hover:bg-gray-800 text-white"
+              >
+                {submitLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Send for review
+              </Button>
+            )}
           </div>
 
           {/* Main Content with Tabs */}
@@ -1119,15 +1140,10 @@ export default function AssessmentApplicationPage() {
                     }
                     afterDocuments={
                       isReadOnly ? null : (() => {
-                        const reqDocs = Array.isArray((assessmentReportData as any).requiredDocuments)
-                          ? ((assessmentReportData as any).requiredDocuments as any[])
-                          : [];
-                        const allProvided = reqDocs.length > 0 && reqDocs.every((d) => d && typeof d === "object" && d.provided === true);
-
                         // If any required doc missing, only allow Return for Revision.
-                        if (!allProvided) {
+                        if (!allRequiredDocsProvided) {
                           return (
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-3">
                               <Button
                                 variant="outline"
                                 size="lg"
@@ -1137,6 +1153,16 @@ export default function AssessmentApplicationPage() {
                               >
                                 <X className="h-4 w-4" />
                                 Return for Revision
+                              </Button>
+                              <Button
+                                size="lg"
+                                onClick={handleForwardToApprover}
+                                disabled={true}
+                                className="gap-2 bg-black/70 hover:bg-black/70 text-white"
+                                title="Mark all required documents as Provided in Section 2 to enable submission."
+                              >
+                                <Send className="h-4 w-4" />
+                                Send for review
                               </Button>
                             </div>
                           );

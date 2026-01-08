@@ -13,6 +13,7 @@ const debugLog = (...args: any[]) => {
 
 interface UsePaymentOptions {
   applicationId?: string;
+  waterUseReportId?: string;
   autoFetch?: boolean;
   pollInterval?: number; // Auto-poll for status updates
 }
@@ -28,7 +29,7 @@ interface UsePaymentReturn {
 }
 
 export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
-  const { applicationId, autoFetch = true, pollInterval } = options;
+  const { applicationId, waterUseReportId, autoFetch = true, pollInterval } = options;
 
   const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -38,13 +39,16 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
    * Fetch payment for application
    */
   const fetchPayment = useCallback(async () => {
-    if (!applicationId) return;
+    if (!applicationId && !waterUseReportId) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/payments?application_id=${applicationId}`);
+      const query = waterUseReportId
+        ? `water_use_report_id=${waterUseReportId}`
+        : `application_id=${applicationId}`;
+      const response = await fetch(`/api/payments?${query}`);
       const data = await response.json();
 
       if (data.success && data.payment) {
@@ -58,7 +62,7 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
     } finally {
       setLoading(false);
     }
-  }, [applicationId]);
+  }, [applicationId, waterUseReportId]);
 
   /**
    * Initiate a new payment
@@ -175,10 +179,10 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
    * Auto-fetch on mount if applicationId is provided
    */
   useEffect(() => {
-    if (autoFetch && applicationId) {
+    if (autoFetch && (applicationId || waterUseReportId)) {
       fetchPayment();
     }
-  }, [autoFetch, applicationId, fetchPayment]);
+  }, [autoFetch, applicationId, waterUseReportId, fetchPayment]);
 
   /**
    * Auto-poll for status updates if payment is pending/processing
