@@ -787,9 +787,10 @@ CREATE POLICY "Reviewers can view assigned applications"
     ON applications FOR SELECT
     USING (
         auth.uid() = assigned_reviewer_id OR
+        auth.uid() = assigned_assessor_id OR
         EXISTS (
             SELECT 1 FROM users 
-            WHERE id = auth.uid() AND role IN ('reviewer', 'admin')
+            WHERE id = auth.uid() AND role IN ('reviewer', 'assessor', 'admin')
         )
     );
 
@@ -811,6 +812,7 @@ CREATE POLICY "Staff can update applications in their workflow"
     USING (
         (auth.uid() = assigned_reviewer_id OR
          auth.uid() = assigned_inspector_id OR
+         auth.uid() = assigned_assessor_id OR
          auth.uid() = assigned_approver_id OR
          EXISTS (
              SELECT 1 FROM users 

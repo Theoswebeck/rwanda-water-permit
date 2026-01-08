@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getInspectionById } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Eye, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { AlertCircle, Eye, Loader2, Save } from "lucide-react";
 import { InspectionDetail } from "@/components/inspection/inspection-detail";
 
 type PermitLite = {
@@ -68,10 +70,16 @@ function statusBadge(status: string) {
 }
 
 export function InspectionDetailTabs({ inspectionId }: { inspectionId: string }) {
+  const { userProfile } = useAuth();
+  const canReview = userProfile?.role === "reviewer" || userProfile?.role === "admin" || userProfile?.role === "approver";
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inspection, setInspection] = useState<any>(null);
   const [permit, setPermit] = useState<PermitLite | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<"pending" | "reviewed" | "changes_requested">("pending");
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -81,6 +89,8 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
 
         const data = await getInspectionById(inspectionId);
         setInspection(data);
+        setReviewStatus((data?.review_status as any) || "pending");
+        setReviewNotes((data?.review_notes as string) || "");
 
         const applicationId = data?.application?.id;
         if (!applicationId) {
@@ -129,6 +139,34 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
 
   const app = inspection?.application;
   const applicant = app?.applicant;
+  const isSubmitted = inspection?.status === "completed";
+
+  const saveReview = async () => {
+    if (!canReview) return;
+    if (!userProfile?.id) return;
+    try {
+      setSavingReview(true);
+      const nowIso = new Date().toISOString();
+      const { data, error: upErr } = await supabase
+        .from("inspections")
+        .update({
+          review_status: reviewStatus,
+          review_notes: reviewNotes || null,
+          reviewed_by: userProfile.id,
+          reviewed_at: nowIso,
+        })
+        .eq("id", inspectionId)
+        .select("*")
+        .single();
+      if (upErr) throw upErr;
+      setInspection(data);
+    } catch (e: any) {
+      console.error("❌ Failed to save inspection review:", e);
+      alert(e?.message || "Failed to save review");
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -137,6 +175,9 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
           <h2 className="text-2xl font-semibold tracking-tight">Inspection {inspectionId.slice(0, 8)}…</h2>
           <div className="mt-2 flex items-center gap-2">
             {statusBadge(inspection?.status || "—")}
+            <Badge variant="outline" className="text-xs">
+              Review: {(inspection?.review_status as string) || "pending"}
+            </Badge>
             <span className="text-sm text-muted-foreground">
               Date: {fmtDate(inspection?.completed_date || inspection?.scheduled_date || inspection?.created_at)}
             </span>
@@ -161,6 +202,58 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
           ) : null}
         </div>
       </div>
+
+      {canReview && isSubmitted ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Reviewer sign-off</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={reviewStatus === "reviewed" ? "default" : "outline"}
+                onClick={() => setReviewStatus("reviewed")}
+              >
+                Mark reviewed
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={reviewStatus === "changes_requested" ? "default" : "outline"}
+                onClick={() => setReviewStatus("changes_requested")}
+              >
+                Request changes
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={reviewStatus === "pending" ? "default" : "outline"}
+                onClick={() => setReviewStatus("pending")}
+              >
+                Pending
+              </Button>
+              <div className="flex-1" />
+              <Button type="button" size="sm" className="gap-2" disabled={savingReview} onClick={saveReview}>
+                {savingReview ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save review
+              </Button>
+            </div>
+
+            <div>
+              <Textarea
+                placeholder="Reviewer notes (optional)…"
+                value={reviewNotes}
+                onChange={(e) => setReviewNotes(e.target.value)}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Note: review updates require the DB migration `database/add-inspection-review-workflow.sql` to be applied in Supabase.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Tabs defaultValue="report" className="w-full">
         <TabsList className="grid w-full grid-cols-3">

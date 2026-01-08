@@ -19,7 +19,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -41,6 +57,14 @@ interface ReviewStatsData {
   returnedForRevision: number;
 }
 
+interface StaffMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
+}
+
 export default function ReviewerDashboard() {
   const router = useRouter();
   const [topTab, setTopTab] = useState<"review" | "inspections">("review");
@@ -52,6 +76,13 @@ export default function ReviewerDashboard() {
   const [startingReview, setStartingReview] = useState<string | null>(null);
   const [stats, setStats] = useState<ReviewStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+
+  // Assessor assignment state
+  const [assessors, setAssessors] = useState<StaffMember[]>([]);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedAppForAssignment, setSelectedAppForAssignment] = useState<ReviewApplication | null>(null);
+  const [selectedAssessorId, setSelectedAssessorId] = useState<string>("");
+  const [assignLoading, setAssignLoading] = useState(false);
 
   // Fetch applications for review
   useEffect(() => {
@@ -174,6 +205,27 @@ export default function ReviewerDashboard() {
     fetchReviewStats();
   }, []);
 
+  // Fetch assessors for assignment dropdown
+  useEffect(() => {
+    const fetchAssessors = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, first_name, last_name, role, email')
+          .in('role', ['assessor'])
+          .eq('status', 'active')
+          .order('first_name', { ascending: true });
+
+        if (error) throw error;
+        setAssessors(data || []);
+      } catch (err) {
+        console.error('❌ Error fetching assessors:', err);
+      }
+    };
+
+    fetchAssessors();
+  }, []);
+
   const handleStartReview = async (application: ReviewApplication) => {
     try {
       setStartingReview(application.id);
@@ -184,6 +236,91 @@ export default function ReviewerDashboard() {
       console.error('Error starting review:', err);
       alert('Failed to start review. Please try again.');
       setStartingReview(null);
+    }
+  };
+
+  // Open the assignment dialog for a specific application
+  const openAssignDialog = (application: ReviewApplication) => {
+    setSelectedAppForAssignment(application);
+    setSelectedAssessorId("");
+    setAssignDialogOpen(true);
+  };
+
+  // Handle assigning an application to an assessor
+  const handleAssignToAssessor = async () => {
+    if (!selectedAppForAssignment || !selectedAssessorId) return;
+
+    try {
+      setAssignLoading(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Find the selected assessor
+      const selectedAssessor = assessors.find(a => a.id === selectedAssessorId);
+      if (!selectedAssessor) {
+        alert('Please select a valid assessor');
+        return;
+      }
+
+      // Update application with assigned assessor and status
+      const { error: updateError } = await supabase
+        .from('applications')
+        .update({
+          assigned_assessor_id: selectedAssessorId,
+          status: 'pending_assessment',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedAppForAssignment.id);
+
+      if (updateError) throw updateError;
+
+      // Create workflow history record
+      const { error: workflowError } = await supabase
+        .from('workflow_history')
+        .insert({
+          application_id: selectedAppForAssignment.id,
+          from_status: selectedAppForAssignment.status,
+          to_status: 'pending_assessment',
+          action: 'assigned_to_assessor',
+          comment: `Application assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`,
+          user_id: user?.id
+        });
+
+      if (workflowError) {
+        console.error('❌ Workflow history error:', workflowError);
+        // Don't throw - the main update succeeded
+      }
+
+      console.log(`✅ Application ${selectedAppForAssignment.application_number} assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name}`);
+
+      // Update local state to remove the assigned application from the list
+      setReviewApplications(prev =>
+        prev.map(app =>
+          app.id === selectedAppForAssignment.id
+            ? { ...app, status: 'pending_assessment', assigned_assessor_id: selectedAssessorId }
+            : app
+        )
+      );
+
+      // Update stats
+      if (stats) {
+        setStats({
+          ...stats,
+          newSubmissions: Math.max(0, stats.newSubmissions - 1),
+          pendingAssessment: stats.pendingAssessment + 1
+        });
+      }
+
+      // Close dialog
+      setAssignDialogOpen(false);
+      setSelectedAppForAssignment(null);
+      setSelectedAssessorId("");
+
+    } catch (err) {
+      console.error('❌ Error assigning application:', err);
+      alert('Failed to assign application. Please try again.');
+    } finally {
+      setAssignLoading(false);
     }
   };
 
@@ -373,38 +510,44 @@ export default function ReviewerDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                  {app.status === 'pending_review' ? (
-                    <Button 
-                      size="sm" 
-                      onClick={() => handleStartReview(app)}
-                      disabled={startingReview === app.id}
-                            className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                    >
-                      {startingReview === app.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                              <Eye className="h-3 w-3" />
-                      )}
-                            <span className="hidden sm:inline">
-                      {startingReview === app.id ? 'Starting...' : 'Review'}
-                            </span>
-                            <span className="sm:hidden">Go</span>
-                    </Button>
-                  ) : (
-                    <Link href={`/review/application/${app.application_number}`}>
+                        {app.status === 'submitted' ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                <Link href={`/review/application/${app.application_number}`} className="flex items-center">
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Details
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => openAssignDialog(app)}
+                                className="flex items-center cursor-pointer"
+                              >
+                                <UserPlus className="h-4 w-4 mr-2" />
+                                Assign to Assessor
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : (
+                          <Link href={`/review/application/${app.application_number}`}>
                             <Button 
                               size="sm" 
                               className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                             >
                               <Eye className="h-3 w-3" />
-                              <span className="hidden sm:inline">
-                                {app.status === 'under_review' ? 'Continue' : 'View'}
-                              </span>
-                              <span className="sm:hidden">Go</span>
-                      </Button>
-                    </Link>
-                  )}
-                </TableCell>
+                              <span className="hidden sm:inline">View</span>
+                            </Button>
+                          </Link>
+                        )}
+                      </TableCell>
               </TableRow>
                   ))
                 )}
@@ -722,6 +865,84 @@ export default function ReviewerDashboard() {
           )}
         </div>
       </motion.div>
+
+        {/* Assign to Assessor Dialog */}
+        <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-blue-600" />
+                Assign to Assessor
+              </DialogTitle>
+              <DialogDescription>
+                Assign application <span className="font-medium">{selectedAppForAssignment?.application_number}</span> to an assessor for review.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Select Assessor</label>
+                <Select value={selectedAssessorId} onValueChange={setSelectedAssessorId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an assessor..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assessors.length === 0 ? (
+                      <SelectItem value="no-assessors" disabled>
+                        No assessors available
+                      </SelectItem>
+                    ) : (
+                      assessors.map((assessor) => (
+                        <SelectItem key={assessor.id} value={assessor.id}>
+                          {assessor.first_name} {assessor.last_name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedAssessorId && assessors.find(a => a.id === selectedAssessorId) && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
+                  <p className="text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {assessors.find(a => a.id === selectedAssessorId)?.first_name}{" "}
+                      {assessors.find(a => a.id === selectedAssessorId)?.last_name}
+                    </span>
+                    {" "}will be notified and the application will appear in their assessment queue.
+                  </p>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAssignDialogOpen(false);
+                  setSelectedAppForAssignment(null);
+                  setSelectedAssessorId("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAssignToAssessor}
+                disabled={!selectedAssessorId || assignLoading || selectedAssessorId === "no-assessors"}
+                className="gap-2"
+              >
+                {assignLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Assign
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     </ProtectedRoute>
   );

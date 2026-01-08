@@ -11,12 +11,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertCircle, Eye, Loader2, MoreHorizontal, Search } from "lucide-react";
+import { CreateInspectionDialog } from "@/components/inspection/create-inspection-dialog";
 
 type InspectionRow = {
   id: string;
   status: "scheduled" | "in_progress" | "completed" | "cancelled" | string;
   type?: string;
   result?: string | null;
+  review_status?: string | null;
+  reviewed_at?: string | null;
   scheduled_date?: string;
   completed_date?: string | null;
   created_at?: string;
@@ -114,6 +117,8 @@ export function StaffInspectionsTab() {
             status,
             type,
             result,
+            review_status,
+            reviewed_at,
             scheduled_date,
             completed_date,
             created_at,
@@ -133,7 +138,7 @@ export function StaffInspectionsTab() {
           .order("created_at", { ascending: false });
 
         if (inspErr) throw inspErr;
-        const rows = (data || []) as InspectionRow[];
+        const rows = (data || []) as unknown as InspectionRow[];
         setInspections(rows);
 
         const appIds = rows.map(r => r.application?.id).filter(Boolean) as string[];
@@ -205,7 +210,10 @@ export function StaffInspectionsTab() {
       <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
         <CardTitle className="flex items-center justify-between gap-3">
           <span>Inspections</span>
-          <Badge variant="secondary">{filtered.length}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">{filtered.length}</Badge>
+            <CreateInspectionDialog />
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
@@ -225,13 +233,14 @@ export function StaffInspectionsTab() {
                 <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[22%]">Permit #</TableHead>
                 <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[26%]">Applicant</TableHead>
                 <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Status</TableHead>
+                <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Review</TableHead>
                 <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium w-[8%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     No inspections found.
                   </TableCell>
                 </TableRow>
@@ -240,6 +249,7 @@ export function StaffInspectionsTab() {
                   const appId = r.application?.id;
                   const permit = appId ? permitByAppId[appId] : undefined;
                   const date = r.completed_date || r.scheduled_date || r.created_at || null;
+                  const review = r.review_status || "pending";
                   return (
                     <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">
                       <TableCell className="font-medium">
@@ -251,6 +261,11 @@ export function StaffInspectionsTab() {
                       <TableCell className="font-medium">{permit?.permit_number || "—"}</TableCell>
                       <TableCell className="truncate max-w-[280px]">{applicantName(r.application as any)}</TableCell>
                       <TableCell>{statusPill(r.status)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {review}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

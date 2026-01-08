@@ -50,7 +50,10 @@ export default function AssessmentDashboard() {
   const [filterType, setFilterType] = useState("all");
   const [sortBy, setSortBy] = useState<"earliest" | "latest">("earliest");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
-  const [assessmentApplications, setAssessmentApplications] = useState<AssessmentApplication[]>([]);
+  // Applications assigned to the current assessor (queue/worklist).
+  const [assignedApplications, setAssignedApplications] = useState<AssessmentApplication[]>([]);
+  // All non-draft applications visible to assessment staff (scope is enforced by Supabase RLS).
+  const [allApplications, setAllApplications] = useState<AssessmentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
@@ -58,59 +61,98 @@ export default function AssessmentDashboard() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [topTab, setTopTab] = useState<"assessment" | "inspections">("assessment");
 
-  // Fetch applications for assessment
+  const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
+    return (data ?? []).map((app) => {
+      const applicant = app.applicant as any;
+      const applicantName =
+        applicant?.company_name ||
+        (applicant?.first_name && applicant?.last_name
+          ? `${applicant.first_name} ${applicant.last_name}`
+          : "Unknown Applicant");
+
+      // Calculate SLA days remaining
+      let slaRemaining: number | null = null;
+      if (app.due_date) {
+        const dueDate = new Date(app.due_date);
+        const now = new Date();
+        const diffTime = dueDate.getTime() - now.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        slaRemaining = diffDays;
+      }
+
+      return {
+        ...app,
+        applicant_name: applicantName,
+        sla_days_remaining: slaRemaining,
+      };
+    });
+  };
+
+  // Fetch applications for assessment.
+  // - Applications for Assessment: ONLY assigned to this assessor
+  // - All Applications: everything the user is allowed to see (RLS enforced)
   useEffect(() => {
     const fetchAssessmentApplications = async () => {
       try {
         if (authLoading) return;
         if (!user?.id) {
-          setAssessmentApplications([]);
+          setAssignedApplications([]);
+          setAllApplications([]);
           return;
         }
 
         setLoading(true);
+        setStatsLoading(true);
         setError(null);
 
-        // Fetch only applications assigned to this assessor and in assessment stages
-        const { data, error } = await supabase
+        // 1) Assigned queue (worklist)
+        const { data: assignedData, error: assignedError } = await supabase
+          .from("applications")
+          .select(
+            `
+            *,
+            applicant:users!applicant_id(first_name, last_name, company_name)
+          `
+          )
+          .eq("assigned_assessor_id", user.id)
+          .in("status", ["pending_assessment", "under_review"])
+          .order("created_at", { ascending: sortBy === "earliest" });
+
+        if (assignedError) throw assignedError;
+
+        // 2) All applications (for oversight/search)
+        const { data: allData, error: allError } = await supabase
           .from('applications')
           .select(`
             *,
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
-          .eq('assigned_assessor_id', user.id)
-          // Assessment stages
-          .in('status', ['pending_assessment', 'under_review'])
+          .neq('status', 'draft')
           .order('created_at', { ascending: sortBy === "earliest" });
 
-        if (error) throw error;
+        if (allError) throw allError;
 
-        // Process applications with calculated fields
-        const processedApplications: AssessmentApplication[] = data.map(app => {
-          const applicant = app.applicant as any;
-          const applicantName = applicant?.company_name || 
-                               (applicant?.first_name && applicant?.last_name ? 
-                                `${applicant.first_name} ${applicant.last_name}` : 
-                                'Unknown Applicant');
+        const processedAssigned = processApplications(assignedData);
+        const processedAll = processApplications(allData);
 
-          // Calculate SLA days remaining
-          let slaRemaining: number | null = null;
-          if (app.due_date) {
-            const dueDate = new Date(app.due_date);
-            const now = new Date();
-            const diffTime = dueDate.getTime() - now.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            slaRemaining = diffDays;
-          }
+        setAssignedApplications(processedAssigned);
+        setAllApplications(processedAll);
 
-          return {
-            ...app,
-            applicant_name: applicantName,
-            sla_days_remaining: slaRemaining
-          };
+        // Compute stats from the All Applications dataset to keep the dashboard consistent.
+        const counts = processedAll.reduce(
+          (acc, app) => {
+            acc[app.status] = (acc[app.status] ?? 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>
+        );
+
+        setStats({
+          newSubmissions: counts.submitted ?? 0,
+          pendingAssessment: counts.pending_assessment ?? 0,
+          underAssessment: counts.under_review ?? 0,
+          readyForReview: counts.pending_review ?? 0,
         });
-
-        setAssessmentApplications(processedApplications);
       } catch (err) {
         let errorMsg = 'Failed to fetch applications';
         if (err instanceof Error) {
@@ -126,72 +168,12 @@ export default function AssessmentDashboard() {
         setError(errorMsg);
       } finally {
         setLoading(false);
+        setStatsLoading(false);
       }
     };
 
     fetchAssessmentApplications();
   }, [sortBy, user?.id, authLoading]);
-
-  // Fetch assessment statistics from database
-  useEffect(() => {
-    const fetchAssessmentStats = async () => {
-      try {
-        if (authLoading) return;
-        if (!user?.id) return;
-
-        setStatsLoading(true);
-        
-        // Query for assigned applications pending assessment
-        const { count: newSubmissionsCount, error: newError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('assigned_assessor_id', user.id)
-          .eq('status', 'pending_assessment');
-        
-        if (newError) throw newError;
-
-        // Query for applications under assessment
-        const { count: pendingAssessmentCount, error: pendingError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('assigned_assessor_id', user.id)
-          .eq('status', 'under_review');
-        
-        if (pendingError) throw pendingError;
-
-        // Query for applications ready for review (post-assessment handoff)
-        const { count: underAssessmentCount, error: assessmentError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('assigned_assessor_id', user.id)
-          .eq('status', 'pending_review');
-        
-        if (assessmentError) throw assessmentError;
-
-        // Keep legacy stat field for UI (readyForReview)
-        const { count: readyForReviewCount, error: approvalError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('assigned_assessor_id', user.id)
-          .eq('status', 'pending_review');
-        
-        if (approvalError) throw approvalError;
-
-        setStats({
-          newSubmissions: newSubmissionsCount || 0,
-          pendingAssessment: pendingAssessmentCount || 0,
-          underAssessment: pendingAssessmentCount || 0,
-          readyForReview: readyForReviewCount || 0
-        });
-      } catch (err) {
-        console.error('Error fetching assessment stats:', err);
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    fetchAssessmentStats();
-  }, [user?.id, authLoading]);
 
   const handleStartAssessment = async (application: AssessmentApplication) => {
     try {
@@ -760,9 +742,7 @@ export default function AssessmentDashboard() {
                     </div>
                   </div>
                   <ApplicationTable 
-                    applications={assessmentApplications.filter(
-                      (app) => app.status === 'submitted' || app.status === 'pending_assessment'
-                    )}
+                    applications={assignedApplications}
                     emptyMessage="Applications for Assessment"
                   />
                 </TabsContent>
@@ -804,7 +784,7 @@ export default function AssessmentDashboard() {
                     </div>
                   </div>
                   <ApplicationTable 
-                    applications={assessmentApplications}
+                    applications={allApplications}
                     emptyMessage="All Applications"
                   />
                 </TabsContent>

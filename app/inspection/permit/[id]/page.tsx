@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Save, Send, Eye } from "lucide-react";
+import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 
 type InspectionTemplate = "authorization" | "concession";
 
@@ -76,6 +77,9 @@ interface FormState {
   // Social/OHS
   employment_gender_breakdown?: EmploymentBreakdown;
   ohs_gender_sensitive?: OhsGenderSensitive;
+
+  // Documents (stored as JSONB in DB)
+  inspection_documents?: any[];
 }
 
 function toNumberOrUndefined(v: string): number | undefined {
@@ -145,7 +149,8 @@ export default function PermitInspectionUnifiedPage() {
   const params = useParams();
   const router = useRouter();
   const { userProfile, loading: authLoading } = useAuth();
-  const isAssessor = userProfile?.role === "assessor";
+  // Allow assessors, inspectors, reviewers, and admins to create/edit inspections
+  const canCreateInspection = ["assessor", "inspector", "reviewer", "admin"].includes(userProfile?.role || "");
 
   const applicationNumber = params.id as string | undefined;
 
@@ -168,6 +173,7 @@ export default function PermitInspectionUnifiedPage() {
     actual_concession_boundaries: [{ beacon: "B1", latitude: null, longitude: null }],
     employment_gender_breakdown: defaultEmployment(),
     ohs_gender_sensitive: defaultOhs(),
+    inspection_documents: [],
   });
 
   useEffect(() => {
@@ -206,7 +212,7 @@ export default function PermitInspectionUnifiedPage() {
           setInspectionId(existing.id);
 
           // Non-assessors can view submitted inspections, but should not edit
-          if (!isAssessor) {
+          if (!canCreateInspection) {
             router.replace(`/inspection/${existing.id}`);
             return;
           }
@@ -230,12 +236,7 @@ export default function PermitInspectionUnifiedPage() {
           }));
           setTemplate(((existing as any).inspection_template as InspectionTemplate) || tpl);
         } else {
-          // No existing inspection: only assessors can start
-          if (!isAssessor) {
-            setError("No inspection exists yet for this permit.");
-            return;
-          }
-
+          // No existing inspection - create a new one
           // Prefill allowed quantities from permit for authorization template
           setForm(prev => ({
             ...prev,
@@ -256,18 +257,14 @@ export default function PermitInspectionUnifiedPage() {
     };
 
     load();
-  }, [applicationNumber, isAssessor, userProfile?.id, authLoading, router]);
+  }, [applicationNumber, canCreateInspection, userProfile?.id, authLoading, router]);
 
-  const canEdit = isAssessor && !!userProfile?.id;
+  const canEdit = !!userProfile?.id;
 
   const setField = (key: keyof FormState, value: any) => setForm(prev => ({ ...prev, [key]: value }));
 
   const save = async (mode: "draft" | "submit") => {
     if (!inspectionData?.application?.id) return;
-    if (!isAssessor) {
-      alert("You are not allowed to save inspections.");
-      return;
-    }
     if (!userProfile?.id) {
       alert("Missing user profile.");
       return;
@@ -318,6 +315,9 @@ export default function PermitInspectionUnifiedPage() {
         // Social/OHS
         employment_gender_breakdown: form.employment_gender_breakdown ?? null,
         ohs_gender_sensitive: form.ohs_gender_sensitive ?? null,
+
+        // Documents
+        inspection_documents: form.inspection_documents ?? null,
       };
 
       if (template === "authorization") {
@@ -339,13 +339,31 @@ export default function PermitInspectionUnifiedPage() {
         });
       }
 
+      const stripDocs = (p: any) => {
+        const { inspection_documents, ...rest } = p || {};
+        return rest;
+      };
+
+      const isMissingColumnError = (err: any) => {
+        const msg = String(err?.message || "");
+        return msg.toLowerCase().includes("inspection_documents") && msg.toLowerCase().includes("does not exist");
+      };
+
       if (inspectionId) {
-        const { data, error: upErr } = await supabase.from("inspections").update(payload).eq("id", inspectionId).select("id").single();
+        let { data, error: upErr } = await supabase.from("inspections").update(payload).eq("id", inspectionId).select("id").single();
+        if (upErr && isMissingColumnError(upErr)) {
+          // DB migration not applied yet; retry without documents so users can still proceed.
+          ({ data, error: upErr } = await supabase.from("inspections").update(stripDocs(payload)).eq("id", inspectionId).select("id").single());
+        }
         if (upErr) throw upErr;
         if (mode === "submit") router.push(`/inspection/${data.id}`);
         else alert("✅ Draft saved");
       } else {
-        const { data, error: insErr } = await supabase.from("inspections").insert(payload).select("id").single();
+        let { data, error: insErr } = await supabase.from("inspections").insert(payload).select("id").single();
+        if (insErr && isMissingColumnError(insErr)) {
+          // DB migration not applied yet; retry without documents so users can still proceed.
+          ({ data, error: insErr } = await supabase.from("inspections").insert(stripDocs(payload)).select("id").single());
+        }
         if (insErr) throw insErr;
         setInspectionId(data.id);
         if (mode === "submit") router.push(`/inspection/${data.id}`);
@@ -420,410 +438,30 @@ export default function PermitInspectionUnifiedPage() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="locked">Locked info</TabsTrigger>
-          <TabsTrigger value="permit">Permit specifics</TabsTrigger>
-          <TabsTrigger value="social">Social & OHS</TabsTrigger>
-          <TabsTrigger value="notes">Findings</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="locked" className="mt-6 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Auto-filled (locked)</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label>Permit holder name</Label>
-                <Input disabled value={locked?.permitHolderName || "N/A"} />
-              </div>
-              <div>
-                <Label>ID/TIN</Label>
-                <Input disabled value={locked?.permitHolderId || "N/A"} />
-              </div>
-              <div>
-                <Label>Residence</Label>
-                <Input disabled value={locked?.residence || "N/A"} />
-              </div>
-              <div>
-                <Label>Contacts</Label>
-                <Input disabled value={locked?.contacts || "N/A"} />
-              </div>
-              <div>
-                <Label>Operator name</Label>
-                <Input disabled value={locked?.operatorName || "N/A"} />
-              </div>
-              <div>
-                <Label>Operator ID/TIN</Label>
-                <Input disabled value={locked?.operatorIdTin || "N/A"} />
-              </div>
-              <div>
-                <Label>Operator residence</Label>
-                <Input disabled value={locked?.operatorResidence || "N/A"} />
-              </div>
-              <div>
-                <Label>Coordinates</Label>
-                <Input disabled value={locked?.coordinates || "N/A"} />
-              </div>
-              <div>
-                <Label>Catchment Level I</Label>
-                <Input disabled value={locked?.catchmentLevel1 || "N/A"} />
-              </div>
-              <div>
-                <Label>Catchment Level II</Label>
-                <Input disabled value={locked?.catchmentLevel2 || "N/A"} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="permit" className="mt-6 space-y-4">
-          {template === "authorization" ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Authorization (Abstraction)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Allowed quantity</Label>
-                    <Input
-                      disabled={!canEdit}
-                      value={form.allowed_quantity ?? ""}
-                      onChange={e => setField("allowed_quantity", toNumberOrUndefined(e.target.value))}
-                      placeholder="e.g. 120"
-                    />
-                  </div>
-                  <div>
-                    <Label>Allowed unit</Label>
-                    <Input disabled={!canEdit} value={form.allowed_unit ?? ""} onChange={e => setField("allowed_unit", e.target.value)} placeholder="m³/day, m³/year" />
-                  </div>
-                  <div>
-                    <Label>Authorized method</Label>
-                    <Input
-                      disabled={!canEdit}
-                      value={form.authorized_abstraction_method ?? ""}
-                      onChange={e => setField("authorized_abstraction_method", e.target.value)}
-                      placeholder="Pump, gravity, ..."
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Actual quantity</Label>
-                    <Input
-                      disabled={!canEdit}
-                      value={form.actual_quantity ?? ""}
-                      onChange={e => setField("actual_quantity", toNumberOrUndefined(e.target.value))}
-                      placeholder="Observed quantity"
-                    />
-                  </div>
-                  <div>
-                    <Label>Actual unit</Label>
-                    <Input disabled={!canEdit} value={form.actual_unit ?? ""} onChange={e => setField("actual_unit", e.target.value)} placeholder="m³/day" />
-                  </div>
-                  <div>
-                    <Label>Actual method</Label>
-                    <Input disabled={!canEdit} value={form.actual_abstraction_method ?? ""} onChange={e => setField("actual_abstraction_method", e.target.value)} placeholder="Observed method" />
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Measurement device type (pictures handled separately)</Label>
-                  <Input disabled={!canEdit} value={form.measurement_device_type ?? ""} onChange={e => setField("measurement_device_type", e.target.value)} placeholder="Flow meter, weir, ..." />
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Concession</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Authorized surface area (Ha)</Label>
-                    <Input
-                      disabled={!canEdit}
-                      value={form.authorized_surface_area_ha ?? ""}
-                      onChange={e => setField("authorized_surface_area_ha", toNumberOrUndefined(e.target.value))}
-                      placeholder="Ha"
-                    />
-                  </div>
-                  <div>
-                    <Label>Actual surface area (Ha)</Label>
-                    <Input disabled={!canEdit} value={form.actual_surface_area_ha ?? ""} onChange={e => setField("actual_surface_area_ha", toNumberOrUndefined(e.target.value))} placeholder="Ha" />
-                  </div>
-                </div>
-
-                <Card className="border-dashed">
-                  <CardHeader>
-                    <CardTitle className="text-base">Authorized boundaries</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {(form.authorized_concession_boundaries || []).map((row, idx) => (
-                      <div key={`ab-${idx}`} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <Label>Beacon</Label>
-                          <Input
-                            disabled={!canEdit}
-                            value={row.beacon}
-                            onChange={e => {
-                              const next = [...(form.authorized_concession_boundaries || [])];
-                              next[idx] = { ...next[idx], beacon: e.target.value };
-                              setField("authorized_concession_boundaries", next);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label>Latitude</Label>
-                          <Input
-                            disabled={!canEdit}
-                            value={row.latitude ?? ""}
-                            onChange={e => {
-                              const next = [...(form.authorized_concession_boundaries || [])];
-                              next[idx] = { ...next[idx], latitude: e.target.value === "" ? null : Number(e.target.value) };
-                              setField("authorized_concession_boundaries", next);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label>Longitude</Label>
-                          <Input
-                            disabled={!canEdit}
-                            value={row.longitude ?? ""}
-                            onChange={e => {
-                              const next = [...(form.authorized_concession_boundaries || [])];
-                              next[idx] = { ...next[idx], longitude: e.target.value === "" ? null : Number(e.target.value) };
-                              setField("authorized_concession_boundaries", next);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    {canEdit ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          setField("authorized_concession_boundaries", [...(form.authorized_concession_boundaries || []), { beacon: `B${(form.authorized_concession_boundaries || []).length + 1}`, latitude: null, longitude: null }])
-                        }
-                      >
-                        Add boundary row
-                      </Button>
-                    ) : null}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-dashed">
-                  <CardHeader>
-                    <CardTitle className="text-base">Actual boundaries</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {(form.actual_concession_boundaries || []).map((row, idx) => (
-                      <div key={`ac-${idx}`} className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <Label>Beacon</Label>
-                          <Input
-                            disabled={!canEdit}
-                            value={row.beacon}
-                            onChange={e => {
-                              const next = [...(form.actual_concession_boundaries || [])];
-                              next[idx] = { ...next[idx], beacon: e.target.value };
-                              setField("actual_concession_boundaries", next);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label>Latitude</Label>
-                          <Input
-                            disabled={!canEdit}
-                            value={row.latitude ?? ""}
-                            onChange={e => {
-                              const next = [...(form.actual_concession_boundaries || [])];
-                              next[idx] = { ...next[idx], latitude: e.target.value === "" ? null : Number(e.target.value) };
-                              setField("actual_concession_boundaries", next);
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <Label>Longitude</Label>
-                          <Input
-                            disabled={!canEdit}
-                            value={row.longitude ?? ""}
-                            onChange={e => {
-                              const next = [...(form.actual_concession_boundaries || [])];
-                              next[idx] = { ...next[idx], longitude: e.target.value === "" ? null : Number(e.target.value) };
-                              setField("actual_concession_boundaries", next);
-                            }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    {canEdit ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() =>
-                          setField("actual_concession_boundaries", [...(form.actual_concession_boundaries || []), { beacon: `B${(form.actual_concession_boundaries || []).length + 1}`, latitude: null, longitude: null }])
-                        }
-                      >
-                        Add boundary row
-                      </Button>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="social" className="mt-6 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Employment (gender-disaggregated)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {(
-                [
-                  ["permanentEmployees", "Permanent Employees"],
-                  ["temporarySeasonalWorkers", "Temporary / Seasonal Workers"],
-                  ["technicalSkilledStaff", "Technical / Skilled Staff"],
-                  ["unskilledSupportStaff", "Unskilled / Support Staff"],
-                  ["totalWorkforce", "Total Workforce"],
-                ] as const
-              ).map(([key, label]) => {
-                const row = form.employment_gender_breakdown?.[key] || {};
-                return (
-                  <div key={key} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <div className="md:col-span-1">
-                      <Label>{label}</Label>
-                    </div>
-                    <div>
-                      <Input
-                        disabled={!canEdit}
-                        placeholder="Male"
-                        value={row.male ?? ""}
-                        onChange={e => {
-                          const next = { ...(form.employment_gender_breakdown || defaultEmployment()) };
-                          (next as any)[key] = { ...(next as any)[key], male: e.target.value === "" ? null : Number(e.target.value) };
-                          setField("employment_gender_breakdown", next);
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        disabled={!canEdit}
-                        placeholder="Female"
-                        value={row.female ?? ""}
-                        onChange={e => {
-                          const next = { ...(form.employment_gender_breakdown || defaultEmployment()) };
-                          (next as any)[key] = { ...(next as any)[key], female: e.target.value === "" ? null : Number(e.target.value) };
-                          setField("employment_gender_breakdown", next);
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Input
-                        disabled={!canEdit}
-                        placeholder="Total"
-                        value={row.total ?? ""}
-                        onChange={e => {
-                          const next = { ...(form.employment_gender_breakdown || defaultEmployment()) };
-                          (next as any)[key] = { ...(next as any)[key], total: e.target.value === "" ? null : Number(e.target.value) };
-                          setField("employment_gender_breakdown", next);
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Occupational Health & Safety (gender-sensitive)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {(
-                [
-                  ["genderInclusiveSafetyMeasures", "Gender-inclusive safety measures are in place"],
-                  ["separateSanitationFacilities", "Separate sanitation facilities"],
-                  ["genderResponsiveGrievanceMechanism", "Gender-responsive grievance mechanism"],
-                ] as const
-              ).map(([key, label]) => {
-                const item = form.ohs_gender_sensitive?.[key] || {};
-                return (
-                  <div key={key} className="space-y-2">
-                    <Label>{label}</Label>
-                    <div className="flex flex-col md:flex-row md:items-center gap-3">
-                      <YesNoSelect
-                        value={item.value}
-                        onChange={v => {
-                          const next = { ...(form.ohs_gender_sensitive || defaultOhs()) };
-                          (next as any)[key] = { ...(next as any)[key], value: v };
-                          setField("ohs_gender_sensitive", next);
-                        }}
-                      />
-                      <Input
-                        disabled={!canEdit}
-                        placeholder="Remarks"
-                        value={item.remarks ?? ""}
-                        onChange={e => {
-                          const next = { ...(form.ohs_gender_sensitive || defaultOhs()) };
-                          (next as any)[key] = { ...(next as any)[key], remarks: e.target.value };
-                          setField("ohs_gender_sensitive", next);
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="notes" className="mt-6 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Findings & recommendations</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label>Activity type</Label>
-                <Input disabled={!canEdit} value={form.activity_type ?? ""} onChange={e => setField("activity_type", e.target.value)} />
-              </div>
-              <div>
-                <Label>Wastewater system type</Label>
-                <Input disabled={!canEdit} value={form.wastewater_system_type ?? ""} onChange={e => setField("wastewater_system_type", e.target.value)} />
-              </div>
-              <div>
-                <Label>Water use conflicts</Label>
-                <Textarea disabled={!canEdit} value={form.water_use_conflicts ?? ""} onChange={e => setField("water_use_conflicts", e.target.value)} />
-              </div>
-              <div>
-                <Label>Environmental / catchment protection initiatives</Label>
-                <Textarea
-                  disabled={!canEdit}
-                  value={form.catchment_protection_initiatives ?? ""}
-                  onChange={e => setField("catchment_protection_initiatives", e.target.value)}
+      <div className="mt-6">
+        <InspectionFormLayout
+          template={template}
+          locked={{
+            permitHolderName: locked?.permitHolderName,
+            permitHolderId: locked?.permitHolderId,
+            residence: locked?.residence,
+            permitNumber: locked?.permitNumber,
+            issuanceDate: locked?.issuanceDate,
+            expirationDate: locked?.expirationDate,
+            operatorName: locked?.operatorName,
+            operatorIdTin: locked?.operatorIdTin,
+            operatorResidence: locked?.operatorResidence,
+            waterSourceName: locked?.waterSourceName,
+            waterSourceLocation: locked?.waterSourceLocation,
+            catchmentLevel1: locked?.catchmentLevel1,
+            catchmentLevel2: locked?.catchmentLevel2,
+          }}
+          form={form as any}
+          canEdit={canEdit}
+          applicationId={inspectionData?.application?.id}
+          setField={(k, v) => setField(k as any, v as any)}
                 />
               </div>
-              <div>
-                <Label>General conclusion</Label>
-                <Textarea disabled={!canEdit} value={form.general_conclusion ?? ""} onChange={e => setField("general_conclusion", e.target.value)} />
-              </div>
-              <div>
-                <Label>Recommendations</Label>
-                <Textarea disabled={!canEdit} value={form.recommendations ?? ""} onChange={e => setField("recommendations", e.target.value)} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }

@@ -646,9 +646,10 @@ CREATE POLICY "Users can update their own draft applications" ON public.applicat
 CREATE POLICY "Reviewers can view assigned applications" ON public.applications
     FOR SELECT USING (
         auth.uid() = assigned_reviewer_id OR
+        auth.uid() = assigned_assessor_id OR
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE id = auth.uid() AND role IN ('reviewer', 'admin')
+            WHERE id = auth.uid() AND role IN ('reviewer', 'assessor', 'admin')
         )
     );
 
@@ -665,6 +666,7 @@ CREATE POLICY "Staff can update applications in their workflow" ON public.applic
     FOR UPDATE USING (
         auth.uid() = assigned_reviewer_id OR
         auth.uid() = assigned_inspector_id OR
+        auth.uid() = assigned_assessor_id OR
         auth.uid() = assigned_approver_id OR
         EXISTS (
             SELECT 1 FROM public.users 

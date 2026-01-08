@@ -382,6 +382,15 @@ export interface Inspection {
   type: InspectionType
   status: InspectionStatus
   result?: InspectionResult
+
+  // Reviewer workflow (optional)
+  review_status?: 'pending' | 'reviewed' | 'changes_requested' | string
+  review_notes?: string
+  reviewed_by?: string
+  reviewed_at?: string
+
+  // Uploaded documents (JSONB)
+  inspection_documents?: Json
   
   // Scheduling
   scheduled_date: string

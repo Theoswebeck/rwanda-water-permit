@@ -91,8 +91,8 @@ export async function fetchInspectionData(
           company_name,
           account_type,
           address,
-          national_id,
-          tin_number
+          id_number,
+          id_type
         )
       `)
       .eq('application_number', applicationNumber)
@@ -261,7 +261,7 @@ function prepareInspectionData(
   const permitHolderName = applicant?.company_name || 
     `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim();
   
-  const permitHolderId = applicant?.national_id || applicant?.tin_number || 'N/A';
+  const permitHolderId = applicant?.id_number || 'N/A';
   
   const residence = applicant?.address || 'N/A';
   
