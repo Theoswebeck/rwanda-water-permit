@@ -84,6 +84,10 @@ export default function ReviewerDashboard() {
   const [selectedAssessorId, setSelectedAssessorId] = useState<string>("");
   const [assignLoading, setAssignLoading] = useState(false);
 
+  const isInApplicationsForReviewQueue = (status: string | null | undefined) => {
+    return status === "submitted" || status === "pending_review" || status === "under_review";
+  };
+
   // Fetch applications for review
   useEffect(() => {
     const fetchReviewApplications = async () => {
@@ -157,11 +161,11 @@ export default function ReviewerDashboard() {
       try {
         setStatsLoading(true);
         
-        // Query for new submissions (submitted status)
+        // Query for new submissions (submitted + pending_review status)
         const { count: newSubmissionsCount, error: newError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'submitted');
+          .in('status', ['submitted', 'pending_review']);
         
         if (newError) throw newError;
 
@@ -510,7 +514,7 @@ export default function ReviewerDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        {app.status === 'submitted' ? (
+                        {app.status === 'submitted' || app.status === 'pending_review' ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -816,7 +820,7 @@ export default function ReviewerDashboard() {
               </Select>
             </div>
                   <ApplicationTable 
-                    applications={reviewApplications.filter(app => app.status === 'submitted')}
+                    applications={reviewApplications.filter(app => isInApplicationsForReviewQueue(app.status))}
                     emptyMessage="Applications for Review"
                   />
             </TabsContent>
