@@ -93,6 +93,19 @@ function toNumberOrNull(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function toFiniteNumberOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function computeEmploymentTotal(male: unknown, female: unknown): number | null {
+  const m = toFiniteNumberOrNull(male);
+  const f = toFiniteNumberOrNull(female);
+  if (m === null && f === null) return null;
+  return (m ?? 0) + (f ?? 0);
+}
+
 function SectionShell({
   title,
   description,
@@ -457,6 +470,7 @@ export function InspectionFormLayout({
                     ] as const
                   ).map(([key, label]) => {
                     const row = (employment as any)[key] || {};
+                    const computedTotal = computeEmploymentTotal(row.male, row.female);
                     return (
                       <div key={key} className="grid grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-3 border-b last:border-b-0 border-slate-200 dark:border-slate-800">
                         <div className={cn("text-sm font-medium", key === "totalWorkforce" ? "font-semibold" : "")}>{label}</div>
@@ -466,7 +480,9 @@ export function InspectionFormLayout({
                           className="h-10"
                           onChange={(e) => {
                             const next = { ...(employment as any) };
-                            next[key] = { ...(next[key] || {}), male: toNumberOrNull(e.target.value) };
+                            const male = toNumberOrNull(e.target.value);
+                            const female = (next[key] || {})?.female;
+                            next[key] = { ...(next[key] || {}), male, total: computeEmploymentTotal(male, female) };
                             setField("employment_gender_breakdown", next as any);
                           }}
                         />
@@ -476,19 +492,16 @@ export function InspectionFormLayout({
                           className="h-10"
                           onChange={(e) => {
                             const next = { ...(employment as any) };
-                            next[key] = { ...(next[key] || {}), female: toNumberOrNull(e.target.value) };
+                            const female = toNumberOrNull(e.target.value);
+                            const male = (next[key] || {})?.male;
+                            next[key] = { ...(next[key] || {}), female, total: computeEmploymentTotal(male, female) };
                             setField("employment_gender_breakdown", next as any);
                           }}
                         />
                         <Input
-                          disabled={!canEdit}
-                          value={row.total ?? ""}
-                          className="h-10"
-                          onChange={(e) => {
-                            const next = { ...(employment as any) };
-                            next[key] = { ...(next[key] || {}), total: toNumberOrNull(e.target.value) };
-                            setField("employment_gender_breakdown", next as any);
-                          }}
+                          disabled
+                          value={computedTotal ?? ""}
+                          className="h-10 bg-muted/30"
                         />
                       </div>
                     );

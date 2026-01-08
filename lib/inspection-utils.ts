@@ -77,39 +77,70 @@ export async function fetchInspectionData(
   applicationNumber: string
 ): Promise<PermitInspectionData | null> {
   try {
-    // Fetch application with related data
-    const { data: application, error: appError } = await supabase
-      .from('applications')
-      .select(`
-        *,
-        applicant:users!applicant_id(
-          id,
-          first_name,
-          last_name,
-          email,
-          phone,
-          company_name,
-          account_type,
-          address,
-          id_number,
-          id_type
-        )
-      `)
-      .eq('application_number', applicationNumber)
-      .single();
+    const applicantSelect = `
+      *,
+      applicant:users!applicant_id(
+        id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        company_name,
+        account_type,
+        address,
+        id_number,
+        id_type
+      )
+    `;
 
-    if (appError) throw appError;
+    // Primary: treat input as application_number
+    const { data: byApplicationNo, error: byApplicationNoError } = await supabase
+      .from('applications')
+      .select(applicantSelect)
+      .eq('application_number', applicationNumber)
+      .maybeSingle();
+
+    if (byApplicationNoError) throw byApplicationNoError;
+
+    let application = byApplicationNo as any | null;
+    let permitData: Permit | null = null;
+
+    // Fallback: treat input as permit_number and resolve application via permits.application_id
+    if (!application) {
+      const { data: permitByNo, error: permitByNoError } = await supabase
+        .from('permits')
+        .select('*')
+        .eq('permit_number', applicationNumber)
+        .maybeSingle();
+
+      if (permitByNoError) throw permitByNoError;
+      permitData = (permitByNo as Permit | null) ?? null;
+
+      if (!permitData?.application_id) return null;
+
+      const { data: appById, error: appByIdError } = await supabase
+        .from('applications')
+        .select(applicantSelect)
+        .eq('id', permitData.application_id)
+        .maybeSingle();
+
+      if (appByIdError) throw appByIdError;
+      application = appById as any | null;
+    }
+
     if (!application) return null;
 
-    // Fetch permit data if available
-    const { data: permit, error: permitError } = await supabase
-      .from('permits')
-      .select('*')
-      .eq('application_id', application.id)
-      .single();
+    // If we didn't already resolve permit via permit_number, attempt to fetch it by application_id
+    if (!permitData) {
+      const { data: permit, error: permitError } = await supabase
+        .from('permits')
+        .select('*')
+        .eq('application_id', application.id)
+        .maybeSingle();
 
-    // Don't throw error if permit not found, it might not exist yet
-    const permitData = permitError ? null : permit;
+      // Don't throw error if permit not found, it might not exist yet
+      permitData = permitError ? null : permit;
+    }
 
     // Fetch payment history (if payment integration exists)
     const paymentHistory = await fetchPaymentHistory(application.id);

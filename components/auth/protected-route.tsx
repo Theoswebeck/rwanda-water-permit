@@ -8,6 +8,19 @@ import { RefreshCw } from "lucide-react";
 
 const SUPERUSER_EMAILS = new Set(["nizzogentl1@gmail.com", "nshutidavy@gmail.com"]);
 
+function getUserEmail(user: any): string {
+  const direct = String(user?.email ?? "").trim().toLowerCase();
+  if (direct) return direct;
+  const meta = String(user?.user_metadata?.email ?? "").trim().toLowerCase();
+  if (meta) return meta;
+  const identities = user?.identities as Array<any> | undefined;
+  const fromIdentities =
+    identities
+      ?.map((i) => String(i?.identity_data?.email ?? "").trim().toLowerCase())
+      .find(Boolean) ?? "";
+  return fromIdentities;
+}
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
@@ -23,7 +36,7 @@ export function ProtectedRoute({
 }: ProtectedRouteProps) {
   const router = useRouter();
   const { user, userProfile, loading, isAuthenticated } = useAuth();
-  const isSuperuser = SUPERUSER_EMAILS.has(String(user?.email ?? "").trim().toLowerCase());
+  const isSuperuser = SUPERUSER_EMAILS.has(getUserEmail(user));
 
   useEffect(() => {
     if (loading) return; // Wait for auth state to load

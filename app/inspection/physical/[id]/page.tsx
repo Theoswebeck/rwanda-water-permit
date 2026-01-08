@@ -199,10 +199,52 @@ export default function PermitInspectionPage() {
         return;
       }
 
+      const extractMissingColumnFromError = (err: any): string | null => {
+        const msg = String(err?.message || "");
+
+        let m = msg.match(/Could not find the '([^']+)' column of '([^']+)' in the schema cache/i);
+        if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
+
+        m = msg.match(/column ["']?([^"']+)["']? of relation ["']?([^"']+)["']? does not exist/i);
+        if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
+
+        return null;
+      };
+
+      const omitKey = (p: any, key: string) => {
+        const { [key]: _omitted, ...rest } = p || {};
+        return rest;
+      };
+
+      const runWithMissingColumnRetries = async (
+        run: (p: any) => Promise<{ error: any }>,
+        initialPayload: any
+      ) => {
+        let cur = initialPayload;
+        const removed = new Set<string>();
+        let lastErr: any = null;
+
+        for (let attempt = 0; attempt < 25; attempt++) {
+          const { error } = await run(cur);
+          if (!error) return { error: null };
+
+          lastErr = error;
+          const missingCol = extractMissingColumnFromError(error);
+          if (missingCol && missingCol in cur && !removed.has(missingCol)) {
+            removed.add(missingCol);
+            cur = omitKey(cur, missingCol);
+            console.warn(`⚠️ Inspections schema missing column '${missingCol}'. Retrying without it.`);
+            continue;
+          }
+
+          return { error };
+        }
+
+        return { error: lastErr };
+      };
+
       // Create comprehensive inspection record
-      const { error: inspectionError } = await supabase
-        .from('inspections')
-        .insert({
+      const inspectionPayload = {
           application_id: inspectionData.application.id,
           inspector_id: user.id,
           type: 'annual', // or 'follow_up', 'initial', etc.
@@ -261,7 +303,12 @@ export default function PermitInspectionPage() {
             ? (formData.actualQuantity || 0) <= formData.allowedQuantity
             : null,
           regulatory_compliance: formData.complianceStatus === 'compliant'
-        });
+        };
+
+      const { error: inspectionError } = await runWithMissingColumnRetries(
+        p => supabase.from('inspections').insert(p),
+        inspectionPayload
+      );
 
       if (inspectionError) throw inspectionError;
 

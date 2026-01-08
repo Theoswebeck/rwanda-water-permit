@@ -4,6 +4,23 @@ import type { User } from '@supabase/supabase-js'
 
 const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
 
+function getUserEmail(user: User | null | undefined): string {
+  // Supabase User objects can surface email in different places depending on provider/session.
+  // We normalize and check multiple sources so allowlists work reliably in middleware (Edge).
+  const direct = String(user?.email ?? '').trim().toLowerCase()
+  if (direct) return direct
+
+  const meta = String((user as any)?.user_metadata?.email ?? '').trim().toLowerCase()
+  if (meta) return meta
+
+  const identities = (user as any)?.identities as Array<any> | undefined
+  const fromIdentities =
+    identities
+      ?.map((i) => String(i?.identity_data?.email ?? '').trim().toLowerCase())
+      .find(Boolean) ?? ''
+  return fromIdentities
+}
+
 // Normalize roles coming from JWT/DB (case, whitespace, aliases).
 // This prevents accidental fallbacks to `/dashboard` when role strings differ (e.g. "Approver", " assessor ").
 function normalizeRole(input: unknown): string {
@@ -15,6 +32,8 @@ function normalizeRole(input: unknown): string {
   // - Inspector role may still exist in legacy data; treat it as part of the assessment workflow.
   const aliases: Record<string, string> = {
     assessor: 'reviewer',
+    // Common typo / confusion: "application" (role) vs "applicant" (role)
+    application: 'applicant',
   }
 
   return aliases[raw] ?? raw
@@ -89,7 +108,7 @@ export async function middleware(request: NextRequest) {
 
   // If user exists, check role-based access
   if (user && isProtectedRoute) {
-    const userEmail = String(user.email ?? '').trim().toLowerCase()
+    const userEmail = getUserEmail(user)
     const isSuperuser = SUPERUSER_EMAILS.has(userEmail)
 
     // ⚡ PERFORMANCE: Get role from JWT metadata first (no DB call needed)

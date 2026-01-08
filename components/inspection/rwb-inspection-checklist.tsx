@@ -98,6 +98,19 @@ function toNumberOrNull(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function toFiniteNumberOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function computeEmploymentTotal(male: unknown, female: unknown): number | null {
+  const m = toFiniteNumberOrNull(male);
+  const f = toFiniteNumberOrNull(female);
+  if (m === null && f === null) return null;
+  return (m ?? 0) + (f ?? 0);
+}
+
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <div className="font-semibold text-sm uppercase tracking-wide text-slate-700 dark:text-slate-200">{children}</div>;
 }
@@ -489,6 +502,7 @@ export function RwbInspectionChecklist({
                 ] as const
               ).map(([key, label]) => {
                 const row = (employment as any)[key] || {};
+                const computedTotal = computeEmploymentTotal(row.male, row.female);
                 return (
                   <div key={key} className="grid grid-cols-[320px_1fr_1fr_1fr] gap-2 px-4 py-2 border-b border-slate-200 dark:border-slate-800 last:border-b-0">
                     <div className="flex items-center text-sm font-medium text-slate-800 dark:text-slate-100">{label}</div>
@@ -498,7 +512,9 @@ export function RwbInspectionChecklist({
                       className="h-9"
                       onChange={(e) => {
                         const next = { ...(employment as any) };
-                        next[key] = { ...(next[key] || {}), male: toNumberOrNull(e.target.value) };
+                        const male = toNumberOrNull(e.target.value);
+                        const female = (next[key] || {})?.female;
+                        next[key] = { ...(next[key] || {}), male, total: computeEmploymentTotal(male, female) };
                         setField("employment_gender_breakdown", next as any);
                       }}
                     />
@@ -508,19 +524,16 @@ export function RwbInspectionChecklist({
                       className="h-9"
                       onChange={(e) => {
                         const next = { ...(employment as any) };
-                        next[key] = { ...(next[key] || {}), female: toNumberOrNull(e.target.value) };
+                        const female = toNumberOrNull(e.target.value);
+                        const male = (next[key] || {})?.male;
+                        next[key] = { ...(next[key] || {}), female, total: computeEmploymentTotal(male, female) };
                         setField("employment_gender_breakdown", next as any);
                       }}
                     />
                     <Input
-                      disabled={!canEdit}
-                      value={row.total ?? ""}
-                      className="h-9"
-                      onChange={(e) => {
-                        const next = { ...(employment as any) };
-                        next[key] = { ...(next[key] || {}), total: toNumberOrNull(e.target.value) };
-                        setField("employment_gender_breakdown", next as any);
-                      }}
+                      disabled
+                      value={computedTotal ?? ""}
+                      className="h-9 bg-muted/30"
                     />
                   </div>
                 );

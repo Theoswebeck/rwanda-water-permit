@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS public.inspections (
   status inspection_status NOT NULL DEFAULT 'scheduled',
   result inspection_result,
 
+  -- Activity details (used by permit-holder inspection checklist)
+  activity_type TEXT,
+  activity_starting_date DATE,
+
   -- Scheduling
   scheduled_date TIMESTAMP WITH TIME ZONE NOT NULL,
   completed_date TIMESTAMP WITH TIME ZONE,

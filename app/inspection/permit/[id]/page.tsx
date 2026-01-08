@@ -148,9 +148,13 @@ function YesNoSelect({
 export default function PermitInspectionUnifiedPage() {
   const params = useParams();
   const router = useRouter();
-  const { userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading } = useAuth();
   // Allow assessors, inspectors, reviewers, and admins to create/edit inspections
-  const canCreateInspection = ["assessor", "inspector", "reviewer", "admin"].includes(userProfile?.role || "");
+  const effectiveRole =
+    (userProfile?.role as any) ||
+    ((user?.user_metadata as any)?.role as any) ||
+    "";
+  const canCreateInspection = ["assessor", "inspector", "reviewer", "admin"].includes(effectiveRole);
 
   const applicationNumber = params.id as string | undefined;
 
@@ -219,7 +223,7 @@ export default function PermitInspectionUnifiedPage() {
 
           // Assessors can only edit their own draft/in-progress
           const isDraft = existing.status === "scheduled" || existing.status === "in_progress";
-          const isOwner = existing.inspector_id === userProfile?.id;
+          const isOwner = existing.inspector_id === user?.id;
           if (!isOwner || !isDraft) {
             router.replace(`/inspection/${existing.id}`);
             return;
@@ -265,8 +269,10 @@ export default function PermitInspectionUnifiedPage() {
 
   const save = async (mode: "draft" | "submit") => {
     if (!inspectionData?.application?.id) return;
-    if (!userProfile?.id) {
-      alert("Missing user profile.");
+    // Ensure we have a valid session; otherwise Supabase requests will run as anon and RLS will block.
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session?.user?.id) {
+      alert("⚠️ Your session is missing/expired. Please log in again, then retry.");
       return;
     }
 
@@ -276,7 +282,7 @@ export default function PermitInspectionUnifiedPage() {
       const nowIso = new Date().toISOString();
       const base = {
         application_id: inspectionData.application.id,
-        inspector_id: userProfile.id,
+        inspector_id: user.id,
         type: "annual",
         inspection_template: template,
         status: mode === "submit" ? "completed" : "in_progress",
@@ -344,26 +350,83 @@ export default function PermitInspectionUnifiedPage() {
         return rest;
       };
 
-      const isMissingColumnError = (err: any) => {
+      const extractMissingColumnFromError = (err: any): string | null => {
         const msg = String(err?.message || "");
-        return msg.toLowerCase().includes("inspection_documents") && msg.toLowerCase().includes("does not exist");
+
+        // PostgREST schema cache error (Supabase REST API)
+        // Example: Could not find the 'activity_starting_date' column of 'inspections' in the schema cache
+        let m = msg.match(/Could not find the '([^']+)' column of '([^']+)' in the schema cache/i);
+        if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
+
+        // Postgres error (via RPC/SQL)
+        // Example: column "inspection_documents" of relation "inspections" does not exist
+        m = msg.match(/column ["']?([^"']+)["']? of relation ["']?([^"']+)["']? does not exist/i);
+        if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
+
+        // Fallback for older handling
+        if (msg.toLowerCase().includes("inspection_documents") && msg.toLowerCase().includes("does not exist")) {
+          return "inspection_documents";
+        }
+
+        return null;
+      };
+
+      const omitKey = (p: any, key: string) => {
+        const { [key]: _omitted, ...rest } = p || {};
+        return rest;
+      };
+
+      const runWithMissingColumnRetries = async <T,>(
+        run: (p: any) => Promise<{ data: T | null; error: any }>,
+        initialPayload: any
+      ) => {
+        let cur = initialPayload;
+        const removed = new Set<string>();
+        let lastErr: any = null;
+
+        // Retry several times, stripping unknown columns reported by Supabase/PostgREST.
+        // In environments where DB migrations haven't been applied, Supabase will surface
+        // missing columns one-by-one.
+        for (let attempt = 0; attempt < 25; attempt++) {
+          const { data, error } = await run(cur);
+          if (!error) return { data, error: null };
+
+          lastErr = error;
+          const missingCol = extractMissingColumnFromError(error);
+          if (missingCol && missingCol in cur && !removed.has(missingCol)) {
+            removed.add(missingCol);
+            cur = omitKey(cur, missingCol);
+            console.warn(`⚠️ Inspections schema missing column '${missingCol}'. Retrying without it.`);
+            continue;
+          }
+
+          // Keep the legacy "documents" fallback as a safety net
+          if (!removed.has("inspection_documents") && extractMissingColumnFromError(error) === "inspection_documents") {
+            removed.add("inspection_documents");
+            cur = stripDocs(cur);
+            console.warn("⚠️ Inspections schema missing column 'inspection_documents'. Retrying without it.");
+            continue;
+          }
+
+          return { data: null, error };
+        }
+
+        return { data: null, error: lastErr };
       };
 
       if (inspectionId) {
-        let { data, error: upErr } = await supabase.from("inspections").update(payload).eq("id", inspectionId).select("id").single();
-        if (upErr && isMissingColumnError(upErr)) {
-          // DB migration not applied yet; retry without documents so users can still proceed.
-          ({ data, error: upErr } = await supabase.from("inspections").update(stripDocs(payload)).eq("id", inspectionId).select("id").single());
-        }
+        const { data, error: upErr } = await runWithMissingColumnRetries<{ id: string }>(
+          p => supabase.from("inspections").update(p).eq("id", inspectionId).select("id").single(),
+          payload
+        );
         if (upErr) throw upErr;
         if (mode === "submit") router.push(`/inspection/${data.id}`);
         else alert("✅ Draft saved");
       } else {
-        let { data, error: insErr } = await supabase.from("inspections").insert(payload).select("id").single();
-        if (insErr && isMissingColumnError(insErr)) {
-          // DB migration not applied yet; retry without documents so users can still proceed.
-          ({ data, error: insErr } = await supabase.from("inspections").insert(stripDocs(payload)).select("id").single());
-        }
+        const { data, error: insErr } = await runWithMissingColumnRetries<{ id: string }>(
+          p => supabase.from("inspections").insert(p).select("id").single(),
+          payload
+        );
         if (insErr) throw insErr;
         setInspectionId(data.id);
         if (mode === "submit") router.push(`/inspection/${data.id}`);
