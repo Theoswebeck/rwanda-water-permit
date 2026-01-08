@@ -15,7 +15,7 @@ const navItems = [
   { label: "Water Use Dashboard", href: "/water-use-dashboard" },
   { label: "Regulations", href: "/regulations" },
   { label: "Resources", href: "/resources" },
-  { label: "Contact", href: "/contact" },
+  { label: "Contact", href: "https://rwanda-water-permit-production.up.railway.app/contact" },
 ];
 
 export function Header() {

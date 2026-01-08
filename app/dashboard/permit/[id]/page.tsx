@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Calendar, Download, FileCheck, Clock, AlertCircle, MapPin } from "lucide-react";
+import { ArrowLeft, Calendar, Download, FileCheck, Clock, AlertCircle, MapPin, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { downloadFromDocumentsBucket } from "@/lib/supabase-storage";
+import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
+import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
 
 export default function PermitDetailPage() {
   const params = useParams();
@@ -19,6 +20,8 @@ export default function PermitDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [permit, setPermit] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [applicationData, setApplicationData] = useState<any>(null);
   
   useEffect(() => {
     const fetchPermitDetails = async () => {
@@ -26,6 +29,8 @@ export default function PermitDetailPage() {
 
       try {
         const permitId = params.id as string;
+        
+        // Fetch permit with application data
         const { data, error } = await supabase
           .from("permits")
           .select(
@@ -42,6 +47,7 @@ export default function PermitDetailPage() {
               expiry_date,
               permit_pdf_url,
               conditions,
+              application_id,
               application:applications(
                 id,
                 application_number,
@@ -70,6 +76,10 @@ export default function PermitDetailPage() {
 
         const app = (data as any)?.application;
         const applicant = app?.applicant;
+        const applicationId = (data as any)?.application_id;
+        
+        // Store application data for PDF generation
+        setApplicationData(app);
 
         const applicantName =
           applicant?.account_type === "individual"
@@ -86,6 +96,55 @@ export default function PermitDetailPage() {
           if (typeof c === "object" && Array.isArray((c as any).conditions)) return (c as any).conditions;
           return [];
         })();
+        
+        // Fetch inspections for this permit using application_id
+        let inspectionsData: any[] = [];
+        if (applicationId) {
+          console.log("📋 Fetching inspections for application_id:", applicationId);
+          const { data: inspections, error: inspectionsError } = await supabase
+            .from("inspections")
+            .select(`
+              id,
+              status,
+              type,
+              result,
+              scheduled_date,
+              completed_date,
+              recommendations,
+              overall_score,
+              created_at,
+              inspector:users!inspector_id(
+                first_name,
+                last_name
+              )
+            `)
+            .eq("application_id", applicationId)
+            .order("created_at", { ascending: false });
+            
+          if (inspectionsError) {
+            console.warn("⚠️ Failed to fetch inspections:", inspectionsError);
+          } else {
+            console.log("✅ Found inspections:", inspections?.length || 0);
+            inspectionsData = (inspections || []).map((insp: any) => ({
+              id: insp.id,
+              date: insp.completed_date 
+                ? new Date(insp.completed_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                : insp.scheduled_date 
+                  ? new Date(insp.scheduled_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                  : "Date not available",
+              status: insp.result 
+                ? insp.result.charAt(0).toUpperCase() + insp.result.slice(1).replace(/_/g, " ")
+                : insp.status 
+                  ? insp.status.charAt(0).toUpperCase() + insp.status.slice(1).replace(/_/g, " ")
+                  : "Pending",
+              notes: insp.recommendations || `${insp.type || "General"} inspection ${insp.status || "scheduled"}`,
+              inspector: insp.inspector 
+                ? `${insp.inspector.first_name || ""} ${insp.inspector.last_name || ""}`.trim() 
+                : "Inspector",
+              score: insp.overall_score,
+            }));
+          }
+        }
 
         setPermit({
           id: data.id,
@@ -101,6 +160,7 @@ export default function PermitDetailPage() {
           waterAllowance: `${data.water_allowance} ${data.allowance_unit}`,
           issuingAuthority: data.issuing_authority,
           permitPdfPath: (data as any).permit_pdf_url ?? null,
+          applicationId,
           applicationDetails: {
             applicantName,
             applicantType: applicant?.account_type === "individual" ? "Individual" : "Organization",
@@ -110,7 +170,7 @@ export default function PermitDetailPage() {
             environmentalAssessment: app?.environmental_assessment ?? "N/A",
           },
           conditions,
-          inspections: [],
+          inspections: inspectionsData,
         });
       } catch (e) {
         console.error("❌ Failed to load permit details:", e);
@@ -129,15 +189,100 @@ export default function PermitDetailPage() {
     
     try {
       setIsDownloading(true);
-      if (!permit.permitPdfPath) {
-        alert("No PDF is available for this permit yet.");
-        return;
+      
+      // If PDF path exists, try to download from storage
+      if (permit.permitPdfPath) {
+        console.log("📥 Attempting to download PDF from:", permit.permitPdfPath);
+        const blob = await downloadFromDocumentsBucket(permit.permitPdfPath);
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `permit-${permit.permitNumber}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          return;
+        }
+        console.warn("⚠️ PDF not found in storage, will try to regenerate...");
       }
-
-      const blob = await downloadFromDocumentsBucket(permit.permitPdfPath);
-      if (!blob) throw new Error("Failed to download permit PDF");
-
-      const url = URL.createObjectURL(blob);
+      
+      // PDF doesn't exist or couldn't be downloaded - try to generate it
+      console.log("📄 Generating PDF for permit:", permit.permitNumber);
+      await handleGeneratePdf();
+      
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      alert('Failed to download PDF. Please try again later.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+  
+  // Handle PDF generation
+  const handleGeneratePdf = async () => {
+    if (!permit || !applicationData) {
+      alert("Unable to generate PDF - application data not available.");
+      return;
+    }
+    
+    try {
+      setIsGeneratingPdf(true);
+      console.log("📄 Generating PDF for permit:", permit.permitNumber);
+      
+      // Fetch full application data for PDF generation
+      const { data: fullApp, error: appError } = await supabase
+        .from("applications")
+        .select(`
+          *,
+          applicant:users!applicant_id(*)
+        `)
+        .eq("id", permit.applicationId)
+        .single();
+        
+      if (appError || !fullApp) {
+        throw new Error("Failed to fetch application data for PDF generation");
+      }
+      
+      // Generate PDF blob
+      const pdfBlob = await generateDigitalWaterPermitBlob(
+        fullApp as any,
+        permit.permitNumber,
+        permit.conditions || [],
+        5 // Default validity years
+      );
+      
+      // Upload to storage
+      const upload = await uploadPermitPdf({
+        permitId: permit.id,
+        permitNumber: permit.permitNumber,
+        pdfBlob,
+      });
+      
+      if (upload?.path) {
+        console.log("✅ PDF uploaded:", upload.path);
+        
+        // Update permit record with PDF path
+        const { error: updateError } = await supabase
+          .from("permits")
+          .update({
+            permit_pdf_url: upload.path,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", permit.id);
+          
+        if (updateError) {
+          console.warn("⚠️ Failed to update permit_pdf_url:", updateError);
+        } else {
+          console.log("✅ permit_pdf_url saved on permit record");
+          // Update local state
+          setPermit((prev: any) => ({ ...prev, permitPdfPath: upload.path }));
+        }
+      }
+      
+      // Download the generated PDF
+      const url = URL.createObjectURL(pdfBlob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `permit-${permit.permitNumber}.pdf`;
@@ -145,11 +290,14 @@ export default function PermitDetailPage() {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      
+      console.log("✅ PDF generated and downloaded successfully");
+      
     } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('Failed to download PDF. Please try again later.');
+      console.error("❌ Failed to generate PDF:", error);
+      alert("Failed to generate PDF. Please try again later.");
     } finally {
-      setIsDownloading(false);
+      setIsGeneratingPdf(false);
     }
   };
   
@@ -595,9 +743,9 @@ export default function PermitDetailPage() {
                   <p className="text-sm text-muted-foreground mb-4">
                     If you have any questions about your permit, please contact our support team.
                   </p>
-                  <Link href={`/contact-us?permit=${permit?.permitNumber || params.id}&category=permit`}>
+                  <a href={`https://rwanda-water-permit-production.up.railway.app/contact?permit=${permit?.permitNumber || params.id}&category=permit`} target="_blank" rel="noopener noreferrer">
                     <Button className="w-full">Contact Support</Button>
-                  </Link>
+                  </a>
                 </CardContent>
               </Card>
             </div>

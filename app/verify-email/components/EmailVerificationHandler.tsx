@@ -68,7 +68,7 @@ export function EmailVerificationHandler() {
         <div className="text-center">
           <p className="text-xs text-muted-foreground">
             Need help?{" "}
-            <a href="/contact" className="text-primary hover:underline">
+            <a href="https://rwanda-water-permit-production.up.railway.app/contact" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
               Contact support
             </a>
           </p>

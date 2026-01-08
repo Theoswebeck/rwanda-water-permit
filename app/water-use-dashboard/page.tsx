@@ -247,7 +247,7 @@ export default function WaterUseDashboardPage() {
                   </a>
                 </Button>
                 <Button variant="outline" className="gap-2 border-emerald-200 text-emerald-900 hover:bg-emerald-50" asChild>
-                  <Link href="/contact">Contact</Link>
+                  <Link href="https://rwanda-water-permit-production.up.railway.app/contact" target="_blank" rel="noopener noreferrer">Contact</Link>
                 </Button>
               </div>
             </div>

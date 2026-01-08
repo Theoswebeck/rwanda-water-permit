@@ -192,10 +192,13 @@ export default function PermitInspectionPage() {
     try {
       setSubmitting(true);
       
-      // Get current user (inspector)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        alert('User not authenticated');
+      // Get current user (inspector) - use getSession for the actual auth.uid() value
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      
+      if (sessionError || !user?.id) {
+        console.error('❌ Session check failed:', sessionError || 'No session user');
+        alert('⚠️ Your session is missing or expired. Please log in again, then retry.');
         return;
       }
 

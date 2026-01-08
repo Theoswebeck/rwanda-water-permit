@@ -43,7 +43,7 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
       onContactSupport();
     } else {
       // Default action - mailto or redirect to contact page
-      window.location.href = '/contact';
+      window.open('https://rwanda-water-permit-production.up.railway.app/contact', '_blank');
     }
   };
 

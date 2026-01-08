@@ -25,8 +25,8 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
   };
 
   const handleContactSupport = () => {
-    // Redirect to contact page or open support modal
-    router.push('/contact');
+    // Open production contact page in new tab
+    window.open('https://rwanda-water-permit-production.up.railway.app/contact', '_blank');
   };
 
   return (

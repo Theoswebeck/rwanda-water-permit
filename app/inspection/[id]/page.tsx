@@ -1,6 +1,7 @@
 import { Metadata } from "next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { InspectionDetailTabs } from "@/components/inspection/inspection-detail-tabs"
+import { BackButton } from "@/components/ui/back-button"
 
 export const metadata: Metadata = {
   title: "Inspection Details | Rwanda Water Resources Board",
@@ -12,6 +13,8 @@ export default async function InspectionDetailPage({ params }: { params: Promise
   
   return (
     <div className="container mx-auto py-8 space-y-8">
+      <BackButton />
+      
       <div>
         <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Inspection Details</h1>
         <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">

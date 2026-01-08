@@ -268,11 +268,18 @@ export default function PermitInspectionUnifiedPage() {
   const setField = (key: keyof FormState, value: any) => setForm(prev => ({ ...prev, [key]: value }));
 
   const save = async (mode: "draft" | "submit") => {
-    if (!inspectionData?.application?.id) return;
+    if (!inspectionData?.application?.id) {
+      alert("⚠️ Application data not loaded.");
+      return;
+    }
+
     // Ensure we have a valid session; otherwise Supabase requests will run as anon and RLS will block.
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session?.user?.id) {
-      alert("⚠️ Your session is missing/expired. Please log in again, then retry.");
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const sessionUserId = sessionData?.session?.user?.id;
+
+    if (sessionError || !sessionUserId) {
+      console.error("❌ Session check failed:", sessionError || "No session user");
+      alert("⚠️ Your session is missing or expired. Please log in again, then retry.");
       return;
     }
 
@@ -282,7 +289,8 @@ export default function PermitInspectionUnifiedPage() {
       const nowIso = new Date().toISOString();
       const base = {
         application_id: inspectionData.application.id,
-        inspector_id: user.id,
+        // CRITICAL: use the session user id (same as auth.uid() in Postgres RLS)
+        inspector_id: sessionUserId,
         type: "annual",
         inspection_template: template,
         status: mode === "submit" ? "completed" : "in_progress",
