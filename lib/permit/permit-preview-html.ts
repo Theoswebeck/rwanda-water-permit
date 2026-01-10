@@ -194,29 +194,7 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
       .footer-inner{
         display:flex;
         align-items:center;
-        justify-content:space-between;
-        gap:18px;
-      }
-      .verify{
-        min-width:0;
-      }
-      .verify .h{
-        margin:0;
-        font-weight:700;
-        color:var(--ink);
-        font-size:13px;
-      }
-      .verify .p{
-        margin:6px 0 0;
-        font-size:11px;
-        color:var(--muted);
-        line-height:1.35;
-      }
-      .verify .url{
-        margin:8px 0 0;
-        font-size:11px;
-        color:var(--brand);
-        word-break:break-all;
+        justify-content:center;
       }
       .qr{
         flex:none;
@@ -232,14 +210,6 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
         display:block;
         width:118px;
         height:118px;
-      }
-      .footnote{
-        margin-top:10px;
-        font-size:10px;
-        color:#64748b;
-        display:flex;
-        justify-content:space-between;
-        gap:12px;
       }
       @media print{
         body{ background:#fff; }
@@ -299,16 +269,7 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
 
         <div class="footer">
           <div class="footer-inner">
-            <div class="verify">
-              <p class="h">Verify this permit</p>
-              <p class="p">Scan the QR code to view this permit in the system. This helps confirm authenticity and reduces manual checks.</p>
-              <div class="url">${safe.verificationUrl}</div>
-            </div>
             <div class="qr">${qrSvg}</div>
-          </div>
-          <div class="footnote">
-            <div>Document ID: ${safe.permitNumber}</div>
-            <div>Generated for preview</div>
           </div>
         </div>
       </div>

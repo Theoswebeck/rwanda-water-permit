@@ -481,7 +481,7 @@ function drawPermitQrFooter(opts: {
 
   const qrBox = 34;
   const qrPadding = 2.5;
-  const qrX = marginX + footerW - qrBox;
+  const qrX = marginX + (footerW - qrBox) / 2;
   const qrY = footerY + (footerH - qrBox) / 2;
   const qrSize = qrBox - qrPadding * 2;
 
@@ -489,17 +489,6 @@ function drawPermitQrFooter(opts: {
   doc.setDrawColor(226, 232, 240);
   doc.setFillColor(251, 253, 255);
   doc.roundedRect(marginX, footerY, footerW, footerH, 2, 2, "FD");
-
-  // Left text block (kept narrow to avoid crowding QR)
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(10);
-  doc.text("Verify this permit", marginX + 8, footerY + 12);
-
-  doc.setTextColor(71, 85, 105);
-  doc.setFontSize(8);
-  const desc = "Scan the QR code to view this permit in the system.";
-  const descLines = doc.splitTextToSize(desc, footerW - qrBox - 18);
-  doc.text(descLines, marginX + 8, footerY + 18);
 
   // QR "card"
   doc.setDrawColor(226, 232, 240);
