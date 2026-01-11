@@ -51,7 +51,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     }
   }
 
-  // Map intended activities to application type and purpose
+  // Map intended activities to application type and purpose (use first selected as primary for DB enums)
   const primaryActivity = formData.intendedActivities?.[0] || 'domestic';
   const waterSourceTypeMap: Record<string, Application['water_source']> = {
     'lake': 'surface_water',
@@ -79,6 +79,8 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'navigation': 'commercial', // navigation is commercial activity
     'recreation': 'commercial', // legacy
     'recreation_activities': 'commercial',
+    'livestock': 'agricultural',
+    'gaz_extraction': 'industrial',
     'other': 'domestic'
   };
 
@@ -99,6 +101,8 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'navigation': 'recreation', // navigation falls under recreation
     'recreation': 'recreation', // legacy
     'recreation_activities': 'recreation',
+    'livestock': 'livestock',
+    'gaz_extraction': 'industrial',
     'other': 'domestic'
   };
 
@@ -142,6 +146,9 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     // Project information - with defaults for drafts
     project_title: defaultsForDrafts.project_title,
     project_description: `${formData.categoryApplicant} water permit application for ${formData.intendedActivities?.join(', ') || 'water use'}`,
+
+    // Store the multi-select activity list explicitly on the application record
+    intended_activities: Array.isArray(formData.intendedActivities) ? formData.intendedActivities : undefined,
     
     // Technical specifications - based on new form structure
     water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
@@ -250,6 +257,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       annexC_aquacultureDetails: formData.annexC_aquacultureDetails,
       annexD_coffeeWashingDetails: formData.annexD_coffeeWashingDetails,
       annexE_industryDetails: formData.annexE_industryDetails,
+      industryDetails: formData.industryDetails,
       annexF_electricityDetails: formData.annexF_electricityDetails,
       annexG_miningDetails: formData.annexG_miningDetails,
       annexH_constructionDetails: formData.annexH_constructionDetails,

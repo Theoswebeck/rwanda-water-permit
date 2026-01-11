@@ -130,10 +130,14 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     const purposeToActivity: Record<string, string> = {
       'domestic': 'water_supply', 'irrigation': 'irrigation', 'fish_farming_lakes': 'fish_farming_lakes',
       'fish_farming_ponds': 'fish_farming_ponds', 'industrial': 'industry', 'electricity_generation': 'electricity_generation',
-      'mining': 'mining', 'recreation': 'recreation_activities'
+      'mining': 'mining', 'recreation': 'recreation_activities', 'livestock': 'livestock'
     };
-    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
-    formData.intendedActivities = [mappedActivity];
+    if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
+      formData.intendedActivities = (application as any).intended_activities;
+    } else {
+      const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+      formData.intendedActivities = [mappedActivity];
+    }
     formData.waterAbstractionDetails = [{
       activity: mappedActivity, flowRate: '', flowRateUnit: 'm³/s',
       maxAverageYearly: application.estimated_usage_volume || 0,

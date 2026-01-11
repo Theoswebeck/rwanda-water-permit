@@ -19,6 +19,7 @@ import { supabase } from "@/lib/supabase";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import type { Application, Document, User as UserType } from "@/types/database";
 import { geometryToCoordinatePolygons, polygonsToGeoJSON, type CoordinatePoint } from "@/lib/geoUtils";
+import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -100,6 +101,8 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     'navigation': 'commercial', // navigation is commercial activity
     'recreation': 'commercial', // legacy
     'recreation_activities': 'commercial',
+    'livestock': 'agricultural',
+    'gaz_extraction': 'industrial',
     'other': 'domestic'
   };
 
@@ -120,6 +123,8 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     'navigation': 'recreation', // navigation falls under recreation
     'recreation': 'recreation', // legacy
     'recreation_activities': 'recreation',
+    'livestock': 'livestock',
+    'gaz_extraction': 'industrial',
     'other': 'domestic'
   };
 
@@ -160,6 +165,9 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
     // Project information - with defaults for drafts
     project_title: defaultsForDrafts.project_title,
     project_description: `${formData.categoryApplicant} water permit application for ${formData.intendedActivities?.join(', ') || 'water use'}`,
+
+    // Persist the full multi-select activity list
+    intended_activities: Array.isArray(formData.intendedActivities) ? formData.intendedActivities : undefined,
     
     // Technical specifications - based on new form structure
     water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
@@ -280,6 +288,7 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' =
       annexC_aquacultureDetails: formData.annexC_aquacultureDetails,
       annexD_coffeeWashingDetails: formData.annexD_coffeeWashingDetails,
       annexE_industryDetails: formData.annexE_industryDetails,
+      industryDetails: formData.industryDetails,
       annexF_electricityDetails: formData.annexF_electricityDetails,
       annexG_miningDetails: formData.annexG_miningDetails,
       annexH_constructionDetails: formData.annexH_constructionDetails,
@@ -512,8 +521,13 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     'recreation': 'recreation_activities'
   };
   
-  const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
-  formData.intendedActivities = [mappedActivity];
+  // Prefer the explicit persisted multi-select list if present.
+  if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
+    formData.intendedActivities = (application as any).intended_activities;
+  } else {
+    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+    formData.intendedActivities = [mappedActivity];
+  }
   
   // Water abstraction details
   if (application.estimated_usage_volume) {
@@ -588,28 +602,53 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       aquacultureEIA: 'environmental_impact_doc',
       aquacultureManagementPlan: 'other',
       aquacultureRecommendationLetter: 'other',
+      aquaculturePolygonAreaMap: 'intake_discharge_map',
+      aquacultureHydrologicalReport: 'geological_survey',
       // Coffee Washing documents
       coffeeWashingGeneralRequirements: 'other',
       coffeeWashingEIA: 'environmental_impact_doc',
+      coffeeWashingHydrologicalReport: 'geological_survey',
       // Industrial documents
       industrialGeneralRequirements: 'other',
       industrialEIA: 'environmental_impact_doc',
+      industrialHydrologicalReport: 'geological_survey',
       // Hydropower documents
       hydropowerGeneralRequirements: 'other',
       hydropowerEIA: 'environmental_impact_doc',
+      hydropowerFeasibilityStudy: 'other',
       // Construction Dam documents
       constructionDamGeneralRequirements: 'other',
       constructionDamEIA: 'environmental_impact_doc',
+      constructionDamFeasibilityStudy: 'other',
       // Infrastructure documents
       infrastructureGeneralRequirements: 'other',
       infrastructureEIA: 'environmental_impact_doc',
+      infrastructureFeasibilityStudy: 'other',
       // Navigation documents
       navigationGeneralRequirements: 'other',
       navigationEIA: 'environmental_impact_doc',
+      navigationManagementPlan: 'other',
       // Recreation documents
       recreationGeneralRequirements: 'other',
-      recreationEIA: 'environmental_impact_doc'
+      recreationEIA: 'environmental_impact_doc',
+      recreationPolygonAreaMap: 'intake_discharge_map',
+      // Gaz extraction documents
+      gazExtractionGeneralRequirements: 'other',
+      gazExtractionEIA: 'environmental_impact_doc',
+      gazExtractionFeasibilityStudy: 'other',
+      // Livestock documents
+      livestockGeneralRequirements: 'other',
+      livestockFeasibilityStudy: 'other',
     };
+
+    const requiredFieldNames = (() => {
+      const intendedActivities = formData.intendedActivities || [];
+      const irrigationArea = formData.irrigationTotalArea || 0;
+      const req = getRequiredAttachmentFieldNames(intendedActivities, { irrigationTotalArea: irrigationArea });
+      req.add("identificationDoc");
+      if (formData.ownsAllLand === false) req.add("landAccessDocuments");
+      return req;
+    })();
     
     console.log('📋 Checking for document uploads in formData:', Object.keys(formData).filter(key => formData[key] instanceof File));
     console.log('📋 All formData keys:', Object.keys(formData));
@@ -627,16 +666,20 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
           console.log(`✅ Upload result for ${fieldName}:`, uploadResult);
           
           if (uploadResult) {
-            // Check if document already exists
+            // IMPORTANT:
+            // Do NOT upsert by `type` because many distinct fields share the same type (e.g. "other", "geological_survey").
+            // Upsert by fieldName encoded into the storage path: applications/{applicationId}/{fieldName}-{timestamp}.{ext}
             const { data: existingDoc, error: checkError } = await supabase
               .from('documents')
-              .select('id')
+              .select('id,file_path,created_at')
               .eq('application_id', applicationId)
-              .eq('type', documentType)
+              .ilike('file_path', `%applications/${applicationId}/${fieldName}-%`)
+              .order('created_at', { ascending: false })
+              .limit(1)
               .maybeSingle();
               
-            if (checkError && checkError.code !== 'PGRST116') {
-              console.error(`Error checking existing document ${fieldName}:`, checkError);
+            if (checkError) {
+              console.error(`Error checking existing document by fieldName ${fieldName}:`, checkError);
               continue;
             }
             
@@ -650,6 +693,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
                   file_size: file.size,
                   mime_type: file.type,
                   verification_status: 'pending',
+                  is_required: requiredFieldNames.has(fieldName),
                   updated_at: new Date().toISOString()
                 })
                 .eq('id', existingDoc.id)
@@ -682,16 +726,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
                   file_size: file.size,
                   mime_type: file.type,
                   verification_status: 'pending',
-                  is_required: [
-                    'paymentProof', 
-                    'identificationDoc', 
-                    'landAccessDocuments',
-                    'landOwnershipDoc',
-                    'miningGeneralRequirements',
-                    'miningLicense',
-                    'miningEIA',
-                    'miningHydrologicalReport'
-                  ].includes(fieldName),
+                  is_required: requiredFieldNames.has(fieldName),
                   uploaded_by: userId || '550e8400-e29b-41d4-a716-446655440001',
                   upload_date: new Date().toISOString()
                 })

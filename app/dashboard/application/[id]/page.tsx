@@ -198,8 +198,13 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'recreation': 'recreation'
     };
     
-    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
-    formData.intendedActivities = [mappedActivity];
+    const intendedActivities = Array.isArray((application as any).intended_activities)
+      ? (application as any).intended_activities
+      : [];
+    formData.intendedActivities =
+      intendedActivities.length > 0 ? intendedActivities : [purposeToActivity[application.water_purpose] || 'water_supply'];
+
+    const mappedActivity = formData.intendedActivities?.[0] || 'water_supply';
     
     // Water abstraction details
     if (application.estimated_usage_volume) {

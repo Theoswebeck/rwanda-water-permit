@@ -32,6 +32,7 @@ import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
 import type { Application, Document } from "@/types/database";
 import { mapFormDataToApplication } from "@/lib/application-utils";
+import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 
 // Helper function to create storage bucket if it doesn't exist
 async function ensureStorageBucket() {
@@ -96,28 +97,54 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       aquacultureEIA: 'environmental_impact_doc',
       aquacultureManagementPlan: 'other',
       aquacultureRecommendationLetter: 'other',
+      aquaculturePolygonAreaMap: 'intake_discharge_map',
+      aquacultureHydrologicalReport: 'geological_survey',
       // Coffee Washing documents
       coffeeWashingGeneralRequirements: 'other',
       coffeeWashingEIA: 'environmental_impact_doc',
+      coffeeWashingHydrologicalReport: 'geological_survey',
       // Industrial documents
       industrialGeneralRequirements: 'other',
       industrialEIA: 'environmental_impact_doc',
+      industrialHydrologicalReport: 'geological_survey',
       // Hydropower documents
       hydropowerGeneralRequirements: 'other',
       hydropowerEIA: 'environmental_impact_doc',
+      hydropowerFeasibilityStudy: 'other',
       // Construction Dam documents
       constructionDamGeneralRequirements: 'other',
       constructionDamEIA: 'environmental_impact_doc',
+      constructionDamFeasibilityStudy: 'other',
       // Infrastructure documents
       infrastructureGeneralRequirements: 'other',
       infrastructureEIA: 'environmental_impact_doc',
+      infrastructureFeasibilityStudy: 'other',
       // Navigation documents
       navigationGeneralRequirements: 'other',
       navigationEIA: 'environmental_impact_doc',
+      navigationManagementPlan: 'other',
       // Recreation documents
       recreationGeneralRequirements: 'other',
-      recreationEIA: 'environmental_impact_doc'
+      recreationEIA: 'environmental_impact_doc',
+      recreationPolygonAreaMap: 'intake_discharge_map',
+      // Gaz extraction documents
+      gazExtractionGeneralRequirements: 'other',
+      gazExtractionEIA: 'environmental_impact_doc',
+      gazExtractionFeasibilityStudy: 'other',
+      // Livestock documents
+      livestockGeneralRequirements: 'other',
+      livestockFeasibilityStudy: 'other'
     };
+
+    const requiredFieldNames = (() => {
+      const intendedActivities = formData.intendedActivities || [];
+      const irrigationArea = formData.irrigationTotalArea || 0;
+      const req = getRequiredAttachmentFieldNames(intendedActivities, { irrigationTotalArea: irrigationArea });
+      // Always required core docs for this UI flow
+      req.add("identificationDoc");
+      if (formData.ownsAllLand === false) req.add("landAccessDocuments");
+      return req;
+    })();
     
     for (const [fieldName, documentType] of Object.entries(documentTypes)) {
       const file = formData[fieldName];
@@ -128,31 +155,38 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
           const uploadResult = await uploadDocument(file, applicationId, fieldName);
           
           if (uploadResult) {
-            // Save document record to database
-            const { data: documentRecord, error: dbError } = await supabase
+            // Upsert by fieldName in file_path (NOT by type) to avoid collisions for shared types.
+            const { data: existingDoc, error: checkError } = await supabase
               .from('documents')
-              .insert({
-                application_id: applicationId,
-                name: file.name,
-                type: documentType,
-                file_path: uploadResult.path,
-                file_size: file.size,
-                mime_type: file.type,
-                  verification_status: 'pending' as const,
-                  is_required: [
-                    'paymentProof', 
-                    'identificationDoc', 
-                    'landAccessDocuments',
-                    'landOwnershipDoc',
-                    'miningGeneralRequirements',
-                    'miningLicense',
-                    'miningEIA',
-                    'miningHydrologicalReport'
-                  ].includes(fieldName),
-                  uploaded_by: '550e8400-e29b-41d4-a716-446655440001' // Sample user ID
-              } as any)
-              .select()
-              .single();
+              .select('id,file_path,created_at')
+              .eq('application_id', applicationId)
+              .ilike('file_path', `%applications/${applicationId}/${fieldName}-%`)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (checkError) {
+              console.error(`❌ Error checking existing document ${fieldName}:`, checkError);
+              continue;
+            }
+
+            const upsertPayload = {
+              application_id: applicationId,
+              name: file.name,
+              type: documentType,
+              file_path: uploadResult.path,
+              file_size: file.size,
+              mime_type: file.type,
+              verification_status: 'pending' as const,
+              is_required: requiredFieldNames.has(fieldName),
+              uploaded_by: '550e8400-e29b-41d4-a716-446655440001', // Sample user ID
+              upload_date: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as any;
+
+            const { data: documentRecord, error: dbError } = existingDoc
+              ? await supabase.from('documents').update(upsertPayload).eq('id', existingDoc.id).select().single()
+              : await supabase.from('documents').insert(upsertPayload).select().single();
               
             if (dbError) {
               console.error(`❌ Error saving document ${fieldName} to database:`, {
@@ -234,6 +268,15 @@ function NewApplicationContent() {
             }
           })();
 
+          // If the stored JSON is missing activities (older drafts), fall back to DB column.
+          if (
+            (!Array.isArray(restored.intendedActivities) || restored.intendedActivities.length === 0) &&
+            Array.isArray((application as any).intended_activities) &&
+            (application as any).intended_activities.length > 0
+          ) {
+            restored.intendedActivities = (application as any).intended_activities;
+          }
+
           // Back-compat: normalize legacy single polygon into waterSourcePolygons
           if (!Array.isArray(restored.waterSourcePolygons) || restored.waterSourcePolygons.length === 0) {
             if (Array.isArray(restored.waterSourceCoordinates)) {
@@ -270,24 +313,44 @@ function NewApplicationContent() {
           
           // ⚡ PERFORMANCE: Process documents efficiently
           const documentMap: Record<string, { url: string; name: string }> = {};
-          const typeMapping: Record<string, string> = {
-            'identification_doc': 'identificationDoc',
-            'land_ownership_doc': 'landOwnershipDoc', 
-            'technical_drawings': 'technicalDrawings',
-            'environmental_impact_doc': 'environmentalImpactDoc',
-            'payment_proof': 'paymentProof',
-            'intake_discharge_map': 'intakeDischargeMap',
-            'other': 'waterSupplyGeneralRequirements', // Default to water supply for 'other' type
-            'business_license': 'miningLicense',
-            'geological_survey': 'miningHydrologicalReport',
-            'water_quality_report': 'waterQualityReport'
+
+          // Prefer extracting the exact fieldName from the stored storage path:
+          // applications/{applicationId}/{fieldName}-{timestamp}.{ext}
+          // This is the only 100% reliable way to map docs back to the correct form field,
+          // since multiple different fields can share the same `doc.type` (e.g. "other", "geological_survey").
+          const fieldNameFromFilePath = (filePath: string): string | null => {
+            const rawFileName = (() => {
+              try {
+                if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+                  return new URL(filePath).pathname.split("/").pop() || "";
+                }
+              } catch {}
+              return filePath.split("/").pop() || "";
+            })();
+
+            const m = rawFileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+            return m?.[1] ?? null;
           };
-          
+
+          // Fallback mapping (legacy rows that stored only doc.type)
+          const typeMapping: Record<string, string> = {
+            identification_doc: "identificationDoc",
+            land_ownership_doc: "landOwnershipDoc",
+            technical_drawings: "technicalDrawings",
+            environmental_impact_doc: "environmentalImpactDoc",
+            payment_proof: "paymentProof",
+            intake_discharge_map: "intakeDischargeMap",
+            business_license: "miningLicense",
+            geological_survey: "miningHydrologicalReport",
+            water_quality_report: "waterQualityReport",
+            other: "waterSupplyGeneralRequirements",
+          };
+
           for (const doc of documents) {
-            const fieldName = typeMapping[doc.type] || doc.type;
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
+                const fieldName = fieldNameFromFilePath(doc.file_path) || typeMapping[doc.type] || doc.type;
                 documentMap[fieldName] = {
                   url: publicUrl,
                   name: doc.name

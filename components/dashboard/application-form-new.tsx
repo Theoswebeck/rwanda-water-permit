@@ -50,6 +50,7 @@ import { MultiPolygonInputWithValidation } from "@/components/forms/MultiPolygon
 import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidation';
 import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
 import { PaymentTab } from '@/components/dashboard/payment-tab';
+import { getAnnexRequirementForActivity, getAnnexRequirementsForSelection } from "@/lib/annex-requirements";
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({
@@ -140,6 +141,12 @@ const applicationFormSchema = z.object({
   annexC_aquacultureDetails: z.string().optional(),
   annexD_coffeeWashingDetails: z.string().optional(),
   annexE_industryDetails: z.string().optional(),
+  // Industry table data (structured)
+  industryDetails: z.array(z.object({
+    industryType: z.string(),
+    dailyQuantity: z.number().optional(),
+    monthlyQuantity: z.number().optional(),
+  })).optional(),
   annexF_electricityDetails: z.string().optional(),
   annexG_miningDetails: z.string().optional(),
   annexH_constructionDetails: z.string().optional(),
@@ -200,15 +207,19 @@ const applicationFormSchema = z.object({
   aquacultureEIA: z.any().optional(),
   aquacultureManagementPlan: z.any().optional(),
   aquacultureRecommendationLetter: z.any().optional(),
+  aquaculturePolygonAreaMap: z.any().optional(),
+  aquacultureHydrologicalReport: z.any().optional(),
   
   // Coffee Washing
   coffeeWashingGeneralRequirements: z.any().optional(),
   coffeeWashingEIA: z.any().optional(),
+  coffeeWashingHydrologicalReport: z.any().optional(),
   
   // Industrial
   industrialGeneralRequirements: z.any().optional(),
   industrialEIA: z.any().optional(),
   industrialWasteManagementPlan: z.any().optional(),
+  industrialHydrologicalReport: z.any().optional(),
   
   // Hydropower/Electricity
   hydropowerGeneralRequirements: z.any().optional(),
@@ -219,11 +230,13 @@ const applicationFormSchema = z.object({
   constructionDamGeneralRequirements: z.any().optional(),
   constructionDamEIA: z.any().optional(),
   constructionDamEngineeringPlans: z.any().optional(),
+  constructionDamFeasibilityStudy: z.any().optional(),
   
   // Infrastructure
   infrastructureGeneralRequirements: z.any().optional(),
   infrastructureEIA: z.any().optional(),
   infrastructureEngineeringPlans: z.any().optional(),
+  infrastructureFeasibilityStudy: z.any().optional(),
   
   // Navigation
   navigationGeneralRequirements: z.any().optional(),
@@ -234,6 +247,16 @@ const applicationFormSchema = z.object({
   recreationGeneralRequirements: z.any().optional(),
   recreationEIA: z.any().optional(),
   recreationManagementPlan: z.any().optional(),
+  recreationPolygonAreaMap: z.any().optional(),
+
+  // Gaz extraction
+  gazExtractionGeneralRequirements: z.any().optional(),
+  gazExtractionEIA: z.any().optional(),
+  gazExtractionFeasibilityStudy: z.any().optional(),
+
+  // Livestock
+  livestockGeneralRequirements: z.any().optional(),
+  livestockFeasibilityStudy: z.any().optional(),
   
   // Additional/Custom documents (extensible)
   additionalDocuments: z.array(z.object({
@@ -251,12 +274,25 @@ const applicationFormSchema = z.object({
 }).superRefine((data, ctx) => {
   // Conditional validation based on activity type
   // Note: This validation only runs on form submission, not on individual tab validation
-  const primaryActivity = data.intendedActivities?.[0];
-  if (!primaryActivity) return; // No validation if no activity selected
+  const selectedActivities = Array.isArray(data.intendedActivities) ? data.intendedActivities : [];
+  if (!selectedActivities.length) return; // No validation if no activity selected
   
-  const isFishFarming = primaryActivity === "fish_farming_lakes" || primaryActivity === "fish_farming_ponds";
+  // Disallow mixing abstraction + concession activities in one application
+  const isConcession = (a: string) => a === "fish_farming_lakes" || a === "fish_farming_ponds";
+  const hasConcession = selectedActivities.some(isConcession);
+  const hasAbstraction = selectedActivities.some((a) => a && !isConcession(a));
+  if (hasConcession && hasAbstraction) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["intendedActivities"],
+      message: "You can’t mix concession (fish farming) and abstraction activities in one application.",
+    });
+  }
+
+  const hasFishFarming =
+    selectedActivities.includes("fish_farming_lakes") || selectedActivities.includes("fish_farming_ponds");
   
-  if (isFishFarming) {
+  if (hasFishFarming) {
     // For fish farming, polygons are required (but only validated on Activity tab or final submission)
     // Don't block if polygons are empty - let tab-specific validation handle it
     if (data.waterSourcePolygons && data.waterSourcePolygons.length > 0) {
@@ -280,8 +316,12 @@ const applicationFormSchema = z.object({
         });
       }
     }
-  } else {
+  }
+
     // For abstraction activities, validate LAT/LONG format if provided (but don't require them here)
+  // (Any non-fish-farming activity implies abstraction point can be required by tab validation.)
+  const hasNonFishActivity = selectedActivities.some((a) => a && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
+  if (hasNonFishActivity) {
     // Tab-specific validation will handle the requirement
     const latitude = String(data.waterSourceLatitude ?? "").trim();
     const longitude = String(data.waterSourceLongitude ?? "").trim();
@@ -414,13 +454,17 @@ export const ApplicationForm = memo(function ApplicationForm({
     aquacultureEIA: useRef<HTMLInputElement>(null),
     aquacultureManagementPlan: useRef<HTMLInputElement>(null),
     aquacultureRecommendationLetter: useRef<HTMLInputElement>(null),
+    aquaculturePolygonAreaMap: useRef<HTMLInputElement>(null),
+    aquacultureHydrologicalReport: useRef<HTMLInputElement>(null),
     // Coffee Washing documents
     coffeeWashingGeneralRequirements: useRef<HTMLInputElement>(null),
     coffeeWashingEIA: useRef<HTMLInputElement>(null),
+    coffeeWashingHydrologicalReport: useRef<HTMLInputElement>(null),
     // Industrial documents
     industrialGeneralRequirements: useRef<HTMLInputElement>(null),
     industrialEIA: useRef<HTMLInputElement>(null),
     industrialWasteManagementPlan: useRef<HTMLInputElement>(null),
+    industrialHydrologicalReport: useRef<HTMLInputElement>(null),
     // Hydropower documents
     hydropowerGeneralRequirements: useRef<HTMLInputElement>(null),
     hydropowerEIA: useRef<HTMLInputElement>(null),
@@ -429,18 +473,28 @@ export const ApplicationForm = memo(function ApplicationForm({
     constructionDamGeneralRequirements: useRef<HTMLInputElement>(null),
     constructionDamEIA: useRef<HTMLInputElement>(null),
     constructionDamEngineeringPlans: useRef<HTMLInputElement>(null),
+    constructionDamFeasibilityStudy: useRef<HTMLInputElement>(null),
     // Infrastructure Construction documents
     infrastructureGeneralRequirements: useRef<HTMLInputElement>(null),
     infrastructureEIA: useRef<HTMLInputElement>(null),
     infrastructureEngineeringPlans: useRef<HTMLInputElement>(null),
+    infrastructureFeasibilityStudy: useRef<HTMLInputElement>(null),
     // Recreation documents
     recreationGeneralRequirements: useRef<HTMLInputElement>(null),
     recreationEIA: useRef<HTMLInputElement>(null),
     recreationManagementPlan: useRef<HTMLInputElement>(null),
+    recreationPolygonAreaMap: useRef<HTMLInputElement>(null),
     // Navigation documents
     navigationGeneralRequirements: useRef<HTMLInputElement>(null),
     navigationEIA: useRef<HTMLInputElement>(null),
     navigationManagementPlan: useRef<HTMLInputElement>(null),
+    // Gaz extraction documents
+    gazExtractionGeneralRequirements: useRef<HTMLInputElement>(null),
+    gazExtractionEIA: useRef<HTMLInputElement>(null),
+    gazExtractionFeasibilityStudy: useRef<HTMLInputElement>(null),
+    // Livestock documents
+    livestockGeneralRequirements: useRef<HTMLInputElement>(null),
+    livestockFeasibilityStudy: useRef<HTMLInputElement>(null),
   };
 
   // State for cascading dropdowns
@@ -717,102 +771,14 @@ export const ApplicationForm = memo(function ApplicationForm({
     const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
     if (!hasIdentificationDoc) return false;
 
-    // Check activity-specific required documents
-    const intendedActivities = form.getValues('intendedActivities') || [];
-    
-    for (const activity of intendedActivities) {
-      switch (activity) {
-        case 'irrigation':
-          // For irrigation > 10 ha, also require EIA and feasibility study
-          const irrigationArea = form.getValues('irrigationTotalArea') || 0;
-          if (irrigationArea > 10) {
-            if (!files.irrigationEIA && !uploadedFileUrls.irrigationEIA) {
-              return false;
-            }
-            if (!files.irrigationFeasibilityStudy && !uploadedFileUrls.irrigationFeasibilityStudy) {
-              return false;
-            }
-          }
-          break;
-        case 'water_supply':
-          if (!files.waterSupplyFeasibilityStudy && !uploadedFileUrls.waterSupplyFeasibilityStudy) {
-            return false;
-          }
-          break;
-        case 'mining':
-          if (!files.miningLicense && !uploadedFileUrls.miningLicense) {
-            return false;
-          }
-          if (!files.miningEIA && !uploadedFileUrls.miningEIA) {
-            return false;
-          }
-          break;
-        case 'aquaculture': // legacy compatibility
-        case 'fish_farming_lakes':
-        case 'fish_farming_ponds':
-          if (!files.aquacultureEIA && !uploadedFileUrls.aquacultureEIA) {
-            return false;
-          }
-          if (!files.aquacultureManagementPlan && !uploadedFileUrls.aquacultureManagementPlan) {
-            return false;
-          }
-          if (!files.aquacultureRecommendationLetter && !uploadedFileUrls.aquacultureRecommendationLetter) {
-            return false;
-          }
-          break;
-        case 'coffee_washing':
-          if (!files.coffeeWashingEIA && !uploadedFileUrls.coffeeWashingEIA) {
-            return false;
-          }
-          break;
-        case 'industry':
-          if (!files.industrialEIA && !uploadedFileUrls.industrialEIA) {
-            return false;
-          }
-          if (!files.industrialWasteManagementPlan && !uploadedFileUrls.industrialWasteManagementPlan) {
-            return false;
-          }
-          break;
-        case 'electricity_generation':
-          if (!files.hydropowerEIA && !uploadedFileUrls.hydropowerEIA) {
-            return false;
-          }
-          if (!files.hydropowerFeasibilityStudy && !uploadedFileUrls.hydropowerFeasibilityStudy) {
-            return false;
-          }
-          break;
-        case 'construction_of_dam':
-          if (!files.constructionDamEIA && !uploadedFileUrls.constructionDamEIA) {
-            return false;
-          }
-          if (!files.constructionDamEngineeringPlans && !uploadedFileUrls.constructionDamEngineeringPlans) {
-            return false;
-          }
-          break;
-        case 'construction_of_infrastructures':
-          if (!files.infrastructureEIA && !uploadedFileUrls.infrastructureEIA) {
-            return false;
-          }
-          if (!files.infrastructureEngineeringPlans && !uploadedFileUrls.infrastructureEngineeringPlans) {
-            return false;
-          }
-          break;
-        case 'navigation':
-          if (!files.navigationEIA && !uploadedFileUrls.navigationEIA) {
-            return false;
-          }
-          if (!files.navigationManagementPlan && !uploadedFileUrls.navigationManagementPlan) {
-            return false;
-          }
-          break;
-        case 'recreation_activities':
-          if (!files.recreationEIA && !uploadedFileUrls.recreationEIA) {
-            return false;
-          }
-          if (!files.recreationManagementPlan && !uploadedFileUrls.recreationManagementPlan) {
-            return false;
-          }
-          break;
+    const intendedActivities = form.getValues("intendedActivities") || [];
+    const irrigationArea = form.getValues("irrigationTotalArea") || 0;
+
+    const requirements = getAnnexRequirementsForSelection(intendedActivities, { irrigationTotalArea: irrigationArea });
+    for (const { requirement } of requirements) {
+      for (const att of requirement.attachments) {
+        const hasFile = Boolean(files[att.fieldName] || uploadedFileUrls[att.fieldName]);
+        if (!hasFile) return false;
       }
     }
 
@@ -872,9 +838,8 @@ export const ApplicationForm = memo(function ApplicationForm({
 
     // For concession activities (fish farming), polygons are required and should be validated here
     const intended = form.getValues('intendedActivities') || [];
-    const primary = intended?.[0];
-    const requiresConcessionPolygons = primary === 'fish_farming_lakes' || primary === 'fish_farming_ponds';
-    const requiresAbstractionDetails = primary && primary !== 'fish_farming_lakes' && primary !== 'fish_farming_ponds';
+    const requiresConcessionPolygons = intended.includes('fish_farming_lakes') || intended.includes('fish_farming_ponds');
+    const requiresAbstractionDetails = intended.some((a: string) => a && a !== 'fish_farming_lakes' && a !== 'fish_farming_ponds');
     
     // For abstraction activities, LAT/LONG and water abstraction details are required
     if (requiresAbstractionDetails) {
@@ -1083,8 +1048,7 @@ export const ApplicationForm = memo(function ApplicationForm({
         const hasRequiredDocs = checkRequiredDocuments();
         
         // For concession activities (fish farming), polygons are required
-        const primaryActivity = intendedActivities?.[0];
-        const requiresConcessionPolygons = primaryActivity === 'fish_farming_lakes' || primaryActivity === 'fish_farming_ponds';
+        const requiresConcessionPolygons = intendedActivities.includes('fish_farming_lakes') || intendedActivities.includes('fish_farming_ponds');
         if (requiresConcessionPolygons) {
           const polygons = form.getValues('waterSourcePolygons') || [];
           const hasValidPolygons =
@@ -1225,6 +1189,15 @@ export const ApplicationForm = memo(function ApplicationForm({
         annexC_aquacultureDetails: "",
         annexD_coffeeWashingDetails: "",
         annexE_industryDetails: "",
+        industryDetails: [
+          { industryType: "Food Processing", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "Horticultural Packaging", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "Chemical Manufacturing", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "Mineral water", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "Brewing/Beverage manufacturing", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "Fruit and vegetable canning or pickling", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "Others (Specify)", dailyQuantity: undefined, monthlyQuantity: undefined },
+        ],
         annexF_electricityDetails: "",
         annexG_miningDetails: "",
         annexH_constructionDetails: "",
@@ -1266,6 +1239,31 @@ export const ApplicationForm = memo(function ApplicationForm({
           shouldTouch: false,
           shouldValidate: false
         } as any);
+      }
+      
+      // Ensure industryDetails always has all 7 industry types, merging saved values where they exist
+      const savedIndustryDetails = form.getValues('industryDetails');
+      const defaultIndustryTypes = [
+        "Food Processing",
+        "Horticultural Packaging",
+        "Chemical Manufacturing",
+        "Mineral water",
+        "Brewing/Beverage manufacturing",
+        "Fruit and vegetable canning or pickling",
+        "Others (Specify)"
+      ];
+      if (!savedIndustryDetails || !Array.isArray(savedIndustryDetails) || savedIndustryDetails.length !== defaultIndustryTypes.length) {
+        const mergedIndustryDetails = defaultIndustryTypes.map((industryType, index) => {
+          const saved = savedIndustryDetails?.[index];
+          return saved && saved.industryType === industryType
+            ? saved
+            : { industryType, dailyQuantity: undefined, monthlyQuantity: undefined };
+        });
+        form.setValue('industryDetails', mergedIndustryDetails, {
+          shouldDirty: false,
+          shouldTouch: false,
+          shouldValidate: false
+        });
       }
       
       // Update dropdown selection states to enable cascading
@@ -1460,6 +1458,27 @@ export const ApplicationForm = memo(function ApplicationForm({
               </Button>
             </div>
           )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderRequiredAttachmentsForActivity = (activity: string) => {
+    const req = getAnnexRequirementForActivity(activity, { irrigationTotalArea: watchedIrrigationTotalArea });
+    if (!req.attachments.length) return null;
+
+    return (
+      <div className="mt-6 space-y-4">
+        {req.annexTitle ? (
+          <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{req.annexTitle}</div>
+        ) : null}
+
+        <DocumentRequirementsInfo documents={req.attachments.map((a) => a.label)} />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {req.attachments.map((a) => (
+            <DocumentUploadField key={a.fieldName} fieldName={a.fieldName} label={a.label} required={a.required} />
+          ))}
         </div>
       </div>
     );
@@ -2621,30 +2640,74 @@ export const ApplicationForm = memo(function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          13. Intended Activity * (Select the primary activity)
+                          13. Intended Activity * (Tick one or more boxes as appropriate)
                         </FormLabel>
                         <FormControl>
-                          <Select onValueChange={readOnly ? undefined : (value) => field.onChange([value])} value={field.value?.[0] || ""} disabled={readOnly}>
-                            <SelectTrigger className={`bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                              <SelectValue placeholder="Select primary water use activity" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="irrigation">Irrigation</SelectItem>
-                              <SelectItem value="construction_of_dam">Construction of dam</SelectItem>
-                              {/* Aquaculture removed per RWB feedback; replaced with fish farming options below */}
-                              <SelectItem value="fish_farming_lakes">Fish farming in lakes</SelectItem>
-                              <SelectItem value="fish_farming_ponds">Fish farming in ponds</SelectItem>
-                              <SelectItem value="mining">Mining</SelectItem>
-                              <SelectItem value="industry">Industry</SelectItem>
-                              <SelectItem value="water_supply">Water Supply</SelectItem>
-                              <SelectItem value="coffee_washing">Coffee washing</SelectItem>
-                              <SelectItem value="electricity_generation">Electricity generation</SelectItem>
-                              <SelectItem value="navigation">Navigation</SelectItem>
-                              <SelectItem value="recreation_activities">Recreation activities</SelectItem>
-                              <SelectItem value="construction_of_infrastructures">Construction of infrastructures</SelectItem>
-                              <SelectItem value="other">Other (specify)</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div
+                            className={`grid grid-cols-1 gap-3 rounded-lg border bg-gradient-to-r from-indigo-50 to-purple-50 p-4 ${
+                              readOnly ? "cursor-default opacity-60" : ""
+                            }`}
+                          >
+                            {(() => {
+                              const current = Array.isArray(field.value) ? field.value : [];
+                              const isConcession = (a: string) => a === "fish_farming_lakes" || a === "fish_farming_ponds";
+                              const hasConcession = current.some(isConcession);
+                              const hasAbstraction = current.some((a) => a && !isConcession(a));
+
+                              return (
+                                <>
+                            {(
+                              [
+                                { value: "irrigation", label: "Irrigation" },
+                                { value: "construction_of_dam", label: "Construction of a dam" },
+                                // Aquaculture removed per RWB feedback; replaced with fish farming options below
+                                { value: "fish_farming_lakes", label: "Fish farming in lakes" },
+                                { value: "fish_farming_ponds", label: "Fish farming in ponds" },
+                                { value: "mining", label: "Mining" },
+                                { value: "industry", label: "Industry" },
+                                { value: "water_supply", label: "Water supply" },
+                                { value: "coffee_washing", label: "Coffee washing" },
+                                { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
+                                { value: "navigation", label: "Navigation" },
+                                { value: "recreation_activities", label: "Recreational activities" },
+                                { value: "construction_of_infrastructures", label: "Construction of infrastructures" },
+                                { value: "gaz_extraction", label: "Gaz extraction" },
+                                { value: "livestock", label: "Livestock" },
+                                { value: "other", label: "Other (specify)" },
+                              ] as const
+                            ).map((opt) => {
+                              const selected = current.includes(opt.value);
+                              const optIsConcession = isConcession(opt.value);
+                              const incompatible =
+                                (hasConcession && !optIsConcession) || (hasAbstraction && optIsConcession);
+                              const disabled = Boolean(readOnly || (incompatible && !selected));
+                              return (
+                                <div key={opt.value} className="flex items-start gap-3">
+                                  <Checkbox
+                                    checked={selected}
+                                    disabled={disabled}
+                                    onCheckedChange={(checked) => {
+                                      if (readOnly) return;
+                                      if (disabled) return;
+
+                                      const next = checked
+                                        ? Array.from(new Set([...current, opt.value]))
+                                        : current.filter((v) => v !== opt.value);
+                                      field.onChange(next);
+                                    }}
+                                  />
+                                  <div className="text-sm leading-5 text-slate-800">{opt.label}</div>
+                                </div>
+                              );
+                            })}
+                            <div className="mt-1 text-xs text-slate-600">
+                              Note: you can select multiple activities, but you can’t mix <span className="font-medium">concession</span> (fish
+                              farming) and <span className="font-medium">abstraction</span> activities in one application.
+                            </div>
+                                </>
+                              );
+                            })()}
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -2653,10 +2716,11 @@ export const ApplicationForm = memo(function ApplicationForm({
 
                   {/* Water Abstraction Point (LAT, LONG) - only for abstraction activities, right after Q13 */}
                   {(() => {
-                    const primaryActivity = watchedIntendedActivities?.[0];
-                    const isFishFarming = primaryActivity === "fish_farming_lakes" || primaryActivity === "fish_farming_ponds";
-                    // Show only for abstraction activities (not fish farming)
-                    return primaryActivity && primaryActivity.trim() !== "" && !isFishFarming ? (
+                    const selected = watchedIntendedActivities || [];
+                    const hasFishFarming = selected.includes("fish_farming_lakes") || selected.includes("fish_farming_ponds");
+                    const hasNonFishActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
+                    // Show for any non-fish-farming activity (can coexist with fish farming if multiple are selected)
+                    return hasNonFishActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           14. Water Abstraction Point * (LAT, LONG)
@@ -3039,33 +3103,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             />
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            ...(watchedIrrigationTotalArea && watchedIrrigationTotalArea > 10 ? [
-                              "Environmental Impact Assessment certificate (required for > 10 ha)",
-                              "Feasibility study (required for > 10 ha)"
-                            ] : [
-                              "Environmental Impact Assessment certificate (required for > 10 ha)",
-                              "Feasibility study (required for > 10 ha)"
-                            ])
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {watchedIrrigationTotalArea && watchedIrrigationTotalArea > 10 && (
-                              <>
-                                <DocumentUploadField
-                                  fieldName="irrigationEIA"
-                                  label="Environmental Impact Assessment certificate"
-                                  required={true}
-                                />
-                                
-                                <DocumentUploadField
-                                  fieldName="irrigationFeasibilityStudy"
-                                  label="Feasibility study"
-                                  required={true}
-                                />
-                              </>
-                            )}
-                          </div>
+                          {renderRequiredAttachmentsForActivity("irrigation")}
 
                           <AdditionalDocumentsSection 
                             category="irrigation" 
@@ -3208,17 +3246,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Feasibility study"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="waterSupplyFeasibilityStudy"
-                              label="Feasibility study"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("water_supply")}
 
                           <AdditionalDocumentsSection 
                             category="water_supply" 
@@ -3296,39 +3324,12 @@ export const ApplicationForm = memo(function ApplicationForm({
                             />
                           </div>
 
-                          {/* Mining Attachments (same page) */}
-                          <div className="mt-6 space-y-4">
-                            <DocumentRequirementsInfo documents={[
-                              "Valid mining license",
-                              "Environmental Impact Assessment certificate", 
-                              "Hydrological report"
-                            ]} />
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <DocumentUploadField
-                                fieldName="miningLicense"
-                                label="Mining license"
-                                required={true}
-                              />
-                              
-                              <DocumentUploadField
-                                fieldName="miningEIA"
-                                label="Environmental Impact Assessment certificate"
-                                required={true}
-                              />
-                              
-                              <DocumentUploadField
-                                fieldName="miningHydrologicalReport"
-                                label="Hydrological report"
-                                required={true}
-                              />
-                            </div>
+                          {renderRequiredAttachmentsForActivity("mining")}
 
                             <AdditionalDocumentsSection 
                               category="mining" 
                               activityType="mining" 
                             />
-                          </div>
                         </div>
                       )}
 
@@ -3519,31 +3520,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </div>
                           )}
 
-                          <DocumentRequirementsInfo documents={[
-                            "Recommendation Letter from MINAGRI/RAB",
-                            "Environmental Impact Assessment certificate",
-                            "Management plan for aquaculture operations"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="aquacultureEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="aquacultureManagementPlan"
-                              label="Management plan for aquaculture operations"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="aquacultureRecommendationLetter"
-                              label="Recommendation Letter from MINAGRI/RAB"
-                              required={true}
-                            />
-                          </div>
+                          {watchedIntendedActivities?.includes("fish_farming_lakes")
+                            ? renderRequiredAttachmentsForActivity("fish_farming_lakes")
+                            : null}
+
+                          {watchedIntendedActivities?.includes("fish_farming_ponds")
+                            ? renderRequiredAttachmentsForActivity("fish_farming_ponds")
+                            : null}
 
                           <AdditionalDocumentsSection 
                             category="aquaculture" 
@@ -3588,17 +3571,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="coffeeWashingEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("coffee_washing")}
 
                           <AdditionalDocumentsSection 
                             category="coffee_washing" 
@@ -3636,10 +3609,44 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   <tr key={index}>
                                     <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">{industry}</td>
                                     <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                      <Input placeholder="Daily (m³)" className="border-0 bg-transparent" />
+                                      <FormField
+                                        control={form.control}
+                                        name={`industryDetails.${index}.dailyQuantity`}
+                                        render={({ field }) => (
+                                          <FormControl>
+                                            <Input
+                                              {...field}
+                                              type="number"
+                                              step="0.01"
+                                              placeholder="Daily (m³)"
+                                              className="border-0 bg-transparent"
+                                              value={field.value ?? ""}
+                                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                        )}
+                                      />
                                     </td>
                                     <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                      <Input placeholder="Monthly (m³)" className="border-0 bg-transparent" />
+                                      <FormField
+                                        control={form.control}
+                                        name={`industryDetails.${index}.monthlyQuantity`}
+                                        render={({ field }) => (
+                                          <FormControl>
+                                            <Input
+                                              {...field}
+                                              type="number"
+                                              step="0.01"
+                                              placeholder="Monthly (m³)"
+                                              className="border-0 bg-transparent"
+                                              value={field.value ?? ""}
+                                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                        )}
+                                      />
                                     </td>
                                   </tr>
                                 ))}
@@ -3647,24 +3654,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate",
-                            "Waste management plan"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="industrialEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="industrialWasteManagementPlan"
-                              label="Waste management plan"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("industry")}
 
                           <AdditionalDocumentsSection 
                             category="industrial" 
@@ -3719,24 +3709,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate",
-                            "Feasibility study (Hydrological assessment)"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="hydropowerEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="hydropowerFeasibilityStudy"
-                              label="Feasibility study (Hydrological assessment)"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("electricity_generation")}
 
                           <AdditionalDocumentsSection 
                             category="hydropower" 
@@ -3799,24 +3772,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate",
-                            "Engineering plans and drawings"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="constructionDamEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="constructionDamEngineeringPlans"
-                              label="Engineering plans and drawings"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("construction_of_dam")}
 
                           <AdditionalDocumentsSection 
                             category="construction_dam" 
@@ -3879,24 +3835,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate",
-                            "Engineering plans and drawings"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="infrastructureEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="infrastructureEngineeringPlans"
-                              label="Engineering plans and drawings"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("construction_of_infrastructures")}
 
                           <AdditionalDocumentsSection 
                             category="infrastructure" 
@@ -3956,29 +3895,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate",
-                            "Navigation management plan"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="navigationEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="navigationManagementPlan"
-                              label="Navigation management plan"
-                              required={true}
-                            />
-                          </div>
-
-                          <AdditionalDocumentsSection 
-                            category="navigation" 
-                            activityType="navigation" 
-                          />
+                          {/* No specific annex/required attachments defined for Navigation in the original annex list */}
+                          <AdditionalDocumentsSection category="navigation" activityType="navigation" />
                         </div>
                       )}
 
@@ -4014,24 +3932,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </table>
                           </div>
 
-                          <DocumentRequirementsInfo documents={[
-                            "Environmental Impact Assessment certificate",
-                            "Management plan for recreational activities"
-                          ]} />
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DocumentUploadField
-                              fieldName="recreationEIA"
-                              label="Environmental Impact Assessment certificate"
-                              required={true}
-                            />
-                            
-                            <DocumentUploadField
-                              fieldName="recreationManagementPlan"
-                              label="Management plan for recreational activities"
-                              required={true}
-                            />
-                          </div>
+                          {renderRequiredAttachmentsForActivity("recreation_activities")}
 
                           <AdditionalDocumentsSection 
                             category="recreation" 
@@ -4039,15 +3940,41 @@ export const ApplicationForm = memo(function ApplicationForm({
                           />
                         </div>
                       )}
+
+                      {/* Gaz extraction Details */}
+                      {watchedIntendedActivities?.includes("gaz_extraction") && (
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
+                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
+                            Gaz Extraction Details
+                          </h4>
+
+                          {renderRequiredAttachmentsForActivity("gaz_extraction")}
+
+                          <AdditionalDocumentsSection category="gaz_extraction" activityType="gaz_extraction" />
+                        </div>
+                      )}
+
+                      {/* Livestock Details */}
+                      {watchedIntendedActivities?.includes("livestock") && (
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
+                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
+                            Livestock Details
+                          </h4>
+
+                          {renderRequiredAttachmentsForActivity("livestock")}
+
+                          <AdditionalDocumentsSection category="livestock" activityType="livestock" />
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {/* 15. Water Abstraction Details - only show for abstraction activities (not fish farming) */}
                   {(() => {
-                    const primaryActivity = watchedIntendedActivities?.[0];
-                    const isFishFarming = primaryActivity === "fish_farming_lakes" || primaryActivity === "fish_farming_ponds";
-                    // Show only if Q13 is selected and it's NOT fish farming (i.e., it's an abstraction activity)
-                    return primaryActivity && primaryActivity.trim() !== "" && !isFishFarming ? (
+                    const selected = watchedIntendedActivities || [];
+                    const hasNonFishActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
+                    // Show if any selected activity is a non-fish-farming activity (can coexist with fish farming if multiple are selected)
+                    return hasNonFishActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           15. Water Abstraction Details *

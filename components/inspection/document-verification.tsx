@@ -53,9 +53,9 @@ const documentTypeLabels: Record<string, string> = {
   technical_drawings: "Technical Drawings",
   environmental_impact_doc: "Environmental Impact Assessment",
   payment_proof: "Payment Proof",
-  intake_discharge_map: "Intake/Discharge Map",
+  intake_discharge_map: "Map (Intake/Discharge / Polygon area)",
   water_quality_report: "Water Quality Report",
-  geological_survey: "Geological Survey",
+  geological_survey: "Geological / Hydrological Report",
   business_license: "Business License",
   other: "Other Documents",
   // Activity-specific document types
