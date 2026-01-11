@@ -549,6 +549,11 @@ export default function AssessmentApplicationPage() {
       const mergedDocVerifications = overrides?.documentVerifications ?? documentVerifications;
       const mergedDocReviewMeta = overrides?.docReviewMeta ?? docReviewMeta;
 
+      // Log assessment report data before saving
+      console.log('💾 Saving assessment report data:', assessmentReportData);
+      const hasReportData = assessmentReportData && typeof assessmentReportData === 'object' && Object.keys(assessmentReportData).length > 0;
+      console.log('📊 Assessment report data has content:', hasReportData);
+
       const assessmentData = {
         application_id: application.id,
         assessor_id: user.id,
@@ -614,6 +619,12 @@ export default function AssessmentApplicationPage() {
       
       if (result.data) {
         setAssessmentId(result.data.id);
+        // Verify that assessment_report_data was saved correctly
+        const savedData = (result.data as any)?.assessment_report_data;
+        console.log('✅ Assessment saved successfully. Saved assessment_report_data:', savedData);
+        if (!savedData || (typeof savedData === 'object' && Object.keys(savedData).length === 0)) {
+          console.warn('⚠️ Warning: assessment_report_data appears to be empty or missing after save');
+        }
       }
 
       return result.data;

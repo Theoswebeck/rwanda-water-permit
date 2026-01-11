@@ -206,6 +206,8 @@ export default function VerificationApplicationPage() {
           .limit(1)
           .maybeSingle();
 
+        let savedAssessmentReportData: Partial<AssessmentReportData> | null | undefined = null;
+
         if (existingAssessment) {
           setDocumentVerifications(existingAssessment.document_verifications || {});
           setFieldReportSummary(existingAssessment.field_report_summary || "");
@@ -230,8 +232,21 @@ export default function VerificationApplicationPage() {
             setFieldReportFiles(files);
           }
 
-          const savedAssessmentReportData =
-            (existingAssessment as any)?.assessment_report_data as Partial<AssessmentReportData> | null | undefined;
+          // Extract assessment_report_data from existing assessment
+          const rawAssessmentReportData = (existingAssessment as any)?.assessment_report_data;
+          // Handle cases where it might be null, undefined, or empty object
+          if (rawAssessmentReportData && typeof rawAssessmentReportData === 'object') {
+            // Check if it's not just an empty object
+            const hasData = Object.keys(rawAssessmentReportData).length > 0;
+            if (hasData) {
+              savedAssessmentReportData = rawAssessmentReportData as Partial<AssessmentReportData>;
+              console.log('✅ Loaded saved assessment report data:', savedAssessmentReportData);
+            } else {
+              console.log('⚠️ assessment_report_data exists but is empty object');
+            }
+          } else {
+            console.log('⚠️ No assessment_report_data found in existing assessment');
+          }
 
           const rt: ReportType = determineReportType(
             (appData as any)?.intended_activities as string[] | null,
@@ -240,6 +255,7 @@ export default function VerificationApplicationPage() {
           setReportType(rt);
           const prefilled = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
           const merged = mergeAssessmentReportData(prefilled, savedAssessmentReportData || null);
+          console.log('🔄 Merged assessment report data:', merged);
           setAssessmentReportData(merged);
         } else {
           // Still set report type for rendering

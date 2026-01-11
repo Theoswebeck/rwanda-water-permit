@@ -322,8 +322,7 @@ export default function ReviewApplicationPage() {
           .limit(1)
           .maybeSingle();
 
-        const savedAssessmentReportData =
-          (existingAssessment as any)?.assessment_report_data as Partial<AssessmentReportData> | null | undefined;
+        let savedAssessmentReportData: Partial<AssessmentReportData> | null | undefined = null;
 
         if (existingAssessment) {
           setDocumentVerifications(existingAssessment.document_verifications || {});
@@ -334,6 +333,22 @@ export default function ReviewApplicationPage() {
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,
             explanationText: existingAssessment.explanation_text || ""
           });
+
+          // Extract assessment_report_data from existing assessment
+          const rawAssessmentReportData = (existingAssessment as any)?.assessment_report_data;
+          // Handle cases where it might be null, undefined, or empty object
+          if (rawAssessmentReportData && typeof rawAssessmentReportData === 'object') {
+            // Check if it's not just an empty object
+            const hasData = Object.keys(rawAssessmentReportData).length > 0;
+            if (hasData) {
+              savedAssessmentReportData = rawAssessmentReportData as Partial<AssessmentReportData>;
+              console.log('✅ Loaded saved assessment report data:', savedAssessmentReportData);
+            } else {
+              console.log('⚠️ assessment_report_data exists but is empty object');
+            }
+          } else {
+            console.log('⚠️ No assessment_report_data found in existing assessment');
+          }
 
           if (existingAssessment.field_report_files && Array.isArray(existingAssessment.field_report_files)) {
             const files = existingAssessment.field_report_files.map((path: string) => {
@@ -354,6 +369,8 @@ export default function ReviewApplicationPage() {
             });
             setFieldReportFiles(files);
           }
+        } else {
+          console.log('⚠️ No existing assessment found for application');
         }
 
         // Prefill assessment report template from current application + merge saved assessor inputs
@@ -361,6 +378,7 @@ export default function ReviewApplicationPage() {
         setReportType(rt);
         const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
         const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
+        console.log('🔄 Merged assessment report data:', mergedReport);
         setAssessmentReportData(mergedReport);
 
         // Fetch comments from reviews table
