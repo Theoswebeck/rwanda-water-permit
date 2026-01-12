@@ -2638,7 +2638,11 @@ export const ApplicationForm = memo(function ApplicationForm({
                         </FormLabel>
                         <FormControl>
                           <Select 
-                            onValueChange={readOnly ? undefined : (value) => field.onChange(parseInt(value, 10))} 
+                            onValueChange={(value) => {
+                              if (!readOnly) {
+                                field.onChange(parseInt(value, 10));
+                              }
+                            }} 
                             value={field.value?.toString() || ""} 
                             disabled={readOnly}
                           >
@@ -4442,7 +4446,25 @@ export const ApplicationForm = memo(function ApplicationForm({
                             ...files, 
                             additionalDocuments 
                           };
-                          await onSaveAsDraft(draftData, 'draft');
+                          console.log('📎 Files being saved:', Object.keys(files).filter(k => files[k]));
+                          const result = await onSaveAsDraft(draftData, 'draft');
+                          
+                          // After successful save, clear the files state so the UI shows uploaded versions
+                          if (result) {
+                            // Clear all successfully uploaded files from state
+                            const uploadedFieldNames = Object.keys(files).filter(k => files[k] instanceof File);
+                            if (uploadedFieldNames.length > 0) {
+                              setFiles({});
+                              // Clear file input refs to allow re-upload
+                              uploadedFieldNames.forEach(fieldName => {
+                                const ref = fileInputRefs[fieldName as keyof typeof fileInputRefs];
+                                if (ref?.current) {
+                                  ref.current.value = '';
+                                }
+                              });
+                              console.log('📎 Cleared files state after successful upload:', uploadedFieldNames);
+                            }
+                          }
                         } catch (error) {
                           console.error('Draft save error:', error);
                         }
