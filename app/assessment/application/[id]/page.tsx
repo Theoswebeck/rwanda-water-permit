@@ -12,6 +12,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -294,6 +301,10 @@ export default function AssessmentApplicationPage() {
     explanationText: ""
   });
 
+  // Assessor Adjustments State
+  const [assessorPermitLength, setAssessorPermitLength] = useState<number | undefined>(undefined);
+  const [permitLengthSaving, setPermitLengthSaving] = useState(false);
+
   // Assessment Report State (template-backed)
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
 
@@ -497,6 +508,12 @@ export default function AssessmentApplicationPage() {
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
         setInitialFormData(formData);
+        
+        // Initialize assessor permit length from form data or database field
+        const permitLength = formData.permitLengthYears || appData.proposed_duration_years;
+        if (typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15) {
+          setAssessorPermitLength(permitLength);
+        }
 
         // Prefill the official assessment report template from application data and merge saved assessor inputs
         const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
@@ -629,6 +646,58 @@ export default function AssessmentApplicationPage() {
     inspectorName,
     inspectionDate,
   ]);
+
+  // Save assessor's permit length adjustment to the application
+  const savePermitLengthAdjustment = async (newPermitLength: number) => {
+    if (!application) return;
+    
+    try {
+      setPermitLengthSaving(true);
+      
+      // Parse existing internal_notes to preserve other form data
+      let existingFormData: any = {};
+      try {
+        existingFormData = JSON.parse(application.internal_notes || '{}');
+      } catch {
+        existingFormData = {};
+      }
+      
+      // Update permit length in the form data
+      existingFormData.permitLengthYears = newPermitLength;
+      existingFormData._assessorAdjustments = {
+        ...(existingFormData._assessorAdjustments || {}),
+        permitLengthYears: newPermitLength,
+        adjustedAt: new Date().toISOString(),
+      };
+      
+      // Update both internal_notes (JSON) and the dedicated database column
+      const { error } = await supabase
+        .from('applications')
+        .update({
+          internal_notes: JSON.stringify(existingFormData),
+          proposed_duration_years: newPermitLength,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', application.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setAssessorPermitLength(newPermitLength);
+      setApplication({
+        ...application,
+        internal_notes: JSON.stringify(existingFormData),
+        proposed_duration_years: newPermitLength
+      } as any);
+      
+      console.log('✅ Permit length adjusted to', newPermitLength, 'years');
+    } catch (err) {
+      console.error('❌ Error saving permit length adjustment:', err);
+      alert('Failed to save permit length adjustment. Please try again.');
+    } finally {
+      setPermitLengthSaving(false);
+    }
+  };
 
   const saveAssessment = async (
     status: 'draft' | 'submitted' | 'forwarded_to_approver' | 'returned_for_revision' = 'draft',
@@ -1105,6 +1174,66 @@ export default function AssessmentApplicationPage() {
                   readOnly={true}
                   isStaffView={true}
                 />
+              )}
+              
+              {/* Assessor Adjustments - Only show when assessment is editable */}
+              {isEditableAssessment && (
+                <Card className="border-amber-200 bg-amber-50/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <ClipboardCheck className="h-5 w-5 text-amber-600" />
+                      Assessor Adjustments
+                    </CardTitle>
+                    <CardDescription>
+                      As an assessor, you can adjust certain application parameters based on your evaluation. 
+                      Changes here will update the actual application record.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="assessor-permit-length" className="text-sm font-medium">
+                        Approved Permit Duration (Years)
+                      </Label>
+                      <div className="flex items-center gap-3">
+                        <Select
+                          value={assessorPermitLength?.toString() || ""}
+                          onValueChange={(value) => {
+                            const newLength = parseInt(value, 10);
+                            savePermitLengthAdjustment(newLength);
+                          }}
+                          disabled={permitLengthSaving}
+                        >
+                          <SelectTrigger id="assessor-permit-length" className="w-48 bg-white">
+                            <SelectValue placeholder="Select duration" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 15 }, (_, i) => i + 1).map((year) => (
+                              <SelectItem key={year} value={year.toString()}>
+                                {year} {year === 1 ? 'year' : 'years'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {permitLengthSaving && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Saving...
+                          </div>
+                        )}
+                        {!permitLengthSaving && assessorPermitLength && (
+                          <div className="flex items-center gap-1 text-sm text-green-600">
+                            <CheckCircle className="h-4 w-4" />
+                            Saved
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Original request: {initialFormData?.permitLengthYears ? `${initialFormData.permitLengthYears} year(s)` : 'Not specified'}. 
+                        Adjust based on the activity type and regulatory requirements.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
             </TabsContent>
 
