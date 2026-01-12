@@ -150,6 +150,9 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     // Store the multi-select activity list explicitly on the application record
     intended_activities: Array.isArray(formData.intendedActivities) ? formData.intendedActivities : undefined,
     
+    // Permit duration (years) - requested by applicant, can be modified by assessor
+    proposed_duration_years: formData.permitLengthYears,
+    
     // Technical specifications - based on new form structure
     water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
     water_measuring_method: 'Flow meter', // Default for drafts
@@ -227,6 +230,9 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       
       // Reliability
       waterReliability: formData.waterReliability,
+      
+      // Permit Length (Years)
+      permitLengthYears: formData.permitLengthYears,
       
       // SECTION 3: INTENDED ACTIVITY
       intendedActivities: formData.intendedActivities,

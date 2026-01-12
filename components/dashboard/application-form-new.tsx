@@ -105,6 +105,9 @@ const applicationFormSchema = z.object({
   // Reliability
   waterReliability: z.enum(["water_always_available", "frequently_dry", "dry_during_certain_season"]),
   
+  // Permit Length (1-15 years)
+  permitLengthYears: z.number().min(1).max(15).optional(),
+  
   // SECTION 3: INTENDED ACTIVITY
   intendedActivities: z.array(z.string()).min(1, { message: "Select at least one activity" }),
   intendedActivityOther: z.string().optional(),
@@ -537,6 +540,7 @@ export const ApplicationForm = memo(function ApplicationForm({
       waterSourceLatitude: "",
       waterSourceLongitude: "",
       waterReliability: "water_always_available",
+      permitLengthYears: undefined,
       waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: 0, abstractionMethod: "" }],
       intendedActivities: [],
       intendedActivityOther: "",
@@ -819,7 +823,8 @@ export const ApplicationForm = memo(function ApplicationForm({
     // Only validate Water Source tab fields - LAT/LONG are validated in Activity tab
     const fields = [
       'waterSourceType', 'nameSourceWater', 'waterSourceProvince',
-      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'
+      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability',
+      'permitLengthYears'
     ];
     
     const errors = await form.trigger(fields as any);
@@ -1036,8 +1041,11 @@ export const ApplicationForm = memo(function ApplicationForm({
           const value = form.getValues(field as any);
           return value && value.toString().trim() !== '';
         });
+        // Check permit length (required for submission)
+        const permitLength = form.getValues('permitLengthYears');
+        const hasPermitLength = typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15;
 
-        return !hasWaterSourceFields;
+        return !hasWaterSourceFields || !hasPermitLength;
       }
         
       case "intended-activity": {
@@ -1171,6 +1179,7 @@ export const ApplicationForm = memo(function ApplicationForm({
           ]
         ],
         waterReliability: "water_always_available",
+        permitLengthYears: 5,
         intendedActivities: ["water_supply"],
         intendedActivityOther: "",
         waterAbstractionDetails: [{
@@ -2613,6 +2622,41 @@ export const ApplicationForm = memo(function ApplicationForm({
                             </SelectContent>
                           </Select>
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Requested Permit Duration */}
+                  <FormField
+                    control={form.control}
+                    name="permitLengthYears"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-medium">
+                          13. Requested Permit Duration (Years) *
+                        </FormLabel>
+                        <FormControl>
+                          <Select 
+                            onValueChange={readOnly ? undefined : (value) => field.onChange(parseInt(value, 10))} 
+                            value={field.value?.toString() || ""} 
+                            disabled={readOnly}
+                          >
+                            <SelectTrigger className={`bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 focus:border-amber-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                              <SelectValue placeholder="Select permit duration" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 15 }, (_, i) => i + 1).map((year) => (
+                                <SelectItem key={year} value={year.toString()}>
+                                  {year} {year === 1 ? 'year' : 'years'}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormControl>
+                        <FormDescription className="text-xs text-gray-500">
+                          Select the duration for which you are requesting the water permit (1-15 years). This may be adjusted by the assessor based on your use case.
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
