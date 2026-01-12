@@ -27,4 +27,3 @@ COMMENT ON COLUMN applications.proposed_duration_years IS 'Requested permit dura
 CREATE INDEX IF NOT EXISTS idx_applications_proposed_duration_years 
 ON applications(proposed_duration_years) 
 WHERE proposed_duration_years IS NOT NULL;
-
