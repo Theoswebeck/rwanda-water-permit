@@ -62,14 +62,7 @@ export async function POST(request: NextRequest) {
       water_use_report_id,
     } = body;
 
-    // ==========================================================
-    // DEMO MODE (for demos when gateway checkout is unreliable)
-    // When enabled, we will mark payment as completed right after
-    // invoice creation succeeds (no real money movement).
-    // ==========================================================
-    const demoMode =
-      process.env.PAYMENT_DEMO_MODE === 'true' ||
-      process.env.NEXT_PUBLIC_PAYMENT_DEMO_MODE === 'true';
+    // Real payment mode only - demo mode removed
 
     console.log('📋 [PAYMENT INITIATE] Request data:', {
       application_id,
@@ -377,7 +370,6 @@ export async function POST(request: NextRequest) {
       gateway_response: iremboResponse.data as any,
       gateway_metadata: {
         ...((iremboPayRequest as any).metadata || {}),
-        demo_mode: demoMode,
       },
       initiated_at: initiatedAtIso,
       expires_at: expiresAt.toISOString(),
@@ -456,14 +448,10 @@ export async function POST(request: NextRequest) {
       success: true,
       payment: paymentRecord as any,
       payment_url: paymentUrl,
-      demo_mode: demoMode,
     };
 
     console.log('✅ [PAYMENT INITIATE] Payment initiated successfully');
     console.log('🔗 [PAYMENT INITIATE] Payment URL:', response.payment_url);
-    if (demoMode) {
-      console.warn('🧪 [PAYMENT INITIATE] DEMO MODE ENABLED: will auto-complete during status polling (not at invoice creation).');
-    }
 
     return NextResponse.json(response, { status: 200 });
 

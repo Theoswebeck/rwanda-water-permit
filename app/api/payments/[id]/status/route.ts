@@ -10,13 +10,7 @@ import { getApplicationStatusFromPayment, mapIremboPayStatus } from '@/lib/payme
 import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
 import type { PaymentStatusResponse } from '@/types/payment';
 
-const getDemoAutoCompleteDelayMs = () => {
-  const raw = process.env.PAYMENT_DEMO_COMPLETE_AFTER_MS;
-  const parsed = raw ? Number(raw) : NaN;
-  // default 18s: tripled from original 6s to give more time for demo
-  // Set to 0 to disable delay and see immediate events (for debugging)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 18000;
-};
+// Demo mode removed - using real payment flow only
 
 export async function GET(
   request: NextRequest,
@@ -115,91 +109,7 @@ export async function GET(
           
           console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus);
 
-          // ==========================================================
-          // DEMO MODE: auto-complete payment during polling
-          // (invoice creation is too early; we simulate success after a delay).
-          // ==========================================================
-          const demoMode =
-            process.env.PAYMENT_DEMO_MODE === 'true' ||
-            process.env.NEXT_PUBLIC_PAYMENT_DEMO_MODE === 'true';
-          const demoDelayMs = getDemoAutoCompleteDelayMs();
-          const initiatedAtMs = payment.initiated_at ? Date.parse(payment.initiated_at) : NaN;
-          const nowMs = Date.now();
-          const shouldAutoComplete =
-            demoMode &&
-            (payment.gateway_metadata as any)?.demo_mode === true &&
-            mappedStatus === 'pending' &&
-            Number.isFinite(initiatedAtMs) &&
-            nowMs - initiatedAtMs >= demoDelayMs;
-
-          if (shouldAutoComplete) {
-            console.warn('🧪 [PAYMENT STATUS] DEMO MODE: auto-completing payment during polling.');
-            const nowIso = new Date().toISOString();
-
-            // Update payment to completed
-            await supabase
-              .from('payments')
-              .update({
-                status: 'completed',
-                completed_at: nowIso,
-                gateway_response: {
-                  ...(payment.gateway_response as any || {}),
-                  demo_completed_at: nowIso,
-                },
-              })
-              .eq('id', paymentId);
-
-            // Create a completion transaction record (keep audit trail)
-            await supabase.from('payment_transactions').insert({
-              payment_id: paymentId,
-              irembo_txn_id: payment.irembo_payment_ref,
-              transaction_ref: payment.irembo_request_id,
-              amount: payment.amount,
-              currency: payment.currency,
-              status: 'completed',
-              provider_response: {
-                demo_mode: true,
-                note: 'Auto-completed for demo during status polling',
-              },
-              initiated_at: payment.initiated_at,
-              processed_at: nowIso,
-            } as any);
-
-            // Update application to submitted
-            if (payment.application_id) {
-              const newApplicationStatus = getApplicationStatusFromPayment('completed');
-              await supabase
-                .from('applications')
-                .update({ status: newApplicationStatus, submitted_at: nowIso })
-                .eq('id', payment.application_id);
-              if (payment.applications) {
-                payment.applications.status = newApplicationStatus as any;
-              }
-              if (newApplicationStatus === 'submitted') {
-                try {
-                  const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
-                  console.log('📣 [PAYMENT STATUS] Submission notification result:', notifyResult);
-                  if (!notifyResult.ok) {
-                    console.warn('⚠️ [PAYMENT STATUS] Submission notifications failed (non-blocking):', notifyResult.message);
-                  }
-                } catch (e) {
-                  console.warn('⚠️ [PAYMENT STATUS] Submission notifications crashed (non-blocking):', e);
-                }
-              }
-            }
-
-            // Mutate response object so client sees completion immediately
-            (payment as any).status = 'completed';
-            (payment as any).completed_at = nowIso;
-            console.log('✅ [PAYMENT STATUS] DEMO MODE: returning completed payment');
-
-            const response: PaymentStatusResponse = {
-              success: true,
-              payment: payment as any,
-              transaction: latestTransaction as any,
-            };
-            return NextResponse.json(response, { status: 200 });
-          }
+          // Real payment flow only - no auto-completion
 
           // Update local status if different
           if (mappedStatus !== payment.status) {
