@@ -40,17 +40,32 @@ function normalizeRole(input: unknown): string {
 
 // ⚡ PERFORMANCE: Define protected routes statically to avoid repeated checks
 // NOTE: Keep this in sync with role dashboards/routes (e.g. verifier -> /verification).
-const PROTECTED_ROUTES = ['/dashboard', '/admin', '/approver', '/inspection', '/inspector', '/review', '/assessment', '/verification', '/apply']
+const PROTECTED_ROUTES = [
+  '/dashboard',
+  '/admin',
+  '/approver',
+  '/inspection',
+  '/inspector',
+  '/review',
+  '/assessment',
+  '/verification',
+  '/verifier',
+  '/technical-assessment',
+  '/management',
+  '/apply',
+]
 const AUTH_PAGES = ['/login', '/register']
 
 // ⚡ PERFORMANCE: Role-based route access defined statically
 const ROLE_ROUTES: Record<string, string[]> = {
-  admin: ['/admin', '/dashboard/profile'],
-  approver: ['/approver', '/dashboard/profile'],
-  inspector: ['/inspection', '/inspector', '/dashboard/profile'],
-  reviewer: ['/review', '/assessment', '/dashboard/profile'],
-  assessor: ['/assessment', '/review', '/dashboard/profile'],
-  verifier: ['/verification', '/dashboard/profile'],
+  // Admins can access all protected routes.
+  // IMPORTANT: the middleware also treats `admin` as "allow all" to avoid accidental lockouts.
+  admin: PROTECTED_ROUTES,
+  approver: ['/approver', '/review', '/assessment', '/verification', '/dashboard/profile', '/management'],
+  inspector: ['/inspection', '/inspector', '/dashboard/profile', '/management'],
+  reviewer: ['/review', '/assessment', '/dashboard/profile', '/management'],
+  assessor: ['/assessment', '/review', '/technical-assessment', '/dashboard/profile', '/management'],
+  verifier: ['/verification', '/verifier', '/dashboard/profile', '/management'],
   applicant: ['/dashboard', '/apply']
 }
 
@@ -153,6 +168,12 @@ export async function middleware(request: NextRequest) {
 
     // ⚡ PERFORMANCE: Simplified role-based access check
     const normalizedRole = normalizeRole(userRole)
+
+    // Admins can access all protected pages.
+    if (normalizedRole === 'admin') {
+      return response
+    }
+
     const allowedRoutes = ROLE_ROUTES[normalizedRole] || []
     const hasAccess = allowedRoutes.some(route => pathname.startsWith(route))
 
@@ -194,7 +215,10 @@ export const config = {
     '/inspector/:path*',
     '/approver/:path*',
     '/assessment/:path*',
+    '/technical-assessment/:path*',
     '/verification/:path*',
+    '/verifier/:path*',
+    '/management/:path*',
     '/apply/:path*',
     '/login',
     '/register'
