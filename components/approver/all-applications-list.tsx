@@ -21,7 +21,7 @@ import {
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
-import { formatDate } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBy90DayDeadlineClosest } from "@/lib/utils";
 
 interface ApplicationWithApplicant extends Application {
   applicant?: {
@@ -31,6 +31,7 @@ interface ApplicationWithApplicant extends Application {
     account_type?: string;
   };
   sla_days_remaining?: number;
+  deadline_90_days_remaining?: number;
 }
 
 export function AllApplicationsList() {
@@ -72,9 +73,15 @@ export function AllApplicationsList() {
           slaRemaining = diffDays;
         }
 
+        const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
+          submittedAt: app.submitted_at,
+          createdAt: app.created_at,
+        });
+
         return {
           ...app,
-          sla_days_remaining: slaRemaining
+          sla_days_remaining: slaRemaining,
+          deadline_90_days_remaining: deadline90Remaining,
         };
       });
 
@@ -120,6 +127,18 @@ export function AllApplicationsList() {
     }
   };
 
+  const get90DayBadge = (daysRemaining: number | null | undefined) => {
+    if (daysRemaining === null || daysRemaining === undefined) return null;
+
+    if (daysRemaining <= 0) {
+      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">Overdue</Badge>;
+    }
+    if (daysRemaining <= 7) {
+      return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">{daysRemaining}d</Badge>;
+    }
+    return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">{daysRemaining}d</Badge>;
+  };
+
   const getApplicantName = (app: ApplicationWithApplicant) => {
     if (app.applicant?.account_type === 'individual') {
       return `${app.applicant.first_name} ${app.applicant.last_name}`;
@@ -139,6 +158,7 @@ export function AllApplicationsList() {
     
     return matchesSearch && matchesStatus && matchesType;
   });
+  const sortedApplications = sortBy90DayDeadlineClosest(filteredApplications, (app) => app.deadline_90_days_remaining ?? null);
 
   if (loading) {
     return (
@@ -271,12 +291,13 @@ export function AllApplicationsList() {
                   <TableHead>Type & Source</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>90-day</TableHead>
                   <TableHead>SLA</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredApplications.map((application) => (
+                {sortedApplications.map((application) => (
                   <TableRow key={application.id}>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(application.submitted_at || application.created_at)}
@@ -311,6 +332,9 @@ export function AllApplicationsList() {
                       {getStatusBadge(application.status)}
                     </TableCell>
                     <TableCell>
+                      {get90DayBadge(application.deadline_90_days_remaining)}
+                    </TableCell>
+                    <TableCell>
                       {getSLABadge(application.sla_days_remaining)}
                     </TableCell>
                     <TableCell>
@@ -326,7 +350,7 @@ export function AllApplicationsList() {
               </TableBody>
             </Table>
             
-            {filteredApplications.length === 0 && (
+            {sortedApplications.length === 0 && (
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No applications found matching your criteria</p>

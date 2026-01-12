@@ -35,7 +35,9 @@ import {
   Shield,
   AlertTriangle,
   Info,
-  Settings
+  Settings,
+  Download,
+  FileText
 } from "lucide-react";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import Link from "next/link";
@@ -43,6 +45,7 @@ import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus, User, Document } from "@/types/database";
 import dynamic from "next/dynamic";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { generateFieldReportPdf, FieldReportAssessment, FieldReportApplicationData } from "@/lib/pdf-generator";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -392,6 +395,70 @@ export default function AssessmentPage() {
       return false;
     }
     return true;
+  };
+
+  // Validate if all required fields are filled for PDF download
+  const canDownloadFieldReport = (): boolean => {
+    if (assessmentForm.technicalFeasibility === null) return false;
+    if (assessmentForm.sourceReliability === null) return false;
+    if (!assessmentForm.overallRecommendation) return false;
+    if (!assessmentForm.overallComments.trim()) return false;
+    if (assessmentForm.fieldVisitRequired) {
+      if (!assessmentForm.fieldVisitCompleted) return false;
+      if (!assessmentForm.fieldVisitDate) return false;
+    }
+    return true;
+  };
+
+  // Handle PDF download
+  const handleDownloadFieldReport = async () => {
+    if (!application || !canDownloadFieldReport()) return;
+
+    const assessmentData: FieldReportAssessment = {
+      technicalFeasibility: assessmentForm.technicalFeasibility,
+      technicalComments: assessmentForm.technicalComments,
+      siteAccessibility: assessmentForm.siteAccessibility,
+      infrastructureAdequacy: assessmentForm.infrastructureAdequacy,
+      environmentalImpactLevel: assessmentForm.environmentalImpactLevel,
+      environmentalComments: assessmentForm.environmentalComments,
+      mitigationRequired: assessmentForm.mitigationRequired,
+      sourceReliability: assessmentForm.sourceReliability,
+      sourceCapacityAdequate: assessmentForm.sourceCapacityAdequate,
+      sourceQualityAcceptable: assessmentForm.sourceQualityAcceptable,
+      waterRightsClear: assessmentForm.waterRightsClear,
+      overallRecommendation: assessmentForm.overallRecommendation,
+      conditionsRequired: assessmentForm.conditionsRequired,
+      overallComments: assessmentForm.overallComments,
+      fieldVisitRequired: assessmentForm.fieldVisitRequired,
+      fieldVisitCompleted: assessmentForm.fieldVisitCompleted,
+      fieldVisitDate: assessmentForm.fieldVisitDate
+    };
+
+    const applicantName = application.applicant?.account_type === 'individual'
+      ? `${application.applicant?.first_name || ''} ${application.applicant?.last_name || ''}`.trim()
+      : application.applicant?.company_name || 'Unknown';
+
+    const applicationData: FieldReportApplicationData = {
+      applicationNumber: application.application_number || '',
+      projectTitle: application.project_title || '',
+      applicantName: applicantName,
+      applicantType: application.applicant?.account_type || 'individual',
+      province: application.province || '',
+      district: application.district || '',
+      sector: application.sector || '',
+      cell: application.cell || '',
+      village: application.village || '',
+      waterSource: application.water_source || '',
+      waterPurpose: application.water_purpose || ''
+    };
+
+    try {
+      await generateFieldReportPdf(assessmentData, applicationData);
+      console.log('✅ Field report PDF generated successfully');
+    } catch (error) {
+      console.error('❌ Error generating field report PDF:', error);
+      alert('Failed to generate field report PDF. Please try again.');
+    }
   };
 
   const handleSubmitAssessment = async () => {
@@ -1085,6 +1152,47 @@ export default function AssessmentPage() {
                           <span>Assessment comments</span>
                         </div>
                       </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5" />
+                        Field Report
+                      </CardTitle>
+                      <CardDescription>
+                        Download assessment as PDF
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Button
+                        onClick={handleDownloadFieldReport}
+                        disabled={!canDownloadFieldReport()}
+                        variant="outline"
+                        className="w-full gap-2"
+                        size="lg"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download Field Report
+                      </Button>
+                      
+                      {!canDownloadFieldReport() && (
+                        <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                          <div className="text-sm text-blue-800">
+                            Complete all required fields to enable PDF download:
+                            <ul className="mt-1 ml-4 list-disc text-xs">
+                              {assessmentForm.technicalFeasibility === null && <li>Technical feasibility</li>}
+                              {assessmentForm.sourceReliability === null && <li>Source reliability</li>}
+                              {!assessmentForm.overallRecommendation && <li>Overall recommendation</li>}
+                              {!assessmentForm.overallComments.trim() && <li>Assessment comments</li>}
+                              {assessmentForm.fieldVisitRequired && !assessmentForm.fieldVisitCompleted && <li>Field visit completed</li>}
+                              {assessmentForm.fieldVisitRequired && !assessmentForm.fieldVisitDate && <li>Field visit date</li>}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
 

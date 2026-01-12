@@ -21,7 +21,7 @@ import {
   User 
 } from "lucide-react";
 import { getApplicationsPendingApproval } from "@/lib/supabase";
-import { formatDate } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBy90DayDeadlineClosest } from "@/lib/utils";
 
 type RawPendingApprovalApplication = {
   id: string
@@ -73,6 +73,7 @@ interface FinalReviewApplication {
   status: string;
   sla_status?: string;
   due_date?: string;
+  deadline_90_days_remaining?: number | null;
 }
 
 export function FinalDecisions() {
@@ -108,6 +109,11 @@ export function FinalDecisions() {
           (new Date().getTime() - new Date(app.created_at).getTime()) / (1000 * 60 * 60 * 24)
         );
 
+        const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
+          submittedAt: app.submitted_at,
+          createdAt: app.created_at,
+        });
+
         return {
           id: app.id,
           application_number: app.application_number || undefined,
@@ -129,7 +135,8 @@ export function FinalDecisions() {
           project_title: app.project_title || '',
           status: app.status,
           sla_status: app.sla_status || undefined,
-          due_date: app.due_date || undefined
+          due_date: app.due_date || undefined,
+          deadline_90_days_remaining: deadline90Remaining,
         };
       });
 
@@ -191,6 +198,18 @@ export function FinalDecisions() {
     }
     
     return null;
+  };
+
+  const get90DayBadge = (daysRemaining: number | null | undefined) => {
+    if (daysRemaining === null || daysRemaining === undefined) return null;
+
+    if (daysRemaining <= 0) {
+      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">Overdue</Badge>;
+    }
+    if (daysRemaining <= 7) {
+      return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">{daysRemaining}d</Badge>;
+    }
+    return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">{daysRemaining}d</Badge>;
   };
 
   const getRecommendationBadge = (recommendation: "approve" | "reject") => {
@@ -267,6 +286,7 @@ export function FinalDecisions() {
     const matchesRisk = filterRisk === "all" || app.riskLevel === filterRisk;
     return matchesSearch && matchesRisk;
   });
+  const sortedApplications = sortBy90DayDeadlineClosest(filteredApplications, (app) => app.deadline_90_days_remaining ?? null);
 
   if (loading) {
     return (
@@ -352,12 +372,13 @@ export function FinalDecisions() {
                   <TableHead>Type & Source</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>90-day</TableHead>
                   <TableHead>SLA</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredApplications.map((application) => (
+                {sortedApplications.map((application) => (
                   <TableRow key={application.id}>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(application.submittedDate)}
@@ -390,6 +411,9 @@ export function FinalDecisions() {
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(application.status)}
+                    </TableCell>
+                    <TableCell>
+                      {get90DayBadge(application.deadline_90_days_remaining)}
                     </TableCell>
                     <TableCell>
                       {getSLABadge(application)}

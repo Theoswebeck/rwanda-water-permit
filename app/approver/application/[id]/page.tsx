@@ -27,7 +27,7 @@ import { FieldReportUpload, FieldReportFile } from "@/components/inspection/fiel
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
-import { determineReportType, mergeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
+import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -242,20 +242,13 @@ export default function ApproverApplicationPage() {
             explanationText: existingAssessment.explanation_text || ""
           });
 
-          // Extract assessment_report_data from existing assessment
-          const rawAssessmentReportData = (existingAssessment as any)?.assessment_report_data;
-          // Handle cases where it might be null, undefined, or empty object
-          if (rawAssessmentReportData && typeof rawAssessmentReportData === 'object') {
-            // Check if it's not just an empty object
-            const hasData = Object.keys(rawAssessmentReportData).length > 0;
-            if (hasData) {
-              savedAssessmentReportData = rawAssessmentReportData as Partial<AssessmentReportData>;
-              console.log('✅ Loaded saved assessment report data:', savedAssessmentReportData);
-            } else {
-              console.log('⚠️ assessment_report_data exists but is empty object');
-            }
+          savedAssessmentReportData = normalizeAssessmentReportData(
+            (existingAssessment as any)?.assessment_report_data
+          );
+          if (savedAssessmentReportData) {
+            console.log("✅ Loaded saved assessment report data:", savedAssessmentReportData);
           } else {
-            console.log('⚠️ No assessment_report_data found in existing assessment');
+            console.log("⚠️ No usable assessment_report_data found in existing assessment");
           }
 
           // Restore field report files

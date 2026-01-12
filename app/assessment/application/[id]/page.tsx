@@ -43,7 +43,12 @@ import { FieldReportUpload, FieldReportFile } from "@/components/inspection/fiel
 import type { VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
-import { determineReportType, mergeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
+import {
+  determineReportType,
+  mergeAssessmentReportData,
+  normalizeAssessmentReportData,
+  prefillAssessmentReportFromApplication,
+} from "@/lib/assessment-report-utils";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -294,6 +299,11 @@ export default function AssessmentApplicationPage() {
 
   // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
   const actionInFlightRef = useRef(false);
+  // Autosave control (prevents losing Field Report inputs on refresh)
+  const hasHydratedRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveInFlightRef = useRef(false);
+  const lastAutoSavedSnapshotRef = useRef<string>("");
   const [activeTab, setActiveTab] = useState<string>("");
   const tabTouchedRef = useRef(false);
 
@@ -388,8 +398,9 @@ export default function AssessmentApplicationPage() {
           .maybeSingle();
 
         // Keep saved report data for merge later (prefill always wins for app-derived read-only fields)
-        const savedAssessmentReportData =
-          (existingAssessment as any)?.assessment_report_data as Partial<AssessmentReportData> | null | undefined;
+        const savedAssessmentReportData = normalizeAssessmentReportData(
+          (existingAssessment as any)?.assessment_report_data
+        );
 
         // Compute default inspector name (priority: saved assessment -> current logged-in user -> assigned inspector)
         let currentAssessorName = "";
@@ -520,6 +531,33 @@ export default function AssessmentApplicationPage() {
         
         setInitialDocuments(documentMap);
 
+        // Mark hydrated + seed autosave snapshot so we don't autosave immediately on initial load
+        hasHydratedRef.current = true;
+        lastAutoSavedSnapshotRef.current = JSON.stringify({
+          assessmentReportData: mergedReport,
+          fieldReportSummary: existingAssessment?.field_report_summary || "",
+          fieldReportFiles: Array.isArray(existingAssessment?.field_report_files)
+            ? (existingAssessment?.field_report_files as any[])
+            : [],
+          checklist: existingAssessment
+            ? {
+                locationVerified: !!existingAssessment.location_verified,
+                waterSourceAccessible: !!existingAssessment.water_source_accessible,
+                environmentalImpactAssessed: !!existingAssessment.environmental_impact_assessed,
+                technicalFeasibilityConfirmed: !!existingAssessment.technical_feasibility_confirmed,
+                infrastructureAdequate: !!existingAssessment.infrastructure_adequate,
+              }
+            : null,
+          recommendation: existingAssessment
+            ? {
+                recommendation: (existingAssessment.recommendation as any) || null,
+                explanationText: existingAssessment.explanation_text || "",
+              }
+            : null,
+          inspectorName: (existingAssessment?.inspector_name || "").trim(),
+          inspectionDate: existingAssessment?.inspection_date || "",
+        });
+
       } catch (err) {
         console.error('Error fetching application:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch application');
@@ -532,6 +570,65 @@ export default function AssessmentApplicationPage() {
       fetchApplicationDetails();
     }
   }, [params.id]);
+
+  // Debounced autosave for Field Report + Assessment Report inputs so refresh doesn't wipe in-progress work.
+  useEffect(() => {
+    if (!application) return;
+    if (isReadOnly) return;
+    if (!hasHydratedRef.current) return;
+
+    const snapshot = JSON.stringify({
+      assessmentReportData,
+      fieldReportSummary,
+      fieldReportFiles: fieldReportFiles.map((f) => f.path),
+      checklist,
+      recommendation,
+      inspectorName,
+      inspectionDate,
+    });
+
+    // No changes since last autosave/hydration
+    if (snapshot === lastAutoSavedSnapshotRef.current) return;
+
+    // Debounce
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      // Prevent overlapping autosaves
+      if (autoSaveInFlightRef.current) return;
+      autoSaveInFlightRef.current = true;
+      try {
+        await saveAssessment("draft");
+        lastAutoSavedSnapshotRef.current = snapshot;
+      } catch (e) {
+        // Non-blocking: user can still submit; we just don't want refresh to wipe if possible.
+        console.error("⚠️ Autosave failed:", e);
+      } finally {
+        autoSaveInFlightRef.current = false;
+      }
+    }, 1200);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    application?.id,
+    isReadOnly,
+    assessmentReportData,
+    fieldReportSummary,
+    fieldReportFiles,
+    checklist,
+    recommendation,
+    inspectorName,
+    inspectionDate,
+  ]);
 
   const saveAssessment = async (
     status: 'draft' | 'submitted' | 'forwarded_to_approver' | 'returned_for_revision' = 'draft',

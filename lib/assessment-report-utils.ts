@@ -517,3 +517,33 @@ export function mergeAssessmentReportData(
   return merged;
 }
 
+/**
+ * Normalizes raw assessment_report_data coming from Supabase/PostgREST.
+ * Handles:
+ * - null/undefined
+ * - empty object {}
+ * - JSON string (legacy/incorrectly-typed rows)
+ */
+export function normalizeAssessmentReportData(
+  raw: unknown
+): Partial<AssessmentReportData> | null {
+  if (!raw) return null;
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return normalizeAssessmentReportData(parsed);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof raw !== "object") return null;
+  if (Array.isArray(raw)) return null;
+
+  const obj = raw as Record<string, unknown>;
+  if (Object.keys(obj).length === 0) return null;
+
+  return obj as Partial<AssessmentReportData>;
+}
+

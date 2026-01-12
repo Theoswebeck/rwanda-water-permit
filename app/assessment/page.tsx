@@ -25,7 +25,7 @@ import type { Application, ApplicationStatus } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
-import { formatDate } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBy90DayDeadlineClosest } from "@/lib/utils";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
@@ -34,6 +34,7 @@ import { InspectionsWorkbench } from "@/components/inspection/inspections-workbe
 interface AssessmentApplication extends Application {
   applicant_name?: string;
   sla_days_remaining?: number;
+  deadline_90_days_remaining?: number;
 }
 
 interface AssessmentStatsData {
@@ -80,10 +81,16 @@ export default function AssessmentDashboard() {
         slaRemaining = diffDays;
       }
 
+      const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
+        submittedAt: app.submitted_at,
+        createdAt: app.created_at,
+      });
+
       return {
         ...app,
         applicant_name: applicantName,
         sla_days_remaining: slaRemaining,
+        deadline_90_days_remaining: deadline90Remaining,
       };
     });
   };
@@ -193,12 +200,11 @@ export default function AssessmentDashboard() {
       }
 
       // Update the local state to reflect the status change
-      setAssessmentApplications(prevApps =>
-        prevApps.map(app =>
-          app.id === application.id 
-            ? { ...app, status: 'under_review' as ApplicationStatus }
-            : app
-        )
+      setAssignedApplications((prevApps) =>
+        prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus } : app))
+      );
+      setAllApplications((prevApps) =>
+        prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus } : app))
       );
 
       // Navigate to the assessment page
@@ -261,6 +267,7 @@ export default function AssessmentDashboard() {
 
   const ApplicationTable = ({ applications, emptyMessage }: { applications: AssessmentApplication[], emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
+    const sortedApps = sortBy90DayDeadlineClosest(filteredApps, (app) => app.deadline_90_days_remaining ?? null);
     
     const getApplicantName = (app: AssessmentApplication) => {
       return app.applicant_name || 'Unknown Applicant';
@@ -268,6 +275,35 @@ export default function AssessmentDashboard() {
 
     const getSubmittedDate = (app: AssessmentApplication) => {
       return app.submitted_at || app.created_at;
+    };
+
+    const get90DayBadge = (daysRemaining: number | null | undefined) => {
+      if (daysRemaining === null || daysRemaining === undefined) return <span className="text-xs text-muted-foreground">—</span>;
+      if (daysRemaining <= 0) {
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
+            Overdue
+          </Badge>
+        );
+      }
+      if (daysRemaining <= 7) {
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
+          >
+            {daysRemaining}d
+          </Badge>
+        );
+      }
+      return (
+        <Badge
+          variant="outline"
+          className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800"
+        >
+          {daysRemaining}d
+        </Badge>
+      );
     };
 
     const getLocationString = (app: AssessmentApplication) => {
@@ -365,6 +401,7 @@ export default function AssessmentDashboard() {
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[10%]">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
@@ -373,9 +410,9 @@ export default function AssessmentDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredApps.length === 0 ? (
+                {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -387,7 +424,7 @@ export default function AssessmentDashboard() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredApps.map((app) => (
+                  sortedApps.map((app) => (
                     <TableRow 
                       key={app.id} 
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
@@ -396,6 +433,9 @@ export default function AssessmentDashboard() {
                         <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
                           {formatDate(getSubmittedDate(app))}
                         </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">

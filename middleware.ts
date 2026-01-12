@@ -28,10 +28,9 @@ function normalizeRole(input: unknown): string {
   if (!raw) return 'applicant'
 
   // Backward/forward compatibility aliases
-  // - Some environments/docs refer to "assessor" while DB/scripts keep "reviewer" as canonical.
   // - Inspector role may still exist in legacy data; treat it as part of the assessment workflow.
+  // - Note: assessor and reviewer are now separate roles with different dashboards
   const aliases: Record<string, string> = {
-    assessor: 'reviewer',
     // Common typo / confusion: "application" (role) vs "applicant" (role)
     application: 'applicant',
   }
@@ -46,12 +45,12 @@ const AUTH_PAGES = ['/login', '/register']
 
 // ⚡ PERFORMANCE: Role-based route access defined statically
 const ROLE_ROUTES: Record<string, string[]> = {
-  admin: ['/admin'],
-  approver: ['/approver'],
-  inspector: ['/inspection', '/inspector'],
-  reviewer: ['/review', '/assessment'],
-  assessor: ['/review', '/assessment'],
-  verifier: ['/verification'],
+  admin: ['/admin', '/dashboard/profile'],
+  approver: ['/approver', '/dashboard/profile'],
+  inspector: ['/inspection', '/inspector', '/dashboard/profile'],
+  reviewer: ['/review', '/assessment', '/dashboard/profile'],
+  assessor: ['/assessment', '/review', '/dashboard/profile'],
+  verifier: ['/verification', '/dashboard/profile'],
   applicant: ['/dashboard', '/apply']
 }
 
@@ -61,7 +60,7 @@ const ROLE_DASHBOARDS: Record<string, string> = {
   approver: '/approver',
   inspector: '/inspection',
   reviewer: '/review',
-  assessor: '/review',
+  assessor: '/assessment',
   verifier: '/verification',
   applicant: '/dashboard'
 }

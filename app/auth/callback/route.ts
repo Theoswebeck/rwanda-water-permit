@@ -61,6 +61,9 @@ export async function GET(request: NextRequest) {
           case 'reviewer':
             redirectPath = '/review'
             break
+          case 'assessor':
+            redirectPath = '/assessment'
+            break
           case 'applicant':
           default:
             redirectPath = '/dashboard'

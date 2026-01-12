@@ -1317,6 +1317,377 @@ export const generateDigitalWaterPermitBlob = async (
   return doc.output('blob');
 };
 
+// Field Report Assessment Types
+export interface FieldReportAssessment {
+  // Technical Feasibility
+  technicalFeasibility: boolean | null;
+  technicalComments: string;
+  siteAccessibility: boolean | null;
+  infrastructureAdequacy: boolean | null;
+  
+  // Environmental Assessment
+  environmentalImpactLevel: "low" | "medium" | "high" | null;
+  environmentalComments: string;
+  mitigationRequired: boolean | null;
+  
+  // Water Source Assessment
+  sourceReliability: boolean | null;
+  sourceCapacityAdequate: boolean | null;
+  sourceQualityAcceptable: boolean | null;
+  waterRightsClear: boolean | null;
+  
+  // Overall Assessment
+  overallRecommendation: "approve" | "reject" | "require_revision" | null;
+  conditionsRequired: string;
+  overallComments: string;
+  
+  // Field Visit
+  fieldVisitRequired: boolean;
+  fieldVisitCompleted: boolean;
+  fieldVisitDate: string;
+}
+
+export interface FieldReportApplicationData {
+  applicationNumber: string;
+  projectTitle: string;
+  applicantName: string;
+  applicantType: string;
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
+  waterSource: string;
+  waterPurpose: string;
+}
+
+/**
+ * Generate a Field Assessment Report PDF
+ */
+export const generateFieldReportPdf = async (
+  assessment: FieldReportAssessment,
+  applicationData: FieldReportApplicationData,
+  inspectorName?: string
+): Promise<void> => {
+  const doc = new jsPDF();
+  
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  const formatBoolean = (value: boolean | null): string => {
+    if (value === null) return 'Not Assessed';
+    return value ? '✓ Yes' : '✗ No';
+  };
+
+  const formatImpactLevel = (level: string | null): string => {
+    if (!level) return 'Not Assessed';
+    const labels: Record<string, string> = {
+      low: '🟢 Low Impact',
+      medium: '🟡 Medium Impact',
+      high: '🔴 High Impact'
+    };
+    return labels[level] || level;
+  };
+
+  const formatRecommendation = (rec: string | null): string => {
+    if (!rec) return 'Not Provided';
+    const labels: Record<string, string> = {
+      approve: '✅ Approved for Final Review',
+      reject: '❌ Rejected',
+      require_revision: '📝 Revision Required'
+    };
+    return labels[rec] || rec;
+  };
+
+  // Add logo
+  try {
+    const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
+    doc.addImage(rwbLogoUrl, 'PNG', 85, 10, 40, 40);
+  } catch (error) {
+    console.error('Error loading logo:', error);
+    doc.setFontSize(12);
+    doc.setTextColor(0, 75, 135);
+    doc.text('Rwanda Water Resources Board', 105, 25, { align: 'center' });
+  }
+
+  // Header
+  doc.setFontSize(18);
+  doc.setTextColor(0, 75, 135);
+  doc.text('FIELD ASSESSMENT REPORT', 105, 58, { align: 'center' });
+
+  doc.setFontSize(12);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Application: ${applicationData.applicationNumber}`, 105, 68, { align: 'center' });
+
+  // Blue separator line
+  doc.setDrawColor(0, 100, 150);
+  doc.setFillColor(0, 100, 150);
+  doc.roundedRect(15, 73, 180, 2, 1, 1, 'F');
+
+  // Generation date
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`Generated: ${formatDate(new Date().toISOString())}`, 15, 82);
+  if (inspectorName) {
+    doc.text(`Inspector: ${inspectorName}`, 195, 82, { align: 'right' });
+  }
+
+  let currentY = 92;
+
+  // SECTION 1: APPLICATION DETAILS
+  doc.setFontSize(14);
+  doc.setTextColor(0, 75, 135);
+  doc.text('1. APPLICATION DETAILS', 15, currentY);
+  currentY += 5;
+
+  const appDetails = [
+    ['Application Number', applicationData.applicationNumber],
+    ['Project Title', applicationData.projectTitle],
+    ['Applicant Name', applicationData.applicantName],
+    ['Applicant Type', applicationData.applicantType === 'individual' ? 'Individual' : 'Organization'],
+    ['Location', `${applicationData.village || ''}, ${applicationData.cell}, ${applicationData.sector}, ${applicationData.district}, ${applicationData.province}`.replace(/^, /, '')],
+    ['Water Source', (applicationData.waterSource || '').replace(/_/g, ' ').toUpperCase()],
+    ['Water Purpose', (applicationData.waterPurpose || '').replace(/_/g, ' ').toUpperCase()]
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Property', 'Value']],
+    body: appDetails,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [0, 100, 150],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [245, 248, 252],
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { cellWidth: 130 }
+    }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+
+  // SECTION 2: TECHNICAL FEASIBILITY
+  doc.setFontSize(14);
+  doc.setTextColor(0, 75, 135);
+  doc.text('2. TECHNICAL FEASIBILITY ASSESSMENT', 15, currentY);
+  currentY += 5;
+
+  const technicalDetails = [
+    ['Technical Feasibility', formatBoolean(assessment.technicalFeasibility)],
+    ['Site Accessibility', formatBoolean(assessment.siteAccessibility)],
+    ['Infrastructure Adequacy', formatBoolean(assessment.infrastructureAdequacy)],
+    ['Technical Comments', assessment.technicalComments || 'No comments provided']
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Assessment Item', 'Result']],
+    body: technicalDetails,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [0, 100, 150],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [245, 248, 252],
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { cellWidth: 130 }
+    }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+
+  // Check if we need a new page
+  if (currentY > 220) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  // SECTION 3: ENVIRONMENTAL ASSESSMENT
+  doc.setFontSize(14);
+  doc.setTextColor(0, 75, 135);
+  doc.text('3. ENVIRONMENTAL IMPACT ASSESSMENT', 15, currentY);
+  currentY += 5;
+
+  const envDetails = [
+    ['Environmental Impact Level', formatImpactLevel(assessment.environmentalImpactLevel)],
+    ['Mitigation Required', formatBoolean(assessment.mitigationRequired)],
+    ['Environmental Comments', assessment.environmentalComments || 'No comments provided']
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Assessment Item', 'Result']],
+    body: envDetails,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [34, 139, 34],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [245, 252, 245],
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { cellWidth: 130 }
+    }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+
+  // SECTION 4: WATER SOURCE ASSESSMENT
+  doc.setFontSize(14);
+  doc.setTextColor(0, 75, 135);
+  doc.text('4. WATER SOURCE ASSESSMENT', 15, currentY);
+  currentY += 5;
+
+  const waterDetails = [
+    ['Source Reliability', formatBoolean(assessment.sourceReliability)],
+    ['Capacity Adequate', formatBoolean(assessment.sourceCapacityAdequate)],
+    ['Quality Acceptable', formatBoolean(assessment.sourceQualityAcceptable)],
+    ['Water Rights Clear', formatBoolean(assessment.waterRightsClear)]
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Assessment Item', 'Result']],
+    body: waterDetails,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [30, 144, 255],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [240, 248, 255],
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { cellWidth: 130 }
+    }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+
+  // Check if we need a new page
+  if (currentY > 200) {
+    doc.addPage();
+    currentY = 20;
+  }
+
+  // SECTION 5: FIELD VISIT
+  doc.setFontSize(14);
+  doc.setTextColor(0, 75, 135);
+  doc.text('5. FIELD VISIT INFORMATION', 15, currentY);
+  currentY += 5;
+
+  const visitDetails = [
+    ['Field Visit Required', assessment.fieldVisitRequired ? 'Yes' : 'No'],
+    ['Field Visit Completed', assessment.fieldVisitCompleted ? 'Yes' : 'No'],
+    ['Visit Date', formatDate(assessment.fieldVisitDate)]
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Item', 'Status']],
+    body: visitDetails,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [128, 128, 128],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [248, 248, 248],
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { cellWidth: 130 }
+    }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 12;
+
+  // SECTION 6: OVERALL RECOMMENDATION
+  doc.setFontSize(14);
+  doc.setTextColor(0, 75, 135);
+  doc.text('6. OVERALL RECOMMENDATION', 15, currentY);
+  currentY += 5;
+
+  const recDetails = [
+    ['Recommendation', formatRecommendation(assessment.overallRecommendation)],
+    ['Conditions Required', assessment.conditionsRequired || 'None specified'],
+    ['Overall Comments', assessment.overallComments || 'No comments provided']
+  ];
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Item', 'Details']],
+    body: recDetails,
+    theme: 'grid',
+    headStyles: {
+      fillColor: assessment.overallRecommendation === 'approve' ? [34, 139, 34] : 
+                 assessment.overallRecommendation === 'reject' ? [220, 20, 60] : [255, 165, 0],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: [255, 250, 240],
+    },
+    columnStyles: {
+      0: { cellWidth: 50 },
+      1: { cellWidth: 130 }
+    }
+  });
+
+  currentY = (doc as any).lastAutoTable.finalY + 20;
+
+  // Check if we need a new page for signature
+  if (currentY > 240) {
+    doc.addPage();
+    currentY = 30;
+  }
+
+  // SIGNATURE SECTION
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text('Inspector Signature: _______________________________', 15, currentY);
+  currentY += 12;
+  doc.text(`Name: ${inspectorName || '_______________________________'}`, 15, currentY);
+  currentY += 12;
+  doc.text(`Date: ${formatDate(new Date().toISOString())}`, 15, currentY);
+
+  // Footer with document ID
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    
+    doc.text(`Page ${i} of ${pageCount}`, 195, 290, { align: 'right' });
+    doc.text(`Document ID: FR-${applicationData.applicationNumber}`, 105, 290, { align: 'center' });
+    doc.text('Rwanda Water Resources Board - Field Assessment Report', 15, 290);
+  }
+
+  // Download the PDF
+  doc.save(`Field-Report-${applicationData.applicationNumber}.pdf`);
+};
+
 export const generatePermitPDF = async (permit: Permit): Promise<void> => {
   // Create a new PDF document
   const doc = new jsPDF();

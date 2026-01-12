@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { signIn } = useAuth();
+  const { signIn, userProfile, user } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>("");
@@ -23,6 +23,7 @@ export function LoginForm() {
   const [showEmailVerificationHelp, setShowEmailVerificationHelp] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [isClearingSession, setIsClearingSession] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   const clearSavedSession = async () => {
     setIsClearingSession(true);
@@ -93,6 +94,39 @@ export function LoginForm() {
     }
   }, [searchParams]);
 
+  // Handle redirect after successful login
+  useEffect(() => {
+    if (!shouldRedirect || !user) return;
+
+    const getRedirectPath = (role: string | undefined): string => {
+      switch (role) {
+        case 'admin':
+          return '/admin';
+        case 'approver':
+          return '/approver';
+        case 'inspector':
+          return '/inspection';
+        case 'reviewer':
+          return '/review';
+        case 'assessor':
+          return '/assessment';
+        case 'verifier':
+          return '/verification';
+        case 'applicant':
+        default:
+          return '/dashboard';
+      }
+    };
+
+    // Get role from userProfile (preferred) or user metadata (fallback)
+    const role = userProfile?.role || (user.user_metadata?.role as string | undefined);
+    const redirectPath = getRedirectPath(role);
+    
+    console.log("✅ Login successful, redirecting to:", redirectPath);
+    setShouldRedirect(false);
+    router.push(redirectPath);
+  }, [shouldRedirect, user, userProfile, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -124,8 +158,8 @@ export function LoginForm() {
         return;
       }
       
-      console.log("✅ Login successful, redirecting to dashboard");
-      router.push("/dashboard");
+      // Set flag to trigger redirect once profile is loaded
+      setShouldRedirect(true);
     } catch (error) {
       console.error("❌ Login error:", error);
       setError("An unexpected error occurred. Please try again.");

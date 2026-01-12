@@ -44,10 +44,12 @@ import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-t
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
+import { calculateDaysRemainingTo90DayDeadline, sortBy90DayDeadlineClosest } from "@/lib/utils";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
   sla_days_remaining?: number;
+  deadline_90_days_remaining?: number;
   assigned_assessor_name?: string;
   assigned_assessor?: {
     first_name?: string | null;
@@ -162,10 +164,16 @@ export default function ReviewerDashboard() {
              slaRemaining = diffDays;
            }
 
+           const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
+             submittedAt: app.submitted_at,
+             createdAt: app.created_at,
+           });
+
            return {
              ...app,
              applicant_name: applicantName,
              sla_days_remaining: slaRemaining,
+             deadline_90_days_remaining: deadline90Remaining,
              assigned_assessor: assignedAssessor ?? null,
              assigned_assessor_name: assignedAssessorName ?? undefined
            };
@@ -426,6 +434,7 @@ export default function ReviewerDashboard() {
 
   const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[], emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
+    const sortedApps = sortBy90DayDeadlineClosest(filteredApps, (app) => app.deadline_90_days_remaining ?? null);
     
     const getApplicantName = (app: ReviewApplication) => {
       return app.applicant_name || 'Unknown Applicant';
@@ -521,6 +530,35 @@ export default function ReviewerDashboard() {
       );
     };
 
+    const get90DayBadge = (daysRemaining: number | null | undefined) => {
+      if (daysRemaining === null || daysRemaining === undefined) return <span className="text-xs text-muted-foreground">—</span>;
+      if (daysRemaining <= 0) {
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
+            Overdue
+          </Badge>
+        );
+      }
+      if (daysRemaining <= 7) {
+        return (
+          <Badge
+            variant="outline"
+            className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
+          >
+            {daysRemaining}d
+          </Badge>
+        );
+      }
+      return (
+        <Badge
+          variant="outline"
+          className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800"
+        >
+          {daysRemaining}d
+        </Badge>
+      );
+    };
+
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
@@ -535,15 +573,16 @@ export default function ReviewerDashboard() {
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[10%]">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[35%] hidden md:table-cell">Location & Type</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-                {filteredApps.length === 0 ? (
+                {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -555,7 +594,7 @@ export default function ReviewerDashboard() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredApps.map((app) => (
+                  sortedApps.map((app) => (
                     <TableRow 
                       key={app.id} 
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
@@ -575,6 +614,9 @@ export default function ReviewerDashboard() {
                         <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {getWaterPurposeLabel(app.water_purpose || '')}
                         </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">
