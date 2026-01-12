@@ -78,7 +78,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       pathname.startsWith('/inspection') ||
       pathname.startsWith('/assessment') ||
       pathname.startsWith('/approver') ||
-      pathname.startsWith('/technical-assessment')
+      pathname.startsWith('/technical-assessment') ||
+      pathname.startsWith('/management') ||
+      pathname.startsWith('/verifier')
     );
   };
 
