@@ -51,6 +51,19 @@ export function UserProfileButton() {
     }
   };
 
+  const roleDashboards: Record<string, { href: string; label: string }> = {
+    admin: { href: "/admin", label: "Admin Dashboard" },
+    approver: { href: "/approver", label: "Approver Dashboard" },
+    inspector: { href: "/inspection", label: "Inspection Dashboard" },
+    reviewer: { href: "/review", label: "Review Dashboard" },
+    assessor: { href: "/assessment", label: "Assessment Dashboard" },
+    verifier: { href: "/verification", label: "Verification Dashboard" },
+    applicant: { href: "/dashboard", label: "My Applications" },
+  };
+
+  const primaryDashboard = roleDashboards[userProfile.role] || roleDashboards.applicant;
+  const isApplicant = userProfile.role === "applicant";
+
   return (
     <div className="fixed top-4 right-4 z-50">
       <DropdownMenu>
@@ -85,17 +98,19 @@ export function UserProfileButton() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/dashboard" className="flex items-center cursor-pointer rounded-md px-3 py-2 hover:bg-gray-50 transition-colors">
+              <Link href={primaryDashboard.href} className="flex items-center cursor-pointer rounded-md px-3 py-2 hover:bg-gray-50 transition-colors">
                 <FileText className="mr-3 h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium">My Applications</span>
+                <span className="text-sm font-medium">{primaryDashboard.label}</span>
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard/settings" className="flex items-center cursor-pointer rounded-md px-3 py-2 hover:bg-gray-50 transition-colors">
-                <Settings className="mr-3 h-4 w-4 text-gray-500" />
-                <span className="text-sm font-medium">Account Settings</span>
-              </Link>
-            </DropdownMenuItem>
+            {isApplicant && (
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/settings" className="flex items-center cursor-pointer rounded-md px-3 py-2 hover:bg-gray-50 transition-colors">
+                  <Settings className="mr-3 h-4 w-4 text-gray-500" />
+                  <span className="text-sm font-medium">Account Settings</span>
+                </Link>
+              </DropdownMenuItem>
+            )}
           </div>
           <DropdownMenuSeparator className="my-1" />
           <div className="p-2">

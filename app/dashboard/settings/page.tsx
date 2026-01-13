@@ -12,9 +12,23 @@ import { ArrowLeft, Bell, Lock, Mail, Shield, Smartphone } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"applications">("applications");
+  const { userProfile } = useAuth();
+
+  const roleDashboards: Record<string, string> = {
+    admin: "/admin",
+    approver: "/approver",
+    inspector: "/inspection",
+    reviewer: "/review",
+    assessor: "/assessment",
+    verifier: "/verification",
+    applicant: "/dashboard",
+  };
+
+  const backHref = roleDashboards[userProfile?.role || "applicant"] || "/dashboard";
   
   return (
     <DashboardLayout>
@@ -25,7 +39,7 @@ export default function SettingsPage() {
         className="container mx-auto px-4 py-6"
       >
         <div className="flex items-center mb-6">
-          <Link href="/dashboard">
+          <Link href={backHref}>
             <Button variant="ghost" className="gap-1">
               <ArrowLeft className="h-4 w-4" />
               Back to Dashboard
