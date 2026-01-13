@@ -704,6 +704,16 @@ export const ApplicationForm = memo(function ApplicationForm({
     return getFormattedCellOptions(province, district, sector);
   };
 
+  const getOfficeVillageOptions = () => {
+    // Use selected state or fall back to form values for initialization
+    const province = selectedOfficeProvince || officeProvince;
+    const district = selectedOfficeDistrict || officeDistrict;
+    const sector = selectedOfficeSector || officeSector;
+    const cell = selectedOfficeCell || officeCell;
+    if (!province || !district || !sector || !cell) return [];
+    return getFormattedVillageOptions(province, district, sector, cell);
+  };
+
   const getWaterSourceDistrictOptions = () => {
     if (!selectedWaterSourceProvince) return [];
     return getFormattedDistrictOptions(selectedWaterSourceProvince);
@@ -717,6 +727,11 @@ export const ApplicationForm = memo(function ApplicationForm({
   const getWaterSourceCellOptions = () => {
     if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict || !selectedWaterSourceSector) return [];
     return getFormattedCellOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector);
+  };
+
+  const getWaterSourceVillageOptions = () => {
+    if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict || !selectedWaterSourceSector || !waterSourceCell) return [];
+    return getFormattedVillageOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector, waterSourceCell);
   };
 
   const watchedCategoryApplicant = form.watch("categoryApplicant");
@@ -743,6 +758,7 @@ export const ApplicationForm = memo(function ApplicationForm({
   const waterSourceProvince = form.watch('waterSourceProvince');
   const waterSourceDistrict = form.watch('waterSourceDistrict');
   const waterSourceSector = form.watch('waterSourceSector');
+  const waterSourceCell = form.watch('waterSourceCell');
 
   // Update dropdown states when form values change
   useEffect(() => {
@@ -2153,6 +2169,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   form.setValue("officeDistrict", "");
                                   form.setValue("officeSector", "");
                                   form.setValue("officeCell", "");
+                                  form.setValue("officeVillage", "");
                                   // Clear stale errors that may have been set on Next/previous validation runs
                                   form.clearErrors(["officeProvince", "officeDistrict", "officeSector", "officeCell"]);
                                   setSelectedOfficeDistrict("");
@@ -2192,6 +2209,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   // Reset dependent fields
                                   form.setValue("officeSector", "");
                                   form.setValue("officeCell", "");
+                                  form.setValue("officeVillage", "");
                                   form.clearErrors(["officeDistrict", "officeSector", "officeCell"]);
                                   setSelectedOfficeSector("");
                                 }}
@@ -2228,6 +2246,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedOfficeSector(value);
                                   // Reset cell field and state
                                   form.setValue("officeCell", "");
+                                  form.setValue("officeVillage", "");
                                   setSelectedOfficeCell("");
                                   form.clearErrors(["officeSector", "officeCell"]);
                                 }}
@@ -2262,6 +2281,8 @@ export const ApplicationForm = memo(function ApplicationForm({
                                 onValueChange={readOnly ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedOfficeCell(value);
+                                  // Reset village when cell changes to avoid invalid combos
+                                  form.setValue("officeVillage", "");
                                   form.clearErrors("officeCell");
                                 }}
                                 value={field.value}
@@ -2291,11 +2312,22 @@ export const ApplicationForm = memo(function ApplicationForm({
                           <FormItem>
                             <FormLabel>Village</FormLabel>
                             <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Enter village (optional)"
-                                className="bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400"
-                              />
+                              <Select
+                                onValueChange={readOnly ? undefined : field.onChange}
+                                value={field.value || ""}
+                                disabled={readOnly || (!selectedOfficeCell && !officeCell)}
+                              >
+                                <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                  <SelectValue placeholder={(selectedOfficeCell || officeCell) ? "Select village (optional)" : "Select cell first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getOfficeVillageOptions().map((village) => (
+                                    <SelectItem key={village.value} value={village.value}>
+                                      {village.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2456,6 +2488,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   form.setValue("waterSourceDistrict", "");
                                   form.setValue("waterSourceSector", "");
                                   form.setValue("waterSourceCell", "");
+                                  form.setValue("waterSourceVillage", "");
                                   form.clearErrors(["waterSourceProvince", "waterSourceDistrict", "waterSourceSector", "waterSourceCell"]);
                                   setSelectedWaterSourceDistrict("");
                                   setSelectedWaterSourceSector("");
@@ -2494,6 +2527,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   // Reset dependent fields
                                   form.setValue("waterSourceSector", "");
                                   form.setValue("waterSourceCell", "");
+                                  form.setValue("waterSourceVillage", "");
                                   form.clearErrors(["waterSourceDistrict", "waterSourceSector", "waterSourceCell"]);
                                   setSelectedWaterSourceSector("");
                                 }}
@@ -2530,6 +2564,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   setSelectedWaterSourceSector(value);
                                   // Reset cell field
                                   form.setValue("waterSourceCell", "");
+                                  form.setValue("waterSourceVillage", "");
                                   form.clearErrors(["waterSourceSector", "waterSourceCell"]);
                                 }}
                                 value={field.value}
@@ -2560,7 +2595,12 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={readOnly ? undefined : field.onChange}
+                                onValueChange={readOnly ? undefined : (value) => {
+                                  field.onChange(value);
+                                  // Reset village when cell changes to avoid invalid combos
+                                  form.setValue("waterSourceVillage", "");
+                                  form.clearErrors("waterSourceCell");
+                                }}
                                 value={field.value}
                                 disabled={readOnly || !selectedWaterSourceSector}
                               >
@@ -2588,11 +2628,22 @@ export const ApplicationForm = memo(function ApplicationForm({
                           <FormItem>
                             <FormLabel>Village</FormLabel>
                             <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Enter village (optional)"
-                                className="bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400"
-                              />
+                              <Select
+                                onValueChange={readOnly ? undefined : field.onChange}
+                                value={field.value || ""}
+                                disabled={readOnly || !waterSourceCell}
+                              >
+                                <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                  <SelectValue placeholder={waterSourceCell ? "Select village (optional)" : "Select cell first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getWaterSourceVillageOptions().map((village) => (
+                                    <SelectItem key={village.value} value={village.value}>
+                                      {village.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
