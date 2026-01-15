@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPortalUrl } from '@/lib/notifications/portal-url'
 
 export async function POST(request: NextRequest) {
   try {
@@ -102,14 +103,14 @@ Rwanda Water Resources Board`;
         break;
 
       case 'revision_required':
+        const portalUrl = getPortalUrl()
         message = `Dear ${applicantName},
 
 Your water permit application ${applicationNumber} requires REVISIONS.
 
 Please log into your dashboard to view detailed feedback and resubmit your application.
 
-Portal: https://rwanda-water-permit-production.up.railway.app/
-TODO: Replace portal link with the final RWB server URL before go-live.
+Portal: ${portalUrl}
 Rwanda Water Resources Board`;
         break;
 

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { sendResendEmail } from '@/lib/notifications/resend-email'
+import { getPortalUrl } from '@/lib/notifications/portal-url'
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
@@ -21,8 +22,7 @@ function buildSubmissionCopy(params: {
   applicationId: string
   applicationNumber?: string | null
 }) {
-  // TODO: Replace fallback with the final RWB server URL before go-live.
-  const portalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://rwanda-water-permit-production.up.railway.app/'
+  const portalUrl = getPortalUrl()
   const supportEmail = process.env.SUPPORT_EMAIL || 'info@rwb.rw'
   const orgName = process.env.ORG_NAME || 'Rwanda Water Resources Board'
 

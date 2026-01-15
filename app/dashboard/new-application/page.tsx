@@ -409,6 +409,10 @@ function NewApplicationContent() {
       
       console.log('📋 Form data received:', formData);
       
+      // Debug: Log all file fields in formData
+      const fileFields = Object.entries(formData).filter(([_, value]) => value instanceof File);
+      console.log('📎 File fields in formData:', fileFields.map(([key, file]) => ({ key, name: (file as File).name, size: (file as File).size })));
+      
       // ⚡ PERFORMANCE: Run storage bucket check and data mapping in parallel
       const [_, applicationData] = await Promise.all([
         ensureStorageBucket(),
@@ -432,14 +436,17 @@ function NewApplicationContent() {
           }).catch(() => null)
         } catch {}
         
-        // ⚡ PERFORMANCE: Upload documents in background, don't block UI
-        uploadApplicationDocuments(newApplication.id, formData)
-          .then(uploadedDocuments => {
-            console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
-          })
-          .catch(docError => {
-            console.error('⚠️ Document upload failed but application was created:', docError);
-          });
+        // Upload documents and WAIT for completion before showing success
+        console.log('🚀 Starting document upload process...');
+        try {
+          const uploadedDocuments = await uploadApplicationDocuments(newApplication.id, formData);
+          console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+        } catch (docError) {
+          console.error('⚠️ Document upload failed:', docError);
+          setError('Application created but some documents failed to upload. Please contact support.');
+          setIsLoading(false);
+          return;
+        }
         
         // Show success message (redirect is handled by useEffect)
         setSubmitSuccess(true);
@@ -465,6 +472,10 @@ function NewApplicationContent() {
         throw new Error('No form data provided');
       }
       
+      // Debug: Log all file fields in formData
+      const fileFields = Object.entries(formData).filter(([_, value]) => value instanceof File);
+      console.log('📎 File fields in formData:', fileFields.map(([key, file]) => ({ key, name: (file as File).name, size: (file as File).size })));
+      
       // ⚡ PERFORMANCE: Run bucket check and data mapping in parallel
       const [_, applicationData] = await Promise.all([
         ensureStorageBucket(),
@@ -484,11 +495,16 @@ function NewApplicationContent() {
       }
       
       if (result) {
-        // ⚡ PERFORMANCE: Upload documents in background for drafts
-        uploadApplicationDocuments(result.id, formData)
-          .catch(docError => {
-            console.error('Document upload failed but draft was saved:', docError);
-          });
+        // Upload documents and WAIT for completion
+        console.log('🚀 Starting document upload process for draft...');
+        try {
+          const uploadedDocuments = await uploadApplicationDocuments(result.id, formData);
+          console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+        } catch (docError) {
+          console.error('⚠️ Document upload failed:', docError);
+          // Don't fail the whole save, but warn the user
+          setError('Draft saved but some documents failed to upload. Please try uploading them again.');
+        }
         
         // Update URL with draft ID if this is a new draft
         // IMPORTANT: Use history.replaceState instead of router.replace to avoid re-render

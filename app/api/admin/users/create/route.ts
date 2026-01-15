@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { buildPortalLink } from '@/lib/notifications/portal-url'
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -189,8 +190,7 @@ export async function POST(req: NextRequest) {
     // Send invite email via Resend
     const resendKey = process.env.RESEND_API_KEY
     const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3002'
-    const loginUrl = `${appUrl}/login`
+    const loginUrl = buildPortalLink('/login')
     const isDev = process.env.NODE_ENV !== 'production'
 
     let emailSent = false

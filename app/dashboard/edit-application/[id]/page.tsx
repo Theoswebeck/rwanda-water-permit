@@ -1085,14 +1085,18 @@ export default function EditApplicationPage() {
       setIsLoading(true);
       setError(null);
       
-      console.log('Updating application, form data received:', formData);
-      console.log('Current application state at submit:', application);
-      console.log('Application ID at submit:', application?.id);
+      console.log('📋 Updating application, form data received:', formData);
+      console.log('📋 Current application state at submit:', application);
+      console.log('📋 Application ID at submit:', application?.id);
+      
+      // Debug: Log all file fields in formData
+      const fileFields = Object.entries(formData).filter(([_, value]) => value instanceof File);
+      console.log('📎 File fields in formData:', fileFields.map(([key, file]) => ({ key, name: (file as File).name, size: (file as File).size })));
       
       // Map form data to application schema with submitted status
       const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       
-      console.log('Mapped application data:', applicationData);
+      console.log('📋 Mapped application data:', applicationData);
       
       // Check if application exists
       if (!application?.id) {
@@ -1116,16 +1120,17 @@ export default function EditApplicationPage() {
           }).catch(() => null)
         } catch {}
         
-        // Upload documents in background, don't block UI
+        // Upload documents and WAIT for completion before redirecting
         console.log('🚀 Starting document upload process...');
-        uploadApplicationDocuments(application.id, formData, userProfile?.id)
-          .then(uploadedDocuments => {
-            console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
-          })
-          .catch(docError => {
-            console.error('⚠️ Document upload failed but application was updated:', docError);
-            console.error('⚠️ Full error details:', docError);
-          });
+        try {
+          const uploadedDocuments = await uploadApplicationDocuments(application.id, formData, userProfile?.id);
+          console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+        } catch (docError) {
+          console.error('⚠️ Document upload failed:', docError);
+          setError('Application submitted but some documents failed to upload. Please contact support.');
+          setIsLoading(false);
+          return;
+        }
         
         setSuccess(true);
         
@@ -1149,17 +1154,21 @@ export default function EditApplicationPage() {
       setError(null);
       setDraftSaved(false);
       
-      console.log('Updating draft, form data received:', formData);
-      console.log('Current application state:', application);
-      console.log('Application ID:', application?.id);
-      console.log('User profile ID:', userProfile?.id);
+      console.log('📋 Updating draft, form data received:', formData);
+      console.log('📋 Current application state:', application);
+      console.log('📋 Application ID:', application?.id);
+      console.log('📋 User profile ID:', userProfile?.id);
+      
+      // Debug: Log all file fields in formData
+      const fileFields = Object.entries(formData).filter(([_, value]) => value instanceof File);
+      console.log('📎 File fields in formData:', fileFields.map(([key, file]) => ({ key, name: (file as File).name, size: (file as File).size })));
       
       // Map form data to application schema with draft status
       const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       // Never attempt to update ownership fields from the client (can violate RLS/policies)
       const { applicant_id, ...updateData } = applicationData as any;
       
-      console.log('Mapped draft application data:', updateData);
+      console.log('📋 Mapped draft application data:', updateData);
       
       // Check if application exists
       if (!application?.id) {
@@ -1174,16 +1183,41 @@ export default function EditApplicationPage() {
       if (updatedApplication) {
         console.log('✅ Application updated as draft successfully:', updatedApplication);
         
-        // Upload documents in background, don't block UI
+        // Upload documents and WAIT for completion (previously was fire-and-forget)
         console.log('🚀 Starting document upload process for draft...');
-        uploadApplicationDocuments(application.id, formData, userProfile?.id)
-          .then(uploadedDocuments => {
-            console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
-          })
-          .catch(docError => {
-            console.error('⚠️ Document upload failed but draft was saved:', docError);
-            console.error('⚠️ Full error details:', docError);
-          });
+        try {
+          const uploadedDocuments = await uploadApplicationDocuments(application.id, formData, userProfile?.id);
+          console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+          
+          // Update initialDocuments state with newly uploaded documents
+          if (uploadedDocuments.length > 0) {
+            const newDocMap: Record<string, { url: string; name: string }> = {};
+            for (const doc of uploadedDocuments) {
+              // Extract field name from file path
+              if (doc.file_path) {
+                const pathParts = doc.file_path.split('/');
+                const fileName = pathParts[pathParts.length - 1];
+                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                if (fieldNameMatch) {
+                  const fieldName = fieldNameMatch[1];
+                  const publicUrl = getDocumentUrl(doc.file_path);
+                  if (publicUrl) {
+                    newDocMap[fieldName] = { url: publicUrl, name: doc.name };
+                  }
+                }
+              }
+            }
+            // Merge with existing initialDocuments
+            if (Object.keys(newDocMap).length > 0) {
+              setInitialDocuments(prev => ({ ...prev, ...newDocMap }));
+              console.log('📋 Updated initialDocuments with:', Object.keys(newDocMap));
+            }
+          }
+        } catch (docError) {
+          console.error('⚠️ Document upload failed:', docError);
+          // Don't fail the whole save, but warn the user
+          setError('Draft saved but some documents failed to upload. Please try uploading them again.');
+        }
         
         // ✅ Draft save UX (do NOT redirect; payment flow depends on staying here)
         setDraftSaved(true);
