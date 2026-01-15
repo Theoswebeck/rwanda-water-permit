@@ -461,10 +461,20 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           ) : isPaymentCompleted ? (
             // Show payment success status
             <div className="space-y-6">
-              <PaymentStatusDisplay
-                payment={payment!}
-                onDownloadReceipt={handleDownloadReceipt}
-              />
+              {payment ? (
+                <PaymentStatusDisplay
+                  payment={payment}
+                  onDownloadReceipt={handleDownloadReceipt}
+                />
+              ) : (
+                <Alert className="bg-green-50 border-green-200">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertTitle className="text-green-800">Payment Complete</AlertTitle>
+                  <AlertDescription className="text-green-700">
+                    Your payment was processed successfully.
+                  </AlertDescription>
+                </Alert>
+              )}
               
               <Alert className="bg-green-50 border-green-200">
                 <CheckCircle className="h-4 w-4 text-green-600" />

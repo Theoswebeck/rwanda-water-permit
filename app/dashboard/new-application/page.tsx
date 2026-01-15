@@ -613,10 +613,11 @@ function NewApplicationContent() {
       console.log('📋 Transfer form data received:', formData);
       
       // Create a transfer application in the applications table
+      // Uses 'transfer' type to follow same status flow but skip field reports
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'submitted',
-        application_type: 'commercial',
+        application_type: 'transfer',
         water_source: selectedPermit?.water_source || 'other',
         water_purpose: selectedPermit?.purpose || 'other',
         province: selectedPermit?.application?.province || 'Kigali',
@@ -662,10 +663,11 @@ function NewApplicationContent() {
       setIsLoading(true);
       setError(null);
       
+      // Uses 'transfer' type to follow same status flow but skip field reports
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
-        application_type: 'commercial',
+        application_type: 'transfer',
         water_source: selectedPermit?.water_source || 'other',
         water_purpose: selectedPermit?.purpose || 'other',
         province: selectedPermit?.application?.province || 'Kigali',

@@ -43,6 +43,7 @@ export type ApplicationType =
   | 'commercial'
   | 'municipal' 
   | 'mining_water_use'
+  | 'transfer'
 
 export type WaterSourceType = 
   | 'borehole' 
