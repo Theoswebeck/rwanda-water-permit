@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { verifyNationalId } from '@/lib/nida/gesb'
 
 function getSupabaseProjectRef(supabaseUrl: string): string | null {
   try {
@@ -23,6 +24,10 @@ export async function POST(req: NextRequest) {
     if (!email || !password || !accountType) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
     }
+
+    // Feature flag: keep NIDA verification off unless explicitly enabled.
+    // Set `NIDA_VERIFICATION_ENABLED=true` to enforce verification.
+    const nidaVerificationEnabled = process.env.NIDA_VERIFICATION_ENABLED === 'true'
 
     // Validate required fields for organizational signups (DB constraint chk_organizational_fields)
     if (accountType !== 'individual') {
@@ -49,6 +54,25 @@ export async function POST(req: NextRequest) {
       const idDigits = rawId.replace(/\D/g, '')
       if (idDigits.length !== 16 || !/^\d{16}$/.test(idDigits)) {
         return NextResponse.json({ success: false, message: 'invalid ID number' }, { status: 400 })
+      }
+    }
+
+    // NIDA verification for individual signups (before creating any auth user/profile)
+    if (accountType === 'individual' && nidaVerificationEnabled) {
+      const rawId = String(rest?.identification?.number ?? rest?.idNumber ?? '')
+      const idDigits = rawId.replace(/\D/g, '')
+      try {
+        const v = await verifyNationalId(idDigits)
+        // Defensive: ensure we have a matching documentNumber back.
+        if (v.documentNumber !== idDigits) {
+          return NextResponse.json({ success: false, message: 'National ID could not be verified' }, { status: 400 })
+        }
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'National ID could not be verified'
+        // Avoid leaking internal details in prod; keep errors actionable in dev/UAT.
+        const safeMessage =
+          process.env.NODE_ENV === 'production' ? 'National ID could not be verified' : `National ID verification failed: ${message}`
+        return NextResponse.json({ success: false, message: safeMessage }, { status: 400 })
       }
     }
 

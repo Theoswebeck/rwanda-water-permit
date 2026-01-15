@@ -90,6 +90,25 @@ export async function POST(req: NextRequest) {
       // ignore
     }
 
+    // Log the user deletion action
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'user.deleted',
+        entity_type: 'user',
+        table_name: 'users',
+        record_id: userId,
+        old_values: { email: email || null },
+        new_values: null,
+        description: `Deleted user account ${email || userId}`,
+        severity: 'critical',
+        status: 'success',
+        request_id: crypto.randomUUID()
+      })
+      console.log('📝 Audit log created for user deletion')
+    } catch (auditErr) {
+      console.warn('⚠️ Failed to create audit log:', auditErr)
+    }
+
     return NextResponse.json({ success: true, userId, email: email || null })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

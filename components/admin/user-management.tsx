@@ -43,7 +43,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getAllUsers, updateUser } from "@/lib/supabase";
+import { getAllUsers, updateUser, createAuditLog } from "@/lib/supabase";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import type { User as UserType } from "@/types/database";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
@@ -52,7 +52,7 @@ interface User {
   id: string;
   email: string;
   phone?: string;
-  role: "applicant" | "reviewer" | "inspector" | "admin" | "approver";
+  role: "applicant" | "assessor" | "reviewer" | "verifier" | "inspector" | "admin" | "approver";
   status: "active" | "inactive" | "suspended";
   account_type: "individual" | "company" | "cooperative" | "organization" | "institution";
   first_name?: string;
@@ -68,7 +68,7 @@ interface User {
 const userValidationSchema = z.object({
   email: z.string().email("Invalid email address"),
   phone: z.string().optional(),
-  role: z.enum(["applicant", "assessor", "reviewer", "inspector", "admin", "approver"]),
+  role: z.enum(["applicant", "assessor", "reviewer", "verifier", "inspector", "admin", "approver"]),
   status: z.enum(["active", "inactive", "suspended"]),
   account_type: z.enum(["individual", "company", "cooperative", "organization", "institution"]),
   first_name: z.string().optional(),
@@ -153,10 +153,12 @@ export function UserManagement() {
   };
 
   const getRoleBadge = (role: User["role"]) => {
-    const roleColors = {
+    const roleColors: Record<User["role"], string> = {
       admin: "bg-red-100 text-red-700 border-red-200",
       approver: "bg-purple-100 text-purple-700 border-purple-200",
       reviewer: "bg-blue-100 text-blue-700 border-blue-200",
+      assessor: "bg-orange-100 text-orange-700 border-orange-200",
+      verifier: "bg-cyan-100 text-cyan-700 border-cyan-200",
       inspector: "bg-green-100 text-green-700 border-green-200",
       applicant: "bg-gray-100 text-gray-700 border-gray-200",
     };
@@ -266,7 +268,33 @@ export function UserManagement() {
         phone: data.phone?.trim() || null,
       };
 
+      // Capture old values for audit log
+      const oldValues = {
+        email: selectedUser.email,
+        role: selectedUser.role,
+        status: selectedUser.status,
+        first_name: selectedUser.first_name,
+        last_name: selectedUser.last_name,
+      };
+
       await updateUser(selectedUser.id, cleanedData);
+      
+      // Log the update action
+      const roleChanged = selectedUser.role !== data.role;
+      await createAuditLog({
+        action: roleChanged ? 'user.role_changed' : 'user.updated',
+        entity_type: 'user',
+        table_name: 'users',
+        record_id: selectedUser.id,
+        old_values: oldValues,
+        new_values: cleanedData,
+        description: roleChanged 
+          ? `Changed user ${selectedUser.email} role from ${selectedUser.role} to ${data.role}`
+          : `Updated user ${selectedUser.email}`,
+        severity: roleChanged ? 'warning' : 'info',
+        status: 'success',
+      });
+
       await fetchUsers(); // Refresh the users list
       setIsEditDialogOpen(false);
       setSelectedUser(null);
@@ -285,6 +313,22 @@ export function UserManagement() {
       
       const newStatus = user.status === 'suspended' ? 'active' : 'suspended';
       await updateUser(userId, { status: newStatus });
+      
+      // Log the suspend/activate action
+      await createAuditLog({
+        action: newStatus === 'suspended' ? 'user.suspended' : 'user.activated',
+        entity_type: 'user',
+        table_name: 'users',
+        record_id: userId,
+        old_values: { status: user.status },
+        new_values: { status: newStatus },
+        description: newStatus === 'suspended' 
+          ? `Suspended user account ${user.email}`
+          : `Activated user account ${user.email}`,
+        severity: newStatus === 'suspended' ? 'warning' : 'info',
+        status: 'success',
+      });
+
       await fetchUsers(); // Refresh the users list
     } catch (err) {
       handleErrorWithBack(err, 'suspend user');

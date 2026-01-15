@@ -508,6 +508,9 @@ export const ApplicationForm = memo(function ApplicationForm({
   const [selectedWaterSourceProvince, setSelectedWaterSourceProvince] = useState("");
   const [selectedWaterSourceDistrict, setSelectedWaterSourceDistrict] = useState("");
   const [selectedWaterSourceSector, setSelectedWaterSourceSector] = useState("");
+  const [selectedWaterSourceCell, setSelectedWaterSourceCell] = useState("");
+  const [selectedOfficeVillage, setSelectedOfficeVillage] = useState("");
+  const [selectedWaterSourceVillage, setSelectedWaterSourceVillage] = useState("");
 
   // ⚡ PERFORMANCE: Memoize default values to prevent recalculation
   const getDefaultValues = useMemo(() => {
@@ -719,6 +722,20 @@ export const ApplicationForm = memo(function ApplicationForm({
     return getFormattedCellOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector);
   };
 
+  const getOfficeVillageOptions = () => {
+    const province = selectedOfficeProvince || officeProvince;
+    const district = selectedOfficeDistrict || officeDistrict;
+    const sector = selectedOfficeSector || officeSector;
+    const cell = selectedOfficeCell || officeCell;
+    if (!province || !district || !sector || !cell) return [];
+    return getFormattedVillageOptions(province, district, sector, cell);
+  };
+
+  const getWaterSourceVillageOptions = () => {
+    if (!selectedWaterSourceProvince || !selectedWaterSourceDistrict || !selectedWaterSourceSector || !selectedWaterSourceCell) return [];
+    return getFormattedVillageOptions(selectedWaterSourceProvince, selectedWaterSourceDistrict, selectedWaterSourceSector, selectedWaterSourceCell);
+  };
+
   const watchedCategoryApplicant = form.watch("categoryApplicant");
   const watchedWaterSourceType = form.watch("waterSourceType");
   const watchedIntendedActivities = form.watch("intendedActivities");
@@ -743,6 +760,9 @@ export const ApplicationForm = memo(function ApplicationForm({
   const waterSourceProvince = form.watch('waterSourceProvince');
   const waterSourceDistrict = form.watch('waterSourceDistrict');
   const waterSourceSector = form.watch('waterSourceSector');
+  const waterSourceCell = form.watch('waterSourceCell');
+  const officeVillage = form.watch('officeVillage');
+  const waterSourceVillage = form.watch('waterSourceVillage');
 
   // Update dropdown states when form values change
   useEffect(() => {
@@ -767,7 +787,16 @@ export const ApplicationForm = memo(function ApplicationForm({
     if (waterSourceSector !== selectedWaterSourceSector) {
       setSelectedWaterSourceSector(waterSourceSector || "");
     }
-  }, [officeProvince, officeDistrict, officeSector, officeCell, waterSourceProvince, waterSourceDistrict, waterSourceSector]);
+    if (waterSourceCell !== selectedWaterSourceCell) {
+      setSelectedWaterSourceCell(waterSourceCell || "");
+    }
+    if (officeVillage !== selectedOfficeVillage) {
+      setSelectedOfficeVillage(officeVillage || "");
+    }
+    if (waterSourceVillage !== selectedWaterSourceVillage) {
+      setSelectedWaterSourceVillage(waterSourceVillage || "");
+    }
+  }, [officeProvince, officeDistrict, officeSector, officeCell, officeVillage, waterSourceProvince, waterSourceDistrict, waterSourceSector, waterSourceCell, waterSourceVillage]);
 
   // Helper function to check if required documents are uploaded
   const checkRequiredDocuments = () => {
@@ -2263,6 +2292,9 @@ export const ApplicationForm = memo(function ApplicationForm({
                                   field.onChange(value);
                                   setSelectedOfficeCell(value);
                                   form.clearErrors("officeCell");
+                                  // Reset village when cell changes
+                                  form.setValue("officeVillage", "");
+                                  setSelectedOfficeVillage("");
                                 }}
                                 value={field.value}
                                 disabled={readOnly || (!selectedOfficeSector && !officeSector)}
@@ -2291,11 +2323,25 @@ export const ApplicationForm = memo(function ApplicationForm({
                           <FormItem>
                             <FormLabel>Village</FormLabel>
                             <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Enter village (optional)"
-                                className="bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400"
-                              />
+                              <Select 
+                                onValueChange={readOnly ? undefined : (value) => {
+                                  field.onChange(value);
+                                  setSelectedOfficeVillage(value);
+                                }}
+                                value={field.value}
+                                disabled={readOnly || (!selectedOfficeCell && !officeCell)}
+                              >
+                                <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                  <SelectValue placeholder={(selectedOfficeCell || officeCell) ? "Select village (optional)" : "Select cell first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getOfficeVillageOptions().map((village) => (
+                                    <SelectItem key={village.value} value={village.value}>
+                                      {village.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2560,7 +2606,13 @@ export const ApplicationForm = memo(function ApplicationForm({
                             <FormLabel>Cell *</FormLabel>
                             <FormControl>
                               <Select 
-                                onValueChange={readOnly ? undefined : field.onChange}
+                                onValueChange={readOnly ? undefined : (value) => {
+                                  field.onChange(value);
+                                  setSelectedWaterSourceCell(value);
+                                  // Reset village when cell changes
+                                  form.setValue("waterSourceVillage", "");
+                                  setSelectedWaterSourceVillage("");
+                                }}
                                 value={field.value}
                                 disabled={readOnly || !selectedWaterSourceSector}
                               >
@@ -2588,11 +2640,25 @@ export const ApplicationForm = memo(function ApplicationForm({
                           <FormItem>
                             <FormLabel>Village</FormLabel>
                             <FormControl>
-                              <Input 
-                                {...field} 
-                                placeholder="Enter village (optional)"
-                                className="bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400"
-                              />
+                              <Select 
+                                onValueChange={readOnly ? undefined : (value) => {
+                                  field.onChange(value);
+                                  setSelectedWaterSourceVillage(value);
+                                }}
+                                value={field.value}
+                                disabled={readOnly || (!selectedWaterSourceCell && !waterSourceCell)}
+                              >
+                                <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                  <SelectValue placeholder={(selectedWaterSourceCell || waterSourceCell) ? "Select village (optional)" : "Select cell first"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {getWaterSourceVillageOptions().map((village) => (
+                                    <SelectItem key={village.value} value={village.value}>
+                                      {village.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </FormControl>
                             <FormMessage />
                           </FormItem>

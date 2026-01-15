@@ -276,6 +276,46 @@ export async function POST(req: NextRequest) {
       console.warn('⚠️ Failed to insert notifications row:', notifErr)
     }
 
+    // Log the decision to audit logs
+    try {
+      const actionMap = {
+        approve: 'application.approved',
+        reject: 'application.rejected',
+        return_to_assessment: 'application.revision_requested'
+      }
+      const severityMap = {
+        approve: 'info',
+        reject: 'warning',
+        return_to_assessment: 'info'
+      }
+      const descriptionMap = {
+        approve: `Approved application ${applicationNumber} for ${applicantName}`,
+        reject: `Rejected application ${applicationNumber}. Reason: ${reason || 'Not specified'}`,
+        return_to_assessment: `Returned application ${applicationNumber} for further verification`
+      }
+
+      await supabase.from('audit_logs').insert({
+        user_id: approver.id,
+        action: actionMap[decision],
+        entity_type: 'application',
+        table_name: 'applications',
+        record_id: applicationId,
+        old_values: { status: 'pending_final_approval' },
+        new_values: { 
+          status: decision === 'approve' ? 'approved_pending_permit' : decision === 'reject' ? 'rejected' : 'pending_verification',
+          ...(decision === 'reject' ? { rejection_reason: reason } : {}),
+          ...(decision === 'approve' && conditions ? { approval_conditions: conditions } : {})
+        },
+        description: descriptionMap[decision],
+        severity: severityMap[decision] as 'info' | 'warning' | 'critical',
+        status: 'success',
+        request_id: crypto.randomUUID()
+      })
+      console.log('📝 Audit log created for final decision')
+    } catch (auditErr) {
+      console.warn('⚠️ Failed to create audit log:', auditErr)
+    }
+
     console.log(`✅ Final decision completed: decision=${decision} application=${applicationNumber}`)
     return NextResponse.json({ success: true })
   } catch (err) {

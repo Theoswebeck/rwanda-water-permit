@@ -491,9 +491,16 @@ function NewApplicationContent() {
           });
         
         // Update URL with draft ID if this is a new draft
+        // IMPORTANT: Use history.replaceState instead of router.replace to avoid re-render
+        // This preserves the current activeTab state (especially important for payment flow)
         if (!draftId && result.id) {
           const newUrl = `/dashboard/new-application?id=${result.id}`;
-          router.replace(newUrl);
+          // Use native history API to update URL without triggering Next.js re-render
+          window.history.replaceState(
+            { ...window.history.state, as: newUrl, url: newUrl },
+            '',
+            newUrl
+          );
           setCurrentApplication(result);
         }
         
@@ -646,11 +653,11 @@ function NewApplicationContent() {
           <ApplicationForm 
             userData={userData}
             onSubmit={handleSubmitApplication}
-            onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, draftId)}
+            onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, currentApplication?.id || draftId)}
             isLoading={isLoading}
             initialData={initialFormData}
             initialDocuments={initialDocuments}
-            mode={draftId ? 'edit' : 'create'}
+            mode={draftId || currentApplication ? 'edit' : 'create'}
             currentApplication={currentApplication}
           />
         </motion.div>
