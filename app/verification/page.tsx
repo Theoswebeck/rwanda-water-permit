@@ -20,6 +20,7 @@ import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-t
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
+import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { calculateDaysRemainingTo90DayDeadline, sortBy90DayDeadlineClosest } from "@/lib/utils";
 
 interface VerificationApplication extends Application {
@@ -43,7 +44,7 @@ export default function VerificationDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<VerificationStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [topTab, setTopTab] = useState<"verification" | "inspections">("verification");
+  const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports">("verification");
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -476,6 +477,7 @@ export default function VerificationDashboard() {
               tabs={[
                 { value: "verification", label: "Verification" },
                 { value: "inspections", label: "Inspections" },
+                { value: "water-reports", label: "Water Use Reports" },
               ]}
             />
 
@@ -567,10 +569,12 @@ export default function VerificationDashboard() {
                   </Tabs>
                 </CardContent>
               </Card>
-            ) : (
+            ) : topTab === "inspections" ? (
               <div className="space-y-6">
                 <InspectionsWorkbench />
               </div>
+            ) : (
+              <WaterUseReportsList />
             )}
           </div>
         </motion.div>

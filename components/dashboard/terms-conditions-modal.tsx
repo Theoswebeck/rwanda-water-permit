@@ -484,32 +484,6 @@ export function TermsConditionsModal({
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-2">
                                   <div className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-                                    The DIRECTOR GENERAL:
-                                  </div>
-                                  <div className="flex flex-col gap-2">
-                                    <div className="text-sm font-semibold text-gray-900">Signature:</div>
-                                    <div className="h-[64px] flex items-end">
-                                      <img
-                                        src="/signatures/director-general.svg"
-                                        alt="Director General signature"
-                                        className="h-[60px] w-auto"
-                                      />
-                                    </div>
-                                    <div className="border-b border-gray-400 w-full" />
-                                  </div>
-
-                                  <div className="pt-1 grid grid-cols-[64px_1fr] gap-x-3 gap-y-2">
-                                    <div className="font-semibold text-gray-900">Name:</div>
-                                    <div className="text-gray-900">Dr. Emmanuel RUKUNDO</div>
-                                    <div className="font-semibold text-gray-900">Title:</div>
-                                    <div className="text-gray-900">Director General</div>
-                                    <div className="font-semibold text-gray-900">Date:</div>
-                                    <div className="text-gray-900">{todayLabel}</div>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                  <div className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
                                     The WATER USER:
                                   </div>
                                   <div className="flex flex-col gap-2">

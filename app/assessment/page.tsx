@@ -30,6 +30,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
+import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 
 interface AssessmentApplication extends Application {
   applicant_name?: string;
@@ -60,7 +61,7 @@ export default function AssessmentDashboard() {
   const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
   const [stats, setStats] = useState<AssessmentStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [topTab, setTopTab] = useState<"assessment" | "inspections">("assessment");
+  const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports">("assessment");
 
   const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
     return (data ?? []).map((app) => {
@@ -722,6 +723,7 @@ export default function AssessmentDashboard() {
             tabs={[
               { value: "assessment", label: "Assessment" },
               { value: "inspections", label: "Inspections" },
+              { value: "water-reports", label: "Water Use Reports" },
             ]}
           />
 
@@ -835,10 +837,12 @@ export default function AssessmentDashboard() {
                 </Tabs>
               </CardContent>
             </Card>
-          ) : (
+          ) : topTab === "inspections" ? (
             <div className="space-y-6">
               <InspectionsWorkbench />
             </div>
+          ) : (
+            <WaterUseReportsList />
           )}
         </div>
       </motion.div>

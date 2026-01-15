@@ -26,6 +26,7 @@ import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-t
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
+import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 
 interface DashboardStats {
   pendingFinalApproval: number;
@@ -40,7 +41,7 @@ export default function ApproverDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"approval" | "inspections">("approval");
+  const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports">("approval");
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -159,6 +160,7 @@ export default function ApproverDashboard() {
           tabs={[
             { value: "approval", label: "Application Approval" },
             { value: "inspections", label: "Inspections" },
+            { value: "water-reports", label: "Water Use Reports" },
           ]}
         />
 
@@ -196,10 +198,12 @@ export default function ApproverDashboard() {
               </Tabs>
             </CardContent>
           </Card>
-        ) : (
+        ) : topTab === "inspections" ? (
           <div className="space-y-6">
             <InspectionsWorkbench />
           </div>
+        ) : (
+          <WaterUseReportsList />
         )}
       </motion.div>
       </div>

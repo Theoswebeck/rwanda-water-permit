@@ -50,14 +50,15 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_entity_type ON audit_logs(entity_type)
 -- Add composite index for common filter combinations
 CREATE INDEX IF NOT EXISTS idx_audit_logs_filters ON audit_logs(created_at DESC, entity_type, severity, status);
 
--- Update RLS policies for audit_logs (admin only access)
+-- Update RLS policies for audit_logs (staff access)
 DROP POLICY IF EXISTS "Admins can view all audit logs" ON audit_logs;
-CREATE POLICY "Admins can view all audit logs"
+DROP POLICY IF EXISTS "Staff can view all audit logs" ON audit_logs;
+CREATE POLICY "Staff can view all audit logs"
     ON audit_logs FOR SELECT
     USING (
         EXISTS (
             SELECT 1 FROM users 
-            WHERE id = auth.uid() AND role = 'admin'
+            WHERE id = auth.uid() AND role IN ('admin', 'approver', 'assessor', 'verifier', 'reviewer', 'inspector')
         )
     );
 

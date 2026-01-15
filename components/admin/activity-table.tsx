@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -261,9 +261,8 @@ export function ActivityTable({ logs, loading }: ActivityTableProps) {
             const { date, time } = formatTimestamp(log.created_at);
             
             return (
-              <>
-                <TableRow 
-                  key={log.id}
+              <React.Fragment key={log.id}>
+                <TableRow
                   className={cn(
                     "cursor-pointer hover:bg-gray-50",
                     isExpanded && "bg-gray-50"
@@ -330,13 +329,13 @@ export function ActivityTable({ logs, loading }: ActivityTableProps) {
                   </TableCell>
                 </TableRow>
                 {isExpanded && (
-                  <TableRow key={`${log.id}-expanded`}>
+                  <TableRow>
                     <TableCell colSpan={8} className="p-0">
                       <ExpandedRowDetail log={log} />
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </React.Fragment>
             );
           })}
         </TableBody>

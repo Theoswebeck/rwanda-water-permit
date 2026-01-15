@@ -37,13 +37,14 @@ import {
 } from "@/components/ui/dialog";
 import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send } from "lucide-react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
+import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { calculateDaysRemainingTo90DayDeadline, sortBy90DayDeadlineClosest } from "@/lib/utils";
 
 interface ReviewApplication extends Application {
@@ -75,7 +76,7 @@ interface StaffMember {
 
 export default function ReviewerDashboard() {
   const router = useRouter();
-  const [topTab, setTopTab] = useState<"review" | "inspections">("review");
+  const [topTab, setTopTab] = useState<"review" | "inspections" | "water-reports">("review");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [reviewApplications, setReviewApplications] = useState<ReviewApplication[]>([]);
@@ -371,6 +372,29 @@ export default function ReviewerDashboard() {
       if (workflowError) {
         console.error('❌ Workflow history error:', workflowError);
         // Don't throw - the main update succeeded
+      }
+
+      // Create audit log entry
+      try {
+        await createAuditLog({
+          action: isReassign ? 'application.reassigned' : 'application.assigned',
+          entity_type: 'application',
+          table_name: 'applications',
+          record_id: selectedAppForAssignment.id,
+          old_values: { 
+            assigned_assessor_id: previousAssessorId, 
+            status: selectedAppForAssignment.status 
+          },
+          new_values: { 
+            assigned_assessor_id: selectedAssessorId, 
+            status: 'pending_assessment' 
+          },
+          description: comment,
+          severity: 'info',
+          status: 'success',
+        });
+      } catch (auditErr) {
+        console.warn('⚠️ Failed to create audit log:', auditErr);
       }
 
       console.log(`✅ Application ${selectedAppForAssignment.application_number} ${isReassign ? 'reassigned' : 'assigned'} to ${selectedAssessor.first_name} ${selectedAssessor.last_name}`);
@@ -895,6 +919,7 @@ export default function ReviewerDashboard() {
             tabs={[
               { value: "review", label: "Review" },
               { value: "inspections", label: "Inspections" },
+              { value: "water-reports", label: "Water Use Reports" },
             ]}
           />
 
@@ -986,10 +1011,12 @@ export default function ReviewerDashboard() {
                 </Tabs>
               </CardContent>
             </Card>
-          ) : (
+          ) : topTab === "inspections" ? (
             <div className="space-y-6">
               <InspectionsWorkbench />
             </div>
+          ) : (
+            <WaterUseReportsList />
           )}
         </div>
       </motion.div>

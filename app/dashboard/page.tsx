@@ -12,12 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, CheckCircle } from "lucide-react";
+import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { PermitSelectModal } from "@/components/dashboard/permit-select-modal";
 // ⚡ PERFORMANCE: Use React Query hooks for automatic caching
 import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useApplicationsQuery";
-import { usePermitsQuery } from "@/hooks/usePermitsQuery";
+import { usePermitsQuery, PermitWithApplication } from "@/hooks/usePermitsQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Permit as DatabasePermit } from "@/types/database";
 import type { Application, ApplicationStatus as DbApplicationStatus } from "@/types/database";
@@ -81,6 +82,7 @@ function DashboardContent() {
   const [activeTab, setActiveTab] = useState<"applications" | "permits">(initialTab);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [showPermitSelectModal, setShowPermitSelectModal] = useState(false);
   
   // Check for success parameters from URL
   useEffect(() => {
@@ -121,7 +123,7 @@ function DashboardContent() {
     isLoading: permitsLoading,
     error: permitsQueryError,
     isFetching: permitsFetching
-  } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id && activeTab === 'permits' });
+  } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id, includeApplication: true });
 
   // ⚡ PERFORMANCE: Use mutation for deleting applications
   const deleteApplicationMutation = useDeleteApplicationMutation();
@@ -139,7 +141,7 @@ function DashboardContent() {
 
   const permits = useMemo(() => {
     // Transform database permits to component format
-    return databasePermits.map((dbPermit: DatabasePermit): PermitListItem => {
+    return databasePermits.map((dbPermit: PermitWithApplication): PermitListItem => {
       // Calculate status based on expiry date
       const now = new Date();
       const expiryDate = new Date(dbPermit.expiry_date);
@@ -204,13 +206,21 @@ function DashboardContent() {
                   Manage your water permit applications and view your permits
                 </p>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 gap-2">
                 <Link href="/dashboard/new-application">
                   <Button>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     New Application
                   </Button>
                 </Link>
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowPermitSelectModal(true)}
+                  disabled={databasePermits.length === 0}
+                >
+                  <ClipboardList className="mr-2 h-4 w-4" />
+                  Water Use Reporting
+                </Button>
               </div>
             </div>
 
@@ -318,6 +328,14 @@ function DashboardContent() {
         
         {/* Terms & Conditions Modal */}
         {/* This modal is now handled by the application detail page */}
+
+        {/* Permit Select Modal for Water Use Reporting */}
+        <PermitSelectModal
+          open={showPermitSelectModal}
+          onOpenChange={setShowPermitSelectModal}
+          permits={databasePermits}
+          loading={permitsLoading}
+        />
       </DashboardLayout>
     </ProtectedRoute>
   );

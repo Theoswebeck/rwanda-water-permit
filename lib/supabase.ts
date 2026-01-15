@@ -116,7 +116,14 @@ export const addReviewComment = async (applicationId: string, reviewerId: string
 }
 
 // Helper function to update application status
-export const updateApplicationStatus = async (applicationId: string, status: string) => {
+export const updateApplicationStatus = async (applicationId: string, status: string, description?: string) => {
+  // Get current status for audit log
+  const { data: currentApp } = await supabase
+    .from('applications')
+    .select('status, application_number')
+    .eq('id', applicationId)
+    .single()
+
   const { data, error } = await supabase
     .from('applications')
     .update({ status })
@@ -125,6 +132,24 @@ export const updateApplicationStatus = async (applicationId: string, status: str
     .single()
   
   if (error) throw error
+
+  // Log the status change
+  try {
+    await createAuditLog({
+      action: 'application.status_changed',
+      entity_type: 'application',
+      table_name: 'applications',
+      record_id: applicationId,
+      old_values: { status: currentApp?.status },
+      new_values: { status },
+      description: description || `Application ${currentApp?.application_number || applicationId} status changed from ${currentApp?.status} to ${status}`,
+      severity: 'info',
+      status: 'success',
+    })
+  } catch (auditErr) {
+    console.warn('⚠️ Failed to create audit log for status change:', auditErr)
+  }
+
   return data
 }
 
@@ -342,6 +367,19 @@ export const getInspectionStats = async () => {
 
 // Helper function to assign inspector to application
 export const assignInspectorToApplication = async (applicationId: string, inspectorId: string) => {
+  // Get current application and inspector info for audit log
+  const { data: currentApp } = await supabase
+    .from('applications')
+    .select('status, application_number, assigned_inspector_id')
+    .eq('id', applicationId)
+    .single()
+
+  const { data: inspector } = await supabase
+    .from('users')
+    .select('first_name, last_name, email')
+    .eq('id', inspectorId)
+    .single()
+
   const { data, error } = await supabase
     .from('applications')
     .update({ 
@@ -353,6 +391,25 @@ export const assignInspectorToApplication = async (applicationId: string, inspec
     .single()
   
   if (error) throw error
+
+  // Log the assignment
+  const inspectorName = inspector ? `${inspector.first_name} ${inspector.last_name}` : inspectorId
+  try {
+    await createAuditLog({
+      action: 'application.assigned',
+      entity_type: 'application',
+      table_name: 'applications',
+      record_id: applicationId,
+      old_values: { assigned_inspector_id: currentApp?.assigned_inspector_id, status: currentApp?.status },
+      new_values: { assigned_inspector_id: inspectorId, status: 'pending_inspection' },
+      description: `Application ${currentApp?.application_number || applicationId} assigned to inspector ${inspectorName}`,
+      severity: 'info',
+      status: 'success',
+    })
+  } catch (auditErr) {
+    console.warn('⚠️ Failed to create audit log for inspector assignment:', auditErr)
+  }
+
   return data
 }
 
