@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
-import { supabase } from "@/lib/supabase";
+import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -471,6 +471,7 @@ export default function ReviewApplicationPage() {
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      const previousStatus = application.status;
 
       const { error } = await supabase
         .from('applications')
@@ -479,13 +480,31 @@ export default function ReviewApplicationPage() {
 
       if (error) throw error;
 
+      // Create audit log entry
+      try {
+        await createAuditLog({
+          action: 'application.status_changed',
+          entity_type: 'application',
+          table_name: 'applications',
+          record_id: application.id,
+          old_values: { status: previousStatus },
+          new_values: { status: 'pending_verification' },
+          description: `Application ${application.application_number} forwarded to verification`,
+          severity: 'info',
+          status: 'success',
+        });
+      } catch (auditErr) {
+        console.warn('⚠️ Failed to create audit log:', auditErr);
+      }
+
       persistBanner({
         scope: params.id as string,
         kind: "success",
         title: "Sent to verification",
         description: "Application recommended and forwarded to verification.",
       });
-      router.refresh();
+      // Navigate back to dashboard to confirm action was successful
+      router.push('/review');
     } catch (err) {
       console.error('Error updating application:', err);
       setBanner({ kind: "error", title: "Action failed", description: "Failed to update application. Please try again." });
@@ -497,6 +516,8 @@ export default function ReviewApplicationPage() {
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      const previousStatus = application.status;
+      
       const { error } = await supabase
         .from('applications')
         .update({ 
@@ -518,6 +539,23 @@ export default function ReviewApplicationPage() {
           status: 'returned'
         }]);
 
+      // Create audit log entry
+      try {
+        await createAuditLog({
+          action: 'application.revision_requested',
+          entity_type: 'application',
+          table_name: 'applications',
+          record_id: application.id,
+          old_values: { status: previousStatus },
+          new_values: { status: 'pending_assessment', revision_notes: revisionNotes.trim() },
+          description: `Application ${application.application_number} returned to assessment for revision`,
+          severity: 'warning',
+          status: 'success',
+        });
+      } catch (auditErr) {
+        console.warn('⚠️ Failed to create audit log:', auditErr);
+      }
+
       setShowRevisionDialog(false);
       setRevisionNotes("");
       setShowConfirmDialog(true);
@@ -529,8 +567,8 @@ export default function ReviewApplicationPage() {
 
   const handleConfirmClose = () => {
     setShowConfirmDialog(false);
-    // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
-    router.refresh();
+    // Navigate back to dashboard to confirm action was successful
+    router.push('/review');
   };
 
   const getStatusBadge = (status: ApplicationStatus) => {

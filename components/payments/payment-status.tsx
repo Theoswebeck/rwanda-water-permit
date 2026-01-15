@@ -12,12 +12,25 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { Payment, PaymentStatus } from '@/types/payment';
 
 interface PaymentStatusProps {
-  payment: Payment;
+  payment: Payment | null | undefined;
   onRetry?: () => void;
   onDownloadReceipt?: () => void;
 }
 
 export function PaymentStatusDisplay({ payment, onRetry, onDownloadReceipt }: PaymentStatusProps) {
+  // Handle null/undefined payment
+  if (!payment) {
+    return (
+      <Alert className="border-gray-200 bg-gray-50">
+        <AlertCircle className="h-5 w-5 text-gray-500" />
+        <AlertTitle>No Payment Information</AlertTitle>
+        <AlertDescription>
+          Payment information is not available yet. Please initiate a payment first.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   const getStatusConfig = (status: PaymentStatus) => {
     switch (status) {
       case 'completed':

@@ -8,7 +8,7 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Lazy load the heavy form component
+// Lazy load the heavy form components
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
   {
@@ -21,6 +21,22 @@ const ApplicationForm = dynamic(
     ssr: false
   }
 );
+
+const PermitTransferForm = dynamic(
+  () => import("@/components/dashboard/permit-transfer-form").then(mod => ({ default: mod.PermitTransferForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading transfer form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
+import { ApplicationTypeSelector, type ApplicationMode } from "@/components/dashboard/application-type-selector";
+import { PermitSelectForTransfer, type PermitWithApplication } from "@/components/dashboard/permit-select-for-transfer";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -223,6 +239,7 @@ function NewApplicationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const draftId = searchParams.get('id'); // Check if we're editing an existing draft
+  const modeParam = searchParams.get('mode'); // Check if mode is specified (new or transfer)
   const { userProfile } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
@@ -233,6 +250,14 @@ function NewApplicationContent() {
   const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  
+  // Application type state (new application vs transfer)
+  const [applicationMode, setApplicationMode] = useState<ApplicationMode | null>(
+    modeParam === 'transfer' ? 'transfer' : modeParam === 'new' ? 'new' : null
+  );
+  const [selectedPermit, setSelectedPermit] = useState<PermitWithApplication | null>(null);
+  const [transferStep, setTransferStep] = useState<'select-permit' | 'fill-form'>('select-permit');
+  const [currentTransferApplication, setCurrentTransferApplication] = useState<Application | null>(null);
   
   const { createApplication, updateApplication, getApplication } = useApplications();
   const { getDocuments } = useDocuments();
@@ -549,6 +574,146 @@ function NewApplicationContent() {
       return () => clearTimeout(timer);
     }
   }, [submitSuccess, router]);
+
+  // Handle application mode selection
+  const handleModeSelect = useCallback((mode: ApplicationMode) => {
+    setApplicationMode(mode);
+    if (mode === 'new') {
+      // Update URL to reflect mode
+      const newUrl = `/dashboard/new-application?mode=new`;
+      window.history.replaceState(
+        { ...window.history.state, as: newUrl, url: newUrl },
+        '',
+        newUrl
+      );
+    } else if (mode === 'transfer') {
+      setTransferStep('select-permit');
+    }
+  }, []);
+
+  // Handle permit selection for transfer
+  const handlePermitSelect = useCallback((permit: PermitWithApplication) => {
+    setSelectedPermit(permit);
+    setTransferStep('fill-form');
+  }, []);
+
+  // Handle transfer cancellation
+  const handleTransferCancel = useCallback(() => {
+    setSelectedPermit(null);
+    setTransferStep('select-permit');
+    setApplicationMode(null);
+  }, []);
+
+  // Handle transfer form submission
+  const handleTransferSubmit = useCallback(async (formData: any, status: 'submitted') => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      console.log('📋 Transfer form data received:', formData);
+      
+      // Create a transfer application in the applications table
+      const transferApplicationData: Partial<Application> = {
+        applicant_id: userProfile?.id,
+        status: 'submitted',
+        application_type: 'commercial',
+        water_source: selectedPermit?.water_source || 'other',
+        water_purpose: selectedPermit?.purpose || 'other',
+        province: selectedPermit?.application?.province || 'Kigali',
+        district: selectedPermit?.application?.district || '',
+        sector: selectedPermit?.application?.sector || '',
+        cell: selectedPermit?.application?.cell || '',
+        project_title: `Transfer: ${selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
+        project_description: `Permit transfer request for permit ${selectedPermit?.permit_number}`,
+        sla_status: 'on_time',
+        internal_notes: JSON.stringify({
+          isTransfer: true,
+          originalPermitId: selectedPermit?.id,
+          originalPermitNumber: selectedPermit?.permit_number,
+          transferFormData: formData,
+        }),
+      };
+      
+      const newApplication = await createApplication(transferApplicationData);
+      
+      if (newApplication) {
+        console.log('✅ Transfer application created:', newApplication);
+        
+        // Upload documents
+        await ensureStorageBucket();
+        const uploadedDocs = await uploadApplicationDocuments(newApplication.id, formData);
+        console.log(`📎 ${uploadedDocs.length} documents uploaded`);
+        
+        setSubmitSuccess(true);
+      } else {
+        throw new Error('Failed to create transfer application');
+      }
+    } catch (error) {
+      console.error('❌ Error submitting transfer:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit transfer request');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedPermit, userProfile?.id, createApplication]);
+
+  // Handle transfer draft save
+  const handleTransferSaveAsDraft = useCallback(async (formData: any, status: 'draft') => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const transferApplicationData: Partial<Application> = {
+        applicant_id: userProfile?.id,
+        status: 'draft',
+        application_type: 'commercial',
+        water_source: selectedPermit?.water_source || 'other',
+        water_purpose: selectedPermit?.purpose || 'other',
+        province: selectedPermit?.application?.province || 'Kigali',
+        district: selectedPermit?.application?.district || '',
+        sector: selectedPermit?.application?.sector || '',
+        cell: selectedPermit?.application?.cell || '',
+        project_title: `Transfer: ${selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
+        project_description: `Permit transfer request for permit ${selectedPermit?.permit_number}`,
+        sla_status: 'on_time',
+        internal_notes: JSON.stringify({
+          isTransfer: true,
+          originalPermitId: selectedPermit?.id,
+          originalPermitNumber: selectedPermit?.permit_number,
+          transferFormData: formData,
+        }),
+      };
+      
+      const result = await createApplication(transferApplicationData);
+      
+      if (result) {
+        await ensureStorageBucket();
+        await uploadApplicationDocuments(result.id, formData);
+        
+        // Track the current transfer application for payment tab
+        setCurrentTransferApplication(result);
+        
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2000);
+        
+        return result;
+      }
+    } catch (error) {
+      console.error('Error saving transfer draft:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save draft');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedPermit, userProfile?.id, createApplication]);
+
+  // User data for transfer form
+  const transferUserData = useMemo(() => ({
+    email: userProfile?.email || "",
+    name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || userProfile?.company_name || "",
+    phone: userProfile?.phone || userProfile?.company_phone || "",
+    address: userProfile?.company_address || "",
+    account_type: userProfile?.account_type || 'individual',
+  }), [userProfile]);
   
   if (loadingDraft) {
     return (
@@ -605,6 +770,155 @@ function NewApplicationContent() {
     );
   }
   
+  // Determine what to render based on application mode and state
+  const renderContent = () => {
+    // If we have a draft ID, always show the regular application form (no mode selection)
+    if (draftId) {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Edit Water Permit Application
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Continue editing your water permit application. Your changes are automatically saved.
+            </p>
+            {currentApplication && (
+              <div className="mt-2 p-2 bg-blue-50 rounded-md">
+                <p className="text-sm text-blue-700">
+                  📝 Editing draft application • ID: {currentApplication.id.slice(0, 8)}... • 
+                  Status: {currentApplication.status} • 
+                  Last updated: {new Date(currentApplication.updated_at || currentApplication.created_at).toLocaleString()}
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <ApplicationForm 
+            userData={userData}
+            onSubmit={handleSubmitApplication}
+            onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, currentApplication?.id || draftId)}
+            isLoading={isLoading}
+            initialData={initialFormData}
+            initialDocuments={initialDocuments}
+            mode="edit"
+            currentApplication={currentApplication}
+          />
+        </>
+      );
+    }
+
+    // No mode selected - show the application type selector
+    if (!applicationMode) {
+      return (
+        <>
+          <div className="text-center mb-8">
+            <h1 className="text-primary leading-tighter max-w-2xl mx-auto text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Water Permit Application
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2 max-w-xl mx-auto">
+              Select the type of application you want to submit. You can apply for a new water use permit or transfer an existing permit.
+            </p>
+          </div>
+          
+          <ApplicationTypeSelector onSelect={handleModeSelect} />
+        </>
+      );
+    }
+
+    // Transfer mode - permit selection step
+    if (applicationMode === 'transfer' && transferStep === 'select-permit') {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Transfer Water Use Permit
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Select the permit you want to transfer. You can search by permit number, project name, or current holder.
+            </p>
+          </div>
+          
+          <PermitSelectForTransfer 
+            userId={userProfile?.id}
+            onPermitSelect={handlePermitSelect}
+            onCancel={handleTransferCancel}
+          />
+        </>
+      );
+    }
+
+    // Transfer mode - fill form step
+    if (applicationMode === 'transfer' && transferStep === 'fill-form' && selectedPermit) {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Transfer Permit: {selectedPermit.permit_number}
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Complete the transfer form for the selected permit. All fields marked with an asterisk (*) are required.
+            </p>
+            <div className="mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTransferStep('select-permit')}
+                className="text-sm"
+              >
+                ← Select a different permit
+              </Button>
+            </div>
+          </div>
+          
+          <PermitTransferForm 
+            permit={selectedPermit}
+            userData={transferUserData}
+            onSubmit={handleTransferSubmit}
+            onSaveAsDraft={handleTransferSaveAsDraft}
+            isLoading={isLoading}
+            currentApplication={currentTransferApplication}
+          />
+        </>
+      );
+    }
+
+    // New application mode - show regular form
+    return (
+      <>
+        <div>
+          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+            New Water Permit Application
+          </h1>
+          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+            Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.
+          </p>
+          <div className="mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setApplicationMode(null)}
+              className="text-sm"
+            >
+              ← Change application type
+            </Button>
+          </div>
+        </div>
+        
+        <ApplicationForm 
+          userData={userData}
+          onSubmit={handleSubmitApplication}
+          onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, currentApplication?.id || draftId)}
+          isLoading={isLoading}
+          initialData={initialFormData}
+          initialDocuments={initialDocuments}
+          mode="create"
+          currentApplication={currentApplication}
+        />
+      </>
+    );
+  };
+
   return (
     <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
       <DashboardLayout>
@@ -618,65 +932,34 @@ function NewApplicationContent() {
             </Link>
           </div>
         
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="space-y-8"
-        >
-          <div>
-            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-              {draftId ? 'Edit Water Permit Application' : 'New Water Permit Application'}
-            </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
-              {draftId 
-                ? 'Continue editing your water permit application. Your changes are automatically saved.'
-                : 'Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.'
-              }
-            </p>
-            {currentApplication && (
-              <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                <p className="text-sm text-blue-700">
-                  📝 Editing draft application • ID: {currentApplication.id.slice(0, 8)}... • 
-                  Status: {currentApplication.status} • 
-                  Last updated: {new Date(currentApplication.updated_at || currentApplication.created_at).toLocaleString()}
-                </p>
-              </div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="space-y-8"
+          >
+            {/* Error Alert */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {error}
+                </AlertDescription>
+              </Alert>
             )}
-          </div>
-          
-          {/* Error Alert */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {error}
-              </AlertDescription>
-            </Alert>
-          )}
 
-          {/* Draft Saved Alert (non-blocking) */}
-          {draftSaved && (
-            <Alert className="border-green-200 bg-green-50">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                ✅ Draft saved.
-              </AlertDescription>
-            </Alert>
-          )}
-          
+            {/* Draft Saved Alert (non-blocking) */}
+            {draftSaved && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  ✅ Draft saved.
+                </AlertDescription>
+              </Alert>
+            )}
 
-          <ApplicationForm 
-            userData={userData}
-            onSubmit={handleSubmitApplication}
-            onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, currentApplication?.id || draftId)}
-            isLoading={isLoading}
-            initialData={initialFormData}
-            initialDocuments={initialDocuments}
-            mode={draftId || currentApplication ? 'edit' : 'create'}
-            currentApplication={currentApplication}
-          />
-        </motion.div>
+            {renderContent()}
+          </motion.div>
         </div>
       </DashboardLayout>
     </ProtectedRoute>

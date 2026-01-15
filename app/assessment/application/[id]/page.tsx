@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
-import { supabase } from "@/lib/supabase";
+import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -916,6 +916,7 @@ export default function AssessmentApplicationPage() {
     try {
       setSubmitLoading(true);
       actionInFlightRef.current = true;
+      const previousStatus = application.status;
       
       // 1. Save assessment with forwarded status
       await saveAssessment('forwarded_to_approver');
@@ -930,6 +931,23 @@ export default function AssessmentApplicationPage() {
         .eq('id', application.id);
         
       if (appError) throw appError;
+
+      // Create audit log entry
+      try {
+        await createAuditLog({
+          action: 'assessment.completed',
+          entity_type: 'application',
+          table_name: 'applications',
+          record_id: application.id,
+          old_values: { status: previousStatus },
+          new_values: { status: 'pending_review' },
+          description: `Assessment completed for application ${application.application_number}, forwarded to review`,
+          severity: 'info',
+          status: 'success',
+        });
+      } catch (auditErr) {
+        console.warn('⚠️ Failed to create audit log:', auditErr);
+      }
       
       // Redirect to assessment dashboard
       router.push('/assessment');
@@ -960,6 +978,7 @@ export default function AssessmentApplicationPage() {
     try {
       setSubmitLoading(true);
       actionInFlightRef.current = true;
+      const previousStatus = application.status;
       
       // 1. Save assessment with revision status
       await saveAssessment('returned_for_revision');
@@ -975,6 +994,23 @@ export default function AssessmentApplicationPage() {
         .eq('id', application.id);
         
       if (appError) throw appError;
+
+      // Create audit log entry
+      try {
+        await createAuditLog({
+          action: 'application.revision_requested',
+          entity_type: 'application',
+          table_name: 'applications',
+          record_id: application.id,
+          old_values: { status: previousStatus },
+          new_values: { status: 'revision_required', revision_notes: revisionNotes },
+          description: `Application ${application.application_number} returned to applicant for revision`,
+          severity: 'warning',
+          status: 'success',
+        });
+      } catch (auditErr) {
+        console.warn('⚠️ Failed to create audit log:', auditErr);
+      }
       
       setShowRevisionDialog(false);
       setRevisionNotes("");

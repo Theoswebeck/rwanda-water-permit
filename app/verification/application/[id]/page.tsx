@@ -306,8 +306,8 @@ export default function VerificationApplicationPage() {
         description: "The application has been forwarded for final approval.",
       };
       persistBanner(nextBanner);
-      setBanner({ kind: nextBanner.kind, title: nextBanner.title, description: nextBanner.description });
-      router.refresh();
+      // Navigate back to dashboard to confirm action was successful
+      router.push('/verification');
     } catch (e) {
       console.error("❌ Failed to forward to approver:", e);
       setBanner({
@@ -350,8 +350,8 @@ export default function VerificationApplicationPage() {
         description: "The reviewer has been notified with your notes.",
       };
       persistBanner(nextBanner);
-      setBanner({ kind: nextBanner.kind, title: nextBanner.title, description: nextBanner.description });
-      router.refresh();
+      // Navigate back to dashboard to confirm action was successful
+      router.push('/verification');
     } catch (e) {
       console.error("❌ Failed to return to reviewer:", e);
       setBanner({

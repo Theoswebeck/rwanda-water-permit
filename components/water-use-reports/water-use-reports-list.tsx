@@ -28,23 +28,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
   Eye,
   Search,
   FileText,
   Loader2,
   AlertCircle,
-  Calendar,
-  Building,
-  Droplets,
-  MapPin,
 } from "lucide-react";
 import { useAllWaterUseReportsQuery, type WaterUseReportWithRelations } from "@/hooks/useWaterUseReports";
 
@@ -58,7 +46,6 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [templateFilter, setTemplateFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
-  const [selectedReport, setSelectedReport] = useState<WaterUseReportWithRelations | null>(null);
 
   const { data: reports = [], isLoading, error } = useAllWaterUseReportsQuery();
 
@@ -117,6 +104,11 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
       return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Concession</Badge>;
     }
     return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Abstraction</Badge>;
+  };
+
+  // Navigate to full page view
+  const handleViewReport = (reportId: string) => {
+    router.push(`/water-use-report/${reportId}`);
   };
 
   const content = (
@@ -217,7 +209,11 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
             </TableHeader>
             <TableBody>
               {filteredReports.map((report) => (
-                <TableRow key={report.id}>
+                <TableRow 
+                  key={report.id}
+                  className="cursor-pointer hover:bg-slate-50"
+                  onClick={() => handleViewReport(report.id)}
+                >
                   <TableCell className="font-medium">{report.reporting_year}</TableCell>
                   <TableCell>
                     <span className="font-mono text-sm">{report.permit?.permit_number || 'N/A'}</span>
@@ -237,7 +233,10 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedReport(report)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewReport(report.id);
+                      }}
                     >
                       <Eye className="h-4 w-4 mr-1" />
                       View
@@ -249,193 +248,6 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
           </Table>
         </div>
       )}
-
-      {/* View Report Dialog */}
-      <Dialog open={!!selectedReport} onOpenChange={() => setSelectedReport(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Water Use Report - {selectedReport?.reporting_year}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedReport?.permit?.permit_number} • {getTemplateBadge(selectedReport?.template || '')}
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="h-[60vh] pr-4">
-            {selectedReport && (
-              <div className="space-y-6">
-                {/* General Info */}
-                <div className="space-y-4">
-                  <h3 className="font-semibold flex items-center gap-2">
-                    <Building className="h-4 w-4" />
-                    General Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Permit Holder:</span>
-                      <p className="font-medium">{getApplicantName(selectedReport)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Permit Number:</span>
-                      <p className="font-medium font-mono">{selectedReport.permit?.permit_number}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Reporting Year:</span>
-                      <p className="font-medium">{selectedReport.reporting_year}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Template:</span>
-                      <p className="font-medium capitalize">{selectedReport.template}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Water Purpose:</span>
-                      <p className="font-medium capitalize">{selectedReport.permit?.purpose?.replace(/_/g, ' ')}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Status:</span>
-                      <p className="font-medium capitalize">{selectedReport.status}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Location */}
-                {selectedReport.application && (
-                  <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Location
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Province:</span>
-                        <p className="font-medium">{selectedReport.application.province}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">District:</span>
-                        <p className="font-medium">{selectedReport.application.district}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Sector:</span>
-                        <p className="font-medium">{selectedReport.application.sector}</p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Cell:</span>
-                        <p className="font-medium">{selectedReport.application.cell}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Actual Water Use (Section 3) */}
-                {selectedReport.section3 && (
-                  <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <Droplets className="h-4 w-4" />
-                      Actual Water Use
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Operational Status:</span>
-                        <p className="font-medium capitalize">
-                          {(selectedReport.section3 as any).operationalStatus?.replace(/_/g, ' ') || 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Payment Status:</span>
-                        <p className="font-medium capitalize">
-                          {(selectedReport.section3 as any).paymentStatus?.replace(/_/g, ' ') || 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                    {(selectedReport.section3 as any).waterUseConflicts && (
-                      <div>
-                        <span className="text-muted-foreground text-sm">Water Use Conflicts:</span>
-                        <p className="text-sm mt-1 p-2 bg-slate-50 rounded">
-                          {(selectedReport.section3 as any).waterUseConflicts}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Quarterly Data */}
-                {selectedReport.section3_quarterly && (
-                  <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold">Quarterly Water Use Data</h3>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Quarter</TableHead>
-                          <TableHead>Volume (m³)</TableHead>
-                          <TableHead>Avg Daily (m³/day)</TableHead>
-                          <TableHead>Method</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {['q1', 'q2', 'q3', 'q4'].map((q, idx) => {
-                          const qData = (selectedReport.section3_quarterly as any)[q];
-                          return (
-                            <TableRow key={q}>
-                              <TableCell>Q{idx + 1}</TableCell>
-                              <TableCell>{qData?.volume || '-'}</TableCell>
-                              <TableCell>{qData?.avgDaily || '-'}</TableCell>
-                              <TableCell className="capitalize">{qData?.method || '-'}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-
-                {/* Declaration */}
-                {selectedReport.section9_declaration && (
-                  <div className="space-y-4 pt-4 border-t">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Declaration
-                    </h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Declared By:</span>
-                        <p className="font-medium">
-                          {(selectedReport.section9_declaration as any).declarantName || 'N/A'}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Declaration Date:</span>
-                        <p className="font-medium">
-                          {formatDate((selectedReport.section9_declaration as any).declarationDate)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Timestamps */}
-                <div className="space-y-2 pt-4 border-t text-sm text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>Created:</span>
-                    <span>{formatDate(selectedReport.created_at)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Last Updated:</span>
-                    <span>{formatDate(selectedReport.updated_at)}</span>
-                  </div>
-                  {selectedReport.submitted_at && (
-                    <div className="flex justify-between">
-                      <span>Submitted:</span>
-                      <span>{formatDate(selectedReport.submitted_at)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </>
   );
 
