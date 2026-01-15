@@ -49,6 +49,19 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
         ? `water_use_report_id=${waterUseReportId}`
         : `application_id=${applicationId}`;
       const response = await fetch(`/api/payments?${query}`);
+      
+      // Check if response is OK before parsing JSON
+      if (!response.ok) {
+        // Don't treat 404 as an error - just means no payment exists yet
+        if (response.status === 404) {
+          setPayment(null);
+          return;
+        }
+        console.warn('Payment fetch failed with status:', response.status);
+        setPayment(null);
+        return;
+      }
+
       const data = await response.json();
 
       if (data.success && data.payment) {
@@ -58,7 +71,9 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       }
     } catch (err) {
       console.error('Error fetching payment:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch payment');
+      // Don't show error to user for fetch failures - just log it
+      // This prevents showing JSON parse errors for missing payments
+      setPayment(null);
     } finally {
       setLoading(false);
     }
@@ -138,11 +153,20 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       debugLog('🔍 Checking payment status...', paymentId);
 
       const response = await fetch(`/api/payments/${paymentId}/status`);
-      const result = await response.json();
-
+      
+      // Check if response is OK before parsing JSON
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to check payment status');
+        let errorMsg = `Status check failed: ${response.status}`;
+        try {
+          const result = await response.json();
+          errorMsg = result.error || errorMsg;
+        } catch {
+          // Response wasn't JSON - ignore parse error
+        }
+        throw new Error(errorMsg);
       }
+
+      const result = await response.json();
 
       if (result.success && result.payment) {
         setPayment(result.payment);
@@ -235,13 +259,24 @@ export function usePaymentStatus(applicationId: string) {
       try {
         setLoading(true);
         const response = await fetch(`/api/payments?application_id=${applicationId}`);
+        
+        // Check if response is OK before parsing JSON
+        if (!response.ok) {
+          console.warn('Payment status fetch failed:', response.status);
+          setPayment(null);
+          return;
+        }
+
         const data = await response.json();
 
         if (data.success && data.payment) {
           setPayment(data.payment);
+        } else {
+          setPayment(null);
         }
       } catch (error) {
         console.error('Error fetching payment status:', error);
+        setPayment(null);
       } finally {
         setLoading(false);
       }

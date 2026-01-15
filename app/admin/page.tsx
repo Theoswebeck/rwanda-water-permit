@@ -9,6 +9,7 @@ import { UserManagement } from "@/components/admin/user-management";
 import { SystemOverview } from "@/components/admin/system-overview";
 import { ApplicationOversight } from "@/components/admin/application-oversight";
 import { AdminReports } from "@/components/admin/admin-reports";
+import { ActivityLogs } from "@/components/admin/activity-logs";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 
 import { getAdminDashboardStats } from "@/lib/supabase";
@@ -187,11 +188,12 @@ export default function AdminDashboard() {
 
           {/* Main Content Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="users">User Management</TabsTrigger>
               <TabsTrigger value="applications">Applications</TabsTrigger>
               <TabsTrigger value="map">Concession Map</TabsTrigger>
+              <TabsTrigger value="logs">Activity Logs</TabsTrigger>
               <TabsTrigger value="reports">Reports</TabsTrigger>
             </TabsList>
             
@@ -209,6 +211,10 @@ export default function AdminDashboard() {
             
             <TabsContent value="map" className="space-y-4">
               <WaterConcessionMap />
+            </TabsContent>
+            
+            <TabsContent value="logs" className="space-y-4">
+              <ActivityLogs />
             </TabsContent>
             
             <TabsContent value="reports" className="space-y-4">

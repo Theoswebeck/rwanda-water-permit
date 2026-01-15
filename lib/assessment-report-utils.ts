@@ -546,4 +546,3 @@ export function normalizeAssessmentReportData(
 
   return obj as Partial<AssessmentReportData>;
 }
-

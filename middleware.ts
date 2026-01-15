@@ -168,6 +168,7 @@ export async function middleware(request: NextRequest) {
 
     // ⚡ PERFORMANCE: Simplified role-based access check
     const normalizedRole = normalizeRole(userRole)
+
     // Prevent staff (including admins) from landing on the applicant dashboard.
     // This route contains applicant-only data fetches + actions and can trigger confusing auth flows.
     // Allow shared pages under /dashboard that are used by all roles (profile/settings).
@@ -180,6 +181,7 @@ export async function middleware(request: NextRequest) {
       const redirectPath = ROLE_DASHBOARDS[normalizedRole] || '/dashboard'
       return NextResponse.redirect(new URL(redirectPath, request.url))
     }
+
     // Admins can access all protected pages.
     if (normalizedRole === 'admin') {
       return response

@@ -167,6 +167,26 @@ export async function POST(req: NextRequest) {
 
     console.log('✅ User profile created')
 
+    // Log the user creation action
+    try {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          action: 'user.created',
+          entity_type: 'user',
+          table_name: 'users',
+          record_id: userId,
+          new_values: { email: emailLower, role, status, account_type },
+          description: `Created new staff account for ${emailLower} with role ${role}`,
+          severity: 'info',
+          status: 'success',
+          request_id: crypto.randomUUID()
+        })
+      console.log('📝 Audit log created for user creation')
+    } catch (auditErr) {
+      console.warn('⚠️ Failed to create audit log:', auditErr)
+    }
+
     // Send invite email via Resend
     const resendKey = process.env.RESEND_API_KEY
     const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'

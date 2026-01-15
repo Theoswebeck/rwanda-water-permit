@@ -44,6 +44,23 @@ export async function GET(request: NextRequest) {
           .update({ last_login_at: new Date().toISOString() })
           .eq('id', data.user.id)
 
+        // Log the login action
+        try {
+          await supabase.from('audit_logs').insert({
+            user_id: data.user.id,
+            action: 'user.login',
+            entity_type: 'user',
+            table_name: 'users',
+            record_id: data.user.id,
+            description: `User ${data.user.email} logged in via OAuth`,
+            severity: 'info',
+            status: 'success',
+            request_id: crypto.randomUUID()
+          })
+        } catch (auditErr) {
+          console.warn('⚠️ Failed to create login audit log:', auditErr)
+        }
+
         console.log('✅ OAuth authentication successful for:', data.user.email)
         
         // Redirect based on user role

@@ -1621,4 +1621,273 @@ export const deleteApplicationCompletely = async (applicationNumber: string) => 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return { success: false, message: `Failed to delete application: ${errorMessage}` };
   }
+}
+
+// ============================================
+// AUDIT LOGS FUNCTIONS
+// ============================================
+
+export type AuditSeverity = 'info' | 'warning' | 'critical'
+export type AuditStatus = 'success' | 'failed'
+export type AuditEntityType = 'user' | 'application' | 'permit' | 'inspection' | 'review' | 'assessment' | 'document' | 'payment' | 'system'
+
+export interface AuditLogEntry {
+  id: string
+  user_id: string | null
+  action: string
+  table_name: string | null
+  record_id: string | null
+  old_values: any | null
+  new_values: any | null
+  ip_address: string | null
+  user_agent: string | null
+  request_id: string | null
+  severity: AuditSeverity
+  status: AuditStatus
+  description: string | null
+  entity_type: AuditEntityType | null
+  created_at: string
+  // Joined user data
+  user?: {
+    first_name: string | null
+    last_name: string | null
+    company_name: string | null
+    email: string
+    role: string
+  } | null
+}
+
+export interface AuditLogFilters {
+  user_id?: string
+  user_roles?: string[]
+  action_types?: string[]
+  entity_types?: AuditEntityType[]
+  status?: AuditStatus | 'all'
+  severities?: AuditSeverity[]
+  date_from?: string
+  date_to?: string
+}
+
+export interface AuditLogPagination {
+  page: number
+  limit: number
+}
+
+// Helper function to get audit logs with filters and pagination
+export const getAuditLogs = async (
+  filters: AuditLogFilters = {},
+  pagination: AuditLogPagination = { page: 1, limit: 25 }
+): Promise<{ data: AuditLogEntry[], total: number }> => {
+  try {
+    const { page, limit } = pagination
+    const offset = (page - 1) * limit
+
+    // Build the query
+    let query = supabase
+      .from('audit_logs')
+      .select(`
+        *,
+        user:users!user_id(
+          first_name,
+          last_name,
+          company_name,
+          email,
+          role
+        )
+      `, { count: 'exact' })
+
+    // Apply filters
+    if (filters.user_id && filters.user_id !== 'all') {
+      query = query.eq('user_id', filters.user_id)
+    }
+
+    if (filters.user_roles && filters.user_roles.length > 0) {
+      // Filter by user roles - need to use a subquery approach
+      const { data: userIds } = await supabase
+        .from('users')
+        .select('id')
+        .in('role', filters.user_roles)
+      
+      if (userIds && userIds.length > 0) {
+        query = query.in('user_id', userIds.map(u => u.id))
+      }
+    }
+
+    if (filters.action_types && filters.action_types.length > 0) {
+      query = query.in('action', filters.action_types)
+    }
+
+    if (filters.entity_types && filters.entity_types.length > 0) {
+      query = query.in('entity_type', filters.entity_types)
+    }
+
+    if (filters.status && filters.status !== 'all') {
+      query = query.eq('status', filters.status)
+    }
+
+    if (filters.severities && filters.severities.length > 0) {
+      query = query.in('severity', filters.severities)
+    }
+
+    if (filters.date_from) {
+      query = query.gte('created_at', filters.date_from)
+    }
+
+    if (filters.date_to) {
+      query = query.lte('created_at', filters.date_to)
+    }
+
+    // Apply ordering and pagination
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    const { data, error, count } = await query
+
+    if (error) {
+      console.warn('❌ Error fetching audit logs:', error.message)
+      return { data: [], total: 0 }
+    }
+
+    return { 
+      data: (data || []) as AuditLogEntry[], 
+      total: count || 0 
+    }
+  } catch (error) {
+    console.warn('❌ Failed to fetch audit logs:', error)
+    return { data: [], total: 0 }
+  }
+}
+
+// Helper function to get staff users for filter dropdown
+export const getStaffUsers = async (): Promise<{ id: string, name: string, role: string }[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, first_name, last_name, company_name, role')
+      .in('role', ['admin', 'approver', 'assessor', 'verifier', 'reviewer', 'inspector'])
+      .order('first_name', { ascending: true })
+
+    if (error) {
+      console.warn('❌ Error fetching staff users:', error.message)
+      return []
+    }
+
+    return (data || []).map(user => ({
+      id: user.id,
+      name: user.company_name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown',
+      role: user.role
+    }))
+  } catch (error) {
+    console.warn('❌ Failed to fetch staff users:', error)
+    return []
+  }
+}
+
+// Helper function to create an audit log entry
+export const createAuditLog = async (params: {
+  action: string
+  entity_type?: AuditEntityType
+  table_name?: string
+  record_id?: string
+  old_values?: any
+  new_values?: any
+  description?: string
+  severity?: AuditSeverity
+  status?: AuditStatus
+  user_id?: string
+}): Promise<boolean> => {
+  try {
+    // Get current user if not provided
+    let userId = params.user_id
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      userId = user?.id
+    }
+
+    // Get IP and user agent from browser if available
+    const userAgent = typeof window !== 'undefined' ? window.navigator.userAgent : null
+
+    const { error } = await supabase
+      .from('audit_logs')
+      .insert({
+        user_id: userId || null,
+        action: params.action,
+        entity_type: params.entity_type || null,
+        table_name: params.table_name || null,
+        record_id: params.record_id || null,
+        old_values: params.old_values || null,
+        new_values: params.new_values || null,
+        description: params.description || null,
+        severity: params.severity || 'info',
+        status: params.status || 'success',
+        user_agent: userAgent,
+        request_id: crypto.randomUUID()
+      })
+
+    if (error) {
+      console.warn('❌ Error creating audit log:', error.message)
+      return false
+    }
+
+    return true
+  } catch (error) {
+    console.warn('❌ Failed to create audit log:', error)
+    return false
+  }
+}
+
+// Helper function to get audit log stats for dashboard
+export const getAuditLogStats = async (): Promise<{
+  totalToday: number
+  totalThisWeek: number
+  criticalCount: number
+  failedCount: number
+}> => {
+  try {
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+    // Get today's count
+    const { count: totalToday } = await supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', startOfToday.toISOString())
+
+    // Get this week's count
+    const { count: totalThisWeek } = await supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', startOfWeek.toISOString())
+
+    // Get critical count (last 7 days)
+    const { count: criticalCount } = await supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('severity', 'critical')
+      .gte('created_at', startOfWeek.toISOString())
+
+    // Get failed count (last 7 days)
+    const { count: failedCount } = await supabase
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'failed')
+      .gte('created_at', startOfWeek.toISOString())
+
+    return {
+      totalToday: totalToday || 0,
+      totalThisWeek: totalThisWeek || 0,
+      criticalCount: criticalCount || 0,
+      failedCount: failedCount || 0
+    }
+  } catch (error) {
+    console.warn('❌ Failed to fetch audit log stats:', error)
+    return {
+      totalToday: 0,
+      totalThisWeek: 0,
+      criticalCount: 0,
+      failedCount: 0
+    }
+  }
 } 
