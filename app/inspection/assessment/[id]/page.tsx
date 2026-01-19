@@ -581,7 +581,7 @@ export default function AssessmentPage() {
       };
 
       alert(messages[assessmentForm.overallRecommendation]);
-      console.log('🎉 Assessment submission completed successfully');
+      console.log('✅ Assessment submission completed successfully');
       router.push('/inspection');
     } catch (err) {
       console.error('💥 Error submitting assessment:', err);

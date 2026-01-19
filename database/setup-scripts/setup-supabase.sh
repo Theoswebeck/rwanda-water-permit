@@ -112,7 +112,7 @@ supabase gen types typescript --local > types/supabase.ts
 print_status "TypeScript types generated at types/supabase.ts"
 
 # Display connection information
-print_info "Database setup complete! 🎉"
+print_info "Database setup complete!"
 echo ""
 echo "📊 Local Development URLs:"
 echo "- Studio URL: http://localhost:54323"
@@ -144,4 +144,4 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     fi
 fi
 
-print_status "Setup complete! Happy coding! 🎉" 
+print_status "Setup complete! Happy coding!" 

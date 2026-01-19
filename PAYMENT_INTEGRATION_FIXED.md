@@ -1,6 +1,6 @@
 # ✅ IremboPay Payment Integration - FIXED
 
-## 🎉 Issue Resolved
+## Issue Resolved
 
 The payment integration has been **fixed** to follow IremboPay's official JavaScript widget integration method.
 
@@ -173,7 +173,7 @@ Before going live, verify:
 7. ✅ Test error scenarios
 8. ✅ Prepare for production
 
-## 🎉 Success Criteria
+## Success Criteria
 
 You'll know it's working when:
 - ✅ No redirect to checkout.irembopay.com

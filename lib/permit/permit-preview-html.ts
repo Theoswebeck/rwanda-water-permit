@@ -1,4 +1,8 @@
 import { qrToSvgString } from "@/lib/qr/qr-svg";
+import { QrCodeEcc } from "@/lib/qr/qrcodegen";
+
+// Always use production URL for QR codes - they will be printed and scanned externally
+const PRODUCTION_URL = "https://rwanda-water-permit-production.up.railway.app";
 
 export type PermitPreviewData = {
   permitNumber: string;
@@ -22,7 +26,8 @@ function escapeHtml(s: string): string {
     .replaceAll("'", "&#039;");
 }
 
-export function getSamplePermitPreviewData(origin = "http://localhost:3000"): PermitPreviewData {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function getSamplePermitPreviewData(_origin = "http://localhost:3000"): PermitPreviewData {
   const permitNumber = "WP-2025-12-001";
   return {
     permitNumber,
@@ -34,7 +39,8 @@ export function getSamplePermitPreviewData(origin = "http://localhost:3000"): Pe
     authorizedVolume: "150 m³/day",
     location: "Kigali, Gasabo District",
     issuingAuthority: "Rwanda Water Resources Board",
-    verificationUrl: `${origin}/permit/view/${encodeURIComponent(permitNumber)}`,
+    // Always use production URL - QR codes are scanned by external devices
+    verificationUrl: `${PRODUCTION_URL}/permit/view/${encodeURIComponent(permitNumber)}`,
   };
 }
 
@@ -45,11 +51,12 @@ export function getSamplePermitPreviewData(origin = "http://localhost:3000"): Pe
  */
 export function renderPermitPreviewHtml(data: PermitPreviewData): string {
   const qrSvg = qrToSvgString(data.verificationUrl, {
+    ecl: QrCodeEcc.HIGH, // HIGH error correction for better scannability
     scale: 3,
     border: 4,
     ariaLabel: `Verify permit ${data.permitNumber}`,
-    darkColor: "#0f172a",
-    lightColor: "#ffffff",
+    darkColor: "#000000", // Pure black for maximum contrast
+    lightColor: "#ffffff", // Pure white for maximum contrast
   });
 
   const safe = {
@@ -104,7 +111,7 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
         overflow:hidden;
       }
       .content{
-        padding:40px 44px 190px; /* reserve footer space */
+        padding:40px 44px 210px; /* reserve footer space */
       }
       .header{
         display:flex;
@@ -193,6 +200,7 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
       }
       .footer-inner{
         display:flex;
+        flex-direction:column;
         align-items:center;
         justify-content:center;
       }
@@ -210,6 +218,15 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
         display:block;
         width:118px;
         height:118px;
+      }
+      .qr-disclaimer{
+        margin-top:10px;
+        font-size:10px;
+        color:var(--muted);
+        text-align:center;
+        max-width:500px;
+        line-height:1.4;
+        font-style:italic;
       }
       @media print{
         body{ background:#fff; }
@@ -270,6 +287,7 @@ export function renderPermitPreviewHtml(data: PermitPreviewData): string {
         <div class="footer">
           <div class="footer-inner">
             <div class="qr">${qrSvg}</div>
+            <p class="qr-disclaimer">This digital permit is only valid if the information on it is the same as the information as the water use permit registry.</p>
           </div>
         </div>
       </div>

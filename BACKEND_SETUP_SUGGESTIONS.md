@@ -228,4 +228,4 @@ make run     # Port 8080
 - 🔗 Integration with legacy systems
 - ⚡ High-performance compute operations
 
-Your current implementation with document viewing is **fully functional** and ready for production! 🎉 
+Your current implementation with document viewing is **fully functional** and ready for production! 

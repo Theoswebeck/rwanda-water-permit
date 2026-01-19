@@ -127,4 +127,4 @@ supabase db reset
 
 ---
 
-**Ready to build! 🎉** 
+**Ready to build!** 

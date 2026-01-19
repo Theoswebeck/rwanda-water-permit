@@ -309,7 +309,7 @@ The following items from the meeting notes are documented but not yet implemente
 
 ---
 
-## 🎉 CONGRATULATIONS!
+## CONGRATULATIONS!
 
 You now have:
 - ✅ A consolidated assessor/reviewer workflow

@@ -23,8 +23,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, Download, AlertCircle, Search } from "lucide-react";
-import { downloadFromDocumentsBucket } from "@/lib/supabase-storage";
+import { Eye, Download, AlertCircle, Search, Loader2 } from "lucide-react";
+import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
+import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
+import { supabase } from "@/lib/supabase";
 
 export interface Permit {
   id: string;
@@ -52,6 +54,119 @@ export function PermitsList({ permits }: PermitsListProps) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [busyPermitId, setBusyPermitId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<"view" | "download" | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+
+  /**
+   * Generate permit PDF on-demand if it doesn't exist.
+   * Returns the PDF blob and updates the permit_pdf_url in the database.
+   */
+  const generatePermitPdfOnDemand = async (permit: Permit): Promise<Blob | null> => {
+    try {
+      setGeneratingPdf(permit.id);
+      console.log("📄 Generating PDF on-demand for permit:", permit.permitNumber);
+
+      // Fetch permit with application data
+      const { data: permitData, error: permitError } = await supabase
+        .from("permits")
+        .select(`
+          id,
+          permit_number,
+          conditions,
+          application_id,
+          application:applications!application_id(
+            *,
+            applicant:users!applicant_id(*)
+          )
+        `)
+        .eq("id", permit.id)
+        .single();
+
+      if (permitError || !permitData) {
+        console.error("❌ Failed to fetch permit data:", permitError);
+        throw new Error("Failed to fetch permit data for PDF generation");
+      }
+
+      const application = (permitData as any).application;
+      if (!application) {
+        throw new Error("No application data found for this permit");
+      }
+
+      // Parse conditions
+      let conditions: string[] = [];
+      if (permitData.conditions) {
+        if (Array.isArray(permitData.conditions)) {
+          conditions = permitData.conditions as string[];
+        } else if (typeof permitData.conditions === "string") {
+          try {
+            const parsed = JSON.parse(permitData.conditions);
+            conditions = Array.isArray(parsed) ? parsed : [];
+          } catch {
+            conditions = [];
+          }
+        }
+      }
+
+      // Generate PDF blob
+      const pdfBlob = await generateDigitalWaterPermitBlob(
+        application,
+        permit.permitNumber,
+        conditions,
+        5 // Default validity years
+      );
+
+      // Upload to storage
+      const upload = await uploadPermitPdf({
+        permitId: permit.id,
+        permitNumber: permit.permitNumber,
+        pdfBlob,
+      });
+
+      if (upload?.path) {
+        console.log("✅ PDF uploaded:", upload.path);
+
+        // Update permit record with PDF path
+        const { error: updateError } = await supabase
+          .from("permits")
+          .update({
+            permit_pdf_url: upload.path,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", permit.id);
+
+        if (updateError) {
+          console.warn("⚠️ Failed to update permit_pdf_url:", updateError);
+        } else {
+          console.log("✅ permit_pdf_url saved on permit record");
+          // Update the permit's pdfPath in the local state (won't affect props, but logs are useful)
+        }
+      }
+
+      return pdfBlob;
+    } catch (error) {
+      console.error("❌ Failed to generate PDF on-demand:", error);
+      return null;
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
+
+  /**
+   * Get PDF blob - either from storage or by generating on-demand
+   */
+  const getPermitPdfBlob = async (permit: Permit): Promise<Blob | null> => {
+    // First try to download from storage if path exists
+    if (permit.pdfPath) {
+      console.log("📥 Attempting to download PDF from:", permit.pdfPath);
+      const blob = await downloadFromDocumentsBucket(permit.pdfPath);
+      if (blob) {
+        return blob;
+      }
+      console.warn("⚠️ PDF not found in storage, will generate on-demand...");
+    }
+
+    // PDF doesn't exist or couldn't be downloaded - generate on-demand
+    return await generatePermitPdfOnDemand(permit);
+  };
 
   // Filter permits based on search and filters
   const filteredPermits = useMemo(() => {
@@ -180,17 +295,14 @@ export function PermitsList({ permits }: PermitsListProps) {
                         variant="ghost"
                         size="sm"
                         className="text-gray-600 hover:text-gray-900"
-                        disabled={busyPermitId === permit.id}
+                        disabled={busyPermitId === permit.id || generatingPdf === permit.id}
                         onClick={async () => {
-                          if (!permit.pdfPath) {
-                            alert("No PDF is available for this permit yet.");
-                            return;
-                          }
                           try {
                             setBusyPermitId(permit.id);
                             setBusyAction("download");
-                            const blob = await downloadFromDocumentsBucket(permit.pdfPath);
-                            if (!blob) throw new Error("Failed to download permit PDF");
+                            
+                            const blob = await getPermitPdfBlob(permit);
+                            if (!blob) throw new Error("Failed to get permit PDF");
 
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement("a");
@@ -209,24 +321,25 @@ export function PermitsList({ permits }: PermitsListProps) {
                           }
                         }}
                       >
-                        <Download className="h-4 w-4" />
+                        {generatingPdf === permit.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
                         <span className="sr-only">Download</span>
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-gray-600 hover:text-gray-900"
-                        disabled={busyPermitId === permit.id}
+                        disabled={busyPermitId === permit.id || generatingPdf === permit.id}
                         onClick={async () => {
-                          if (!permit.pdfPath) {
-                            alert("No PDF is available for this permit yet.");
-                            return;
-                          }
                           try {
                             setBusyPermitId(permit.id);
                             setBusyAction("view");
-                            const blob = await downloadFromDocumentsBucket(permit.pdfPath);
-                            if (!blob) throw new Error("Failed to download permit PDF");
+                            
+                            const blob = await getPermitPdfBlob(permit);
+                            if (!blob) throw new Error("Failed to get permit PDF");
 
                             const url = URL.createObjectURL(blob);
                             window.open(url, "_blank");
@@ -240,13 +353,21 @@ export function PermitsList({ permits }: PermitsListProps) {
                           }
                         }}
                       >
-                        <Eye className="h-4 w-4" />
+                        {generatingPdf === permit.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
                         <span className="sr-only">View</span>
                       </Button>
                     </div>
-                    {busyPermitId === permit.id ? (
+                    {(busyPermitId === permit.id || generatingPdf === permit.id) ? (
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {busyAction === "download" ? "Downloading…" : "Opening…"}
+                        {generatingPdf === permit.id 
+                          ? "Generating PDF…" 
+                          : busyAction === "download" 
+                            ? "Downloading…" 
+                            : "Opening…"}
                       </div>
                     ) : null}
                   </TableCell>

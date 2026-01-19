@@ -82,4 +82,4 @@ npm run dev
 
 **Run the SQL above in Supabase, then restart your server!** 
 
-The error should be resolved and phone verification will work perfectly. 🎉
+The error should be resolved and phone verification will work perfectly.

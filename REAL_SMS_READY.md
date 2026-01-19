@@ -82,7 +82,7 @@ Check browser console - you should see:
 - Check Pindo balance isn't exhausted
 - Look for SMS in spam/promotions folder
 
-**Test with a new phone number now - you should receive a real SMS!** 📱🎉
+**Test with a new phone number now - you should receive a real SMS!** 📱
 
 ---
 

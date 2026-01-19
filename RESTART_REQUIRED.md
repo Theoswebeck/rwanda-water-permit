@@ -47,7 +47,7 @@ PINDO_API_KEY=your_valid_api_key_here
 # PINDO_DEVELOPMENT_MODE=true  ← Comment this out
 ```
 
-**Restart your server now - the error should be completely resolved!** 🎉
+**Restart your server now - the error should be completely resolved!**
 
 ---
 

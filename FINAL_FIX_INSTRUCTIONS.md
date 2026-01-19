@@ -90,7 +90,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verification_attempts INTEGER D
 ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verification_last_sent TIMESTAMP WITH TIME ZONE;
 ```
 
-## 🎉 **Success Criteria:**
+## **Success Criteria:**
 
 ### **Development Mode Success:**
 - ✅ Server starts without errors

@@ -87,6 +87,6 @@ Run this SQL in your database:
 
 ---
 
-## 🎉 **Ready to Explore!**
+## **Ready to Explore!**
 
 The map is fully functional and ready for immediate use. Start by loading the test data and exploring the geographic distribution of water concession applications across Rwanda! 

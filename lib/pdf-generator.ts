@@ -1,7 +1,108 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { qrToSvgString } from "@/lib/qr/qr-svg";
+import QRCode from 'qrcode';
 import { isConcessionApplication, selectPermitVariant } from "@/lib/permit-variant";
+
+// Rwanda Coat of Arms watermark path
+const WATERMARK_IMAGE_PATH = "/assets/png-transparent-rulindo-district-coat-of-arms-organization-agriculture-government-others-leaf-logo-agriculture.png";
+
+/**
+ * Pre-load the watermark image and return a Promise that resolves to the data URL.
+ * This is cached for performance.
+ */
+let cachedWatermarkDataUrl: string | null = null;
+
+async function loadWatermarkImage(): Promise<string | null> {
+  if (cachedWatermarkDataUrl) {
+    return cachedWatermarkDataUrl;
+  }
+
+  try {
+    const watermarkUrl = `${window.location.origin}${WATERMARK_IMAGE_PATH}`;
+    
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+          cachedWatermarkDataUrl = dataUrl;
+          resolve(dataUrl);
+        } catch (e) {
+          console.warn("⚠️ Could not convert watermark to data URL:", e);
+          resolve(null);
+        }
+      };
+      img.onerror = () => {
+        console.warn("⚠️ Failed to load watermark image");
+        resolve(null);
+      };
+      img.src = watermarkUrl;
+    });
+  } catch (error) {
+    console.warn("⚠️ Error loading watermark image:", error);
+    return null;
+  }
+}
+
+/**
+ * Draw a centered watermark on the current page of the PDF document.
+ * The watermark is drawn with low opacity to appear behind content.
+ */
+async function drawCenteredWatermark(doc: jsPDF): Promise<void> {
+  const watermarkDataUrl = await loadWatermarkImage();
+  if (!watermarkDataUrl) {
+    return; // Silently skip if watermark can't be loaded
+  }
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  // Watermark size - make it substantial and visible
+  // Using 100mm width for better visibility on A4 pages
+  const watermarkWidth = 100;
+  const watermarkHeight = 100; // Coat of arms is roughly square
+
+  // Center the watermark
+  const x = (pageWidth - watermarkWidth) / 2;
+  const y = (pageHeight - watermarkHeight) / 2;
+
+  // Save current graphics state
+  const gState = new (doc as any).GState({ opacity: 0.18 }); // Subtle but visible watermark effect
+  doc.setGState(gState);
+
+  // Add the watermark image
+  try {
+    doc.addImage(watermarkDataUrl, "PNG", x, y, watermarkWidth, watermarkHeight);
+  } catch (error) {
+    console.warn("⚠️ Could not add watermark to PDF:", error);
+  }
+
+  // Reset graphics state to full opacity
+  const normalState = new (doc as any).GState({ opacity: 1 });
+  doc.setGState(normalState);
+}
+
+/**
+ * Add watermark to all pages of a PDF document.
+ * Call this AFTER all content has been added and before outputting the blob.
+ */
+async function addWatermarkToAllPages(doc: jsPDF): Promise<void> {
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    await drawCenteredWatermark(doc);
+  }
+}
 
 type Permit = {
   id: string;
@@ -77,10 +178,20 @@ type Application = {
   };
 };
 
-const PERMIT_VERIFY_BASE_URL = window.location.origin;
+// Production URL for QR codes - ALWAYS use production URL since QR codes are printed
+// and scanned externally by phones that cannot access localhost
+const PRODUCTION_URL = "https://rwanda-water-permit-production.up.railway.app";
 
+/**
+ * Build the permit verification URL for QR codes.
+ * IMPORTANT: Always uses production URL because QR codes on printed permits
+ * will be scanned by phones that cannot access localhost or internal servers.
+ */
 function buildPermitVerificationUrl(permitNumber: string): string {
-  return `${PERMIT_VERIFY_BASE_URL}/permit/view/${encodeURIComponent(permitNumber)}`;
+  // Clean the permit number - remove extra whitespace
+  const cleanPermitNumber = permitNumber.trim();
+  // Always use production URL for QR codes - they'll be printed and scanned externally
+  return `${PRODUCTION_URL}/permit/view/${encodeURIComponent(cleanPermitNumber)}`;
 }
 
 type PermitVariant =
@@ -465,43 +576,18 @@ function resolveVolumes(application: Application): { yearly: number | null; dail
 }
 
 async function qrPngDataUrl(text: string, px: number): Promise<string> {
-  // Client-only: jsPDF generation runs in the browser. Keep this helper here to avoid server-side usage.
-  const svg = qrToSvgString(text, {
-    scale: 6,
-    border: 4,
-    ariaLabel: "Permit verification QR",
-    darkColor: "#0f172a",
-    lightColor: "#ffffff",
+  // Using qrcode package for reliable QR code generation
+  // HIGH error correction level (H) allows up to 30% damage and still be readable
+  const dataUrl = await QRCode.toDataURL(text, {
+    errorCorrectionLevel: 'H', // HIGH - best for printed materials
+    width: px,
+    margin: 2, // Quiet zone around the QR code
+    color: {
+      dark: '#000000', // Pure black for maximum contrast
+      light: '#ffffff', // Pure white background
+    },
   });
-
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  try {
-    const img = new Image();
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      img.onload = () => {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = px;
-          canvas.height = px;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error("Canvas context unavailable");
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, px, px);
-          ctx.drawImage(img, 0, 0, px, px);
-          resolve(canvas.toDataURL("image/png"));
-        } catch (e) {
-          reject(e);
-        }
-      };
-      img.onerror = () => reject(new Error("Failed to load QR SVG image"));
-      img.src = url;
-    });
-    return dataUrl;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return dataUrl;
 }
 
 function drawPermitQrFooter(opts: {
@@ -518,14 +604,14 @@ function drawPermitQrFooter(opts: {
 
   // Keep clear of existing footer text at y=285 and y=295
   const footerBottomPadding = 14;
-  const footerY = pageHeight - 50 - footerBottomPadding; // ~246 on A4
-  const footerH = 36;
+  const footerY = pageHeight - 60 - footerBottomPadding; // Adjusted to accommodate disclaimer
+  const footerH = 46; // Increased height to accommodate disclaimer
   const footerW = pageWidth - marginX * 2;
 
   const qrBox = 34;
   const qrPadding = 2.5;
   const qrX = marginX + (footerW - qrBox) / 2;
-  const qrY = footerY + (footerH - qrBox) / 2;
+  const qrY = footerY + 2;
   const qrSize = qrBox - qrPadding * 2;
 
   // Background container
@@ -540,6 +626,15 @@ function drawPermitQrFooter(opts: {
 
   return qrPngDataUrl(verifyUrl, 512).then((png) => {
     doc.addImage(png, "PNG", qrX + qrPadding, qrY + qrPadding, qrSize, qrSize);
+    
+    // Add disclaimer text below QR code
+    const disclaimerText = "This digital permit is only valid if the information on it is the same as the information as the water use permit registry.";
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont("times", "italic");
+    const disclaimerY = qrY + qrBox + 4;
+    doc.text(disclaimerText, pageWidth / 2, disclaimerY, { align: "center", maxWidth: footerW - 20 });
+    doc.setFont("times", "normal");
   });
 }
 
@@ -593,15 +688,14 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   const activitiesText = formatActivitiesForPermit(application);
   const vols = resolveVolumes(application);
   const yearlyStr = vols.yearly != null ? `${formatNumber(vols.yearly)} m³/year` : "N/A m³/year";
-  const dailyStr = vols.daily != null ? `${formatNumber(vols.daily, { maxDecimals: 2 })} m³/day` : "N/A m³/day";
 
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,";
   const para2 =
-    `“${applicantName}”, with ID Number: ${applicantId}, is authorized to abstract water from ${waterSourceName} ` +
+    `"${applicantName}", with ID Number: ${applicantId}, is authorized to abstract water from ${waterSourceName} ` +
     `located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village ` +
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
-    `by a ${systemType} with a flow rate of ${yearlyStr} OR ${dailyStr}. ` +
+    `by a ${systemType} with a flow rate of ${yearlyStr}. ` +
     `Water abstracted will be used for ${activitiesText}.`;
   const para3 =
     `This water use permit is valid for a period of ${permitValidityYears} (Five) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
@@ -623,16 +717,7 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   }
 
   doc.text("Signature: …………………..", leftX, y);
-  y += 18;
-
-  try {
-    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
-    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
-  } catch (error) {
-    console.error('Error loading signature image:', error);
-  }
-
-  y += 18; // Adjust Y to account for the image height
+  y += 12;
 
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
@@ -645,6 +730,9 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
 
   // QR footer on last page only
   await drawPermitQrFooter({ doc, permitNumber });
+
+  // Add watermark to all pages BEFORE adding footer text (so watermark is behind everything)
+  await addWatermarkToAllPages(doc);
 
   // Minimal page footer metadata (keep consistent with existing PDFs)
   const pageCount = doc.getNumberOfPages();
@@ -704,7 +792,6 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const activitiesText = formatActivitiesForPermit(application);
   const vols = resolveVolumes(application);
   const yearlyStr = vols.yearly != null ? `${formatNumber(vols.yearly)} m³/year` : "N/A m³/year";
-  const dailyStr = vols.daily != null ? `${formatNumber(vols.daily, { maxDecimals: 2 })} m³/day` : "N/A m³/day";
 
   const validityWord = "Five";
   const validityNumber = permitValidityYears;
@@ -713,11 +800,11 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     "Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,";
 
   const para2 =
-    `“${orgName}”, with its registered office address as follows: ${officeAddress}; ` +
+    `"${orgName}", with its registered office address as follows: ${officeAddress}; ` +
     `represented by ${rep.name}, is authorized to abstract water from ${waterSourceName} ` +
     `located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village ` +
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
-    `by a ${systemType} with a flow rate of ${yearlyStr} OR ${dailyStr}. ` +
+    `by a ${systemType} with a flow rate of ${yearlyStr}. ` +
     `Water abstracted will be used for ${activitiesText}.`;
 
   const para3 =
@@ -741,16 +828,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   }
 
   doc.text("Signature: …………………..", leftX, y);
-  y += 18;
-
-  try {
-    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
-    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
-  } catch (error) {
-    console.error('Error loading signature image:', error);
-  }
-
-  y += 18; // Adjust Y to account for the image height
+  y += 12;
 
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
@@ -762,6 +840,9 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
+
+  // Add watermark to all pages
+  await addWatermarkToAllPages(doc);
 
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -852,16 +933,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   }
 
   doc.text("Signature/Umukono: …………………..", leftX, y);
-  y += 22;
-
-  try {
-    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
-    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
-  } catch (error) {
-    console.error('Error loading signature image:', error);
-  }
-
-  y += 18; // Adjust Y to account for the image height
+  y += 12;
 
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
@@ -873,6 +945,9 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
+
+  // Add watermark to all pages
+  await addWatermarkToAllPages(doc);
 
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -965,16 +1040,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   }
 
   doc.text("Signature: …………………..", leftX, y);
-  y += 22;
-
-  try {
-    const signatureUrl = `${window.location.origin}/assets/signatures/director-general.svg`; // Assuming the signature is in assets/signatures
-    doc.addImage(signatureUrl, "SVG", leftX + 5, y, 50, 20); // Adjust position and size as needed
-  } catch (error) {
-    console.error('Error loading signature image:', error);
-  }
-
-  y += 18; // Adjust Y to account for the image height
+  y += 12;
 
   doc.setFont("times", "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
@@ -986,6 +1052,9 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
+
+  // Add watermark to all pages
+  await addWatermarkToAllPages(doc);
 
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -1343,6 +1412,9 @@ export const generateDigitalWaterPermitBlob = async (
 
   // Add QR footer on the last page only
   await drawPermitQrFooter({ doc, permitNumber });
+
+  // Add watermark to all pages
+  await addWatermarkToAllPages(doc);
 
   // Footer with security features
   const pageCount = doc.getNumberOfPages();
@@ -1737,6 +1809,177 @@ export const generateFieldReportPdf = async (
   doc.save(`Field-Report-${applicationData.applicationNumber}.pdf`);
 };
 
+/**
+ * Generate Terms and Conditions (Contract) PDF as a Blob.
+ * This creates a downloadable PDF of the contract terms for the water permit.
+ */
+export const generateTermsConditionsPdfBlob = async (opts: {
+  applicationNumber: string;
+  projectTitle: string;
+  applicantName: string;
+  contractNumber: string;
+  termsHeading: string;
+  termsSections: Array<{ title: string; paragraphs: string[] }>;
+  importantNotice?: { title: string; body: string } | null;
+}): Promise<Blob> => {
+  const {
+    applicationNumber,
+    projectTitle,
+    applicantName,
+    contractNumber,
+    termsHeading,
+    termsSections,
+    importantNotice
+  } = opts;
+
+  const doc = new jsPDF();
+  const issueDate = new Date();
+
+  // Add logo
+  try {
+    const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
+    doc.addImage(rwbLogoUrl, 'PNG', 85, 10, 40, 40);
+  } catch {
+    doc.setFontSize(12);
+    doc.setTextColor(0, 75, 135);
+    doc.text('Rwanda Water Resources Board', 105, 25, { align: 'center' });
+  }
+
+  // Header
+  doc.setFontSize(16);
+  doc.setTextColor(0, 75, 135);
+  doc.text('REPUBLIC OF RWANDA', 105, 55, { align: 'center' });
+  doc.setFontSize(12);
+  doc.text('RWANDA WATER RESOURCES BOARD', 105, 62, { align: 'center' });
+
+  // Blue separator line
+  doc.setDrawColor(0, 100, 150);
+  doc.setFillColor(0, 100, 150);
+  doc.roundedRect(15, 68, 180, 2, 1, 1, 'F');
+
+  // Main title
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("times", "bold");
+  doc.text(termsHeading.toUpperCase(), 105, 80, { align: 'center' });
+
+  doc.setFontSize(11);
+  doc.setFont("times", "normal");
+  doc.text(`Contract No: ${contractNumber}/RWB/${issueDate.getFullYear()}`, 105, 88, { align: 'center' });
+
+  // Application reference info
+  doc.setFontSize(10);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Application: ${applicationNumber}`, 15, 96);
+  doc.text(`Project: ${projectTitle}`, 15, 102);
+  doc.text(`Applicant: ${applicantName}`, 15, 108);
+  doc.text(`Date: ${formatDateDMY(issueDate)}`, 195, 96, { align: 'right' });
+
+  // Divider
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(15, 112, 195, 112);
+
+  let currentY = 120;
+  const leftX = 15;
+  const maxWidth = 175;
+  const lineHeight = 5;
+  const sectionSpacing = 8;
+
+  // Filter out Kinyarwanda sections for the English version (display English only)
+  const englishSections = termsSections.filter((section) => {
+    const t = section.title.trim().toLowerCase();
+    return !(
+      t.includes('kinyarwanda') ||
+      t.startsWith('amasezerano') ||
+      t.startsWith('igice') ||
+      t.startsWith('ingingo') ||
+      t.startsWith('imikono') ||
+      t.startsWith('ibisobanuro')
+    );
+  });
+
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+
+  // Render each section
+  for (const section of englishSections) {
+    // Check if we need a new page
+    if (currentY > 260) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    // Section title
+    doc.setFont("times", "bold");
+    const titleLines = doc.splitTextToSize(section.title, maxWidth);
+    doc.text(titleLines, leftX, currentY);
+    currentY += titleLines.length * lineHeight + 2;
+
+    // Section paragraphs
+    doc.setFont("times", "normal");
+    for (const paragraph of section.paragraphs) {
+      if (!paragraph.trim()) {
+        currentY += lineHeight / 2;
+        continue;
+      }
+
+      // Check if we need a new page
+      if (currentY > 270) {
+        doc.addPage();
+        currentY = 20;
+      }
+
+      const lines = doc.splitTextToSize(paragraph, maxWidth);
+      doc.text(lines, leftX, currentY);
+      currentY += lines.length * lineHeight + 2;
+    }
+
+    currentY += sectionSpacing;
+  }
+
+  // Important Notice
+  if (importantNotice) {
+    if (currentY > 240) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFillColor(255, 248, 230);
+    doc.setDrawColor(255, 165, 0);
+    const noticeHeight = 25;
+    doc.roundedRect(15, currentY, 180, noticeHeight, 3, 3, 'FD');
+
+    doc.setFont("times", "bold");
+    doc.setTextColor(180, 100, 0);
+    doc.text(importantNotice.title, 20, currentY + 8);
+
+    doc.setFont("times", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(100, 70, 0);
+    const noticeLines = doc.splitTextToSize(importantNotice.body, 170);
+    doc.text(noticeLines, 20, currentY + 15);
+
+    currentY += noticeHeight + 10;
+  }
+
+  // Add watermark to all pages
+  await addWatermarkToAllPages(doc);
+
+  // Footer with page numbers
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Page ${i} of ${pageCount}`, 195, 290, { align: 'right' });
+    doc.text(`Contract: ${contractNumber}/RWB/${issueDate.getFullYear()}`, 105, 290, { align: 'center' });
+    doc.text('Rwanda Water Resources Board - Terms and Conditions', 15, 290);
+  }
+
+  return doc.output('blob');
+};
+
 export const generatePermitPDF = async (permit: Permit): Promise<void> => {
   // Create a new PDF document
   const doc = new jsPDF();
@@ -1824,6 +2067,9 @@ export const generatePermitPDF = async (permit: Permit): Promise<void> => {
     doc.addPage();
   }
   await drawPermitQrFooter({ doc, permitNumber: permit.permitNumber });
+
+  // Add watermark to all pages
+  await addWatermarkToAllPages(doc);
   
   // Open the PDF in a new tab
   const pdfBlob = doc.output('blob');

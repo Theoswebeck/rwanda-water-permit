@@ -91,7 +91,7 @@ function DashboardContent() {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     
     if (success === 'application-created') {
-      setSuccessMessage('🎉 Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.');
+      setSuccessMessage('Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.');
       setShowSuccessAlert(true);
       // Auto-hide success message after 5 seconds
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);

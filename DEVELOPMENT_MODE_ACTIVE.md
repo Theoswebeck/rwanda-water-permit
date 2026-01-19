@@ -58,7 +58,7 @@ When you get a valid Pindo API key later, just:
 2. Apply the database schema
 3. Remove development mode flags
 
-## 🎉 Test Now!
+## Test Now!
 
 **Restart your server and try with code `123456` - it should work perfectly!**
 

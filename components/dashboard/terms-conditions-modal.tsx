@@ -27,6 +27,7 @@ import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
+import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 
 interface TermsConditionsModalProps {
   isOpen: boolean;
@@ -321,9 +322,40 @@ export function TermsConditionsModal({
           console.warn('⚠️ PDF upload failed (no path returned).');
         }
 
-        // Open the generated PDF immediately for the user
+        // Generate Terms and Conditions PDF and open in new tab
+        if (resolvedTerms) {
+          console.log('📄 Generating Terms and Conditions PDF...');
+          const applicantName = applicationData.applicant?.account_type === 'individual'
+            ? `${applicationData.applicant.first_name || ''} ${applicationData.applicant.last_name || ''}`.trim() || 'N/A'
+            : applicationData.applicant?.company_name || 'N/A';
+
+          // Fill placeholders in the terms sections
+          const filledSections = resolvedTerms.sections.map((section) => ({
+            title: section.title,
+            paragraphs: section.paragraphs.map((p) => 
+              placeholderCtx ? fillContractText(p, placeholderCtx) : p
+            )
+          }));
+
+          const termsBlob = await generateTermsConditionsPdfBlob({
+            applicationNumber: applicationNumber,
+            projectTitle: projectTitle,
+            applicantName: applicantName,
+            contractNumber: permitData.permit_number.replace('WP-', ''),
+            termsHeading: resolvedTerms.heading,
+            termsSections: filledSections,
+            importantNotice: resolvedTerms.importantNotice || null,
+          });
+          
+          const termsUrl = URL.createObjectURL(termsBlob);
+          window.open(termsUrl, '_blank');
+          console.log('✅ Terms and Conditions PDF opened in new tab');
+        }
+
+        // Open the generated Permit PDF in a new tab for the user
         const pdfUrl = URL.createObjectURL(pdfBlob);
         window.open(pdfUrl, '_blank');
+        console.log('✅ Water Permit PDF opened in new tab');
       } catch (pdfStoreError) {
         console.warn('⚠️ PDF generation/upload failed, but permit was created:', pdfStoreError);
       }
@@ -348,11 +380,7 @@ export function TermsConditionsModal({
       }
 
       console.log("✅ Terms accepted successfully! Your permit has been generated...");
-      
-      // Open the generated permit in a new tab
-      const permitUrl = `/dashboard/permit/${permitData.id}`;
-      console.log('🔗 Opening permit URL:', permitUrl);
-      window.open(permitUrl, '_blank');
+      console.log('📋 Both Terms & Conditions and Water Permit PDFs have been opened in new tabs for download.');
       
       setShowFeedback(true);
       // Don't call onTermsAccepted() immediately - let user see feedback first

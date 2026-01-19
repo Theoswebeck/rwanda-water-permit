@@ -155,4 +155,4 @@ psql your_database < database/fix-email-verification-flow.sql
 4. **🧪 Test both signup flows** (company & individual)
 5. **📊 Verify database records** are created correctly
 
-The signup system should now work perfectly for both company and individual accounts! 🎉
+The signup system should now work perfectly for both company and individual accounts!

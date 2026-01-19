@@ -319,7 +319,7 @@ Before running the application:
 
 ---
 
-## 🎉 You're Ready!
+## You're Ready!
 
 Run `npm run dev` and navigate to:
 - **http://localhost:3000** - Home page

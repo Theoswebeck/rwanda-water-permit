@@ -207,4 +207,4 @@ All sample applications have **"submitted"** status and include:
 - GPS coordinates
 - Financial estimates
 
-Perfect for testing the complete application lifecycle! 🎉 
+Perfect for testing the complete application lifecycle! 

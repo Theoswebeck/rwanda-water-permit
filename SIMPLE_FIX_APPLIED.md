@@ -90,7 +90,7 @@ Content-Type: application/json
 - ✅ SMS from "PindoTest"
 - ✅ Production-ready workflow
 
-**Test now with code `123456` - it should work perfectly!** 🎉
+**Test now with code `123456` - it should work perfectly!**
 
 ---
 

@@ -175,7 +175,7 @@ Amount: 35,000 RWF
 5. Complete payment in IremboPay
 6. Original tab will detect completion automatically
 
-**No more being stuck!** 🎉
+**No more being stuck!**
 
 ---
 **Fixed**: November 23, 2025  

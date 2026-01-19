@@ -250,4 +250,4 @@ For questions about the suspension system:
 
 ---
 
-**🎉 Your suspended users will now have a beautiful, professional experience while being clearly informed about their account status!** 
+**Your suspended users will now have a beautiful, professional experience while being clearly informed about their account status!** 

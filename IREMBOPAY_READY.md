@@ -1,6 +1,6 @@
 # ✅ IremboPay Integration - READY TO TEST
 
-## 🎉 Status: FULLY CONFIGURED
+## Status: FULLY CONFIGURED
 
 All IremboPay credentials and settings are now correctly configured!
 

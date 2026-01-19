@@ -168,7 +168,7 @@ const getUsageIntensityColor = (usage: number) => {
 
 ---
 
-## 🎉 **Perfect Implementation!**
+## **Perfect Implementation!**
 
 The water permit usage map now correctly visualizes:
 - ✅ **Actual issued permits** (not just applications)

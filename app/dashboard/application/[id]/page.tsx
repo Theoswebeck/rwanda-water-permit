@@ -629,7 +629,7 @@ export default function ApplicationDetailPage() {
               <AlertDescription>
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <p className="font-medium text-green-800">🎉 Application Approved!</p>
+                    <p className="font-medium text-green-800">Application Approved!</p>
                     <p className="text-green-700">
                       Congratulations! Your water permit application has been approved by Rwanda Water Resources Board.
                     </p>

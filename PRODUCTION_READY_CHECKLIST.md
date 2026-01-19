@@ -90,7 +90,7 @@ The system is smart:
 2. Database schema applied  
 3. Development mode disabled
 
-**Everything else is production-ready!** 🎉
+**Everything else is production-ready!**
 
 ---
 

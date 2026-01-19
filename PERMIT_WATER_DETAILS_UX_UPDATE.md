@@ -139,7 +139,7 @@ Transformed a flat, single-column layout into a visually hierarchical, section-b
 - 📱 **Fully responsive layout**
 - 🌙 **Dark mode compatible**
 
-## 🎉 **Result**
+## **Result**
 
 The new "Permit & Water Details" tab provides:
 - **Better User Experience**: Easier to understand and navigate

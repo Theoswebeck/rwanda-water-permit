@@ -72,7 +72,7 @@ Your Rwanda Water Resources Board verification code is: 123456. Valid for 10 min
 - **SMS costs will be deducted from your balance**
 - **Perfect for production use!**
 
-**Restart your server and test with real SMS now!** 🎉
+**Restart your server and test with real SMS now!**
 
 ---
 

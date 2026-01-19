@@ -168,4 +168,4 @@ Check browser console for errors and verify:
 3. Storage bucket is configured
 4. CDN URLs are being generated correctly
 
-Happy testing! 🎉 
+Happy testing! 

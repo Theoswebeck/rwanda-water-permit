@@ -110,4 +110,4 @@ When a user selects "Person" and fills out the form:
 - [ ] Verify phone verification still works for both types
 - [ ] Test form validation for both account types
 
-The signup issue should now be completely resolved! 🎉
+The signup issue should now be completely resolved!

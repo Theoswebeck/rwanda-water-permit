@@ -97,7 +97,7 @@ npm run dev
 2. **Go to:** New Application
 3. **Fill form** (all 4 tabs)
 4. **Click:** "Continue to Payment"
-5. **See:** IremboPay payment interface! 🎉
+5. **See:** IremboPay payment interface!
 
 ---
 
@@ -243,7 +243,7 @@ LIMIT 10;
 
 ---
 
-## 🎉 You're Ready!
+## You're Ready!
 
 **All configured with:**
 - ✅ Live API Keys

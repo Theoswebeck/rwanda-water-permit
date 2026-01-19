@@ -93,7 +93,7 @@ psql your_database < database/fix-email-verification-flow.sql
 
 This adds email verification tracking fields and sync triggers.
 
-## 🎉 Status
+## Status
 
 - ✅ **Syntax errors fixed**
 - ✅ **Application compiling**

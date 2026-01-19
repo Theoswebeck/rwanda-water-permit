@@ -32,7 +32,7 @@ When users signed in, the system tried to create a basic profile without these r
 - ✅ Added authentication debug utility (`lib/auth-debug.ts`)
 
 ### **Current Status**
-🎉 **Authentication is now fully functional!**
+✅ **Authentication is now fully functional!**
 
 - ✅ New user signup works
 - ✅ User login works (creates profile if missing)
@@ -115,4 +115,4 @@ CONSTRAINT chk_company_fields CHECK (
 4. **📝 Better UX**: Clear error messages and profile completion flow
 5. **🛠️ Debuggable**: Tools to diagnose future issues
 
-Your authentication system is now production-ready! 🎉
+Your authentication system is now production-ready!

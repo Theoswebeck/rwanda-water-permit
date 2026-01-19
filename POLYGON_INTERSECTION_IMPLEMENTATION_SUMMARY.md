@@ -241,7 +241,7 @@ curl -X POST http://localhost:3000/api/applications/{application-id}/validate-in
 
 ---
 
-## 🎉 **Success Metrics Achieved**
+## **Success Metrics Achieved**
 
 ✅ **Zero overlapping permits** - System prevents intersection conflicts  
 ✅ **Real-time validation** - Feedback provided in < 2 seconds  
