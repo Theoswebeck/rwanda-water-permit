@@ -188,6 +188,16 @@ function resolveLatLng(application: ApplicationForContract): { lat: string; lng:
 }
 
 function resolveVolumeLabel(application: ApplicationForContract): string {
+  const notes = getInternalNotes(application);
+  
+  // Priority 1: Assessor recommended volume (from assessor adjustments)
+  const assessorAdjustments = notes?._assessorAdjustments;
+  if (typeof assessorAdjustments?.recommendedVolumeM3 === "number" && 
+      Number.isFinite(assessorAdjustments.recommendedVolumeM3)) {
+    return `${formatNumber(assessorAdjustments.recommendedVolumeM3)} m³/year`;
+  }
+  
+  // Priority 2: Fall back to database fields (original applicant values)
   if (typeof application.max_yearly_volume_m3 === "number" && Number.isFinite(application.max_yearly_volume_m3)) {
     return `${formatNumber(application.max_yearly_volume_m3)} m³/year`;
   }
@@ -198,15 +208,36 @@ function resolveVolumeLabel(application: ApplicationForContract): string {
     const unit = (application.usage_unit ?? "m³").trim() || "m³";
     return `${formatNumber(application.estimated_usage_volume)} ${unit}`;
   }
+  
+  // Priority 3: Check internal_notes for original form data
+  const formVolume = notes?.waterAbstractionDetails?.[0]?.maxAverageYearly;
+  if (typeof formVolume === "number" && Number.isFinite(formVolume)) {
+    return `${formatNumber(formVolume)} m³/year`;
+  }
+  
   return "N/A";
 }
 
 function resolveDurationYears(application: ApplicationForContract): string {
-  const years =
-    typeof application.proposed_duration_years === "number" && Number.isFinite(application.proposed_duration_years)
-      ? application.proposed_duration_years
-      : 5; // current system default
-  return String(Math.max(1, Math.round(years)));
+  const notes = getInternalNotes(application);
+  
+  // Priority 1: Assessor recommended duration (from assessor adjustments)
+  const assessorAdjustments = notes?._assessorAdjustments;
+  if (typeof assessorAdjustments?.permitLengthYears === "number" && 
+      Number.isFinite(assessorAdjustments.permitLengthYears) &&
+      assessorAdjustments.permitLengthYears >= 1 && 
+      assessorAdjustments.permitLengthYears <= 15) {
+    return String(Math.round(assessorAdjustments.permitLengthYears));
+  }
+  
+  // Priority 2: Database field (may have been updated by assessor)
+  if (typeof application.proposed_duration_years === "number" && 
+      Number.isFinite(application.proposed_duration_years)) {
+    return String(Math.max(1, Math.round(application.proposed_duration_years)));
+  }
+  
+  // Priority 3: Default
+  return "5";
 }
 
 function resolveConcessionAreaLabel(application: ApplicationForContract): string {

@@ -56,15 +56,6 @@ export function TermsConditionsModal({
   const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
   const [termsApplication, setTermsApplication] = useState<any | null>(null);
 
-  const todayLabel = useMemo(() => {
-    // Use user's local timezone; format as DD/MM/YYYY (Rwanda-friendly).
-    return new Intl.DateTimeFormat("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    }).format(new Date());
-  }, []);
-
   useEffect(() => {
     if (!isOpen) return;
 
@@ -425,7 +416,7 @@ export function TermsConditionsModal({
                 </div>
                 <div>
                   <DialogTitle className="text-2xl font-semibold text-green-800">
-                    🎉 Application Approved!
+                    Application Approved!
                   </DialogTitle>
                   <DialogDescription className="text-base text-gray-600 mt-1">
                     Application #{applicationNumber} - {projectTitle}
@@ -476,59 +467,19 @@ export function TermsConditionsModal({
                 ) : resolvedTerms ? (
                   <>
                     <div className="space-y-6 text-base">
-                      {visibleSections.map((section, idx) => (
+                      {visibleSections
+                        .filter((section) => !section.title.toLowerCase().includes("signature"))
+                        .map((section, idx, filteredSections) => (
                         <div key={`${section.title}-${idx}`}>
-                          {section.title.toLowerCase().includes("signature") ? (
-                            <div className="space-y-4">
-                              <h4 className="font-semibold text-gray-900 text-lg">Signatures</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <div className="space-y-2">
-                                  <div className="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-                                    The WATER USER:
-                                  </div>
-                                  <div className="flex flex-col gap-2">
-                                    <div className="text-sm font-semibold text-gray-900">Signature:</div>
-                                    <div className="h-[64px]" />
-                                    <div className="border-b border-gray-400 w-full" />
-                                  </div>
-
-                                  <div className="pt-1 grid grid-cols-[64px_1fr] gap-x-3 gap-y-2">
-                                    <div className="font-semibold text-gray-900">Name:</div>
-                                    <div className="text-gray-900">
-                                      {placeholderCtx
-                                        ? placeholderCtx.isIndividual
-                                          ? placeholderCtx.applicantName
-                                          : placeholderCtx.representativeName
-                                        : "N/A"}
-                                    </div>
-                                    <div className="font-semibold text-gray-900">Title:</div>
-                                    <div className="text-gray-900">
-                                      {placeholderCtx
-                                        ? placeholderCtx.isIndividual
-                                          ? "Water User"
-                                          : placeholderCtx.representativeTitle
-                                        : "N/A"}
-                                    </div>
-                                    <div className="font-semibold text-gray-900">Date:</div>
-                                    <div className="text-gray-900">{todayLabel}</div>
-                                  </div>
-                                </div>
-                              </div>
-                              {idx < visibleSections.length - 1 ? <Separator className="mt-6" /> : null}
-                            </div>
-                          ) : (
-                            <>
-                              <h4 className="font-semibold text-gray-900 mb-3 text-lg">{section.title}</h4>
-                              <div className="space-y-3">
-                                {section.paragraphs.map((p, pIdx) => (
-                                  <p key={pIdx} className="text-gray-700 leading-relaxed">
-                                    {placeholderCtx ? fillContractText(p, placeholderCtx) : p}
-                                  </p>
-                                ))}
-                              </div>
-                              {idx < visibleSections.length - 1 ? <Separator className="mt-6" /> : null}
-                            </>
-                          )}
+                          <h4 className="font-semibold text-gray-900 mb-3 text-lg">{section.title}</h4>
+                          <div className="space-y-3">
+                            {section.paragraphs.map((p, pIdx) => (
+                              <p key={pIdx} className="text-gray-700 leading-relaxed">
+                                {placeholderCtx ? fillContractText(p, placeholderCtx) : p}
+                              </p>
+                            ))}
+                          </div>
+                          {idx < filteredSections.length - 1 ? <Separator className="mt-6" /> : null}
                         </div>
                       ))}
                     </div>

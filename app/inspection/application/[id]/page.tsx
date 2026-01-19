@@ -502,7 +502,7 @@ export default function InspectorApplicationView() {
     if (actionInFlightRef.current) return;
 
     if (fieldReportFiles.length === 0 || !fieldReportSummary.trim()) {
-      alert("⚠️ Field Report Documents and Field Report Summary are required before sending for final approval.");
+      alert("⚠️ Assessment Report Documents and Assessment Report Summary are required before sending for final approval.");
       tabTouchedRef.current = true;
       setActiveTab("field_report");
       return;
@@ -743,7 +743,7 @@ export default function InspectorApplicationView() {
             <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
-              <TabsTrigger value="field_report" className="py-2.5">Field Report</TabsTrigger>
+              <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
               <TabsTrigger value="summary" className="py-2.5">Final Recommendation</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
@@ -785,7 +785,7 @@ export default function InspectorApplicationView() {
               />
             </TabsContent>
 
-            {/* Field Report Tab */}
+            {/* Assessment Report Tab */}
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               <FieldReportUpload
                 applicationId={application.id}

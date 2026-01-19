@@ -61,6 +61,9 @@ type Application = {
   max_daily_volume_m3?: number;
   max_yearly_volume_m3?: number;
   concession_area?: number;
+  // Assessor recommended fields - take precedence over requested values
+  proposed_duration_years?: number;
+  assessor_recommended_volume_m3?: number;
   applicant: {
     first_name?: string;
     last_name?: string;
@@ -394,10 +397,50 @@ function resolveSystemType(application: Application): "GRAVITY SYSTEM" | "PUMPIN
   return "GRAVITY SYSTEM";
 }
 
+/**
+ * Resolve permit duration, prioritizing assessor recommended value over applicant's request.
+ * Returns the number of years for the permit validity.
+ */
+function resolvePermitDurationYears(application: Application, fallbackYears: number = 5): number {
+  const notes = getInternalNotes(application);
+  
+  // Priority 1: Assessor recommended duration (from assessment adjustments)
+  const assessorAdjustments = notes?._assessorAdjustments;
+  if (typeof assessorAdjustments?.permitLengthYears === "number" && 
+      Number.isFinite(assessorAdjustments.permitLengthYears) &&
+      assessorAdjustments.permitLengthYears >= 1 && 
+      assessorAdjustments.permitLengthYears <= 15) {
+    return assessorAdjustments.permitLengthYears;
+  }
+  
+  // Priority 2: proposed_duration_years from the application record (may have been updated by assessor)
+  if (typeof application.proposed_duration_years === "number" && 
+      Number.isFinite(application.proposed_duration_years) &&
+      application.proposed_duration_years >= 1 && 
+      application.proposed_duration_years <= 15) {
+    return application.proposed_duration_years;
+  }
+  
+  // Priority 3: Fallback to passed value or default
+  return fallbackYears;
+}
+
 function resolveVolumes(application: Application): { yearly: number | null; daily: number | null } {
   const notes = getInternalNotes(application);
+  
+  // Priority 1: Assessor recommended volume (from assessment adjustments)
+  const assessorAdjustments = notes?._assessorAdjustments;
+  const assessorVolume = 
+    (typeof assessorAdjustments?.recommendedVolumeM3 === "number" && Number.isFinite(assessorAdjustments.recommendedVolumeM3)
+      ? assessorAdjustments.recommendedVolumeM3
+      : null) ??
+    (typeof application.assessor_recommended_volume_m3 === "number" && Number.isFinite(application.assessor_recommended_volume_m3)
+      ? application.assessor_recommended_volume_m3
+      : null);
 
+  // Priority 2: Fall back to applicant's requested values if no assessor recommendation
   const yearlyCandidate =
+    assessorVolume ??
     (typeof application.max_yearly_volume_m3 === "number" && Number.isFinite(application.max_yearly_volume_m3)
       ? application.max_yearly_volume_m3
       : null) ??
@@ -970,6 +1013,9 @@ export const generateDigitalWaterPermit = async (
 /**
  * Generate a digital water permit PDF as a Blob (does NOT open a new tab).
  * This is used when we need to persist the exact PDF to Supabase Storage.
+ * 
+ * Note: The permit duration is resolved from assessor recommendations stored in the
+ * application record, falling back to the passed permitValidityYears if not available.
  */
 export const generateDigitalWaterPermitBlob = async (
   application: Application,
@@ -977,33 +1023,36 @@ export const generateDigitalWaterPermitBlob = async (
   conditions: string[] = [],
   permitValidityYears: number = 5
 ): Promise<Blob> => {
+  // Use assessor recommended duration if available, otherwise fall back to passed value
+  const resolvedValidityYears = resolvePermitDurationYears(application, permitValidityYears);
+  
   const variant = selectPermitVariant(application);
   if (variant === "abstraction_individual") {
     return renderAbstractionIndividualPermitPdfBlob({
       application,
       permitNumber,
-      permitValidityYears,
+      permitValidityYears: resolvedValidityYears,
     });
   }
   if (variant === "abstraction_organization") {
     return renderAbstractionOrganizationPermitPdfBlob({
       application,
       permitNumber,
-      permitValidityYears,
+      permitValidityYears: resolvedValidityYears,
     });
   }
   if (variant === "concession_individual") {
     return renderConcessionIndividualPermitPdfBlob({
       application,
       permitNumber,
-      permitValidityYears,
+      permitValidityYears: resolvedValidityYears,
     });
   }
   if (variant === "concession_organization") {
     return renderConcessionOrganizationPermitPdfBlob({
       application,
       permitNumber,
-      permitValidityYears,
+      permitValidityYears: resolvedValidityYears,
     });
   }
 

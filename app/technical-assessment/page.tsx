@@ -361,12 +361,12 @@ function TechnicalAssessmentContent() {
           {/* Technical Assessment Form */}
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Field Report Section */}
+              {/* Assessment Report Section */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="h-5 w-5" />
-                    Field Report
+                    Assessment Report
                   </CardTitle>
                   <CardDescription>
                     Provide a summary of your field visit and observations

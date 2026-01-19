@@ -19,6 +19,7 @@ import { FieldReportUpload, FieldReportFile } from "@/components/inspection/fiel
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
 import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
+import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { cn } from "@/lib/utils";
 import { 
@@ -180,6 +181,12 @@ export default function ReviewApplicationPage() {
   const [recommendation, setRecommendation] = useState<RecommendationData>({ recommendation: null, explanationText: "" });
   const [reportType, setReportType] = useState<ReportType>("abstraction");
   const [banner, setBanner] = useState<Omit<UIBanner, "scope"> | null>(null);
+  
+  // Assessor Recommendations State (read-only for reviewers)
+  const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
+  const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
+  const [recommendedDurationYears, setRecommendedDurationYears] = useState<number | undefined>(undefined);
+  const [recommendedVolumeM3, setRecommendedVolumeM3] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     // Restore any persisted banner after a router.refresh()
@@ -373,6 +380,36 @@ export default function ReviewApplicationPage() {
         const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
         console.log('🔄 Merged assessment report data:', mergedReport);
         setAssessmentReportData(mergedReport);
+        
+        // Initialize Assessor Recommendations values (read-only for reviewers)
+        const assessorAdjustments = formData._assessorAdjustments || {};
+        const originalRequestedValues = formData._originalRequestedValues || {};
+        
+        // ORIGINAL REQUESTED VALUES (from applicant's submission - preserved and NEVER modified)
+        const originalDuration = originalRequestedValues.permitLengthYears 
+          || formData.permitLengthYears;
+        if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
+          setRequestedDurationYears(originalDuration);
+        }
+        const originalVolume = originalRequestedValues.volumeM3
+          || formData.waterAbstractionDetails?.[0]?.maxAverageYearly 
+          || appData.max_yearly_volume_m3 
+          || appData.estimated_usage_volume;
+        if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
+          setRequestedVolumeM3(originalVolume);
+        }
+        
+        // ASSESSOR RECOMMENDED VALUES (from assessor adjustments)
+        const assessorDuration = assessorAdjustments.permitLengthYears 
+          || (typeof originalDuration === 'number' ? originalDuration : undefined);
+        if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
+          setRecommendedDurationYears(assessorDuration);
+        }
+        const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+          || (typeof originalVolume === 'number' ? originalVolume : undefined);
+        if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
+          setRecommendedVolumeM3(assessorVolume);
+        }
 
         // Fetch comments from reviews table
         const { data: reviewData, error: reviewError } = await supabase
@@ -812,7 +849,7 @@ export default function ReviewApplicationPage() {
             <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification">Document Verification</TabsTrigger>
-              <TabsTrigger value="field_report">Field Report</TabsTrigger>
+              <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
               <TabsTrigger value="internal_notes">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -855,7 +892,7 @@ export default function ReviewApplicationPage() {
               />
             </TabsContent>
 
-            {/* Field Report Tab (read-only) */}
+            {/* Assessment Report Tab (read-only) */}
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               <FieldReportUpload
                 applicationId={application.id}
@@ -872,15 +909,27 @@ export default function ReviewApplicationPage() {
                 hideSummary={true}
                 showInlineValidation={false}
                 betweenDetailsAndDocuments={
-                  <AssessmentReportForm
-                    reportData={assessmentReportData}
-                    onReportDataChange={() => {}}
-                    reportType={reportType}
-                    readOnly={true}
-                    inspectionDate={inspectionDate}
-                    recommendation={recommendation}
-                    onRecommendationChange={() => {}}
-                  />
+                  <div className="space-y-6">
+                    {/* Assessor Recommendations - Read-only for reviewers */}
+                    <AssessorRecommendations
+                      requestedDurationYears={requestedDurationYears}
+                      requestedVolumeM3={requestedVolumeM3}
+                      recommendedDurationYears={recommendedDurationYears}
+                      recommendedVolumeM3={recommendedVolumeM3}
+                      readOnly={true}
+                    />
+                    
+                    {/* Assessment Report Form */}
+                    <AssessmentReportForm
+                      reportData={assessmentReportData}
+                      onReportDataChange={() => {}}
+                      reportType={reportType}
+                      readOnly={true}
+                      inspectionDate={inspectionDate}
+                      recommendation={recommendation}
+                      onRecommendationChange={() => {}}
+                    />
+                  </div>
                 }
               />
             </TabsContent>

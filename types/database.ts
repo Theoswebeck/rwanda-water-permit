@@ -258,6 +258,9 @@ export interface Application {
   proposed_duration_years?: number
   pumping_hours_per_day?: number
   
+  // Assessor recommended values (take precedence for permit/terms generation)
+  assessor_recommended_volume_m3?: number
+  
   // Project Details (Section 9 of form)
   proposed_facilities_description?: string
   construction_type?: string

@@ -672,12 +672,12 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Section 7: Field report Summary */}
+      {/* Section 7: Assessment Report Summary */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            {reportType === 'abstraction' ? '7' : '7'}. Field report Summary <span className="text-destructive">*</span>
+            {reportType === 'abstraction' ? '7' : '7'}. Assessment Report Summary <span className="text-destructive">*</span>
           </CardTitle>
           <CardDescription>
             Provide a brief summary of the field visit findings

@@ -21,6 +21,7 @@ import { FieldReportUpload, FieldReportFile } from "@/components/inspection/fiel
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
 import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
+import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
@@ -126,6 +127,12 @@ export default function VerificationApplicationPage() {
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
   const [recommendation, setRecommendation] = useState<RecommendationData>({ recommendation: null, explanationText: "" });
   const [reportType, setReportType] = useState<ReportType>("abstraction");
+  
+  // Assessor Recommendations State (read-only for verifiers)
+  const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
+  const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
+  const [recommendedDurationYears, setRecommendedDurationYears] = useState<number | undefined>(undefined);
+  const [recommendedVolumeM3, setRecommendedVolumeM3] = useState<number | undefined>(undefined);
 
   const [showReturnDialog, setShowReturnDialog] = useState(false);
   const [returnNotes, setReturnNotes] = useState("");
@@ -250,6 +257,36 @@ export default function VerificationApplicationPage() {
           const merged = mergeAssessmentReportData(prefilled, savedAssessmentReportData || null);
           console.log('🔄 Merged assessment report data:', merged);
           setAssessmentReportData(merged);
+          
+          // Initialize Assessor Recommendations values (read-only for verifiers)
+          const assessorAdjustments = formData._assessorAdjustments || {};
+          const originalRequestedValues = formData._originalRequestedValues || {};
+          
+          // ORIGINAL REQUESTED VALUES (from applicant's submission - preserved and NEVER modified)
+          const originalDuration = originalRequestedValues.permitLengthYears 
+            || formData.permitLengthYears;
+          if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
+            setRequestedDurationYears(originalDuration);
+          }
+          const originalVolume = originalRequestedValues.volumeM3
+            || formData.waterAbstractionDetails?.[0]?.maxAverageYearly 
+            || appData.max_yearly_volume_m3 
+            || appData.estimated_usage_volume;
+          if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
+            setRequestedVolumeM3(originalVolume);
+          }
+          
+          // ASSESSOR RECOMMENDED VALUES (from assessor adjustments)
+          const assessorDuration = assessorAdjustments.permitLengthYears 
+            || (typeof originalDuration === 'number' ? originalDuration : undefined);
+          if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
+            setRecommendedDurationYears(assessorDuration);
+          }
+          const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+            || (typeof originalVolume === 'number' ? originalVolume : undefined);
+          if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
+            setRecommendedVolumeM3(assessorVolume);
+          }
         } else {
           // Still set report type for rendering
           setReportType(determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null));
@@ -478,7 +515,7 @@ export default function VerificationApplicationPage() {
                   Document Verification
                 </TabsTrigger>
                 <TabsTrigger value="field_report" className="py-2.5">
-                  Field Report
+                  Assessment Report
                 </TabsTrigger>
                 <TabsTrigger value="internal_notes" className="py-2.5">
                   History & Notes
@@ -540,15 +577,27 @@ export default function VerificationApplicationPage() {
                   hideSummary={true}
                   showInlineValidation={false}
                   betweenDetailsAndDocuments={
-                    <AssessmentReportForm
-                      reportData={assessmentReportData}
-                      onReportDataChange={() => {}}
-                      reportType={reportType}
-                      readOnly={true}
-                      inspectionDate={inspectionDate}
-                      recommendation={recommendation}
-                      onRecommendationChange={() => {}}
-                    />
+                    <div className="space-y-6">
+                      {/* Assessor Recommendations - Read-only for verifiers */}
+                      <AssessorRecommendations
+                        requestedDurationYears={requestedDurationYears}
+                        requestedVolumeM3={requestedVolumeM3}
+                        recommendedDurationYears={recommendedDurationYears}
+                        recommendedVolumeM3={recommendedVolumeM3}
+                        readOnly={true}
+                      />
+                      
+                      {/* Assessment Report Form */}
+                      <AssessmentReportForm
+                        reportData={assessmentReportData}
+                        onReportDataChange={() => {}}
+                        reportType={reportType}
+                        readOnly={true}
+                        inspectionDate={inspectionDate}
+                        recommendation={recommendation}
+                        onRecommendationChange={() => {}}
+                      />
+                    </div>
                   }
                 />
               </div>

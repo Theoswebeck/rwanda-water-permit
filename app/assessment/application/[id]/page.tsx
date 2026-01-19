@@ -56,6 +56,7 @@ import {
   normalizeAssessmentReportData,
   prefillAssessmentReportFromApplication,
 } from "@/lib/assessment-report-utils";
+import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -304,6 +305,12 @@ export default function AssessmentApplicationPage() {
   // Assessor Adjustments State
   const [assessorPermitLength, setAssessorPermitLength] = useState<number | undefined>(undefined);
   const [permitLengthSaving, setPermitLengthSaving] = useState(false);
+  const [assessorRecommendedVolume, setAssessorRecommendedVolume] = useState<number | undefined>(undefined);
+  const [volumeSaving, setVolumeSaving] = useState(false);
+  
+  // Original requested values (from applicant submission - read-only)
+  const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
+  const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
 
   // Assessment Report State (template-backed)
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
@@ -509,10 +516,55 @@ export default function AssessmentApplicationPage() {
         const formData = mapApplicationToFormData(appData, null);
         setInitialFormData(formData);
         
-        // Initialize assessor permit length from form data or database field
-        const permitLength = formData.permitLengthYears || appData.proposed_duration_years;
-        if (typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15) {
-          setAssessorPermitLength(permitLength);
+        // Initialize assessor adjustments
+        const assessorAdjustments = formData._assessorAdjustments || {};
+        
+        // ORIGINAL REQUESTED VALUES (from applicant's submission - NEVER modified)
+        // These come from the original form data, not from database fields that can be updated
+        // If _originalRequestedValues exists, use it (preserved from first submission)
+        // Otherwise, extract from formData (first time viewing after submission)
+        let originalRequestedValues = formData._originalRequestedValues || {};
+        
+        // Original requested duration - from permitLengthYears in form data (not proposed_duration_years which can be updated)
+        const originalDuration = originalRequestedValues.permitLengthYears 
+          || formData.permitLengthYears;
+        if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
+          setRequestedDurationYears(originalDuration);
+        }
+        
+        // Original requested volume - from waterAbstractionDetails in form data
+        const originalVolume = originalRequestedValues.volumeM3
+          || formData.waterAbstractionDetails?.[0]?.maxAverageYearly 
+          || appData.max_yearly_volume_m3 
+          || appData.estimated_usage_volume;
+        if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
+          setRequestedVolumeM3(originalVolume);
+        }
+        
+        // ASSESSOR RECOMMENDED VALUES (can be modified by assessor)
+        // Assessor permit length: use adjustment if available, otherwise default to original
+        const assessorDuration = assessorAdjustments.permitLengthYears 
+          || (typeof originalDuration === 'number' ? originalDuration : undefined);
+        if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
+          setAssessorPermitLength(assessorDuration);
+        }
+        
+        // Assessor recommended volume: use adjustment if available, otherwise default to original
+        const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+          || (typeof originalVolume === 'number' ? originalVolume : undefined);
+        if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
+          setAssessorRecommendedVolume(assessorVolume);
+        }
+        
+        // Store original values if not already stored (first time assessor views this)
+        if (!formData._originalRequestedValues && (originalDuration || originalVolume)) {
+          const originals = {
+            permitLengthYears: originalDuration,
+            volumeM3: originalVolume,
+            storedAt: new Date().toISOString()
+          };
+          // We'll save this when assessor makes any adjustment
+          formData._originalRequestedValues = originals;
         }
 
         // Prefill the official assessment report template from application data and merge saved assessor inputs
@@ -662,15 +714,26 @@ export default function AssessmentApplicationPage() {
         existingFormData = {};
       }
       
-      // Update permit length in the form data
-      existingFormData.permitLengthYears = newPermitLength;
+      // Preserve original requested values (NEVER modify these)
+      if (!existingFormData._originalRequestedValues) {
+        existingFormData._originalRequestedValues = {
+          permitLengthYears: requestedDurationYears,
+          volumeM3: requestedVolumeM3,
+          storedAt: new Date().toISOString()
+        };
+      }
+      
+      // Update assessor adjustments (separate from original values)
       existingFormData._assessorAdjustments = {
         ...(existingFormData._assessorAdjustments || {}),
         permitLengthYears: newPermitLength,
         adjustedAt: new Date().toISOString(),
       };
       
-      // Update both internal_notes (JSON) and the dedicated database column
+      // Note: We do NOT update permitLengthYears in the root of existingFormData
+      // as that would overwrite the applicant's original request
+      
+      // Update internal_notes (JSON) and the dedicated database column for permit generation
       const { error } = await supabase
         .from('applications')
         .update({
@@ -696,6 +759,66 @@ export default function AssessmentApplicationPage() {
       alert('Failed to save permit length adjustment. Please try again.');
     } finally {
       setPermitLengthSaving(false);
+    }
+  };
+
+  // Save assessor's volume adjustment to the application
+  const saveVolumeAdjustment = async (newVolume: number) => {
+    if (!application) return;
+    
+    try {
+      setVolumeSaving(true);
+      
+      // Parse existing internal_notes to preserve other form data
+      let existingFormData: any = {};
+      try {
+        existingFormData = JSON.parse(application.internal_notes || '{}');
+      } catch {
+        existingFormData = {};
+      }
+      
+      // Preserve original requested values (NEVER modify these)
+      if (!existingFormData._originalRequestedValues) {
+        existingFormData._originalRequestedValues = {
+          permitLengthYears: requestedDurationYears,
+          volumeM3: requestedVolumeM3,
+          storedAt: new Date().toISOString()
+        };
+      }
+      
+      // Update assessor adjustments (separate from original values)
+      existingFormData._assessorAdjustments = {
+        ...(existingFormData._assessorAdjustments || {}),
+        recommendedVolumeM3: newVolume,
+        volumeAdjustedAt: new Date().toISOString(),
+      };
+      
+      // Store in internal_notes JSON (works without database migration)
+      const updateData: any = {
+        internal_notes: JSON.stringify(existingFormData),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
+        .from('applications')
+        .update(updateData)
+        .eq('id', application.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      setAssessorRecommendedVolume(newVolume);
+      setApplication({
+        ...application,
+        internal_notes: JSON.stringify(existingFormData),
+      } as any);
+      
+      console.log('✅ Volume adjusted to', newVolume, 'm³/year');
+    } catch (err) {
+      console.error('❌ Error saving volume adjustment:', err);
+      alert('Failed to save volume adjustment. Please try again.');
+    } finally {
+      setVolumeSaving(false);
     }
   };
 
@@ -884,7 +1007,7 @@ export default function AssessmentApplicationPage() {
     if (actionInFlightRef.current) return;
 
     if (!canProceedPastDocReview) {
-      alert("⚠️ Please confirm eligibility and application completeness in Document Verification before proceeding to Field Report / Recommendation.");
+      alert("⚠️ Please confirm eligibility and application completeness in Document Verification before proceeding to Assessment Report / Recommendation.");
       return;
     }
 
@@ -900,7 +1023,7 @@ export default function AssessmentApplicationPage() {
     if (!assessmentReportData.waterUseConflict) missing.push("Section 5: Water use conflict");
     if (!assessmentReportData.wastewaterSystemDescription) missing.push("Section 6: Wastewater system description");
     if (!assessmentReportData.pollutionDescription) missing.push("Section 6: Pollution description");
-    if (!assessmentReportData.conclusion) missing.push("Section 7: Field report Summary");
+    if (!assessmentReportData.conclusion) missing.push("Section 7: Assessment Report Summary");
     if (!recommendation.recommendation) missing.push("Section 8: Assessor Recommendation");
     if (recommendation.recommendation === "no" && !recommendation.explanationText) {
       missing.push("Section 8: Explanation for Recommendation");
@@ -1180,7 +1303,7 @@ export default function AssessmentApplicationPage() {
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
                   <TabsTrigger value="field_report" className="py-2.5" disabled={!canProceedPastDocReview}>
-                    Field Report
+                    Assessment Report
                   </TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
@@ -1212,65 +1335,6 @@ export default function AssessmentApplicationPage() {
                 />
               )}
               
-              {/* Assessor Adjustments - Only show when assessment is editable */}
-              {isEditableAssessment && (
-                <Card className="border-amber-200 bg-amber-50/30">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <ClipboardCheck className="h-5 w-5 text-amber-600" />
-                      Assessor Adjustments
-                    </CardTitle>
-                    <CardDescription>
-                      As an assessor, you can adjust certain application parameters based on your evaluation. 
-                      Changes here will update the actual application record.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="assessor-permit-length" className="text-sm font-medium">
-                        Approved Permit Duration (Years)
-                      </Label>
-                      <div className="flex items-center gap-3">
-                        <Select
-                          value={assessorPermitLength?.toString() || ""}
-                          onValueChange={(value) => {
-                            const newLength = parseInt(value, 10);
-                            savePermitLengthAdjustment(newLength);
-                          }}
-                          disabled={permitLengthSaving}
-                        >
-                          <SelectTrigger id="assessor-permit-length" className="w-48 bg-white">
-                            <SelectValue placeholder="Select duration" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Array.from({ length: 15 }, (_, i) => i + 1).map((year) => (
-                              <SelectItem key={year} value={year.toString()}>
-                                {year} {year === 1 ? 'year' : 'years'}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {permitLengthSaving && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Saving...
-                          </div>
-                        )}
-                        {!permitLengthSaving && assessorPermitLength && (
-                          <div className="flex items-center gap-1 text-sm text-green-600">
-                            <CheckCircle className="h-4 w-4" />
-                            Saved
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Original request: {initialFormData?.permitLengthYears ? `${initialFormData.permitLengthYears} year(s)` : 'Not specified'}. 
-                        Adjust based on the activity type and regulatory requirements.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </TabsContent>
 
             {/* Document Verification Tab */}
@@ -1287,7 +1351,7 @@ export default function AssessmentApplicationPage() {
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Eligibility & Completeness</CardTitle>
                     <CardDescription>
-                      Confirm eligibility and completeness before proceeding to Field Report. If incomplete, return the application for revision with comments.
+                      Confirm eligibility and completeness before proceeding to Assessment Report. If incomplete, return the application for revision with comments.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -1304,7 +1368,7 @@ export default function AssessmentApplicationPage() {
                       <Alert>
                         <AlertTriangle className="h-4 w-4" />
                         <AlertDescription>
-                          You can only proceed to <strong>Field Report</strong> after confirming both eligibility and completeness.
+                          You can only proceed to <strong>Assessment Report</strong> after confirming both eligibility and completeness.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -1362,7 +1426,7 @@ export default function AssessmentApplicationPage() {
               )}
             </TabsContent>
 
-            {/* Field Report Tab */}
+            {/* Assessment Report Tab */}
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               {(() => {
                 const intended = (application as any)?.intended_activities as string[] | null | undefined;
@@ -1386,15 +1450,31 @@ export default function AssessmentApplicationPage() {
                     hideSummary={true}
                     showInlineValidation={false}
                     betweenDetailsAndDocuments={
-                      <AssessmentReportForm
-                        reportData={assessmentReportData}
-                        onReportDataChange={setAssessmentReportData}
-                        reportType={rt}
-                        readOnly={isReadOnly}
-                        inspectionDate={inspectionDate}
-                        recommendation={recommendation}
-                        onRecommendationChange={setRecommendation}
-                      />
+                      <div className="space-y-6">
+                        {/* Assessor Recommendations - Requested vs Recommended comparison */}
+                        <AssessorRecommendations
+                          requestedDurationYears={requestedDurationYears}
+                          requestedVolumeM3={requestedVolumeM3}
+                          recommendedDurationYears={assessorPermitLength}
+                          recommendedVolumeM3={assessorRecommendedVolume}
+                          onDurationChange={savePermitLengthAdjustment}
+                          onVolumeChange={saveVolumeAdjustment}
+                          readOnly={isReadOnly}
+                          durationSaving={permitLengthSaving}
+                          volumeSaving={volumeSaving}
+                        />
+                        
+                        {/* Assessment Report Form */}
+                        <AssessmentReportForm
+                          reportData={assessmentReportData}
+                          onReportDataChange={setAssessmentReportData}
+                          reportType={rt}
+                          readOnly={isReadOnly}
+                          inspectionDate={inspectionDate}
+                          recommendation={recommendation}
+                          onRecommendationChange={setRecommendation}
+                        />
+                      </div>
                     }
                     afterDocuments={
                       isReadOnly ? null : (() => {

@@ -99,7 +99,7 @@ const applicationFormSchema = z.object({
         latitude: z.string().min(1, { message: "Latitude is required" }),
         longitude: z.string().min(1, { message: "Longitude is required" })
       })
-    ).min(3, { message: "Each polygon must have at least 3 coordinate points" })
+    ).min(4, { message: "Each polygon must have at least 4 coordinate points" })
   ).optional(),
   
   // Reliability
@@ -109,7 +109,7 @@ const applicationFormSchema = z.object({
   permitLengthYears: z.number().min(1).max(15).optional(),
   
   // SECTION 3: INTENDED ACTIVITY
-  intendedActivities: z.array(z.string()).min(1, { message: "Select at least one activity" }),
+  intendedActivities: z.array(z.string()).min(1, { message: "Select an activity" }).max(1, { message: "Only one activity can be selected per application" }),
   intendedActivityOther: z.string().optional(),
   
   // Water Abstraction - optional, required only for abstraction activities
@@ -280,17 +280,8 @@ const applicationFormSchema = z.object({
   const selectedActivities = Array.isArray(data.intendedActivities) ? data.intendedActivities : [];
   if (!selectedActivities.length) return; // No validation if no activity selected
   
-  // Disallow mixing abstraction + concession activities in one application
-  const isConcession = (a: string) => a === "fish_farming_lakes" || a === "fish_farming_ponds";
-  const hasConcession = selectedActivities.some(isConcession);
-  const hasAbstraction = selectedActivities.some((a) => a && !isConcession(a));
-  if (hasConcession && hasAbstraction) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["intendedActivities"],
-      message: "You can’t mix concession (fish farming) and abstraction activities in one application.",
-    });
-  }
+  // Single activity selection is enforced by schema (.max(1))
+  // No need to check for mixing concession and abstraction activities
 
   const hasFishFarming =
     selectedActivities.includes("fish_farming_lakes") || selectedActivities.includes("fish_farming_ponds");
@@ -303,7 +294,7 @@ const applicationFormSchema = z.object({
       const hasValidPolygons = data.waterSourcePolygons.every((poly: any) => {
         return (
           Array.isArray(poly) &&
-          poly.length >= 3 &&
+          poly.length >= 4 &&
           poly.every((coord: any) => 
             coord?.latitude?.toString().trim() !== "" && 
             coord?.longitude?.toString().trim() !== ""
@@ -315,7 +306,7 @@ const applicationFormSchema = z.object({
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["waterSourcePolygons"],
-          message: "Each polygon must have at least 3 complete coordinate points."
+          message: "Each polygon must have at least 4 complete coordinate points."
         });
       }
     }
@@ -909,13 +900,13 @@ export const ApplicationForm = memo(function ApplicationForm({
         polygons.every((poly: any) => {
           return (
             Array.isArray(poly) &&
-            poly.length >= 3 &&
+            poly.length >= 4 &&
             poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
           );
         });
 
       if (!hasValidPolygons) {
-        setValidationError('Please provide at least one concession polygon with 3+ coordinate points before proceeding.');
+        setValidationError('Please provide at least one concession polygon with 4+ coordinate points before proceeding.');
         return false;
       }
 
@@ -1096,7 +1087,7 @@ export const ApplicationForm = memo(function ApplicationForm({
             polygons.every((poly: any) => {
               return (
                 Array.isArray(poly) &&
-                poly.length >= 3 &&
+                poly.length >= 4 &&
                 poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
               );
             });
@@ -2758,81 +2749,52 @@ export const ApplicationForm = memo(function ApplicationForm({
                     </p>
                   </div>
 
-                  {/* 13. Activity Type */}
+                  {/* 13. Activity Type - Single Selection */}
                   <FormField
                     control={form.control}
                     name="intendedActivities"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          13. Intended Activity * (Tick one or more boxes as appropriate)
+                          13. Intended Activity * (Select one activity)
                         </FormLabel>
                         <FormControl>
-                          <div
+                          <RadioGroup
+                            value={Array.isArray(field.value) && field.value.length > 0 ? field.value[0] : ""}
+                            onValueChange={(value) => {
+                              if (readOnly) return;
+                              field.onChange([value]);
+                            }}
+                            disabled={readOnly}
                             className={`grid grid-cols-1 gap-3 rounded-lg border bg-gradient-to-r from-indigo-50 to-purple-50 p-4 ${
                               readOnly ? "cursor-default opacity-60" : ""
                             }`}
                           >
-                            {(() => {
-                              const current = Array.isArray(field.value) ? field.value : [];
-                              const isConcession = (a: string) => a === "fish_farming_lakes" || a === "fish_farming_ponds";
-                              const hasConcession = current.some(isConcession);
-                              const hasAbstraction = current.some((a) => a && !isConcession(a));
-
-                              return (
-                                <>
-                            {(
-                              [
-                                { value: "irrigation", label: "Irrigation" },
-                                { value: "construction_of_dam", label: "Construction of a dam" },
-                                // Aquaculture removed per RWB feedback; replaced with fish farming options below
-                                { value: "fish_farming_lakes", label: "Fish farming in lakes" },
-                                { value: "fish_farming_ponds", label: "Fish farming in ponds" },
-                                { value: "mining", label: "Mining" },
-                                { value: "industry", label: "Industry" },
-                                { value: "water_supply", label: "Water supply" },
-                                { value: "coffee_washing", label: "Coffee washing" },
-                                { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
-                                { value: "navigation", label: "Navigation" },
-                                { value: "recreation_activities", label: "Recreational activities" },
-                                { value: "construction_of_infrastructures", label: "Construction of infrastructures" },
-                                { value: "gaz_extraction", label: "Gaz extraction" },
-                                { value: "livestock", label: "Livestock" },
-                                { value: "other", label: "Other (specify)" },
-                              ] as const
-                            ).map((opt) => {
-                              const selected = current.includes(opt.value);
-                              const optIsConcession = isConcession(opt.value);
-                              const incompatible =
-                                (hasConcession && !optIsConcession) || (hasAbstraction && optIsConcession);
-                              const disabled = Boolean(readOnly || (incompatible && !selected));
-                              return (
-                                <div key={opt.value} className="flex items-start gap-3">
-                                  <Checkbox
-                                    checked={selected}
-                                    disabled={disabled}
-                                    onCheckedChange={(checked) => {
-                                      if (readOnly) return;
-                                      if (disabled) return;
-
-                                      const next = checked
-                                        ? Array.from(new Set([...current, opt.value]))
-                                        : current.filter((v) => v !== opt.value);
-                                      field.onChange(next);
-                                    }}
-                                  />
-                                  <div className="text-sm leading-5 text-slate-800">{opt.label}</div>
-                                </div>
-                              );
-                            })}
-                            <div className="mt-1 text-xs text-slate-600">
-                              Note: you can select multiple activities, but you can’t mix <span className="font-medium">concession</span> (fish
-                              farming) and <span className="font-medium">abstraction</span> activities in one application.
-                            </div>
-                                </>
-                              );
-                            })()}
-                          </div>
+                            {[
+                              { value: "irrigation", label: "Irrigation" },
+                              { value: "construction_of_dam", label: "Construction of a dam" },
+                              { value: "fish_farming_lakes", label: "Fish farming in lakes" },
+                              { value: "fish_farming_ponds", label: "Fish farming in ponds" },
+                              { value: "mining", label: "Mining" },
+                              { value: "industry", label: "Industry" },
+                              { value: "water_supply", label: "Water supply" },
+                              { value: "coffee_washing", label: "Coffee washing" },
+                              { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
+                              { value: "navigation", label: "Navigation" },
+                              { value: "recreation_activities", label: "Recreational activities" },
+                              { value: "construction_of_infrastructures", label: "Construction of infrastructures" },
+                              { value: "gaz_extraction", label: "Gaz extraction" },
+                              { value: "livestock", label: "Livestock" },
+                              { value: "other", label: "Other (specify)" },
+                            ].map((opt) => (
+                              <div key={opt.value} className="flex items-center gap-3">
+                                <RadioGroupItem value={opt.value} id={`activity-${opt.value}`} />
+                                <Label htmlFor={`activity-${opt.value}`} className="text-sm leading-5 text-slate-800 cursor-pointer">
+                                  {opt.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -2844,7 +2806,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                     const selected = watchedIntendedActivities || [];
                     const hasFishFarming = selected.includes("fish_farming_lakes") || selected.includes("fish_farming_ponds");
                     const hasNonFishActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
-                    // Show for any non-fish-farming activity (can coexist with fish farming if multiple are selected)
+                    // Show for any non-fish-farming activity
                     return hasNonFishActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
@@ -2996,7 +2958,7 @@ export const ApplicationForm = memo(function ApplicationForm({
 
                       <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <p className="text-sm text-yellow-800">
-                          <strong>Note:</strong> This concession area is required for fish farming. Each polygon needs at least 3 points.
+                          <strong>Note:</strong> This concession area is required for fish farming. Each polygon needs at least 4 points.
                           If you have multiple separate areas, add multiple polygons.
                         </p>
                       </div>
@@ -4098,7 +4060,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                   {(() => {
                     const selected = watchedIntendedActivities || [];
                     const hasNonFishActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
-                    // Show if any selected activity is a non-fish-farming activity (can coexist with fish farming if multiple are selected)
+                    // Show if the selected activity is a non-fish-farming activity
                     return hasNonFishActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
