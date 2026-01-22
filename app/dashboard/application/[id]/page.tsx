@@ -22,8 +22,10 @@ import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
+import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -33,6 +35,20 @@ const ApplicationForm = dynamic(
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <span className="ml-3 text-sm text-muted-foreground">Loading application form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
+// Lazy load the PermitRenewalForm component for renewal applications
+const PermitRenewalForm = dynamic(
+  () => import("@/components/dashboard/permit-renewal-form").then(mod => ({ default: mod.PermitRenewalForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading renewal form...</span>
       </div>
     ),
     ssr: false
@@ -252,6 +268,8 @@ export default function ApplicationDetailPage() {
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
+  const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
   const { getApplication, loading, refresh } = useApplications();
   const { getDocuments } = useDocuments();
   
@@ -335,6 +353,76 @@ export default function ApplicationDetailPage() {
       fetchApplicationDetails();
     }
   }, [params.id, getApplication, getDocuments, userProfile]);
+
+  // Load renewal permit data if this is a renewal application
+  useEffect(() => {
+    const loadRenewalPermit = async () => {
+      if (!application) return;
+      
+      // Check if this is a renewal application
+      const isRenewal = (application as any).is_renewal;
+      const permitId = (application as any).renewed_from_permit_id;
+      
+      if (!isRenewal || !permitId) {
+        setRenewalPermit(null);
+        return;
+      }
+      
+      try {
+        setLoadingRenewalPermit(true);
+        
+        const { data: permit, error: permitError } = await supabase
+          .from('permits')
+          .select(`
+            *,
+            application:applications!application_id (
+              id,
+              application_number,
+              project_title,
+              province,
+              district,
+              sector,
+              cell,
+              village,
+              water_source,
+              water_purpose,
+              water_body_name,
+              max_daily_volume_m3,
+              max_yearly_volume_m3,
+              concession_area,
+              internal_notes,
+              intended_activities,
+              applicant:users!applicant_id (
+                id,
+                email,
+                phone,
+                first_name,
+                last_name,
+                company_name,
+                company_address,
+                company_phone,
+                account_type
+              )
+            )
+          `)
+          .eq('id', permitId)
+          .single();
+          
+        if (permitError) {
+          console.error('Error loading renewal permit:', permitError);
+        } else {
+          setRenewalPermit(permit as PermitWithApplication);
+          console.log('✅ Renewal permit loaded:', permit);
+        }
+      } catch (err) {
+        console.error('Error loading renewal permit:', err);
+      } finally {
+        setLoadingRenewalPermit(false);
+      }
+    };
+    
+    loadRenewalPermit();
+  }, [application]);
 
   // Create userData object for the form (similar to new-application page)
   const userData = {
@@ -586,7 +674,11 @@ export default function ApplicationDetailPage() {
               <div className="flex items-center gap-2">
                 {getStatusBadge(application.status)}
                 {(application.status === 'revision_required' || application.status === 'draft') && (
-                  <Link href={`/dashboard/edit-application/${application.id}`}>
+                  <Link href={
+                    (application as any).is_renewal 
+                      ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${(application as any).renewed_from_permit_id}`
+                      : `/dashboard/edit-application/${application.id}`
+                  }>
                     <Button variant="outline" size="sm">
                       <Edit className="h-4 w-4 mr-2" />
                       Edit Application
@@ -656,7 +748,11 @@ export default function ApplicationDetailPage() {
                     <p className="text-orange-700">{application.revision_notes}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Link href={`/dashboard/edit-application/${application.id}`}>
+                    <Link href={
+                      (application as any).is_renewal 
+                        ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${(application as any).renewed_from_permit_id}`
+                        : `/dashboard/edit-application/${application.id}`
+                    }>
                       <Button variant="outline" size="sm" className="bg-white hover:bg-orange-50 border-orange-300">
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Application
@@ -669,7 +765,23 @@ export default function ApplicationDetailPage() {
           )}
           
           {/* Application Form in Read-only Mode */}
-          {initialFormData && Object.keys(initialFormData).length > 0 && (
+          {/* For renewal applications, show the renewal form */}
+          {(application as any).is_renewal && renewalPermit ? (
+            <PermitRenewalForm 
+              permit={renewalPermit}
+              userData={userData}
+              onSubmit={async () => {}}
+              onSaveAsDraft={async () => {}}
+              isLoading={false}
+              currentApplication={application}
+              readOnly={true}
+            />
+          ) : loadingRenewalPermit && (application as any).is_renewal ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+              <span className="ml-3 text-sm text-muted-foreground">Loading renewal details...</span>
+            </div>
+          ) : initialFormData && Object.keys(initialFormData).length > 0 ? (
             <ApplicationForm 
               userData={userData}
               onSubmit={handleSubmitApplication}
@@ -681,7 +793,7 @@ export default function ApplicationDetailPage() {
               readOnly={true}
               currentApplication={application} // Pass the application object to handle payment tab correctly
             />
-          )}
+          ) : null}
 
         </motion.div>
       </div>

@@ -60,6 +60,7 @@ interface PermitRenewalFormProps {
   onSaveAsDraft: (formData: any, status: string) => Promise<void>;
   isLoading?: boolean;
   currentApplication?: Application | null;
+  readOnly?: boolean;
 }
 
 // Helper to format date
@@ -81,6 +82,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   onSaveAsDraft,
   isLoading = false,
   currentApplication,
+  readOnly = false,
 }: PermitRenewalFormProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("how-it-works");
@@ -463,13 +465,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   </CardContent>
                 </Card>
 
-                {/* Navigation */}
-                <div className="flex justify-end">
-                  <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700 gap-2">
-                    Continue to Water Use Report
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </div>
+                {/* Navigation - hidden in read-only mode */}
+                {!readOnly && (
+                  <div className="flex justify-end">
+                    <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700 gap-2">
+                      Continue to Water Use Report
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
             </TabsContent>
 
@@ -483,37 +487,41 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   reportingYear={new Date().getFullYear() - 1}
                   existingReport={null}
                   onSaveAsDraft={async (data) => {
+                    if (readOnly) return;
                     setWaterUseReportData(data);
                     // Don't mark as submitted on draft save
                   }}
                   onSubmit={async (data) => {
+                    if (readOnly) return;
                     setWaterUseReportData(data);
                     setWaterUseReportSubmitted(true);
                     // Auto-advance to next tab
                     setActiveTab("attachments");
                   }}
                   isLoading={isSaving}
-                  isReadOnly={false}
+                  isReadOnly={readOnly}
                 />
 
-                {/* Navigation */}
-                <div className="flex justify-between pt-4 border-t">
-                  <Button variant="outline" onClick={handleBack} className="gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Overview
-                  </Button>
-                  <div className="flex gap-2">
-                    {waterUseReportSubmitted && (
-                      <Button 
-                        onClick={handleNext} 
-                        className="bg-green-600 hover:bg-green-700 gap-2"
-                      >
-                        Continue to Attachments
-                        <ArrowRight className="h-4 w-4" />
-                      </Button>
-                    )}
+                {/* Navigation - hidden in read-only mode */}
+                {!readOnly && (
+                  <div className="flex justify-between pt-4 border-t">
+                    <Button variant="outline" onClick={handleBack} className="gap-2">
+                      <ArrowLeft className="h-4 w-4" />
+                      Back to Overview
+                    </Button>
+                    <div className="flex gap-2">
+                      {waterUseReportSubmitted && (
+                        <Button 
+                          onClick={handleNext} 
+                          className="bg-green-600 hover:bg-green-700 gap-2"
+                        >
+                          Continue to Attachments
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </TabsContent>
 
@@ -565,15 +573,17 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                                 ({(renewalLetter.size / 1024).toFixed(1)} KB)
                               </span>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={handleRemoveFile}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <X className="h-4 w-4 mr-1" />
-                              Remove
-                            </Button>
+                            {!readOnly && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRemoveFile}
+                                className="text-red-600 hover:text-red-700"
+                              >
+                                <X className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            )}
                           </div>
                         ) : existingRenewalLetterUrl ? (
                           <div className="space-y-3">
@@ -589,16 +599,25 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                               <Eye className="h-4 w-4 mr-1" />
                               View Document
                             </Button>
-                            <div className="pt-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => renewalLetterInputRef.current?.click()}
-                              >
-                                <Upload className="h-4 w-4 mr-1" />
-                                Replace Document
-                              </Button>
-                            </div>
+                            {!readOnly && (
+                              <div className="pt-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => renewalLetterInputRef.current?.click()}
+                                >
+                                  <Upload className="h-4 w-4 mr-1" />
+                                  Replace Document
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ) : readOnly ? (
+                          <div className="space-y-3">
+                            <FileText className="h-12 w-12 mx-auto text-gray-400" />
+                            <p className="text-sm text-muted-foreground">
+                              No renewal letter uploaded
+                            </p>
                           </div>
                         ) : (
                           <div className="space-y-3">
@@ -620,13 +639,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                             </Button>
                           </div>
                         )}
-                        <input
-                          ref={renewalLetterInputRef}
-                          type="file"
-                          className="hidden"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={handleFileChange}
-                        />
+                        {!readOnly && (
+                          <input
+                            ref={renewalLetterInputRef}
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={handleFileChange}
+                          />
+                        )}
                       </div>
                     </div>
 
@@ -654,38 +675,72 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   </CardContent>
                 </Card>
 
-                {/* Navigation */}
-                <div className="flex justify-between">
-                  <Button variant="outline" onClick={handleBack} className="gap-2">
-                    <ArrowLeft className="h-4 w-4" />
-                    Back
-                  </Button>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={handleSaveDraft}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Save Draft
+                {/* Navigation - hidden in read-only mode */}
+                {!readOnly && (
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={handleBack} className="gap-2">
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
                     </Button>
-                    <Button 
-                      onClick={handleNext} 
-                      className="bg-green-600 hover:bg-green-700 gap-2"
-                      disabled={!tabsCompleted.attachments}
-                    >
-                      Continue to Payment
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        onClick={handleSaveDraft}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Save Draft
+                      </Button>
+                      <Button 
+                        onClick={handleNext} 
+                        className="bg-green-600 hover:bg-green-700 gap-2"
+                        disabled={!tabsCompleted.attachments}
+                      >
+                        Continue to Payment
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </TabsContent>
 
             {/* TAB 4: Payment */}
             <TabsContent value="payment" className="mt-6">
               <div className="space-y-6">
-                {!canProceedToPayment ? (
+                {readOnly ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5" />
+                        Payment Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                          <span className="font-medium">Renewal Fee</span>
+                          <span className="text-lg font-bold text-green-600">{RENEWAL_FEE.toLocaleString()} RWF</span>
+                        </div>
+                        {currentApplication?.payment_status === 'paid' ? (
+                          <Alert className="border-green-200 bg-green-50">
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                            <AlertDescription className="text-green-800">
+                              Payment has been completed for this renewal application.
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <Alert className="border-amber-200 bg-amber-50">
+                            <Clock className="h-4 w-4 text-amber-600" />
+                            <AlertDescription className="text-amber-800">
+                              Payment is pending for this renewal application.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : !canProceedToPayment ? (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertTitle>Cannot Proceed to Payment</AlertTitle>
@@ -709,8 +764,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   />
                 )}
                 
-                {/* Back button if payment tab has issues */}
-                {!canProceedToPayment && (
+                {/* Back button if payment tab has issues - hidden in read-only mode */}
+                {!readOnly && !canProceedToPayment && (
                   <div className="flex justify-start">
                     <Button variant="outline" onClick={handleBack} className="gap-2">
                       <ArrowLeft className="h-4 w-4" />

@@ -27,7 +27,7 @@ function generateTempPassword(length = 16): string {
 }
 
 // Valid staff roles (applicants must self-register)
-const STAFF_ROLES = ['assessor', 'inspector', 'admin', 'approver'] as const
+const STAFF_ROLES = ['assessor', 'reviewer', 'verifier', 'inspector', 'admin', 'approver'] as const
 
 export async function POST(req: NextRequest) {
   try {
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     if (role === 'applicant') {
       return NextResponse.json({ 
         success: false, 
-        message: 'Applicants must register themselves. Admin can only create staff accounts (reviewer, inspector, admin, approver).' 
+        message: 'Applicants must register themselves. Admin can only create staff accounts (assessor, reviewer, verifier, inspector, admin, approver).' 
       }, { status: 400 })
     }
 

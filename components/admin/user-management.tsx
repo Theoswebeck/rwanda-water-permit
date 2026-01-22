@@ -99,7 +99,8 @@ export function UserManagement() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | User["role"]>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | User["status"]>("all");
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -187,7 +188,7 @@ export function UserManagement() {
       // Staff users are created via API (which creates auth user + sends invite email)
       // Applicants must self-register
       if (data.role === 'applicant') {
-        setErrorMessage('Applicants must register themselves through the public registration page. Admin can only create staff accounts (reviewer, inspector, admin, approver).');
+        setErrorMessage('Applicants must register themselves through the public registration page. Admin can only create staff accounts (assessor, reviewer, verifier, inspector, admin, approver).');
         setIsSubmitting(false);
         return;
       }
@@ -336,16 +337,17 @@ export function UserManagement() {
   };
 
 
-  // Filter users based on search term and active tab
+  // Filter users based on search term and filters
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (user.first_name && user.first_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (user.last_name && user.last_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
                          (user.company_name && user.company_name.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesTab = activeTab === "all" || user.role === activeTab;
+    const matchesRole = roleFilter === "all" || user.role === roleFilter;
+    const matchesStatus = statusFilter === "all" || user.status === statusFilter;
     
-    return matchesSearch && matchesTab;
+    return matchesSearch && matchesRole && matchesStatus;
   });
 
   if (loading) {
@@ -403,7 +405,7 @@ export function UserManagement() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {users.filter(u => u.role === "reviewer").length + users.filter(u => u.role === "inspector").length + users.filter(u => u.role === "admin").length}
+              {users.filter(u => u.role !== "applicant").length}
             </div>
             <p className="text-xs text-muted-foreground">
               RWB staff members
@@ -542,6 +544,8 @@ export function UserManagement() {
                             </FormControl>
                             <SelectContent>
                               <SelectItem value="assessor">Assessor</SelectItem>
+                              <SelectItem value="reviewer">Reviewer</SelectItem>
+                              <SelectItem value="verifier">Verifier</SelectItem>
                               <SelectItem value="inspector">Inspector</SelectItem>
                               <SelectItem value="approver">Approver</SelectItem>
                               <SelectItem value="admin">Admin</SelectItem>
@@ -623,20 +627,22 @@ export function UserManagement() {
                 />
               </div>
             </div>
-            <Select value={activeTab} onValueChange={setActiveTab}>
+            <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as any)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Filter by role" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
                 <SelectItem value="applicant">Applicant</SelectItem>
+                <SelectItem value="assessor">Assessor</SelectItem>
                 <SelectItem value="reviewer">Reviewer</SelectItem>
+                <SelectItem value="verifier">Verifier</SelectItem>
                 <SelectItem value="inspector">Inspector</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="approver">Approver</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={activeTab} onValueChange={setActiveTab}>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
@@ -855,7 +861,9 @@ export function UserManagement() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="applicant">Applicant</SelectItem>
+                          <SelectItem value="assessor">Assessor</SelectItem>
                           <SelectItem value="reviewer">Reviewer</SelectItem>
+                          <SelectItem value="verifier">Verifier</SelectItem>
                           <SelectItem value="inspector">Inspector</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="approver">Approver</SelectItem>

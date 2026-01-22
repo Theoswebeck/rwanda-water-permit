@@ -39,6 +39,7 @@ import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
 type BannerKind = "success" | "error" | "info";
 type UIBanner = {
@@ -66,6 +67,20 @@ const ApplicationForm = dynamic(
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         <span className="ml-3 text-sm text-muted-foreground">Loading application form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
+// Lazy load the PermitRenewalForm component for renewal applications
+const PermitRenewalForm = dynamic(
+  () => import("@/components/dashboard/permit-renewal-form").then(mod => ({ default: mod.PermitRenewalForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading renewal form...</span>
       </div>
     ),
     ssr: false
@@ -168,6 +183,10 @@ export default function ReviewApplicationPage() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  
+  // Renewal permit state (for renewal applications)
+  const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
+  const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
 
   // Assessment evidence (read-only) - matches Assessment/Approver UX
   const [documentVerifications, setDocumentVerifications] = useState<
@@ -452,6 +471,75 @@ export default function ReviewApplicationPage() {
       fetchApplicationDetails();
     }
   }, [params.id]);
+
+  // Load renewal permit data if this is a renewal application
+  useEffect(() => {
+    const loadRenewalPermit = async () => {
+      if (!application) return;
+      
+      const isRenewal = (application as any).is_renewal;
+      const permitId = (application as any).renewed_from_permit_id;
+      
+      if (!isRenewal || !permitId) {
+        setRenewalPermit(null);
+        return;
+      }
+      
+      try {
+        setLoadingRenewalPermit(true);
+        
+        const { data: permit, error: permitError } = await supabase
+          .from('permits')
+          .select(`
+            *,
+            application:applications!application_id (
+              id,
+              application_number,
+              project_title,
+              province,
+              district,
+              sector,
+              cell,
+              village,
+              water_source,
+              water_purpose,
+              water_body_name,
+              max_daily_volume_m3,
+              max_yearly_volume_m3,
+              concession_area,
+              internal_notes,
+              intended_activities,
+              applicant:users!applicant_id (
+                id,
+                email,
+                phone,
+                first_name,
+                last_name,
+                company_name,
+                company_address,
+                company_phone,
+                account_type
+              )
+            )
+          `)
+          .eq('id', permitId)
+          .single();
+          
+        if (permitError) {
+          console.error('Error loading renewal permit:', permitError);
+        } else {
+          setRenewalPermit(permit as PermitWithApplication);
+          console.log('✅ Renewal permit loaded for review:', permit);
+        }
+      } catch (err) {
+        console.error('Error loading renewal permit:', err);
+      } finally {
+        setLoadingRenewalPermit(false);
+      }
+    };
+    
+    loadRenewalPermit();
+  }, [application]);
 
   const handleAddComment = async () => {
     if (!newComment.trim() || !application) return;
@@ -892,8 +980,31 @@ export default function ReviewApplicationPage() {
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
-              {/* Application Form in Read-only Mode */}
-              {initialFormData && (
+              {/* Show Renewal Form for renewal applications, regular form for others */}
+              {(application as any).is_renewal && renewalPermit ? (
+                <PermitRenewalForm 
+                  permit={renewalPermit}
+                  userData={{
+                    id: application.applicant?.id,
+                    email: application.applicant?.email || "",
+                    phone: application.applicant?.phone || "",
+                    first_name: application.applicant?.first_name,
+                    last_name: application.applicant?.last_name,
+                    company_name: application.applicant?.company_name,
+                    account_type: application.applicant?.account_type || 'individual',
+                  }}
+                  onSubmit={async () => {}}
+                  onSaveAsDraft={async () => {}}
+                  isLoading={false}
+                  currentApplication={application}
+                  readOnly={true}
+                />
+              ) : loadingRenewalPermit && (application as any).is_renewal ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+                  <span className="ml-3 text-sm text-muted-foreground">Loading renewal details...</span>
+                </div>
+              ) : initialFormData ? (
                 <ApplicationForm 
                   userData={{
                     email: application.applicant?.email || "",
@@ -916,7 +1027,7 @@ export default function ReviewApplicationPage() {
                   readOnly={true}
                   isStaffView={true}
                 />
-              )}
+              ) : null}
             </TabsContent>
 
             {/* Document Verification Tab (read-only) */}
