@@ -605,7 +605,15 @@ export default function VerificationApplicationPage() {
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               <div className="space-y-6">
-                <ApplicationComments applicationId={application.id} />
+                <ApplicationComments 
+                  applicationId={application.id}
+                  applicationStatus={application.status}
+                  applicationSubmittedAt={application.submitted_at ?? undefined}
+                  applicationCreatedAt={application.created_at}
+                  applicantName={application.applicant?.first_name && application.applicant?.last_name 
+                    ? `${application.applicant.first_name} ${application.applicant.last_name}`
+                    : application.applicant?.company_name || application.project_title?.replace(' Water Permit Application', '') || undefined}
+                />
               </div>
             </TabsContent>
             </Tabs>

@@ -39,6 +39,7 @@ type RawPendingApprovalApplication = {
   project_title?: string | null
   sla_status?: string | null
   due_date?: string | null
+  is_modification?: boolean | null
   applicant?: {
     account_type?: "individual" | "company" | string | null
     first_name?: string | null
@@ -74,6 +75,7 @@ interface FinalReviewApplication {
   sla_status?: string;
   due_date?: string;
   deadline_90_days_remaining?: number | null;
+  is_modification?: boolean;
 }
 
 export function FinalDecisions() {
@@ -137,6 +139,7 @@ export function FinalDecisions() {
           sla_status: app.sla_status || undefined,
           due_date: app.due_date || undefined,
           deadline_90_days_remaining: deadline90Remaining,
+          is_modification: app.is_modification || false,
         };
       });
 
@@ -227,9 +230,9 @@ export function FinalDecisions() {
   };
 
   // Get application type badge (New, Modification, Transfer)
-  const getAppTypeBadge = (applicationType: string) => {
-    const isModification = applicationType === 'modification';
-    const isTransfer = applicationType === 'transfer';
+  const getAppTypeBadge = (application: FinalReviewApplication) => {
+    const isModification = application.applicationType === 'modification' || application.is_modification === true;
+    const isTransfer = application.applicationType === 'transfer';
     
     if (isModification) {
       return <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">Mod</Badge>;
@@ -411,7 +414,7 @@ export function FinalDecisions() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {getAppTypeBadge(application.applicationType)}
+                      {getAppTypeBadge(application)}
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <div className="text-sm text-muted-foreground flex items-center">
