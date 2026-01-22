@@ -696,16 +696,18 @@ export default function ReviewApplicationPage() {
     router.push('/review');
   };
 
-  // Get application type badge for display - shows New, Modification, or Transfer
+  // Get application type badge for display - shows New, Modification, Transfer, or Renewal
   const getApplicationTypeBadge = () => {
     if (!application) return null;
     
     const appType = application.application_type;
     const isModification = appType === 'modification' || (application as any).is_modification === true;
     const isTransfer = appType === 'transfer';
+    const isRenewal = appType === 'renewal' || (application as any).is_renewal === true;
     
-    let displayType: 'new' | 'modification' | 'transfer' = 'new';
-    if (isModification) displayType = 'modification';
+    let displayType: 'new' | 'modification' | 'transfer' | 'renewal' = 'new';
+    if (isRenewal) displayType = 'renewal';
+    else if (isModification) displayType = 'modification';
     else if (isTransfer) displayType = 'transfer';
     
     const typeConfig = {
@@ -720,6 +722,10 @@ export default function ReviewApplicationPage() {
       'transfer': { 
         label: 'Transfer', 
         className: 'bg-purple-100 text-purple-700 border-purple-300' 
+      },
+      'renewal': { 
+        label: 'Renewal', 
+        className: 'bg-green-100 text-green-700 border-green-300' 
       },
     };
     

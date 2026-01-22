@@ -278,12 +278,16 @@ export default function VerificationDashboard() {
       );
     };
 
-    // Get application type badge (New, Modification, Transfer)
+    // Get application type badge (New, Modification, Transfer, Renewal)
     const getAppTypeBadge = (app: VerificationApplication) => {
       const appType = app.application_type;
       const isModification = appType === 'modification' || (app as any).is_modification === true;
       const isTransfer = appType === 'transfer';
+      const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
       
+      if (isRenewal) {
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
+      }
       if (isModification) {
         return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
       }

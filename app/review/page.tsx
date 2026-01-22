@@ -499,14 +499,16 @@ export default function ReviewerDashboard() {
       return labels[purpose] || purpose;
     };
 
-    // Get application type badge for display - shows New, Modification, or Transfer
+    // Get application type badge for display - shows New, Modification, Transfer, or Renewal
     const getApplicationTypeBadge = (app: ReviewApplication) => {
       const appType = app.application_type;
       const isModification = appType === 'modification' || (app as any).is_modification === true;
       const isTransfer = appType === 'transfer';
+      const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
       
-      let displayType: 'new' | 'modification' | 'transfer' = 'new';
-      if (isModification) displayType = 'modification';
+      let displayType: 'new' | 'modification' | 'transfer' | 'renewal' = 'new';
+      if (isRenewal) displayType = 'renewal';
+      else if (isModification) displayType = 'modification';
       else if (isTransfer) displayType = 'transfer';
       
       const typeConfig = {
@@ -521,6 +523,10 @@ export default function ReviewerDashboard() {
         'transfer': { 
           label: 'Transfer', 
           className: 'bg-purple-50 text-purple-700 border-purple-200' 
+        },
+        'renewal': { 
+          label: 'Renewal', 
+          className: 'bg-green-50 text-green-700 border-green-200' 
         },
       };
       

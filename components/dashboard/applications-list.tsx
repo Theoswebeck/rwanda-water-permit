@@ -206,8 +206,14 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
   };
 
   // Format application type for display
-  // For modification/transfer types, try to show a more meaningful type based on intended activities or water purpose
+  // For modification/transfer/renewal types, try to show a more meaningful type based on intended activities or water purpose
   const formatApplicationType = (type: string, app?: Application) => {
+    // Check if it's a renewal application (via flag or type)
+    const isRenewal = type === 'renewal' || (app && (app as any).is_renewal === true);
+    if (isRenewal) {
+      return 'Renewal';
+    }
+    
     // If it's a modification or transfer, try to get a better type from intended_activities or water_purpose
     if ((type === 'modification' || type === 'transfer') && app) {
       const activities = app.intended_activities as string[] | null;
