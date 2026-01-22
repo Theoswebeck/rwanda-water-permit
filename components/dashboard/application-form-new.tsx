@@ -51,6 +51,7 @@ import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidati
 import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
 import { PaymentTab } from '@/components/dashboard/payment-tab';
 import { getAnnexRequirementForActivity, getAnnexRequirementsForSelection } from "@/lib/annex-requirements";
+import { ModificationBadge, ModificationChangesSummary } from "@/components/dashboard/modified-field-marker";
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({
@@ -374,6 +375,118 @@ const applicationFormSchema = z.object({
 
 type FormValues = z.infer<typeof applicationFormSchema>;
 
+// Utility function to compute modification changes between original and current form data
+function computeModificationChanges(
+  originalData: Partial<FormValues> | undefined,
+  currentData: FormValues
+): Record<string, { previous: any; current: any }> {
+  if (!originalData) return {};
+  
+  const changes: Record<string, { previous: any; current: any }> = {};
+  
+  // Fields to compare (excluding files and computed fields)
+  const fieldsToCompare: (keyof FormValues)[] = [
+    'fullNameApplicant',
+    'categoryApplicant',
+    'nameRepresentative',
+    'officeProvince',
+    'officeDistrict',
+    'officeSector',
+    'officeCell',
+    'officeVillage',
+    'telephoneContact',
+    'telephoneContactOffice',
+    'emailAddress',
+    'nationalIdNumber',
+    'waterSourceType',
+    'nameSourceWater',
+    'tributaryToMain',
+    'waterSourceProvince',
+    'waterSourceDistrict',
+    'waterSourceSector',
+    'waterSourceCell',
+    'waterSourceVillage',
+    'waterSourceLatitude',
+    'waterSourceLongitude',
+    'waterReliability',
+    'permitLengthYears',
+    'intendedActivities',
+    'concessionArea',
+    'ownsAllLand',
+    'hasLandAccess',
+    'waterSupplyPopulation',
+    'waterSupplyPerCapitaDemand',
+    'waterSupplyTotalDailyDemand',
+    'waterSupplyDailyAbstraction',
+    'waterSupplyStorageCapacity',
+    'irrigationTotalArea',
+    'irrigationCropType',
+    'irrigationWaterDemand',
+    'irrigationMethod',
+    'irrigationStorageCapacity',
+  ];
+  
+  for (const field of fieldsToCompare) {
+    const originalValue = originalData[field];
+    const currentValue = currentData[field];
+    
+    // Deep comparison for arrays and objects
+    const originalStr = JSON.stringify(originalValue ?? '');
+    const currentStr = JSON.stringify(currentValue ?? '');
+    
+    if (originalStr !== currentStr) {
+      changes[field] = {
+        previous: originalValue,
+        current: currentValue
+      };
+    }
+  }
+  
+  return changes;
+}
+
+// Field labels for display in modification markers
+const FIELD_LABELS: Record<string, string> = {
+  fullNameApplicant: 'Full Name',
+  categoryApplicant: 'Applicant Category',
+  nameRepresentative: 'Representative Name',
+  officeProvince: 'Office Province',
+  officeDistrict: 'Office District',
+  officeSector: 'Office Sector',
+  officeCell: 'Office Cell',
+  officeVillage: 'Office Village',
+  telephoneContact: 'Telephone',
+  telephoneContactOffice: 'Office Telephone',
+  emailAddress: 'Email Address',
+  nationalIdNumber: 'National ID',
+  waterSourceType: 'Water Source Type',
+  nameSourceWater: 'Water Source Name',
+  tributaryToMain: 'Tributary',
+  waterSourceProvince: 'Water Source Province',
+  waterSourceDistrict: 'Water Source District',
+  waterSourceSector: 'Water Source Sector',
+  waterSourceCell: 'Water Source Cell',
+  waterSourceVillage: 'Water Source Village',
+  waterSourceLatitude: 'Latitude',
+  waterSourceLongitude: 'Longitude',
+  waterReliability: 'Water Reliability',
+  permitLengthYears: 'Permit Duration',
+  intendedActivities: 'Intended Activities',
+  concessionArea: 'Concession Area',
+  ownsAllLand: 'Owns All Land',
+  hasLandAccess: 'Has Land Access',
+  waterSupplyPopulation: 'Population Served',
+  waterSupplyPerCapitaDemand: 'Per Capita Demand',
+  waterSupplyTotalDailyDemand: 'Total Daily Demand',
+  waterSupplyDailyAbstraction: 'Daily Abstraction',
+  waterSupplyStorageCapacity: 'Storage Capacity',
+  irrigationTotalArea: 'Total Irrigation Area',
+  irrigationCropType: 'Crop Type',
+  irrigationWaterDemand: 'Water Demand',
+  irrigationMethod: 'Irrigation Method',
+  irrigationStorageCapacity: 'Storage Capacity',
+};
+
 interface ApplicationFormProps {
   userData: any;
   onSubmit: (data: FormValues, status: 'submitted') => void | Promise<void>;
@@ -385,6 +498,9 @@ interface ApplicationFormProps {
   readOnly?: boolean;
   currentApplication?: any; // The saved application object (needed for payment tab)
   isStaffView?: boolean; // True for review/assessment/approver views - hides payment tab
+  isModification?: boolean; // True when modifying an existing permit
+  originalApplicationData?: Partial<FormValues>; // Original data for comparison (modification mode)
+  modificationChanges?: Record<string, { previous: any; current: any }>; // Stored changes from DB (staff view)
 }
 
 // ⚡ PERFORMANCE: Memoize the entire form component to prevent unnecessary re-renders
@@ -398,7 +514,10 @@ export const ApplicationForm = memo(function ApplicationForm({
   mode = 'create',
   readOnly = false,
   currentApplication,
-  isStaffView = false
+  isStaffView = false,
+  isModification = false,
+  originalApplicationData,
+  modificationChanges
 }: ApplicationFormProps) {
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
@@ -1841,11 +1960,23 @@ export const ApplicationForm = memo(function ApplicationForm({
 
   const handleFormSubmit = async (values: FormValues) => {
     try {
-      // Include additionalDocuments in the submission
+      // Compute modification changes if in modification mode
+      let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+      if (isModification && originalApplicationData) {
+        modificationChangesData = computeModificationChanges(originalApplicationData, values);
+        console.log('📝 Modification changes detected:', modificationChangesData);
+      }
+      
+      // Include additionalDocuments and modification data in the submission
       const submissionData = { 
         ...values, 
         ...files, 
-        additionalDocuments 
+        additionalDocuments,
+        // Include modification-specific data
+        ...(isModification && {
+          isModification: true,
+          modificationChanges: modificationChangesData,
+        }),
       };
       await onSubmit(submissionData, 'submitted');
     } catch (error) {
@@ -1878,7 +2009,13 @@ export const ApplicationForm = memo(function ApplicationForm({
 
       <Card className="border-gray-200 dark:border-gray-800">
         <CardHeader>
-          <CardTitle>Water Permit Application Form</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Water Permit Application Form</CardTitle>
+            {/* Show modification badge for staff viewing modification applications */}
+            {isStaffView && modificationChanges && Object.keys(modificationChanges).length > 0 && (
+              <ModificationBadge changesCount={Object.keys(modificationChanges).length} />
+            )}
+          </div>
           <CardDescription>
             {readOnly 
               ? "Review the submitted water permit application details below."
@@ -1906,6 +2043,15 @@ export const ApplicationForm = memo(function ApplicationForm({
                 </AlertDescription>
               </Alert>
             )}
+
+            {/* Show modification changes summary for staff viewing modification applications */}
+            {isStaffView && modificationChanges && Object.keys(modificationChanges).length > 0 && (
+              <ModificationChangesSummary 
+                changes={modificationChanges} 
+                fieldLabels={FIELD_LABELS}
+              />
+            )}
+
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
               <Tabs
                 defaultValue="applicant-info"
@@ -4457,10 +4603,19 @@ export const ApplicationForm = memo(function ApplicationForm({
                       saveError={paymentPrepError}
                       onRetrySave={() => {
                         setPaymentPrepError(null);
+                        // Compute modification changes if in modification mode
+                        let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+                        if (isModification && originalApplicationData) {
+                          modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
+                        }
                         const draftData = {
                           ...form.getValues(),
                           ...files,
-                          additionalDocuments
+                          additionalDocuments,
+                          ...(isModification && {
+                            isModification: true,
+                            modificationChanges: modificationChangesData,
+                          }),
                         };
                         void onSaveAsDraft(draftData, 'draft').catch((error) => {
                           console.error('Error saving application:', error);
@@ -4479,11 +4634,21 @@ export const ApplicationForm = memo(function ApplicationForm({
                       variant="outline"
                       onClick={async () => {
                         try {
-                          // Include additionalDocuments in the draft save
+                          // Compute modification changes if in modification mode
+                          let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+                          if (isModification && originalApplicationData) {
+                            modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
+                          }
+                          
+                          // Include additionalDocuments and modification data in the draft save
                           const draftData = { 
                             ...form.getValues(), 
                             ...files, 
-                            additionalDocuments 
+                            additionalDocuments,
+                            ...(isModification && {
+                              isModification: true,
+                              modificationChanges: modificationChangesData,
+                            }),
                           };
                           console.log('📎 Files being saved:', Object.keys(files).filter(k => files[k]));
                           const result = await onSaveAsDraft(draftData, 'draft');
@@ -4569,11 +4734,21 @@ export const ApplicationForm = memo(function ApplicationForm({
                               return;
                             }
 
+                            // Compute modification changes if in modification mode
+                            let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+                            if (isModification && originalApplicationData) {
+                              modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
+                            }
+
                             // Automatically save as draft (like airline booking)
                             const draftData = { 
                               ...form.getValues(), 
                               ...files, 
-                              additionalDocuments 
+                              additionalDocuments,
+                              ...(isModification && {
+                                isModification: true,
+                                modificationChanges: modificationChangesData,
+                              }),
                             };
 
                             // Navigate to payment tab immediately; save happens in the background

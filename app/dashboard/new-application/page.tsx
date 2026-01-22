@@ -37,6 +37,7 @@ const PermitTransferForm = dynamic(
 
 import { ApplicationTypeSelector, type ApplicationMode } from "@/components/dashboard/application-type-selector";
 import { PermitSelectForTransfer, type PermitWithApplication } from "@/components/dashboard/permit-select-for-transfer";
+import { PermitSelectForModification } from "@/components/dashboard/permit-select-for-modification";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -47,7 +48,7 @@ import { useDocuments } from "@/hooks/useDocuments";
 import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
 import type { Application, Document } from "@/types/database";
-import { mapFormDataToApplication } from "@/lib/application-utils";
+import { mapFormDataToApplication, formatProvinceForDB, formatWaterSourceForDB, formatWaterPurposeForDB, formatApplicationTypeForDB } from "@/lib/application-utils";
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 
 // Helper function to create storage bucket if it doesn't exist
@@ -251,13 +252,19 @@ function NewApplicationContent() {
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   
-  // Application type state (new application vs transfer)
+  // Application type state (new application vs transfer vs modification)
   const [applicationMode, setApplicationMode] = useState<ApplicationMode | null>(
-    modeParam === 'transfer' ? 'transfer' : modeParam === 'new' ? 'new' : null
+    modeParam === 'transfer' ? 'transfer' : modeParam === 'modification' ? 'modification' : modeParam === 'new' ? 'new' : null
   );
   const [selectedPermit, setSelectedPermit] = useState<PermitWithApplication | null>(null);
   const [transferStep, setTransferStep] = useState<'select-permit' | 'fill-form'>('select-permit');
   const [currentTransferApplication, setCurrentTransferApplication] = useState<Application | null>(null);
+  
+  // Modification-specific state
+  const [modificationStep, setModificationStep] = useState<'select-permit' | 'fill-form'>('select-permit');
+  const [selectedPermitForModification, setSelectedPermitForModification] = useState<PermitWithApplication | null>(null);
+  const [originalApplicationData, setOriginalApplicationData] = useState<any>(null);
+  const [currentModificationApplication, setCurrentModificationApplication] = useState<Application | null>(null);
   
   const { createApplication, updateApplication, getApplication } = useApplications();
   const { getDocuments } = useDocuments();
@@ -588,6 +595,8 @@ function NewApplicationContent() {
       );
     } else if (mode === 'transfer') {
       setTransferStep('select-permit');
+    } else if (mode === 'modification') {
+      setModificationStep('select-permit');
     }
   }, []);
 
@@ -716,6 +725,194 @@ function NewApplicationContent() {
     address: userProfile?.company_address || "",
     account_type: userProfile?.account_type || 'individual',
   }), [userProfile]);
+
+  // Handle permit selection for modification
+  const handleModificationPermitSelect = useCallback(async (permit: PermitWithApplication) => {
+    setSelectedPermitForModification(permit);
+    
+    // Load original application data for comparison
+    try {
+      if (permit.application_id) {
+        const originalApplication = await getApplication(permit.application_id);
+        if (originalApplication) {
+          // Parse internal_notes to get the original form data
+          const originalFormData = (() => {
+            try {
+              const parsed = JSON.parse((originalApplication as any).internal_notes || "{}");
+              return parsed && typeof parsed === "object" ? parsed : {};
+            } catch {
+              return {};
+            }
+          })();
+          
+          // If internal_notes doesn't have all data, fall back to application fields
+          if (!originalFormData.intendedActivities && (originalApplication as any).intended_activities) {
+            originalFormData.intendedActivities = (originalApplication as any).intended_activities;
+          }
+          
+          setOriginalApplicationData(originalFormData);
+          setInitialFormData(originalFormData);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading original application data:', error);
+    }
+    
+    setModificationStep('fill-form');
+  }, [getApplication]);
+
+  // Handle modification cancellation
+  const handleModificationCancel = useCallback(() => {
+    setSelectedPermitForModification(null);
+    setModificationStep('select-permit');
+    setApplicationMode(null);
+    setOriginalApplicationData(null);
+  }, []);
+
+  // Handle modification form submission
+  const handleModificationSubmit = useCallback(async (formData: any, status: 'submitted') => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      console.log('📋 Modification form data received:', formData);
+      
+      // Build modification application data
+      // Use the actual application type based on intended activities, not 'modification'
+      const primaryActivity = formData.intendedActivities?.[0];
+      const modificationApplicationData: Partial<Application> = {
+        applicant_id: userProfile?.id,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+        application_type: formatApplicationTypeForDB(primaryActivity) || selectedPermitForModification?.application?.application_type || 'domestic',
+        water_source: formatWaterSourceForDB(formData.waterSourceType) || selectedPermitForModification?.water_source || 'other',
+        water_purpose: formatWaterPurposeForDB(primaryActivity) || selectedPermitForModification?.purpose || 'other',
+        province: formatProvinceForDB(formData.waterSourceProvince) || selectedPermitForModification?.application?.province || 'Kigali',
+        district: formData.waterSourceDistrict || selectedPermitForModification?.application?.district || '',
+        sector: formData.waterSourceSector || selectedPermitForModification?.application?.sector || '',
+        cell: formData.waterSourceCell || selectedPermitForModification?.application?.cell || '',
+        project_title: formData.fullNameApplicant ? `Modification: ${formData.fullNameApplicant}` : `Modification: ${selectedPermitForModification?.permit_number}`,
+        project_description: formData.projectDescription || `Permit modification request for permit ${selectedPermitForModification?.permit_number}`,
+        sla_status: 'on_time',
+        is_modification: true,
+        modified_from_application_id: selectedPermitForModification?.application_id,
+        modification_changes: formData.modificationChanges || {},
+        internal_notes: JSON.stringify({
+          ...formData,
+          isModification: true,
+          originalPermitId: selectedPermitForModification?.id,
+          originalPermitNumber: selectedPermitForModification?.permit_number,
+          originalApplicationId: selectedPermitForModification?.application_id,
+        }),
+        intended_activities: formData.intendedActivities,
+      };
+      
+      let resultApplication;
+      
+      // If we already have a draft modification application, update it to submitted
+      if (currentModificationApplication?.id) {
+        const { applicant_id, ...updateData } = modificationApplicationData as any;
+        resultApplication = await updateApplication(currentModificationApplication.id, updateData);
+        console.log('✅ Modification application updated to submitted:', resultApplication);
+      } else {
+        // Create new modification application
+        resultApplication = await createApplication(modificationApplicationData);
+        console.log('✅ Modification application created:', resultApplication);
+      }
+      
+      if (resultApplication) {
+        // Fire-and-forget: send submission SMS + email
+        try {
+          fetch('/api/notifications/send-submission', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: resultApplication.id }),
+          }).catch(() => null)
+        } catch {}
+        
+        // Upload documents
+        await ensureStorageBucket();
+        const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, formData);
+        console.log(`📎 ${uploadedDocs.length} documents uploaded`);
+        
+        setSubmitSuccess(true);
+      } else {
+        throw new Error('Failed to submit modification application');
+      }
+    } catch (error) {
+      console.error('❌ Error submitting modification:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit modification request');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedPermitForModification, userProfile?.id, createApplication, updateApplication, currentModificationApplication]);
+
+  // Handle modification draft save
+  const handleModificationSaveAsDraft = useCallback(async (formData: any, status: 'draft') => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Use the actual application type based on intended activities, not 'modification'
+      const primaryActivity = formData.intendedActivities?.[0];
+      const modificationApplicationData: Partial<Application> = {
+        applicant_id: userProfile?.id,
+        status: 'draft',
+        application_type: formatApplicationTypeForDB(primaryActivity) || selectedPermitForModification?.application?.application_type || 'domestic',
+        water_source: formatWaterSourceForDB(formData.waterSourceType) || selectedPermitForModification?.water_source || 'other',
+        water_purpose: formatWaterPurposeForDB(primaryActivity) || selectedPermitForModification?.purpose || 'other',
+        province: formatProvinceForDB(formData.waterSourceProvince) || selectedPermitForModification?.application?.province || 'Kigali',
+        district: formData.waterSourceDistrict || selectedPermitForModification?.application?.district || '',
+        sector: formData.waterSourceSector || selectedPermitForModification?.application?.sector || '',
+        cell: formData.waterSourceCell || selectedPermitForModification?.application?.cell || '',
+        project_title: formData.fullNameApplicant ? `Modification: ${formData.fullNameApplicant}` : `Modification: ${selectedPermitForModification?.permit_number}`,
+        project_description: formData.projectDescription || `Permit modification request for permit ${selectedPermitForModification?.permit_number}`,
+        sla_status: 'on_time',
+        is_modification: true,
+        modified_from_application_id: selectedPermitForModification?.application_id,
+        modification_changes: formData.modificationChanges || {},
+        internal_notes: JSON.stringify({
+          ...formData,
+          isModification: true,
+          originalPermitId: selectedPermitForModification?.id,
+          originalPermitNumber: selectedPermitForModification?.permit_number,
+          originalApplicationId: selectedPermitForModification?.application_id,
+        }),
+        intended_activities: formData.intendedActivities,
+      };
+      
+      let result;
+      
+      // If we already have a modification application, update it; otherwise create new
+      if (currentModificationApplication?.id) {
+        // Update existing - don't send applicant_id on updates (can violate RLS)
+        const { applicant_id, ...updateData } = modificationApplicationData as any;
+        result = await updateApplication(currentModificationApplication.id, updateData);
+      } else {
+        // Create new modification application
+        result = await createApplication(modificationApplicationData);
+      }
+      
+      if (result) {
+        await ensureStorageBucket();
+        await uploadApplicationDocuments(result.id, formData);
+        
+        // Track the current modification application for payment tab
+        setCurrentModificationApplication(result);
+        
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2000);
+        
+        return result;
+      }
+    } catch (error) {
+      console.error('Error saving modification draft:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save draft');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedPermitForModification, userProfile?.id, createApplication, updateApplication, currentModificationApplication]);
   
   if (loadingDraft) {
     return (
@@ -819,7 +1016,7 @@ function NewApplicationContent() {
               Water Permit Application
             </h1>
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2 max-w-xl mx-auto">
-              Select the type of application you want to submit. You can apply for a new water use permit or transfer an existing permit.
+              Select the type of application you want to submit. You can apply for a new water use permit, modify an existing permit, or transfer a permit to another holder.
             </p>
           </div>
           
@@ -880,6 +1077,67 @@ function NewApplicationContent() {
             onSaveAsDraft={handleTransferSaveAsDraft}
             isLoading={isLoading}
             currentApplication={currentTransferApplication}
+          />
+        </>
+      );
+    }
+
+    // Modification mode - permit selection step
+    if (applicationMode === 'modification' && modificationStep === 'select-permit') {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Modify Water Use Permit
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Select the permit you want to modify. Only your active permits can be modified. The permit number will remain the same.
+            </p>
+          </div>
+          
+          <PermitSelectForModification 
+            userId={userProfile?.id}
+            onPermitSelect={handleModificationPermitSelect}
+            onCancel={handleModificationCancel}
+          />
+        </>
+      );
+    }
+
+    // Modification mode - fill form step
+    if (applicationMode === 'modification' && modificationStep === 'fill-form' && selectedPermitForModification) {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Modify Permit: {selectedPermitForModification.permit_number}
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Update the details of your existing permit. Modified fields will be tracked and reviewed. The permit number remains unchanged.
+            </p>
+            <div className="mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setModificationStep('select-permit')}
+                className="text-sm"
+              >
+                ← Select a different permit
+              </Button>
+            </div>
+          </div>
+          
+          <ApplicationForm 
+            userData={userData}
+            onSubmit={handleModificationSubmit}
+            onSaveAsDraft={handleModificationSaveAsDraft}
+            isLoading={isLoading}
+            initialData={initialFormData}
+            initialDocuments={initialDocuments}
+            mode="edit"
+            currentApplication={currentModificationApplication}
+            isModification={true}
+            originalApplicationData={originalApplicationData}
           />
         </>
       );

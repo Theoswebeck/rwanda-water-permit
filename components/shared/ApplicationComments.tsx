@@ -27,6 +27,10 @@ interface Comment {
 
 interface ApplicationCommentsProps {
   applicationId: string;
+  applicationStatus?: string;
+  applicationSubmittedAt?: string;
+  applicationCreatedAt?: string;
+  applicantName?: string;
 }
 
 type WorkflowEvent = {
@@ -50,7 +54,13 @@ function humanizeStatus(s?: string | null) {
     .join(" ");
 }
 
-export function ApplicationComments({ applicationId }: ApplicationCommentsProps) {
+export function ApplicationComments({ 
+  applicationId, 
+  applicationStatus,
+  applicationSubmittedAt,
+  applicationCreatedAt,
+  applicantName 
+}: ApplicationCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -191,6 +201,27 @@ export function ApplicationComments({ applicationId }: ApplicationCommentsProps)
             createdAt: r.created_at,
           };
         });
+
+        // Add synthetic "Application Submitted" event if no workflow history exists
+        // and we have application data (submitted status)
+        if (formatted.length === 0 && applicationStatus && applicationStatus !== 'draft') {
+          const submittedDate = applicationSubmittedAt || applicationCreatedAt;
+          if (submittedDate) {
+            const syntheticEvent: WorkflowEvent = {
+              id: 'synthetic-submission',
+              userId: null,
+              actorName: applicantName || 'Applicant',
+              actorRole: 'applicant',
+              avatar: applicantName ? applicantName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2) : 'AP',
+              fromStatus: 'draft',
+              toStatus: 'submitted',
+              action: 'submitted',
+              comment: 'Application submitted for review',
+              createdAt: submittedDate,
+            };
+            formatted.push(syntheticEvent);
+          }
+        }
 
         setEvents(formatted);
       } catch (e: any) {

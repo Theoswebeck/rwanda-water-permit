@@ -13,10 +13,11 @@ import {
   FilePlus, 
   ArrowLeftRight,
   FileCheck,
-  CheckCircle
+  CheckCircle,
+  FileEdit
 } from "lucide-react";
 
-export type ApplicationMode = 'new' | 'transfer';
+export type ApplicationMode = 'new' | 'transfer' | 'modification';
 
 interface ApplicationTypeSelectorProps {
   onSelect: (mode: ApplicationMode) => void;
@@ -34,6 +35,13 @@ export function ApplicationTypeSelector({
       description: 'Apply for a new water use permit for your project or facility. This is for first-time applications.',
       icon: FilePlus,
       color: 'blue',
+    },
+    {
+      mode: 'modification' as ApplicationMode,
+      title: 'Modify Existing Permit',
+      description: 'Request modifications to your existing water use permit. The permit number remains the same.',
+      icon: FileEdit,
+      color: 'amber',
     },
     {
       mode: 'transfer' as ApplicationMode,
@@ -61,7 +69,7 @@ export function ApplicationTypeSelector({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {options.map((option) => {
               const Icon = option.icon;
               const isSelected = selectedMode === option.mode;
@@ -73,6 +81,15 @@ export function ApplicationTypeSelector({
                     icon: 'text-blue-600 bg-blue-100',
                     check: 'text-blue-600',
                     button: 'bg-blue-600 hover:bg-blue-700',
+                  }
+                : option.color === 'amber'
+                ? {
+                    border: 'border-amber-500',
+                    bg: 'bg-amber-50',
+                    ring: 'ring-amber-200',
+                    icon: 'text-amber-600 bg-amber-100',
+                    check: 'text-amber-600',
+                    button: 'bg-amber-600 hover:bg-amber-700',
                   }
                 : {
                     border: 'border-purple-500',
@@ -117,7 +134,11 @@ export function ApplicationTypeSelector({
                         onSelect(option.mode);
                       }}
                     >
-                      {option.mode === 'new' ? 'Start New Application' : 'Transfer a Permit'}
+                      {option.mode === 'new' 
+                        ? 'Start New Application' 
+                        : option.mode === 'modification'
+                        ? 'Modify a Permit'
+                        : 'Transfer a Permit'}
                     </Button>
                   </CardContent>
                 </Card>

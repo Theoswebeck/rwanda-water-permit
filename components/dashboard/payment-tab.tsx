@@ -280,7 +280,15 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   };
 
   // Check if payment is already completed
-  const isPaymentCompleted = payment?.status === 'completed' || (application?.status !== 'draft' && application?.status !== 'pending_payment' && application?.status !== 'revision_required');
+  // IMPORTANT: If there's no application yet (undefined/null), payment is NOT completed
+  // Only consider payment completed if we have an application with a status beyond draft/pending_payment
+  const isPaymentCompleted = payment?.status === 'completed' || (
+    application?.id && 
+    application?.status && 
+    application.status !== 'draft' && 
+    application.status !== 'pending_payment' && 
+    application.status !== 'revision_required'
+  );
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
 

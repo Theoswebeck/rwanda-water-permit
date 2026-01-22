@@ -608,6 +608,42 @@ export default function ReviewApplicationPage() {
     router.push('/review');
   };
 
+  // Get application type badge for display - shows New, Modification, or Transfer
+  const getApplicationTypeBadge = () => {
+    if (!application) return null;
+    
+    const appType = application.application_type;
+    const isModification = appType === 'modification' || (application as any).is_modification === true;
+    const isTransfer = appType === 'transfer';
+    
+    let displayType: 'new' | 'modification' | 'transfer' = 'new';
+    if (isModification) displayType = 'modification';
+    else if (isTransfer) displayType = 'transfer';
+    
+    const typeConfig = {
+      'new': { 
+        label: 'New Application', 
+        className: 'bg-blue-100 text-blue-700 border-blue-300' 
+      },
+      'modification': { 
+        label: 'Modification', 
+        className: 'bg-amber-100 text-amber-700 border-amber-300' 
+      },
+      'transfer': { 
+        label: 'Transfer', 
+        className: 'bg-purple-100 text-purple-700 border-purple-300' 
+      },
+    };
+    
+    const config = typeConfig[displayType];
+    
+    return (
+      <Badge variant="outline" className={`${config.className} text-xs font-medium px-2 py-0.5 rounded-full border`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
   const getStatusBadge = (status: ApplicationStatus) => {
     // Keep flexible to avoid runtime issues if DB gains new statuses.
     const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
@@ -709,10 +745,11 @@ export default function ReviewApplicationPage() {
             </div>
             
             <div className="space-y-2">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
                   Application Review: {application.application_number}
                 </h1>
+                {getApplicationTypeBadge()}
                 {getStatusBadge(application.status)}
               </div>
 
@@ -936,7 +973,17 @@ export default function ReviewApplicationPage() {
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
-              {application.id && <ApplicationComments applicationId={application.id} />}
+              {application.id && (
+                <ApplicationComments 
+                  applicationId={application.id}
+                  applicationStatus={application.status}
+                  applicationSubmittedAt={application.submitted_at ?? undefined}
+                  applicationCreatedAt={application.created_at}
+                  applicantName={(application as any).applicant?.first_name && (application as any).applicant?.last_name 
+                    ? `${(application as any).applicant.first_name} ${(application as any).applicant.last_name}`
+                    : (application as any).applicant?.company_name || application.project_title?.replace(' Water Permit Application', '') || undefined}
+                />
+              )}
             </TabsContent>
           </Tabs>
           </motion.div>

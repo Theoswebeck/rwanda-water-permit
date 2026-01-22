@@ -44,6 +44,7 @@ export type ApplicationType =
   | 'municipal' 
   | 'mining_water_use'
   | 'transfer'
+  | 'modification'
 
 export type WaterSourceType = 
   | 'borehole' 
@@ -302,6 +303,11 @@ export interface Application {
   rejection_reason?: string
   internal_notes?: string
   
+  // Modification tracking
+  is_modification?: boolean
+  modified_from_application_id?: string
+  modification_changes?: Record<string, { previous: any; current: any }>
+  
   // Joined relations (from Supabase queries with select joins)
   applicant?: any // User/applicant data when joined
   assigned_reviewer?: any
@@ -333,10 +339,11 @@ export interface Permit {
   // Conditions and restrictions
   conditions?: Json
   
-  // Transfer and renewal history
+  // Transfer, renewal, and modification history
   original_permit_id?: string
   is_renewal: boolean
   is_transfer: boolean
+  is_modification: boolean
   transfer_reason?: string
   
   // Monitoring requirements

@@ -14,6 +14,100 @@ export function formatProvinceForDB(province: string): Application['province'] |
   return provinceMap[province] || provinceMap[province.toLowerCase()] || undefined;
 }
 
+// Helper function to map form water source types to database enum values
+// Database enum: 'borehole', 'surface_water', 'river', 'groundwater', 'lake', 'spring', 'other'
+export function formatWaterSourceForDB(waterSourceType: string): Application['water_source'] {
+  if (!waterSourceType) return 'other';
+  const waterSourceMap: Record<string, Application['water_source']> = {
+    // Direct mappings to valid DB enum values
+    'lake': 'lake',
+    'spring': 'spring',
+    'borehole': 'borehole',
+    'river': 'river',
+    'groundwater': 'groundwater',
+    'surface_water': 'surface_water',
+    'other': 'other',
+    // Form values that need mapping
+    'stream_river': 'river',
+    'stream': 'river',
+    'dam': 'surface_water',
+    'swamp': 'surface_water',
+    'reservoir': 'surface_water',
+    'wetland': 'surface_water',
+    'hydropower_source': 'surface_water',
+  };
+  return waterSourceMap[waterSourceType] || 'other';
+}
+
+// Helper function to map form activity types to database water_purpose enum values
+// Database enum: 'domestic', 'irrigation', 'industrial', 'livestock', 'aquaculture', 'recreation', 'electricity_generation', 'mining', 'municipal_supply', 'other'
+export function formatWaterPurposeForDB(activity: string): Application['water_purpose'] {
+  if (!activity) return 'other';
+  const purposeMap: Record<string, Application['water_purpose']> = {
+    // Direct mappings to valid DB enum values
+    'domestic': 'domestic',
+    'irrigation': 'irrigation',
+    'industrial': 'industrial',
+    'livestock': 'livestock',
+    'aquaculture': 'aquaculture',
+    'recreation': 'recreation',
+    'electricity_generation': 'electricity_generation',
+    'mining': 'mining',
+    'municipal_supply': 'municipal_supply',
+    'other': 'other',
+    // Form values that need mapping
+    'water_supply': 'domestic',
+    'fish_farming_lakes': 'aquaculture',
+    'fish_farming_ponds': 'aquaculture',
+    'coffee_washing': 'industrial',
+    'industry': 'industrial',
+    'electricity': 'electricity_generation',
+    'construction': 'industrial',
+    'construction_of_dam': 'industrial',
+    'construction_of_infrastructures': 'industrial',
+    'navigation': 'recreation',
+    'recreation_activities': 'recreation',
+    'gaz_extraction': 'industrial',
+  };
+  return purposeMap[activity] || 'other';
+}
+
+// Helper function to map form activity types to database application_type enum values
+// Database enum: 'domestic', 'industrial', 'agricultural', 'commercial', 'municipal', 'mining_water_use', 'transfer', 'modification'
+export function formatApplicationTypeForDB(activity: string): Application['application_type'] {
+  if (!activity) return 'domestic';
+  const typeMap: Record<string, Application['application_type']> = {
+    // Direct mappings to valid DB enum values
+    'domestic': 'domestic',
+    'industrial': 'industrial',
+    'agricultural': 'agricultural',
+    'commercial': 'commercial',
+    'municipal': 'municipal',
+    'mining_water_use': 'mining_water_use',
+    // Form activity values that need mapping
+    'irrigation': 'agricultural',
+    'water_supply': 'domestic',
+    'aquaculture': 'agricultural',
+    'fish_farming_lakes': 'agricultural',
+    'fish_farming_ponds': 'agricultural',
+    'coffee_washing': 'industrial',
+    'industry': 'industrial',
+    'electricity': 'industrial',
+    'electricity_generation': 'industrial',
+    'mining': 'mining_water_use',
+    'construction': 'industrial',
+    'construction_of_dam': 'industrial',
+    'construction_of_infrastructures': 'industrial',
+    'navigation': 'commercial',
+    'recreation': 'commercial',
+    'recreation_activities': 'commercial',
+    'livestock': 'agricultural',
+    'gaz_extraction': 'industrial',
+    'other': 'domestic',
+  };
+  return typeMap[activity] || 'domestic';
+}
+
 // Mapping function to transform form data to database schema
 export function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft', userId?: string): Partial<Application> {
   // Handle coordinates: support single polygon (legacy waterSourceCoordinates) and multi-polygons (waterSourcePolygons)
@@ -315,6 +409,13 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
         contact: formData.emailAddress || 'Not provided'
       }
     }),
+    
+    // Modification tracking fields (only set if this is a modification request)
+    ...(formData.isModification ? {
+      is_modification: true,
+      modified_from_application_id: formData.originalApplicationId,
+      modification_changes: formData.modificationChanges,
+    } : {}),
     
     // SLA tracking
     sla_status: 'on_time' as const,

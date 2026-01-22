@@ -139,7 +139,48 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
     });
   };
 
-  const formatApplicationType = (type: string) => {
+  // Format application type for display
+  // For modification/transfer types, try to show a more meaningful type based on intended activities or water purpose
+  const formatApplicationType = (type: string, app?: Application) => {
+    // If it's a modification or transfer, try to get a better type from intended_activities or water_purpose
+    if ((type === 'modification' || type === 'transfer') && app) {
+      const activities = app.intended_activities as string[] | null;
+      const primaryActivity = activities?.[0] || app.water_purpose;
+      
+      if (primaryActivity) {
+        // Map activity to display type
+        const activityToType: Record<string, string> = {
+          'mining': 'Mining Water Use',
+          'irrigation': 'Agricultural',
+          'livestock': 'Agricultural',
+          'aquaculture': 'Agricultural',
+          'fish_farming_lakes': 'Agricultural',
+          'fish_farming_ponds': 'Agricultural',
+          'coffee_washing': 'Industrial',
+          'industry': 'Industrial',
+          'industrial': 'Industrial',
+          'electricity_generation': 'Industrial',
+          'construction_of_dam': 'Industrial',
+          'construction_of_infrastructures': 'Industrial',
+          'gaz_extraction': 'Industrial',
+          'navigation': 'Commercial',
+          'recreation': 'Commercial',
+          'recreation_activities': 'Commercial',
+          'domestic': 'Domestic',
+          'water_supply': 'Domestic',
+          'municipal_supply': 'Municipal',
+        };
+        
+        const betterType = activityToType[primaryActivity];
+        if (betterType) {
+          // Append (Modification) or (Transfer) suffix to indicate the type
+          const suffix = type === 'modification' ? ' (Mod)' : ' (Transfer)';
+          return betterType + suffix;
+        }
+      }
+    }
+    
+    // Default formatting
     return type
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -243,7 +284,7 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
                             {application.application_number || application.id.slice(0, 8)}
                           </h4>
                           <p className="text-xs text-muted-foreground">
-                            {formatApplicationType(application.application_type)}
+                            {formatApplicationType(application.application_type, application)}
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {application.district}, {application.province}

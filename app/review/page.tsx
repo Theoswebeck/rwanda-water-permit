@@ -499,6 +499,40 @@ export default function ReviewerDashboard() {
       return labels[purpose] || purpose;
     };
 
+    // Get application type badge for display - shows New, Modification, or Transfer
+    const getApplicationTypeBadge = (app: ReviewApplication) => {
+      const appType = app.application_type;
+      const isModification = appType === 'modification' || (app as any).is_modification === true;
+      const isTransfer = appType === 'transfer';
+      
+      let displayType: 'new' | 'modification' | 'transfer' = 'new';
+      if (isModification) displayType = 'modification';
+      else if (isTransfer) displayType = 'transfer';
+      
+      const typeConfig = {
+        'new': { 
+          label: 'New Application', 
+          className: 'bg-blue-50 text-blue-700 border-blue-200' 
+        },
+        'modification': { 
+          label: 'Modification', 
+          className: 'bg-amber-50 text-amber-700 border-amber-200' 
+        },
+        'transfer': { 
+          label: 'Transfer', 
+          className: 'bg-purple-50 text-purple-700 border-purple-200' 
+        },
+      };
+      
+      const config = typeConfig[displayType];
+      
+      return (
+        <Badge variant="outline" className={`${config.className} text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap`}>
+          {config.label}
+        </Badge>
+      );
+    };
+
     const getReviewStatusBadge = (status: string) => {
       const statusConfig = {
         'pending_review': {
@@ -595,18 +629,19 @@ export default function ReviewerDashboard() {
             <Table className="w-full">
           <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[10%]">90-day</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[35%] hidden md:table-cell">Location & Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden md:table-cell">Location</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -638,6 +673,9 @@ export default function ReviewerDashboard() {
                         <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {getWaterPurposeLabel(app.water_purpose || '')}
                         </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        {getApplicationTypeBadge(app)}
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>

@@ -12,8 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PlusCircle, FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList } from "lucide-react";
-import Link from "next/link";
+import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import dynamic from "next/dynamic";
 import { PermitSelectModal } from "@/components/dashboard/permit-select-modal";
 // ⚡ PERFORMANCE: Use React Query hooks for automatic caching
@@ -77,6 +84,7 @@ function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationSt
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { user } = useAuth();
   const initialTab = searchParams.get('tab') === 'permits' ? 'permits' : 'applications';
   const [activeTab, setActiveTab] = useState<"applications" | "permits">(initialTab);
@@ -206,22 +214,46 @@ function DashboardContent() {
                   Manage your water permit applications and view your permits
                 </p>
               </div>
-              <div className="flex items-center space-x-2 gap-2">
-                <Link href="/dashboard/new-application">
-                  <Button>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    New Application
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button className="gap-2">
+                    Quick Actions
+                    <ChevronDown className="h-4 w-4" />
                   </Button>
-                </Link>
-                <Button 
-                  variant="outline"
-                  onClick={() => setShowPermitSelectModal(true)}
-                  disabled={databasePermits.length === 0}
-                >
-                  <ClipboardList className="mr-2 h-4 w-4" />
-                  Water Use Reporting
-                </Button>
-              </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuItem 
+                    onClick={() => router.push("/dashboard/new-application?mode=new")}
+                    className="cursor-pointer"
+                  >
+                    <FilePlus className="mr-2 h-4 w-4" />
+                    New Water Permit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => router.push("/dashboard/new-application?mode=modification")}
+                    className="cursor-pointer"
+                  >
+                    <FileEdit className="mr-2 h-4 w-4" />
+                    Modify Existing Permit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => router.push("/dashboard/new-application?mode=transfer")}
+                    className="cursor-pointer"
+                  >
+                    <ArrowLeftRight className="mr-2 h-4 w-4" />
+                    Transfer Existing Permit
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => setShowPermitSelectModal(true)}
+                    disabled={databasePermits.length === 0}
+                    className="cursor-pointer"
+                  >
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    Water Use Reporting
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* Success Alert */}
