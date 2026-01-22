@@ -139,6 +139,21 @@ export function AllApplicationsList() {
     return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">{daysRemaining}d</Badge>;
   };
 
+  // Get application type badge (New, Modification, Transfer)
+  const getAppTypeBadge = (app: ApplicationWithApplicant) => {
+    const appType = app.application_type;
+    const isModification = appType === 'modification' || (app as any).is_modification === true;
+    const isTransfer = appType === 'transfer';
+    
+    if (isModification) {
+      return <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">Mod</Badge>;
+    }
+    if (isTransfer) {
+      return <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0">Transfer</Badge>;
+    }
+    return <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0">New</Badge>;
+  };
+
   const getApplicantName = (app: ApplicationWithApplicant) => {
     if (app.applicant?.account_type === 'individual') {
       return `${app.applicant.first_name} ${app.applicant.last_name}`;
@@ -288,11 +303,10 @@ export function AllApplicationsList() {
                   <TableHead>Date</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Applicant</TableHead>
-                  <TableHead>Type & Source</TableHead>
-                  <TableHead>Location</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="hidden lg:table-cell">Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>90-day</TableHead>
-                  <TableHead>SLA</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -317,12 +331,9 @@ export function AllApplicationsList() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <div className="text-sm font-medium">{application.application_type}</div>
-                        <div className="text-xs text-muted-foreground">{application.water_source}</div>
-                      </div>
+                      {getAppTypeBadge(application)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <div className="text-sm flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
                         {application.district}, {application.province}
@@ -333,9 +344,6 @@ export function AllApplicationsList() {
                     </TableCell>
                     <TableCell>
                       {get90DayBadge(application.deadline_90_days_remaining)}
-                    </TableCell>
-                    <TableCell>
-                      {getSLABadge(application.sla_days_remaining)}
                     </TableCell>
                     <TableCell>
                       <Link href={`/approver/application/${application.application_number}`}>

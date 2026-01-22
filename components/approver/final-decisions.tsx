@@ -226,6 +226,20 @@ export function FinalDecisions() {
     );
   };
 
+  // Get application type badge (New, Modification, Transfer)
+  const getAppTypeBadge = (applicationType: string) => {
+    const isModification = applicationType === 'modification';
+    const isTransfer = applicationType === 'transfer';
+    
+    if (isModification) {
+      return <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">Mod</Badge>;
+    }
+    if (isTransfer) {
+      return <Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0">Transfer</Badge>;
+    }
+    return <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0">New</Badge>;
+  };
+
   const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject" | "return_to_assessment") => {
     try {
       setSubmitting(true);
@@ -369,11 +383,10 @@ export function FinalDecisions() {
                   <TableHead>Date</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Applicant</TableHead>
-                  <TableHead>Type & Source</TableHead>
-                  <TableHead>Location</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="hidden lg:table-cell">Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>90-day</TableHead>
-                  <TableHead>SLA</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -398,12 +411,9 @@ export function FinalDecisions() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <div className="text-sm">{application.applicationType}</div>
-                        <div className="text-xs text-muted-foreground">{application.waterSource}</div>
-                      </div>
+                      {getAppTypeBadge(application.applicationType)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden lg:table-cell">
                       <div className="text-sm text-muted-foreground flex items-center">
                         <MapPin className="h-3 w-3 mr-1" />
                         {application.location}
@@ -414,9 +424,6 @@ export function FinalDecisions() {
                     </TableCell>
                     <TableCell>
                       {get90DayBadge(application.deadline_90_days_remaining)}
-                    </TableCell>
-                    <TableCell>
-                      {getSLABadge(application)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">

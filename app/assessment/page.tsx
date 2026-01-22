@@ -389,6 +389,21 @@ export default function AssessmentDashboard() {
       );
     };
 
+    // Get application type badge (New, Modification, Transfer)
+    const getAppTypeBadge = (app: AssessmentApplication) => {
+      const appType = app.application_type;
+      const isModification = appType === 'modification' || (app as any).is_modification === true;
+      const isTransfer = appType === 'transfer';
+      
+      if (isModification) {
+        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
+      }
+      if (isTransfer) {
+        return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
+      }
+      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 whitespace-nowrap">New</Badge>;
+    };
+
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
@@ -401,19 +416,20 @@ export default function AssessmentDashboard() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[10%]">90-day</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Application</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[25%]">Applicant</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[15%]">Status</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[35%] hidden md:table-cell">Location & Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden lg:table-cell">Location</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -455,21 +471,18 @@ export default function AssessmentDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
+                        {getAppTypeBadge(app)}
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">
                           {getAssessmentStatusBadge(app.status)}
                         </div>
                       </TableCell>
-                      <TableCell className="p-2 sm:p-3 hidden md:table-cell">
-                        <div className="flex items-center gap-1 mb-1">
+                      <TableCell className="p-2 sm:p-3 hidden lg:table-cell">
+                        <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
                           <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
                             {getLocationString(app)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Droplets className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
-                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                            {getWaterSourceLabel(app.water_source || '')}
                           </span>
                         </div>
                       </TableCell>
