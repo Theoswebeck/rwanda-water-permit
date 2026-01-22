@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight } from "lucide-react";
+import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -229,6 +229,13 @@ function DashboardContent() {
                     >
                       <FilePlus className="mr-2 h-4 w-4" />
                       New Water Permit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => router.push("/dashboard/new-application?mode=renewal")}
+                      className="cursor-pointer"
+                    >
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Renew Existing Permit
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => router.push("/dashboard/new-application?mode=modification")}

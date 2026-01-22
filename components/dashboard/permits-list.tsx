@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -23,7 +24,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Eye, Download, AlertCircle, Search, Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Eye, AlertCircle, Search, Loader2, List } from "lucide-react";
 import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
 import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
 import { supabase } from "@/lib/supabase";
@@ -48,13 +56,153 @@ interface PermitsListProps {
   permits: Permit[];
 }
 
+type PermitApplicationListItem = {
+  id: string;
+  application_number?: string | null;
+  project_title?: string | null;
+  status?: string | null;
+  application_type?: string | null;
+  created_at?: string | null;
+  submitted_at?: string | null;
+  is_renewal?: boolean | null;
+  is_modification?: boolean | null;
+  kind: "original" | "renewal" | "modification" | "transfer";
+};
+
 export function PermitsList({ permits }: PermitsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [busyPermitId, setBusyPermitId] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<"view" | "download" | null>(null);
+  const [busyAction, setBusyAction] = useState<"view" | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+
+  // Applications dialog state (permit-linked applications list)
+  const [appsDialogOpen, setAppsDialogOpen] = useState(false);
+  const [appsPermit, setAppsPermit] = useState<Permit | null>(null);
+  const [appsBusyPermitId, setAppsBusyPermitId] = useState<string | null>(null);
+  const [appsLoading, setAppsLoading] = useState(false);
+  const [appsError, setAppsError] = useState<string | null>(null);
+  const [appsList, setAppsList] = useState<PermitApplicationListItem[]>([]);
+
+  const appSelectFields =
+    "id, application_number, project_title, status, application_type, created_at, submitted_at, is_renewal, is_modification";
+
+  const fetchPermitApplications = async (permitId: string) => {
+    const { data: permitRow, error: permitError } = await supabase
+      .from("permits")
+      .select("id, application_id, permit_number")
+      .eq("id", permitId)
+      .single();
+
+    if (permitError || !permitRow) throw permitError ?? new Error("Permit not found");
+
+    const originalApplicationId = (permitRow as any).application_id as string | undefined;
+
+    const items: PermitApplicationListItem[] = [];
+
+    // Original application (the one that created this permit)
+    if (originalApplicationId) {
+      const { data: original, error: originalError } = await supabase
+        .from("applications")
+        .select(appSelectFields)
+        .eq("id", originalApplicationId)
+        .maybeSingle();
+
+      if (!originalError && original) {
+        items.push({
+          ...(original as any),
+          kind: "original",
+        });
+      }
+
+      // Modifications are linked by modified_from_application_id
+      const { data: modifications, error: modError } = await supabase
+        .from("applications")
+        .select(appSelectFields)
+        .eq("modified_from_application_id", originalApplicationId)
+        .order("created_at", { ascending: false });
+
+      if (!modError && modifications?.length) {
+        for (const app of modifications as any[]) {
+          items.push({ ...(app as any), kind: "modification" });
+        }
+      }
+    }
+
+    // Renewals are linked by renewed_from_permit_id (fallback: internal_notes contains originalPermitId)
+    let renewalApps: any[] = [];
+    try {
+      const { data: renewals, error: renewalsError } = await supabase
+        .from("applications")
+        .select(appSelectFields)
+        .eq("renewed_from_permit_id", permitId)
+        .order("created_at", { ascending: false });
+
+      if (!renewalsError && renewals?.length) renewalApps = renewals as any[];
+    } catch {
+      // ignore - fallback below
+    }
+
+    if (renewalApps.length === 0) {
+      // Fallback for environments where renewed_from_permit_id isn't available
+      const { data: renewalsFallback, error: renewalsFallbackError } = await supabase
+        .from("applications")
+        .select(appSelectFields)
+        .eq("is_renewal", true)
+        .ilike("internal_notes", `%\"originalPermitId\":\"${permitId}\"%`)
+        .order("created_at", { ascending: false });
+
+      if (!renewalsFallbackError && renewalsFallback?.length) renewalApps = renewalsFallback as any[];
+    }
+
+    for (const app of renewalApps) {
+      items.push({ ...(app as any), kind: "renewal" });
+    }
+
+    // Transfers are tracked in internal_notes with originalPermitId (application_type = transfer)
+    const { data: transfers, error: transferError } = await supabase
+      .from("applications")
+      .select(appSelectFields)
+      .eq("application_type", "transfer")
+      .ilike("internal_notes", `%\"originalPermitId\":\"${permitId}\"%`)
+      .order("created_at", { ascending: false });
+
+    if (!transferError && transfers?.length) {
+      for (const app of transfers as any[]) {
+        items.push({ ...(app as any), kind: "transfer" });
+      }
+    }
+
+    // De-dupe and sort (newest first)
+    const deduped = Array.from(new Map(items.map((i) => [i.id, i])).values()).sort((a, b) => {
+      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return db - da;
+    });
+
+    return deduped;
+  };
+
+  const openApplicationsDialog = async (permit: Permit) => {
+    setAppsPermit(permit);
+    setAppsDialogOpen(true);
+    setAppsLoading(true);
+    setAppsError(null);
+    setAppsList([]);
+    setAppsBusyPermitId(permit.id);
+
+    try {
+      const list = await fetchPermitApplications(permit.id);
+      setAppsList(list);
+    } catch (e) {
+      console.error("❌ Failed to load permit applications:", e);
+      setAppsError("Failed to load applications for this permit. Please try again.");
+    } finally {
+      setAppsLoading(false);
+      setAppsBusyPermitId(null);
+    }
+  };
 
   /**
    * Generate permit PDF on-demand if it doesn't exist.
@@ -295,38 +443,17 @@ export function PermitsList({ permits }: PermitsListProps) {
                         variant="ghost"
                         size="sm"
                         className="text-gray-600 hover:text-gray-900"
-                        disabled={busyPermitId === permit.id || generatingPdf === permit.id}
+                        disabled={appsBusyPermitId === permit.id}
                         onClick={async () => {
-                          try {
-                            setBusyPermitId(permit.id);
-                            setBusyAction("download");
-                            
-                            const blob = await getPermitPdfBlob(permit);
-                            if (!blob) throw new Error("Failed to get permit PDF");
-
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = `permit-${permit.permitNumber}.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                          } catch (e) {
-                            console.error("❌ Failed to download permit PDF:", e);
-                            alert("Failed to download permit PDF. Please try again.");
-                          } finally {
-                            setBusyPermitId(null);
-                            setBusyAction(null);
-                          }
+                          await openApplicationsDialog(permit);
                         }}
                       >
-                        {generatingPdf === permit.id ? (
+                        {appsBusyPermitId === permit.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Download className="h-4 w-4" />
+                          <List className="h-4 w-4" />
                         )}
-                        <span className="sr-only">Download</span>
+                        <span className="sr-only">Applications</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -365,9 +492,7 @@ export function PermitsList({ permits }: PermitsListProps) {
                       <div className="mt-1 text-xs text-muted-foreground">
                         {generatingPdf === permit.id 
                           ? "Generating PDF…" 
-                          : busyAction === "download" 
-                            ? "Downloading…" 
-                            : "Opening…"}
+                          : "Opening…"}
                       </div>
                     ) : null}
                   </TableCell>
@@ -395,6 +520,102 @@ export function PermitsList({ permits }: PermitsListProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
+      <Dialog
+        open={appsDialogOpen}
+        onOpenChange={(open) => {
+          setAppsDialogOpen(open);
+          if (!open) {
+            setAppsPermit(null);
+            setAppsError(null);
+            setAppsList([]);
+            setAppsLoading(false);
+            setAppsBusyPermitId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>
+              Applications linked to permit {appsPermit?.permitNumber ?? ""}
+            </DialogTitle>
+            <DialogDescription>
+              This includes the original application and any renewal, modification, or transfer requests associated with this permit.
+            </DialogDescription>
+          </DialogHeader>
+
+          {appsLoading ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Loading applications…
+            </div>
+          ) : appsError ? (
+            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+              {appsError}
+            </div>
+          ) : appsList.length === 0 ? (
+            <div className="rounded-md border p-4 text-sm text-muted-foreground">
+              No applications are linked to this permit yet.
+            </div>
+          ) : (
+            <div className="max-h-[60vh] overflow-auto rounded-md border">
+              <div className="divide-y">
+                {appsList.map((app) => {
+                  const title = app.project_title || "Untitled application";
+                  const number = app.application_number || app.id.slice(0, 8);
+                  const kindLabel =
+                    app.kind === "original"
+                      ? "Original"
+                      : app.kind === "renewal"
+                        ? "Renewal"
+                        : app.kind === "modification"
+                          ? "Modification"
+                          : "Transfer";
+
+                  return (
+                    <div key={app.id} className="flex items-start justify-between gap-4 p-4">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-gray-900">{number}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {kindLabel}
+                          </Badge>
+                          {app.status ? (
+                            <Badge variant="secondary" className="text-xs">
+                              {String(app.status).replace(/_/g, " ")}
+                            </Badge>
+                          ) : null}
+                          {app.application_type ? (
+                            <Badge variant="outline" className="text-xs text-muted-foreground">
+                              {String(app.application_type).replace(/_/g, " ")}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className="mt-1 truncate text-sm text-muted-foreground">{title}</div>
+                        {app.submitted_at || app.created_at ? (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {app.submitted_at
+                              ? `Submitted: ${new Date(app.submitted_at).toLocaleDateString()}`
+                              : app.created_at
+                                ? `Created: ${new Date(app.created_at).toLocaleDateString()}`
+                                : null}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="shrink-0">
+                        <Button asChild variant="outline" size="sm">
+                          <Link href={`/dashboard/application/${app.id}`}>Open</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Card className="border-0 shadow-sm">
         <CardHeader className="px-6 pt-6 pb-3">
           <CardTitle>Your Permits</CardTitle>

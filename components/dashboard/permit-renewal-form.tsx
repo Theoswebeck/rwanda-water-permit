@@ -40,8 +40,9 @@ import {
   CheckSquare
 } from "lucide-react";
 import { PaymentTab } from "@/components/dashboard/payment-tab";
+import { WaterUseReportForm } from "@/components/dashboard/water-use-report-form";
 import type { PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
-import type { Application } from "@/types/database";
+import type { Application, WaterUseReportTemplate } from "@/types/database";
 import { supabase } from "@/lib/supabase";
 
 interface PermitRenewalFormProps {
@@ -86,15 +87,22 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   
-  // Water use report state
-  const [waterUseReportData, setWaterUseReportData] = useState<any>({
-    reportingYear: new Date().getFullYear() - 1,
-    operationalStatus: "",
-    actualUsageVolume: "",
-    usageUnit: "m³/year",
-    waterQualityStatus: "",
-    complianceNotes: "",
-  });
+  // Water use report state - full report data from WaterUseReportForm
+  const [waterUseReportData, setWaterUseReportData] = useState<any>(null);
+  const [waterUseReportSubmitted, setWaterUseReportSubmitted] = useState(false);
+  
+  // Determine template type based on permit's intended activities
+  const waterUseTemplate: WaterUseReportTemplate = useMemo(() => {
+    const activities = permit.application?.intended_activities || [];
+    // Fish farming activities use 'concession' template
+    if (activities.some((a: string) => 
+      a?.toLowerCase().includes('fish') || 
+      a?.toLowerCase().includes('aquaculture')
+    )) {
+      return 'concession';
+    }
+    return 'abstraction';
+  }, [permit.application?.intended_activities]);
   
   // Attachment state
   const [renewalLetter, setRenewalLetter] = useState<File | null>(null);
@@ -109,17 +117,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     payment: false,
   });
 
-  // Check if water use report is complete
+  // Check if water use report is complete (submitted)
   useEffect(() => {
-    const isReportComplete = 
-      waterUseReportData.operationalStatus &&
-      waterUseReportData.actualUsageVolume;
-    
     setTabsCompleted(prev => ({
       ...prev,
-      "water-use-report": isReportComplete,
+      "water-use-report": waterUseReportSubmitted,
     }));
-  }, [waterUseReportData]);
+  }, [waterUseReportSubmitted]);
 
   // Check if attachments are complete
   useEffect(() => {
@@ -393,27 +397,6 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
                     <Separator />
 
-                    {/* Required Documents */}
-                    <div className="space-y-3">
-                      <h3 className="font-semibold text-gray-900">Required Documents</h3>
-                      <ul className="space-y-2">
-                        <li className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          Letter requesting permit renewal (PDF or image)
-                        </li>
-                        <li className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          Water use report for the permit period
-                        </li>
-                        <li className="flex items-center gap-2 text-sm">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                          IremboPay payment of {RENEWAL_FEE.toLocaleString()} RWF
-                        </li>
-                      </ul>
-                    </div>
-
-                    <Separator />
-
                     {/* Important Notes */}
                     <div className="space-y-3">
                       <h3 className="font-semibold text-gray-900">Important Notes</h3>
@@ -490,185 +473,45 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
               </div>
             </TabsContent>
 
-            {/* TAB 2: Water Use Report */}
+            {/* TAB 2: Water Use Report - Full Form */}
             <TabsContent value="water-use-report" className="mt-6">
               <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      Annual Water Use Report
-                    </CardTitle>
-                    <CardDescription>
-                      Provide information about your water usage during the permit period. 
-                      This report helps track compliance and informs the renewal decision.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Reporting Year */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="reportingYear">Reporting Year *</Label>
-                        <Input
-                          id="reportingYear"
-                          type="number"
-                          min={2020}
-                          max={new Date().getFullYear()}
-                          value={waterUseReportData.reportingYear}
-                          onChange={(e) =>
-                            setWaterUseReportData((prev: any) => ({
-                              ...prev,
-                              reportingYear: parseInt(e.target.value) || new Date().getFullYear() - 1,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="operationalStatus">Operational Status *</Label>
-                        <select
-                          id="operationalStatus"
-                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                          value={waterUseReportData.operationalStatus}
-                          onChange={(e) =>
-                            setWaterUseReportData((prev: any) => ({
-                              ...prev,
-                              operationalStatus: e.target.value,
-                            }))
-                          }
-                        >
-                          <option value="">Select status...</option>
-                          <option value="fully_operational">Fully Operational</option>
-                          <option value="partially_operational">Partially Operational</option>
-                          <option value="temporarily_suspended">Temporarily Suspended</option>
-                          <option value="not_operational">Not Operational</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Actual Usage */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <Label htmlFor="actualUsageVolume">Actual Water Usage Volume *</Label>
-                        <Input
-                          id="actualUsageVolume"
-                          type="number"
-                          placeholder="e.g., 50000"
-                          value={waterUseReportData.actualUsageVolume}
-                          onChange={(e) =>
-                            setWaterUseReportData((prev: any) => ({
-                              ...prev,
-                              actualUsageVolume: e.target.value,
-                            }))
-                          }
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Total water volume used during the reporting year
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="usageUnit">Usage Unit</Label>
-                        <select
-                          id="usageUnit"
-                          className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                          value={waterUseReportData.usageUnit}
-                          onChange={(e) =>
-                            setWaterUseReportData((prev: any) => ({
-                              ...prev,
-                              usageUnit: e.target.value,
-                            }))
-                          }
-                        >
-                          <option value="m³/year">m³/year (Cubic meters per year)</option>
-                          <option value="m³/day">m³/day (Cubic meters per day)</option>
-                          <option value="liters/day">Liters/day</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {/* Comparison with permitted */}
-                    <div className="p-4 bg-slate-50 rounded-lg border">
-                      <h4 className="font-medium mb-3">Usage Comparison</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Permitted Allowance:</span>
-                          <p className="font-semibold">{permit.water_allowance?.toLocaleString() || "N/A"} {permit.allowance_unit}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Reported Usage:</span>
-                          <p className="font-semibold">
-                            {waterUseReportData.actualUsageVolume 
-                              ? `${parseFloat(waterUseReportData.actualUsageVolume).toLocaleString()} ${waterUseReportData.usageUnit}`
-                              : "Not entered"
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Water Quality */}
-                    <div className="space-y-2">
-                      <Label htmlFor="waterQualityStatus">Water Quality Status</Label>
-                      <select
-                        id="waterQualityStatus"
-                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                        value={waterUseReportData.waterQualityStatus}
-                        onChange={(e) =>
-                          setWaterUseReportData((prev: any) => ({
-                            ...prev,
-                            waterQualityStatus: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Select quality status...</option>
-                        <option value="good">Good - Meets all standards</option>
-                        <option value="acceptable">Acceptable - Minor issues</option>
-                        <option value="needs_improvement">Needs Improvement</option>
-                        <option value="not_tested">Not Tested</option>
-                      </select>
-                    </div>
-
-                    {/* Compliance Notes */}
-                    <div className="space-y-2">
-                      <Label htmlFor="complianceNotes">Additional Notes / Compliance Information</Label>
-                      <Textarea
-                        id="complianceNotes"
-                        placeholder="Provide any additional information about your water usage, challenges faced, or compliance measures taken..."
-                        rows={4}
-                        value={waterUseReportData.complianceNotes}
-                        onChange={(e) =>
-                          setWaterUseReportData((prev: any) => ({
-                            ...prev,
-                            complianceNotes: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
+                {/* Embedded Full Water Use Report Form */}
+                <WaterUseReportForm
+                  permit={permit as any}
+                  template={waterUseTemplate}
+                  reportingYear={new Date().getFullYear() - 1}
+                  existingReport={null}
+                  onSaveAsDraft={async (data) => {
+                    setWaterUseReportData(data);
+                    // Don't mark as submitted on draft save
+                  }}
+                  onSubmit={async (data) => {
+                    setWaterUseReportData(data);
+                    setWaterUseReportSubmitted(true);
+                    // Auto-advance to next tab
+                    setActiveTab("attachments");
+                  }}
+                  isLoading={isSaving}
+                  isReadOnly={false}
+                />
 
                 {/* Navigation */}
-                <div className="flex justify-between">
+                <div className="flex justify-between pt-4 border-t">
                   <Button variant="outline" onClick={handleBack} className="gap-2">
                     <ArrowLeft className="h-4 w-4" />
-                    Back
+                    Back to Overview
                   </Button>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      onClick={handleSaveDraft}
-                      disabled={isSaving}
-                    >
-                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                      Save Draft
-                    </Button>
-                    <Button 
-                      onClick={handleNext} 
-                      className="bg-green-600 hover:bg-green-700 gap-2"
-                      disabled={!tabsCompleted["water-use-report"]}
-                    >
-                      Continue to Attachments
-                      <ArrowRight className="h-4 w-4" />
-                    </Button>
+                    {waterUseReportSubmitted && (
+                      <Button 
+                        onClick={handleNext} 
+                        className="bg-green-600 hover:bg-green-700 gap-2"
+                      >
+                        Continue to Attachments
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

@@ -522,10 +522,12 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
   };
   
   // Prefer the explicit persisted multi-select list if present.
+  let mappedActivity: string;
   if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
     formData.intendedActivities = (application as any).intended_activities;
+    mappedActivity = (application as any).intended_activities[0] || 'water_supply';
   } else {
-    const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
+    mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
     formData.intendedActivities = [mappedActivity];
   }
   

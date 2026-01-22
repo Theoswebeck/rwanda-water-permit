@@ -116,6 +116,8 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       miningEIA: 'environmental_impact_doc',
       miningHydrologicalReport: 'geological_survey',
       miningGeneralRequirements: 'other',
+      // Renewal documents
+      renewalRequestLetter: 'renewal_request_letter',
       // Irrigation documents
       irrigationGeneralRequirements: 'other',
       irrigationEIA: 'environmental_impact_doc',
@@ -255,6 +257,8 @@ function NewApplicationContent() {
   const searchParams = useSearchParams();
   const draftId = searchParams.get('id'); // Check if we're editing an existing draft
   const modeParam = searchParams.get('mode'); // Check if mode is specified (new or transfer)
+  const renewalApplicationId = searchParams.get('applicationId'); // For loading existing renewal drafts
+  const renewalPermitId = searchParams.get('permitId'); // For loading existing renewal drafts
   const { userProfile } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
@@ -284,9 +288,81 @@ function NewApplicationContent() {
   const [renewalStep, setRenewalStep] = useState<'select-permit' | 'fill-form'>('select-permit');
   const [selectedPermitForRenewal, setSelectedPermitForRenewal] = useState<RenewalPermitWithApplication | null>(null);
   const [currentRenewalApplication, setCurrentRenewalApplication] = useState<Application | null>(null);
+  const [loadingRenewalDraft, setLoadingRenewalDraft] = useState(!!renewalApplicationId);
   
   const { createApplication, updateApplication, getApplication } = useApplications();
   const { getDocuments } = useDocuments();
+  
+  // Load existing renewal application if applicationId and permitId are provided
+  useEffect(() => {
+    const loadRenewalDraft = async () => {
+      if (!renewalApplicationId || !renewalPermitId || applicationMode !== 'renewal') {
+        setLoadingRenewalDraft(false);
+        return;
+      }
+      
+      try {
+        setLoadingRenewalDraft(true);
+        setError(null);
+        
+        // Load the application and permit data in parallel
+        const [application, permitResult] = await Promise.all([
+          getApplication(renewalApplicationId),
+          supabase
+            .from('permits')
+            .select(`
+              *,
+              application:applications!application_id (
+                id,
+                application_number,
+                project_title,
+                province,
+                district,
+                sector,
+                cell,
+                village,
+                water_source,
+                water_purpose,
+                water_body_name,
+                max_daily_volume_m3,
+                max_yearly_volume_m3,
+                concession_area,
+                internal_notes,
+                intended_activities,
+                applicant:users!applicant_id (
+                  id,
+                  email,
+                  phone,
+                  first_name,
+                  last_name,
+                  company_name,
+                  company_address,
+                  company_phone,
+                  account_type
+                )
+              )
+            `)
+            .eq('id', renewalPermitId)
+            .single()
+        ]);
+        
+        if (application && permitResult.data) {
+          setCurrentRenewalApplication(application);
+          setSelectedPermitForRenewal(permitResult.data as RenewalPermitWithApplication);
+          setRenewalStep('fill-form');
+        } else {
+          setError('Failed to load renewal application data');
+        }
+      } catch (err) {
+        console.error('Error loading renewal draft:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load renewal draft');
+      } finally {
+        setLoadingRenewalDraft(false);
+      }
+    };
+    
+    loadRenewalDraft();
+  }, [renewalApplicationId, renewalPermitId, applicationMode, getApplication]);
   
   // Load existing draft if draftId is provided - OPTIMIZED
   useEffect(() => {
@@ -1332,6 +1408,76 @@ function NewApplicationContent() {
             currentApplication={currentModificationApplication}
             isModification={true}
             originalApplicationData={originalApplicationData}
+          />
+        </>
+      );
+    }
+
+    // Renewal mode - loading existing draft
+    if (applicationMode === 'renewal' && loadingRenewalDraft) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+          <span className="ml-3 text-sm text-muted-foreground">Loading renewal application...</span>
+        </div>
+      );
+    }
+
+    // Renewal mode - permit selection step (only if not loading from existing application)
+    if (applicationMode === 'renewal' && renewalStep === 'select-permit' && !renewalApplicationId) {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Renew Water Use Permit
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Select the permit you want to renew. Permits nearing expiration or recently expired are shown with urgency indicators.
+            </p>
+          </div>
+          
+          <PermitSelectForRenewal 
+            userId={userProfile?.id}
+            onPermitSelect={handleRenewalPermitSelect}
+            onCancel={handleRenewalCancel}
+          />
+        </>
+      );
+    }
+
+    // Renewal mode - fill form step
+    if (applicationMode === 'renewal' && renewalStep === 'fill-form' && selectedPermitForRenewal) {
+      return (
+        <>
+          <div>
+            <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+              Renew Permit: {selectedPermitForRenewal.permit_number}
+            </h1>
+            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+              Complete the renewal process for your water use permit. Submit your water use report, required documents, and payment.
+            </p>
+            {/* Only show "Select different permit" if this is a new renewal, not editing existing */}
+            {!renewalApplicationId && (
+              <div className="mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRenewalStep('select-permit')}
+                  className="text-sm"
+                >
+                  ← Select a different permit
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <PermitRenewalForm 
+            permit={selectedPermitForRenewal}
+            userData={renewalUserData}
+            onSubmit={handleRenewalSubmit}
+            onSaveAsDraft={handleRenewalSaveAsDraft}
+            isLoading={isLoading}
+            currentApplication={currentRenewalApplication}
           />
         </>
       );

@@ -414,7 +414,11 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                   <TableCell className="text-right px-6 py-4">
                     <div className="flex justify-end gap-1.5">
                       {(application.status === 'draft' || application.status === 'revision_required') && (
-                        <Link href={`/dashboard/edit-application/${application.id}`}>
+                        <Link href={
+                          (application as any).is_renewal 
+                            ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${(application as any).renewed_from_permit_id}`
+                            : `/dashboard/edit-application/${application.id}`
+                        }>
                           <Button 
                             variant="ghost" 
                             size="sm" 

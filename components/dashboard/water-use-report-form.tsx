@@ -267,21 +267,35 @@ export function WaterUseReportForm({
   ];
 
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-9 w-full">
-          {tabs.map(tab => (
-            <TabsTrigger 
-              key={tab.id} 
-              value={tab.id}
-              className="text-xs px-2"
-            >
-              <tab.icon className="h-3 w-3 mr-1 hidden sm:inline" />
-              <span className="hidden md:inline">{tab.label}</span>
-              <span className="md:hidden">{tab.id.replace('section', 'S')}</span>
-            </TabsTrigger>
-          ))}
-        </TabsList>
+    <Card className="border-2 border-blue-200">
+      <CardHeader className="bg-blue-50 border-b border-blue-200">
+        <CardTitle className="flex items-center gap-2 text-blue-900">
+          <BarChart3 className="h-5 w-5" />
+          Annual Water Use Report - {reportingYear}
+        </CardTitle>
+        <CardDescription className="text-blue-700">
+          Complete all 9 sections below. Click each tab to fill in the required information.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="pt-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          {/* Water Use Report Section Tabs - Made prominent */}
+          <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
+            <p className="text-sm font-medium text-slate-700 mb-3">📋 Report Sections (click to navigate):</p>
+            <TabsList className="flex flex-wrap gap-2 h-auto p-0 bg-transparent w-full">
+              {tabs.map((tab, index) => (
+                <TabsTrigger 
+                  key={tab.id} 
+                  value={tab.id}
+                  className="text-sm px-4 py-2.5 border border-slate-300 bg-white hover:bg-slate-100 rounded-md flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:border-blue-600"
+                >
+                  <span className="font-bold">{index + 1}.</span>
+                  <tab.icon className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
         {/* SECTION 1: General Information (Read-only, prefilled from permit) */}
         <TabsContent value="section1">
@@ -1662,13 +1676,14 @@ export function WaterUseReportForm({
         </div>
       )}
 
-      {/* Read-only message */}
-      {isReadOnly && (
-        <div className="flex items-center justify-center p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <Info className="h-5 w-5 text-amber-600 mr-2" />
-          <span className="text-amber-800">This report has been submitted and cannot be edited.</span>
-        </div>
-      )}
-    </div>
+        {/* Read-only message */}
+        {isReadOnly && (
+          <div className="flex items-center justify-center p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <Info className="h-5 w-5 text-amber-600 mr-2" />
+            <span className="text-amber-800">This report has been submitted and cannot be edited.</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

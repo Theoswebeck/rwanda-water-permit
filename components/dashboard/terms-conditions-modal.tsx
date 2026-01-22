@@ -218,72 +218,128 @@ export function TermsConditionsModal({
         throw new Error('This application has expired (6 months since submission). The permit can no longer be issued.');
       }
 
-      // Generate permit number
+      // Check if this is a renewal application
+      const isRenewalApplication = applicationData.is_renewal === true || 
+        (applicationData.internal_notes && (() => {
+          try {
+            const notes = JSON.parse(applicationData.internal_notes || '{}');
+            return notes.isRenewal === true;
+          } catch { return false; }
+        })());
       
-      // Create permit in database with comprehensive data
-      console.log('📝 Creating permit in database...');
-      const permitData_insert = {
-        application_id: applicationId,
-        status: 'active',
-        water_source: applicationData.water_source,
-        purpose: applicationData.water_purpose,
-        water_allowance: applicationData.estimated_usage_volume || 0,
-        allowance_unit: applicationData.usage_unit || 'm³',
-        issuing_authority: 'Rwanda Water Resources Board',
-        issued_date: new Date().toISOString().split('T')[0],
-        expiry_date: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 years
-        conditions: { 
-          conditions: [
-            'Comply with all environmental regulations', 
-            'Submit quarterly usage reports', 
-            'Allow inspections as required',
-            ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
-          ],
-          // Include location and polygon data for permit enforcement
-          location: {
-            province: applicationData.province,
-            district: applicationData.district,
-            sector: applicationData.sector,
-            cell: applicationData.cell,
-            village: applicationData.village,
-            coordinates: applicationData.coordinates,
-            description: applicationData.location_description
-          },
-          // Include project details
-          project: {
-            title: applicationData.project_title,
-            description: applicationData.project_description,
-            value: applicationData.project_value
-          }
+      const renewedFromPermitId = applicationData.renewed_from_permit_id || (() => {
+        try {
+          const notes = JSON.parse(applicationData.internal_notes || '{}');
+          return notes.originalPermitId;
+        } catch { return null; }
+      })();
+
+      let permitData: any;
+
+      if (isRenewalApplication && renewedFromPermitId) {
+        // RENEWAL: Update existing permit dates instead of creating new permit
+        console.log('🔄 Processing RENEWAL - updating existing permit:', renewedFromPermitId);
+        
+        const newIssuedDate = new Date().toISOString().split('T')[0];
+        const newExpiryDate = new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 5 years
+        
+        const { data: updatedPermit, error: updateError } = await supabase
+          .from('permits')
+          .update({
+            status: 'active',
+            issued_date: newIssuedDate,
+            expiry_date: newExpiryDate,
+            is_renewal: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', renewedFromPermitId)
+          .select()
+          .single() as { data: any; error: any };
+
+        if (updateError) {
+          console.error('❌ Error updating permit for renewal:', updateError);
+          throw updateError;
         }
-      };
+        
+        permitData = updatedPermit;
+        console.log('✅ Permit renewed successfully:', permitData.permit_number, 
+          '| New issued date:', newIssuedDate, 
+          '| New expiry date:', newExpiryDate);
+      } else {
+        // NEW PERMIT: Create permit in database with comprehensive data
+        console.log('📝 Creating NEW permit in database...');
+        const permitData_insert = {
+          application_id: applicationId,
+          status: 'active',
+          water_source: applicationData.water_source,
+          purpose: applicationData.water_purpose,
+          water_allowance: applicationData.estimated_usage_volume || 0,
+          allowance_unit: applicationData.usage_unit || 'm³',
+          issuing_authority: 'Rwanda Water Resources Board',
+          issued_date: new Date().toISOString().split('T')[0],
+          expiry_date: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 years
+          conditions: { 
+            conditions: [
+              'Comply with all environmental regulations', 
+              'Submit quarterly usage reports', 
+              'Allow inspections as required',
+              ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
+            ],
+            // Include location and polygon data for permit enforcement
+            location: {
+              province: applicationData.province,
+              district: applicationData.district,
+              sector: applicationData.sector,
+              cell: applicationData.cell,
+              village: applicationData.village,
+              coordinates: applicationData.coordinates,
+              description: applicationData.location_description
+            },
+            // Include project details
+            project: {
+              title: applicationData.project_title,
+              description: applicationData.project_description,
+              value: applicationData.project_value
+            }
+          }
+        };
 
-      console.log('📍 Permit data includes coordinates:', !!applicationData.coordinates);
-      if (applicationData.coordinates) {
-        console.log('🗺️ Coordinate type:', applicationData.coordinates.type);
+        console.log('📍 Permit data includes coordinates:', !!applicationData.coordinates);
+        if (applicationData.coordinates) {
+          console.log('🗺️ Coordinate type:', applicationData.coordinates.type);
+        }
+
+        const { data: newPermit, error: permitError } = await supabase
+          .from('permits')
+          .insert(permitData_insert as any)
+          .select()
+          .single() as { data: any; error: any };
+
+        if (permitError) {
+          console.error('❌ Error creating permit:', permitError);
+          throw permitError;
+        }
+        
+        permitData = newPermit;
+        console.log('✅ Permit created successfully:', permitData.permit_number);
       }
-
-      const { data: permitData, error: permitError } = await supabase
-        .from('permits')
-        .insert(permitData_insert as any)
-        .select()
-        .single() as { data: any; error: any };
-
-      if (permitError) {
-        console.error('❌ Error creating permit:', permitError);
-        throw permitError;
-      }
-      console.log('✅ Permit created successfully:', permitData.permit_number);
 
       // Generate the exact PDF and persist it to Supabase Storage + save path in DB
       try {
-        const conditionsForPdf: string[] = Array.isArray((permitData_insert as any)?.conditions?.conditions)
-          ? ((permitData_insert as any).conditions.conditions as string[])
-          : [
-              'Comply with all environmental regulations',
-              'Submit quarterly usage reports',
-              'Allow inspections as required',
-            ];
+        // Get conditions for PDF from permit data (handle both new and renewed permits)
+        const conditionsForPdf: string[] = (() => {
+          // First try to get from permitData (for renewals, this comes from the existing permit)
+          if (permitData?.conditions?.conditions && Array.isArray(permitData.conditions.conditions)) {
+            return permitData.conditions.conditions;
+          }
+          // Default conditions
+          return [
+            'Comply with all environmental regulations',
+            'Submit quarterly usage reports',
+            'Allow inspections as required',
+            ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
+          ];
+        })();
 
         console.log('📄 Generating PDF permit (for storage + view)...');
         const { generateDigitalWaterPermitBlob } = await import('@/lib/pdf-generator');

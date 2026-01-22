@@ -6,6 +6,57 @@ import { isConcessionApplication, selectPermitVariant } from "@/lib/permit-varia
 // Rwanda Coat of Arms watermark path
 const WATERMARK_IMAGE_PATH = "/assets/png-transparent-rulindo-district-coat-of-arms-organization-agriculture-government-others-leaf-logo-agriculture.png";
 
+// =============================================
+// Small formatting helpers
+// =============================================
+function numberToEnglishWords(n: number): string {
+  // Supports 0-99; falls back to numeric string for anything else.
+  if (!Number.isFinite(n)) return String(n);
+  const num = Math.abs(Math.trunc(n));
+
+  const small: Record<number, string> = {
+    0: "Zero",
+    1: "One",
+    2: "Two",
+    3: "Three",
+    4: "Four",
+    5: "Five",
+    6: "Six",
+    7: "Seven",
+    8: "Eight",
+    9: "Nine",
+    10: "Ten",
+    11: "Eleven",
+    12: "Twelve",
+    13: "Thirteen",
+    14: "Fourteen",
+    15: "Fifteen",
+    16: "Sixteen",
+    17: "Seventeen",
+    18: "Eighteen",
+    19: "Nineteen",
+    20: "Twenty",
+  };
+  if (small[num]) return small[num];
+
+  const tensMap: Record<number, string> = {
+    2: "Twenty",
+    3: "Thirty",
+    4: "Forty",
+    5: "Fifty",
+    6: "Sixty",
+    7: "Seventy",
+    8: "Eighty",
+    9: "Ninety",
+  };
+  const tens = Math.floor(num / 10);
+  const ones = num % 10;
+  const tensWord = tensMap[tens];
+  if (!tensWord) return String(n);
+  if (ones === 0) return tensWord;
+  return `${tensWord}-${small[ones]}`;
+}
+
 /**
  * Pre-load the watermark image and return a Promise that resolves to the data URL.
  * This is cached for performance.
@@ -697,8 +748,10 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
     `by a ${systemType} with a flow rate of ${yearlyStr}. ` +
     `Water abstracted will be used for ${activitiesText}.`;
+  const validityNumber = permitValidityYears;
+  const validityWord = numberToEnglishWords(validityNumber);
   const para3 =
-    `This water use permit is valid for a period of ${permitValidityYears} (Five) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
+    `This water use permit is valid for a period of ${validityNumber} (${validityWord}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.";
 
@@ -793,8 +846,8 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const vols = resolveVolumes(application);
   const yearlyStr = vols.yearly != null ? `${formatNumber(vols.yearly)} m³/year` : "N/A m³/year";
 
-  const validityWord = "Five";
   const validityNumber = permitValidityYears;
+  const validityWord = numberToEnglishWords(validityNumber);
 
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,";
@@ -900,8 +953,8 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   const loc = resolveWaterSourceAdminLocation(application);
   const provinceStr = formatProvinceOrKigali(loc.province);
 
-  const validityWord = "Five";
   const validityNumber = permitValidityYears;
+  const validityWord = numberToEnglishWords(validityNumber);
 
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,";
@@ -1006,8 +1059,8 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   const loc = resolveWaterSourceAdminLocation(application);
   const provinceStr = formatProvinceOrKigali(loc.province);
 
-  const validityWord = "Five";
   const validityNumber = permitValidityYears;
+  const validityWord = numberToEnglishWords(validityNumber);
 
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,";
@@ -1834,6 +1887,34 @@ export const generateTermsConditionsPdfBlob = async (opts: {
 
   const doc = new jsPDF();
   const issueDate = new Date();
+  const signatureDate = formatDateDMY(issueDate);
+
+  const isSignatureSectionTitle = (title: string): boolean => {
+    const t = (title || "").trim().toLowerCase();
+    if (!t) return false;
+    // English
+    if (t === "signatures" || t.includes("signature")) return true;
+    // Kinyarwanda
+    if (t === "imikono" || t.includes("imikono")) return true;
+    return false;
+  };
+
+  const normalizeSignatureDateLine = (paragraph: string): string => {
+    const p = paragraph.trim();
+    if (!p) return paragraph;
+
+    // English signature date placeholder
+    if (/^Date:\s*[.·•…_–-]+$/i.test(p) || (/^Date:\s*/i.test(p) && /[.·•…_]{6,}/.test(p))) {
+      return `Date: ${signatureDate}`;
+    }
+
+    // Kinyarwanda signature date placeholder (in case Kinyarwanda sections are rendered later)
+    if (/^Itariki:\s*[.·•…_–-]+$/i.test(p) || (/^Itariki:\s*/i.test(p) && /[.·•…_]{6,}/.test(p))) {
+      return `Itariki: ${signatureDate}`;
+    }
+
+    return paragraph;
+  };
 
   // Add logo
   try {
@@ -1897,7 +1978,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
       t.startsWith('imikono') ||
       t.startsWith('ibisobanuro')
     );
-  });
+  }).filter((section) => !isSignatureSectionTitle(section.title));
 
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
@@ -1930,7 +2011,8 @@ export const generateTermsConditionsPdfBlob = async (opts: {
         currentY = 20;
       }
 
-      const lines = doc.splitTextToSize(paragraph, maxWidth);
+      const renderedParagraph = normalizeSignatureDateLine(paragraph);
+      const lines = doc.splitTextToSize(renderedParagraph, maxWidth);
       doc.text(lines, leftX, currentY);
       currentY += lines.length * lineHeight + 2;
     }

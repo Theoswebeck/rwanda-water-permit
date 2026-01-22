@@ -101,6 +101,7 @@ export type DocumentType =
   | 'water_quality_report' 
   | 'geological_survey' 
   | 'business_license'
+  | 'renewal_request_letter' // Letter requesting permit renewal
   | 'other'
 
 export type VerificationStatus = 'pending' | 'verified' | 'rejected'
@@ -307,6 +308,10 @@ export interface Application {
   is_modification?: boolean
   modified_from_application_id?: string
   modification_changes?: Record<string, { previous: any; current: any }>
+  
+  // Renewal tracking
+  is_renewal?: boolean
+  renewed_from_permit_id?: string
   
   // Joined relations (from Supabase queries with select joins)
   applicant?: any // User/applicant data when joined
