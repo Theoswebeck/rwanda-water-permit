@@ -348,9 +348,9 @@ export default function ApplicationDetailPage() {
     company_tin: userProfile?.company_tin,
   };
 
-  // Dummy handlers for read-only form (these won't be called)
-  const handleSubmitApplication = async () => {};
-  const handleSaveAsDraft = async () => {};
+  // Dummy handlers for read-only form (these won't be called in view mode)
+  const handleSubmitApplication = async (_data: any, _status: string) => {};
+  const handleSaveAsDraft = async (_data: any, _status: string, _draftId?: string | null) => {};
 
   // Function to render the correct status badge
   const getStatusBadge = (status: string) => {
@@ -669,7 +669,7 @@ export default function ApplicationDetailPage() {
           )}
           
           {/* Application Form in Read-only Mode */}
-          {initialFormData && (
+          {initialFormData && Object.keys(initialFormData).length > 0 && (
             <ApplicationForm 
               userData={userData}
               onSubmit={handleSubmitApplication}
