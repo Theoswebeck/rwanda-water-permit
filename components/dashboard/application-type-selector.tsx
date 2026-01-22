@@ -14,10 +14,11 @@ import {
   ArrowLeftRight,
   FileCheck,
   CheckCircle,
-  FileEdit
+  FileEdit,
+  RefreshCw
 } from "lucide-react";
 
-export type ApplicationMode = 'new' | 'transfer' | 'modification';
+export type ApplicationMode = 'new' | 'transfer' | 'modification' | 'renewal';
 
 interface ApplicationTypeSelectorProps {
   onSelect: (mode: ApplicationMode) => void;
@@ -35,6 +36,13 @@ export function ApplicationTypeSelector({
       description: 'Apply for a new water use permit for your project or facility. This is for first-time applications.',
       icon: FilePlus,
       color: 'blue',
+    },
+    {
+      mode: 'renewal' as ApplicationMode,
+      title: 'Renew Existing Permit',
+      description: 'Renew an expiring or expired water use permit to extend its validity period. Requires water use report and renewal fee.',
+      icon: RefreshCw,
+      color: 'green',
     },
     {
       mode: 'modification' as ApplicationMode,
@@ -69,7 +77,7 @@ export function ApplicationTypeSelector({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {options.map((option) => {
               const Icon = option.icon;
               const isSelected = selectedMode === option.mode;
@@ -81,6 +89,15 @@ export function ApplicationTypeSelector({
                     icon: 'text-blue-600 bg-blue-100',
                     check: 'text-blue-600',
                     button: 'bg-blue-600 hover:bg-blue-700',
+                  }
+                : option.color === 'green'
+                ? {
+                    border: 'border-green-500',
+                    bg: 'bg-green-50',
+                    ring: 'ring-green-200',
+                    icon: 'text-green-600 bg-green-100',
+                    check: 'text-green-600',
+                    button: 'bg-green-600 hover:bg-green-700',
                   }
                 : option.color === 'amber'
                 ? {
@@ -136,6 +153,8 @@ export function ApplicationTypeSelector({
                     >
                       {option.mode === 'new' 
                         ? 'Start New Application' 
+                        : option.mode === 'renewal'
+                        ? 'Renew a Permit'
                         : option.mode === 'modification'
                         ? 'Modify a Permit'
                         : 'Transfer a Permit'}

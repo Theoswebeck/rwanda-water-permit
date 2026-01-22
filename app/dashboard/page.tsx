@@ -214,46 +214,49 @@ function DashboardContent() {
                   Manage your water permit applications and view your permits
                 </p>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="gap-2">
-                    Quick Actions
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem 
-                    onClick={() => router.push("/dashboard/new-application?mode=new")}
-                    className="cursor-pointer"
-                  >
-                    <FilePlus className="mr-2 h-4 w-4" />
-                    New Water Permit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => router.push("/dashboard/new-application?mode=modification")}
-                    className="cursor-pointer"
-                  >
-                    <FileEdit className="mr-2 h-4 w-4" />
-                    Modify Existing Permit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={() => router.push("/dashboard/new-application?mode=transfer")}
-                    className="cursor-pointer"
-                  >
-                    <ArrowLeftRight className="mr-2 h-4 w-4" />
-                    Transfer Existing Permit
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => setShowPermitSelectModal(true)}
-                    disabled={databasePermits.length === 0}
-                    className="cursor-pointer"
-                  >
-                    <ClipboardList className="mr-2 h-4 w-4" />
-                    Water Use Reporting
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="gap-2">
+                      Apply
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuItem 
+                      onClick={() => router.push("/dashboard/new-application?mode=new")}
+                      className="cursor-pointer"
+                    >
+                      <FilePlus className="mr-2 h-4 w-4" />
+                      New Water Permit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => router.push("/dashboard/new-application?mode=modification")}
+                      className="cursor-pointer"
+                    >
+                      <FileEdit className="mr-2 h-4 w-4" />
+                      Modify Existing Permit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => router.push("/dashboard/new-application?mode=transfer")}
+                      className="cursor-pointer"
+                    >
+                      <ArrowLeftRight className="mr-2 h-4 w-4" />
+                      Transfer Existing Permit
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => setShowPermitSelectModal(true)}
+                  disabled={databasePermits.length === 0}
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Water Use Reporting
+                </Button>
+              </div>
             </div>
 
             {/* Success Alert */}

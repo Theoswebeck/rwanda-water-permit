@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   Card,
@@ -46,12 +47,38 @@ import {
   getFormattedCellOptions,
   getFormattedVillageOptions
 } from '@/lib/rwanda-administrative-data';
-import { MultiPolygonInputWithValidation } from "@/components/forms/MultiPolygonInputWithValidation";
 import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidation';
 import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
-import { PaymentTab } from '@/components/dashboard/payment-tab';
 import { getAnnexRequirementForActivity, getAnnexRequirementsForSelection } from "@/lib/annex-requirements";
 import { ModificationBadge, ModificationChangesSummary } from "@/components/dashboard/modified-field-marker";
+
+// Lazy-load heavy tab components to avoid module-eval crashes on pages that never render them (e.g. view-only / terms acceptance).
+const PaymentTab = dynamic(
+  () => import("@/components/dashboard/payment-tab").then((mod) => ({ default: mod.PaymentTab })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        Loading payment…
+      </div>
+    ),
+  }
+);
+
+const MultiPolygonInputWithValidation = dynamic(
+  () =>
+    import("@/components/forms/MultiPolygonInputWithValidation").then((mod) => ({
+      default: mod.MultiPolygonInputWithValidation,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        Loading map…
+      </div>
+    ),
+  }
+);
 
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({

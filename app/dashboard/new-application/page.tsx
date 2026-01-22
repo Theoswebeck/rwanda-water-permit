@@ -35,9 +35,23 @@ const PermitTransferForm = dynamic(
   }
 );
 
+const PermitRenewalForm = dynamic(
+  () => import("@/components/dashboard/permit-renewal-form").then(mod => ({ default: mod.PermitRenewalForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading renewal form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
 import { ApplicationTypeSelector, type ApplicationMode } from "@/components/dashboard/application-type-selector";
 import { PermitSelectForTransfer, type PermitWithApplication } from "@/components/dashboard/permit-select-for-transfer";
 import { PermitSelectForModification } from "@/components/dashboard/permit-select-for-modification";
+import { PermitSelectForRenewal, type PermitWithApplication as RenewalPermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -252,9 +266,9 @@ function NewApplicationContent() {
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   
-  // Application type state (new application vs transfer vs modification)
+  // Application type state (new application vs transfer vs modification vs renewal)
   const [applicationMode, setApplicationMode] = useState<ApplicationMode | null>(
-    modeParam === 'transfer' ? 'transfer' : modeParam === 'modification' ? 'modification' : modeParam === 'new' ? 'new' : null
+    modeParam === 'transfer' ? 'transfer' : modeParam === 'modification' ? 'modification' : modeParam === 'renewal' ? 'renewal' : modeParam === 'new' ? 'new' : null
   );
   const [selectedPermit, setSelectedPermit] = useState<PermitWithApplication | null>(null);
   const [transferStep, setTransferStep] = useState<'select-permit' | 'fill-form'>('select-permit');
@@ -265,6 +279,11 @@ function NewApplicationContent() {
   const [selectedPermitForModification, setSelectedPermitForModification] = useState<PermitWithApplication | null>(null);
   const [originalApplicationData, setOriginalApplicationData] = useState<any>(null);
   const [currentModificationApplication, setCurrentModificationApplication] = useState<Application | null>(null);
+  
+  // Renewal-specific state
+  const [renewalStep, setRenewalStep] = useState<'select-permit' | 'fill-form'>('select-permit');
+  const [selectedPermitForRenewal, setSelectedPermitForRenewal] = useState<RenewalPermitWithApplication | null>(null);
+  const [currentRenewalApplication, setCurrentRenewalApplication] = useState<Application | null>(null);
   
   const { createApplication, updateApplication, getApplication } = useApplications();
   const { getDocuments } = useDocuments();
@@ -597,6 +616,8 @@ function NewApplicationContent() {
       setTransferStep('select-permit');
     } else if (mode === 'modification') {
       setModificationStep('select-permit');
+    } else if (mode === 'renewal') {
+      setRenewalStep('select-permit');
     }
   }, []);
 
@@ -768,6 +789,179 @@ function NewApplicationContent() {
     setApplicationMode(null);
     setOriginalApplicationData(null);
   }, []);
+
+  // Handle permit selection for renewal
+  const handleRenewalPermitSelect = useCallback(async (permit: RenewalPermitWithApplication) => {
+    setSelectedPermitForRenewal(permit);
+    setRenewalStep('fill-form');
+  }, []);
+
+  // Handle renewal cancellation
+  const handleRenewalCancel = useCallback(() => {
+    setSelectedPermitForRenewal(null);
+    setRenewalStep('select-permit');
+    setApplicationMode(null);
+  }, []);
+
+  // Handle renewal form submission
+  const handleRenewalSubmit = useCallback(async (formData: any) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      console.log('📋 Renewal form data received:', formData);
+      
+      // Create a renewal application in the applications table
+      const renewalApplicationData: Partial<Application> = {
+        applicant_id: userProfile?.id,
+        status: 'submitted',
+        submitted_at: new Date().toISOString(),
+        application_type: selectedPermitForRenewal?.application?.application_type || 'domestic',
+        water_source: selectedPermitForRenewal?.water_source || 'other',
+        water_purpose: selectedPermitForRenewal?.purpose || 'other',
+        province: selectedPermitForRenewal?.application?.province || 'Kigali',
+        district: selectedPermitForRenewal?.application?.district || '',
+        sector: selectedPermitForRenewal?.application?.sector || '',
+        cell: selectedPermitForRenewal?.application?.cell || '',
+        project_title: `Renewal: ${selectedPermitForRenewal?.application?.project_title || selectedPermitForRenewal?.permit_number}`,
+        project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
+        sla_status: 'on_time',
+        is_renewal: true,
+        renewed_from_permit_id: selectedPermitForRenewal?.id,
+        internal_notes: JSON.stringify({
+          isRenewal: true,
+          originalPermitId: selectedPermitForRenewal?.id,
+          originalPermitNumber: selectedPermitForRenewal?.permit_number,
+          originalApplicationId: selectedPermitForRenewal?.application_id,
+          waterUseReport: formData.waterUseReport,
+          renewalFormData: formData,
+        }),
+        intended_activities: selectedPermitForRenewal?.application?.intended_activities,
+      };
+      
+      let resultApplication;
+      
+      // If we already have a draft renewal application, update it to submitted
+      if (currentRenewalApplication?.id) {
+        const { applicant_id, ...updateData } = renewalApplicationData as any;
+        resultApplication = await updateApplication(currentRenewalApplication.id, updateData);
+        console.log('✅ Renewal application updated to submitted:', resultApplication);
+      } else {
+        // Create new renewal application
+        resultApplication = await createApplication(renewalApplicationData);
+        console.log('✅ Renewal application created:', resultApplication);
+      }
+      
+      if (resultApplication) {
+        // Fire-and-forget: send submission SMS + email
+        try {
+          fetch('/api/notifications/send-submission', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: resultApplication.id }),
+          }).catch(() => null)
+        } catch {}
+        
+        // Upload renewal letter document
+        await ensureStorageBucket();
+        if (formData.renewalLetter) {
+          const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, {
+            renewalRequestLetter: formData.renewalLetter,
+          });
+          console.log(`📎 ${uploadedDocs.length} documents uploaded`);
+        }
+        
+        setSubmitSuccess(true);
+      } else {
+        throw new Error('Failed to submit renewal application');
+      }
+    } catch (error) {
+      console.error('❌ Error submitting renewal:', error);
+      setError(error instanceof Error ? error.message : 'Failed to submit renewal request');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedPermitForRenewal, userProfile?.id, createApplication, updateApplication, currentRenewalApplication]);
+
+  // Handle renewal draft save
+  const handleRenewalSaveAsDraft = useCallback(async (formData: any, status: string) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const renewalApplicationData: Partial<Application> = {
+        applicant_id: userProfile?.id,
+        status: 'draft',
+        application_type: selectedPermitForRenewal?.application?.application_type || 'domestic',
+        water_source: selectedPermitForRenewal?.water_source || 'other',
+        water_purpose: selectedPermitForRenewal?.purpose || 'other',
+        province: selectedPermitForRenewal?.application?.province || 'Kigali',
+        district: selectedPermitForRenewal?.application?.district || '',
+        sector: selectedPermitForRenewal?.application?.sector || '',
+        cell: selectedPermitForRenewal?.application?.cell || '',
+        project_title: `Renewal: ${selectedPermitForRenewal?.application?.project_title || selectedPermitForRenewal?.permit_number}`,
+        project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
+        sla_status: 'on_time',
+        is_renewal: true,
+        renewed_from_permit_id: selectedPermitForRenewal?.id,
+        internal_notes: JSON.stringify({
+          isRenewal: true,
+          originalPermitId: selectedPermitForRenewal?.id,
+          originalPermitNumber: selectedPermitForRenewal?.permit_number,
+          originalApplicationId: selectedPermitForRenewal?.application_id,
+          waterUseReport: formData.waterUseReport,
+          renewalFormData: formData,
+        }),
+        intended_activities: selectedPermitForRenewal?.application?.intended_activities,
+      };
+      
+      let result;
+      
+      // If we already have a renewal application, update it; otherwise create new
+      if (currentRenewalApplication?.id) {
+        // Update existing - don't send applicant_id on updates (can violate RLS)
+        const { applicant_id, ...updateData } = renewalApplicationData as any;
+        result = await updateApplication(currentRenewalApplication.id, updateData);
+      } else {
+        // Create new renewal application
+        result = await createApplication(renewalApplicationData);
+      }
+      
+      if (result) {
+        await ensureStorageBucket();
+        if (formData.renewalLetter) {
+          await uploadApplicationDocuments(result.id, {
+            renewalRequestLetter: formData.renewalLetter,
+          });
+        }
+        
+        // Track the current renewal application for payment tab
+        setCurrentRenewalApplication(result);
+        
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 2000);
+        
+        return result;
+      }
+    } catch (error) {
+      console.error('Error saving renewal draft:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save draft');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedPermitForRenewal, userProfile?.id, createApplication, updateApplication, currentRenewalApplication]);
+
+  // User data for renewal form
+  const renewalUserData = useMemo(() => ({
+    id: userProfile?.id,
+    email: userProfile?.email || "",
+    first_name: userProfile?.first_name || "",
+    last_name: userProfile?.last_name || "",
+    phone: userProfile?.phone || userProfile?.company_phone || "",
+    company_name: userProfile?.company_name || "",
+    account_type: userProfile?.account_type || 'individual',
+  }), [userProfile]);
 
   // Handle modification form submission
   const handleModificationSubmit = useCallback(async (formData: any, status: 'submitted') => {
