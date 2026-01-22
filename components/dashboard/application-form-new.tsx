@@ -722,7 +722,8 @@ export const ApplicationForm = memo(function ApplicationForm({
   }, [userData, initialData]);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(applicationFormSchema),
+    // Skip validation resolver in read-only mode - not needed and can cause initialization issues
+    resolver: readOnly ? undefined : zodResolver(applicationFormSchema),
     defaultValues: getDefaultValues,
     // Validate when the user leaves a field (click outside / tab away), and re-validate to clear errors.
     mode: "onBlur",
