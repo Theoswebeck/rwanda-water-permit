@@ -10,6 +10,7 @@ import { SystemOverview } from "@/components/admin/system-overview";
 import { ApplicationOversight } from "@/components/admin/application-oversight";
 import { AdminReports } from "@/components/admin/admin-reports";
 import { ActivityLogs } from "@/components/admin/activity-logs";
+import { RoleDelegationManagement } from "@/components/admin/role-delegation-management";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 
@@ -21,7 +22,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Loader2
+  Loader2,
+  UserCheck
 } from "lucide-react";
 
 interface AdminDashboardStats {
@@ -189,9 +191,13 @@ export default function AdminDashboard() {
 
           {/* Main Content Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-7">
+            <TabsList className="grid w-full grid-cols-8">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="users">User Management</TabsTrigger>
+              <TabsTrigger value="delegations" className="flex items-center gap-1">
+                <UserCheck className="h-3.5 w-3.5" />
+                Delegations
+              </TabsTrigger>
               <TabsTrigger value="applications">Applications</TabsTrigger>
               <TabsTrigger value="water-reports">Water Use Reports</TabsTrigger>
               <TabsTrigger value="map">Concession Map</TabsTrigger>
@@ -205,6 +211,10 @@ export default function AdminDashboard() {
             
             <TabsContent value="users" className="space-y-4">
               <UserManagement />
+            </TabsContent>
+            
+            <TabsContent value="delegations" className="space-y-4">
+              <RoleDelegationManagement />
             </TabsContent>
             
             <TabsContent value="applications" className="space-y-4">

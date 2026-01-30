@@ -675,7 +675,58 @@ CREATE POLICY "Staff can update applications in their workflow" ON public.applic
     );
 
 -- Similar policies for other tables...
--- (Copy all RLS policies from schema.sql)
+
+-- Approvals policies (for approver comments and decisions)
+CREATE POLICY "Approvers can insert their own approvals"
+    ON public.approvals
+    FOR INSERT
+    WITH CHECK (
+        auth.uid() = approver_id AND
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    );
+
+CREATE POLICY "Approvers can update their own approvals"
+    ON public.approvals
+    FOR UPDATE
+    USING (
+        auth.uid() = approver_id AND
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    )
+    WITH CHECK (
+        auth.uid() = approver_id AND
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    );
+
+CREATE POLICY "Approvers can delete their own approvals"
+    ON public.approvals
+    FOR DELETE
+    USING (
+        auth.uid() = approver_id AND
+        decision = 'comment' AND
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    );
+
+CREATE POLICY "Staff can view approvals"
+    ON public.approvals
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.users 
+            WHERE id = auth.uid() AND role IN ('reviewer', 'inspector', 'approver', 'admin')
+        )
+    );
 
 -- =============================================
 -- SEED DATA

@@ -646,7 +646,7 @@ export default function ReviewApplicationPage() {
       const { error } = await supabase
         .from('applications')
         .update({ 
-          status: 'pending_assessment',
+          status: 'returned_to_assessment',
           updated_at: new Date().toISOString()
         })
         .eq('id', application.id);
@@ -667,13 +667,13 @@ export default function ReviewApplicationPage() {
       // Create audit log entry
       try {
         await createAuditLog({
-          action: 'application.revision_requested',
+          action: 'application.returned_to_assessment',
           entity_type: 'application',
           table_name: 'applications',
           record_id: application.id,
           old_values: { status: previousStatus },
-          new_values: { status: 'pending_assessment', revision_notes: revisionNotes.trim() },
-          description: `Application ${application.application_number} returned to assessment for revision`,
+          new_values: { status: 'returned_to_assessment', revision_notes: revisionNotes.trim() },
+          description: `Application ${application.application_number} returned to assessor for corrections`,
           severity: 'warning',
           status: 'success',
         });
@@ -755,6 +755,10 @@ export default function ReviewApplicationPage() {
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
+      // Returned statuses
+      returned_to_assessment: { label: "🔄 Returned to Assessor", variant: "secondary" },
+      returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },
+      returned_to_verification: { label: "🔄 Returned to Verifier", variant: "secondary" },
     };
     
     const config = statusConfig[status] || { label: status, variant: "outline" as const };

@@ -879,6 +879,58 @@ CREATE POLICY "Reviewers can manage their reviews"
     ON reviews FOR ALL
     USING (auth.uid() = reviewer_id);
 
+-- Approvals policies (for approver comments and decisions)
+CREATE POLICY "Approvers can insert their own approvals"
+    ON approvals
+    FOR INSERT
+    WITH CHECK (
+        auth.uid() = approver_id AND
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    );
+
+CREATE POLICY "Approvers can update their own approvals"
+    ON approvals
+    FOR UPDATE
+    USING (
+        auth.uid() = approver_id AND
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    )
+    WITH CHECK (
+        auth.uid() = approver_id AND
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    );
+
+CREATE POLICY "Approvers can delete their own approvals"
+    ON approvals
+    FOR DELETE
+    USING (
+        auth.uid() = approver_id AND
+        decision = 'comment' AND
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('approver', 'admin')
+        )
+    );
+
+CREATE POLICY "Staff can view approvals"
+    ON approvals
+    FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('reviewer', 'inspector', 'approver', 'admin')
+        )
+    );
+
 -- Notifications policies
 CREATE POLICY "Users can manage their own notifications"
     ON notifications FOR ALL

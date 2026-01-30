@@ -103,6 +103,14 @@ function DashboardContent() {
       setShowSuccessAlert(true);
       // Auto-hide success message after 5 seconds
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
+    } else if (success === 'application-submitted') {
+      setSuccessMessage('✅ Application Submitted Successfully! Your water permit application has been submitted for review. You will be notified of any updates.');
+      setShowSuccessAlert(true);
+      timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
+    } else if (success === 'application-resubmitted-to-assessor') {
+      setSuccessMessage('✅ Application Resubmitted Successfully! Your corrections have been submitted and sent back to the assigned assessor for review.');
+      setShowSuccessAlert(true);
+      timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     }
     
     if (tab === 'applications') {

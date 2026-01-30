@@ -8,11 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Bell, Lock, Mail, Shield, Smartphone } from "lucide-react";
+import { ArrowLeft, Bell, Lock, Mail, Shield, Smartphone, UserCheck } from "lucide-react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { MyDelegations } from "@/components/shared/my-delegations";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"applications">("applications");
@@ -29,6 +30,10 @@ export default function SettingsPage() {
   };
 
   const backHref = roleDashboards[userProfile?.role || "applicant"] || "/dashboard";
+  
+  // Check if user is staff (can delegate roles)
+  const isStaffUser = userProfile?.role && 
+    ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'].includes(userProfile.role);
   
   return (
     <DashboardLayout>
@@ -52,11 +57,17 @@ export default function SettingsPage() {
           <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">Manage your account preferences and settings</p>
           
           <Tabs defaultValue="general" className="w-full">
-            <TabsList className="w-full max-w-md grid grid-cols-4">
+            <TabsList className={`w-full max-w-xl grid ${isStaffUser ? 'grid-cols-5' : 'grid-cols-4'}`}>
               <TabsTrigger value="general">General</TabsTrigger>
               <TabsTrigger value="notifications">Notifications</TabsTrigger>
               <TabsTrigger value="security">Security</TabsTrigger>
               <TabsTrigger value="privacy">Privacy</TabsTrigger>
+              {isStaffUser && (
+                <TabsTrigger value="delegations" className="flex items-center gap-1">
+                  <UserCheck className="h-3.5 w-3.5" />
+                  Delegations
+                </TabsTrigger>
+              )}
             </TabsList>
             
             {/* General Settings */}
@@ -324,6 +335,13 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             </TabsContent>
+            
+            {/* Delegations Settings (Staff Only) */}
+            {isStaffUser && (
+              <TabsContent value="delegations" className="space-y-6 pt-6">
+                <MyDelegations />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </motion.div>

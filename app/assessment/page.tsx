@@ -18,19 +18,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2, Droplets, FileCheck, Calendar, Filter } from "lucide-react";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2, Droplets, FileCheck, Calendar, Filter, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
-import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBy90DayDeadlineClosest } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBySubmissionDateDescending } from "@/lib/utils";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
 
 interface AssessmentApplication extends Application {
   applicant_name?: string;
@@ -43,6 +44,7 @@ interface AssessmentStatsData {
   pendingAssessment: number;
   underAssessment: number;
   readyForReview: number;
+  pendingVerification: number;
 }
 
 export default function AssessmentDashboard() {
@@ -50,7 +52,7 @@ export default function AssessmentDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [sortBy, setSortBy] = useState<"earliest" | "latest">("earliest");
+  const [sortBy, setSortBy] = useState<"earliest" | "latest">("latest");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   // Applications assigned to the current assessor (queue/worklist).
   const [assignedApplications, setAssignedApplications] = useState<AssessmentApplication[]>([]);
@@ -62,6 +64,8 @@ export default function AssessmentDashboard() {
   const [stats, setStats] = useState<AssessmentStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports">("assessment");
+  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
     return (data ?? []).map((app) => {
@@ -82,9 +86,9 @@ export default function AssessmentDashboard() {
         slaRemaining = diffDays;
       }
 
+      // 90-day countdown starts from when completeness was confirmed (not submission)
       const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
-        submittedAt: app.submitted_at,
-        createdAt: app.created_at,
+        completenessConfirmedAt: app.completeness_confirmed_at,
       });
 
       return {
@@ -113,7 +117,7 @@ export default function AssessmentDashboard() {
         setStatsLoading(true);
         setError(null);
 
-        // 1) Assigned queue (worklist)
+        // 1) Assigned queue (worklist) - includes returned_to_assessment for applications sent back for corrections
         const { data: assignedData, error: assignedError } = await supabase
           .from("applications")
           .select(
@@ -123,7 +127,7 @@ export default function AssessmentDashboard() {
           `
           )
           .eq("assigned_assessor_id", user.id)
-          .in("status", ["pending_assessment", "under_review"])
+          .in("status", ["pending_assessment", "under_review", "returned_to_assessment"])
           .order("created_at", { ascending: sortBy === "earliest" });
 
         if (assignedError) throw assignedError;
@@ -160,6 +164,7 @@ export default function AssessmentDashboard() {
           pendingAssessment: counts.pending_assessment ?? 0,
           underAssessment: counts.under_review ?? 0,
           readyForReview: counts.pending_review ?? 0,
+          pendingVerification: counts.pending_verification ?? 0,
         });
       } catch (err) {
         let errorMsg = 'Failed to fetch applications';
@@ -217,7 +222,7 @@ export default function AssessmentDashboard() {
     }
   };
 
-  const filterApplications = (applications: AssessmentApplication[]) => {
+  const filterApplications = (applications: AssessmentApplication[], applyStatusFilter = true) => {
     let filtered = applications.filter(app => {
       const matchesSearch = app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            app.applicant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -227,7 +232,10 @@ export default function AssessmentDashboard() {
                          app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
                          app.application_type?.toLowerCase().includes(filterType.toLowerCase());
       
-      return matchesSearch && matchesType;
+      // Apply status filter from clicked stats card
+      const matchesStatus = !applyStatusFilter || statusFilter.length === 0 || statusFilter.includes(app.status);
+      
+      return matchesSearch && matchesType && matchesStatus;
     });
 
     // Apply date range filter if set
@@ -242,6 +250,69 @@ export default function AssessmentDashboard() {
 
     return filtered;
   };
+
+  // Handle stats card click
+  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
+    setSelectedStatId(statId);
+    setStatusFilter(filterStatuses);
+  };
+
+  // Create stats configuration for clickable cards
+  const statsConfig: StatsConfig[] = useMemo(() => [
+    {
+      id: "new_submissions",
+      title: "New Submissions",
+      value: stats?.newSubmissions ?? 0,
+      description: "Awaiting initial assessment",
+      icon: Clock,
+      iconColor: "text-blue-600",
+      filterStatuses: ["submitted"],
+      badgeText: stats?.newSubmissions === 0 ? "All caught up" : `${stats?.newSubmissions} pending`,
+      badgeClassName: stats?.newSubmissions === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
+    },
+    {
+      id: "under_assessment",
+      title: "Under Assessment",
+      value: stats?.underAssessment ?? 0,
+      description: "Currently being assessed",
+      icon: AlertCircle,
+      iconColor: "text-amber-600",
+      filterStatuses: ["under_review"],
+      badgeText: stats?.underAssessment === 0 ? "No active assessments" : `${stats?.underAssessment} in progress`,
+      badgeClassName: stats?.underAssessment === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
+    },
+    {
+      id: "ready_for_review",
+      title: "Ready for Review",
+      value: stats?.readyForReview ?? 0,
+      description: "Assessment complete, awaiting review",
+      icon: CheckCircle,
+      iconColor: "text-green-600",
+      filterStatuses: ["pending_review"],
+      badgeText: stats?.readyForReview === 0 ? "None ready" : `${stats?.readyForReview} ready`,
+      badgeClassName: stats?.readyForReview === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-green-100 text-green-800 hover:bg-green-100",
+    },
+    {
+      id: "pending_verification",
+      title: "Pending Verification",
+      value: stats?.pendingVerification ?? 0,
+      description: "Sent to verification stage",
+      icon: ClipboardCheck,
+      iconColor: "text-indigo-600",
+      filterStatuses: ["pending_verification"],
+      badgeText: stats?.pendingVerification === 0 ? "None pending" : `${stats?.pendingVerification} in verification`,
+      badgeClassName: stats?.pendingVerification === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
+      isNextStage: true,
+    },
+  ], [stats]);
 
   const getStatusBadge = (status: ApplicationStatus) => {
     // Keep flexible to avoid runtime issues if DB gains new statuses.
@@ -260,6 +331,10 @@ export default function AssessmentDashboard() {
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
+      // Returned statuses
+      returned_to_assessment: { label: "🔄 Returned for Corrections", variant: "secondary" },
+      returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },
+      returned_to_verification: { label: "🔄 Returned to Verifier", variant: "secondary" },
     };
     
     const config = statusConfig[status] || { label: status, variant: "outline" as const };
@@ -268,7 +343,7 @@ export default function AssessmentDashboard() {
 
   const ApplicationTable = ({ applications, emptyMessage }: { applications: AssessmentApplication[], emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
-    const sortedApps = sortBy90DayDeadlineClosest(filteredApps, (app) => app.deadline_90_days_remaining ?? null);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
     
     const getApplicantName = (app: AssessmentApplication) => {
       return app.applicant_name || 'Unknown Applicant';
@@ -279,7 +354,14 @@ export default function AssessmentDashboard() {
     };
 
     const get90DayBadge = (daysRemaining: number | null | undefined) => {
-      if (daysRemaining === null || daysRemaining === undefined) return <span className="text-xs text-muted-foreground">—</span>;
+      // 90-day countdown hasn't started yet (completeness not confirmed)
+      if (daysRemaining === null || daysRemaining === undefined) {
+        return (
+          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">
+            Not Started
+          </Badge>
+        );
+      }
       if (daysRemaining <= 0) {
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
@@ -371,6 +453,19 @@ export default function AssessmentDashboard() {
         'rejected': { 
           label: 'Rejected', 
           className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+        },
+        // Returned statuses
+        'returned_to_assessment': { 
+          label: '🔄 Returned for Corrections', 
+          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
+        },
+        'returned_to_review': { 
+          label: '🔄 Returned to Reviewer', 
+          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
+        },
+        'returned_to_verification': { 
+          label: '🔄 Returned to Verifier', 
+          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
         }
       };
       
@@ -423,7 +518,6 @@ export default function AssessmentDashboard() {
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden lg:table-cell">Location</TableHead>
@@ -433,7 +527,7 @@ export default function AssessmentDashboard() {
               <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -454,6 +548,9 @@ export default function AssessmentDashboard() {
                         <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
                           {formatDate(getSubmittedDate(app))}
                         </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {new Date(getSubmittedDate(app)).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
@@ -461,14 +558,6 @@ export default function AssessmentDashboard() {
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
                           {app.application_number}
-                        </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {app.project_title || 'No project title'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                          {getApplicantName(app)}
                         </div>
                         <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {getWaterPurposeLabel(app.water_purpose || '')}
@@ -591,148 +680,14 @@ export default function AssessmentDashboard() {
             </div>
           </div>
 
-          {/* Summary Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  New Submissions
-                </CardTitle>
-                <Clock className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.newSubmissions || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Awaiting initial assessment
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant={stats.newSubmissions === 0 ? "default" : "outline"}
-                      className={`text-xs ${
-                        stats.newSubmissions === 0 
-                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
-                          : "bg-blue-100 text-blue-800 hover:bg-blue-100"
-                      }`}
-                    >
-                      {stats.newSubmissions === 0 ? "All caught up" : `${stats.newSubmissions} pending assessment`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Under Assessment
-                </CardTitle>
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.underAssessment || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Currently being assessed
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        stats.underAssessment === 0 
-                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
-                          : "bg-amber-100 text-amber-800 hover:bg-amber-100"
-                      }`}
-                    >
-                      {stats.underAssessment === 0 ? "No active assessments" : `${stats.underAssessment} in progress`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Ready for Review
-                </CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.readyForReview || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Assessment complete, awaiting review
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        stats.readyForReview === 0 
-                          ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-                          : "bg-green-100 text-green-800 hover:bg-green-100"
-                      }`}
-                    >
-                      {stats.readyForReview === 0 ? "None ready" : `${stats.readyForReview} ready`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Pending Assessment
-                </CardTitle>
-                <XCircle className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.pendingAssessment || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Waiting for field assessment
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        stats.pendingAssessment === 0 
-                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
-                          : "bg-red-100 text-red-800 hover:bg-red-100"
-                      }`}
-                    >
-                      {stats.pendingAssessment === 0 ? "No pending assessments" : `${stats.pendingAssessment} pending`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          {/* Summary Stats - Clickable to filter applications */}
+          <ClickableStatsGrid
+            stats={statsConfig}
+            selectedStatId={selectedStatId}
+            onStatClick={handleStatClick}
+            isLoading={statsLoading}
+            columns={4}
+          />
 
           <StaffTopTabs
             value={topTab}

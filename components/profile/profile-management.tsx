@@ -22,9 +22,11 @@ import {
   Eye,
   EyeOff,
   Save,
-  Loader2
+  Loader2,
+  UserCheck
 } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { MyDelegations } from "@/components/shared/my-delegations";
 
 interface ProfileFormData {
   first_name?: string;
@@ -181,6 +183,10 @@ export function ProfileManagement() {
     }
   };
 
+  // Check if user is staff (can delegate roles)
+  const isStaffUser = userProfile?.role && 
+    ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'].includes(userProfile.role);
+
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -248,10 +254,16 @@ export function ProfileManagement() {
 
       {/* Profile Management Tabs */}
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className={`grid w-full ${isStaffUser ? 'grid-cols-4' : 'grid-cols-3'}`}>
           <TabsTrigger value="profile">Profile Information</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="account">Account Details</TabsTrigger>
+          {isStaffUser && (
+            <TabsTrigger value="delegations" className="flex items-center gap-1">
+              <UserCheck className="h-3.5 w-3.5" />
+              Delegations
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Profile Information Tab */}
@@ -592,6 +604,13 @@ export function ProfileManagement() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Delegations Tab (Staff Only) */}
+        {isStaffUser && (
+          <TabsContent value="delegations">
+            <MyDelegations />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

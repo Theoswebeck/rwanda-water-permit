@@ -17,17 +17,17 @@ import {
   MapPin, 
   AlertTriangle, 
   Search, 
-  Loader2, 
-  User 
+  Loader2 
 } from "lucide-react";
 import { getApplicationsPendingApproval } from "@/lib/supabase";
-import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBy90DayDeadlineClosest } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBySubmissionDateDescending } from "@/lib/utils";
 
 type RawPendingApprovalApplication = {
   id: string
   application_number?: string | null
   application_type: string
   water_source: string
+  water_purpose?: string | null
   district: string
   province: string
   status: string
@@ -59,6 +59,7 @@ interface FinalReviewApplication {
   applicantType: "company" | "individual";
   applicationType: string;
   waterSource: string;
+  waterPurpose: string;
   location: string;
   submittedDate: string;
   reviewCompletedDate?: string;
@@ -111,9 +112,9 @@ export function FinalDecisions() {
           (new Date().getTime() - new Date(app.created_at).getTime()) / (1000 * 60 * 60 * 24)
         );
 
+        // 90-day countdown starts from when completeness was confirmed (not submission)
         const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
-          submittedAt: app.submitted_at,
-          createdAt: app.created_at,
+          completenessConfirmedAt: app.completeness_confirmed_at,
         });
 
         return {
@@ -123,6 +124,7 @@ export function FinalDecisions() {
           applicantType: app.applicant?.account_type === 'individual' ? 'individual' : 'company',
           applicationType: app.application_type,
           waterSource: app.water_source,
+          waterPurpose: app.water_purpose || '',
           location: `${app.district}, ${app.province}`,
           submittedDate: app.submitted_at || app.created_at,
           reviewCompletedDate: app.reviewed_at || undefined,
@@ -159,6 +161,23 @@ export function FinalDecisions() {
       high: "bg-red-100 text-red-700 border-red-200"
     };
     return <Badge variant="outline" className={riskColors[risk]}>{risk.toUpperCase()}</Badge>;
+  };
+
+  const getWaterPurposeLabel = (purpose: string) => {
+    const labels: Record<string, string> = {
+      'domestic': 'Domestic Use',
+      'industrial': 'Industrial Use',
+      'agricultural': 'Agricultural Use',
+      'irrigation': 'Irrigation',
+      'livestock': 'Livestock',
+      'aquaculture': 'Aquaculture',
+      'recreation': 'Recreation',
+      'electricity_generation': 'Electricity Generation',
+      'mining': 'Mining',
+      'municipal_supply': 'Municipal Supply',
+      'other': 'Other'
+    };
+    return labels[purpose] || purpose || 'Unknown';
   };
 
   const getStatusBadge = (status: string) => {
@@ -204,7 +223,10 @@ export function FinalDecisions() {
   };
 
   const get90DayBadge = (daysRemaining: number | null | undefined) => {
-    if (daysRemaining === null || daysRemaining === undefined) return null;
+    // 90-day countdown hasn't started yet (completeness not confirmed)
+    if (daysRemaining === null || daysRemaining === undefined) {
+      return <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Not Started</Badge>;
+    }
 
     if (daysRemaining <= 0) {
       return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">Overdue</Badge>;
@@ -303,7 +325,7 @@ export function FinalDecisions() {
     const matchesRisk = filterRisk === "all" || app.riskLevel === filterRisk;
     return matchesSearch && matchesRisk;
   });
-  const sortedApplications = sortBy90DayDeadlineClosest(filteredApplications, (app) => app.deadline_90_days_remaining ?? null);
+  const sortedApplications = sortBySubmissionDateDescending(filteredApplications, (app) => app.submittedDate);
 
   if (loading) {
     return (
@@ -384,49 +406,47 @@ export function FinalDecisions() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Application</TableHead>
-                  <TableHead>Applicant</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="hidden lg:table-cell">Location</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>90-day</TableHead>
+                  <TableHead>Application</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="hidden lg:table-cell">Location</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedApplications.map((application) => (
                   <TableRow key={application.id}>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {formatDate(application.submittedDate)}
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm text-muted-foreground">
+                        {formatDate(application.submittedDate)}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground/70">
+                        {new Date(application.submittedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {get90DayBadge(application.deadline_90_days_remaining)}
                     </TableCell>
                     <TableCell>
                       <div>
                         <div className="font-medium">{application.application_number || application.id}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{application.applicantName}</div>
-                        <div className="text-sm text-muted-foreground flex items-center">
-                          <User className="h-3 w-3 mr-1" />
-                          {application.applicantType === 'individual' ? 'Individual' : 'Company'}
+                        <div className="text-sm text-muted-foreground">
+                          {getWaterPurposeLabel(application.waterPurpose)}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       {getAppTypeBadge(application)}
                     </TableCell>
+                    <TableCell>
+                      {getStatusBadge(application.status)}
+                    </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <div className="text-sm text-muted-foreground flex items-center">
                         <MapPin className="h-3 w-3 mr-1" />
                         {application.location}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {getStatusBadge(application.status)}
-                    </TableCell>
-                    <TableCell>
-                      {get90DayBadge(application.deadline_90_days_remaining)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, FileCheck, Eye, Search, MapPin, Droplets, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, FileCheck, Eye, Search, MapPin, Droplets, Clock, CheckCircle, XCircle, AlertCircle, Gavel } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -21,7 +21,8 @@ import { ActivePermitsInspectionTab } from "@/components/inspection/active-permi
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
-import { calculateDaysRemainingTo90DayDeadline, sortBy90DayDeadlineClosest } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, sortBySubmissionDateDescending } from "@/lib/utils";
+import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
 
 interface VerificationApplication extends Application {
   applicant_name?: string;
@@ -45,6 +46,8 @@ export default function VerificationDashboard() {
   const [stats, setStats] = useState<VerificationStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports">("verification");
+  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -80,9 +83,9 @@ export default function VerificationDashboard() {
             slaRemaining = diffDays;
           }
 
+          // 90-day countdown starts from when completeness was confirmed (not submission)
           const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
-            submittedAt: app.submitted_at,
-            createdAt: app.created_at,
+            completenessConfirmedAt: app.completeness_confirmed_at,
           });
 
           return {
@@ -112,10 +115,11 @@ export default function VerificationDashboard() {
       try {
         setStatsLoading(true);
 
+        // Include returned_to_verification in pending verification count
         const { count: pendingVerificationCount, error: pendingVerificationError } = await supabase
           .from("applications")
           .select("*", { count: "exact", head: true })
-          .eq("status", "pending_verification");
+          .in("status", ["pending_verification", "returned_to_verification"]);
         if (pendingVerificationError) throw pendingVerificationError;
 
         const { count: pendingApprovalCount, error: pendingApprovalError } = await supabase
@@ -178,6 +182,19 @@ export default function VerificationDashboard() {
         label: "Approved",
         className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800",
       },
+      // Returned statuses
+      returned_to_assessment: {
+        label: "🔄 Returned to Assessor",
+        className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
+      },
+      returned_to_review: {
+        label: "🔄 Returned to Reviewer",
+        className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
+      },
+      returned_to_verification: {
+        label: "🔄 Returned for Re-verification",
+        className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
+      },
     };
 
     const config =
@@ -208,9 +225,75 @@ export default function VerificationDashboard() {
         app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
         app.application_type?.toLowerCase().includes(filterType.toLowerCase());
 
-      return matchesSearch && matchesType;
+      // Apply status filter from clicked stats card
+      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(app.status);
+
+      return matchesSearch && matchesType && matchesStatus;
     });
   };
+
+  // Handle stats card click
+  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
+    setSelectedStatId(statId);
+    setStatusFilter(filterStatuses);
+  };
+
+  // Create stats configuration for clickable cards
+  const statsConfig: StatsConfig[] = useMemo(() => [
+    {
+      id: "pending_verification",
+      title: "Pending Verification",
+      value: stats?.pendingVerification ?? 0,
+      description: "Awaiting verifier review",
+      icon: FileCheck,
+      iconColor: "text-indigo-600",
+      filterStatuses: ["pending_verification", "returned_to_verification"],
+      badgeText: stats?.pendingVerification === 0 ? "All caught up" : `${stats?.pendingVerification} pending`,
+      badgeClassName: stats?.pendingVerification === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
+    },
+    {
+      id: "pending_approval",
+      title: "Pending Approval",
+      value: stats?.pendingApproval ?? 0,
+      description: "With approver for final decision",
+      icon: Clock,
+      iconColor: "text-purple-600",
+      filterStatuses: ["pending_final_approval"],
+      badgeText: stats?.pendingApproval === 0 ? "None pending" : `${stats?.pendingApproval} awaiting`,
+      badgeClassName: stats?.pendingApproval === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-purple-100 text-purple-800 hover:bg-purple-100",
+      isNextStage: true,
+    },
+    {
+      id: "permit_pending",
+      title: "Permit Pending",
+      value: stats?.approvedPendingPermit ?? 0,
+      description: "Approved, awaiting terms acceptance",
+      icon: CheckCircle,
+      iconColor: "text-green-600",
+      filterStatuses: ["approved_pending_permit"],
+      badgeText: stats?.approvedPendingPermit === 0 ? "None pending" : `${stats?.approvedPendingPermit} awaiting terms`,
+      badgeClassName: stats?.approvedPendingPermit === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-green-100 text-green-800 hover:bg-green-100",
+    },
+    {
+      id: "rejected",
+      title: "Rejected",
+      value: stats?.rejected ?? 0,
+      description: "Applications rejected",
+      icon: XCircle,
+      iconColor: "text-red-600",
+      filterStatuses: ["rejected"],
+      badgeText: stats?.rejected === 0 ? "None rejected" : `${stats?.rejected} rejected`,
+      badgeClassName: stats?.rejected === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-red-100 text-red-800 hover:bg-red-100",
+    },
+  ], [stats]);
 
   const getLocationString = (app: VerificationApplication) => `${app.district || "N/A"}, ${app.sector || "N/A"}`;
 
@@ -247,10 +330,17 @@ export default function VerificationDashboard() {
 
   const ApplicationTable = ({ apps, emptyMessage }: { apps: VerificationApplication[]; emptyMessage: string }) => {
     const filteredApps = filterApplications(apps);
-    const sortedApps = sortBy90DayDeadlineClosest(filteredApps, (app) => app.deadline_90_days_remaining ?? null);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
 
     const get90DayBadge = (daysRemaining: number | null | undefined) => {
-      if (daysRemaining === null || daysRemaining === undefined) return <span className="text-xs text-muted-foreground">—</span>;
+      // 90-day countdown hasn't started yet (completeness not confirmed)
+      if (daysRemaining === null || daysRemaining === undefined) {
+        return (
+          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">
+            Not Started
+          </Badge>
+        );
+      }
       if (daysRemaining <= 0) {
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
@@ -309,10 +399,10 @@ export default function VerificationDashboard() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden lg:table-cell">Location</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
@@ -339,22 +429,24 @@ export default function VerificationDashboard() {
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
                     >
                       <TableCell className="p-2 sm:p-3">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {app.project_title || "No project title"}
+                        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {new Date(app.submitted_at || app.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                          {app.applicant_name || "Unknown Applicant"}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {new Date(app.submitted_at || app.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || "")}</div>
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        {getAppTypeBadge(app)}
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                          {getWaterPurposeLabel(app.water_purpose || "")}
+                        </div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        {getAppTypeBadge(app)}
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{getVerificationStatusBadge(app.status)}</div>
@@ -372,7 +464,7 @@ export default function VerificationDashboard() {
                             className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                           >
                             <Eye className="h-3 w-3" />
-                            <span className="hidden sm:inline">{app.status === "pending_verification" ? "Verify" : "View"}</span>
+                            <span className="hidden sm:inline">{app.status === "pending_verification" || app.status === "returned_to_verification" ? "Verify" : "View"}</span>
                             <span className="sm:hidden">Go</span>
                           </Button>
                         </Link>
@@ -427,64 +519,14 @@ export default function VerificationDashboard() {
             </div>
           </div>
 
-            {/* Summary Stats */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Pending Verification</CardTitle>
-                  <FileCheck className="h-4 w-4 text-indigo-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {statsLoading ? <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" /> : stats?.pendingVerification || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Awaiting verifier review</p>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Pending Approval</CardTitle>
-                  <Clock className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {statsLoading ? <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" /> : stats?.pendingApproval || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">With approver for final decision</p>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Permit Pending</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {statsLoading ? (
-                      <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                    ) : (
-                      stats?.approvedPendingPermit || 0
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Approved, awaiting terms acceptance</p>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Rejected</CardTitle>
-                  <XCircle className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {statsLoading ? <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" /> : stats?.rejected || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Applications rejected</p>
-                </CardContent>
-              </Card>
-            </div>
+            {/* Summary Stats - Clickable to filter applications */}
+            <ClickableStatsGrid
+              stats={statsConfig}
+              selectedStatId={selectedStatId}
+              onStatClick={handleStatClick}
+              isLoading={statsLoading}
+              columns={4}
+            />
 
             <StaffTopTabs
               value={topTab}
@@ -543,7 +585,7 @@ export default function VerificationDashboard() {
                     {error ? <div className="text-sm text-destructive">{error}</div> : null}
 
                     <ApplicationTable
-                      apps={applications.filter((a) => a.status === "pending_verification")}
+                      apps={applications.filter((a) => a.status === "pending_verification" || a.status === "returned_to_verification")}
                       emptyMessage="Applications for Verification"
                     />
                   </TabsContent>

@@ -1072,14 +1072,34 @@ export default function AssessmentApplicationPage() {
 
     try {
       setDocReviewSaveLoading(true);
+      const confirmedAt = new Date().toISOString();
       const nextMeta: DocReviewMeta = {
         ...docReviewMeta,
         completenessConfirmed: true,
-        completenessConfirmedAt: new Date().toISOString(),
+        completenessConfirmedAt: confirmedAt,
       };
       setDocReviewMeta(nextMeta);
       await saveAssessment("draft", { docReviewMeta: nextMeta });
-      alert("✅ Application marked complete. Document review is now locked.");
+      
+      // Also update the applications table with completeness_confirmed_at
+      // This triggers the 90-day countdown for processing deadline
+      const { error: appUpdateError } = await supabase
+        .from('applications')
+        .update({ 
+          completeness_confirmed_at: confirmedAt,
+          updated_at: confirmedAt
+        })
+        .eq('id', application.id);
+      
+      if (appUpdateError) {
+        console.error("⚠️ Failed to update application completeness_confirmed_at:", appUpdateError);
+      } else {
+        console.log("✅ 90-day countdown started from:", confirmedAt);
+        // Update local application state
+        setApplication(prev => prev ? { ...prev, completeness_confirmed_at: confirmedAt } : prev);
+      }
+      
+      alert("✅ Application marked complete. Document review is now locked.\n\n⏱️ The 90-day processing deadline has started.");
     } catch (err) {
       console.error("Error confirming completeness:", err);
       alert("❌ Failed to confirm completeness.");

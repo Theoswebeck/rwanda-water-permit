@@ -1947,4 +1947,502 @@ export const getAuditLogStats = async (): Promise<{
       failedCount: 0
     }
   }
+}
+
+// ============================================
+// ROLE DELEGATION (ACTING STAFF) FUNCTIONS
+// ============================================
+
+import type { RoleDelegation, RoleDelegationWithUsers, DelegatableRole, DelegationStatus } from '@/types/database'
+
+export interface CreateDelegationParams {
+  delegate_id: string
+  delegated_role: DelegatableRole
+  reason?: string
+  start_date?: string
+  end_date?: string | null
+}
+
+// Helper function to create a new role delegation
+export const createRoleDelegation = async (params: CreateDelegationParams): Promise<RoleDelegation> => {
+  try {
+    // Get current user (delegator)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      throw new Error('You must be logged in to create a delegation')
+    }
+
+    // Validate that delegate exists and is active staff
+    const { data: delegate, error: delegateError } = await supabase
+      .from('users')
+      .select('id, role, status')
+      .eq('id', params.delegate_id)
+      .single()
+
+    if (delegateError || !delegate) {
+      throw new Error('Selected delegate user not found')
+    }
+
+    if (delegate.status !== 'active') {
+      throw new Error('Cannot delegate to an inactive user')
+    }
+
+    // Validate that the delegator has the role they're trying to delegate
+    const { data: delegator, error: delegatorError } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', user.id)
+      .single()
+
+    if (delegatorError || !delegator) {
+      throw new Error('Could not verify your user information')
+    }
+
+    // Only allow delegating your own role (or admin can delegate any role)
+    if (delegator.role !== 'admin' && delegator.role !== params.delegated_role) {
+      throw new Error(`You can only delegate your own role (${delegator.role})`)
+    }
+
+    // Check if there's already an active delegation for this role from this user
+    const { data: existingDelegation } = await supabase
+      .from('role_delegations')
+      .select('id')
+      .eq('delegator_id', user.id)
+      .eq('delegated_role', params.delegated_role)
+      .eq('status', 'active')
+      .single()
+
+    if (existingDelegation) {
+      throw new Error(`You already have an active delegation for the ${params.delegated_role} role. Please revoke it first.`)
+    }
+
+    // Create the delegation
+    const delegationData = {
+      delegator_id: user.id,
+      delegate_id: params.delegate_id,
+      delegated_role: params.delegated_role,
+      reason: params.reason || null,
+      start_date: params.start_date || new Date().toISOString(),
+      end_date: params.end_date || null,
+      status: 'active' as DelegationStatus,
+    }
+
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .insert([delegationData])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('❌ Error creating delegation:', error)
+      throw new Error(`Failed to create delegation: ${error.message}`)
+    }
+
+    // Log the delegation creation
+    await createAuditLog({
+      action: 'role_delegation.created',
+      entity_type: 'user',
+      table_name: 'role_delegations',
+      record_id: data.id,
+      new_values: delegationData,
+      description: `Role ${params.delegated_role} delegated to user ${params.delegate_id}`,
+      severity: 'warning',
+      status: 'success',
+    })
+
+    console.log('✅ Role delegation created successfully')
+    return data
+  } catch (error) {
+    console.error('❌ Failed to create role delegation:', error)
+    throw error
+  }
+}
+
+// Helper function to get all role delegations (for admin view)
+export const getAllRoleDelegations = async (): Promise<RoleDelegationWithUsers[]> => {
+  try {
+    // First, expire any ended delegations
+    await expireEndedDelegations()
+
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .select(`
+        *,
+        delegator:users!delegator_id(
+          id,
+          email,
+          first_name,
+          last_name,
+          role
+        ),
+        delegate:users!delegate_id(
+          id,
+          email,
+          first_name,
+          last_name,
+          role
+        ),
+        revoker:users!revoked_by(
+          id,
+          email,
+          first_name,
+          last_name
+        )
+      `)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.warn('❌ Error fetching role delegations:', error.message)
+      return []
+    }
+
+    return (data || []) as RoleDelegationWithUsers[]
+  } catch (error) {
+    console.warn('❌ Failed to fetch role delegations:', error)
+    return []
+  }
+}
+
+// Helper function to get delegations for a specific user (as delegator or delegate)
+export const getUserDelegations = async (userId?: string): Promise<RoleDelegationWithUsers[]> => {
+  try {
+    // Get current user if not specified
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      userId = user.id
+    }
+
+    // First, expire any ended delegations
+    await expireEndedDelegations()
+
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .select(`
+        *,
+        delegator:users!delegator_id(
+          id,
+          email,
+          first_name,
+          last_name,
+          role
+        ),
+        delegate:users!delegate_id(
+          id,
+          email,
+          first_name,
+          last_name,
+          role
+        )
+      `)
+      .or(`delegator_id.eq.${userId},delegate_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.warn('❌ Error fetching user delegations:', error.message)
+      return []
+    }
+
+    return (data || []) as RoleDelegationWithUsers[]
+  } catch (error) {
+    console.warn('❌ Failed to fetch user delegations:', error)
+    return []
+  }
+}
+
+// Helper function to get active delegations where user is the delegate (acting roles)
+export const getActiveDelegationsForDelegate = async (userId?: string): Promise<RoleDelegationWithUsers[]> => {
+  try {
+    // Get current user if not specified
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      userId = user.id
+    }
+
+    // First, expire any ended delegations
+    await expireEndedDelegations()
+
+    const now = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .select(`
+        *,
+        delegator:users!delegator_id(
+          id,
+          email,
+          first_name,
+          last_name,
+          role
+        ),
+        delegate:users!delegate_id(
+          id,
+          email,
+          first_name,
+          last_name,
+          role
+        )
+      `)
+      .eq('delegate_id', userId)
+      .eq('status', 'active')
+      .lte('start_date', now)
+      .or(`end_date.is.null,end_date.gt.${now}`)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.warn('❌ Error fetching active delegations for delegate:', error.message)
+      return []
+    }
+
+    return (data || []) as RoleDelegationWithUsers[]
+  } catch (error) {
+    console.warn('❌ Failed to fetch active delegations for delegate:', error)
+    return []
+  }
+}
+
+// Helper function to revoke a role delegation
+export const revokeRoleDelegation = async (
+  delegationId: string, 
+  reason?: string
+): Promise<RoleDelegation> => {
+  try {
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      throw new Error('You must be logged in to revoke a delegation')
+    }
+
+    // Get the delegation to verify ownership
+    const { data: delegation, error: fetchError } = await supabase
+      .from('role_delegations')
+      .select('*')
+      .eq('id', delegationId)
+      .single()
+
+    if (fetchError || !delegation) {
+      throw new Error('Delegation not found')
+    }
+
+    // Check if user is authorized to revoke (delegator or admin)
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+
+    if (delegation.delegator_id !== user.id && currentUser?.role !== 'admin') {
+      throw new Error('You are not authorized to revoke this delegation')
+    }
+
+    if (delegation.status !== 'active') {
+      throw new Error('This delegation is already revoked or expired')
+    }
+
+    // Update the delegation
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .update({
+        status: 'revoked',
+        revoked_at: new Date().toISOString(),
+        revoked_by: user.id,
+        revocation_reason: reason || null,
+      })
+      .eq('id', delegationId)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('❌ Error revoking delegation:', error)
+      throw new Error(`Failed to revoke delegation: ${error.message}`)
+    }
+
+    // Log the revocation
+    await createAuditLog({
+      action: 'role_delegation.revoked',
+      entity_type: 'user',
+      table_name: 'role_delegations',
+      record_id: delegationId,
+      old_values: { status: 'active' },
+      new_values: { status: 'revoked', revoked_at: data.revoked_at, revocation_reason: reason },
+      description: `Role delegation ${delegationId} revoked${reason ? `: ${reason}` : ''}`,
+      severity: 'warning',
+      status: 'success',
+    })
+
+    console.log('✅ Role delegation revoked successfully')
+    return data
+  } catch (error) {
+    console.error('❌ Failed to revoke role delegation:', error)
+    throw error
+  }
+}
+
+// Helper function to expire ended delegations
+export const expireEndedDelegations = async (): Promise<void> => {
+  try {
+    const now = new Date().toISOString()
+
+    const { error } = await supabase
+      .from('role_delegations')
+      .update({ status: 'expired' })
+      .eq('status', 'active')
+      .not('end_date', 'is', null)
+      .lt('end_date', now)
+
+    if (error) {
+      console.warn('⚠️ Warning: Failed to expire ended delegations:', error.message)
+    }
+  } catch (error) {
+    console.warn('⚠️ Warning: Failed to expire ended delegations:', error)
+  }
+}
+
+// Helper function to check if a user has a specific delegated role
+export const hasActiveDelegation = async (
+  userId: string, 
+  role: DelegatableRole
+): Promise<boolean> => {
+  try {
+    await expireEndedDelegations()
+
+    const now = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .select('id')
+      .eq('delegate_id', userId)
+      .eq('delegated_role', role)
+      .eq('status', 'active')
+      .lte('start_date', now)
+      .or(`end_date.is.null,end_date.gt.${now}`)
+      .limit(1)
+
+    if (error) {
+      console.warn('❌ Error checking active delegation:', error.message)
+      return false
+    }
+
+    return (data?.length || 0) > 0
+  } catch (error) {
+    console.warn('❌ Failed to check active delegation:', error)
+    return false
+  }
+}
+
+// Helper function to get user's effective roles (own role + delegated roles)
+export const getUserEffectiveRoles = async (userId?: string): Promise<string[]> => {
+  try {
+    // Get current user if not specified
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      userId = user.id
+    }
+
+    // Get user's own role
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', userId)
+      .single()
+
+    if (userError || !user) {
+      return []
+    }
+
+    const roles: string[] = [user.role]
+
+    // Get active delegated roles
+    const delegations = await getActiveDelegationsForDelegate(userId)
+    
+    for (const delegation of delegations) {
+      if (!roles.includes(delegation.delegated_role)) {
+        roles.push(delegation.delegated_role)
+      }
+    }
+
+    return roles
+  } catch (error) {
+    console.warn('❌ Failed to get user effective roles:', error)
+    return []
+  }
+}
+
+// Helper function to get staff users eligible to be delegates
+export const getEligibleDelegates = async (excludeUserId?: string): Promise<{
+  id: string
+  email: string
+  first_name?: string
+  last_name?: string
+  role: string
+}[]> => {
+  try {
+    let query = supabase
+      .from('users')
+      .select('id, email, first_name, last_name, role')
+      .in('role', ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'])
+      .eq('status', 'active')
+      .order('first_name', { ascending: true })
+
+    if (excludeUserId) {
+      query = query.neq('id', excludeUserId)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      console.warn('❌ Error fetching eligible delegates:', error.message)
+      return []
+    }
+
+    return data || []
+  } catch (error) {
+    console.warn('❌ Failed to fetch eligible delegates:', error)
+    return []
+  }
+}
+
+// Helper function to get delegation statistics
+export const getDelegationStats = async (): Promise<{
+  totalActive: number
+  totalRevoked: number
+  totalExpired: number
+  byRole: Record<string, number>
+}> => {
+  try {
+    await expireEndedDelegations()
+
+    const { data, error } = await supabase
+      .from('role_delegations')
+      .select('status, delegated_role')
+
+    if (error) {
+      console.warn('❌ Error fetching delegation stats:', error.message)
+      return { totalActive: 0, totalRevoked: 0, totalExpired: 0, byRole: {} }
+    }
+
+    const stats = {
+      totalActive: 0,
+      totalRevoked: 0,
+      totalExpired: 0,
+      byRole: {} as Record<string, number>
+    }
+
+    (data || []).forEach(d => {
+      if (d.status === 'active') stats.totalActive++
+      else if (d.status === 'revoked') stats.totalRevoked++
+      else if (d.status === 'expired') stats.totalExpired++
+
+      if (d.status === 'active') {
+        stats.byRole[d.delegated_role] = (stats.byRole[d.delegated_role] || 0) + 1
+      }
+    })
+
+    return stats
+  } catch (error) {
+    console.warn('❌ Failed to fetch delegation stats:', error)
+    return { totalActive: 0, totalRevoked: 0, totalExpired: 0, byRole: {} }
+  }
 } 

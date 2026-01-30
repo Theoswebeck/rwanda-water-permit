@@ -15,7 +15,7 @@ import { useDocuments } from "@/hooks/useDocuments";
 import { DocumentViewer } from "@/components/documents/document-viewer";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
-import { supabase } from "@/lib/supabase";
+import { supabase, createAuditLog } from "@/lib/supabase";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import type { Application, Document, User as UserType } from "@/types/database";
 import { geometryToCoordinatePolygons, polygonsToGeoJSON, type CoordinatePoint } from "@/lib/geoUtils";
@@ -40,7 +40,7 @@ function formatProvinceForDB(province: string): Application['province'] | undefi
 }
 
 // Mapping function to transform form data to database schema - UPDATED TO MATCH NEW-APPLICATION
-function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft', userId?: string): Partial<Application> {
+function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' | 'pending_assessment' = 'draft', userId?: string): Partial<Application> {
   // Handle coordinates: support multi-polygons (waterSourcePolygons) and legacy single polygon (waterSourceCoordinates)
   let coordinates: any = undefined;
   try {
@@ -1095,8 +1095,23 @@ export default function EditApplicationPage() {
       const fileFields = Object.entries(formData).filter(([_, value]) => value instanceof File);
       console.log('📎 File fields in formData:', fileFields.map(([key, file]) => ({ key, name: (file as File).name, size: (file as File).size })));
       
-      // Map form data to application schema with submitted status
-      const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
+      // Determine the correct status for resubmission:
+      // If the application was returned by an assessor for revision (has assigned_assessor_id),
+      // route it back to that assessor by setting status to 'pending_assessment' instead of 'submitted'
+      const wasReturnedByAssessor = application?.status === 'revision_required' && application?.assigned_assessor_id;
+      const resubmissionStatus = wasReturnedByAssessor ? 'pending_assessment' : status;
+      
+      if (wasReturnedByAssessor) {
+        console.log('🔄 Application was returned by assessor - routing back to assessor:', application.assigned_assessor_id);
+      }
+      
+      // Map form data to application schema with appropriate status
+      const applicationData = mapFormDataToApplication(formData, resubmissionStatus as any, userProfile?.id);
+      
+      // If returning to assessor, clear the revision notes since applicant has made corrections
+      if (wasReturnedByAssessor) {
+        (applicationData as any).revision_notes = null;
+      }
       
       console.log('📋 Mapped application data:', applicationData);
       
@@ -1112,6 +1127,25 @@ export default function EditApplicationPage() {
       
       if (updatedApplication) {
         console.log('✅ Application updated and submitted successfully:', updatedApplication);
+
+        // Create audit log for resubmission
+        try {
+          await createAuditLog({
+            action: wasReturnedByAssessor ? 'application.resubmitted_to_assessor' : 'application.resubmitted',
+            entity_type: 'application',
+            table_name: 'applications',
+            record_id: application.id,
+            old_values: { status: application.status },
+            new_values: { status: resubmissionStatus },
+            description: wasReturnedByAssessor 
+              ? `Application ${application.application_number} resubmitted after corrections - routed back to assigned assessor`
+              : `Application ${application.application_number} resubmitted`,
+            severity: 'info',
+            status: 'success',
+          });
+        } catch (auditErr) {
+          console.warn('⚠️ Failed to create audit log:', auditErr);
+        }
 
         // Fire-and-forget: send submission SMS + email (idempotent server-side)
         try {
@@ -1137,8 +1171,10 @@ export default function EditApplicationPage() {
         setSuccess(true);
         
         // Redirect to dashboard after a brief success message
+        // Use different success query param based on routing
+        const successParam = wasReturnedByAssessor ? 'application-resubmitted-to-assessor' : 'application-submitted';
         setTimeout(() => {
-          router.push("/dashboard?tab=applications&success=application-submitted");
+          router.push(`/dashboard?tab=applications&success=${successParam}`);
         }, 2000);
       } else {
         throw new Error('Failed to submit application');

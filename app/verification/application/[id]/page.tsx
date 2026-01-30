@@ -396,6 +396,10 @@ export default function VerificationApplicationPage() {
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
       rejected: { label: "Rejected", variant: "destructive" },
+      // Returned statuses
+      returned_to_assessment: { label: "🔄 Returned to Assessor", variant: "secondary" },
+      returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },
+      returned_to_verification: { label: "🔄 Returned to Verifier", variant: "secondary" },
     };
     const config = statusConfig[status] || { label: status, variant: "outline" as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
@@ -453,7 +457,7 @@ export default function VerificationApplicationPage() {
 
       const { error: appError } = await supabase
         .from("applications")
-        .update({ status: "pending_review", updated_at: new Date().toISOString() })
+        .update({ status: "returned_to_review", updated_at: new Date().toISOString() })
         .eq("id", application.id);
       if (appError) throw appError;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 // import { ProtectedRoute } from "@/components/auth/protected-route"; // TEMPORARY: Disabled for testing
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,7 @@ import { ActivePermitsInspectionTab } from "@/components/inspection/active-permi
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
 
 interface DashboardStats {
   pendingFinalApproval: number;
@@ -42,6 +43,9 @@ export default function ApproverDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports">("approval");
+  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeApprovalTab, setActiveApprovalTab] = useState("pending_approval");
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -59,6 +63,73 @@ export default function ApproverDashboard() {
 
     fetchStats();
   }, []);
+
+  // Handle stats card click
+  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
+    setSelectedStatId(statId);
+    setStatusFilter(filterStatuses);
+    
+    // Switch to appropriate tab based on clicked stat
+    if (statId === "pending_approval") {
+      setActiveApprovalTab("pending_approval");
+    } else if (statId && statId !== "pending_approval") {
+      setActiveApprovalTab("all_applications");
+    }
+  };
+
+  // Create stats configuration for clickable cards
+  const statsConfig: StatsConfig[] = useMemo(() => [
+    {
+      id: "total_applications",
+      title: "Total Applications",
+      value: stats?.totalApplications ?? 0,
+      description: "All applications in the system",
+      icon: FileCheck,
+      iconColor: "text-slate-600",
+      filterStatuses: [], // Show all
+      badgeText: `${stats?.totalApplications ?? 0} total`,
+      badgeClassName: "bg-slate-100 text-slate-800 hover:bg-slate-100",
+    },
+    {
+      id: "pending_approval",
+      title: "Pending Approval",
+      value: stats?.pendingFinalApproval ?? 0,
+      description: "Awaiting final decision",
+      icon: Clock,
+      iconColor: "text-purple-600",
+      filterStatuses: ["pending_final_approval"],
+      badgeText: stats?.pendingFinalApproval === 0 ? "All caught up" : `${stats?.pendingFinalApproval} pending`,
+      badgeClassName: stats?.pendingFinalApproval === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-purple-100 text-purple-800 hover:bg-purple-100",
+    },
+    {
+      id: "approved",
+      title: "Approved",
+      value: stats?.approvedThisMonth ?? 0,
+      description: "Approved this month",
+      icon: CheckCircle,
+      iconColor: "text-green-600",
+      filterStatuses: ["approved", "approved_pending_permit"],
+      badgeText: stats?.approvedThisMonth === 0 ? "None this month" : `${stats?.approvedThisMonth} approved`,
+      badgeClassName: stats?.approvedThisMonth === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-green-100 text-green-800 hover:bg-green-100",
+    },
+    {
+      id: "rejected",
+      title: "Rejected",
+      value: stats?.rejectedThisMonth ?? 0,
+      description: "Rejected this month",
+      icon: XCircle,
+      iconColor: "text-red-600",
+      filterStatuses: ["rejected"],
+      badgeText: stats?.rejectedThisMonth === 0 ? "None this month" : `${stats?.rejectedThisMonth} rejected`,
+      badgeClassName: stats?.rejectedThisMonth === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-red-100 text-red-800 hover:bg-red-100",
+    },
+  ], [stats]);
 
   if (loading) {
     return (
@@ -111,48 +182,14 @@ export default function ApproverDashboard() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Applications</CardTitle>
-              <FileCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.totalApplications || 0}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.pendingFinalApproval || 0}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Approved</CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.approvedThisMonth || 0}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Rejected</CardTitle>
-              <XCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats?.rejectedThisMonth || 0}</div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Summary Cards - Clickable to filter applications */}
+        <ClickableStatsGrid
+          stats={statsConfig}
+          selectedStatId={selectedStatId}
+          onStatClick={handleStatClick}
+          isLoading={loading}
+          columns={4}
+        />
 
         <StaffTopTabs
           value={topTab}
@@ -173,7 +210,7 @@ export default function ApproverDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Tabs defaultValue="pending_approval" className="w-full">
+              <Tabs value={activeApprovalTab} onValueChange={setActiveApprovalTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="pending_approval">Pending Approval</TabsTrigger>
                   <TabsTrigger value="all_applications">All Applications</TabsTrigger>
@@ -189,7 +226,7 @@ export default function ApproverDashboard() {
               </TabsContent>
 
               <TabsContent value="all_applications" className="space-y-4 mt-6">
-                <AllApplicationsList />
+                <AllApplicationsList externalStatusFilter={statusFilter} />
               </TabsContent>
 
               <TabsContent value="map" className="space-y-4 mt-6">

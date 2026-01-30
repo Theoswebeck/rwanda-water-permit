@@ -35,6 +35,10 @@ export type ApplicationStatus =
   | 'rejected' 
   | 'revision_required' 
   | 'cancelled'
+  // Returned statuses - for applications sent back for corrections
+  | 'returned_to_assessment'    // Returned to assessor by reviewer/verifier
+  | 'returned_to_review'        // Returned to reviewer by verifier/approver  
+  | 'returned_to_verification'  // Returned to verifier by approver
 
 export type ApplicationType = 
   | 'domestic' 
@@ -114,6 +118,10 @@ export type RiskAssessment = 'low' | 'medium' | 'high'
 export type RecommendationType = 'approve' | 'reject' | 'require_revision' | 'require_inspection'
 
 export type ProvinceType = 'Kigali' | 'Northern' | 'Southern' | 'Eastern' | 'Western'
+
+// Role Delegation Types
+export type DelegationStatus = 'active' | 'revoked' | 'expired'
+export type DelegatableRole = 'reviewer' | 'verifier' | 'approver' | 'assessor' | 'inspector'
 
 // =============================================
 // WATER USE REPORTING (ANNUAL)
@@ -294,6 +302,11 @@ export interface Application {
   reviewed_at?: string
   inspected_at?: string
   approved_at?: string
+  
+  // 90-day deadline countdown trigger
+  // This is set when the assessor clicks "Confirm Completeness and Lock"
+  // The 90-day processing deadline starts from this timestamp
+  completeness_confirmed_at?: string
   
   // Audit fields
   created_at: string
@@ -785,6 +798,66 @@ export interface AuditLog {
 }
 
 // =============================================
+// ROLE DELEGATION (Acting Staff Feature)
+// =============================================
+
+export interface RoleDelegation {
+  id: string
+  
+  // Delegation participants
+  delegator_id: string
+  delegate_id: string
+  
+  // Role being delegated
+  delegated_role: DelegatableRole
+  
+  // Delegation details
+  reason?: string
+  start_date: string
+  end_date?: string | null  // null = indefinite
+  
+  // Status tracking
+  status: DelegationStatus
+  
+  // Revocation info
+  revoked_at?: string | null
+  revoked_by?: string | null
+  revocation_reason?: string | null
+  
+  // Audit fields
+  created_at: string
+  updated_at: string
+  
+  // Joined relations (from Supabase queries with select joins)
+  delegator?: User | null
+  delegate?: User | null
+  revoker?: User | null
+}
+
+export interface RoleDelegationWithUsers extends RoleDelegation {
+  delegator: {
+    id: string
+    email: string
+    first_name?: string
+    last_name?: string
+    role: UserRole
+  }
+  delegate: {
+    id: string
+    email: string
+    first_name?: string
+    last_name?: string
+    role: UserRole
+  }
+  revoker?: {
+    id: string
+    email: string
+    first_name?: string
+    last_name?: string
+  } | null
+}
+
+// =============================================
 // HELPER TYPES AND INTERFACES
 // =============================================
 
@@ -1004,6 +1077,11 @@ export interface Database {
         Row: AuditLog
         Insert: Omit<AuditLog, 'id' | 'created_at'>
         Update: Partial<Omit<AuditLog, 'id' | 'created_at'>>
+      }
+      role_delegations: {
+        Row: RoleDelegation
+        Insert: Omit<RoleDelegation, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<RoleDelegation, 'id' | 'created_at' | 'updated_at'>>
       }
     }
     Views: {

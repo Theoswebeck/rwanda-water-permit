@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -35,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send } from "lucide-react";
+import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send, ClipboardCheck } from "lucide-react";
 import Link from "next/link";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -45,7 +45,8 @@ import { ActivePermitsInspectionTab } from "@/components/inspection/active-permi
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
-import { calculateDaysRemainingTo90DayDeadline, sortBy90DayDeadlineClosest } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline, sortBySubmissionDateDescending } from "@/lib/utils";
+import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -64,6 +65,7 @@ interface ReviewStatsData {
   pendingAssessment: number;
   underReview: number;
   returnedForRevision: number;
+  pendingVerification: number;
 }
 
 interface StaffMember {
@@ -85,6 +87,8 @@ export default function ReviewerDashboard() {
   const [startingReview, setStartingReview] = useState<string | null>(null);
   const [stats, setStats] = useState<ReviewStatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   // Assessor assignment state
   const [assessors, setAssessors] = useState<StaffMember[]>([]);
@@ -94,7 +98,7 @@ export default function ReviewerDashboard() {
   const [assignLoading, setAssignLoading] = useState(false);
 
   const isInApplicationsForReviewQueue = (status: string | null | undefined) => {
-    return status === "submitted" || status === "pending_review" || status === "under_review";
+    return status === "submitted" || status === "pending_review" || status === "under_review" || status === "returned_to_review";
   };
 
   const isFinalizedStatus = (status: string | null | undefined) => {
@@ -106,7 +110,9 @@ export default function ReviewerDashboard() {
     return (
       status === "submitted" ||
       status === "pending_assessment" ||
-      status === "under_review"
+      status === "under_review" ||
+      status === "returned_to_review" ||
+      status === "returned_to_assessment"
     );
   };
 
@@ -165,9 +171,9 @@ export default function ReviewerDashboard() {
              slaRemaining = diffDays;
            }
 
+           // 90-day countdown starts from when completeness was confirmed (not submission)
            const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
-             submittedAt: app.submitted_at,
-             createdAt: app.created_at,
+             completenessConfirmedAt: app.completeness_confirmed_at,
            });
 
            return {
@@ -209,19 +215,19 @@ export default function ReviewerDashboard() {
       try {
         setStatsLoading(true);
         
-        // Query for new submissions (submitted + pending_review status)
+        // Query for new submissions (submitted + pending_review + returned_to_review status)
         const { count: newSubmissionsCount, error: newError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .in('status', ['submitted', 'pending_review']);
+          .in('status', ['submitted', 'pending_review', 'returned_to_review']);
         
         if (newError) throw newError;
 
-        // Query for applications pending assessment
+        // Query for applications pending assessment (includes returned_to_assessment)
         const { count: pendingAssessmentCount, error: pendingError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_assessment');
+          .in('status', ['pending_assessment', 'returned_to_assessment']);
         
         if (pendingError) throw pendingError;
 
@@ -233,7 +239,7 @@ export default function ReviewerDashboard() {
         
         if (reviewError) throw reviewError;
 
-        // Query for applications returned for revision
+        // Query for applications returned for revision (to applicant)
         const { count: revisionCount, error: revisionError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
@@ -241,11 +247,20 @@ export default function ReviewerDashboard() {
         
         if (revisionError) throw revisionError;
 
+        // Query for applications pending verification (next stage)
+        const { count: pendingVerificationCount, error: verificationError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending_verification');
+        
+        if (verificationError) throw verificationError;
+
         setStats({
           newSubmissions: newSubmissionsCount || 0,
           pendingAssessment: pendingAssessmentCount || 0,
           underReview: underReviewCount || 0,
-          returnedForRevision: revisionCount || 0
+          returnedForRevision: revisionCount || 0,
+          pendingVerification: pendingVerificationCount || 0
         });
       } catch (err) {
         console.error('Error fetching review stats:', err);
@@ -452,13 +467,79 @@ export default function ReviewerDashboard() {
                          app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
                          app.application_type?.toLowerCase().includes(filterType.toLowerCase());
       
-      return matchesSearch && matchesType;
+      // Apply status filter from clicked stats card
+      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(app.status);
+      
+      return matchesSearch && matchesType && matchesStatus;
     });
   };
 
+  // Handle stats card click
+  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
+    setSelectedStatId(statId);
+    setStatusFilter(filterStatuses);
+  };
+
+  // Create stats configuration for clickable cards
+  const statsConfig: StatsConfig[] = useMemo(() => [
+    {
+      id: "new_submissions",
+      title: "New Submissions",
+      value: stats?.newSubmissions ?? 0,
+      description: "Awaiting assignment to assessor",
+      icon: Clock,
+      iconColor: "text-blue-600",
+      filterStatuses: ["submitted", "pending_review", "returned_to_review"],
+      badgeText: stats?.newSubmissions === 0 ? "All caught up" : `${stats?.newSubmissions} pending review`,
+      badgeClassName: stats?.newSubmissions === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
+    },
+    {
+      id: "pending_assessment",
+      title: "Pending Assessment",
+      value: stats?.pendingAssessment ?? 0,
+      description: "With inspectors for assessment",
+      icon: AlertCircle,
+      iconColor: "text-amber-600",
+      filterStatuses: ["pending_assessment", "returned_to_assessment"],
+      badgeText: stats?.pendingAssessment === 0 ? "No pending assessments" : `${stats?.pendingAssessment} with inspectors`,
+      badgeClassName: stats?.pendingAssessment === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
+    },
+    {
+      id: "under_review",
+      title: "Under Review",
+      value: stats?.underReview ?? 0,
+      description: "Being reviewed by staff",
+      icon: CheckCircle,
+      iconColor: "text-green-600",
+      filterStatuses: ["under_review"],
+      badgeText: stats?.underReview === 0 ? "No active reviews" : `${stats?.underReview} in review`,
+      badgeClassName: stats?.underReview === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-green-100 text-green-800 hover:bg-green-100",
+    },
+    {
+      id: "pending_verification",
+      title: "Pending Verification",
+      value: stats?.pendingVerification ?? 0,
+      description: "Sent to verification stage",
+      icon: ClipboardCheck,
+      iconColor: "text-indigo-600",
+      filterStatuses: ["pending_verification"],
+      badgeText: stats?.pendingVerification === 0 ? "None pending" : `${stats?.pendingVerification} in verification`,
+      badgeClassName: stats?.pendingVerification === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
+      isNextStage: true,
+    },
+  ], [stats]);
+
   const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[], emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
-    const sortedApps = sortBy90DayDeadlineClosest(filteredApps, (app) => app.deadline_90_days_remaining ?? null);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
     
     const getApplicantName = (app: ReviewApplication) => {
       return app.applicant_name || 'Unknown Applicant';
@@ -576,6 +657,19 @@ export default function ReviewerDashboard() {
         'rejected': { 
           label: 'Rejected', 
           className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
+        },
+        // Returned statuses
+        'returned_to_assessment': { 
+          label: '🔄 Returned to Assessor', 
+          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
+        },
+        'returned_to_review': { 
+          label: '🔄 Returned for Review', 
+          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
+        },
+        'returned_to_verification': { 
+          label: '🔄 Returned to Verifier', 
+          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
         }
       };
       
@@ -595,7 +689,14 @@ export default function ReviewerDashboard() {
     };
 
     const get90DayBadge = (daysRemaining: number | null | undefined) => {
-      if (daysRemaining === null || daysRemaining === undefined) return <span className="text-xs text-muted-foreground">—</span>;
+      // 90-day countdown hasn't started yet (completeness not confirmed)
+      if (daysRemaining === null || daysRemaining === undefined) {
+        return (
+          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">
+            Not Started
+          </Badge>
+        );
+      }
       if (daysRemaining <= 0) {
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
@@ -635,10 +736,10 @@ export default function ReviewerDashboard() {
             <Table className="w-full">
           <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden md:table-cell">Location</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
@@ -665,16 +766,19 @@ export default function ReviewerDashboard() {
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
                     >
                       <TableCell className="p-2 sm:p-3">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                          {app.application_number}
+                        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                          {new Date(app.submitted_at || app.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {app.project_title || 'No project title'}
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {new Date(app.submitted_at || app.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
+                        <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
+                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                          {getApplicantName(app)}
+                          {app.application_number}
                         </div>
                         <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
                           {getWaterPurposeLabel(app.water_purpose || '')}
@@ -682,9 +786,6 @@ export default function ReviewerDashboard() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         {getApplicationTypeBadge(app)}
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">
@@ -813,148 +914,14 @@ export default function ReviewerDashboard() {
             </div>
           </div>
 
-          {/* Summary Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  New Submissions
-                </CardTitle>
-                <Clock className="h-4 w-4 text-blue-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.newSubmissions || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Awaiting assignment to assessor
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant={stats.newSubmissions === 0 ? "default" : "outline"}
-                      className={`text-xs ${
-                        stats.newSubmissions === 0 
-                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
-                          : "bg-blue-100 text-blue-800 hover:bg-blue-100"
-                      }`}
-                    >
-                      {stats.newSubmissions === 0 ? "All caught up" : `${stats.newSubmissions} pending review`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Pending Assessment
-                </CardTitle>
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.pendingAssessment || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  With inspectors for assessment
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        stats.pendingAssessment === 0 
-                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
-                          : "bg-amber-100 text-amber-800 hover:bg-amber-100"
-                      }`}
-                    >
-                      {stats.pendingAssessment === 0 ? "No pending assessments" : `${stats.pendingAssessment} with inspectors`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Under Review
-                </CardTitle>
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.underReview || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Being reviewed by staff
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        stats.underReview === 0 
-                          ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-                          : "bg-green-100 text-green-800 hover:bg-green-100"
-                      }`}
-                    >
-                      {stats.underReview === 0 ? "No active reviews" : `${stats.underReview} in review`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            
-            <Card className="hover:shadow-md transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Returned for Revision
-                </CardTitle>
-                <XCircle className="h-4 w-4 text-red-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <div className="h-8 w-12 bg-gray-200 rounded animate-pulse" />
-                  ) : (
-                    stats?.returnedForRevision || 0
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pending resubmission
-                </p>
-                {!statsLoading && stats && (
-                  <div className="flex items-center mt-2">
-                    <Badge 
-                      variant="outline"
-                      className={`text-xs ${
-                        stats.returnedForRevision === 0 
-                          ? "bg-green-100 text-green-800 hover:bg-green-100" 
-                          : "bg-red-100 text-red-800 hover:bg-red-100"
-                      }`}
-                    >
-                      {stats.returnedForRevision === 0 ? "No revisions pending" : `${stats.returnedForRevision} revisions needed`}
-                    </Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          {/* Summary Stats - Clickable to filter applications */}
+          <ClickableStatsGrid
+            stats={statsConfig}
+            selectedStatId={selectedStatId}
+            onStatClick={handleStatClick}
+            isLoading={statsLoading}
+            columns={4}
+          />
 
           {/* Main Content */}
           <StaffTopTabs

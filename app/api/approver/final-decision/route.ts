@@ -244,11 +244,11 @@ export async function POST(req: NextRequest) {
         .eq('id', applicationId)
       if (updErr) throw updErr
     } else {
-      // return_to_assessment (updated workflow: return to verification stage)
+      // return_to_assessment (updated workflow: return to verification stage with explicit returned status)
       const { error: updErr } = await supabase
         .from('applications')
         .update({
-          status: 'pending_verification',
+          status: 'returned_to_verification',
           internal_notes: `Returned from Approval for further verification: ${reason.trim()}`,
           assigned_approver_id: approver.id,
           updated_at: now,
@@ -302,7 +302,7 @@ export async function POST(req: NextRequest) {
         record_id: applicationId,
         old_values: { status: 'pending_final_approval' },
         new_values: { 
-          status: decision === 'approve' ? 'approved_pending_permit' : decision === 'reject' ? 'rejected' : 'pending_verification',
+          status: decision === 'approve' ? 'approved_pending_permit' : decision === 'reject' ? 'rejected' : 'returned_to_verification',
           ...(decision === 'reject' ? { rejection_reason: reason } : {}),
           ...(decision === 'approve' && conditions ? { approval_conditions: conditions } : {})
         },
