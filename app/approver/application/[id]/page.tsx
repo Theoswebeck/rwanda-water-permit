@@ -164,10 +164,11 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'fish_farming_ponds': 'fish_farming_ponds', 'industrial': 'industry', 'electricity_generation': 'electricity_generation',
       'mining': 'mining', 'recreation': 'recreation_activities', 'livestock': 'livestock'
     };
+    let mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
     if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
       formData.intendedActivities = (application as any).intended_activities;
+      mappedActivity = (application as any).intended_activities[0] || mappedActivity;
     } else {
-      const mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
       formData.intendedActivities = [mappedActivity];
     }
     formData.waterAbstractionDetails = [{
