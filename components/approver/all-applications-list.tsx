@@ -5,9 +5,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
+  ChevronDown,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
   Eye, 
   Search, 
   Filter,
@@ -21,6 +27,13 @@ import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ApplicationWithApplicant extends Application {
   applicant?: {
@@ -44,6 +57,16 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  
+  // Decision dialog state
+  const [selectedApplication, setSelectedApplication] = useState<ApplicationWithApplicant | null>(null);
+  const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
+  const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_assessment">("approve");
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
+  const [conditions, setConditions] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchApplications();
@@ -149,7 +172,7 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
 
   // Get application type badge (New, Modification, Transfer, Renewal)
   const getAppTypeBadge = (app: ApplicationWithApplicant) => {
-    const appType = app.application_type;
+    const appType = app.application_type as string;
     const isModification = appType === 'modification' || (app as any).is_modification === true;
     const isTransfer = appType === 'transfer';
     const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
@@ -191,6 +214,63 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
     return labels[purpose || ''] || purpose || 'Unknown';
   };
 
+  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject" | "return_to_assessment") => {
+    try {
+      setSubmitting(true);
+      setError(null);
+      console.log(`🔄 Processing ${decision} decision for application ${applicationId}`);
+
+      const resp = await fetch('/api/approver/final-decision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicationId,
+          decision,
+          reason: decisionReason,
+          conditions,
+        }),
+      });
+
+      const result = await resp.json();
+      if (!resp.ok || !result?.success) {
+        throw new Error(result?.message || 'Failed to process decision');
+      }
+      
+      // Show success message
+      const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to verification';
+      const notificationSuffix = decision === 'return_to_assessment' ? '' : ' SMS and email notifications sent.';
+      setSuccessMessage(`Application ${actionText} successfully!${notificationSuffix}`);
+      
+      // Refresh applications list
+      await fetchApplications();
+      
+      // Close dialog and reset form
+      setIsDecisionDialogOpen(false);
+      setDecisionReason("");
+      setDecisionReasonPreset("");
+      setConditions("");
+      setSelectedApplication(null);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err: unknown) {
+      console.error('❌ Failed to process decision:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Failed to process ${decision}: ${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openDecisionDialog = (application: ApplicationWithApplicant, decision: "approve" | "reject" | "return_to_assessment") => {
+    setSelectedApplication(application);
+    setDecisionType(decision);
+    setDecisionReason("");
+    setDecisionReasonPreset("");
+    setConditions("");
+    setIsDecisionDialogOpen(true);
+  };
+
   const filteredApplications = applications.filter(app => {
     const matchesSearch = 
       app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -230,6 +310,15 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
 
   return (
     <div className="space-y-6">
+      {successMessage && (
+        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            {successMessage}
+          </div>
+        </div>
+      )}
+      
       <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">All Applications</h2>
@@ -376,12 +465,48 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Link href={`/approver/application/${application.application_number}`}>
-                        <Button size="sm" variant="outline" className="gap-2">
-                          <Eye className="h-4 w-4" />
-                          View
-                        </Button>
-                      </Link>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" className="gap-2 bg-gray-900 hover:bg-gray-800 text-white">
+                            Actions
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/approver/application/${application.application_number}`} className="flex items-center gap-2 cursor-pointer">
+                              <Eye className="h-4 w-4" />
+                              View Details
+                            </Link>
+                          </DropdownMenuItem>
+                          {application.status === 'pending_final_approval' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                onClick={() => openDecisionDialog(application, 'approve')}
+                                className="flex items-center gap-2 cursor-pointer text-green-600 focus:text-green-600"
+                              >
+                                <CheckCircle2 className="h-4 w-4" />
+                                Approve
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => openDecisionDialog(application, 'reject')}
+                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                              >
+                                <XCircle className="h-4 w-4" />
+                                Reject
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => openDecisionDialog(application, 'return_to_assessment')}
+                                className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                                Return to Verification
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -397,6 +522,119 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
           </div>
         </CardContent>
       </Card>
+
+      {/* Decision Dialog */}
+      <Dialog open={isDecisionDialogOpen} onOpenChange={setIsDecisionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {decisionType === "approve" 
+                ? "Approve Application" 
+                : decisionType === "reject" 
+                  ? "Reject Application" 
+                  : "Return Application to Verification"}
+            </DialogTitle>
+            <DialogDescription>
+              {decisionType === "approve" 
+                ? "You are about to approve this water permit application. This decision is final."
+                : decisionType === "reject"
+                  ? "You are about to reject this water permit application. Please provide a reason."
+                  : "You are about to return this application to the verification stage. Please provide specific instructions for the verifier."
+              }
+            </DialogDescription>
+          </DialogHeader>
+          {selectedApplication && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm bg-muted/50 p-4 rounded-lg">
+                <div>
+                  <span className="font-medium text-muted-foreground">Application ID:</span>
+                  <p className="mt-1 font-medium">{selectedApplication.application_number || selectedApplication.id}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground">Applicant:</span>
+                  <p className="mt-1 font-medium">{getApplicantName(selectedApplication)}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground">Type:</span>
+                  <p className="mt-1 font-medium">{getWaterPurposeLabel(selectedApplication.water_purpose)}</p>
+                </div>
+                <div>
+                  <span className="font-medium text-muted-foreground">Location:</span>
+                  <p className="mt-1 font-medium">{selectedApplication.district}, {selectedApplication.province}</p>
+                </div>
+              </div>
+              
+              {decisionType === "approve" ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Approval Conditions (Optional)</label>
+                  <Textarea
+                    placeholder="Add any conditions or requirements for the approval (one per line)..."
+                    value={conditions}
+                    onChange={(e) => setConditions(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Verification Instructions (Required)"}
+                  </label>
+                  <div className="space-y-2">
+                    <Select value={decisionReasonPreset} onValueChange={(v) => { setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="incomplete_documentation">Incomplete documentation</SelectItem>
+                        <SelectItem value="non_compliance_requirements">Non-compliance with requirements</SelectItem>
+                        <SelectItem value="inconsistent_information">Inconsistent information provided</SelectItem>
+                        <SelectItem value="requires_further_review">Requires further technical assessment</SelectItem>
+                        <SelectItem value="other">Other...</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Textarea
+                      placeholder={decisionReasonPreset === 'other' || decisionReasonPreset === '' ? "Type reason/instructions..." : "Add details (optional)"}
+                      value={decisionReason}
+                      onChange={(e) => setDecisionReason(e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="gap-2 pt-6">
+            <Button variant="outline" onClick={() => setIsDecisionDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
+              disabled={submitting || ((decisionType === "reject" || decisionType === "return_to_assessment") && !decisionReason.trim())}
+              variant={
+                decisionType === "approve" 
+                  ? "default" 
+                  : decisionType === "reject" 
+                    ? "destructive" 
+                    : "outline"
+              }
+              className={decisionType === "approve" ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                decisionType === "approve" 
+                  ? "Approve Application" 
+                  : decisionType === "reject" 
+                    ? "Reject Application"
+                    : "Return to Verification"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
