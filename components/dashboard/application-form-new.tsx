@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -530,8 +530,7 @@ interface ApplicationFormProps {
   modificationChanges?: Record<string, { previous: any; current: any }>; // Stored changes from DB (staff view)
 }
 
-// ⚡ PERFORMANCE: Memoize the entire form component to prevent unnecessary re-renders
-export const ApplicationForm = memo(function ApplicationForm({ 
+export function ApplicationForm({ 
   userData, 
   onSubmit, 
   onSaveAsDraft, 
@@ -711,13 +710,13 @@ export const ApplicationForm = memo(function ApplicationForm({
       irrigationStorageFacilities: "",
       irrigationStorageCapacity: undefined,
       additionalDocuments: [],
-      waterSourcePolygons: [
-        [
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" }
-        ]
-      ],
+      // Start with a 4-point polygon placeholder to match schema min(4) when polygons are used.
+      waterSourcePolygons: [[
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+        { latitude: "", longitude: "" },
+      ]],
     };
 
     // Auto-fill from current user profile if available
@@ -746,7 +745,7 @@ export const ApplicationForm = memo(function ApplicationForm({
 
     // Override with any provided initial data
     return { ...defaults, ...initialData };
-  }, [userData, initialData]);
+  }, [initialData, userProfile]);
 
   const form = useForm<FormValues>({
     // Skip validation resolver in read-only mode - not needed and can cause initialization issues
@@ -1469,7 +1468,10 @@ export const ApplicationForm = memo(function ApplicationForm({
       
       // Initialize additionalDocuments if they exist in initialData
       if (initialData.additionalDocuments && Array.isArray(initialData.additionalDocuments)) {
+        console.log('📎 Initializing additionalDocuments from initialData:', initialData.additionalDocuments.length, initialData.additionalDocuments);
         setAdditionalDocuments(initialData.additionalDocuments);
+      } else {
+        console.log('📎 No additionalDocuments in initialData:', { has: !!initialData.additionalDocuments, isArray: Array.isArray(initialData.additionalDocuments) });
       }
     }
   }, [initialData, form, formatPolygonCoordinatesForDisplay]);
@@ -2006,6 +2008,7 @@ export const ApplicationForm = memo(function ApplicationForm({
           modificationChanges: modificationChangesData,
         }),
       };
+      console.log('📎 additionalDocuments being submitted:', additionalDocuments.length, additionalDocuments.map(d => ({ id: d.id, name: d.name, hasFile: !!d.file, fileIsFile: d.file instanceof File })));
       await onSubmit(submissionData, 'submitted');
     } catch (error) {
       console.error('Form submission error:', error);
@@ -3078,19 +3081,33 @@ export const ApplicationForm = memo(function ApplicationForm({
 
                   {/* Other activity specification */}
                   {watchedIntendedActivities?.includes("other") && (
-                    <FormField
-                      control={form.control}
-                      name="intendedActivityOther"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Please specify other activity</FormLabel>
-                          <FormControl>
-                            <Input {...field} placeholder="Specify other activity" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="space-y-4">
+                      <FormField
+                        control={form.control}
+                        name="intendedActivityOther"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Please specify other activity</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Specify other activity" disabled={readOnly} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      {/* Other activity attachments (multiple, dynamic) */}
+                      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 text-lg border-b pb-2">
+                          Other Activity Attachments
+                        </h4>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Upload any supporting documents for your other activity. You can add multiple attachments.
+                        </p>
+
+                        <AdditionalDocumentsSection category="other" activityType="other" />
+                      </div>
+                    </div>
                   )}
 
                   {/* Water Concession Area (Multiple Polygons) - only for fish farming, after Q13 selection */}
@@ -4679,6 +4696,7 @@ export const ApplicationForm = memo(function ApplicationForm({
                             }),
                           };
                           console.log('📎 Files being saved:', Object.keys(files).filter(k => files[k]));
+                          console.log('📎 additionalDocuments being saved:', additionalDocuments.length, additionalDocuments.map(d => ({ id: d.id, name: d.name, hasFile: !!d.file, fileIsFile: d.file instanceof File })));
                           const result = await onSaveAsDraft(draftData, 'draft');
                           
                           // After successful save, clear the files state so the UI shows uploaded versions
@@ -4815,4 +4833,7 @@ export const ApplicationForm = memo(function ApplicationForm({
       </Card>
     </motion.div>
   );
-});
+}
+
+// Also export as default for dynamic() compatibility
+export default ApplicationForm;

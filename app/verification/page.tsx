@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, FileCheck, Eye, Search, MapPin, Droplets, Clock, CheckCircle, XCircle, AlertCircle, Gavel } from "lucide-react";
+import { Loader2, FileCheck, Eye, Search, MapPin, Droplets, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -21,7 +21,8 @@ import { ActivePermitsInspectionTab } from "@/components/inspection/active-permi
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
-import { calculateDaysRemainingTo90DayDeadline, sortBySubmissionDateDescending } from "@/lib/utils";
+import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
 
 interface VerificationApplication extends Application {
@@ -32,9 +33,8 @@ interface VerificationApplication extends Application {
 
 interface VerificationStatsData {
   pendingVerification: number;
+  underVerification: number;
   pendingApproval: number;
-  approvedPendingPermit: number;
-  rejected: number;
 }
 
 export default function VerificationDashboard() {
@@ -48,6 +48,7 @@ export default function VerificationDashboard() {
   const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports">("verification");
   const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -64,6 +65,8 @@ export default function VerificationDashboard() {
             applicant:users!applicant_id(first_name, last_name, company_name)
           `
           )
+          // Always show latest submissions first (fallback to created_at when submitted_at is null).
+          .order("submitted_at", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
 
         if (error) throw error;
@@ -115,36 +118,31 @@ export default function VerificationDashboard() {
       try {
         setStatsLoading(true);
 
-        // Include returned_to_verification in pending verification count
+        // Panel 1: Pending Verification (my queue - needs my action)
         const { count: pendingVerificationCount, error: pendingVerificationError } = await supabase
           .from("applications")
           .select("*", { count: "exact", head: true })
-          .in("status", ["pending_verification", "returned_to_verification"]);
+          .eq("status", "pending_verification");
         if (pendingVerificationError) throw pendingVerificationError;
 
+        // Panel 2: Under Verification (work in progress - returned for corrections)
+        const { count: underVerificationCount, error: underError } = await supabase
+          .from("applications")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "returned_to_verification");
+        if (underError) throw underError;
+
+        // Panel 3: Pending Approval (next stage - sent to Approver)
         const { count: pendingApprovalCount, error: pendingApprovalError } = await supabase
           .from("applications")
           .select("*", { count: "exact", head: true })
           .eq("status", "pending_final_approval");
         if (pendingApprovalError) throw pendingApprovalError;
 
-        const { count: approvedPendingPermitCount, error: approvedPendingPermitError } = await supabase
-          .from("applications")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "approved_pending_permit");
-        if (approvedPendingPermitError) throw approvedPendingPermitError;
-
-        const { count: rejectedCount, error: rejectedError } = await supabase
-          .from("applications")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "rejected");
-        if (rejectedError) throw rejectedError;
-
         setStats({
           pendingVerification: pendingVerificationCount || 0,
+          underVerification: underVerificationCount || 0,
           pendingApproval: pendingApprovalCount || 0,
-          approvedPendingPermit: approvedPendingPermitCount || 0,
-          rejected: rejectedCount || 0,
         });
       } catch (e) {
         console.error("❌ Error fetching verification stats:", e);
@@ -244,54 +242,41 @@ export default function VerificationDashboard() {
       id: "pending_verification",
       title: "Pending Verification",
       value: stats?.pendingVerification ?? 0,
-      description: "Awaiting verifier review",
+      description: "My queue - needs my action",
       icon: FileCheck,
-      iconColor: "text-indigo-600",
-      filterStatuses: ["pending_verification", "returned_to_verification"],
-      badgeText: stats?.pendingVerification === 0 ? "All caught up" : `${stats?.pendingVerification} pending`,
+      iconColor: "text-blue-600",
+      filterStatuses: ["pending_verification"],
+      badgeText: stats?.pendingVerification === 0 ? "All caught up" : `${stats?.pendingVerification} in queue`,
       badgeClassName: stats?.pendingVerification === 0 
         ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
+        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
+    },
+    {
+      id: "under_verification",
+      title: "Under Verification",
+      value: stats?.underVerification ?? 0,
+      description: "Work in progress",
+      icon: AlertCircle,
+      iconColor: "text-amber-600",
+      filterStatuses: ["returned_to_verification"],
+      badgeText: (stats?.underVerification ?? 0) === 0 ? "None in progress" : `${stats?.underVerification ?? 0} in progress`,
+      badgeClassName: stats?.underVerification === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
     },
     {
       id: "pending_approval",
       title: "Pending Approval",
       value: stats?.pendingApproval ?? 0,
-      description: "With approver for final decision",
-      icon: Clock,
-      iconColor: "text-purple-600",
-      filterStatuses: ["pending_final_approval"],
-      badgeText: stats?.pendingApproval === 0 ? "None pending" : `${stats?.pendingApproval} awaiting`,
-      badgeClassName: stats?.pendingApproval === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-purple-100 text-purple-800 hover:bg-purple-100",
-      isNextStage: true,
-    },
-    {
-      id: "permit_pending",
-      title: "Permit Pending",
-      value: stats?.approvedPendingPermit ?? 0,
-      description: "Approved, awaiting terms acceptance",
+      description: "Sent to Approver",
       icon: CheckCircle,
       iconColor: "text-green-600",
-      filterStatuses: ["approved_pending_permit"],
-      badgeText: stats?.approvedPendingPermit === 0 ? "None pending" : `${stats?.approvedPendingPermit} awaiting terms`,
-      badgeClassName: stats?.approvedPendingPermit === 0 
+      filterStatuses: ["pending_final_approval"],
+      badgeText: stats?.pendingApproval === 0 ? "None pending" : `${stats?.pendingApproval} with approver`,
+      badgeClassName: stats?.pendingApproval === 0 
         ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
         : "bg-green-100 text-green-800 hover:bg-green-100",
-    },
-    {
-      id: "rejected",
-      title: "Rejected",
-      value: stats?.rejected ?? 0,
-      description: "Applications rejected",
-      icon: XCircle,
-      iconColor: "text-red-600",
-      filterStatuses: ["rejected"],
-      badgeText: stats?.rejected === 0 ? "None rejected" : `${stats?.rejected} rejected`,
-      badgeClassName: stats?.rejected === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-red-100 text-red-800 hover:bg-red-100",
+      isNextStage: true,
     },
   ], [stats]);
 
@@ -525,7 +510,7 @@ export default function VerificationDashboard() {
               selectedStatId={selectedStatId}
               onStatClick={handleStatClick}
               isLoading={statsLoading}
-              columns={4}
+              columns={3}
             />
 
             <StaffTopTabs
@@ -547,48 +532,14 @@ export default function VerificationDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Tabs defaultValue="applications_to_verify" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="applications_to_verify">Applications for Verification</TabsTrigger>
+                  <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="all_applications">All Applications</TabsTrigger>
                       <TabsTrigger value="map" className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
                         Concession Map
                       </TabsTrigger>
                     </TabsList>
-
-                  <TabsContent value="applications_to_verify" className="space-y-4 mt-6">
-                    <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
-                      <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                        <Input
-                          placeholder="Search by applicant name, application number, or project title..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
-                        />
-                      </div>
-                      <Select value={filterType} onValueChange={setFilterType}>
-                        <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
-                          <SelectValue placeholder="Filter by type" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                          <SelectItem value="all">All Types</SelectItem>
-                          <SelectItem value="surface">Surface Water</SelectItem>
-                          <SelectItem value="groundwater">Groundwater</SelectItem>
-                          <SelectItem value="industrial">Industrial</SelectItem>
-                          <SelectItem value="agricultural">Agricultural</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {error ? <div className="text-sm text-destructive">{error}</div> : null}
-
-                    <ApplicationTable
-                      apps={applications.filter((a) => a.status === "pending_verification" || a.status === "returned_to_verification")}
-                      emptyMessage="Applications for Verification"
-                    />
-                  </TabsContent>
 
                   <TabsContent value="all_applications" className="space-y-4 mt-6">
                     <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">

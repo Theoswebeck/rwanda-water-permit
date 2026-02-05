@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // Lazy load the heavy form components
 const ApplicationForm = dynamic(
-  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
+  () => import("@/components/dashboard/application-form-new"),
   {
     loading: () => (
       <div className="flex items-center justify-center py-12">
@@ -98,9 +98,20 @@ async function ensureStorageBucket() {
 }
 
 // Helper function to upload documents and save to database
-async function uploadApplicationDocuments(applicationId: string, formData: any): Promise<Document[]> {
+async function uploadApplicationDocuments(applicationId: string, formData: any, userId?: string): Promise<Document[]> {
   try {
     const uploadedDocuments: Document[] = [];
+    const uploadFailures: Array<{ fieldName: string; reason: string }> = [];
+
+    // Prefer Supabase auth user id for RLS (source of truth). Fall back to provided userId.
+    const uploaderId = await (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        return data?.user?.id || userId || '550e8400-e29b-41d4-a716-446655440001';
+      } catch {
+        return userId || '550e8400-e29b-41d4-a716-446655440001';
+      }
+    })();
     
     // Document type mapping
     const documentTypes = {
@@ -166,7 +177,12 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       gazExtractionFeasibilityStudy: 'other',
       // Livestock documents
       livestockGeneralRequirements: 'other',
-      livestockFeasibilityStudy: 'other'
+      livestockFeasibilityStudy: 'other',
+      // Transfer documents
+      applicationLetter: 'transfer_application_letter',
+      signedTransferForm: 'signed_transfer_form',
+      registrationCertificate: 'registration_certificate',
+      existingPermitCopy: 'existing_permit_copy'
     };
 
     const requiredFieldNames = (() => {
@@ -176,6 +192,13 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
       // Always required core docs for this UI flow
       req.add("identificationDoc");
       if (formData.ownsAllLand === false) req.add("landAccessDocuments");
+      const isTransferForm = Boolean(formData.permitNumber && formData.transfereeName);
+      if (isTransferForm) {
+        req.add("applicationLetter");
+        req.add("signedTransferForm");
+        req.add("registrationCertificate");
+        req.add("existingPermitCopy");
+      }
       return req;
     })();
     
@@ -212,7 +235,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
               mime_type: file.type,
               verification_status: 'pending' as const,
               is_required: requiredFieldNames.has(fieldName),
-              uploaded_by: '550e8400-e29b-41d4-a716-446655440001', // Sample user ID
+              uploaded_by: uploaderId,
               upload_date: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             } as any;
@@ -231,17 +254,112 @@ async function uploadApplicationDocuments(applicationId: string, formData: any):
                 errorDetails: dbError.details,
                 errorHint: dbError.hint
               });
+              uploadFailures.push({ fieldName, reason: dbError.message || 'DB insert/update failed' });
             } else {
               console.log(`✅ Successfully saved document ${fieldName} to database`);
               uploadedDocuments.push(documentRecord);
             }
           } else {
             console.error(`Failed to upload ${fieldName}`);
+            uploadFailures.push({ fieldName, reason: 'Storage upload failed' });
           }
         } catch (error) {
           console.error(`Error processing document ${fieldName}:`, error);
+          uploadFailures.push({ fieldName, reason: error instanceof Error ? error.message : 'Unknown error' });
         }
       }
+    }
+
+    // Handle additional documents (dynamic attachments)
+    console.log('📎 additionalDocuments check:', {
+      exists: !!formData.additionalDocuments,
+      isArray: Array.isArray(formData.additionalDocuments),
+      length: formData.additionalDocuments?.length ?? 0,
+      raw: formData.additionalDocuments
+    });
+    
+    if (formData.additionalDocuments && Array.isArray(formData.additionalDocuments)) {
+      console.log('📎 Processing additional documents:', formData.additionalDocuments.length);
+
+      for (const additionalDoc of formData.additionalDocuments) {
+        console.log('📎 Checking additionalDoc:', {
+          id: additionalDoc?.id,
+          name: additionalDoc?.name,
+          hasFile: !!additionalDoc?.file,
+          fileIsFile: additionalDoc?.file instanceof File,
+          fileType: additionalDoc?.file?.constructor?.name
+        });
+        
+        if (additionalDoc?.file && additionalDoc.file instanceof File) {
+          try {
+            const fieldName = `additional_${additionalDoc.id}`;
+            console.log(`🔄 Uploading additional document ${additionalDoc.name} to storage...`);
+            const uploadResult = await uploadDocument(additionalDoc.file, applicationId, fieldName);
+
+            if (!uploadResult) {
+              console.error(`Failed to upload additional document ${additionalDoc.name}`);
+              continue;
+            }
+
+            // Upsert by fieldName in file_path to avoid collisions if two docs share the same name.
+            const { data: existingDoc, error: checkError } = await supabase
+              .from('documents')
+              .select('id,file_path,created_at')
+              .eq('application_id', applicationId)
+              .ilike('file_path', `%applications/${applicationId}/${fieldName}-%`)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (checkError) {
+              console.error(`❌ Error checking existing additional document ${additionalDoc.name}:`, checkError);
+              continue;
+            }
+
+            const upsertPayload = {
+              application_id: applicationId,
+              name: additionalDoc.name,
+              type: 'other' as const,
+              file_path: uploadResult.path,
+              file_size: additionalDoc.file.size,
+              mime_type: additionalDoc.file.type,
+              verification_status: 'pending' as const,
+              is_required: false,
+              uploaded_by: uploaderId,
+              upload_date: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            } as any;
+
+            const { data: documentRecord, error: dbError } = existingDoc
+              ? await supabase.from('documents').update(upsertPayload).eq('id', existingDoc.id).select().single()
+              : await supabase.from('documents').insert(upsertPayload).select().single();
+
+            if (dbError) {
+              console.error(`❌ Error saving additional document ${additionalDoc.name} to database:`, dbError);
+              uploadFailures.push({ fieldName, reason: dbError.message || 'DB insert/update failed' });
+            } else {
+              uploadedDocuments.push(documentRecord);
+            }
+          } catch (error) {
+            console.error(`Error processing additional document ${additionalDoc?.name}:`, error);
+            const fieldName = `additional_${additionalDoc?.id ?? 'unknown'}`;
+            uploadFailures.push({ fieldName, reason: error instanceof Error ? error.message : 'Unknown error' });
+          }
+        }
+      }
+    }
+
+    // If anything failed to persist, throw so callers can surface it to the user.
+    if (uploadFailures.length > 0) {
+      const details = uploadFailures
+        .slice(0, 6)
+        .map((f) => `${f.fieldName}: ${f.reason}`)
+        .join('; ');
+      throw new Error(
+        `Some documents failed to persist. ${uploadFailures.length} failure(s). ${details}${
+          uploadFailures.length > 6 ? '…' : ''
+        }`
+      );
     }
     
     return uploadedDocuments;
@@ -435,11 +553,10 @@ function NewApplicationContent() {
           if (!Array.isArray(restored.additionalDocuments)) {
             restored.additionalDocuments = [];
           }
-
-          setInitialFormData(restored);
           
           // ⚡ PERFORMANCE: Process documents efficiently
           const documentMap: Record<string, { url: string; name: string }> = {};
+          const additionalDocsFromDb: Array<{ id?: string; name: string; url: string }> = [];
 
           // Prefer extracting the exact fieldName from the stored storage path:
           // applications/{applicationId}/{fieldName}-{timestamp}.{ext}
@@ -473,19 +590,75 @@ function NewApplicationContent() {
             other: "waterSupplyGeneralRequirements",
           };
 
+          console.log('📄 Processing documents from DB:', documents.length);
           for (const doc of documents) {
+            console.log('📄 Document:', { name: doc.name, type: doc.type, file_path: doc.file_path });
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
-                const fieldName = fieldNameFromFilePath(doc.file_path) || typeMapping[doc.type] || doc.type;
-                documentMap[fieldName] = {
-                  url: publicUrl,
-                  name: doc.name
-                };
+                // Detect dynamic "additional documents" (uploaded as additional_{id}-timestamp.ext)
+                const rawFileName = (() => {
+                  try {
+                    if (doc.file_path.startsWith("http://") || doc.file_path.startsWith("https://")) {
+                      return new URL(doc.file_path).pathname.split("/").pop() || "";
+                    }
+                  } catch {}
+                  return doc.file_path.split("/").pop() || "";
+                })();
+
+                console.log('📄 Raw filename:', rawFileName, 'starts with additional_:', rawFileName.startsWith("additional_"));
+
+                if (rawFileName.startsWith("additional_")) {
+                  const m = rawFileName.match(/^additional_(.+?)-\d+\./);
+                  console.log('📄 Matched additional doc ID:', m?.[1]);
+                  additionalDocsFromDb.push({ id: m?.[1], name: doc.name, url: publicUrl });
+                } else {
+                  const fieldName = fieldNameFromFilePath(doc.file_path) || typeMapping[doc.type] || doc.type;
+                  documentMap[fieldName] = {
+                    url: publicUrl,
+                    name: doc.name
+                  };
+                }
               }
             }
           }
+          console.log('📄 Additional docs from DB:', additionalDocsFromDb);
+
+          // Merge additional documents (kept in internal_notes) with their uploaded URLs (from documents table)
+          if (additionalDocsFromDb.length > 0) {
+            const existing = Array.isArray(restored.additionalDocuments) ? restored.additionalDocuments : [];
+            const byId = new Map<string, any>();
+            const byName = new Map<string, any>();
+            for (const d of existing) {
+              if (d?.id) byId.set(String(d.id), d);
+              if (d?.name) byName.set(String(d.name), d);
+            }
+
+            for (const dbDoc of additionalDocsFromDb) {
+              const match =
+                (dbDoc.id ? byId.get(String(dbDoc.id)) : undefined) ||
+                byName.get(String(dbDoc.name));
+
+              if (match) {
+                match.url = dbDoc.url;
+                match.file = null;
+              } else {
+                existing.push({
+                  id: dbDoc.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                  name: dbDoc.name,
+                  category: "additional",
+                  description: "",
+                  file: null,
+                  url: dbDoc.url,
+                });
+              }
+            }
+
+            restored.additionalDocuments = existing;
+          }
           
+          // Set initial form data after documents are processed/merged
+          setInitialFormData(restored);
           setInitialDocuments(documentMap);
         } else {
           setError('Draft application not found');
@@ -566,7 +739,7 @@ function NewApplicationContent() {
         // Upload documents and WAIT for completion before showing success
         console.log('🚀 Starting document upload process...');
         try {
-          const uploadedDocuments = await uploadApplicationDocuments(newApplication.id, formData);
+          const uploadedDocuments = await uploadApplicationDocuments(newApplication.id, formData, userProfile?.id);
           console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
         } catch (docError) {
           console.error('⚠️ Document upload failed:', docError);
@@ -625,7 +798,7 @@ function NewApplicationContent() {
         // Upload documents and WAIT for completion
         console.log('🚀 Starting document upload process for draft...');
         try {
-          const uploadedDocuments = await uploadApplicationDocuments(result.id, formData);
+          const uploadedDocuments = await uploadApplicationDocuments(result.id, formData, userProfile?.id);
           console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
         } catch (docError) {
           console.error('⚠️ Document upload failed:', docError);
@@ -748,7 +921,7 @@ function NewApplicationContent() {
         
         // Upload documents
         await ensureStorageBucket();
-        const uploadedDocs = await uploadApplicationDocuments(newApplication.id, formData);
+        const uploadedDocs = await uploadApplicationDocuments(newApplication.id, formData, userProfile?.id);
         console.log(`📎 ${uploadedDocs.length} documents uploaded`);
         
         setSubmitSuccess(true);
@@ -795,7 +968,7 @@ function NewApplicationContent() {
       
       if (result) {
         await ensureStorageBucket();
-        await uploadApplicationDocuments(result.id, formData);
+        await uploadApplicationDocuments(result.id, formData, userProfile?.id);
         
         // Track the current transfer application for payment tab
         setCurrentTransferApplication(result);
@@ -943,7 +1116,7 @@ function NewApplicationContent() {
         if (formData.renewalLetter) {
           const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, {
             renewalRequestLetter: formData.renewalLetter,
-          });
+          }, userProfile?.id);
           console.log(`📎 ${uploadedDocs.length} documents uploaded`);
         }
         
@@ -1008,7 +1181,7 @@ function NewApplicationContent() {
         if (formData.renewalLetter) {
           await uploadApplicationDocuments(result.id, {
             renewalRequestLetter: formData.renewalLetter,
-          });
+          }, userProfile?.id);
         }
         
         // Track the current renewal application for payment tab
@@ -1102,7 +1275,7 @@ function NewApplicationContent() {
         
         // Upload documents
         await ensureStorageBucket();
-        const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, formData);
+        const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, formData, userProfile?.id);
         console.log(`📎 ${uploadedDocs.length} documents uploaded`);
         
         setSubmitSuccess(true);
@@ -1165,7 +1338,7 @@ function NewApplicationContent() {
       
       if (result) {
         await ensureStorageBucket();
-        await uploadApplicationDocuments(result.id, formData);
+        await uploadApplicationDocuments(result.id, formData, userProfile?.id);
         
         // Track the current modification application for payment tab
         setCurrentModificationApplication(result);

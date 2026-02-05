@@ -19,7 +19,8 @@ import {
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
-import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBySubmissionDateDescending } from "@/lib/utils";
+import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
 
 interface ApplicationWithApplicant extends Application {
   applicant?: {
@@ -59,6 +60,8 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
           *,
           applicant:users!applicant_id(first_name, last_name, company_name, account_type)
         `)
+        // Always show latest submissions first (fallback to created_at when submitted_at is null).
+        .order('submitted_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -144,12 +147,16 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
     return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">{daysRemaining}d</Badge>;
   };
 
-  // Get application type badge (New, Modification, Transfer)
+  // Get application type badge (New, Modification, Transfer, Renewal)
   const getAppTypeBadge = (app: ApplicationWithApplicant) => {
     const appType = app.application_type;
     const isModification = appType === 'modification' || (app as any).is_modification === true;
     const isTransfer = appType === 'transfer';
+    const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
     
+    if (isRenewal) {
+      return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">Renewal</Badge>;
+    }
     if (isModification) {
       return <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">Mod</Badge>;
     }

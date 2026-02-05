@@ -15,7 +15,6 @@ import {
   Loader2,
   MapPin
 } from "lucide-react";
-import { FinalDecisions } from "@/components/approver/final-decisions";
 import { ExecutiveOverview } from "@/components/approver/executive-overview";
 import { PerformanceMetrics } from "@/components/approver/performance-metrics";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
@@ -31,8 +30,9 @@ import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-s
 
 interface DashboardStats {
   pendingFinalApproval: number;
-  approvedThisMonth: number;
-  rejectedThisMonth: number;
+  returnedToVerification: number;
+  approvedPendingPermit: number;
+  approved: number;
   totalApplications: number;
   avgDecisionTime: number;
   complianceRate: number;
@@ -45,7 +45,7 @@ export default function ApproverDashboard() {
   const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports">("approval");
   const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [activeApprovalTab, setActiveApprovalTab] = useState("pending_approval");
+  const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -68,66 +68,63 @@ export default function ApproverDashboard() {
   const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
     setSelectedStatId(statId);
     setStatusFilter(filterStatuses);
-    
-    // Switch to appropriate tab based on clicked stat
-    if (statId === "pending_approval") {
-      setActiveApprovalTab("pending_approval");
-    } else if (statId && statId !== "pending_approval") {
-      setActiveApprovalTab("all_applications");
-    }
   };
 
   // Create stats configuration for clickable cards
+  // Pattern: Panel 1 = Pending (my queue), Panel 2 = Returned (under work), Panel 3 = Next Stage, Panel 4 = Next-Next Stage
   const statsConfig: StatsConfig[] = useMemo(() => [
-    {
-      id: "total_applications",
-      title: "Total Applications",
-      value: stats?.totalApplications ?? 0,
-      description: "All applications in the system",
-      icon: FileCheck,
-      iconColor: "text-slate-600",
-      filterStatuses: [], // Show all
-      badgeText: `${stats?.totalApplications ?? 0} total`,
-      badgeClassName: "bg-slate-100 text-slate-800 hover:bg-slate-100",
-    },
     {
       id: "pending_approval",
       title: "Pending Approval",
       value: stats?.pendingFinalApproval ?? 0,
-      description: "Awaiting final decision",
+      description: "My queue - needs decision",
       icon: Clock,
-      iconColor: "text-purple-600",
+      iconColor: "text-blue-600",
       filterStatuses: ["pending_final_approval"],
-      badgeText: stats?.pendingFinalApproval === 0 ? "All caught up" : `${stats?.pendingFinalApproval} pending`,
+      badgeText: stats?.pendingFinalApproval === 0 ? "All caught up" : `${stats?.pendingFinalApproval} in queue`,
       badgeClassName: stats?.pendingFinalApproval === 0 
         ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-purple-100 text-purple-800 hover:bg-purple-100",
+        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
+    },
+    {
+      id: "returned_to_verification",
+      title: "Returned to Verifier",
+      value: stats?.returnedToVerification ?? 0,
+      description: "Items I sent back",
+      icon: AlertTriangle,
+      iconColor: "text-amber-600",
+      filterStatuses: ["returned_to_verification"],
+      badgeText: stats?.returnedToVerification === 0 ? "No follow-ups" : `${stats?.returnedToVerification} returned`,
+      badgeClassName: stats?.returnedToVerification === 0 
+        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
+    },
+    {
+      id: "approved_pending_permit",
+      title: "Awaiting Terms",
+      value: stats?.approvedPendingPermit ?? 0,
+      description: "Next stage - with Applicant",
+      icon: CheckCircle,
+      iconColor: "text-green-600",
+      filterStatuses: ["approved_pending_permit"],
+      badgeText: stats?.approvedPendingPermit === 0 ? "None pending" : `${stats?.approvedPendingPermit} awaiting`,
+      badgeClassName: stats?.approvedPendingPermit === 0 
+        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
+        : "bg-green-100 text-green-800 hover:bg-green-100",
+      isNextStage: true,
     },
     {
       id: "approved",
-      title: "Approved",
-      value: stats?.approvedThisMonth ?? 0,
-      description: "Approved this month",
-      icon: CheckCircle,
-      iconColor: "text-green-600",
-      filterStatuses: ["approved", "approved_pending_permit"],
-      badgeText: stats?.approvedThisMonth === 0 ? "None this month" : `${stats?.approvedThisMonth} approved`,
-      badgeClassName: stats?.approvedThisMonth === 0 
+      title: "Permits Issued",
+      value: stats?.approved ?? 0,
+      description: "Next-next - active permits",
+      icon: FileCheck,
+      iconColor: "text-indigo-600",
+      filterStatuses: ["approved"],
+      badgeText: stats?.approved === 0 ? "None issued" : `${stats?.approved} permits`,
+      badgeClassName: stats?.approved === 0 
         ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-green-100 text-green-800 hover:bg-green-100",
-    },
-    {
-      id: "rejected",
-      title: "Rejected",
-      value: stats?.rejectedThisMonth ?? 0,
-      description: "Rejected this month",
-      icon: XCircle,
-      iconColor: "text-red-600",
-      filterStatuses: ["rejected"],
-      badgeText: stats?.rejectedThisMonth === 0 ? "None this month" : `${stats?.rejectedThisMonth} rejected`,
-      badgeClassName: stats?.rejectedThisMonth === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-red-100 text-red-800 hover:bg-red-100",
+        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
     },
   ], [stats]);
 
@@ -211,8 +208,7 @@ export default function ApproverDashboard() {
             </CardHeader>
             <CardContent>
               <Tabs value={activeApprovalTab} onValueChange={setActiveApprovalTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="pending_approval">Pending Approval</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="all_applications">All Applications</TabsTrigger>
                   <TabsTrigger value="map" className="flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
@@ -221,10 +217,6 @@ export default function ApproverDashboard() {
                 </TabsList>
 
               {/* Tab Contents */}
-              <TabsContent value="pending_approval" className="space-y-4 mt-6">
-                <FinalDecisions />
-              </TabsContent>
-
               <TabsContent value="all_applications" className="space-y-4 mt-6">
                 <AllApplicationsList externalStatusFilter={statusFilter} />
               </TabsContent>

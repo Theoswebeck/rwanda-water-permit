@@ -966,7 +966,8 @@ export default function EditApplicationPage() {
             getDocuments(app.id)
           ]);
           
-          setInitialFormData(formData);
+          // NOTE: setInitialFormData is called AFTER document processing below
+          // so that additionalDocuments are included
           
           // ⚡ PERFORMANCE: Process documents efficiently
           const documentMap: Record<string, { url: string; name: string }> = {};
@@ -1057,6 +1058,8 @@ export default function EditApplicationPage() {
             formData.additionalDocuments = additionalDocsList;
           }
           
+          // NOW set the initial form data (after additionalDocuments are added)
+          setInitialFormData(formData);
           setInitialDocuments(documentMap);
           console.log('📋 Document processing complete:');
           console.log('📋 Standard documents found:', Object.keys(documentMap));

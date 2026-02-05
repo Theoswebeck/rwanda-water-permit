@@ -45,7 +45,8 @@ import { ActivePermitsInspectionTab } from "@/components/inspection/active-permi
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
-import { calculateDaysRemainingTo90DayDeadline, sortBySubmissionDateDescending } from "@/lib/utils";
+import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
 
 interface ReviewApplication extends Application {
@@ -61,10 +62,10 @@ interface ReviewApplication extends Application {
 }
 
 interface ReviewStatsData {
-  newSubmissions: number;
+  pendingReview: number;
+  returnedToReview: number;
   pendingAssessment: number;
   underReview: number;
-  returnedForRevision: number;
   pendingVerification: number;
 }
 
@@ -89,6 +90,7 @@ export default function ReviewerDashboard() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
 
   // Assessor assignment state
   const [assessors, setAssessors] = useState<StaffMember[]>([]);
@@ -143,6 +145,8 @@ export default function ReviewerDashboard() {
              applicant:users!applicant_id(first_name, last_name, company_name),
              assigned_assessor:users!assigned_assessor_id(first_name, last_name, email)
            `)
+           // Always show latest submissions first (fallback to created_at when submitted_at is null).
+           .order('submitted_at', { ascending: false, nullsFirst: false })
            .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -215,51 +219,44 @@ export default function ReviewerDashboard() {
       try {
         setStatsLoading(true);
         
-        // Query for new submissions (submitted + pending_review + returned_to_review status)
-        const { count: newSubmissionsCount, error: newError } = await supabase
+        // Panel 1: Pending Review (my queue - needs my action)
+        // Includes 'submitted' (new submissions) and 'pending_review' (returned from assessor)
+        const { count: pendingReviewCount, error: pendingReviewError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .in('status', ['submitted', 'pending_review', 'returned_to_review']);
+          .in('status', ['submitted', 'pending_review']);
         
-        if (newError) throw newError;
+        if (pendingReviewError) throw pendingReviewError;
 
-        // Query for applications pending assessment (includes returned_to_assessment)
+        // Panel 2: Returned to Review (follow-ups from later stages)
+        const { count: returnedToReviewCount, error: returnedError } = await supabase
+          .from('applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'returned_to_review');
+        
+        if (returnedError) throw returnedError;
+
+        // Panel 3: With Assessors (next stage - out for assessment)
         const { count: pendingAssessmentCount, error: pendingError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .in('status', ['pending_assessment', 'returned_to_assessment']);
+          .in('status', ['pending_assessment', 'under_review', 'returned_to_assessment']);
         
         if (pendingError) throw pendingError;
 
-        // Query for applications under review
-        const { count: underReviewCount, error: reviewError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'under_review');
-        
-        if (reviewError) throw reviewError;
-
-        // Query for applications returned for revision (to applicant)
-        const { count: revisionCount, error: revisionError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'revision_required');
-        
-        if (revisionError) throw revisionError;
-
-        // Query for applications pending verification (next stage)
+        // Panel 4: Pending Verification (next-next stage - with Verifiers)
         const { count: pendingVerificationCount, error: verificationError } = await supabase
           .from('applications')
           .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending_verification');
+          .in('status', ['pending_verification', 'returned_to_verification']);
         
         if (verificationError) throw verificationError;
 
         setStats({
-          newSubmissions: newSubmissionsCount || 0,
+          pendingReview: pendingReviewCount || 0,
+          returnedToReview: returnedToReviewCount || 0,
           pendingAssessment: pendingAssessmentCount || 0,
-          underReview: underReviewCount || 0,
-          returnedForRevision: revisionCount || 0,
+          underReview: 0, // Not used anymore in new panel layout
           pendingVerification: pendingVerificationCount || 0
         });
       } catch (err) {
@@ -481,59 +478,60 @@ export default function ReviewerDashboard() {
   };
 
   // Create stats configuration for clickable cards
+  // Pattern: Panel 1 = Pending (my queue), Panel 2 = Under Work (returned), Panel 3 = Next Stage, Panel 4 = Next-Next Stage
   const statsConfig: StatsConfig[] = useMemo(() => [
     {
-      id: "new_submissions",
-      title: "New Submissions",
-      value: stats?.newSubmissions ?? 0,
-      description: "Awaiting assignment to assessor",
+      id: "pending_review",
+      title: "Pending Review",
+      value: stats?.pendingReview ?? 0,
+      description: "My queue - needs my action",
       icon: Clock,
       iconColor: "text-blue-600",
-      filterStatuses: ["submitted", "pending_review", "returned_to_review"],
-      badgeText: stats?.newSubmissions === 0 ? "All caught up" : `${stats?.newSubmissions} pending review`,
-      badgeClassName: stats?.newSubmissions === 0 
+      filterStatuses: ["submitted", "pending_review"],
+      badgeText: stats?.pendingReview === 0 ? "All caught up" : `${stats?.pendingReview} in queue`,
+      badgeClassName: stats?.pendingReview === 0 
         ? "bg-green-100 text-green-800 hover:bg-green-100" 
         : "bg-blue-100 text-blue-800 hover:bg-blue-100",
     },
     {
-      id: "pending_assessment",
-      title: "Pending Assessment",
-      value: stats?.pendingAssessment ?? 0,
-      description: "With inspectors for assessment",
+      id: "returned_to_review",
+      title: "Returned to Me",
+      value: stats?.returnedToReview ?? 0,
+      description: "Follow-ups from later stages",
       icon: AlertCircle,
       iconColor: "text-amber-600",
-      filterStatuses: ["pending_assessment", "returned_to_assessment"],
-      badgeText: stats?.pendingAssessment === 0 ? "No pending assessments" : `${stats?.pendingAssessment} with inspectors`,
-      badgeClassName: stats?.pendingAssessment === 0 
+      filterStatuses: ["returned_to_review"],
+      badgeText: stats?.returnedToReview === 0 ? "No follow-ups" : `${stats?.returnedToReview} returned`,
+      badgeClassName: stats?.returnedToReview === 0 
         ? "bg-green-100 text-green-800 hover:bg-green-100" 
         : "bg-amber-100 text-amber-800 hover:bg-amber-100",
     },
     {
-      id: "under_review",
-      title: "Under Review",
-      value: stats?.underReview ?? 0,
-      description: "Being reviewed by staff",
+      id: "with_assessors",
+      title: "With Assessors",
+      value: stats?.pendingAssessment ?? 0,
+      description: "Next stage - out for assessment",
       icon: CheckCircle,
       iconColor: "text-green-600",
-      filterStatuses: ["under_review"],
-      badgeText: stats?.underReview === 0 ? "No active reviews" : `${stats?.underReview} in review`,
-      badgeClassName: stats?.underReview === 0 
+      filterStatuses: ["pending_assessment", "under_review", "returned_to_assessment"],
+      badgeText: stats?.pendingAssessment === 0 ? "None with assessors" : `${stats?.pendingAssessment} with assessors`,
+      badgeClassName: stats?.pendingAssessment === 0 
         ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
         : "bg-green-100 text-green-800 hover:bg-green-100",
+      isNextStage: true,
     },
     {
       id: "pending_verification",
       title: "Pending Verification",
       value: stats?.pendingVerification ?? 0,
-      description: "Sent to verification stage",
+      description: "Next-next stage - with Verifiers",
       icon: ClipboardCheck,
       iconColor: "text-indigo-600",
-      filterStatuses: ["pending_verification"],
-      badgeText: stats?.pendingVerification === 0 ? "None pending" : `${stats?.pendingVerification} in verification`,
+      filterStatuses: ["pending_verification", "returned_to_verification"],
+      badgeText: stats?.pendingVerification === 0 ? "None pending" : `${stats?.pendingVerification} with verifier`,
       badgeClassName: stats?.pendingVerification === 0 
         ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
         : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-      isNextStage: true,
     },
   ], [stats]);
 
@@ -943,9 +941,8 @@ export default function ReviewerDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="applications_to_review" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="applications_to_review">Applications for Review</TabsTrigger>
+                <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="all_applications">All Applications</TabsTrigger>
                     <TabsTrigger value="map" className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
@@ -954,37 +951,6 @@ export default function ReviewerDashboard() {
                   </TabsList>
 
                 {/* Tab Contents */}
-                <TabsContent value="applications_to_review" className="space-y-4 mt-6">
-            {/* Search and Filter Controls */}
-                  <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                  <Input
-                        placeholder="Search by applicant name, application number, or project title..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
-                  />
-              </div>
-              <Select value={filterType} onValueChange={setFilterType}>
-                      <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                      <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="surface">Surface Water</SelectItem>
-                  <SelectItem value="groundwater">Groundwater</SelectItem>
-                  <SelectItem value="industrial">Industrial</SelectItem>
-                  <SelectItem value="agricultural">Agricultural</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-                  <ApplicationTable 
-                    applications={reviewApplications.filter(app => isInApplicationsForReviewQueue(app.status))}
-                    emptyMessage="Applications for Review"
-                  />
-            </TabsContent>
-
                 <TabsContent value="all_applications" className="space-y-4 mt-6">
                   {/* Search and Filter Controls */}
                   <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">

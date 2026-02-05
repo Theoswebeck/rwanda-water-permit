@@ -49,7 +49,7 @@ import { generateFieldReportPdf, FieldReportAssessment, FieldReportApplicationDa
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
-  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
+  () => import("@/components/dashboard/application-form-new"),
   {
     loading: () => (
       <div className="flex items-center justify-center py-12">

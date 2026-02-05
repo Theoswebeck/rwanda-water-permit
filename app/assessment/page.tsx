@@ -25,7 +25,8 @@ import type { Application, ApplicationStatus } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
-import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBySubmissionDateDescending } from "@/lib/utils";
+import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
@@ -40,11 +41,10 @@ interface AssessmentApplication extends Application {
 }
 
 interface AssessmentStatsData {
-  newSubmissions: number;
   pendingAssessment: number;
   underAssessment: number;
-  readyForReview: number;
-  pendingVerification: number;
+  reviewerWork: number;
+  verifierWork: number;
 }
 
 export default function AssessmentDashboard() {
@@ -52,7 +52,6 @@ export default function AssessmentDashboard() {
   const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [sortBy, setSortBy] = useState<"earliest" | "latest">("latest");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   // Applications assigned to the current assessor (queue/worklist).
   const [assignedApplications, setAssignedApplications] = useState<AssessmentApplication[]>([]);
@@ -66,6 +65,7 @@ export default function AssessmentDashboard() {
   const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports">("assessment");
   const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
 
   const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
     return (data ?? []).map((app) => {
@@ -128,7 +128,9 @@ export default function AssessmentDashboard() {
           )
           .eq("assigned_assessor_id", user.id)
           .in("status", ["pending_assessment", "under_review", "returned_to_assessment"])
-          .order("created_at", { ascending: sortBy === "earliest" });
+          // Always show latest submissions first (fallback to created_at when submitted_at is null).
+          .order("submitted_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false });
 
         if (assignedError) throw assignedError;
 
@@ -140,7 +142,9 @@ export default function AssessmentDashboard() {
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
           .neq('status', 'draft')
-          .order('created_at', { ascending: sortBy === "earliest" });
+          // Always show latest submissions first (fallback to created_at when submitted_at is null).
+          .order("submitted_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false });
 
         if (allError) throw allError;
 
@@ -150,8 +154,17 @@ export default function AssessmentDashboard() {
         setAssignedApplications(processedAssigned);
         setAllApplications(processedAll);
 
-        // Compute stats from the All Applications dataset to keep the dashboard consistent.
-        const counts = processedAll.reduce(
+        // Compute MY QUEUE stats from assigned applications (what's assigned to ME)
+        const myQueueCounts = processedAssigned.reduce(
+          (acc, app) => {
+            acc[app.status] = (acc[app.status] ?? 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>
+        );
+
+        // Compute system-wide stats from all applications (for visibility into pipeline)
+        const allCounts = processedAll.reduce(
           (acc, app) => {
             acc[app.status] = (acc[app.status] ?? 0) + 1;
             return acc;
@@ -160,11 +173,13 @@ export default function AssessmentDashboard() {
         );
 
         setStats({
-          newSubmissions: counts.submitted ?? 0,
-          pendingAssessment: counts.pending_assessment ?? 0,
-          underAssessment: counts.under_review ?? 0,
-          readyForReview: counts.pending_review ?? 0,
-          pendingVerification: counts.pending_verification ?? 0,
+          // Pending current staff (me)
+          pendingAssessment: myQueueCounts.pending_assessment ?? 0,
+          // Under work (me)
+          underAssessment: myQueueCounts.under_review ?? 0,
+          // Next 2 staffs work (visibility)
+          reviewerWork: (allCounts.pending_review ?? 0) + (allCounts.returned_to_review ?? 0),
+          verifierWork: (allCounts.pending_verification ?? 0) + (allCounts.returned_to_verification ?? 0),
         });
       } catch (err) {
         let errorMsg = 'Failed to fetch applications';
@@ -186,7 +201,7 @@ export default function AssessmentDashboard() {
     };
 
     fetchAssessmentApplications();
-  }, [sortBy, user?.id, authLoading]);
+  }, [user?.id, authLoading]);
 
   const handleStartAssessment = async (application: AssessmentApplication) => {
     try {
@@ -260,15 +275,15 @@ export default function AssessmentDashboard() {
   // Create stats configuration for clickable cards
   const statsConfig: StatsConfig[] = useMemo(() => [
     {
-      id: "new_submissions",
-      title: "New Submissions",
-      value: stats?.newSubmissions ?? 0,
-      description: "Awaiting initial assessment",
+      id: "pending_assessment",
+      title: "Pending Assessment",
+      value: stats?.pendingAssessment ?? 0,
+      description: "Pending my action",
       icon: Clock,
       iconColor: "text-blue-600",
-      filterStatuses: ["submitted"],
-      badgeText: stats?.newSubmissions === 0 ? "All caught up" : `${stats?.newSubmissions} pending`,
-      badgeClassName: stats?.newSubmissions === 0 
+      filterStatuses: ["pending_assessment"],
+      badgeText: stats?.pendingAssessment === 0 ? "All caught up" : `${stats?.pendingAssessment} in queue`,
+      badgeClassName: stats?.pendingAssessment === 0 
         ? "bg-green-100 text-green-800 hover:bg-green-100" 
         : "bg-blue-100 text-blue-800 hover:bg-blue-100",
     },
@@ -276,41 +291,41 @@ export default function AssessmentDashboard() {
       id: "under_assessment",
       title: "Under Assessment",
       value: stats?.underAssessment ?? 0,
-      description: "Currently being assessed",
+      description: "Under my work",
       icon: AlertCircle,
       iconColor: "text-amber-600",
       filterStatuses: ["under_review"],
-      badgeText: stats?.underAssessment === 0 ? "No active assessments" : `${stats?.underAssessment} in progress`,
+      badgeText: stats?.underAssessment === 0 ? "No active work" : `${stats?.underAssessment} in progress`,
       badgeClassName: stats?.underAssessment === 0 
         ? "bg-green-100 text-green-800 hover:bg-green-100" 
         : "bg-amber-100 text-amber-800 hover:bg-amber-100",
     },
     {
-      id: "ready_for_review",
-      title: "Ready for Review",
-      value: stats?.readyForReview ?? 0,
-      description: "Assessment complete, awaiting review",
+      id: "reviewer_work",
+      title: "Pending Review",
+      value: stats?.reviewerWork ?? 0,
+      description: "Next staff (Reviewer)",
       icon: CheckCircle,
       iconColor: "text-green-600",
-      filterStatuses: ["pending_review"],
-      badgeText: stats?.readyForReview === 0 ? "None ready" : `${stats?.readyForReview} ready`,
-      badgeClassName: stats?.readyForReview === 0 
+      filterStatuses: ["pending_review", "returned_to_review"],
+      badgeText: stats?.reviewerWork === 0 ? "None pending" : `${stats?.reviewerWork} with reviewer`,
+      badgeClassName: stats?.reviewerWork === 0 
         ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
         : "bg-green-100 text-green-800 hover:bg-green-100",
+      isNextStage: true,
     },
     {
-      id: "pending_verification",
+      id: "verifier_work",
       title: "Pending Verification",
-      value: stats?.pendingVerification ?? 0,
-      description: "Sent to verification stage",
+      value: stats?.verifierWork ?? 0,
+      description: "Next-next staff (Verifier)",
       icon: ClipboardCheck,
       iconColor: "text-indigo-600",
-      filterStatuses: ["pending_verification"],
-      badgeText: stats?.pendingVerification === 0 ? "None pending" : `${stats?.pendingVerification} in verification`,
-      badgeClassName: stats?.pendingVerification === 0 
+      filterStatuses: ["pending_verification", "returned_to_verification"],
+      badgeText: stats?.verifierWork === 0 ? "None pending" : `${stats?.verifierWork} with verifier`,
+      badgeClassName: stats?.verifierWork === 0 
         ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
         : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-      isNextStage: true,
     },
   ], [stats]);
 
@@ -708,9 +723,8 @@ export default function AssessmentDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="applications_to_assess" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="applications_to_assess">Applications for Assessment</TabsTrigger>
+                <Tabs value={activeInnerTab} onValueChange={(v) => setActiveInnerTab(v as any)} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="all_applications">All Applications</TabsTrigger>
                     <TabsTrigger value="map" className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
@@ -719,48 +733,6 @@ export default function AssessmentDashboard() {
                   </TabsList>
 
                 {/* Tab Contents */}
-                <TabsContent value="applications_to_assess" className="space-y-4 mt-6">
-                  {/* Search and Filter Controls */}
-                  <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
-                      <Input
-                        placeholder="Search by applicant name, application number, or project title..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Select value={filterType} onValueChange={setFilterType}>
-                        <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
-                          <SelectValue placeholder="Filter by type" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                          <SelectItem value="all">All Types</SelectItem>
-                          <SelectItem value="surface">Surface Water</SelectItem>
-                          <SelectItem value="groundwater">Groundwater</SelectItem>
-                          <SelectItem value="industrial">Industrial</SelectItem>
-                          <SelectItem value="agricultural">Agricultural</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={sortBy} onValueChange={(value: "earliest" | "latest") => setSortBy(value)}>
-                        <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
-                          <SelectValue placeholder="Sort by" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                          <SelectItem value="earliest">Earliest First</SelectItem>
-                          <SelectItem value="latest">Latest First</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <ApplicationTable 
-                    applications={assignedApplications}
-                    emptyMessage="Applications for Assessment"
-                  />
-                </TabsContent>
-
                 <TabsContent value="all_applications" className="space-y-4 mt-6">
                   {/* Search and Filter Controls */}
                   <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
@@ -784,15 +756,6 @@ export default function AssessmentDashboard() {
                           <SelectItem value="groundwater">Groundwater</SelectItem>
                           <SelectItem value="industrial">Industrial</SelectItem>
                           <SelectItem value="agricultural">Agricultural</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Select value={sortBy} onValueChange={(value: "earliest" | "latest") => setSortBy(value)}>
-                        <SelectTrigger className="w-full md:w-48 border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg">
-                          <SelectValue placeholder="Sort by" />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
-                          <SelectItem value="earliest">Earliest First</SelectItem>
-                          <SelectItem value="latest">Latest First</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

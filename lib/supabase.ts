@@ -173,6 +173,8 @@ export const getApplicationsPendingInspection = async () => {
         )
       `)
       .eq('status', 'pending_inspection')
+      // Always show latest submissions first (fallback to created_at when submitted_at is null).
+      .order('submitted_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
     
     if (error) {
@@ -783,39 +785,40 @@ export const getApplicationsPendingApproval = async () => {
 // Helper function to get approver dashboard statistics
 export const getApproverDashboardStats = async () => {
   try {
-    // Get pending final approval count
+    // Panel 1: Pending Final Approval (my queue - needs decision)
     const { count: pendingFinalApproval } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
-      .in('status', ['pending_inspection', 'under_review'])
+      .eq('status', 'pending_final_approval')
 
-    // Get approved this month count
-    const startOfMonth = new Date()
-    startOfMonth.setDate(1)
-    startOfMonth.setHours(0, 0, 0, 0)
-    
-    const { count: approvedThisMonth } = await supabase
+    // Panel 2: Returned to Verification (items I sent back - under work/follow-ups)
+    const { count: returnedToVerification } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'returned_to_verification')
+
+    // Panel 3: Approved Pending Permit (next stage - awaiting applicant terms acceptance)
+    const { count: approvedPendingPermit } = await supabase
+      .from('applications')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'approved_pending_permit')
+
+    // Panel 4: Approved/Permits Issued (next-next stage - active permits)
+    const { count: approved } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'approved')
-      .gte('approved_at', startOfMonth.toISOString())
 
-    // Get rejected this month count
-    const { count: rejectedThisMonth } = await supabase
-      .from('applications')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'rejected')
-      .gte('updated_at', startOfMonth.toISOString())
-
-    // Get total applications count
+    // Get total applications count for overview
     const { count: totalApplications } = await supabase
       .from('applications')
       .select('*', { count: 'exact', head: true })
 
     return {
       pendingFinalApproval: pendingFinalApproval || 0,
-      approvedThisMonth: approvedThisMonth || 0,
-      rejectedThisMonth: rejectedThisMonth || 0,
+      returnedToVerification: returnedToVerification || 0,
+      approvedPendingPermit: approvedPendingPermit || 0,
+      approved: approved || 0,
       totalApplications: totalApplications || 0,
       avgDecisionTime: 2.3,
       complianceRate: 98.2
@@ -824,8 +827,9 @@ export const getApproverDashboardStats = async () => {
     console.warn('Failed to fetch approver dashboard stats:', error)
     return {
       pendingFinalApproval: 0,
-      approvedThisMonth: 0,
-      rejectedThisMonth: 0,
+      returnedToVerification: 0,
+      approvedPendingPermit: 0,
+      approved: 0,
       totalApplications: 0,
       avgDecisionTime: 2.3,
       complianceRate: 98.2

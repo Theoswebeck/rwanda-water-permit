@@ -107,6 +107,7 @@ export interface StatsConfig {
   icon: LucideIcon;
   iconColor: string;
   filterStatuses: string[];
+  targetTab?: string;
   badgeText?: string;
   badgeClassName?: string;
   isNextStage?: boolean;
@@ -115,7 +116,7 @@ export interface StatsConfig {
 interface ClickableStatsGridProps {
   stats: StatsConfig[];
   selectedStatId: string | null;
-  onStatClick: (statId: string | null, filterStatuses: string[]) => void;
+  onStatClick: (statId: string | null, filterStatuses: string[], targetTab?: string) => void;
   isLoading?: boolean;
   columns?: 2 | 3 | 4;
 }
@@ -136,9 +137,9 @@ export function ClickableStatsGrid({
   const handleCardClick = (stat: StatsConfig) => {
     if (selectedStatId === stat.id) {
       // Deselect if clicking the same card
-      onStatClick(null, []);
+      onStatClick(null, [], undefined);
     } else {
-      onStatClick(stat.id, stat.filterStatuses);
+      onStatClick(stat.id, stat.filterStatuses, stat.targetTab);
     }
   };
 
@@ -171,7 +172,7 @@ export function ClickableStatsGrid({
           <Badge 
             variant="secondary" 
             className="cursor-pointer hover:bg-secondary/80 transition-colors"
-            onClick={() => onStatClick(null, [])}
+            onClick={() => onStatClick(null, [], undefined)}
           >
             ✕ Clear filter: {stats.find(s => s.id === selectedStatId)?.title}
           </Badge>

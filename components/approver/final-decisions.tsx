@@ -20,7 +20,8 @@ import {
   Loader2 
 } from "lucide-react";
 import { getApplicationsPendingApproval } from "@/lib/supabase";
-import { calculateDaysRemainingTo90DayDeadline, formatDate, sortBySubmissionDateDescending } from "@/lib/utils";
+import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
+import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
 
 type RawPendingApprovalApplication = {
   id: string
@@ -251,11 +252,15 @@ export function FinalDecisions() {
     );
   };
 
-  // Get application type badge (New, Modification, Transfer)
+  // Get application type badge (New, Modification, Transfer, Renewal)
   const getAppTypeBadge = (application: FinalReviewApplication) => {
     const isModification = application.applicationType === 'modification' || application.is_modification === true;
     const isTransfer = application.applicationType === 'transfer';
+    const isRenewal = application.applicationType === 'renewal' || application.is_renewal === true;
     
+    if (isRenewal) {
+      return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-[10px] px-1.5 py-0">Renewal</Badge>;
+    }
     if (isModification) {
       return <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0">Mod</Badge>;
     }

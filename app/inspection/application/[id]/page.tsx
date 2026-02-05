@@ -49,7 +49,7 @@ import { type PermitWithApplication } from "@/components/dashboard/permit-select
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
-  () => import("@/components/dashboard/application-form-new").then(mod => ({ default: mod.ApplicationForm })),
+  () => import("@/components/dashboard/application-form-new"),
   {
     loading: () => (
       <div className="flex items-center justify-center py-12">
@@ -69,6 +69,20 @@ const PermitRenewalForm = dynamic(
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
         <span className="ml-3 text-sm text-muted-foreground">Loading renewal form...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
+// Lazy load the PermitTransferForm component for transfer applications
+const PermitTransferForm = dynamic(
+  () => import("@/components/dashboard/permit-transfer-form").then(mod => ({ default: mod.PermitTransferForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading transfer details...</span>
       </div>
     ),
     ssr: false
@@ -274,6 +288,7 @@ export default function InspectorApplicationView() {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
+  const [showSendToApproverDialog, setShowSendToApproverDialog] = useState(false);
   
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
@@ -282,6 +297,13 @@ export default function InspectorApplicationView() {
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
   const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
+
+  // Transfer permit state (for transfer applications)
+  const [transferPermit, setTransferPermit] = useState<PermitWithApplication | null>(null);
+  const [loadingTransferPermit, setLoadingTransferPermit] = useState(false);
+  const [transferFormData, setTransferFormData] = useState<any>(null);
+  const [isTransferApp, setIsTransferApp] = useState(false);
+  const [isModificationApp, setIsModificationApp] = useState(false);
   
   // Assessment State
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
@@ -396,6 +418,72 @@ export default function InspectorApplicationView() {
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
         setInitialFormData(formData);
+
+        // Handle transfer/modification applications: load transfer data and original permit details
+        const parsedNotes = (() => {
+          try {
+            return appData.internal_notes ? JSON.parse(appData.internal_notes) : null;
+          } catch {
+            return null;
+          }
+        })();
+        const transferDetected = appData.application_type === 'transfer' || parsedNotes?.isTransfer === true;
+        const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
+        setIsTransferApp(transferDetected);
+        setIsModificationApp(modificationDetected);
+
+        if (transferDetected) {
+          setTransferFormData(parsedNotes?.transferFormData || null);
+          const originalPermitId = parsedNotes?.originalPermitId;
+          const originalPermitNumber = parsedNotes?.originalPermitNumber;
+
+          if (originalPermitId || originalPermitNumber) {
+            setLoadingTransferPermit(true);
+            try {
+              let permitQuery = supabase
+                .from('permits')
+                .select(`
+                  *,
+                  application:applications!application_id (
+                    id,
+                    project_title,
+                    province,
+                    district,
+                    sector,
+                    cell,
+                    water_source,
+                    water_purpose,
+                    applicant:users!applicant_id (
+                      id,
+                      email,
+                      phone,
+                      first_name,
+                      last_name,
+                      company_name,
+                      company_address,
+                      company_phone,
+                      account_type
+                    )
+                  )
+                `);
+
+              if (originalPermitId) {
+                permitQuery = permitQuery.eq('id', originalPermitId);
+              } else if (originalPermitNumber) {
+                permitQuery = permitQuery.eq('permit_number', originalPermitNumber);
+              }
+
+              const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
+              if (permitError) throw permitError;
+              setTransferPermit(permitData || null);
+            } catch (permitErr) {
+              console.error('Error fetching original permit for transfer:', permitErr);
+              setTransferPermit(null);
+            } finally {
+              setLoadingTransferPermit(false);
+            }
+          }
+        }
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
@@ -583,10 +671,8 @@ export default function InspectorApplicationView() {
     }
   };
 
-  const handleForwardToApprover = async () => {
+  const handleOpenSendToApproverDialog = () => {
     if (!application) return;
-
-    if (actionInFlightRef.current) return;
 
     if (fieldReportFiles.length === 0 || !fieldReportSummary.trim()) {
       alert("⚠️ Assessment Report Documents and Assessment Report Summary are required before sending for final approval.");
@@ -606,6 +692,15 @@ export default function InspectorApplicationView() {
       return;
     }
 
+    // All validations passed, show confirmation dialog
+    setShowSendToApproverDialog(true);
+  };
+
+  const handleForwardToApprover = async () => {
+    if (!application) return;
+
+    if (actionInFlightRef.current) return;
+
     try {
       setSubmitLoading(true);
       actionInFlightRef.current = true;
@@ -624,6 +719,7 @@ export default function InspectorApplicationView() {
         
       if (appError) throw appError;
       
+      setShowSendToApproverDialog(false);
       alert("Assessment submitted and application forwarded to approver.");
       // ⚡ PERFORMANCE: Use router.refresh() instead of full page reload
       router.refresh();
@@ -816,7 +912,7 @@ export default function InspectorApplicationView() {
             
             <Button 
               size="sm" 
-              onClick={handleForwardToApprover}
+              onClick={handleOpenSendToApproverDialog}
               disabled={submitLoading || !recommendation.recommendation}
               className="gap-2 bg-green-600 hover:bg-green-700"
             >
@@ -837,8 +933,70 @@ export default function InspectorApplicationView() {
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
-              {/* Show Renewal Form for renewal applications, regular form for others */}
-              {(application as any).is_renewal && renewalPermit ? (
+              {/* Show Transfer Form for transfer applications */}
+              {isTransferApp ? (
+                loadingTransferPermit ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                    <span className="ml-3 text-sm text-muted-foreground">Loading transfer details...</span>
+                  </div>
+                ) : transferPermit ? (
+                  <PermitTransferForm
+                    permit={transferPermit}
+                    userData={{
+                      email: application.applicant?.email || "",
+                      name: application.applicant?.company_name || 
+                            (application.applicant?.first_name && application.applicant?.last_name ? 
+                             `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
+                      phone: application.applicant?.phone || application.applicant?.company_phone || "",
+                      address: application.applicant?.company_address || "",
+                      account_type: application.applicant?.account_type || 'individual',
+                    }}
+                    onSubmit={async () => {}}
+                    onSaveAsDraft={async () => {}}
+                    isLoading={false}
+                    initialData={transferFormData || undefined}
+                    initialDocuments={initialDocuments}
+                    mode="view"
+                    readOnly={true}
+                    currentApplication={application}
+                  />
+                ) : (
+                  <Alert className="border-amber-200 bg-amber-50">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription>
+                      Original permit details could not be loaded for this transfer.
+                    </AlertDescription>
+                  </Alert>
+                )
+              ) : isModificationApp ? (
+                initialFormData ? (
+                  <ApplicationForm 
+                    userData={{
+                      email: application.applicant?.email || "",
+                      name: application.applicant?.company_name || 
+                            (application.applicant?.first_name && application.applicant?.last_name ? 
+                             `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
+                      phone: application.applicant?.phone || "",
+                      address: application.applicant?.address || "",
+                      idNumber: "",
+                      account_type: 'individual' as const,
+                      id_number: "",
+                      company_tin: "",
+                    }}
+                    onSubmit={async () => {}} 
+                    onSaveAsDraft={async () => {}}
+                    isLoading={false}
+                    initialData={initialFormData}
+                    initialDocuments={initialDocuments}
+                    mode="view"
+                    readOnly={true}
+                    isStaffView={true}
+                    isModification={true}
+                    modificationChanges={(application as any).modification_changes || undefined}
+                  />
+                ) : null
+              ) : (application as any).is_renewal && renewalPermit ? (
                 <PermitRenewalForm 
                   permit={renewalPermit}
                   userData={{
@@ -972,6 +1130,42 @@ export default function InspectorApplicationView() {
               disabled={!revisionNotes.trim() || submitLoading}
             >
               {submitLoading ? 'Returning...' : 'Return for Revision'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Submit to Approver Confirmation Dialog */}
+      <Dialog open={showSendToApproverDialog} onOpenChange={setShowSendToApproverDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Confirm Action
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to submit this application to the approver? This action will change the application status and send it for final approval.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowSendToApproverDialog(false)}
+              disabled={submitLoading}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleForwardToApprover}
+              disabled={submitLoading}
+              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+            >
+              {submitLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              Yes, Submit to Approver
             </Button>
           </DialogFooter>
         </DialogContent>
