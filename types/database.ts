@@ -106,6 +106,11 @@ export type DocumentType =
   | 'geological_survey' 
   | 'business_license'
   | 'renewal_request_letter' // Letter requesting permit renewal
+  // Transfer application documents
+  | 'transfer_application_letter'
+  | 'signed_transfer_form'
+  | 'registration_certificate'
+  | 'existing_permit_copy'
   | 'other'
 
 export type VerificationStatus = 'pending' | 'verified' | 'rejected'

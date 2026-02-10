@@ -150,6 +150,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       // Industrial documents
       industrialGeneralRequirements: 'other',
       industrialEIA: 'environmental_impact_doc',
+      industrialWasteManagementPlan: 'other',
       industrialHydrologicalReport: 'geological_survey',
       // Hydropower documents
       hydropowerGeneralRequirements: 'other',
@@ -158,10 +159,12 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       // Construction Dam documents
       constructionDamGeneralRequirements: 'other',
       constructionDamEIA: 'environmental_impact_doc',
+      constructionDamEngineeringPlans: 'technical_drawings',
       constructionDamFeasibilityStudy: 'other',
       // Infrastructure documents
       infrastructureGeneralRequirements: 'other',
       infrastructureEIA: 'environmental_impact_doc',
+      infrastructureEngineeringPlans: 'technical_drawings',
       infrastructureFeasibilityStudy: 'other',
       // Navigation documents
       navigationGeneralRequirements: 'other',
@@ -170,6 +173,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       // Recreation documents
       recreationGeneralRequirements: 'other',
       recreationEIA: 'environmental_impact_doc',
+      recreationManagementPlan: 'other',
       recreationPolygonAreaMap: 'intake_discharge_map',
       // Gaz extraction documents
       gazExtractionGeneralRequirements: 'other',

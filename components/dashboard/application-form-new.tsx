@@ -104,7 +104,7 @@ const applicationFormSchema = z.object({
   nationalIdNumber: z.string().optional(),
   
   // SECTION 2: SOURCE OF WATER
-  waterSourceType: z.enum(["lake", "dam", "spring", "borehole", "stream_river", "other"]),
+  waterSourceType: z.enum(["lake", "dam", "spring", "borehole", "stream_river", "other"]).or(z.literal("")),
   waterSourceOther: z.string().optional(),
   nameSourceWater: z.string().min(1, { message: "Water source name is required" }),
   tributaryToMain: z.string().optional(),
@@ -667,7 +667,7 @@ export function ApplicationForm({
       telephoneContactOffice: "",
       emailAddress: "",
       nationalIdNumber: "",
-      waterSourceType: "stream_river",
+      waterSourceType: "",
       waterSourceOther: "",
       nameSourceWater: "",
       tributaryToMain: "",
@@ -1191,11 +1191,26 @@ export function ApplicationForm({
     switch (activeTab) {
       case "applicant-info": {
         // Check required fields for applicant tab
-        const applicantFields = ['fullNameApplicant', 'categoryApplicant', 'officeProvince', 'officeDistrict', 'officeSector', 'officeCell', 'telephoneContact', 'emailAddress'];
-        const hasApplicantFields = applicantFields.every(field => {
-          const value = form.getValues(field as any);
-          return value && value.toString().trim() !== '';
-        });
+        // Note: categoryApplicant has a default value of 'individual', so use form.watch() to ensure we get current values
+        const fullNameApplicant = form.watch('fullNameApplicant') || form.getValues('fullNameApplicant') || '';
+        const categoryApplicant = form.watch('categoryApplicant') || form.getValues('categoryApplicant') || 'individual';
+        const officeProvince = form.watch('officeProvince') || form.getValues('officeProvince') || '';
+        const officeDistrict = form.watch('officeDistrict') || form.getValues('officeDistrict') || '';
+        const officeSector = form.watch('officeSector') || form.getValues('officeSector') || '';
+        const officeCell = form.watch('officeCell') || form.getValues('officeCell') || '';
+        const telephoneContact = form.watch('telephoneContact') || form.getValues('telephoneContact') || '';
+        const emailAddress = form.watch('emailAddress') || form.getValues('emailAddress') || '';
+        
+        const hasApplicantFields = 
+          fullNameApplicant.trim() !== '' &&
+          categoryApplicant.trim() !== '' &&
+          officeProvince.trim() !== '' &&
+          officeDistrict.trim() !== '' &&
+          officeSector.trim() !== '' &&
+          officeCell.trim() !== '' &&
+          telephoneContact.trim() !== '' &&
+          emailAddress.trim() !== '';
+          
         // Check identification document
         const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
         return !hasApplicantFields || !hasIdentificationDoc;
@@ -1204,13 +1219,26 @@ export function ApplicationForm({
       case "water-source": {
         // Check required fields for water source tab only
         // LAT/LONG are validated in Activity tab, not here
-        const waterSourceFields = ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability'];
-        const hasWaterSourceFields = waterSourceFields.every(field => {
-          const value = form.getValues(field as any);
-          return value && value.toString().trim() !== '';
-        });
+        // Note: waterSourceType must be explicitly selected (no default), waterReliability has a default
+        const waterSourceType = form.watch('waterSourceType') || form.getValues('waterSourceType') || '';
+        const waterReliability = form.watch('waterReliability') || form.getValues('waterReliability') || 'water_always_available';
+        const nameSourceWater = form.watch('nameSourceWater') || form.getValues('nameSourceWater') || '';
+        const waterSourceProvince = form.watch('waterSourceProvince') || form.getValues('waterSourceProvince') || '';
+        const waterSourceDistrict = form.watch('waterSourceDistrict') || form.getValues('waterSourceDistrict') || '';
+        const waterSourceSector = form.watch('waterSourceSector') || form.getValues('waterSourceSector') || '';
+        const waterSourceCell = form.watch('waterSourceCell') || form.getValues('waterSourceCell') || '';
+        
+        const hasWaterSourceFields = 
+          waterSourceType.trim() !== '' &&
+          nameSourceWater.trim() !== '' &&
+          waterSourceProvince.trim() !== '' &&
+          waterSourceDistrict.trim() !== '' &&
+          waterSourceSector.trim() !== '' &&
+          waterSourceCell.trim() !== '' &&
+          waterReliability.trim() !== '';
+          
         // Check permit length (required for submission)
-        const permitLength = form.getValues('permitLengthYears');
+        const permitLength = form.watch('permitLengthYears') ?? form.getValues('permitLengthYears');
         const hasPermitLength = typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15;
 
         return !hasWaterSourceFields || !hasPermitLength;
@@ -1218,15 +1246,23 @@ export function ApplicationForm({
         
       case "intended-activity": {
         // Check required fields and documents for intended activity tab
-        const intendedActivities = form.getValues('intendedActivities') || [];
-        const waterAbstractionDetails = form.getValues('waterAbstractionDetails') || [];
-        const hasActivityFields = intendedActivities.length > 0 && waterAbstractionDetails.length > 0;
+        // Use form.watch() to ensure reactive updates when fields change
+        const intendedActivities = form.watch('intendedActivities') || form.getValues('intendedActivities') || [];
+        const waterAbstractionDetails = form.watch('waterAbstractionDetails') || form.getValues('waterAbstractionDetails') || [];
         const hasRequiredDocs = checkRequiredDocuments();
         
-        // For concession activities (fish farming), polygons are required
-        const requiresConcessionPolygons = intendedActivities.includes('fish_farming_lakes') || intendedActivities.includes('fish_farming_ponds');
-        if (requiresConcessionPolygons) {
-          const polygons = form.getValues('waterSourcePolygons') || [];
+        // Must have at least one activity selected
+        if (intendedActivities.length === 0) {
+          return true; // Disable Next button
+        }
+        
+        // Determine if this is a concession (fish farming) or abstraction activity
+        const isConcessionActivity = intendedActivities.includes('fish_farming_lakes') || intendedActivities.includes('fish_farming_ponds');
+        const isAbstractionActivity = intendedActivities.some((a: string) => a && a !== 'fish_farming_lakes' && a !== 'fish_farming_ponds');
+        
+        // For concession activities (fish farming), polygons are required but NOT water abstraction details
+        if (isConcessionActivity) {
+          const polygons = form.watch('waterSourcePolygons') || form.getValues('waterSourcePolygons') || [];
           const hasValidPolygons =
             Array.isArray(polygons) &&
             polygons.length > 0 &&
@@ -1237,17 +1273,27 @@ export function ApplicationForm({
                 poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
               );
             });
-          return !hasActivityFields || !hasRequiredDocs || !hasValidPolygons;
+          return !hasRequiredDocs || !hasValidPolygons;
         }
         
-        return !hasActivityFields || !hasRequiredDocs;
+        // For abstraction activities, water abstraction details and LAT/LONG are required
+        if (isAbstractionActivity) {
+          const hasAbstractionDetails = waterAbstractionDetails.length > 0;
+          const lat = String(form.watch('waterSourceLatitude') ?? form.getValues('waterSourceLatitude') ?? '').trim();
+          const lng = String(form.watch('waterSourceLongitude') ?? form.getValues('waterSourceLongitude') ?? '').trim();
+          const hasLatLng = lat !== '' && lng !== '';
+          return !hasAbstractionDetails || !hasLatLng || !hasRequiredDocs;
+        }
+        
+        return !hasRequiredDocs;
       }
         
       case "land-ownership": {
         // Check required fields and documents for land ownership tab
-        const ownsAllLand = form.getValues('ownsAllLand');
+        // Use form.watch() to ensure reactive updates when fields change
+        const ownsAllLand = form.watch('ownsAllLand') ?? form.getValues('ownsAllLand');
         const hasLandDocs = checkLandAccessDocuments();
-        const hasCertified = Boolean(form.getValues('certificationAgreement'));
+        const hasCertified = Boolean(form.watch('certificationAgreement') ?? form.getValues('certificationAgreement'));
         return ownsAllLand === undefined || !hasLandDocs || !hasCertified;
       }
         
@@ -1328,7 +1374,7 @@ export function ApplicationForm({
         officeVillage: "",
         telephoneContact: "",
         emailAddress: "",
-        waterSourceType: "stream_river",
+        waterSourceType: "",
         waterSourceOther: "",
         nameSourceWater: "",
         tributaryToMain: "",
@@ -2585,7 +2631,7 @@ export function ApplicationForm({
                           7. Source of Water *
                         </FormLabel>
                         <FormControl>
-                          <Select onValueChange={field.onChange} value={field.value || ""} {...getSelectProps()}>
+                          <Select onValueChange={field.onChange} value={field.value || undefined} {...getSelectProps()}>
                             <SelectTrigger className={`bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200 focus:border-blue-400 ${readOnly ? 'cursor-default' : ''}`}>
                               <SelectValue placeholder="Select water source type" />
                             </SelectTrigger>
