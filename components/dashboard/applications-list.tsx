@@ -61,7 +61,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     // Critical: when the raw status is approved_pending_permit, always show it (do not map to under_review).
     if (app.status === "approved_pending_permit") return "approved_pending_permit";
 
-    const fromParent = (app as any).display_status as string | undefined;
+    const fromParent = (app as Application & { display_status?: string }).display_status;
     if (fromParent) return fromParent;
 
     // Fallback: ensure internal statuses never leak to applicants even if parent forgets to attach `display_status`.
@@ -205,11 +205,44 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     });
   };
 
+  const isRenewalApplication = (app?: Application) => {
+    if (!app) return false;
+
+    const notes = (() => {
+      try {
+        const raw = app.internal_notes;
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        return null;
+      }
+    })();
+
+    return (
+      app.is_renewal === true ||
+      Boolean(app.renewed_from_permit_id) ||
+      Boolean(notes?.isRenewal) ||
+      (typeof app.project_title === 'string' && app.project_title.startsWith('Renewal:'))
+    );
+  };
+
   // Format application type for display
   // For modification/transfer/renewal types, try to show a more meaningful type based on intended activities or water purpose
   const formatApplicationType = (type: string, app?: Application) => {
-    // Check if it's a renewal application (via flag or type)
-    const isRenewal = type === 'renewal' || (app && (app as any).is_renewal === true);
+    const notes = (() => {
+      try {
+        const raw = app?.internal_notes;
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
+      } catch {
+        return null;
+      }
+    })();
+
+    // Check if it's a renewal application (supports legacy rows created before renewal flags were persisted consistently)
+    const isRenewal =
+      type === 'renewal' ||
+      Boolean(notes?.isRenewal) ||
+      isRenewalApplication(app);
+
     if (isRenewal) {
       return 'Renewal';
     }
@@ -421,8 +454,8 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                     <div className="flex justify-end gap-1.5">
                       {(application.status === 'draft' || application.status === 'revision_required') && (
                         <Link href={
-                          (application as any).is_renewal 
-                            ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${(application as any).renewed_from_permit_id}`
+                          isRenewalApplication(application)
+                            ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${application.renewed_from_permit_id}`
                             : `/dashboard/edit-application/${application.id}`
                         }>
                           <Button 

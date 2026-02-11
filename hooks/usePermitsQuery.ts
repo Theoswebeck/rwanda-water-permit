@@ -17,6 +17,12 @@ export interface PermitWithApplication extends Permit {
     id: string
     application_number: string
     project_title: string
+    applicant?: {
+      id: string
+      first_name?: string
+      last_name?: string
+      company_name?: string
+    }
     intended_activities: string[] | null
     province: string
     district: string
@@ -65,7 +71,7 @@ export function usePermitsQuery({ userId, enabled = true, includeApplication = t
 
       // Get permits for those applications with optional application data
       const selectQuery = includeApplication 
-        ? `*, application:applications!application_id(id, application_number, project_title, intended_activities, province, district, sector, cell, village, water_body_name, max_daily_volume_m3, max_yearly_volume_m3, concession_area)`
+        ? `*, application:applications!application_id(id, application_number, project_title, intended_activities, province, district, sector, cell, village, water_body_name, max_daily_volume_m3, max_yearly_volume_m3, concession_area, applicant:users!applicant_id(id, first_name, last_name, company_name))`
         : '*'
 
       const { data, error } = await supabase

@@ -42,8 +42,9 @@ import {
 import { PaymentTab } from "@/components/dashboard/payment-tab";
 import { WaterUseReportForm } from "@/components/dashboard/water-use-report-form";
 import type { PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
-import type { Application, WaterUseReportTemplate } from "@/types/database";
+import type { Application, WaterUseReportTemplate, WaterUseReport } from "@/types/database";
 import { supabase } from "@/lib/supabase";
+import { getDocumentUrl } from "@/lib/supabase-storage";
 
 interface PermitRenewalFormProps {
   permit: PermitWithApplication;
@@ -92,6 +93,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   // Water use report state - full report data from WaterUseReportForm
   const [waterUseReportData, setWaterUseReportData] = useState<any>(null);
   const [waterUseReportSubmitted, setWaterUseReportSubmitted] = useState(false);
+  const [existingWaterUseReport, setExistingWaterUseReport] = useState<WaterUseReport | null>(null);
   
   // Determine template type based on permit's intended activities
   const waterUseTemplate: WaterUseReportTemplate = useMemo(() => {
@@ -105,11 +107,62 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     }
     return 'abstraction';
   }, [permit.application?.intended_activities]);
+  const reportYear = useMemo(() => new Date().getFullYear() - 1, []);
   
   // Attachment state
   const [renewalLetter, setRenewalLetter] = useState<File | null>(null);
   const [existingRenewalLetterUrl, setExistingRenewalLetterUrl] = useState<string | null>(null);
   const renewalLetterInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const loadExistingRenewalLetter = async () => {
+      if (!currentApplication?.id) {
+        setExistingRenewalLetterUrl(null);
+        return;
+      }
+
+      try {
+        const { data: byType, error: byTypeError } = await supabase
+          .from('documents')
+          .select('file_path')
+          .eq('application_id', currentApplication.id)
+          .eq('type', 'renewal_request_letter')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (byTypeError) {
+          console.error('❌ Error loading renewal letter by type:', byTypeError);
+        }
+
+        if (byType?.file_path) {
+          setExistingRenewalLetterUrl(getDocumentUrl(byType.file_path));
+          return;
+        }
+
+        // Fallback for any legacy rows where type was not normalized correctly.
+        const { data: byPath, error: byPathError } = await supabase
+          .from('documents')
+          .select('file_path')
+          .eq('application_id', currentApplication.id)
+          .ilike('file_path', `%applications/${currentApplication.id}/renewalRequestLetter-%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (byPathError) {
+          console.error('❌ Error loading renewal letter by file path:', byPathError);
+        }
+
+        setExistingRenewalLetterUrl(getDocumentUrl(byPath?.file_path || null));
+      } catch (err) {
+        console.error('❌ Failed to load existing renewal letter:', err);
+        setExistingRenewalLetterUrl(null);
+      }
+    };
+
+    loadExistingRenewalLetter();
+  }, [currentApplication?.id]);
   
   // Tab validation state
   const [tabsCompleted, setTabsCompleted] = useState({
@@ -208,10 +261,14 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       permitId: permit.id,
       permitNumber: permit.permit_number,
       originalApplicationId: permit.application_id,
+      originalApplicationType: permit.application?.application_type,
       applicationType: 'renewal',
+      isRenewal: true,
+      renewed_from_permit_id: permit.id,
       
       // Water use report data
       waterUseReport: waterUseReportData,
+      waterUseReportId: existingWaterUseReport?.id,
       
       // Renewal letter file
       renewalLetter,
@@ -219,6 +276,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       // Permit holder info (read-only reference)
       permitHolder: getPermitHolderName(),
       projectTitle: permit.application?.project_title,
+      waterSource: permit.water_source,
+      waterPurpose: permit.purpose,
+      intendedActivities: permit.application?.intended_activities,
       
       // Location (read-only reference)
       province: permit.application?.province,
@@ -226,7 +286,123 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       sector: permit.application?.sector,
       cell: permit.application?.cell,
     };
-  }, [permit, waterUseReportData, renewalLetter]);
+  }, [permit, waterUseReportData, renewalLetter, existingWaterUseReport?.id]);
+
+  useEffect(() => {
+    const loadExistingWaterUseReport = async () => {
+      if (!permit?.id) {
+        setExistingWaterUseReport(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('water_use_reports')
+          .select('*')
+          .eq('permit_id', permit.id)
+          .eq('reporting_year', reportYear)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          console.error('❌ Error loading renewal water use report:', error);
+          return;
+        }
+
+        setExistingWaterUseReport((data as WaterUseReport | null) ?? null);
+        if (data?.section3 || data?.section4 || data?.section5_monitoring || data?.section6_employment || data?.section7 || data?.section8 || data?.section9_declaration) {
+          setWaterUseReportData({
+            reportingYear: data.reporting_year,
+            section3: data.section3,
+            section3_quarterly: data.section3_quarterly,
+            section4: data.section4,
+            section5_monitoring: data.section5_monitoring,
+            section5_incidents: data.section5_incidents,
+            section6_employment: data.section6_employment,
+            section6_ohs: data.section6_ohs,
+            section7: data.section7,
+            section8: data.section8,
+            section9_declaration: data.section9_declaration,
+          });
+          setWaterUseReportSubmitted(data.status === 'submitted');
+        }
+      } catch (err) {
+        console.error('❌ Failed to load renewal water use report:', err);
+      }
+    };
+
+    loadExistingWaterUseReport();
+  }, [permit?.id, reportYear]);
+
+  const persistWaterUseReport = useCallback(async (reportData: any, nextStatus: 'draft' | 'submitted') => {
+    const applicantId =
+      userData?.id ||
+      permit.application?.applicant?.id ||
+      currentApplication?.applicant_id;
+
+    if (!applicantId) {
+      throw new Error('Missing applicant information for water use report');
+    }
+
+    const payload = {
+      permit_id: permit.id,
+      application_id: permit.application_id,
+      applicant_id: applicantId,
+      reporting_year: reportData?.reportingYear || reportYear,
+      template: waterUseTemplate,
+      // Keep draft if row already submitted and viewed in readonly contexts.
+      status: existingWaterUseReport?.status === 'submitted' ? 'submitted' : nextStatus,
+      section3: reportData?.section3 || null,
+      section3_quarterly: reportData?.section3_quarterly || null,
+      section4: reportData?.section4 || null,
+      section5_monitoring: reportData?.section5_monitoring || null,
+      section5_incidents: reportData?.section5_incidents || null,
+      section6_employment: reportData?.section6_employment || null,
+      section6_ohs: reportData?.section6_ohs || null,
+      section7: reportData?.section7 || null,
+      section8: reportData?.section8 || null,
+      section9_declaration: reportData?.section9_declaration || null,
+      submitted_at:
+        (existingWaterUseReport?.status === 'submitted' || nextStatus === 'submitted')
+          ? (existingWaterUseReport?.submitted_at || new Date().toISOString())
+          : null,
+      updated_at: new Date().toISOString(),
+    } as const;
+
+    if (existingWaterUseReport?.id) {
+      const { data, error } = await supabase
+        .from('water_use_reports')
+        .update(payload)
+        .eq('id', existingWaterUseReport.id)
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      setExistingWaterUseReport(data as WaterUseReport);
+      return data as WaterUseReport;
+    }
+
+    const { data, error } = await supabase
+      .from('water_use_reports')
+      .insert(payload)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    setExistingWaterUseReport(data as WaterUseReport);
+    return data as WaterUseReport;
+  }, [
+    userData?.id,
+    permit.id,
+    permit.application_id,
+    permit.application?.applicant?.id,
+    currentApplication?.applicant_id,
+    reportYear,
+    waterUseTemplate,
+    existingWaterUseReport?.id,
+    existingWaterUseReport?.status,
+    existingWaterUseReport?.submitted_at,
+  ]);
 
   const handleSaveDraft = async () => {
     try {
@@ -236,6 +412,25 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       await onSaveAsDraft(formData, 'draft');
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save draft');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleContinueToPayment = async () => {
+    if (readOnly) return;
+    if (currentApplication?.id) {
+      setActiveTab("payment");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveError(null);
+      await onSaveAsDraft(buildFormData(), 'draft');
+      setActiveTab("payment");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to prepare renewal application for payment');
     } finally {
       setIsSaving(false);
     }
@@ -484,15 +679,19 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                 <WaterUseReportForm
                   permit={permit as any}
                   template={waterUseTemplate}
-                  reportingYear={new Date().getFullYear() - 1}
-                  existingReport={null}
+                  reportingYear={reportYear}
+                  existingReport={existingWaterUseReport}
                   onSaveAsDraft={async (data) => {
                     if (readOnly) return;
+                    setSaveError(null);
+                    await persistWaterUseReport(data, 'draft');
                     setWaterUseReportData(data);
-                    // Don't mark as submitted on draft save
                   }}
                   onSubmit={async (data) => {
                     if (readOnly) return;
+                    setSaveError(null);
+                    // Keep persisted status as draft in renewal flow; final renewal submission governs lifecycle.
+                    await persistWaterUseReport(data, 'draft');
                     setWaterUseReportData(data);
                     setWaterUseReportSubmitted(true);
                     // Auto-advance to next tab
@@ -692,9 +891,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         Save Draft
                       </Button>
                       <Button 
-                        onClick={handleNext} 
+                        onClick={handleContinueToPayment}
                         className="bg-green-600 hover:bg-green-700 gap-2"
-                        disabled={!tabsCompleted.attachments}
+                        disabled={!tabsCompleted.attachments || isSaving}
                       >
                         Continue to Payment
                         <ArrowRight className="h-4 w-4" />

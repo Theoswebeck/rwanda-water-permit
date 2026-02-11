@@ -86,7 +86,10 @@ function WaterUseReportContent() {
               id, application_number, project_title, intended_activities, 
               province, district, sector, cell, village, water_body_name,
               max_daily_volume_m3, max_yearly_volume_m3, concession_area,
-              water_source, water_purpose
+              water_source, water_purpose,
+              applicant:users!applicant_id(
+                id, first_name, last_name, company_name
+              )
             )
           `)
           .eq('id', permitId)

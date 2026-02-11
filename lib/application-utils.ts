@@ -110,6 +110,49 @@ export function formatApplicationTypeForDB(activity: string): Application['appli
 
 // Mapping function to transform form data to database schema
 export function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' = 'draft', userId?: string): Partial<Application> {
+  const isRenewalPayload =
+    formData?.applicationType === 'renewal' ||
+    formData?.isRenewal === true ||
+    Boolean(formData?.permitId) ||
+    Boolean(formData?.renewed_from_permit_id);
+
+  // Renewal forms can reach payment before a draft is explicitly saved.
+  // In that flow, we still need a correctly-typed renewal application record.
+  if (isRenewalPayload) {
+    const fallbackType = formatApplicationTypeForDB(formData?.originalApplicationType || 'domestic');
+    const fallbackSource = formatWaterSourceForDB(formData?.waterSource || 'other');
+    const fallbackPurpose = formatWaterPurposeForDB(formData?.waterPurpose || 'other');
+
+    return {
+      status,
+      ...(status === 'submitted' ? { submitted_at: new Date().toISOString() } : {}),
+      application_type: fallbackType,
+      water_source: fallbackSource,
+      water_purpose: fallbackPurpose,
+      province: formatProvinceForDB(formData?.province) || 'Kigali',
+      district: formData?.district || (status === 'draft' ? 'Draft District' : ''),
+      sector: formData?.sector || (status === 'draft' ? 'Draft Sector' : ''),
+      cell: formData?.cell || (status === 'draft' ? 'Draft Cell' : ''),
+      project_title: formData?.projectTitle
+        ? `Renewal: ${formData.projectTitle}`
+        : `Renewal: ${formData?.permitNumber || 'Permit'}`,
+      project_description: `Permit renewal request for permit ${formData?.permitNumber || 'N/A'}`,
+      intended_activities: Array.isArray(formData?.intendedActivities) ? formData.intendedActivities : undefined,
+      is_renewal: true,
+      renewed_from_permit_id: formData?.permitId || formData?.renewed_from_permit_id,
+      internal_notes: JSON.stringify({
+        isRenewal: true,
+        originalPermitId: formData?.permitId || formData?.renewed_from_permit_id,
+        originalPermitNumber: formData?.permitNumber,
+        originalApplicationId: formData?.originalApplicationId,
+        waterUseReport: formData?.waterUseReport ?? null,
+        renewalFormData: formData ?? {},
+      }),
+      sla_status: 'on_time' as const,
+      applicant_id: userId || '550e8400-e29b-41d4-a716-446655440001',
+    };
+  }
+
   // Handle coordinates: support single polygon (legacy waterSourceCoordinates) and multi-polygons (waterSourcePolygons)
   let coordinates: any = undefined;
   try {

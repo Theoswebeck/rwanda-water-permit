@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Card,
@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,118 +81,130 @@ export function WaterUseReportForm({
   isReadOnly = false,
 }: WaterUseReportFormProps) {
   const [activeTab, setActiveTab] = useState("section1");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const permitHolderName = useMemo(() => {
+    const applicant = permit.application?.applicant;
+    if (applicant?.company_name) return applicant.company_name;
+    const individualName = `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim();
+    if (individualName) return individualName;
+    // Fallback for legacy rows where applicant relation was not joined.
+    return permit.application?.project_title || 'N/A';
+  }, [permit.application?.applicant, permit.application?.project_title]);
+
+  const buildInitialFormData = useCallback(() => ({
+    reportingYear,
+    // Section 3 - Actual Water Use
+    section3: existingReport?.section3 || {
+      operationalStatus: '',
+      waterUseConflicts: '',
+      paymentStatus: 'not_paid',
+      // Concession-specific
+      totalSurfaceAreaOccupied: '',
+      changesduringYear: false,
+      changesDescription: '',
+    },
+    section3_quarterly: existingReport?.section3_quarterly || {
+      q1: { volume: '', avgDaily: '', method: '' },
+      q2: { volume: '', avgDaily: '', method: '' },
+      q3: { volume: '', avgDaily: '', method: '' },
+      q4: { volume: '', avgDaily: '', method: '' },
+      // Concession fish farming quarterly
+      q1_fish: { cages: '', capacity: '', surface: '' },
+      q2_fish: { cages: '', capacity: '', surface: '' },
+      q3_fish: { cages: '', capacity: '', surface: '' },
+      q4_fish: { cages: '', capacity: '', surface: '' },
+    },
+    // Section 4 - Water Use Efficiency
+    section4: existingReport?.section4 || {
+      efficiencyMeasures: '',
+      recyclingPractices: '',
+      estimatedWaterSaved: '',
+      reductionPercentage: '',
+      identifiedLosses: '',
+      // Concession-specific
+      productionOutputMeasures: '',
+      ecologicalImpactMeasures: '',
+      spatialOccupationMeasures: '',
+    },
+    // Section 5 - Environmental Compliance
+    section5_monitoring: existingReport?.section5_monitoring || {
+      waterTemperature: { min: '', max: '', avg: '' },
+      dissolvedOxygen: { min: '', max: '', avg: '' },
+      turbidity: { min: '', max: '', avg: '' },
+      ph: { min: '', max: '', avg: '' },
+      nutrients: { min: '', max: '', avg: '' },
+      bod: { min: '', max: '', avg: '' },
+      other: { parameter: '', min: '', max: '', avg: '' },
+      // Concession-specific
+      infrastructureNature: [],
+      pollutionPrevention: '',
+    },
+    section5_incidents: existingReport?.section5_incidents || {
+      hasIncidents: false,
+      incidentDate: '',
+      incidentDescription: '',
+      correctiveActions: '',
+      dateReportedToAuthority: '',
+    },
+    // Section 6 - Social & Gender
+    section6_employment: existingReport?.section6_employment || {
+      permanentMale: '',
+      permanentFemale: '',
+      temporaryMale: '',
+      temporaryFemale: '',
+      technicalMale: '',
+      technicalFemale: '',
+      unskilledMale: '',
+      unskilledFemale: '',
+      // Concession-specific
+      communityEngaged: '',
+      womenInConsultations: '',
+      communityBenefits: '',
+      genderSupportMeasures: '',
+    },
+    section6_ohs: existingReport?.section6_ohs || {
+      genderInclusiveSafety: false,
+      genderInclusiveSafetyRemarks: '',
+      separateSanitation: false,
+      separateSanitationRemarks: '',
+      genderGrievance: false,
+      genderGrievanceRemarks: '',
+    },
+    // Section 7 - Compliance Status
+    section7: existingReport?.section7 || {
+      permitLimitsCompliance: false,
+      permitLimitsRemarks: '',
+      zoningCompliance: false,
+      zoningRemarks: '',
+      environmentalApprovalCompliance: false,
+      environmentalApprovalRemarks: '',
+      monitoringReportsCompliance: false,
+      monitoringReportsRemarks: '',
+      waterFeesCompliance: false,
+      waterFeesRemarks: '',
+    },
+    // Section 8 - Future Plans
+    section8: existingReport?.section8 || {
+      plannedChanges: '',
+      expectedChangePercentage: '',
+      plannedInfrastructureUpgrades: '',
+      environmentalImprovements: '',
+      genderInclusionActions: '',
+    },
+    // Section 9 - Declaration
+    section9_declaration: existingReport?.section9_declaration || {
+      declarantName: '',
+      declarationDate: new Date().toISOString().split('T')[0],
+      agreed: false,
+    },
+  }), [reportingYear, existingReport]);
 
   // Form state - organized by sections
-  const [formData, setFormData] = useState(() => {
-    // Initialize from existing report or defaults
-    return {
-      reportingYear,
-      // Section 3 - Actual Water Use
-      section3: existingReport?.section3 || {
-        operationalStatus: '',
-        waterUseConflicts: '',
-        paymentStatus: 'not_paid',
-        // Concession-specific
-        totalSurfaceAreaOccupied: '',
-        changesduringYear: false,
-        changesDescription: '',
-      },
-      section3_quarterly: existingReport?.section3_quarterly || {
-        q1: { volume: '', avgDaily: '', method: '' },
-        q2: { volume: '', avgDaily: '', method: '' },
-        q3: { volume: '', avgDaily: '', method: '' },
-        q4: { volume: '', avgDaily: '', method: '' },
-        // Concession fish farming quarterly
-        q1_fish: { cages: '', capacity: '', surface: '' },
-        q2_fish: { cages: '', capacity: '', surface: '' },
-        q3_fish: { cages: '', capacity: '', surface: '' },
-        q4_fish: { cages: '', capacity: '', surface: '' },
-      },
-      // Section 4 - Water Use Efficiency
-      section4: existingReport?.section4 || {
-        efficiencyMeasures: '',
-        recyclingPractices: '',
-        estimatedWaterSaved: '',
-        reductionPercentage: '',
-        identifiedLosses: '',
-        // Concession-specific
-        productionOutputMeasures: '',
-        ecologicalImpactMeasures: '',
-        spatialOccupationMeasures: '',
-      },
-      // Section 5 - Environmental Compliance
-      section5_monitoring: existingReport?.section5_monitoring || {
-        waterTemperature: { min: '', max: '', avg: '' },
-        dissolvedOxygen: { min: '', max: '', avg: '' },
-        turbidity: { min: '', max: '', avg: '' },
-        ph: { min: '', max: '', avg: '' },
-        nutrients: { min: '', max: '', avg: '' },
-        bod: { min: '', max: '', avg: '' },
-        other: { parameter: '', min: '', max: '', avg: '' },
-        // Concession-specific
-        infrastructureNature: [],
-        pollutionPrevention: '',
-      },
-      section5_incidents: existingReport?.section5_incidents || {
-        hasIncidents: false,
-        incidentDate: '',
-        incidentDescription: '',
-        correctiveActions: '',
-        dateReportedToAuthority: '',
-      },
-      // Section 6 - Social & Gender
-      section6_employment: existingReport?.section6_employment || {
-        permanentMale: '',
-        permanentFemale: '',
-        temporaryMale: '',
-        temporaryFemale: '',
-        technicalMale: '',
-        technicalFemale: '',
-        unskilledMale: '',
-        unskilledFemale: '',
-        // Concession-specific
-        communityEngaged: '',
-        womenInConsultations: '',
-        communityBenefits: '',
-        genderSupportMeasures: '',
-      },
-      section6_ohs: existingReport?.section6_ohs || {
-        genderInclusiveSafety: false,
-        genderInclusiveSafetyRemarks: '',
-        separateSanitation: false,
-        separateSanitationRemarks: '',
-        genderGrievance: false,
-        genderGrievanceRemarks: '',
-      },
-      // Section 7 - Compliance Status
-      section7: existingReport?.section7 || {
-        permitLimitsCompliance: false,
-        permitLimitsRemarks: '',
-        zoningCompliance: false,
-        zoningRemarks: '',
-        environmentalApprovalCompliance: false,
-        environmentalApprovalRemarks: '',
-        monitoringReportsCompliance: false,
-        monitoringReportsRemarks: '',
-        waterFeesCompliance: false,
-        waterFeesRemarks: '',
-      },
-      // Section 8 - Future Plans
-      section8: existingReport?.section8 || {
-        plannedChanges: '',
-        expectedChangePercentage: '',
-        plannedInfrastructureUpgrades: '',
-        environmentalImprovements: '',
-        genderInclusionActions: '',
-      },
-      // Section 9 - Declaration
-      section9_declaration: existingReport?.section9_declaration || {
-        declarantName: '',
-        declarationDate: new Date().toISOString().split('T')[0],
-        agreed: false,
-      },
-    };
-  });
+  const [formData, setFormData] = useState(() => buildInitialFormData());
+
+  useEffect(() => {
+    setFormData(buildInitialFormData());
+  }, [buildInitialFormData]);
 
   // Update form data helper
   const updateFormData = useCallback((section: string, field: string, value: any) => {
@@ -203,6 +216,20 @@ export function WaterUseReportForm({
       },
     }));
   }, []);
+
+  const updatePercentageField = useCallback((section: string, field: string, rawValue: string) => {
+    if (rawValue === '') {
+      updateFormData(section, field, '');
+      return;
+    }
+
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric)) return;
+
+    const clamped = Math.max(0, Math.min(100, numeric));
+    const roundedToTwoDecimals = Math.round(clamped * 100) / 100;
+    updateFormData(section, field, String(roundedToTwoDecimals));
+  }, [updateFormData]);
 
   // Update nested form data helper
   const updateNestedFormData = useCallback((section: string, parent: string, field: string, value: any) => {
@@ -245,11 +272,49 @@ export function WaterUseReportForm({
 
   // Handle save
   const handleSave = async () => {
+    setValidationError(null);
+    const reduction = Number(formData.section4.reductionPercentage || 0);
+    const expectedChange = Number(formData.section8.expectedChangePercentage || 0);
+    const hasMoreThanTwoDecimals = (value: string) => {
+      if (!value || !value.includes('.')) return false;
+      return value.split('.')[1].length > 2;
+    };
+
+    if (
+      reduction > 100 ||
+      reduction < 0 ||
+      expectedChange > 100 ||
+      expectedChange < 0 ||
+      hasMoreThanTwoDecimals(formData.section4.reductionPercentage || '') ||
+      hasMoreThanTwoDecimals(formData.section8.expectedChangePercentage || '')
+    ) {
+      setValidationError("Percentage fields must be between 0 and 100, with at most 2 decimal places.");
+      return;
+    }
     await onSaveAsDraft(formData);
   };
 
   // Handle submit
   const handleSubmitForm = async () => {
+    setValidationError(null);
+    const reduction = Number(formData.section4.reductionPercentage || 0);
+    const expectedChange = Number(formData.section8.expectedChangePercentage || 0);
+    const hasMoreThanTwoDecimals = (value: string) => {
+      if (!value || !value.includes('.')) return false;
+      return value.split('.')[1].length > 2;
+    };
+
+    if (
+      reduction > 100 ||
+      reduction < 0 ||
+      expectedChange > 100 ||
+      expectedChange < 0 ||
+      hasMoreThanTwoDecimals(formData.section4.reductionPercentage || '') ||
+      hasMoreThanTwoDecimals(formData.section8.expectedChangePercentage || '')
+    ) {
+      setValidationError("Percentage fields must be between 0 and 100, with at most 2 decimal places.");
+      return;
+    }
     await onSubmit(formData);
   };
 
@@ -314,7 +379,7 @@ export function WaterUseReportForm({
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Name of Permit Holder</Label>
                   <div className="p-3 bg-slate-50 rounded-md border">
-                    {permit.application?.project_title || 'N/A'}
+                    {permitHolderName}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -765,9 +830,11 @@ export function WaterUseReportForm({
                       <Input
                         id="reduction"
                         type="number"
-                        step="0.1"
+                        min="0"
+                        max="100"
+                        step="0.01"
                         value={formData.section4.reductionPercentage}
-                        onChange={(e) => updateFormData('section4', 'reductionPercentage', e.target.value)}
+                        onChange={(e) => updatePercentageField('section4', 'reductionPercentage', e.target.value)}
                         disabled={isReadOnly}
                       />
                     </div>
@@ -824,9 +891,11 @@ export function WaterUseReportForm({
                     <Input
                       id="reductionConc"
                       type="number"
-                      step="0.1"
+                      min="0"
+                      max="100"
+                      step="0.01"
                       value={formData.section4.reductionPercentage}
-                      onChange={(e) => updateFormData('section4', 'reductionPercentage', e.target.value)}
+                      onChange={(e) => updatePercentageField('section4', 'reductionPercentage', e.target.value)}
                       disabled={isReadOnly}
                     />
                   </div>
@@ -1548,9 +1617,11 @@ export function WaterUseReportForm({
                 <Input
                   id="expectedChange"
                   type="number"
-                  step="0.1"
+                  min="0"
+                  max="100"
+                  step="0.01"
                   value={formData.section8.expectedChangePercentage}
-                  onChange={(e) => updateFormData('section8', 'expectedChangePercentage', e.target.value)}
+                  onChange={(e) => updatePercentageField('section8', 'expectedChangePercentage', e.target.value)}
                   disabled={isReadOnly}
                 />
               </div>
@@ -1649,7 +1720,13 @@ export function WaterUseReportForm({
 
       {/* Action Buttons */}
       {!isReadOnly && (
-        <div className="flex justify-between items-center pt-6 border-t">
+        <div className="space-y-3 pt-6 border-t">
+          {validationError && (
+            <Alert variant="destructive">
+              <AlertDescription>{validationError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="flex justify-between items-center">
           <Button
             variant="outline"
             onClick={handleSave}
@@ -1673,6 +1750,7 @@ export function WaterUseReportForm({
             )}
             Submit Report
           </Button>
+          </div>
         </div>
       )}
 
