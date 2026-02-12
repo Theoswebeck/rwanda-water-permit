@@ -89,11 +89,8 @@ type UIBanner = {
 const BANNER_STORAGE_KEY = "waterpermit:verification:uiBanner";
 
 function persistBanner(banner: UIBanner) {
-  try {
-    sessionStorage.setItem(BANNER_STORAGE_KEY, JSON.stringify({ ...banner, ts: Date.now() }));
-  } catch {
-    // ignore (storage may be unavailable)
-  }
+  // Intentionally no-op: do not persist UI state in browser session storage.
+  void banner;
 }
 
 // Transform Application data back to form format for viewing (copied from other staff pages)
@@ -180,19 +177,7 @@ export default function VerificationApplicationPage() {
   const [showSendToApproverDialog, setShowSendToApproverDialog] = useState(false);
 
   useEffect(() => {
-    // Restore any persisted banner after a router.refresh()
-    try {
-      const raw = sessionStorage.getItem(BANNER_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<UIBanner> & { ts?: number };
-        if (parsed && parsed.scope && parsed.scope === (params.id as string) && parsed.kind && parsed.title) {
-          setBanner({ kind: parsed.kind, title: parsed.title, description: parsed.description });
-          sessionStorage.removeItem(BANNER_STORAGE_KEY);
-        }
-      }
-    } catch {
-      // ignore
-    }
+    // Do not restore persisted UI state from browser storage.
   }, [params.id]);
 
   useEffect(() => {
@@ -298,14 +283,33 @@ export default function VerificationApplicationPage() {
 
             const pathParts = doc.file_path.split("/");
             const fileName = pathParts[pathParts.length - 1];
-            const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\\d+\\./);
+            const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
             if (fieldNameMatch) {
               const fieldName = fieldNameMatch[1];
               if (!fieldName.startsWith("additional_")) {
                 documentMap[fieldName] = { url: publicUrl, name: doc.name };
               }
             } else {
-              documentMap[doc.type] = { url: publicUrl, name: doc.name };
+              // Fallback: map database document types to form field names
+              const typeMapping: Record<string, string> = {
+                identification_doc: "identificationDoc",
+                land_ownership_doc: "landOwnershipDoc",
+                land_access_doc: "landAccessDocuments",
+                technical_drawings: "technicalDrawings",
+                environmental_impact_doc: "environmentalImpactDoc",
+                payment_proof: "paymentProof",
+                intake_discharge_map: "intakeDischargeMap",
+                business_license: "miningLicense",
+                geological_survey: "miningHydrologicalReport",
+                water_quality_report: "waterQualityReport",
+                renewal_request_letter: "renewalRequestLetter",
+                transfer_application_letter: "applicationLetter",
+                signed_transfer_form: "signedTransferForm",
+                registration_certificate: "registrationCertificate",
+                existing_permit_copy: "existingPermitCopy",
+              };
+              const fieldName = typeMapping[doc.type] || doc.type;
+              documentMap[fieldName] = { url: publicUrl, name: doc.name };
             }
           }
         }
@@ -336,7 +340,7 @@ export default function VerificationApplicationPage() {
               const name = path.split("/").pop() || "File";
               return {
                 id: Math.random().toString(36).slice(2),
-                name: name.replace(/^\\d+-/, ""),
+                name: name.replace(/^\d+-/, ""),
                 path,
                 size: 0,
                 type: name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg",
@@ -687,16 +691,18 @@ export default function VerificationApplicationPage() {
             )}
 
             <Tabs defaultValue="application_details" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
+              <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
                 <TabsTrigger value="application_details" className="py-2.5">
                   Application Details
                 </TabsTrigger>
                 <TabsTrigger value="doc_verification" className="py-2.5">
                   Document Verification
                 </TabsTrigger>
+                {!isTransferApp && (
                 <TabsTrigger value="field_report" className="py-2.5">
                   Assessment Report
                 </TabsTrigger>
+                )}
                 <TabsTrigger value="internal_notes" className="py-2.5">
                   History & Notes
                 </TabsTrigger>
@@ -732,6 +738,7 @@ export default function VerificationApplicationPage() {
                     mode="view"
                     readOnly={true}
                     currentApplication={application}
+                    isStaffView={true}
                   />
                 ) : (
                   <Alert className="border-amber-200 bg-amber-50">
@@ -787,6 +794,7 @@ export default function VerificationApplicationPage() {
                   isLoading={false}
                   currentApplication={application}
                   readOnly={true}
+                  isStaffView={true}
                 />
               ) : loadingRenewalPermit && (application as any).is_renewal ? (
                 <div className="flex items-center justify-center py-12">
@@ -830,6 +838,8 @@ export default function VerificationApplicationPage() {
               />
             </TabsContent>
 
+            {/* Assessment Report Tab - Hidden for transfer applications */}
+            {!isTransferApp && (
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               <div className="grid grid-cols-1 gap-6">
                 <FieldReportUpload
@@ -872,6 +882,7 @@ export default function VerificationApplicationPage() {
                 />
               </div>
             </TabsContent>
+            )}
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               <div className="space-y-6">

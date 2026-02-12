@@ -62,6 +62,7 @@ interface PermitRenewalFormProps {
   isLoading?: boolean;
   currentApplication?: Application | null;
   readOnly?: boolean;
+  isStaffView?: boolean; // True for review/assessment/approver/inspector views - hides payment tab
 }
 
 // Helper to format date
@@ -84,6 +85,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   isLoading = false,
   currentApplication,
   readOnly = false,
+  isStaffView = false,
 }: PermitRenewalFormProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("how-it-works");
@@ -221,7 +223,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   };
 
   const handleNext = () => {
-    const tabs = ["how-it-works", "water-use-report", "attachments", "payment"];
+    const tabs = isStaffView 
+      ? ["how-it-works", "water-use-report", "attachments"]
+      : ["how-it-works", "water-use-report", "attachments", "payment"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex < tabs.length - 1) {
       setActiveTab(tabs[currentIndex + 1]);
@@ -229,7 +233,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   };
 
   const handleBack = () => {
-    const tabs = ["how-it-works", "water-use-report", "attachments", "payment"];
+    const tabs = isStaffView 
+      ? ["how-it-works", "water-use-report", "attachments"]
+      : ["how-it-works", "water-use-report", "attachments", "payment"];
     const currentIndex = tabs.indexOf(activeTab);
     if (currentIndex > 0) {
       setActiveTab(tabs[currentIndex - 1]);
@@ -526,7 +532,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={handleTabChange}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className={`grid w-full ${isStaffView ? 'grid-cols-3' : 'grid-cols-4'}`}>
               <TabsTrigger value="how-it-works" className="flex items-center gap-1 text-xs">
                 <Info className="h-4 w-4" />
                 <span className="hidden sm:inline">How It Works</span>
@@ -545,14 +551,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CheckCircle className="h-3 w-3 text-green-600 ml-1" />
                 )}
               </TabsTrigger>
-              <TabsTrigger 
-                value="payment" 
-                className="flex items-center gap-1 text-xs"
-                disabled={!canProceedToPayment}
-              >
-                <CreditCard className="h-4 w-4" />
-                <span className="hidden sm:inline">Payment</span>
-              </TabsTrigger>
+              {!isStaffView && (
+                <TabsTrigger 
+                  value="payment" 
+                  className="flex items-center gap-1 text-xs"
+                  disabled={!canProceedToPayment}
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span className="hidden sm:inline">Payment</span>
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* TAB 1: How Renewal Works */}
@@ -950,76 +958,78 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
               </div>
             </TabsContent>
 
-            {/* TAB 4: Payment */}
-            <TabsContent value="payment" className="mt-6">
-              <div className="space-y-6">
-                {readOnly ? (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5" />
-                        Payment Information
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                          <span className="font-medium">Renewal Fee</span>
-                          <span className="text-lg font-bold text-green-600">{RENEWAL_FEE.toLocaleString()} RWF</span>
+            {/* TAB 4: Payment - Hidden for staff views */}
+            {!isStaffView && (
+              <TabsContent value="payment" className="mt-6">
+                <div className="space-y-6">
+                  {readOnly ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <CreditCard className="h-5 w-5" />
+                          Payment Information
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                            <span className="font-medium">Renewal Fee</span>
+                            <span className="text-lg font-bold text-green-600">{RENEWAL_FEE.toLocaleString()} RWF</span>
+                          </div>
+                          {currentApplication?.payment_status === 'paid' ? (
+                            <Alert className="border-green-200 bg-green-50">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <AlertDescription className="text-green-800">
+                                Payment has been completed for this renewal application.
+                              </AlertDescription>
+                            </Alert>
+                          ) : (
+                            <Alert className="border-amber-200 bg-amber-50">
+                              <Clock className="h-4 w-4 text-amber-600" />
+                              <AlertDescription className="text-amber-800">
+                                Payment is pending for this renewal application.
+                              </AlertDescription>
+                            </Alert>
+                          )}
                         </div>
-                        {currentApplication?.payment_status === 'paid' ? (
-                          <Alert className="border-green-200 bg-green-50">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <AlertDescription className="text-green-800">
-                              Payment has been completed for this renewal application.
-                            </AlertDescription>
-                          </Alert>
-                        ) : (
-                          <Alert className="border-amber-200 bg-amber-50">
-                            <Clock className="h-4 w-4 text-amber-600" />
-                            <AlertDescription className="text-amber-800">
-                              Payment is pending for this renewal application.
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : !canProceedToPayment ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Cannot Proceed to Payment</AlertTitle>
-                    <AlertDescription>
-                      Please complete the Water Use Report and upload the required Renewal Letter before proceeding to payment.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <PaymentTab
-                    application={currentApplication as Application}
-                    formData={{
-                      emailAddress: userData?.email,
-                      telephoneContact: userData?.phone,
-                      fullNameApplicant: getPermitHolderName(),
-                      ...buildFormData(),
-                    }}
-                    onBack={handleBack}
-                    isSavingApplication={isSaving}
-                    saveError={saveError}
-                    onRetrySave={handleSaveDraft}
-                  />
-                )}
-                
-                {/* Back button if payment tab has issues - hidden in read-only mode */}
-                {!readOnly && !canProceedToPayment && (
-                  <div className="flex justify-start">
-                    <Button variant="outline" onClick={handleBack} className="gap-2">
-                      <ArrowLeft className="h-4 w-4" />
-                      Back to Attachments
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
+                      </CardContent>
+                    </Card>
+                  ) : !canProceedToPayment ? (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Cannot Proceed to Payment</AlertTitle>
+                      <AlertDescription>
+                        Please complete the Water Use Report and upload the required Renewal Letter before proceeding to payment.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <PaymentTab
+                      application={currentApplication as Application}
+                      formData={{
+                        emailAddress: userData?.email,
+                        telephoneContact: userData?.phone,
+                        fullNameApplicant: getPermitHolderName(),
+                        ...buildFormData(),
+                      }}
+                      onBack={handleBack}
+                      isSavingApplication={isSaving}
+                      saveError={saveError}
+                      onRetrySave={handleSaveDraft}
+                    />
+                  )}
+                  
+                  {/* Back button if payment tab has issues - hidden in read-only mode */}
+                  {!readOnly && !canProceedToPayment && (
+                    <div className="flex justify-start">
+                      <Button variant="outline" onClick={handleBack} className="gap-2">
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Attachments
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
         </CardContent>
       </Card>

@@ -107,6 +107,7 @@ export function PermitSelectForRenewal({
           application:applications!application_id (
             id,
             application_number,
+            application_type,
             project_title,
             province,
             district,

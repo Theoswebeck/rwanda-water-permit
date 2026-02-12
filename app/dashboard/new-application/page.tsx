@@ -437,6 +437,7 @@ function NewApplicationContent() {
               application:applications!application_id (
                 id,
                 application_number,
+                application_type,
                 project_title,
                 province,
                 district,
@@ -1076,15 +1077,19 @@ function NewApplicationContent() {
       setError(null);
       
       console.log('📋 Renewal form data received:', formData);
+
+      // 🔒 Normalize water_purpose: DB may have migrated 'aquaculture' → 'fish_farming_lakes'.
+      const rawPurpose: string = selectedPermitForRenewal?.purpose || 'other';
+      const normalizedPurpose = rawPurpose === 'aquaculture' ? 'fish_farming_lakes' : rawPurpose;
       
       // Create a renewal application in the applications table
       const renewalApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'submitted',
         submitted_at: new Date().toISOString(),
-        application_type: selectedPermitForRenewal?.application?.application_type || 'domestic',
+        application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
         water_source: selectedPermitForRenewal?.water_source || 'other',
-        water_purpose: selectedPermitForRenewal?.purpose || 'other',
+        water_purpose: normalizedPurpose as Application['water_purpose'],
         province: selectedPermitForRenewal?.application?.province || 'Kigali',
         district: selectedPermitForRenewal?.application?.district || '',
         sector: selectedPermitForRenewal?.application?.sector || '',
@@ -1154,13 +1159,22 @@ function NewApplicationContent() {
     try {
       setIsLoading(true);
       setError(null);
+
+      // 🔒 Normalize water_purpose: DB may have migrated 'aquaculture' → 'fish_farming_lakes'.
+      const rawWaterPurpose: string = selectedPermitForRenewal?.purpose || 'other';
+      const normalizedWaterPurpose = rawWaterPurpose === 'aquaculture' ? 'fish_farming_lakes' : rawWaterPurpose;
+
+      // Strip non-serializable File objects from the data stored in internal_notes
+      // to keep the JSON payload clean and small.
+      const safeFormDataForNotes = { ...formData };
+      delete safeFormDataForNotes.renewalLetter; // File objects serialize to {}
       
       const renewalApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
-        application_type: selectedPermitForRenewal?.application?.application_type || 'domestic',
+        application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
         water_source: selectedPermitForRenewal?.water_source || 'other',
-        water_purpose: selectedPermitForRenewal?.purpose || 'other',
+        water_purpose: normalizedWaterPurpose as Application['water_purpose'],
         province: selectedPermitForRenewal?.application?.province || 'Kigali',
         district: selectedPermitForRenewal?.application?.district || '',
         sector: selectedPermitForRenewal?.application?.sector || '',
@@ -1169,17 +1183,31 @@ function NewApplicationContent() {
         project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
         sla_status: 'on_time',
         is_renewal: true,
-        renewed_from_permit_id: selectedPermitForRenewal?.id,
         internal_notes: JSON.stringify({
           isRenewal: true,
           originalPermitId: selectedPermitForRenewal?.id,
           originalPermitNumber: selectedPermitForRenewal?.permit_number,
           originalApplicationId: selectedPermitForRenewal?.application_id,
           waterUseReport: formData.waterUseReport,
-          renewalFormData: formData,
+          renewalFormData: safeFormDataForNotes,
         }),
         intended_activities: selectedPermitForRenewal?.application?.intended_activities,
       };
+
+      // Only include renewed_from_permit_id if a value is present (the column may not
+      // exist in older environments that haven't run the renewal migration).
+      if (selectedPermitForRenewal?.id) {
+        (renewalApplicationData as any).renewed_from_permit_id = selectedPermitForRenewal.id;
+      }
+
+      console.log('📋 Renewal draft payload:', {
+        application_type: renewalApplicationData.application_type,
+        water_source: renewalApplicationData.water_source,
+        water_purpose: renewalApplicationData.water_purpose,
+        province: renewalApplicationData.province,
+        is_renewal: renewalApplicationData.is_renewal,
+        has_renewed_from_permit_id: !!(renewalApplicationData as any).renewed_from_permit_id,
+      });
       
       let result: Application | null = null;
       
@@ -1189,12 +1217,69 @@ function NewApplicationContent() {
         const { applicant_id, ...updateData } = renewalApplicationData as any;
         result = await updateApplication(currentRenewalApplication.id, updateData);
       } else {
-        // Create new renewal application
-        result = await createApplication(renewalApplicationData);
+        // Create new renewal application — use direct Supabase insert for better error
+        // visibility (createApplication swallows the actual DB error message).
+        const { data: newApp, error: insertError } = await supabase
+          .from('applications')
+          .insert([renewalApplicationData])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('❌ Supabase insert error for renewal draft:', {
+            message: insertError.message,
+            code: insertError.code,
+            details: insertError.details,
+            hint: insertError.hint,
+          });
+
+          // If the error is about renewed_from_permit_id column not existing,
+          // retry without that field.
+          if (
+            insertError.message?.includes('renewed_from_permit_id') ||
+            insertError.code === '42703' // undefined_column
+          ) {
+            console.warn('⚠️ renewed_from_permit_id column not found — retrying without it');
+            delete (renewalApplicationData as any).renewed_from_permit_id;
+            const { data: retryApp, error: retryError } = await supabase
+              .from('applications')
+              .insert([renewalApplicationData])
+              .select()
+              .single();
+            if (retryError) {
+              throw new Error(`Failed to save renewal draft: ${retryError.message}`);
+            }
+            result = retryApp;
+          } else {
+            throw new Error(`Failed to save renewal draft: ${insertError.message}`);
+          }
+        } else {
+          result = newApp;
+        }
       }
 
       if (!result) {
         throw new Error('Failed to save renewal draft — database returned no data.');
+      }
+
+      // ✅ Ensure the draft is immediately visible in any cached applicant application lists.
+      const savedApp: Application = result;
+      try {
+        queryClient.setQueriesData<Application[]>(
+          { queryKey: applicationKeys.lists() },
+          (old) => {
+            const prev = Array.isArray(old) ? old : [];
+            const next = [savedApp, ...prev.filter((a) => a.id !== savedApp.id)];
+            next.sort((a, b) => {
+              const at = new Date(a.created_at || 0).getTime();
+              const bt = new Date(b.created_at || 0).getTime();
+              return bt - at;
+            });
+            return next;
+          }
+        );
+      } catch (e) {
+        console.warn('⚠️ Failed to update React Query cache (non-fatal):', e);
       }
       
       await ensureStorageBucket();
@@ -1206,19 +1291,38 @@ function NewApplicationContent() {
       
       // Track the current renewal application for payment tab
       setCurrentRenewalApplication(result);
+
+      // ✅ Persist the renewal draft in the URL so refresh/back can reload it,
+      // and subsequent saves update the same row instead of creating duplicates.
+      try {
+        const permitId = selectedPermitForRenewal?.id;
+        if (permitId && result.id) {
+          const newUrl = `/dashboard/new-application?mode=renewal&applicationId=${result.id}&permitId=${permitId}`;
+          window.history.replaceState(
+            { ...window.history.state, as: newUrl, url: newUrl },
+            '',
+            newUrl
+          );
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to update URL with renewal draft ids (non-fatal):', e);
+      }
       
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 3000);
+
+      // Ensure applicant dashboard list refetches.
+      queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       
       return result;
     } catch (error) {
-      console.error('Error saving renewal draft:', error);
+      console.error('❌ Error saving renewal draft:', error);
       setError(error instanceof Error ? error.message : 'Failed to save draft');
       throw error;
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermitForRenewal, userProfile?.id, createApplication, updateApplication, currentRenewalApplication]);
+  }, [selectedPermitForRenewal, userProfile?.id, updateApplication, currentRenewalApplication]);
 
   // User data for renewal form
   const renewalUserData = useMemo(() => ({

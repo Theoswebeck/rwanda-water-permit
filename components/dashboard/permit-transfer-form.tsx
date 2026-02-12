@@ -1518,46 +1518,48 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           {isSavingDraft ? 'Saving...' : 'Save as Draft'}
                         </Button>
                       )}
-                      <Button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            // Validate documents tab before proceeding to payment
-                            const isValid = await validateDocumentsTab();
-                            if (!isValid) {
-                              setTimeout(() => setValidationError(null), 5000);
-                              return;
+                      {!isStaffView && (
+                        <Button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              // Validate documents tab before proceeding to payment
+                              const isValid = await validateDocumentsTab();
+                              if (!isValid) {
+                                setTimeout(() => setValidationError(null), 5000);
+                                return;
+                              }
+
+                              // Navigate to payment tab immediately (like airline booking flow)
+                              setPaymentPrepError(null);
+                              setActiveTab('payment');
+                              
+                              // Scroll to top for better UX
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                              // Save in background (do not block navigation)
+                              const draftData = { ...form.getValues(), ...files };
+                              void onSaveAsDraft(draftData, 'draft').catch((error) => {
+                                console.error('Error saving transfer application:', error);
+                                setPaymentPrepError('Please try saving your application again before proceeding to payment.');
+                              });
+                            } catch (error) {
+                              console.error('Error validating documents tab:', error);
                             }
-
-                            // Navigate to payment tab immediately (like airline booking flow)
-                            setPaymentPrepError(null);
-                            setActiveTab('payment');
-                            
-                            // Scroll to top for better UX
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-
-                            // Save in background (do not block navigation)
-                            const draftData = { ...form.getValues(), ...files };
-                            void onSaveAsDraft(draftData, 'draft').catch((error) => {
-                              console.error('Error saving transfer application:', error);
-                              setPaymentPrepError('Please try saving your application again before proceeding to payment.');
-                            });
-                          } catch (error) {
-                            console.error('Error validating documents tab:', error);
-                          }
-                        }}
-                        className="bg-blue-600 hover:bg-blue-700"
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Proceed to Payment'
-                        )}
-                      </Button>
+                          }}
+                          className="bg-blue-600 hover:bg-blue-700"
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            'Proceed to Payment'
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </TabsContent>

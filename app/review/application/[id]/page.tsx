@@ -365,14 +365,21 @@ export default function ReviewApplicationPage() {
         const documentMap: Record<string, { url: string; name: string }> = {};
         const typeMapping: Record<string, string> = {
           'identification_doc': 'identificationDoc',
-          'land_ownership_doc': 'landOwnershipDoc', 
+          'land_ownership_doc': 'landOwnershipDoc',
+          'land_access_doc': 'landAccessDocuments',
           'technical_drawings': 'technicalDrawings',
           'environmental_impact_doc': 'environmentalImpactDoc',
           'payment_proof': 'paymentProof',
           'intake_discharge_map': 'intakeDischargeMap',
           'business_license': 'miningLicense',
           'geological_survey': 'miningHydrologicalReport',
-          'water_quality_report': 'waterQualityReport'
+          'water_quality_report': 'waterQualityReport',
+          'renewal_request_letter': 'renewalRequestLetter',
+          // Transfer document types
+          'transfer_application_letter': 'applicationLetter',
+          'signed_transfer_form': 'signedTransferForm',
+          'registration_certificate': 'registrationCertificate',
+          'existing_permit_copy': 'existingPermitCopy',
         };
         
         // Process documents from appData.documents using smart classification (copied from edit-application page)
@@ -1074,10 +1081,12 @@ export default function ReviewApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
+            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification">Document Verification</TabsTrigger>
-              <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
+              {!isTransferApp && (
+                <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
+              )}
               <TabsTrigger value="internal_notes">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -1110,6 +1119,7 @@ export default function ReviewApplicationPage() {
                     mode="view"
                     readOnly={true}
                     currentApplication={application}
+                    isStaffView={true}
                   />
                 ) : (
                   <Alert className="border-amber-200 bg-amber-50">
@@ -1163,6 +1173,7 @@ export default function ReviewApplicationPage() {
                   isLoading={false}
                   currentApplication={application}
                   readOnly={true}
+                  isStaffView={true}
                 />
               ) : loadingRenewalPermit && (application as any).is_renewal ? (
                 <div className="flex items-center justify-center py-12">
@@ -1205,7 +1216,8 @@ export default function ReviewApplicationPage() {
               />
             </TabsContent>
 
-            {/* Assessment Report Tab (read-only) */}
+            {/* Assessment Report Tab (read-only) - Hidden for transfer applications */}
+            {!isTransferApp && (
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               <FieldReportUpload
                 applicationId={application.id}
@@ -1246,6 +1258,7 @@ export default function ReviewApplicationPage() {
                 }
               />
             </TabsContent>
+            )}
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">

@@ -57,6 +57,12 @@ const documentTypeLabels: Record<string, string> = {
   water_quality_report: "Water Quality Report",
   geological_survey: "Geological / Hydrological Report",
   business_license: "Business License",
+  land_access_doc: "Land Access Document",
+  renewal_request_letter: "Renewal Request Letter",
+  transfer_application_letter: "Transfer Application Letter",
+  signed_transfer_form: "Signed Transfer Form",
+  registration_certificate: "Registration Certificate",
+  existing_permit_copy: "Copy of Existing Permit",
   other: "Other Documents",
   // Activity-specific document types
   identificationDoc: "Identification Document",
@@ -69,6 +75,12 @@ const documentTypeLabels: Record<string, string> = {
   miningLicense: "Mining License",
   miningHydrologicalReport: "Mining Hydrological Report",
   generalRequirements: "General Requirements",
+  landAccessDocuments: "Land Access Document",
+  renewalRequestLetter: "Renewal Request Letter",
+  applicationLetter: "Transfer Application Letter",
+  signedTransferForm: "Signed Transfer Form",
+  registrationCertificate: "Registration Certificate",
+  existingPermitCopy: "Copy of Existing Permit",
 };
 
 const getStatusBadge = (status: VerificationStatus) => {

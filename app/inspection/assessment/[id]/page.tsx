@@ -299,14 +299,22 @@ export default function AssessmentPage() {
         // Document type mapping for form fields
         const typeMapping: Record<string, string> = {
           'identification_doc': 'identificationDoc',
-          'land_ownership_doc': 'landOwnershipDoc', 
+          'land_ownership_doc': 'landOwnershipDoc',
+          'land_access_doc': 'landAccessDocuments',
           'technical_drawings': 'technicalDrawings',
           'environmental_impact_doc': 'environmentalImpactDoc',
           'payment_proof': 'paymentProof',
           'intake_discharge_map': 'intakeDischargeMap',
           'business_license': 'miningLicense',
           'geological_survey': 'miningHydrologicalReport',
-          'water_quality_report': 'waterQualityReport'
+          'water_quality_report': 'waterQualityReport',
+          'renewal_request_letter': 'renewalRequestLetter',
+          // Transfer document types
+          'transfer_application_letter': 'applicationLetter',
+          'signed_transfer_form': 'signedTransferForm',
+          'registration_certificate': 'registrationCertificate',
+          'existing_permit_copy': 'existingPermitCopy',
+          'other': 'other',
         };
 
         console.log('🔍 Raw documents from database:', appData.documents);

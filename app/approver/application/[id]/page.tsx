@@ -447,7 +447,26 @@ export default function ApproverApplicationPage() {
                     documentMap[fieldName] = { url: publicUrl, name: doc.name };
                   }
                 } else {
-                  documentMap[doc.type] = { url: publicUrl, name: doc.name };
+                  // Fallback: map database document types to form field names
+                  const typeMapping: Record<string, string> = {
+                    identification_doc: 'identificationDoc',
+                    land_ownership_doc: 'landOwnershipDoc',
+                    land_access_doc: 'landAccessDocuments',
+                    technical_drawings: 'technicalDrawings',
+                    environmental_impact_doc: 'environmentalImpactDoc',
+                    payment_proof: 'paymentProof',
+                    intake_discharge_map: 'intakeDischargeMap',
+                    business_license: 'miningLicense',
+                    geological_survey: 'miningHydrologicalReport',
+                    water_quality_report: 'waterQualityReport',
+                    renewal_request_letter: 'renewalRequestLetter',
+                    transfer_application_letter: 'applicationLetter',
+                    signed_transfer_form: 'signedTransferForm',
+                    registration_certificate: 'registrationCertificate',
+                    existing_permit_copy: 'existingPermitCopy',
+                  };
+                  const fieldName = typeMapping[doc.type] || doc.type;
+                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
                 }
               }
             }
@@ -643,10 +662,12 @@ export default function ApproverApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
+          <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
-              <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
+              {!isTransferApp && (
+                <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
+              )}
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
         </TabsList>
 
@@ -678,6 +699,7 @@ export default function ApproverApplicationPage() {
                     mode="view"
                     readOnly={true}
                     currentApplication={application}
+                    isStaffView={true}
                   />
                 ) : (
                   <Alert className="border-amber-200 bg-amber-50">
@@ -731,6 +753,7 @@ export default function ApproverApplicationPage() {
                   isLoading={false}
                   currentApplication={application}
                   readOnly={true}
+                  isStaffView={true}
                 />
               ) : loadingRenewalPermit && (application as any).is_renewal ? (
                 <div className="flex items-center justify-center py-12">
@@ -772,6 +795,8 @@ export default function ApproverApplicationPage() {
               />
             </TabsContent>
 
+            {/* Assessment Report Tab - Hidden for transfer applications */}
+            {!isTransferApp && (
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               {(() => {
                 const intended = (application as any)?.intended_activities as string[] | null | undefined;
@@ -818,6 +843,7 @@ export default function ApproverApplicationPage() {
                 );
               })()}
         </TabsContent>
+            )}
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
           {application.id && (

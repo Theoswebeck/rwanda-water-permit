@@ -504,8 +504,26 @@ export default function InspectorApplicationView() {
                     documentMap[fieldName] = { url: publicUrl, name: doc.name };
                   }
                 } else {
-                  // Use document type as fallback key
-                  documentMap[doc.type] = { url: publicUrl, name: doc.name };
+                  // Fallback: map database document types to form field names
+                  const typeMapping: Record<string, string> = {
+                    identification_doc: 'identificationDoc',
+                    land_ownership_doc: 'landOwnershipDoc',
+                    land_access_doc: 'landAccessDocuments',
+                    technical_drawings: 'technicalDrawings',
+                    environmental_impact_doc: 'environmentalImpactDoc',
+                    payment_proof: 'paymentProof',
+                    intake_discharge_map: 'intakeDischargeMap',
+                    business_license: 'miningLicense',
+                    geological_survey: 'miningHydrologicalReport',
+                    water_quality_report: 'waterQualityReport',
+                    renewal_request_letter: 'renewalRequestLetter',
+                    transfer_application_letter: 'applicationLetter',
+                    signed_transfer_form: 'signedTransferForm',
+                    registration_certificate: 'registrationCertificate',
+                    existing_permit_copy: 'existingPermitCopy',
+                  };
+                  const fieldName = typeMapping[doc.type] || doc.type;
+                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
                 }
               }
             }
@@ -961,6 +979,7 @@ export default function InspectorApplicationView() {
                     mode="view"
                     readOnly={true}
                     currentApplication={application}
+                    isStaffView={true}
                   />
                 ) : (
                   <Alert className="border-amber-200 bg-amber-50">
@@ -1014,6 +1033,7 @@ export default function InspectorApplicationView() {
                   isLoading={false}
                   currentApplication={application}
                   readOnly={true}
+                  isStaffView={true}
                 />
               ) : loadingRenewalPermit && (application as any).is_renewal ? (
                 <div className="flex items-center justify-center py-12">

@@ -983,7 +983,13 @@ export default function EditApplicationPage() {
             'intake_discharge_map': 'intakeDischargeMap',
             'business_license': 'miningLicense',
             'geological_survey': 'miningHydrologicalReport',
-            'water_quality_report': 'waterQualityReport'
+            'water_quality_report': 'waterQualityReport',
+            'renewal_request_letter': 'renewalRequestLetter',
+            // Transfer document types
+            'transfer_application_letter': 'applicationLetter',
+            'signed_transfer_form': 'signedTransferForm',
+            'registration_certificate': 'registrationCertificate',
+            'existing_permit_copy': 'existingPermitCopy',
           };
 
           // Create reverse mapping to find field names from documents
