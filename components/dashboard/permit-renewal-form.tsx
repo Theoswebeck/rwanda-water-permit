@@ -702,7 +702,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
                 {/* Navigation - hidden in read-only mode */}
                 {!readOnly && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveDraft}
+                      disabled={isSaving}
+                      className="gap-2"
+                    >
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                      Save as Draft
+                    </Button>
                     <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700 gap-2">
                       Continue to Water Use Report
                       <ArrowRight className="h-4 w-4" />
@@ -728,6 +737,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                       await persistWaterUseReport(data, 'draft');
                       setWaterUseReportData(data);
                       console.log('✅ Water use report draft saved');
+                      // Also save the renewal APPLICATION as a draft so it appears
+                      // in the applicant's dashboard list (this is what the user
+                      // expects when they click "Save as Draft").
+                      try {
+                        await onSaveAsDraft({ ...buildFormData(), waterUseReport: data }, 'draft');
+                        console.log('✅ Renewal application draft saved alongside water use report');
+                      } catch (appErr) {
+                        // Log but don't fail — the water use report itself was saved.
+                        console.error('⚠️ Water use report saved, but renewal application draft failed:', appErr);
+                      }
                     } catch (err) {
                       console.error('❌ Failed to save water use report draft:', err);
                       setSaveError(err instanceof Error ? err.message : 'Failed to save water use report');
@@ -763,6 +782,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                       Back to Overview
                     </Button>
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleSaveDraft}
+                        disabled={isSaving}
+                        className="gap-2"
+                      >
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                        Save as Draft
+                      </Button>
                       {waterUseReportSubmitted && (
                         <Button 
                           onClick={handleNext} 
@@ -940,9 +968,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         variant="outline" 
                         onClick={handleSaveDraft}
                         disabled={isSaving}
+                        className="gap-2"
                       >
-                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Save Draft
+                        {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                        Save as Draft
                       </Button>
                       <Button 
                         onClick={handleContinueToPayment}

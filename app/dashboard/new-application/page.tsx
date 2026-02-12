@@ -57,7 +57,9 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApplications } from "@/hooks/useApplications";
+import { applicationKeys } from "@/hooks/useApplicationsQuery";
 import { useDocuments } from "@/hooks/useDocuments";
 import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
@@ -377,6 +379,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
 function NewApplicationContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const draftId = searchParams.get('id'); // Check if we're editing an existing draft
   const modeParam = searchParams.get('mode'); // Check if mode is specified (new or transfer)
   const renewalApplicationId = searchParams.get('applicationId'); // For loading existing renewal drafts
@@ -1081,15 +1084,19 @@ function NewApplicationContent() {
       // 🔒 Normalize water_purpose: DB may have migrated 'aquaculture' → 'fish_farming_lakes'.
       const rawPurpose: string = selectedPermitForRenewal?.purpose || 'other';
       const normalizedPurpose = rawPurpose === 'aquaculture' ? 'fish_farming_lakes' : rawPurpose;
+
+      // Strip File objects from internal_notes payload
+      const safeFormData = { ...formData };
+      delete safeFormData.renewalLetter;
       
-      // Create a renewal application in the applications table
-      const renewalApplicationData: Partial<Application> = {
+      // Core columns guaranteed to exist in the base applications schema.
+      const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
         status: 'submitted',
         submitted_at: new Date().toISOString(),
         application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
         water_source: selectedPermitForRenewal?.water_source || 'other',
-        water_purpose: normalizedPurpose as Application['water_purpose'],
+        water_purpose: normalizedPurpose,
         province: selectedPermitForRenewal?.application?.province || 'Kigali',
         district: selectedPermitForRenewal?.application?.district || '',
         sector: selectedPermitForRenewal?.application?.sector || '',
@@ -1097,30 +1104,61 @@ function NewApplicationContent() {
         project_title: `Renewal: ${selectedPermitForRenewal?.application?.project_title || selectedPermitForRenewal?.permit_number}`,
         project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
         sla_status: 'on_time',
-        is_renewal: true,
-        renewed_from_permit_id: selectedPermitForRenewal?.id,
         internal_notes: JSON.stringify({
           isRenewal: true,
           originalPermitId: selectedPermitForRenewal?.id,
           originalPermitNumber: selectedPermitForRenewal?.permit_number,
           originalApplicationId: selectedPermitForRenewal?.application_id,
           waterUseReport: formData.waterUseReport,
-          renewalFormData: formData,
+          renewalFormData: safeFormData,
         }),
-        intended_activities: selectedPermitForRenewal?.application?.intended_activities,
       };
+
+      // Migration-dependent columns — added optimistically.
+      const optionalColumns: Record<string, unknown> = { is_renewal: true };
+      if (selectedPermitForRenewal?.id) {
+        optionalColumns.renewed_from_permit_id = selectedPermitForRenewal.id;
+      }
+      if (selectedPermitForRenewal?.application?.intended_activities) {
+        optionalColumns.intended_activities = selectedPermitForRenewal.application.intended_activities;
+      }
+
+      const renewalApplicationData = { ...corePayload, ...optionalColumns };
       
-      let resultApplication;
+      let resultApplication: Application | null = null;
       
       // If we already have a draft renewal application, update it to submitted
       if (currentRenewalApplication?.id) {
-        const { applicant_id, ...updateData } = renewalApplicationData as any;
-        resultApplication = await updateApplication(currentRenewalApplication.id, updateData);
-        console.log('✅ Renewal application updated to submitted:', resultApplication);
+        const { applicant_id, ...updateData } = renewalApplicationData;
+        resultApplication = await updateApplication(currentRenewalApplication.id, updateData as Partial<Application>);
+        console.log('✅ Renewal application updated to submitted:', resultApplication?.id);
       } else {
-        // Create new renewal application
-        resultApplication = await createApplication(renewalApplicationData);
-        console.log('✅ Renewal application created:', resultApplication);
+        // Create new renewal application — direct Supabase insert for error visibility.
+        const { data: newApp, error: insertError } = await supabase
+          .from('applications')
+          .insert([renewalApplicationData])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('❌ Supabase insert error for renewal submit:', insertError);
+          // Retry with core-only payload on unknown-column errors
+          if (insertError.code === '42703' || insertError.message?.includes('column')) {
+            console.warn('⚠️ Column error — retrying with core-only payload');
+            const { data: retryApp, error: retryError } = await supabase
+              .from('applications')
+              .insert([corePayload])
+              .select()
+              .single();
+            if (retryError) throw new Error(`Failed to submit renewal: ${retryError.message}`);
+            resultApplication = retryApp;
+          } else {
+            throw new Error(`Failed to submit renewal: ${insertError.message}`);
+          }
+        } else {
+          resultApplication = newApp;
+        }
+        console.log('✅ Renewal application created:', resultApplication?.id);
       }
       
       if (resultApplication) {
@@ -1144,7 +1182,7 @@ function NewApplicationContent() {
         
         setSubmitSuccess(true);
       } else {
-        throw new Error('Failed to submit renewal application');
+        throw new Error('Failed to submit renewal application — database returned no data.');
       }
     } catch (error) {
       console.error('❌ Error submitting renewal:', error);
@@ -1152,7 +1190,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermitForRenewal, userProfile?.id, createApplication, updateApplication, currentRenewalApplication]);
+  }, [selectedPermitForRenewal, userProfile?.id, updateApplication, currentRenewalApplication]);
 
   // Handle renewal draft save
   const handleRenewalSaveAsDraft = useCallback(async (formData: any, status: string) => {
@@ -1169,12 +1207,16 @@ function NewApplicationContent() {
       const safeFormDataForNotes = { ...formData };
       delete safeFormDataForNotes.renewalLetter; // File objects serialize to {}
       
-      const renewalApplicationData: Partial<Application> = {
+      // Core columns that exist in the base applications schema and are safe to
+      // send in every environment.  Migration-dependent columns (is_renewal,
+      // renewed_from_permit_id, intended_activities) are added separately and
+      // stripped on retry if the DB rejects them.
+      const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
         status: 'draft',
         application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
         water_source: selectedPermitForRenewal?.water_source || 'other',
-        water_purpose: normalizedWaterPurpose as Application['water_purpose'],
+        water_purpose: normalizedWaterPurpose,
         province: selectedPermitForRenewal?.application?.province || 'Kigali',
         district: selectedPermitForRenewal?.application?.district || '',
         sector: selectedPermitForRenewal?.application?.sector || '',
@@ -1182,7 +1224,6 @@ function NewApplicationContent() {
         project_title: `Renewal: ${selectedPermitForRenewal?.application?.project_title || selectedPermitForRenewal?.permit_number}`,
         project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
         sla_status: 'on_time',
-        is_renewal: true,
         internal_notes: JSON.stringify({
           isRenewal: true,
           originalPermitId: selectedPermitForRenewal?.id,
@@ -1191,14 +1232,19 @@ function NewApplicationContent() {
           waterUseReport: formData.waterUseReport,
           renewalFormData: safeFormDataForNotes,
         }),
-        intended_activities: selectedPermitForRenewal?.application?.intended_activities,
       };
 
-      // Only include renewed_from_permit_id if a value is present (the column may not
-      // exist in older environments that haven't run the renewal migration).
+      // Migration-dependent columns — added optimistically, stripped on retry.
+      const optionalColumns: Record<string, unknown> = {};
       if (selectedPermitForRenewal?.id) {
-        (renewalApplicationData as any).renewed_from_permit_id = selectedPermitForRenewal.id;
+        optionalColumns.renewed_from_permit_id = selectedPermitForRenewal.id;
       }
+      optionalColumns.is_renewal = true;
+      if (selectedPermitForRenewal?.application?.intended_activities) {
+        optionalColumns.intended_activities = selectedPermitForRenewal.application.intended_activities;
+      }
+
+      const renewalApplicationData: Record<string, unknown> = { ...corePayload, ...optionalColumns };
 
       console.log('📋 Renewal draft payload:', {
         application_type: renewalApplicationData.application_type,
@@ -1206,7 +1252,7 @@ function NewApplicationContent() {
         water_purpose: renewalApplicationData.water_purpose,
         province: renewalApplicationData.province,
         is_renewal: renewalApplicationData.is_renewal,
-        has_renewed_from_permit_id: !!(renewalApplicationData as any).renewed_from_permit_id,
+        has_renewed_from_permit_id: !!renewalApplicationData.renewed_from_permit_id,
       });
       
       let result: Application | null = null;
@@ -1214,11 +1260,11 @@ function NewApplicationContent() {
       // If we already have a renewal application, update it; otherwise create new
       if (currentRenewalApplication?.id) {
         // Update existing - don't send applicant_id on updates (can violate RLS)
-        const { applicant_id, ...updateData } = renewalApplicationData as any;
-        result = await updateApplication(currentRenewalApplication.id, updateData);
+        const { applicant_id, ...updateData } = renewalApplicationData;
+        result = await updateApplication(currentRenewalApplication.id, updateData as Partial<Application>);
       } else {
-        // Create new renewal application — use direct Supabase insert for better error
-        // visibility (createApplication swallows the actual DB error message).
+        // Create new renewal application — use direct Supabase insert for better
+        // error visibility (createApplication swallows the actual DB error).
         const { data: newApp, error: insertError } = await supabase
           .from('applications')
           .insert([renewalApplicationData])
@@ -1233,17 +1279,16 @@ function NewApplicationContent() {
             hint: insertError.hint,
           });
 
-          // If the error is about renewed_from_permit_id column not existing,
-          // retry without that field.
+          // If the error is about an unknown column (code 42703), fall back to
+          // core-only payload (no migration-dependent columns).
           if (
-            insertError.message?.includes('renewed_from_permit_id') ||
-            insertError.code === '42703' // undefined_column
+            insertError.code === '42703' || // undefined_column
+            insertError.message?.includes('column') 
           ) {
-            console.warn('⚠️ renewed_from_permit_id column not found — retrying without it');
-            delete (renewalApplicationData as any).renewed_from_permit_id;
+            console.warn('⚠️ Column error detected — retrying with core-only payload');
             const { data: retryApp, error: retryError } = await supabase
               .from('applications')
-              .insert([renewalApplicationData])
+              .insert([corePayload])
               .select()
               .single();
             if (retryError) {
