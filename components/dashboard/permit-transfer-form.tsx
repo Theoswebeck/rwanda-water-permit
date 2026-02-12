@@ -152,6 +152,7 @@ interface PermitTransferFormProps {
   mode?: 'create' | 'edit' | 'view';
   readOnly?: boolean;
   currentApplication?: Application | null; // The saved application object (needed for payment tab)
+  isStaffView?: boolean; // When true, hides payment/submit actions (staff only views the form)
 }
 
 export const PermitTransferForm = memo(function PermitTransferForm({ 
@@ -165,6 +166,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   mode = 'create',
   readOnly = false,
   currentApplication,
+  isStaffView = false,
 }: PermitTransferFormProps) {
   const router = useRouter();
   const { userProfile } = useAuth();

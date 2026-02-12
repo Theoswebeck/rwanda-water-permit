@@ -107,6 +107,7 @@ export function PermitSelectForTransfer({
             district,
             sector,
             cell,
+            village,
             water_source,
             water_purpose,
             applicant:users!applicant_id (
