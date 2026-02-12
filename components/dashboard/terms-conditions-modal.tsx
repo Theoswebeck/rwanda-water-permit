@@ -218,25 +218,161 @@ export function TermsConditionsModal({
         throw new Error('This application has expired (6 months since submission). The permit can no longer be issued.');
       }
 
+      // Parse internal_notes once for reuse
+      let parsedNotes: Record<string, any> | null = null;
+      try {
+        parsedNotes = applicationData.internal_notes ? JSON.parse(applicationData.internal_notes) : null;
+      } catch { parsedNotes = null; }
+
       // Check if this is a renewal application
       const isRenewalApplication = applicationData.is_renewal === true || 
-        (applicationData.internal_notes && (() => {
-          try {
-            const notes = JSON.parse(applicationData.internal_notes || '{}');
-            return notes.isRenewal === true;
-          } catch { return false; }
-        })());
+        (parsedNotes?.isRenewal === true);
       
-      const renewedFromPermitId = applicationData.renewed_from_permit_id || (() => {
-        try {
-          const notes = JSON.parse(applicationData.internal_notes || '{}');
-          return notes.originalPermitId;
-        } catch { return null; }
-      })();
+      const renewedFromPermitId = applicationData.renewed_from_permit_id || parsedNotes?.originalPermitId || null;
+
+      // Check if this is a modification application
+      const isModificationApplication = applicationData.is_modification === true ||
+        (parsedNotes?.isModification === true);
+      
+      const modificationOriginalPermitId = parsedNotes?.originalPermitId || null;
 
       let permitData: any;
 
-      if (isRenewalApplication && renewedFromPermitId) {
+      if (isModificationApplication && modificationOriginalPermitId) {
+        // MODIFICATION: Update existing permit with the newly approved values
+        console.log('🔧 Processing MODIFICATION - updating existing permit:', modificationOriginalPermitId);
+
+        // Resolve the permit validity duration from the modification application
+        // Priority: assessor adjustments > proposed_duration_years > form's permitLengthYears > current permit value
+        const assessorAdjustments = parsedNotes?._assessorAdjustments;
+        let resolvedDurationYears: number | null = null;
+        if (typeof assessorAdjustments?.permitLengthYears === 'number' &&
+            Number.isFinite(assessorAdjustments.permitLengthYears) &&
+            assessorAdjustments.permitLengthYears >= 1 &&
+            assessorAdjustments.permitLengthYears <= 15) {
+          resolvedDurationYears = assessorAdjustments.permitLengthYears;
+        } else if (typeof applicationData.proposed_duration_years === 'number' &&
+                   Number.isFinite(applicationData.proposed_duration_years) &&
+                   applicationData.proposed_duration_years >= 1) {
+          resolvedDurationYears = applicationData.proposed_duration_years;
+        } else if (typeof parsedNotes?.permitLengthYears === 'number' &&
+                   Number.isFinite(parsedNotes.permitLengthYears) &&
+                   parsedNotes.permitLengthYears >= 1) {
+          resolvedDurationYears = parsedNotes.permitLengthYears;
+        }
+
+        // Fetch the current permit to preserve values that weren't modified
+        const { data: currentPermit, error: fetchPermitErr } = await supabase
+          .from('permits')
+          .select('*')
+          .eq('id', modificationOriginalPermitId)
+          .single() as { data: any; error: any };
+
+        if (fetchPermitErr || !currentPermit) {
+          console.error('❌ Error fetching original permit for modification:', fetchPermitErr);
+          throw fetchPermitErr || new Error('Original permit not found for modification');
+        }
+
+        console.log('📋 Original permit values:', {
+          permit_number: currentPermit.permit_number,
+          water_source: currentPermit.water_source,
+          purpose: currentPermit.purpose,
+          water_allowance: currentPermit.water_allowance,
+          expiry_date: currentPermit.expiry_date,
+        });
+
+        // Compute updated expiry date based on resolved duration or keep existing
+        const newIssuedDate = new Date().toISOString().split('T')[0];
+        const newExpiryDate = resolvedDurationYears
+          ? new Date(Date.now() + resolvedDurationYears * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          : currentPermit.expiry_date; // Keep existing if no duration change
+
+        // Build the update payload — only override values that exist on the modification application
+        const permitUpdatePayload: Record<string, unknown> = {
+          status: 'active',
+          is_modification: true,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Update water source if provided on the modification application
+        if (applicationData.water_source) {
+          permitUpdatePayload.water_source = applicationData.water_source;
+        }
+        // Update purpose if provided
+        if (applicationData.water_purpose) {
+          permitUpdatePayload.purpose = applicationData.water_purpose;
+        }
+        // Update water allowance (volume) if provided
+        if (applicationData.estimated_usage_volume != null && applicationData.estimated_usage_volume > 0) {
+          permitUpdatePayload.water_allowance = applicationData.estimated_usage_volume;
+        }
+        // Update allowance unit if provided
+        if (applicationData.usage_unit) {
+          permitUpdatePayload.allowance_unit = applicationData.usage_unit;
+        }
+        // Update dates — always update issued_date; expiry_date only if duration changed
+        permitUpdatePayload.issued_date = newIssuedDate;
+        if (resolvedDurationYears) {
+          permitUpdatePayload.expiry_date = newExpiryDate;
+        }
+
+        // Update conditions with new location/project data from modification
+        permitUpdatePayload.conditions = {
+          conditions: [
+            'Comply with all environmental regulations',
+            'Submit quarterly usage reports',
+            'Allow inspections as required',
+            ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : []),
+          ],
+          location: {
+            province: applicationData.province || currentPermit.conditions?.location?.province,
+            district: applicationData.district || currentPermit.conditions?.location?.district,
+            sector: applicationData.sector || currentPermit.conditions?.location?.sector,
+            cell: applicationData.cell || currentPermit.conditions?.location?.cell,
+            village: applicationData.village || currentPermit.conditions?.location?.village,
+            coordinates: applicationData.coordinates || currentPermit.conditions?.location?.coordinates,
+            description: applicationData.location_description || currentPermit.conditions?.location?.description,
+          },
+          project: {
+            title: applicationData.project_title || currentPermit.conditions?.project?.title,
+            description: applicationData.project_description || currentPermit.conditions?.project?.description,
+            value: applicationData.project_value || currentPermit.conditions?.project?.value,
+          },
+          modification_history: [
+            ...(currentPermit.conditions?.modification_history || []),
+            {
+              modification_application_id: applicationId,
+              modified_at: new Date().toISOString(),
+              changes: applicationData.modification_changes || {},
+            },
+          ],
+        };
+
+        console.log('📝 Updating permit with modification values:', {
+          water_source: permitUpdatePayload.water_source,
+          purpose: permitUpdatePayload.purpose,
+          water_allowance: permitUpdatePayload.water_allowance,
+          expiry_date: permitUpdatePayload.expiry_date,
+          resolvedDurationYears,
+        });
+
+        const { data: updatedPermit, error: updateError } = await supabase
+          .from('permits')
+          .update(permitUpdatePayload)
+          .eq('id', modificationOriginalPermitId)
+          .select()
+          .single() as { data: any; error: any };
+
+        if (updateError) {
+          console.error('❌ Error updating permit for modification:', updateError);
+          throw updateError;
+        }
+
+        permitData = updatedPermit;
+        console.log('✅ Permit modified successfully:', permitData.permit_number,
+          '| Updated values applied from modification application');
+
+      } else if (isRenewalApplication && renewedFromPermitId) {
         // RENEWAL: Update existing permit dates instead of creating new permit
         console.log('🔄 Processing RENEWAL - updating existing permit:', renewedFromPermitId);
         
