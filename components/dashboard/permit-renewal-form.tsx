@@ -344,7 +344,17 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
             section8: data.section8,
             section9_declaration: data.section9_declaration,
           });
-          setWaterUseReportSubmitted(data.status === 'submitted');
+          // In the renewal flow the report is intentionally persisted with
+          // status 'draft' (final renewal submission governs the lifecycle).
+          // So we treat the report as "submitted" for the payment gate
+          // whenever it contains meaningful section data — not just when
+          // the DB status happens to be 'submitted'.
+          const hasReportData = !!(
+            data.section3 || data.section4 || data.section5_monitoring ||
+            data.section6_employment || data.section7 || data.section8 ||
+            data.section9_declaration
+          );
+          setWaterUseReportSubmitted(data.status === 'submitted' || hasReportData);
         }
       } catch (err) {
         console.error('❌ Failed to load renewal water use report:', err);
