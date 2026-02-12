@@ -143,6 +143,7 @@ export default function VerificationApplicationPage() {
 
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<any[]>([]);
 
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -275,8 +276,26 @@ export default function VerificationApplicationPage() {
 
         // Process documents for ApplicationForm
         const documentMap: Record<string, { url: string; name: string }> = {};
-        if (appData.documents && Array.isArray(appData.documents)) {
-          for (const doc of appData.documents) {
+        const typeMapping: Record<string, string> = {
+          identification_doc: "identificationDoc",
+          land_ownership_doc: "landOwnershipDoc",
+          land_access_doc: "landAccessDocuments",
+          technical_drawings: "technicalDrawings",
+          environmental_impact_doc: "environmentalImpactDoc",
+          payment_proof: "paymentProof",
+          intake_discharge_map: "intakeDischargeMap",
+          business_license: "miningLicense",
+          geological_survey: "miningHydrologicalReport",
+          water_quality_report: "waterQualityReport",
+          renewal_request_letter: "renewalRequestLetter",
+          transfer_application_letter: "applicationLetter",
+          signed_transfer_form: "signedTransferForm",
+          registration_certificate: "registrationCertificate",
+          existing_permit_copy: "existingPermitCopy",
+        };
+
+        const processDocsIntoMap = (docs: any[]) => {
+          for (const doc of docs) {
             if (!doc.file_path || !doc.name) continue;
             const publicUrl = getDocumentUrl(doc.file_path);
             if (!publicUrl) continue;
@@ -286,34 +305,54 @@ export default function VerificationApplicationPage() {
             const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
             if (fieldNameMatch) {
               const fieldName = fieldNameMatch[1];
-              if (!fieldName.startsWith("additional_")) {
+              if (!fieldName.startsWith("additional_") && !documentMap[fieldName]) {
                 documentMap[fieldName] = { url: publicUrl, name: doc.name };
               }
             } else {
-              // Fallback: map database document types to form field names
-              const typeMapping: Record<string, string> = {
-                identification_doc: "identificationDoc",
-                land_ownership_doc: "landOwnershipDoc",
-                land_access_doc: "landAccessDocuments",
-                technical_drawings: "technicalDrawings",
-                environmental_impact_doc: "environmentalImpactDoc",
-                payment_proof: "paymentProof",
-                intake_discharge_map: "intakeDischargeMap",
-                business_license: "miningLicense",
-                geological_survey: "miningHydrologicalReport",
-                water_quality_report: "waterQualityReport",
-                renewal_request_letter: "renewalRequestLetter",
-                transfer_application_letter: "applicationLetter",
-                signed_transfer_form: "signedTransferForm",
-                registration_certificate: "registrationCertificate",
-                existing_permit_copy: "existingPermitCopy",
-              };
               const fieldName = typeMapping[doc.type] || doc.type;
-              documentMap[fieldName] = { url: publicUrl, name: doc.name };
+              if (!documentMap[fieldName]) {
+                documentMap[fieldName] = { url: publicUrl, name: doc.name };
+              }
+            }
+          }
+        };
+
+        // Collect ALL document rows for Document Verification tab
+        let mergedDocsList: any[] = [...(appData.documents || [])];
+        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
+
+        // 1. Process this application's own documents first
+        if (appData.documents && Array.isArray(appData.documents)) {
+          processDocsIntoMap(appData.documents);
+        }
+
+        // 2. For modifications: also load documents from the original application
+        if (modificationDetected) {
+          const originalAppId = (appData as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+          if (originalAppId) {
+            try {
+              const { data: originalDocs } = await supabase
+                .from('documents')
+                .select('*')
+                .eq('application_id', originalAppId)
+                .order('created_at', { ascending: false });
+              if (originalDocs) {
+                processDocsIntoMap(originalDocs);
+                for (const doc of originalDocs) {
+                  if (!seenDocIds.has(doc.id)) {
+                    mergedDocsList.push(doc);
+                    seenDocIds.add(doc.id);
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('⚠️ Failed to load original application documents:', e);
             }
           }
         }
+
         setInitialDocuments(documentMap);
+        setAllDocumentsForVerification(mergedDocsList);
 
         // Load latest technical assessment as read-only evidence for verifier
         const { data: existingAssessment } = await supabase
@@ -370,6 +409,8 @@ export default function VerificationApplicationPage() {
           setAssessmentReportData(merged);
           
           // Initialize Assessor Recommendations values (read-only for verifiers)
+          // Only use _assessorAdjustments from this application's saved assessment, not stale
+          // values that may have been carried over from a previous submission cycle (modifications).
           const assessorAdjustments = formData._assessorAdjustments || {};
           const originalRequestedValues = formData._originalRequestedValues || {};
           
@@ -831,7 +872,7 @@ export default function VerificationApplicationPage() {
 
             <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
               <DocumentVerificationComponent
-                documents={application.documents || []}
+                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
                 verifications={documentVerifications}
                 onVerificationsChange={() => {}}
                 readOnly={true}

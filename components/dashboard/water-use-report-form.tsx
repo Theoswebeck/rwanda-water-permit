@@ -248,6 +248,26 @@ export function WaterUseReportForm({
     }));
   }, []);
 
+  // Auto-calculate average when min or max changes for monitoring parameters
+  const updateMonitoringMinMax = useCallback((parent: string, field: 'min' | 'max', value: string) => {
+    setFormData(prev => {
+      const existing = (prev as any).section5_monitoring?.[parent] || {};
+      const updatedParam = { ...existing, [field]: value };
+      const minVal = parseFloat(field === 'min' ? value : updatedParam.min);
+      const maxVal = parseFloat(field === 'max' ? value : updatedParam.max);
+      const avg = (!isNaN(minVal) && !isNaN(maxVal))
+        ? String(Math.round(((minVal + maxVal) / 2) * 100) / 100)
+        : '';
+      return {
+        ...prev,
+        section5_monitoring: {
+          ...prev.section5_monitoring,
+          [parent]: { ...updatedParam, avg },
+        },
+      };
+    });
+  }, []);
+
   // Get water use type options based on template
   const waterUseOptions = useMemo(() => getWaterUseTypeOptions(template), [template]);
   const waterSourceOptions = useMemo(() => getWaterSourceTypeOptions(template), [template]);
@@ -995,7 +1015,7 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.1"
                           value={formData.section5_monitoring.waterTemperature?.min || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'waterTemperature', 'min', e.target.value)}
+                          onChange={(e) => updateMonitoringMinMax('waterTemperature', 'min', e.target.value)}
                           disabled={isReadOnly}
                           className="w-20"
                         />
@@ -1005,7 +1025,7 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.1"
                           value={formData.section5_monitoring.waterTemperature?.max || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'waterTemperature', 'max', e.target.value)}
+                          onChange={(e) => updateMonitoringMinMax('waterTemperature', 'max', e.target.value)}
                           disabled={isReadOnly}
                           className="w-20"
                         />
@@ -1015,9 +1035,10 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.1"
                           value={formData.section5_monitoring.waterTemperature?.avg || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'waterTemperature', 'avg', e.target.value)}
+                          readOnly
                           disabled={isReadOnly}
-                          className="w-20"
+                          className="w-20 bg-muted"
+                          tabIndex={-1}
                         />
                       </TableCell>
                     </TableRow>
@@ -1029,7 +1050,7 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.01"
                           value={formData.section5_monitoring.dissolvedOxygen?.min || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'dissolvedOxygen', 'min', e.target.value)}
+                          onChange={(e) => updateMonitoringMinMax('dissolvedOxygen', 'min', e.target.value)}
                           disabled={isReadOnly}
                           className="w-20"
                         />
@@ -1039,7 +1060,7 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.01"
                           value={formData.section5_monitoring.dissolvedOxygen?.max || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'dissolvedOxygen', 'max', e.target.value)}
+                          onChange={(e) => updateMonitoringMinMax('dissolvedOxygen', 'max', e.target.value)}
                           disabled={isReadOnly}
                           className="w-20"
                         />
@@ -1049,9 +1070,10 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.01"
                           value={formData.section5_monitoring.dissolvedOxygen?.avg || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'dissolvedOxygen', 'avg', e.target.value)}
+                          readOnly
                           disabled={isReadOnly}
-                          className="w-20"
+                          className="w-20 bg-muted"
+                          tabIndex={-1}
                         />
                       </TableCell>
                     </TableRow>
@@ -1063,7 +1085,7 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.1"
                           value={formData.section5_monitoring.turbidity?.min || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'turbidity', 'min', e.target.value)}
+                          onChange={(e) => updateMonitoringMinMax('turbidity', 'min', e.target.value)}
                           disabled={isReadOnly}
                           className="w-20"
                         />
@@ -1073,7 +1095,7 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.1"
                           value={formData.section5_monitoring.turbidity?.max || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'turbidity', 'max', e.target.value)}
+                          onChange={(e) => updateMonitoringMinMax('turbidity', 'max', e.target.value)}
                           disabled={isReadOnly}
                           className="w-20"
                         />
@@ -1083,9 +1105,10 @@ export function WaterUseReportForm({
                           type="number"
                           step="0.1"
                           value={formData.section5_monitoring.turbidity?.avg || ''}
-                          onChange={(e) => updateNestedFormData('section5_monitoring', 'turbidity', 'avg', e.target.value)}
+                          readOnly
                           disabled={isReadOnly}
-                          className="w-20"
+                          className="w-20 bg-muted"
+                          tabIndex={-1}
                         />
                       </TableCell>
                     </TableRow>
@@ -1099,7 +1122,7 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.1"
                               value={formData.section5_monitoring.ph?.min || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'ph', 'min', e.target.value)}
+                              onChange={(e) => updateMonitoringMinMax('ph', 'min', e.target.value)}
                               disabled={isReadOnly}
                               className="w-20"
                             />
@@ -1109,7 +1132,7 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.1"
                               value={formData.section5_monitoring.ph?.max || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'ph', 'max', e.target.value)}
+                              onChange={(e) => updateMonitoringMinMax('ph', 'max', e.target.value)}
                               disabled={isReadOnly}
                               className="w-20"
                             />
@@ -1119,9 +1142,10 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.1"
                               value={formData.section5_monitoring.ph?.avg || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'ph', 'avg', e.target.value)}
+                              readOnly
                               disabled={isReadOnly}
-                              className="w-20"
+                              className="w-20 bg-muted"
+                              tabIndex={-1}
                             />
                           </TableCell>
                         </TableRow>
@@ -1133,7 +1157,7 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.01"
                               value={formData.section5_monitoring.nutrients?.min || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'nutrients', 'min', e.target.value)}
+                              onChange={(e) => updateMonitoringMinMax('nutrients', 'min', e.target.value)}
                               disabled={isReadOnly}
                               className="w-20"
                             />
@@ -1143,7 +1167,7 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.01"
                               value={formData.section5_monitoring.nutrients?.max || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'nutrients', 'max', e.target.value)}
+                              onChange={(e) => updateMonitoringMinMax('nutrients', 'max', e.target.value)}
                               disabled={isReadOnly}
                               className="w-20"
                             />
@@ -1153,9 +1177,10 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.01"
                               value={formData.section5_monitoring.nutrients?.avg || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'nutrients', 'avg', e.target.value)}
+                              readOnly
                               disabled={isReadOnly}
-                              className="w-20"
+                              className="w-20 bg-muted"
+                              tabIndex={-1}
                             />
                           </TableCell>
                         </TableRow>
@@ -1167,7 +1192,7 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.01"
                               value={formData.section5_monitoring.bod?.min || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'bod', 'min', e.target.value)}
+                              onChange={(e) => updateMonitoringMinMax('bod', 'min', e.target.value)}
                               disabled={isReadOnly}
                               className="w-20"
                             />
@@ -1177,7 +1202,7 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.01"
                               value={formData.section5_monitoring.bod?.max || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'bod', 'max', e.target.value)}
+                              onChange={(e) => updateMonitoringMinMax('bod', 'max', e.target.value)}
                               disabled={isReadOnly}
                               className="w-20"
                             />
@@ -1187,9 +1212,10 @@ export function WaterUseReportForm({
                               type="number"
                               step="0.01"
                               value={formData.section5_monitoring.bod?.avg || ''}
-                              onChange={(e) => updateNestedFormData('section5_monitoring', 'bod', 'avg', e.target.value)}
+                              readOnly
                               disabled={isReadOnly}
-                              className="w-20"
+                              className="w-20 bg-muted"
+                              tabIndex={-1}
                             />
                           </TableCell>
                         </TableRow>
@@ -1220,6 +1246,7 @@ export function WaterUseReportForm({
                           <Input
                             id="incidentDate"
                             type="date"
+                            max={new Date().toISOString().split('T')[0]}
                             value={formData.section5_incidents.incidentDate}
                             onChange={(e) => updateFormData('section5_incidents', 'incidentDate', e.target.value)}
                             disabled={isReadOnly}
@@ -1230,6 +1257,7 @@ export function WaterUseReportForm({
                           <Input
                             id="reportedDate"
                             type="date"
+                            max={new Date().toISOString().split('T')[0]}
                             value={formData.section5_incidents.dateReportedToAuthority}
                             onChange={(e) => updateFormData('section5_incidents', 'dateReportedToAuthority', e.target.value)}
                             disabled={isReadOnly}

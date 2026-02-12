@@ -199,6 +199,8 @@ export default function ReviewApplicationPage() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  // Merged documents list for Document Verification tab (includes original app docs for modifications)
+  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<Document[]>([]);
   
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -381,59 +383,85 @@ export default function ReviewApplicationPage() {
           'registration_certificate': 'registrationCertificate',
           'existing_permit_copy': 'existingPermitCopy',
         };
-        
-        // Process documents from appData.documents using smart classification (copied from edit-application page)
-        console.log('🔍 Raw documents from database:', appData.documents);
-        if (appData.documents && Array.isArray(appData.documents)) {
-          for (const doc of appData.documents) {
-            console.log('📋 Processing document:', doc.name, 'type:', doc.type, 'path:', doc.file_path);
-            
+
+        // Helper: process a list of document rows into the documentMap
+        const processDocumentsIntoMap = (docs: any[], label: string) => {
+          console.log(`🔍 [${label}] Processing ${docs.length} documents`);
+          for (const doc of docs) {
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
-                // Extract field name from file path if it follows our naming convention
                 const pathParts = doc.file_path.split('/');
                 const fileName = pathParts[pathParts.length - 1];
                 const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
 
                 if (fieldNameMatch) {
-                  // This is a structured document with field name in path
                   const fieldName = fieldNameMatch[1];
-                  console.log('🎯 Identified field name from path:', fieldName);
-                  
-                  // Check if it's an additional document
                   if (fieldName.startsWith('additional_')) {
-                    console.log('📎 Skipping additional document for now:', fieldName);
-                    // Skip additional documents for now since ApplicationForm handles them differently
-                  } else {
-                    // This is a standard/activity-specific document
-                    documentMap[fieldName] = {
-                      url: publicUrl,
-                      name: doc.name
-                    };
-                    console.log('✅ Mapped document:', fieldName, '→', doc.name);
+                    // Skip additional documents for now
+                  } else if (!documentMap[fieldName]) {
+                    // Only set if not already mapped (modification's own docs take priority)
+                    documentMap[fieldName] = { url: publicUrl, name: doc.name };
+                    console.log(`✅ [${label}] Mapped document:`, fieldName, '→', doc.name);
                   }
                 } else {
-                  // Fallback to old type-based mapping
                   const fieldName = typeMapping[doc.type] || doc.type;
-                  documentMap[fieldName] = {
-                    url: publicUrl,
-                    name: doc.name
-                  };
-                  console.log('✅ Mapped document (fallback):', fieldName, '→', doc.name);
+                  if (!documentMap[fieldName]) {
+                    documentMap[fieldName] = { url: publicUrl, name: doc.name };
+                    console.log(`✅ [${label}] Mapped document (fallback):`, fieldName, '→', doc.name);
+                  }
                 }
-              } else {
-                console.log('❌ Failed to get public URL for:', doc.file_path);
               }
-            } else {
-              console.log('❌ Missing file_path or name for document:', doc);
+            }
+          }
+        };
+
+        // Collect ALL document rows for Document Verification tab
+        let mergedDocsList: Document[] = [...(appData.documents || [])];
+        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
+
+        // 1. Process documents from this application first (they take priority)
+        if (appData.documents && Array.isArray(appData.documents)) {
+          processDocumentsIntoMap(appData.documents, 'Current App');
+        }
+
+        // 2. For modification applications: also load documents from the original application
+        //    so pre-existing attachments that weren't re-uploaded are still visible.
+        if (modificationDetected) {
+          const originalAppId = (appData as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+          if (originalAppId) {
+            console.log('📎 [Modification] Loading documents from original application:', originalAppId);
+            try {
+              const { data: originalDocs, error: origDocsError } = await supabase
+                .from('documents')
+                .select('*')
+                .eq('application_id', originalAppId)
+                .order('created_at', { ascending: false });
+
+              if (!origDocsError && originalDocs && originalDocs.length > 0) {
+                processDocumentsIntoMap(originalDocs, 'Original App');
+                // Also merge into the documents list for verification tab (avoid duplicates)
+                for (const doc of originalDocs) {
+                  if (!seenDocIds.has(doc.id)) {
+                    mergedDocsList.push(doc);
+                    seenDocIds.add(doc.id);
+                  }
+                }
+              } else if (origDocsError) {
+                console.error('❌ Error fetching original application documents:', origDocsError);
+              } else {
+                console.log('⚠️ No documents found in original application');
+              }
+            } catch (origErr) {
+              console.error('❌ Error loading original application documents:', origErr);
             }
           }
         }
         
         setInitialDocuments(documentMap);
+        setAllDocumentsForVerification(mergedDocsList);
         console.log('📄 Final document map:', documentMap);
-        console.log('📄 Documents found:', appData.documents?.length || 0, 'documents');
+        console.log('📄 Documents for verification:', mergedDocsList.length, 'total');
 
         // Fetch existing assessment evidence (read-only)
         const { data: existingAssessment } = await supabase
@@ -497,7 +525,11 @@ export default function ReviewApplicationPage() {
         setAssessmentReportData(mergedReport);
         
         // Initialize Assessor Recommendations values (read-only for reviewers)
-        const assessorAdjustments = formData._assessorAdjustments || {};
+        // IMPORTANT: Only use _assessorAdjustments if an assessment actually exists for THIS application.
+        // For modification applications, the form_data may carry stale _assessorAdjustments from the
+        // previous submission cycle. We must NOT pre-fill recommended values from those stale adjustments.
+        const hasAssessmentForThisApp = !!existingAssessment;
+        const assessorAdjustments = hasAssessmentForThisApp ? (formData._assessorAdjustments || {}) : {};
         const originalRequestedValues = formData._originalRequestedValues || {};
         
         // ORIGINAL REQUESTED VALUES (from applicant's submission - preserved and NEVER modified)
@@ -514,16 +546,20 @@ export default function ReviewApplicationPage() {
           setRequestedVolumeM3(originalVolume);
         }
         
-        // ASSESSOR RECOMMENDED VALUES (from assessor adjustments)
-        const assessorDuration = assessorAdjustments.permitLengthYears 
-          || (typeof originalDuration === 'number' ? originalDuration : undefined);
-        if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
-          setRecommendedDurationYears(assessorDuration);
-        }
-        const assessorVolume = assessorAdjustments.recommendedVolumeM3 
-          || (typeof originalVolume === 'number' ? originalVolume : undefined);
-        if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
-          setRecommendedVolumeM3(assessorVolume);
+        // ASSESSOR RECOMMENDED VALUES (from assessor adjustments — only when assessment exists)
+        if (hasAssessmentForThisApp) {
+          const assessorDuration = assessorAdjustments.permitLengthYears 
+            || (typeof originalDuration === 'number' ? originalDuration : undefined);
+          if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
+            setRecommendedDurationYears(assessorDuration);
+          }
+          const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+            || (typeof originalVolume === 'number' ? originalVolume : undefined);
+          if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
+            setRecommendedVolumeM3(assessorVolume);
+          }
+        } else {
+          console.log('⚠️ No assessment filed yet for this application — skipping assessor recommended values');
         }
 
         // Fetch comments from reviews table
@@ -1209,7 +1245,7 @@ export default function ReviewApplicationPage() {
             {/* Document Verification Tab (read-only) */}
             <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
               <DocumentVerificationComponent
-                documents={application.documents || []}
+                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
                 verifications={documentVerifications}
                 onVerificationsChange={() => {}}
                 readOnly={true}

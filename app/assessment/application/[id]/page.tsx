@@ -303,6 +303,7 @@ export default function AssessmentApplicationPage() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<any[]>([]);
   
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -626,7 +627,11 @@ export default function AssessmentApplicationPage() {
         }
         
         // Initialize assessor adjustments
-        const assessorAdjustments = formData._assessorAdjustments || {};
+        // IMPORTANT: Only use _assessorAdjustments if an assessment actually exists for THIS application.
+        // For modification applications, the form_data may carry stale _assessorAdjustments from the
+        // previous submission cycle. We must NOT pre-fill recommended values from those stale adjustments.
+        const hasAssessmentForThisApp = !!existingAssessment;
+        const assessorAdjustments = hasAssessmentForThisApp ? (formData._assessorAdjustments || {}) : {};
         
         // ORIGINAL REQUESTED VALUES (from applicant's submission - NEVER modified)
         // These come from the original form data, not from database fields that can be updated
@@ -650,19 +655,30 @@ export default function AssessmentApplicationPage() {
           setRequestedVolumeM3(originalVolume);
         }
         
-        // ASSESSOR RECOMMENDED VALUES (can be modified by assessor)
-        // Assessor permit length: use adjustment if available, otherwise default to original
-        const assessorDuration = assessorAdjustments.permitLengthYears 
-          || (typeof originalDuration === 'number' ? originalDuration : undefined);
-        if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
-          setAssessorPermitLength(assessorDuration);
-        }
-        
-        // Assessor recommended volume: use adjustment if available, otherwise default to original
-        const assessorVolume = assessorAdjustments.recommendedVolumeM3 
-          || (typeof originalVolume === 'number' ? originalVolume : undefined);
-        if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
-          setAssessorRecommendedVolume(assessorVolume);
+        // ASSESSOR RECOMMENDED VALUES (can be modified by assessor — only pre-fill when assessment exists)
+        if (hasAssessmentForThisApp) {
+          // Assessor permit length: use adjustment if available, otherwise default to original
+          const assessorDuration = assessorAdjustments.permitLengthYears 
+            || (typeof originalDuration === 'number' ? originalDuration : undefined);
+          if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
+            setAssessorPermitLength(assessorDuration);
+          }
+          
+          // Assessor recommended volume: use adjustment if available, otherwise default to original
+          const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+            || (typeof originalVolume === 'number' ? originalVolume : undefined);
+          if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
+            setAssessorRecommendedVolume(assessorVolume);
+          }
+        } else {
+          console.log('⚠️ No assessment filed yet for this application — assessor recommended values start fresh');
+          // Default to requested values for new assessment (assessor can then adjust)
+          if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
+            setAssessorPermitLength(originalDuration);
+          }
+          if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
+            setAssessorRecommendedVolume(originalVolume);
+          }
         }
         
         // Store original values if not already stored (first time assessor views this)
@@ -683,49 +699,83 @@ export default function AssessmentApplicationPage() {
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
-        
-        if (appData.documents && Array.isArray(appData.documents)) {
-          for (const doc of appData.documents) {
-            if (doc.file_path && doc.name) {
-              const publicUrl = getDocumentUrl(doc.file_path);
-              if (publicUrl) {
-                const pathParts = doc.file_path.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+        const typeMapping: Record<string, string> = {
+          identification_doc: 'identificationDoc',
+          land_ownership_doc: 'landOwnershipDoc',
+          land_access_doc: 'landAccessDocuments',
+          technical_drawings: 'technicalDrawings',
+          environmental_impact_doc: 'environmentalImpactDoc',
+          payment_proof: 'paymentProof',
+          intake_discharge_map: 'intakeDischargeMap',
+          business_license: 'miningLicense',
+          geological_survey: 'miningHydrologicalReport',
+          water_quality_report: 'waterQualityReport',
+          renewal_request_letter: 'renewalRequestLetter',
+          transfer_application_letter: 'applicationLetter',
+          signed_transfer_form: 'signedTransferForm',
+          registration_certificate: 'registrationCertificate',
+          existing_permit_copy: 'existingPermitCopy',
+        };
 
-                if (fieldNameMatch) {
-                  const fieldName = fieldNameMatch[1];
-                  if (!fieldName.startsWith('additional_')) {
-                    documentMap[fieldName] = { url: publicUrl, name: doc.name };
+        const processDocsIntoMap = (docs: any[]) => {
+          for (const doc of docs) {
+            if (!doc.file_path || !doc.name) continue;
+            const publicUrl = getDocumentUrl(doc.file_path);
+            if (!publicUrl) continue;
+
+            const pathParts = doc.file_path.split('/');
+            const fileName = pathParts[pathParts.length - 1];
+            const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+            if (fieldNameMatch) {
+              const fieldName = fieldNameMatch[1];
+              if (!fieldName.startsWith('additional_') && !documentMap[fieldName]) {
+                documentMap[fieldName] = { url: publicUrl, name: doc.name };
+              }
+            } else {
+              const fieldName = typeMapping[doc.type] || doc.type;
+              if (!documentMap[fieldName]) {
+                documentMap[fieldName] = { url: publicUrl, name: doc.name };
+              }
+            }
+          }
+        };
+
+        // Collect ALL document rows for Document Verification tab
+        let mergedDocsList: any[] = [...(appData.documents || [])];
+        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
+
+        // 1. Process this application's own documents first
+        if (appData.documents && Array.isArray(appData.documents)) {
+          processDocsIntoMap(appData.documents);
+        }
+
+        // 2. For modifications: also load documents from the original application
+        if (modificationDetected) {
+          const originalAppId = (appData as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+          if (originalAppId) {
+            try {
+              const { data: originalDocs } = await supabase
+                .from('documents')
+                .select('*')
+                .eq('application_id', originalAppId)
+                .order('created_at', { ascending: false });
+              if (originalDocs) {
+                processDocsIntoMap(originalDocs);
+                for (const doc of originalDocs) {
+                  if (!seenDocIds.has(doc.id)) {
+                    mergedDocsList.push(doc);
+                    seenDocIds.add(doc.id);
                   }
-                } else {
-                  // Fallback: map database document types to form field names
-                  const typeMapping: Record<string, string> = {
-                    identification_doc: 'identificationDoc',
-                    land_ownership_doc: 'landOwnershipDoc',
-                    land_access_doc: 'landAccessDocuments',
-                    technical_drawings: 'technicalDrawings',
-                    environmental_impact_doc: 'environmentalImpactDoc',
-                    payment_proof: 'paymentProof',
-                    intake_discharge_map: 'intakeDischargeMap',
-                    business_license: 'miningLicense',
-                    geological_survey: 'miningHydrologicalReport',
-                    water_quality_report: 'waterQualityReport',
-                    renewal_request_letter: 'renewalRequestLetter',
-                    transfer_application_letter: 'applicationLetter',
-                    signed_transfer_form: 'signedTransferForm',
-                    registration_certificate: 'registrationCertificate',
-                    existing_permit_copy: 'existingPermitCopy',
-                  };
-                  const fieldName = typeMapping[doc.type] || doc.type;
-                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
                 }
               }
+            } catch (e) {
+              console.error('⚠️ Failed to load original application documents:', e);
             }
           }
         }
         
         setInitialDocuments(documentMap);
+        setAllDocumentsForVerification(mergedDocsList);
 
         // Mark hydrated + seed autosave snapshot so we don't autosave immediately on initial load
         hasHydratedRef.current = true;
@@ -1651,7 +1701,7 @@ export default function AssessmentApplicationPage() {
             {/* Document Verification Tab */}
             <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
               <DocumentVerificationComponent
-                documents={application.documents || []}
+                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
                 verifications={documentVerifications}
                 onVerificationsChange={setDocumentVerifications}
                 readOnly={isReadOnly || docReviewLocked}

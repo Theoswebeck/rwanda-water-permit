@@ -211,17 +211,20 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     });
   };
 
+  /** Parse internal_notes JSON safely */
+  const parseNotes = (app?: Application) => {
+    try {
+      const raw = app?.internal_notes;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return null;
+    }
+  };
+
   const isRenewalApplication = (app?: Application) => {
     if (!app) return false;
 
-    const notes = (() => {
-      try {
-        const raw = app.internal_notes;
-        return typeof raw === 'string' ? JSON.parse(raw) : raw;
-      } catch {
-        return null;
-      }
-    })();
+    const notes = parseNotes(app);
 
     return (
       app.is_renewal === true ||
@@ -231,17 +234,17 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     );
   };
 
+  /** Get the permit ID for a renewal draft — prefer the DB column, fall back to internal_notes */
+  const getRenewalPermitId = (app: Application): string | undefined => {
+    if (app.renewed_from_permit_id) return app.renewed_from_permit_id;
+    const notes = parseNotes(app);
+    return notes?.originalPermitId ?? undefined;
+  };
+
   // Format application type for display
   // For modification/transfer/renewal types, try to show a more meaningful type based on intended activities or water purpose
   const formatApplicationType = (type: string, app?: Application) => {
-    const notes = (() => {
-      try {
-        const raw = app?.internal_notes;
-        return typeof raw === 'string' ? JSON.parse(raw) : raw;
-      } catch {
-        return null;
-      }
-    })();
+    const notes = parseNotes(app);
 
     // Check if it's a renewal application (supports legacy rows created before renewal flags were persisted consistently)
     const isRenewal =
@@ -461,7 +464,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                       {(application.status === 'draft' || application.status === 'revision_required') && (
                         <Link href={
                           isRenewalApplication(application)
-                            ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${application.renewed_from_permit_id}`
+                            ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${getRenewalPermitId(application)}`
                             : `/dashboard/edit-application/${application.id}`
                         }>
                           <Button 

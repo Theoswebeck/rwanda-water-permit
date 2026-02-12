@@ -434,16 +434,38 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     existingWaterUseReport?.submitted_at,
   ]);
 
-  const handleSaveDraft = async () => {
+  /**
+   * Unified "Save as Draft" handler used by ALL save-as-draft buttons in the
+   * renewal form — both the outer navigation buttons AND the inner
+   * WaterUseReportForm button.
+   *
+   * @param waterUseReportOverride  Pass the latest WUR data when the save
+   *   originates from inside the WaterUseReportForm (so the form data object
+   *   includes it even though React state hasn't batched yet).
+   */
+  const handleSaveDraft = async (waterUseReportOverride?: any) => {
     try {
       setIsSaving(true);
       setSaveError(null);
       setDraftSavedMessage(null);
-      const formData = buildFormData();
+
+      // Build the payload — merge override WUR data so the caller doesn't
+      // have to wait for React state to flush.
+      const formData = {
+        ...buildFormData(),
+        ...(waterUseReportOverride !== undefined
+          ? { waterUseReport: waterUseReportOverride }
+          : {}),
+      };
+
+      console.log('📤 handleSaveDraft: calling onSaveAsDraft (renewal application)…');
       await onSaveAsDraft(formData, 'draft');
-      setDraftSavedMessage('Draft saved successfully.');
-      setTimeout(() => setDraftSavedMessage(null), 3000);
+      console.log('✅ handleSaveDraft: renewal application saved — redirecting to dashboard');
+
+      // ✅ Redirect to dashboard "Your Applications" after successful save
+      router.push('/dashboard?tab=applications');
     } catch (err) {
+      console.error('❌ handleSaveDraft: failed to save renewal draft:', err);
       setSaveError(err instanceof Error ? err.message : 'Failed to save draft');
     } finally {
       setIsSaving(false);
@@ -734,23 +756,21 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     if (readOnly) return;
                     setSaveError(null);
                     try {
+                      // Step 1: persist the water use report row
                       await persistWaterUseReport(data, 'draft');
                       setWaterUseReportData(data);
                       console.log('✅ Water use report draft saved');
-                      // Also save the renewal APPLICATION as a draft so it appears
-                      // in the applicant's dashboard list (this is what the user
-                      // expects when they click "Save as Draft").
-                      try {
-                        await onSaveAsDraft({ ...buildFormData(), waterUseReport: data }, 'draft');
-                        console.log('✅ Renewal application draft saved alongside water use report');
-                      } catch (appErr) {
-                        // Log but don't fail — the water use report itself was saved.
-                        console.error('⚠️ Water use report saved, but renewal application draft failed:', appErr);
-                      }
+
+                      // Step 2: save the renewal APPLICATION as a draft so it
+                      // appears in the applicant dashboard list, then redirect.
+                      // Uses the unified handleSaveDraft with override data so
+                      // the latest WUR data is included even though React state
+                      // hasn't flushed yet.
+                      await handleSaveDraft(data);
                     } catch (err) {
-                      console.error('❌ Failed to save water use report draft:', err);
-                      setSaveError(err instanceof Error ? err.message : 'Failed to save water use report');
-                      throw err; // re-throw so caller knows it failed
+                      console.error('❌ Failed to save draft (WUR + renewal app):', err);
+                      setSaveError(err instanceof Error ? err.message : 'Failed to save draft');
+                      throw err; // re-throw so WaterUseReportForm shows its own error
                     }
                   }}
                   onSubmit={async (data) => {

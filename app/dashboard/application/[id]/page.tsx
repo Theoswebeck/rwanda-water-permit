@@ -314,28 +314,49 @@ export default function ApplicationDetailPage() {
             'registration_certificate': 'registrationCertificate',
             'existing_permit_copy': 'existingPermitCopy',
           };
-          
-          for (const doc of documents) {
-            if (doc.file_path && doc.name) {
+
+          const processDocsIntoMap = (docs: any[]) => {
+            for (const doc of docs) {
+              if (!doc.file_path || !doc.name) continue;
               const publicUrl = getDocumentUrl(doc.file_path);
               if (!publicUrl) continue;
 
-              // Extract field name from file path if it follows our naming convention
               const pathParts = doc.file_path.split('/');
               const fileName = pathParts[pathParts.length - 1];
               const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-
               if (fieldNameMatch) {
                 const fieldName = fieldNameMatch[1];
-                if (!fieldName.startsWith('additional_')) {
+                if (!fieldName.startsWith('additional_') && !documentMap[fieldName]) {
                   documentMap[fieldName] = { url: publicUrl, name: doc.name };
-                  continue;
+                }
+              } else {
+                const fieldName = typeMapping[doc.type] || doc.type;
+                if (!documentMap[fieldName]) {
+                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
                 }
               }
+            }
+          };
 
-              // Fallback to type-based mapping
-              const fieldName = typeMapping[doc.type] || doc.type;
-              documentMap[fieldName] = { url: publicUrl, name: doc.name };
+          // 1. Process this application's own documents first
+          processDocsIntoMap(documents);
+
+          // 2. For modifications: also load documents from the original application
+          const parsedNotes = (() => {
+            try {
+              return (appWithRelations as any).internal_notes ? JSON.parse((appWithRelations as any).internal_notes) : null;
+            } catch { return null; }
+          })();
+          const isModification = (appWithRelations as any).is_modification === true || parsedNotes?.isModification === true;
+          if (isModification) {
+            const originalAppId = (appWithRelations as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+            if (originalAppId) {
+              try {
+                const originalDocs = await getDocuments(originalAppId);
+                if (originalDocs) processDocsIntoMap(originalDocs);
+              } catch (e) {
+                console.error('⚠️ Failed to load original application documents:', e);
+              }
             }
           }
           

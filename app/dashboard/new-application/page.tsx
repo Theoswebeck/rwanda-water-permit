@@ -1018,10 +1018,15 @@ function NewApplicationContent() {
   const handleModificationPermitSelect = useCallback(async (permit: PermitWithApplication) => {
     setSelectedPermitForModification(permit);
     
-    // Load original application data for comparison
+    // Load original application data AND documents for comparison
     try {
       if (permit.application_id) {
-        const originalApplication = await getApplication(permit.application_id);
+        // Load application and documents in parallel
+        const [originalApplication, documents] = await Promise.all([
+          getApplication(permit.application_id),
+          getDocuments(permit.application_id)
+        ]);
+
         if (originalApplication) {
           // Parse internal_notes to get the original form data
           const originalFormData = (() => {
@@ -1037,17 +1042,137 @@ function NewApplicationContent() {
           if (!originalFormData.intendedActivities && (originalApplication as any).intended_activities) {
             originalFormData.intendedActivities = (originalApplication as any).intended_activities;
           }
+
+          // Back-compat: normalize legacy single polygon into waterSourcePolygons
+          if (!Array.isArray(originalFormData.waterSourcePolygons) || originalFormData.waterSourcePolygons.length === 0) {
+            if (Array.isArray(originalFormData.waterSourceCoordinates)) {
+              originalFormData.waterSourcePolygons = [originalFormData.waterSourceCoordinates];
+            }
+          }
+
+          // Backfill LAT/LONG from stored geometry if internal_notes didn't include it
+          if (
+            (originalFormData.waterSourceLatitude == null || String(originalFormData.waterSourceLatitude).trim() === "") &&
+            (originalFormData.waterSourceLongitude == null || String(originalFormData.waterSourceLongitude).trim() === "")
+          ) {
+            const geom: any = (originalApplication as any).coordinates;
+            if (geom && geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+              const [lng, lat] = geom.coordinates;
+              originalFormData.waterSourceLatitude = String(lat ?? "");
+              originalFormData.waterSourceLongitude = String(lng ?? "");
+            }
+          }
+
+          if (!Array.isArray(originalFormData.additionalDocuments)) {
+            originalFormData.additionalDocuments = [];
+          }
+
+          // Process documents from the original application (same logic as loadDraft)
+          const documentMap: Record<string, { url: string; name: string }> = {};
+          const additionalDocsFromDb: Array<{ id?: string; name: string; url: string }> = [];
+
+          const fieldNameFromFilePath = (filePath: string): string | null => {
+            const rawFileName = (() => {
+              try {
+                if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+                  return new URL(filePath).pathname.split("/").pop() || "";
+                }
+              } catch {}
+              return filePath.split("/").pop() || "";
+            })();
+
+            const m = rawFileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+            return m?.[1] ?? null;
+          };
+
+          const typeMapping: Record<string, string> = {
+            identification_doc: "identificationDoc",
+            land_ownership_doc: "landOwnershipDoc",
+            technical_drawings: "technicalDrawings",
+            environmental_impact_doc: "environmentalImpactDoc",
+            payment_proof: "paymentProof",
+            intake_discharge_map: "intakeDischargeMap",
+            business_license: "miningLicense",
+            geological_survey: "miningHydrologicalReport",
+            water_quality_report: "waterQualityReport",
+            other: "waterSupplyGeneralRequirements",
+          };
+
+          console.log('📄 [Modification] Processing documents from DB:', documents.length);
+          for (const doc of documents) {
+            console.log('📄 [Modification] Document:', { name: doc.name, type: doc.type, file_path: doc.file_path });
+            if (doc.file_path && doc.name) {
+              const publicUrl = getDocumentUrl(doc.file_path);
+              if (publicUrl) {
+                const rawFileName = (() => {
+                  try {
+                    if (doc.file_path.startsWith("http://") || doc.file_path.startsWith("https://")) {
+                      return new URL(doc.file_path).pathname.split("/").pop() || "";
+                    }
+                  } catch {}
+                  return doc.file_path.split("/").pop() || "";
+                })();
+
+                if (rawFileName.startsWith("additional_")) {
+                  const m = rawFileName.match(/^additional_(.+?)-\d+\./);
+                  additionalDocsFromDb.push({ id: m?.[1], name: doc.name, url: publicUrl });
+                } else {
+                  const fieldName = fieldNameFromFilePath(doc.file_path) || typeMapping[doc.type] || doc.type;
+                  documentMap[fieldName] = {
+                    url: publicUrl,
+                    name: doc.name
+                  };
+                }
+              }
+            }
+          }
+
+          // Merge additional documents
+          if (additionalDocsFromDb.length > 0) {
+            const existing = Array.isArray(originalFormData.additionalDocuments) ? originalFormData.additionalDocuments : [];
+            const byId = new Map<string, any>();
+            const byName = new Map<string, any>();
+            for (const d of existing) {
+              if (d?.id) byId.set(String(d.id), d);
+              if (d?.name) byName.set(String(d.name), d);
+            }
+
+            for (const dbDoc of additionalDocsFromDb) {
+              const match =
+                (dbDoc.id ? byId.get(String(dbDoc.id)) : undefined) ||
+                byName.get(String(dbDoc.name));
+
+              if (match) {
+                match.url = dbDoc.url;
+                match.file = null;
+              } else {
+                existing.push({
+                  id: dbDoc.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                  name: dbDoc.name,
+                  category: "additional",
+                  description: "",
+                  file: null,
+                  url: dbDoc.url,
+                });
+              }
+            }
+
+            originalFormData.additionalDocuments = existing;
+          }
+
+          console.log('✅ [Modification] Document map:', Object.keys(documentMap));
           
           setOriginalApplicationData(originalFormData);
           setInitialFormData(originalFormData);
+          setInitialDocuments(documentMap);
         }
       }
     } catch (error) {
-      console.error('Error loading original application data:', error);
+      console.error('❌ Error loading original application data:', error);
     }
     
     setModificationStep('fill-form');
-  }, [getApplication]);
+  }, [getApplication, getDocuments]);
 
   // Handle modification cancellation
   const handleModificationCancel = useCallback(() => {
@@ -1194,6 +1319,14 @@ function NewApplicationContent() {
 
   // Handle renewal draft save
   const handleRenewalSaveAsDraft = useCallback(async (formData: any, status: string) => {
+    console.log('📋 handleRenewalSaveAsDraft ENTERED', {
+      hasFormData: !!formData,
+      status,
+      hasSelectedPermit: !!selectedPermitForRenewal,
+      permitId: selectedPermitForRenewal?.id,
+      userId: userProfile?.id,
+      hasCurrentApp: !!currentRenewalApplication,
+    });
     try {
       setIsLoading(true);
       setError(null);
@@ -1441,10 +1574,65 @@ function NewApplicationContent() {
           }).catch(() => null)
         } catch {}
         
-        // Upload documents
+        // Upload documents (new File objects)
         await ensureStorageBucket();
         const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, formData, userProfile?.id);
-        console.log(`📎 ${uploadedDocs.length} documents uploaded`);
+        console.log(`📎 ${uploadedDocs.length} new documents uploaded`);
+
+        // Copy over documents from the original application that weren't re-uploaded.
+        // This ensures the modification application has a complete set of document records.
+        const originalAppId = selectedPermitForModification?.application_id;
+        if (originalAppId) {
+          try {
+            // Get the set of fieldNames that were freshly uploaded
+            const uploadedFieldNames = new Set<string>();
+            for (const doc of uploadedDocs) {
+              if (doc.file_path) {
+                const rawName = doc.file_path.split('/').pop() || '';
+                const m = rawName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                if (m) uploadedFieldNames.add(m[1]);
+              }
+            }
+
+            // Fetch original application's documents
+            const { data: originalDocs, error: origDocsErr } = await supabase
+              .from('documents')
+              .select('*')
+              .eq('application_id', originalAppId);
+
+            if (!origDocsErr && originalDocs) {
+              let copiedCount = 0;
+              for (const origDoc of originalDocs) {
+                // Determine the fieldName of this original doc
+                const rawName = (origDoc.file_path || '').split('/').pop() || '';
+                const m = rawName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                const fieldName = m?.[1] || origDoc.type || '';
+
+                // Skip if we already uploaded a new version for this field
+                if (uploadedFieldNames.has(fieldName)) continue;
+
+                // Create a copy record pointing to the same storage file
+                const { error: copyErr } = await supabase.from('documents').insert({
+                  application_id: resultApplication.id,
+                  name: origDoc.name,
+                  type: origDoc.type,
+                  file_path: origDoc.file_path,
+                  file_size: origDoc.file_size,
+                  mime_type: origDoc.mime_type,
+                  verification_status: 'pending',
+                  is_required: origDoc.is_required,
+                  uploaded_by: userProfile?.id || origDoc.uploaded_by,
+                  upload_date: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+                if (!copyErr) copiedCount++;
+              }
+              console.log(`📎 ${copiedCount} documents copied from original application`);
+            }
+          } catch (copyError) {
+            console.error('⚠️ Non-critical: failed to copy original documents:', copyError);
+          }
+        }
         
         setSubmitSuccess(true);
       } else {
@@ -1506,7 +1694,71 @@ function NewApplicationContent() {
       
       if (result) {
         await ensureStorageBucket();
-        await uploadApplicationDocuments(result.id, formData, userProfile?.id);
+        const uploadedDocs = await uploadApplicationDocuments(result.id, formData, userProfile?.id);
+
+        // Copy over documents from the original application that weren't re-uploaded
+        const originalAppId = selectedPermitForModification?.application_id;
+        if (originalAppId) {
+          try {
+            const uploadedFieldNames = new Set<string>();
+            for (const doc of uploadedDocs) {
+              if (doc.file_path) {
+                const rawName = doc.file_path.split('/').pop() || '';
+                const m = rawName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                if (m) uploadedFieldNames.add(m[1]);
+              }
+            }
+
+            // Also gather field names already in the new application's documents table
+            const { data: existingNewDocs } = await supabase
+              .from('documents')
+              .select('file_path')
+              .eq('application_id', result.id);
+            if (existingNewDocs) {
+              for (const d of existingNewDocs) {
+                const rawName = (d.file_path || '').split('/').pop() || '';
+                const m = rawName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                if (m) uploadedFieldNames.add(m[1]);
+              }
+            }
+
+            const { data: originalDocs, error: origDocsErr } = await supabase
+              .from('documents')
+              .select('*')
+              .eq('application_id', originalAppId);
+
+            if (!origDocsErr && originalDocs) {
+              let copiedCount = 0;
+              for (const origDoc of originalDocs) {
+                const rawName = (origDoc.file_path || '').split('/').pop() || '';
+                const m = rawName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                const fieldName = m?.[1] || origDoc.type || '';
+                if (uploadedFieldNames.has(fieldName)) continue;
+
+                const { error: copyErr } = await supabase.from('documents').insert({
+                  application_id: result.id,
+                  name: origDoc.name,
+                  type: origDoc.type,
+                  file_path: origDoc.file_path,
+                  file_size: origDoc.file_size,
+                  mime_type: origDoc.mime_type,
+                  verification_status: 'pending',
+                  is_required: origDoc.is_required,
+                  uploaded_by: userProfile?.id || origDoc.uploaded_by,
+                  upload_date: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+                if (!copyErr) {
+                  copiedCount++;
+                  uploadedFieldNames.add(fieldName);
+                }
+              }
+              console.log(`📎 ${copiedCount} documents copied from original application (draft save)`);
+            }
+          } catch (copyError) {
+            console.error('⚠️ Non-critical: failed to copy original documents:', copyError);
+          }
+        }
         
         // Track the current modification application for payment tab
         setCurrentModificationApplication(result);
