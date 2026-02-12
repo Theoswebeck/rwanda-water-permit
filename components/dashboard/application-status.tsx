@@ -35,7 +35,7 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
   // Calculate statistics from applications
   const stats = {
     total: applications.length,
-    inProgress: applications.filter(app => ['submitted', 'under_review'].includes(getDisplayStatus(app))).length,
+    inProgress: applications.filter(app => ['submitted', 'under_review', 'pending_payment'].includes(getDisplayStatus(app))).length,
     approved: applications.filter(app => ['approved', 'approved_pending_permit'].includes(getDisplayStatus(app))).length,
     expired: applications.filter(app => getDisplayStatus(app) === 'expired').length,
   };
@@ -123,6 +123,8 @@ export function ApplicationStatus({ applications, loading = false, onRefresh }: 
         return <Badge variant="outline" className="bg-green-100 text-green-700">Approved (Pending Signature)</Badge>;
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700">Approved</Badge>;
+      case "pending_payment":
+        return <Badge variant="outline" className="bg-orange-100 text-orange-700">Pending Payment</Badge>;
       case "expired":
         return <Badge variant="outline" className="bg-slate-200 text-slate-700">Expired</Badge>;
       default:

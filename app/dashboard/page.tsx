@@ -68,6 +68,7 @@ function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationSt
   // Applicant-visible statuses:
   // - draft, submitted, under_review, approved, expired
   // - plus: approved_pending_permit (approved pending signature/terms acceptance)
+  // - plus: pending_payment (payment failed or not yet completed)
   // Any other internal status is mapped to under_review on the dashboard UI.
   if (
     status === "draft" ||
@@ -75,7 +76,8 @@ function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationSt
     status === "under_review" ||
     status === "approved" ||
     status === "expired" ||
-    status === "approved_pending_permit"
+    status === "approved_pending_permit" ||
+    status === "pending_payment"
   ) {
     return status;
   }

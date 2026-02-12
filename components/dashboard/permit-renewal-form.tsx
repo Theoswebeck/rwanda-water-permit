@@ -89,6 +89,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const [activeTab, setActiveTab] = useState("how-it-works");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
   
   // Water use report state - full report data from WaterUseReportForm
   const [waterUseReportData, setWaterUseReportData] = useState<any>(null);
@@ -292,8 +293,21 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     const loadExistingWaterUseReport = async () => {
       if (!permit?.id) {
         setExistingWaterUseReport(null);
+        setWaterUseReportData(null);
+        setWaterUseReportSubmitted(false);
         return;
       }
+
+      // IMPORTANT UX: A brand-new renewal should start with a blank annual report.
+      // Only load previously-saved report data when we're editing an existing saved
+      // renewal application (draft/submitted) or viewing in read-only mode.
+      if (!readOnly && !currentApplication?.id) {
+        setExistingWaterUseReport(null);
+        setWaterUseReportData(null);
+        setWaterUseReportSubmitted(false);
+        return;
+      }
+
       try {
         const { data, error } = await supabase
           .from('water_use_reports')
@@ -332,7 +346,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     };
 
     loadExistingWaterUseReport();
-  }, [permit?.id, reportYear]);
+  }, [permit?.id, reportYear, currentApplication?.id, readOnly]);
 
   const persistWaterUseReport = useCallback(async (reportData: any, nextStatus: 'draft' | 'submitted') => {
     const applicantId =
@@ -377,18 +391,28 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         .select('*')
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Failed to update water use report:', error);
+        throw error;
+      }
+      console.log('✅ Water use report updated:', data?.id);
       setExistingWaterUseReport(data as WaterUseReport);
       return data as WaterUseReport;
     }
 
+    // Use upsert with the unique constraint (permit_id, reporting_year) to
+    // safely handle re-submits and race conditions where the row may already exist.
     const { data, error } = await supabase
       .from('water_use_reports')
-      .insert(payload)
+      .upsert(payload, { onConflict: 'permit_id,reporting_year' })
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Failed to upsert water use report:', error);
+      throw error;
+    }
+    console.log('✅ Water use report upserted:', data?.id);
     setExistingWaterUseReport(data as WaterUseReport);
     return data as WaterUseReport;
   }, [
@@ -408,8 +432,11 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     try {
       setIsSaving(true);
       setSaveError(null);
+      setDraftSavedMessage(null);
       const formData = buildFormData();
       await onSaveAsDraft(formData, 'draft');
+      setDraftSavedMessage('Draft saved successfully.');
+      setTimeout(() => setDraftSavedMessage(null), 3000);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save draft');
     } finally {
@@ -419,11 +446,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
   const handleContinueToPayment = async () => {
     if (readOnly) return;
-    if (currentApplication?.id) {
-      setActiveTab("payment");
-      return;
-    }
 
+    // ALWAYS save before moving to payment — this ensures the renewal letter
+    // file gets uploaded even when a draft application already exists.
     try {
       setIsSaving(true);
       setSaveError(null);
@@ -487,6 +512,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+      {/* Save Success */}
+      {draftSavedMessage && (
+        <Alert className="border-green-200 bg-green-50">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">{draftSavedMessage}</AlertDescription>
         </Alert>
       )}
 
@@ -684,18 +716,32 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   onSaveAsDraft={async (data) => {
                     if (readOnly) return;
                     setSaveError(null);
-                    await persistWaterUseReport(data, 'draft');
-                    setWaterUseReportData(data);
+                    try {
+                      await persistWaterUseReport(data, 'draft');
+                      setWaterUseReportData(data);
+                      console.log('✅ Water use report draft saved');
+                    } catch (err) {
+                      console.error('❌ Failed to save water use report draft:', err);
+                      setSaveError(err instanceof Error ? err.message : 'Failed to save water use report');
+                      throw err; // re-throw so caller knows it failed
+                    }
                   }}
                   onSubmit={async (data) => {
                     if (readOnly) return;
                     setSaveError(null);
-                    // Keep persisted status as draft in renewal flow; final renewal submission governs lifecycle.
-                    await persistWaterUseReport(data, 'draft');
-                    setWaterUseReportData(data);
-                    setWaterUseReportSubmitted(true);
-                    // Auto-advance to next tab
-                    setActiveTab("attachments");
+                    try {
+                      // Keep persisted status as draft in renewal flow; final renewal submission governs lifecycle.
+                      await persistWaterUseReport(data, 'draft');
+                      setWaterUseReportData(data);
+                      setWaterUseReportSubmitted(true);
+                      console.log('✅ Water use report submitted (renewal flow)');
+                      // Auto-advance to next tab
+                      setActiveTab("attachments");
+                    } catch (err) {
+                      console.error('❌ Failed to submit water use report:', err);
+                      setSaveError(err instanceof Error ? err.message : 'Failed to save water use report');
+                      throw err; // re-throw so caller knows it failed
+                    }
                   }}
                   isLoading={isSaving}
                   isReadOnly={readOnly}

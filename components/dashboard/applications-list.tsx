@@ -67,7 +67,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     // Fallback: ensure internal statuses never leak to applicants even if parent forgets to attach `display_status`.
     const raw = app.status;
     if (raw === "draft") return "draft";
-    if (raw === "submitted" || raw === "under_review" || raw === "approved" || raw === "expired") return raw;
+    if (raw === "submitted" || raw === "under_review" || raw === "approved" || raw === "expired" || raw === "pending_payment") return raw;
     return "under_review";
   };
 
@@ -169,6 +169,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           label: "Approved",
           icon: <CheckCircle2 className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "pending_payment":
+        return {
+          label: "Pending Payment",
+          icon: <Clock className="h-4 w-4" />,
+          className: "bg-orange-100 text-orange-700 border-0 hover:bg-orange-100 px-3 py-2 rounded-full font-medium"
         };
       case "expired":
         return {

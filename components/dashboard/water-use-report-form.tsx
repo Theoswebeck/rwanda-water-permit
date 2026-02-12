@@ -44,7 +44,8 @@ import {
   Calendar,
   FileSignature,
   Loader2,
-  Info
+  Info,
+  CheckCircle
 } from "lucide-react";
 import type { PermitWithApplication } from "@/hooks/usePermitsQuery";
 import type { WaterUseReportTemplate, WaterUseReport } from "@/types/database";
@@ -82,6 +83,8 @@ export function WaterUseReportForm({
 }: WaterUseReportFormProps) {
   const [activeTab, setActiveTab] = useState("section1");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
   const permitHolderName = useMemo(() => {
     const applicant = permit.application?.applicant;
     if (applicant?.company_name) return applicant.company_name;
@@ -273,6 +276,7 @@ export function WaterUseReportForm({
   // Handle save
   const handleSave = async () => {
     setValidationError(null);
+    setDraftSavedMessage(null);
     const reduction = Number(formData.section4.reductionPercentage || 0);
     const expectedChange = Number(formData.section8.expectedChangePercentage || 0);
     const hasMoreThanTwoDecimals = (value: string) => {
@@ -291,7 +295,17 @@ export function WaterUseReportForm({
       setValidationError("Percentage fields must be between 0 and 100, with at most 2 decimal places.");
       return;
     }
-    await onSaveAsDraft(formData);
+    setIsSavingDraft(true);
+    try {
+      await onSaveAsDraft(formData);
+      setDraftSavedMessage('Draft saved successfully.');
+      setTimeout(() => setDraftSavedMessage(null), 3000);
+    } catch (err) {
+      console.error('❌ Error saving water use report draft:', err);
+      setValidationError(err instanceof Error ? err.message : 'Failed to save draft. Please try again.');
+    } finally {
+      setIsSavingDraft(false);
+    }
   };
 
   // Handle submit
@@ -315,7 +329,12 @@ export function WaterUseReportForm({
       setValidationError("Percentage fields must be between 0 and 100, with at most 2 decimal places.");
       return;
     }
-    await onSubmit(formData);
+    try {
+      await onSubmit(formData);
+    } catch (err) {
+      console.error('❌ Error submitting water use report:', err);
+      setValidationError(err instanceof Error ? err.message : 'Failed to submit report. Please try again.');
+    }
   };
 
   // Tab configuration based on template
@@ -1726,22 +1745,30 @@ export function WaterUseReportForm({
               <AlertDescription>{validationError}</AlertDescription>
             </Alert>
           )}
+          {draftSavedMessage && (
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                {draftSavedMessage}
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="flex justify-between items-center">
           <Button
             variant="outline"
             onClick={handleSave}
-            disabled={isLoading}
+            disabled={isLoading || isSavingDraft}
           >
-            {isLoading ? (
+            {isSavingDraft ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            Save as Draft
+            {isSavingDraft ? 'Saving...' : 'Save as Draft'}
           </Button>
           <Button
             onClick={handleSubmitForm}
-            disabled={isLoading || !formData.section9_declaration.agreed || !formData.section9_declaration.declarantName}
+            disabled={isLoading || isSavingDraft || !formData.section9_declaration.agreed || !formData.section9_declaration.declarantName}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

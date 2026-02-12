@@ -967,21 +967,31 @@ function NewApplicationContent() {
           transferFormData: formData,
         }),
       };
-      
-      const result = await createApplication(transferApplicationData);
-      
-      if (result) {
-        await ensureStorageBucket();
-        await uploadApplicationDocuments(result.id, formData, userProfile?.id);
-        
-        // Track the current transfer application for payment tab
-        setCurrentTransferApplication(result);
-        
-        setDraftSaved(true);
-        setTimeout(() => setDraftSaved(false), 2000);
-        
-        return result;
+
+      let result: Application | null = null;
+
+      if (currentTransferApplication?.id) {
+        // Update existing draft instead of creating duplicates
+        const { applicant_id, ...updateData } = transferApplicationData as any;
+        result = await updateApplication(currentTransferApplication.id, updateData);
+      } else {
+        result = await createApplication(transferApplicationData);
       }
+
+      if (!result) {
+        throw new Error('Failed to save transfer draft — database returned no data.');
+      }
+      
+      await ensureStorageBucket();
+      await uploadApplicationDocuments(result.id, formData, userProfile?.id);
+      
+      // Track the current transfer application for payment tab
+      setCurrentTransferApplication(result);
+      
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 3000);
+      
+      return result;
     } catch (error) {
       console.error('Error saving transfer draft:', error);
       setError(error instanceof Error ? error.message : 'Failed to save draft');
@@ -989,7 +999,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermit, userProfile?.id, createApplication]);
+  }, [selectedPermit, userProfile?.id, createApplication, updateApplication, currentTransferApplication]);
 
   // User data for transfer form
   const transferUserData = useMemo(() => ({
@@ -1045,6 +1055,9 @@ function NewApplicationContent() {
 
   // Handle permit selection for renewal
   const handleRenewalPermitSelect = useCallback(async (permit: RenewalPermitWithApplication) => {
+    // Starting a NEW renewal flow should not inherit any previously-loaded draft
+    // application state from another renewal session.
+    setCurrentRenewalApplication(null);
     setSelectedPermitForRenewal(permit);
     setRenewalStep('fill-form');
   }, []);
@@ -1168,7 +1181,7 @@ function NewApplicationContent() {
         intended_activities: selectedPermitForRenewal?.application?.intended_activities,
       };
       
-      let result;
+      let result: Application | null = null;
       
       // If we already have a renewal application, update it; otherwise create new
       if (currentRenewalApplication?.id) {
@@ -1179,23 +1192,25 @@ function NewApplicationContent() {
         // Create new renewal application
         result = await createApplication(renewalApplicationData);
       }
-      
-      if (result) {
-        await ensureStorageBucket();
-        if (formData.renewalLetter) {
-          await uploadApplicationDocuments(result.id, {
-            renewalRequestLetter: formData.renewalLetter,
-          }, userProfile?.id);
-        }
-        
-        // Track the current renewal application for payment tab
-        setCurrentRenewalApplication(result);
-        
-        setDraftSaved(true);
-        setTimeout(() => setDraftSaved(false), 2000);
-        
-        return result;
+
+      if (!result) {
+        throw new Error('Failed to save renewal draft — database returned no data.');
       }
+      
+      await ensureStorageBucket();
+      if (formData.renewalLetter) {
+        await uploadApplicationDocuments(result.id, {
+          renewalRequestLetter: formData.renewalLetter,
+        }, userProfile?.id);
+      }
+      
+      // Track the current renewal application for payment tab
+      setCurrentRenewalApplication(result);
+      
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 3000);
+      
+      return result;
     } catch (error) {
       console.error('Error saving renewal draft:', error);
       setError(error instanceof Error ? error.message : 'Failed to save draft');

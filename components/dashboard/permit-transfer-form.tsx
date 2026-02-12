@@ -49,7 +49,8 @@ import {
   Building2,
   FileCheck,
   Calendar,
-  CreditCard
+  CreditCard,
+  CheckCircle
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -574,13 +575,24 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     }
   };
 
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
+
   const handleSaveDraft = async () => {
+    setIsSavingDraft(true);
+    setValidationError(null);
+    setDraftSavedMessage(null);
     try {
       const values = form.getValues();
       const draftData = { ...values, ...files };
       await onSaveAsDraft(draftData, 'draft');
+      setDraftSavedMessage('Draft saved successfully.');
+      setTimeout(() => setDraftSavedMessage(null), 3000);
     } catch (error) {
       console.error('Save draft error:', error);
+      setValidationError(error instanceof Error ? error.message : 'Failed to save draft. Please try again.');
+    } finally {
+      setIsSavingDraft(false);
     }
   };
 
@@ -621,6 +633,14 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-red-800">
                   {validationError}
+                </AlertDescription>
+              </Alert>
+            )}
+            {draftSavedMessage && (
+              <Alert className="mb-4 border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  {draftSavedMessage}
                 </AlertDescription>
               </Alert>
             )}
@@ -1487,11 +1507,15 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           type="button"
                           variant="outline"
                           onClick={handleSaveDraft}
-                          disabled={isLoading}
+                          disabled={isLoading || isSavingDraft}
                           className="gap-2"
                         >
-                          <Save className="h-4 w-4" />
-                          Save as Draft
+                          {isSavingDraft ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          {isSavingDraft ? 'Saving...' : 'Save as Draft'}
                         </Button>
                       )}
                       <Button
