@@ -843,6 +843,43 @@ CREATE POLICY "Staff can view all permits"
         )
     );
 
+CREATE POLICY "Staff can create permits for approved applications" ON permits
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('reviewer', 'inspector', 'admin', 'approver')
+        ) OR
+        EXISTS (
+            SELECT 1 FROM applications 
+            WHERE id = application_id 
+              AND applicant_id = auth.uid() 
+              AND status = 'approved_pending_permit'
+        )
+    );
+
+CREATE POLICY "Staff can update permits" ON permits
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM users 
+            WHERE id = auth.uid() AND role IN ('admin', 'approver')
+        )
+        OR
+        (
+            EXISTS (
+                SELECT 1 FROM applications orig_app
+                WHERE orig_app.id = permits.application_id
+                  AND orig_app.applicant_id = auth.uid()
+            )
+            AND
+            EXISTS (
+                SELECT 1 FROM applications mod_app
+                WHERE mod_app.applicant_id = auth.uid()
+                  AND mod_app.status = 'approved_pending_permit'
+                  AND (mod_app.is_modification = true OR mod_app.is_renewal = true)
+            )
+        )
+    );
+
 -- Documents policies
 CREATE POLICY "Users can manage documents for their applications"
     ON documents FOR ALL

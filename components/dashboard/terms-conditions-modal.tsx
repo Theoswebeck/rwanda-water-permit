@@ -224,6 +224,62 @@ export function TermsConditionsModal({
         parsedNotes = applicationData.internal_notes ? JSON.parse(applicationData.internal_notes) : null;
       } catch { parsedNotes = null; }
 
+      // ── Resolve assessor-approved values (used for both new permits & modifications) ──
+      const assessorAdjustments = parsedNotes?._assessorAdjustments;
+
+      // Duration: assessor adjustment > proposed_duration_years > form permitLengthYears > default 5
+      const resolvedDurationYearsGlobal: number = (() => {
+        if (typeof assessorAdjustments?.permitLengthYears === 'number' &&
+            Number.isFinite(assessorAdjustments.permitLengthYears) &&
+            assessorAdjustments.permitLengthYears >= 1 &&
+            assessorAdjustments.permitLengthYears <= 15) {
+          return assessorAdjustments.permitLengthYears;
+        }
+        if (typeof applicationData.proposed_duration_years === 'number' &&
+            Number.isFinite(applicationData.proposed_duration_years) &&
+            applicationData.proposed_duration_years >= 1 &&
+            applicationData.proposed_duration_years <= 15) {
+          return applicationData.proposed_duration_years;
+        }
+        if (typeof parsedNotes?.permitLengthYears === 'number' &&
+            Number.isFinite(parsedNotes.permitLengthYears) &&
+            parsedNotes.permitLengthYears >= 1 &&
+            parsedNotes.permitLengthYears <= 15) {
+          return parsedNotes.permitLengthYears;
+        }
+        return 5;
+      })();
+
+      // Volume: assessor adjustment > max_yearly > estimated_usage > form value > 0
+      const resolvedVolumeM3: number = (() => {
+        if (typeof assessorAdjustments?.recommendedVolumeM3 === 'number' &&
+            Number.isFinite(assessorAdjustments.recommendedVolumeM3) &&
+            assessorAdjustments.recommendedVolumeM3 > 0) {
+          return assessorAdjustments.recommendedVolumeM3;
+        }
+        if (typeof applicationData.max_yearly_volume_m3 === 'number' &&
+            Number.isFinite(applicationData.max_yearly_volume_m3) &&
+            applicationData.max_yearly_volume_m3 > 0) {
+          return applicationData.max_yearly_volume_m3;
+        }
+        if (typeof applicationData.estimated_usage_volume === 'number' &&
+            Number.isFinite(applicationData.estimated_usage_volume) &&
+            applicationData.estimated_usage_volume > 0) {
+          return applicationData.estimated_usage_volume;
+        }
+        const formVolume = parsedNotes?.waterAbstractionDetails?.[0]?.maxAverageYearly;
+        if (typeof formVolume === 'number' && Number.isFinite(formVolume) && formVolume > 0) {
+          return formVolume;
+        }
+        return 0;
+      })();
+
+      console.log('📊 Resolved assessor-approved terms:', {
+        durationYears: resolvedDurationYearsGlobal,
+        volumeM3: resolvedVolumeM3,
+        source: assessorAdjustments ? 'assessor adjustments' : 'application data',
+      });
+
       // Check if this is a renewal application
       const isRenewalApplication = applicationData.is_renewal === true || 
         (parsedNotes?.isRenewal === true);
@@ -241,25 +297,22 @@ export function TermsConditionsModal({
       if (isModificationApplication && modificationOriginalPermitId) {
         // MODIFICATION: Update existing permit with the newly approved values
         console.log('🔧 Processing MODIFICATION - updating existing permit:', modificationOriginalPermitId);
+        console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
-        // Resolve the permit validity duration from the modification application
-        // Priority: assessor adjustments > proposed_duration_years > form's permitLengthYears > current permit value
-        const assessorAdjustments = parsedNotes?._assessorAdjustments;
-        let resolvedDurationYears: number | null = null;
-        if (typeof assessorAdjustments?.permitLengthYears === 'number' &&
-            Number.isFinite(assessorAdjustments.permitLengthYears) &&
-            assessorAdjustments.permitLengthYears >= 1 &&
-            assessorAdjustments.permitLengthYears <= 15) {
-          resolvedDurationYears = assessorAdjustments.permitLengthYears;
-        } else if (typeof applicationData.proposed_duration_years === 'number' &&
-                   Number.isFinite(applicationData.proposed_duration_years) &&
-                   applicationData.proposed_duration_years >= 1) {
-          resolvedDurationYears = applicationData.proposed_duration_years;
-        } else if (typeof parsedNotes?.permitLengthYears === 'number' &&
-                   Number.isFinite(parsedNotes.permitLengthYears) &&
-                   parsedNotes.permitLengthYears >= 1) {
-          resolvedDurationYears = parsedNotes.permitLengthYears;
-        }
+        // Use the already-resolved duration (from assessor adjustments)
+        const resolvedDurationYears: number | null = resolvedDurationYearsGlobal !== 5
+          ? resolvedDurationYearsGlobal
+          : (() => {
+              // If we got the default, check if assessor actually set it or it's truly the fallback
+              if (typeof assessorAdjustments?.permitLengthYears === 'number') return assessorAdjustments.permitLengthYears;
+              if (typeof applicationData.proposed_duration_years === 'number' &&
+                  Number.isFinite(applicationData.proposed_duration_years) &&
+                  applicationData.proposed_duration_years >= 1) return applicationData.proposed_duration_years;
+              if (typeof parsedNotes?.permitLengthYears === 'number' &&
+                  Number.isFinite(parsedNotes.permitLengthYears) &&
+                  parsedNotes.permitLengthYears >= 1) return parsedNotes.permitLengthYears;
+              return null;
+            })();
 
         // Fetch the current permit to preserve values that weren't modified
         const { data: currentPermit, error: fetchPermitErr } = await supabase
@@ -302,8 +355,10 @@ export function TermsConditionsModal({
         if (applicationData.water_purpose) {
           permitUpdatePayload.purpose = applicationData.water_purpose;
         }
-        // Update water allowance (volume) if provided
-        if (applicationData.estimated_usage_volume != null && applicationData.estimated_usage_volume > 0) {
+        // Update water allowance (volume) — prefer assessor-recommended volume over raw application value
+        if (resolvedVolumeM3 > 0) {
+          permitUpdatePayload.water_allowance = resolvedVolumeM3;
+        } else if (applicationData.estimated_usage_volume != null && applicationData.estimated_usage_volume > 0) {
           permitUpdatePayload.water_allowance = applicationData.estimated_usage_volume;
         }
         // Update allowance unit if provided
@@ -356,16 +411,25 @@ export function TermsConditionsModal({
           resolvedDurationYears,
         });
 
+        // Use maybeSingle() instead of single() to avoid PGRST116 when RLS blocks the row
         const { data: updatedPermit, error: updateError } = await supabase
           .from('permits')
           .update(permitUpdatePayload)
           .eq('id', modificationOriginalPermitId)
           .select()
-          .single() as { data: any; error: any };
+          .maybeSingle() as { data: any; error: any };
 
         if (updateError) {
           console.error('❌ Error updating permit for modification:', updateError);
-          throw updateError;
+          throw new Error(
+            updateError.code === 'PGRST116'
+              ? 'Permission denied: unable to update the permit. Please contact support.'
+              : `Failed to update permit: ${updateError.message}`
+          );
+        }
+        if (!updatedPermit) {
+          console.error('❌ Permit update returned no data — the row may not exist or RLS policy blocked the update. Permit ID:', modificationOriginalPermitId);
+          throw new Error('Unable to update the permit. The original permit may not exist or you lack permission. Please contact support.');
         }
 
         permitData = updatedPermit;
@@ -375,10 +439,12 @@ export function TermsConditionsModal({
       } else if (isRenewalApplication && renewedFromPermitId) {
         // RENEWAL: Update existing permit dates instead of creating new permit
         console.log('🔄 Processing RENEWAL - updating existing permit:', renewedFromPermitId);
+        console.log('📊 Using assessor-approved duration for renewal:', resolvedDurationYearsGlobal, 'years');
         
         const newIssuedDate = new Date().toISOString().split('T')[0];
-        const newExpiryDate = new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 5 years
+        const newExpiryDate = new Date(Date.now() + resolvedDurationYearsGlobal * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         
+        // Use maybeSingle() instead of single() to avoid PGRST116 when RLS blocks the row
         const { data: updatedPermit, error: updateError } = await supabase
           .from('permits')
           .update({
@@ -390,11 +456,15 @@ export function TermsConditionsModal({
           })
           .eq('id', renewedFromPermitId)
           .select()
-          .single() as { data: any; error: any };
+          .maybeSingle() as { data: any; error: any };
 
         if (updateError) {
           console.error('❌ Error updating permit for renewal:', updateError);
-          throw updateError;
+          throw new Error(`Failed to renew permit: ${updateError.message}`);
+        }
+        if (!updatedPermit) {
+          console.error('❌ Renewal permit update returned no data — the row may not exist or RLS policy blocked the update. Permit ID:', renewedFromPermitId);
+          throw new Error('Unable to renew the permit. The original permit may not exist or you lack permission. Please contact support.');
         }
         
         permitData = updatedPermit;
@@ -403,17 +473,23 @@ export function TermsConditionsModal({
           '| New expiry date:', newExpiryDate);
       } else {
         // NEW PERMIT: Create permit in database with comprehensive data
+        // Use assessor-approved terms (duration + volume) instead of hardcoded/raw values
         console.log('📝 Creating NEW permit in database...');
+        console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
+
+        const newIssuedDate = new Date().toISOString().split('T')[0];
+        const newExpiryDate = new Date(Date.now() + resolvedDurationYearsGlobal * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
         const permitData_insert = {
           application_id: applicationId,
           status: 'active',
           water_source: applicationData.water_source,
           purpose: applicationData.water_purpose,
-          water_allowance: applicationData.estimated_usage_volume || 0,
+          water_allowance: resolvedVolumeM3,
           allowance_unit: applicationData.usage_unit || 'm³',
           issuing_authority: 'Rwanda Water Resources Board',
-          issued_date: new Date().toISOString().split('T')[0],
-          expiry_date: new Date(Date.now() + 5 * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 5 years
+          issued_date: newIssuedDate,
+          expiry_date: newExpiryDate,
           conditions: { 
             conditions: [
               'Comply with all environmental regulations', 
@@ -477,13 +553,13 @@ export function TermsConditionsModal({
           ];
         })();
 
-        console.log('📄 Generating PDF permit (for storage + view)...');
+        console.log('📄 Generating PDF permit (for storage + view) with duration:', resolvedDurationYearsGlobal, 'years');
         const { generateDigitalWaterPermitBlob } = await import('@/lib/pdf-generator');
         const pdfBlob = await generateDigitalWaterPermitBlob(
           applicationData,
           permitData.permit_number,
           conditionsForPdf,
-          5
+          resolvedDurationYearsGlobal
         );
         console.log('✅ PDF permit generated');
 
