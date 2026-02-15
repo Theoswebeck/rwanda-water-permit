@@ -42,7 +42,7 @@ import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
-import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
+import { VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import { VerificationSummary, VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
@@ -294,7 +294,6 @@ export default function InspectorApplicationView() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<any[]>([]);
   
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -530,10 +529,6 @@ export default function InspectorApplicationView() {
           }
         };
 
-        // Collect ALL document rows for Document Verification tab
-        let mergedDocsList: any[] = [...(appData.documents || [])];
-        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
-
         // 1. Process this application's own documents first
         if (appData.documents && Array.isArray(appData.documents)) {
           processDocsIntoMap(appData.documents);
@@ -551,12 +546,6 @@ export default function InspectorApplicationView() {
                 .order('created_at', { ascending: false });
               if (originalDocs) {
                 processDocsIntoMap(originalDocs);
-                for (const doc of originalDocs) {
-                  if (!seenDocIds.has(doc.id)) {
-                    mergedDocsList.push(doc);
-                    seenDocIds.add(doc.id);
-                  }
-                }
               }
             } catch (e) {
               console.error('⚠️ Failed to load original application documents:', e);
@@ -565,7 +554,6 @@ export default function InspectorApplicationView() {
         }
         
         setInitialDocuments(documentMap);
-        setAllDocumentsForVerification(mergedDocsList);
         
       } catch (err) {
         console.error('Error fetching application:', err);
@@ -976,10 +964,9 @@ export default function InspectorApplicationView() {
           </div>
 
           {/* Main Content with Tabs */}
-          <Tabs defaultValue="doc_verification" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-muted/80">
+          <Tabs defaultValue="application_details" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
-              <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
               <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
               <TabsTrigger value="summary" className="py-2.5">Final Recommendation</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
@@ -1099,15 +1086,6 @@ export default function InspectorApplicationView() {
                   isStaffView={true}
                 />
               ) : null}
-            </TabsContent>
-
-            {/* Document Verification Tab */}
-            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
-              <DocumentVerificationComponent
-                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
-                verifications={documentVerifications}
-                onVerificationsChange={setDocumentVerifications}
-              />
             </TabsContent>
 
             {/* Assessment Report Tab */}

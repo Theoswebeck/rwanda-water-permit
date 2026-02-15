@@ -24,7 +24,6 @@ import { getDocumentUrl } from "@/lib/supabase-storage";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
-import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
@@ -194,7 +193,6 @@ export default function ApproverApplicationPage() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<any[]>([]);
   
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -206,9 +204,6 @@ export default function ApproverApplicationPage() {
   const [transferFormData, setTransferFormData] = useState<any>(null);
   const [isTransferApp, setIsTransferApp] = useState(false);
   const [isModificationApp, setIsModificationApp] = useState(false);
-  
-  // Assessment State
-  const [documentVerifications, setDocumentVerifications] = useState<Record<string, { status: VerificationStatus; notes: string }>>({});
   
   // Field Report State
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
@@ -275,7 +270,6 @@ export default function ApproverApplicationPage() {
         let savedAssessmentReportData: Partial<AssessmentReportData> | null | undefined = null;
 
         if (existingAssessment) {
-          setDocumentVerifications(existingAssessment.document_verifications || {});
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
           setInspectionDate(existingAssessment.inspection_date || "");
@@ -483,10 +477,6 @@ export default function ApproverApplicationPage() {
           }
         };
 
-        // Collect ALL document rows for Document Verification tab
-        let mergedDocsList: any[] = [...(appData.documents || [])];
-        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
-
         // 1. Process this application's own documents first
         if (appData.documents && Array.isArray(appData.documents)) {
           processDocsIntoMap(appData.documents);
@@ -504,12 +494,6 @@ export default function ApproverApplicationPage() {
                 .order('created_at', { ascending: false });
               if (originalDocs) {
                 processDocsIntoMap(originalDocs);
-                for (const doc of originalDocs) {
-                  if (!seenDocIds.has(doc.id)) {
-                    mergedDocsList.push(doc);
-                    seenDocIds.add(doc.id);
-                  }
-                }
               }
             } catch (e) {
               console.error('⚠️ Failed to load original application documents:', e);
@@ -518,7 +502,6 @@ export default function ApproverApplicationPage() {
         }
 
         setInitialDocuments(documentMap);
-        setAllDocumentsForVerification(mergedDocsList);
 
       } catch (err) {
         console.error('Error fetching application:', err);
@@ -708,9 +691,8 @@ export default function ApproverApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-          <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
+          <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-2' : 'grid-cols-3'} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
-              <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
               {!isTransferApp && (
                 <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
               )}
@@ -831,15 +813,6 @@ export default function ApproverApplicationPage() {
             />
               ) : null}
         </TabsContent>
-
-            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
-              <DocumentVerificationComponent
-                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
-                verifications={documentVerifications}
-                onVerificationsChange={() => {}}
-                readOnly={true}
-              />
-            </TabsContent>
 
             {/* Assessment Report Tab - Hidden for transfer applications */}
             {!isTransferApp && (

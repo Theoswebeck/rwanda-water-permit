@@ -46,6 +46,12 @@ export interface Permit {
   location: string;
   permitNumber: string;
   /**
+   * Denormalized modification tagging fields from `permits`.
+   * If > 0, we show a "Modified" tag on the permit.
+   */
+  modifiedCount?: number;
+  lastModifiedAt?: string | null;
+  /**
    * Storage path or URL for the generated permit PDF.
    * Expected to match `permits.permit_pdf_url` (storage path preferred).
    */
@@ -421,7 +427,16 @@ export function PermitsList({ permits }: PermitsListProps) {
                   key={permit.id} 
                   className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
                 >
-                  <TableCell className="font-medium text-gray-900 py-4 px-6">{permit.permitNumber}</TableCell>
+                  <TableCell className="font-medium text-gray-900 py-4 px-6">
+                    <div className="flex items-center gap-2">
+                      <span>{permit.permitNumber}</span>
+                      {(permit.modifiedCount ?? 0) > 0 ? (
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          Modified{permit.modifiedCount && permit.modifiedCount > 1 ? ` (${permit.modifiedCount})` : ''}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-gray-700 py-4 px-6">{permit.title}</TableCell>
                   <TableCell className="text-gray-700 py-4 px-6">{permit.type}</TableCell>
                   <TableCell className="text-gray-700 py-4 px-6">{formatDate(permit.issueDate)}</TableCell>

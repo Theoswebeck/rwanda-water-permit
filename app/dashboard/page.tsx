@@ -181,6 +181,8 @@ function DashboardContent() {
         type: dbPermit.purpose, // Use purpose as type
         location: "N/A", // We'll need to get this from related application
         permitNumber: dbPermit.permit_number,
+        modifiedCount: (dbPermit as any).modification_count ?? 0,
+        lastModifiedAt: (dbPermit as any).last_modified_at ?? null,
         pdfPath: dbPermit.permit_pdf_url ?? null,
       };
     });

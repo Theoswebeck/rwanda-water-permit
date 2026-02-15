@@ -39,6 +39,23 @@ const nextConfig: NextConfig = {
   },
   // ⚡ PERFORMANCE: Add cache headers for static assets
   async headers() {
+    // IMPORTANT (dev stability):
+    // In development, aggressive caching for `/_next/static/*` can cause stale webpack runtime/chunk
+    // mismatches, producing errors like "Cannot read properties of undefined (reading 'call')".
+    if (process.env.NODE_ENV !== "production") {
+      return [
+        {
+          source: "/_next/static/:path*",
+          headers: [
+            {
+              key: "Cache-Control",
+              value: "no-store, must-revalidate",
+            },
+          ],
+        },
+      ];
+    }
+
     return [
       {
         source: '/:all*(svg|jpg|jpeg|png|gif|ico|webp)',

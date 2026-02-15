@@ -1771,7 +1771,7 @@ function NewApplicationContent() {
           }
         }
         
-        // Track the current modification application for payment tab
+        // Keep reference to the current modification application (used to keep edits on the same row)
         setCurrentModificationApplication(result);
         
         setDraftSaved(true);

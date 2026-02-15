@@ -46,7 +46,7 @@ import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
-import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
+import { VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import type { VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
@@ -303,11 +303,12 @@ export default function AssessmentApplicationPage() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<any[]>([]);
   
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
   const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
+  const [renewalRecommendedDurationYears, setRenewalRecommendedDurationYears] = useState<number | undefined>(undefined);
+  const [renewalRecommendedVolumeM3, setRenewalRecommendedVolumeM3] = useState<number | undefined>(undefined);
 
   // Transfer permit state (for transfer applications)
   const [transferPermit, setTransferPermit] = useState<PermitWithApplication | null>(null);
@@ -323,7 +324,6 @@ export default function AssessmentApplicationPage() {
     eligibilityConfirmed: false,
     completenessConfirmed: false,
   });
-  const [docReviewSaveLoading, setDocReviewSaveLoading] = useState(false);
   
   // Field Report State
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
@@ -375,16 +375,8 @@ export default function AssessmentApplicationPage() {
     application?.status === "pending_assessment" ||
     application?.status === "under_review";
   const isReadOnly = application ? !isEditableAssessment : true;
-  const defaultTabValue = isReadOnly ? "application_details" : "doc_verification";
+  const defaultTabValue = "application_details";
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
-  const canProceedPastDocReview =
-    isReadOnly || (docReviewMeta.eligibilityConfirmed && docReviewMeta.completenessConfirmed);
-  const requiredDocuments = Array.isArray((assessmentReportData as any).requiredDocuments)
-    ? ((assessmentReportData as any).requiredDocuments as any[])
-    : [];
-  const allRequiredDocsProvided =
-    requiredDocuments.length > 0 &&
-    requiredDocuments.every((d) => d && typeof d === "object" && d.provided === true);
   const isFieldReportComplete =
     isReadOnly ||
     (fieldReportFiles.length > 0 &&
@@ -740,10 +732,6 @@ export default function AssessmentApplicationPage() {
           }
         };
 
-        // Collect ALL document rows for Document Verification tab
-        let mergedDocsList: any[] = [...(appData.documents || [])];
-        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
-
         // 1. Process this application's own documents first
         if (appData.documents && Array.isArray(appData.documents)) {
           processDocsIntoMap(appData.documents);
@@ -761,12 +749,6 @@ export default function AssessmentApplicationPage() {
                 .order('created_at', { ascending: false });
               if (originalDocs) {
                 processDocsIntoMap(originalDocs);
-                for (const doc of originalDocs) {
-                  if (!seenDocIds.has(doc.id)) {
-                    mergedDocsList.push(doc);
-                    seenDocIds.add(doc.id);
-                  }
-                }
               }
             } catch (e) {
               console.error('⚠️ Failed to load original application documents:', e);
@@ -775,7 +757,6 @@ export default function AssessmentApplicationPage() {
         }
         
         setInitialDocuments(documentMap);
-        setAllDocumentsForVerification(mergedDocsList);
 
         // Mark hydrated + seed autosave snapshot so we don't autosave immediately on initial load
         hasHydratedRef.current = true;
@@ -827,6 +808,8 @@ export default function AssessmentApplicationPage() {
       
       if (!isRenewal || !permitId) {
         setRenewalPermit(null);
+        setRenewalRecommendedDurationYears(undefined);
+        setRenewalRecommendedVolumeM3(undefined);
         return;
       }
       
@@ -851,6 +834,8 @@ export default function AssessmentApplicationPage() {
               water_body_name,
               max_daily_volume_m3,
               max_yearly_volume_m3,
+              proposed_duration_years,
+              assessor_recommended_volume_m3,
               concession_area,
               internal_notes,
               intended_activities,
@@ -873,7 +858,51 @@ export default function AssessmentApplicationPage() {
         if (permitError) {
           console.error('Error loading renewal permit:', permitError);
         } else {
-          setRenewalPermit(permit as PermitWithApplication);
+          const typedPermit = permit as PermitWithApplication;
+          setRenewalPermit(typedPermit);
+
+          // Derive renewal assessor recommendations from the previous permit's application.
+          // These MUST be shown (and locked) for renewals.
+          try {
+            const prevApp: any = (typedPermit as any)?.application;
+            const prevNotesRaw = prevApp?.internal_notes;
+            let prevNotes: any = {};
+            if (typeof prevNotesRaw === "string" && prevNotesRaw.trim()) {
+              try {
+                prevNotes = JSON.parse(prevNotesRaw);
+              } catch {
+                prevNotes = {};
+              }
+            }
+
+            const prevAdjustments = prevNotes?._assessorAdjustments || {};
+            const durCandidate =
+              (typeof prevAdjustments.permitLengthYears === "number" && Number.isFinite(prevAdjustments.permitLengthYears)
+                ? prevAdjustments.permitLengthYears
+                : undefined) ??
+              (typeof prevApp?.proposed_duration_years === "number" && Number.isFinite(prevApp.proposed_duration_years)
+                ? prevApp.proposed_duration_years
+                : undefined);
+            if (typeof durCandidate === "number" && durCandidate >= 1 && durCandidate <= 15) {
+              setRenewalRecommendedDurationYears(durCandidate);
+            }
+
+            const volCandidate =
+              (typeof prevAdjustments.recommendedVolumeM3 === "number" && Number.isFinite(prevAdjustments.recommendedVolumeM3)
+                ? prevAdjustments.recommendedVolumeM3
+                : undefined) ??
+              (typeof prevApp?.assessor_recommended_volume_m3 === "number" && Number.isFinite(prevApp.assessor_recommended_volume_m3)
+                ? prevApp.assessor_recommended_volume_m3
+                : undefined) ??
+              (typeof prevApp?.max_yearly_volume_m3 === "number" && Number.isFinite(prevApp.max_yearly_volume_m3)
+                ? prevApp.max_yearly_volume_m3
+                : undefined);
+            if (typeof volCandidate === "number" && Number.isFinite(volCandidate)) {
+              setRenewalRecommendedVolumeM3(volCandidate);
+            }
+          } catch (e) {
+            console.warn("⚠️ Failed to derive renewal assessor recommendations from previous permit:", e);
+          }
         }
       } catch (err) {
         console.error('Error loading renewal permit:', err);
@@ -947,6 +976,10 @@ export default function AssessmentApplicationPage() {
   // Save assessor's permit length adjustment to the application
   const savePermitLengthAdjustment = async (newPermitLength: number) => {
     if (!application) return;
+    if ((application as any).is_renewal) {
+      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
+      return;
+    }
     
     try {
       setPermitLengthSaving(true);
@@ -1010,6 +1043,10 @@ export default function AssessmentApplicationPage() {
   // Save assessor's volume adjustment to the application
   const saveVolumeAdjustment = async (newVolume: number) => {
     if (!application) return;
+    if ((application as any).is_renewal) {
+      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
+      return;
+    }
     
     try {
       setVolumeSaving(true);
@@ -1168,121 +1205,11 @@ export default function AssessmentApplicationPage() {
     }
   };
 
-  const getDocsAllVerified = () => {
-    const docs = application?.documents || [];
-    if (!docs.length) return false;
-    return docs.every((d) => (documentVerifications[d.id]?.status || "pending") === "verified");
-  };
-
-  const getNonVerifiedDocs = () => {
-    const docs = application?.documents || [];
-    return docs
-      .map((d) => ({
-        id: d.id,
-        name: d.name,
-        status: (documentVerifications[d.id]?.status || "pending") as VerificationStatus,
-      }))
-      .filter((d) => d.status !== "verified");
-  };
-
-  const handleSaveEligibility = async (nextEligibilityConfirmed: boolean) => {
-    if (!application) return;
-    if (docReviewLocked || isReadOnly) return;
-    if (docReviewSaveLoading) return;
-    try {
-      setDocReviewSaveLoading(true);
-      const nextMeta: DocReviewMeta = {
-        ...docReviewMeta,
-        eligibilityConfirmed: nextEligibilityConfirmed,
-        eligibilityConfirmedAt: nextEligibilityConfirmed ? new Date().toISOString() : undefined,
-      };
-      setDocReviewMeta(nextMeta);
-      await saveAssessment("draft", { docReviewMeta: nextMeta });
-      alert("✅ Eligibility confirmation saved.");
-    } catch (err) {
-      console.error("Error saving eligibility confirmation:", err);
-      alert("❌ Failed to save eligibility confirmation.");
-    } finally {
-      setDocReviewSaveLoading(false);
-    }
-  };
-
-  const handleConfirmCompletenessAndLock = async () => {
-    if (!application) return;
-    if (docReviewLocked || isReadOnly) return;
-    if (docReviewSaveLoading) return;
-
-    if (!docReviewMeta.eligibilityConfirmed) {
-      alert("⚠️ Please confirm eligibility first.");
-      return;
-    }
-
-    const nonVerified = getNonVerifiedDocs();
-    if (nonVerified.length > 0) {
-      const list = nonVerified
-        .map((d) => `- ${d.name} (${d.status})`)
-        .join("\n");
-      alert(
-        `⚠️ Please mark all uploaded documents as ✅ Verified before confirming completeness.\n\nNot verified yet:\n${list}`
-      );
-      return;
-    }
-
-    try {
-      setDocReviewSaveLoading(true);
-      const confirmedAt = new Date().toISOString();
-      const nextMeta: DocReviewMeta = {
-        ...docReviewMeta,
-        completenessConfirmed: true,
-        completenessConfirmedAt: confirmedAt,
-      };
-      setDocReviewMeta(nextMeta);
-      await saveAssessment("draft", { docReviewMeta: nextMeta });
-      
-      // Also update the applications table with completeness_confirmed_at
-      // This triggers the 90-day countdown for processing deadline
-      const { error: appUpdateError } = await supabase
-        .from('applications')
-        .update({ 
-          completeness_confirmed_at: confirmedAt,
-          updated_at: confirmedAt
-        })
-        .eq('id', application.id);
-      
-      if (appUpdateError) {
-        console.error("⚠️ Failed to update application completeness_confirmed_at:", appUpdateError);
-      } else {
-        console.log("✅ 90-day countdown started from:", confirmedAt);
-        // Update local application state
-        setApplication(prev => prev ? { ...prev, completeness_confirmed_at: confirmedAt } : prev);
-      }
-      
-      alert("✅ Application marked complete. Document review is now locked.\n\n⏱️ The 90-day processing deadline has started.");
-    } catch (err) {
-      console.error("Error confirming completeness:", err);
-      alert("❌ Failed to confirm completeness.");
-    } finally {
-      setDocReviewSaveLoading(false);
-    }
-  };
-
   const handleOpenSendToReviewDialog = () => {
     if (!application) return;
 
-    if (!canProceedPastDocReview) {
-      alert("⚠️ Please confirm eligibility and application completeness in Document Verification before proceeding to Assessment Report / Recommendation.");
-      return;
-    }
-
     // Validate ONLY on submit click
     const missing: string[] = [];
-    // Required documents (Section 2) must all be marked provided
-    const requiredDocs = Array.isArray((assessmentReportData as any).requiredDocuments)
-      ? ((assessmentReportData as any).requiredDocuments as any[])
-      : [];
-    const allRequiredDocsProvided =
-      requiredDocs.length > 0 && requiredDocs.every((d) => d && typeof d === "object" && d.provided === true);
-    if (!allRequiredDocsProvided) missing.push("Section 2: Required documents (mark all as Provided)");
     if (!assessmentReportData.waterUseConflict) missing.push("Section 5: Water use conflict");
     if (!assessmentReportData.wastewaterSystemDescription) missing.push("Section 6: Wastewater system description");
     if (!assessmentReportData.pollutionDescription) missing.push("Section 6: Pollution description");
@@ -1544,6 +1471,20 @@ export default function AssessmentApplicationPage() {
 
             {!isReadOnly && (
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowRevisionDialog(true)}
+                disabled={submitLoading || docReviewLocked}
+                className="gap-2"
+                title={docReviewLocked ? "This application has already been confirmed complete and can no longer be returned for revision." : undefined}
+              >
+                <X className="h-4 w-4" />
+                Return for Revision
+              </Button>
+            )}
+
+            {!isReadOnly && (
+              <Button
                 size="sm"
                 onClick={handleOpenSendToReviewDialog}
                 disabled={submitLoading}
@@ -1563,21 +1504,16 @@ export default function AssessmentApplicationPage() {
           <Tabs
             value={activeTab || defaultTabValue}
             onValueChange={(next) => {
-              if (!canProceedPastDocReview && next === "field_report") {
-                alert("⚠️ Please confirm eligibility and completeness in Document Verification before proceeding.");
-                return;
-              }
               tabTouchedRef.current = true;
               setActiveTab(next);
             }}
             className="space-y-6"
           >
-            <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
+            <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
-              <TabsTrigger value="doc_verification" className="py-2.5">Document Verification</TabsTrigger>
-                  <TabsTrigger value="field_report" className="py-2.5" disabled={!canProceedPastDocReview}>
-                    Assessment Report
-                  </TabsTrigger>
+              <TabsTrigger value="field_report" className="py-2.5">
+                Assessment Report
+              </TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -1698,95 +1634,6 @@ export default function AssessmentApplicationPage() {
               
             </TabsContent>
 
-            {/* Document Verification Tab */}
-            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
-              <DocumentVerificationComponent
-                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
-                verifications={documentVerifications}
-                onVerificationsChange={setDocumentVerifications}
-                readOnly={isReadOnly || docReviewLocked}
-              />
-
-              {!isReadOnly && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Eligibility & Completeness</CardTitle>
-                    <CardDescription>
-                      Confirm eligibility and completeness before proceeding to Assessment Report. If incomplete, return the application for revision with comments.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {docReviewLocked && (
-                      <Alert>
-                        <CheckCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Locked:</strong> Completeness confirmed{docReviewMeta.completenessConfirmedAt ? ` on ${new Date(docReviewMeta.completenessConfirmedAt).toLocaleString()}` : ""}. Document review is read-only and the application can no longer be returned for revision.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    {!docReviewLocked && (
-                      <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          You can only proceed to <strong>Assessment Report</strong> after confirming both eligibility and completeness.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-
-                    <div className="flex items-start gap-3">
-                      <Checkbox
-                        id="eligibility-confirmed"
-                        checked={docReviewMeta.eligibilityConfirmed}
-                        disabled={docReviewLocked || docReviewSaveLoading}
-                        onCheckedChange={(checked) => handleSaveEligibility(!!checked)}
-                      />
-                      <div className="space-y-1">
-                        <Label htmlFor="eligibility-confirmed" className="text-sm font-medium">
-                          I confirm the application and documents are eligible for assessment
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          This is required before confirming completeness.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t">
-                      <div className="text-sm text-muted-foreground">
-                        <strong>Completeness requires:</strong> all uploaded documents marked as <strong>✅ Verified</strong>.
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowRevisionDialog(true)}
-                          disabled={docReviewLocked || docReviewSaveLoading || submitLoading}
-                          className="gap-2"
-                        >
-                          <X className="h-4 w-4" />
-                          Return for Revision
-                        </Button>
-                        <Button
-                          onClick={handleConfirmCompletenessAndLock}
-                          disabled={docReviewLocked || docReviewSaveLoading || !docReviewMeta.eligibilityConfirmed || !getDocsAllVerified()}
-                        >
-                          {docReviewSaveLoading ? "Saving..." : "Confirm Completeness & Lock"}
-                        </Button>
-                      </div>
-                    </div>
-
-                    {!docReviewLocked && docReviewMeta.eligibilityConfirmed && getNonVerifiedDocs().length > 0 && (
-                      <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Still pending:</strong> {getNonVerifiedDocs().length} document(s) are not marked as ✅ Verified yet. Please update their statuses above before confirming completeness.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
-            </TabsContent>
-
             {/* Assessment Report Tab */}
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               {(() => {
@@ -1816,11 +1663,11 @@ export default function AssessmentApplicationPage() {
                         <AssessorRecommendations
                           requestedDurationYears={requestedDurationYears}
                           requestedVolumeM3={requestedVolumeM3}
-                          recommendedDurationYears={assessorPermitLength}
-                          recommendedVolumeM3={assessorRecommendedVolume}
-                          onDurationChange={savePermitLengthAdjustment}
-                          onVolumeChange={saveVolumeAdjustment}
-                          readOnly={isReadOnly}
+                          recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
+                          recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
+                          onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}
+                          onVolumeChange={(application as any).is_renewal ? undefined : saveVolumeAdjustment}
+                          readOnly={isReadOnly || (application as any).is_renewal}
                           durationSaving={permitLengthSaving}
                           volumeSaving={volumeSaving}
                         />
@@ -1839,34 +1686,6 @@ export default function AssessmentApplicationPage() {
                     }
                     afterDocuments={
                       isReadOnly ? null : (() => {
-                        // If any required doc missing, only allow Return for Revision.
-                        if (!allRequiredDocsProvided) {
-                          return (
-                            <div className="flex justify-end gap-3">
-                              <Button
-                                variant="outline"
-                                size="lg"
-                                onClick={() => setShowRevisionDialog(true)}
-                                disabled={submitLoading || docReviewLocked}
-                                className="gap-2"
-                              >
-                                <X className="h-4 w-4" />
-                                Return for Revision
-                              </Button>
-                              <Button
-                                size="lg"
-                                onClick={handleOpenSendToReviewDialog}
-                                disabled={true}
-                                className="gap-2 bg-black/70 hover:bg-black/70 text-white"
-                                title="Mark all required documents as Provided in Section 2 to enable submission."
-                              >
-                                <Send className="h-4 w-4" />
-                                Send for review
-                              </Button>
-                            </div>
-                          );
-                        }
-
                         return (
                           <div className="flex justify-end">
                             <Button

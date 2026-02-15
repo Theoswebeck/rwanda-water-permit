@@ -6,16 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { FileText, Droplet, MapPin, Factory, AlertCircle, Plus, X, ExternalLink, ThumbsUp, ThumbsDown, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Droplet, MapPin, Factory, AlertCircle, Plus, X, ThumbsUp, ThumbsDown, CheckCircle, XCircle } from "lucide-react";
 import type { AssessmentReportData } from "@/lib/assessment-report-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -156,131 +148,6 @@ export function AssessmentReportForm({
                 />
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Section 2: Required Documents */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <FileText className="h-5 w-5" />
-            2. Required Documents
-          </CardTitle>
-          <CardDescription>
-            List of provided documents (prefilled from application)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {Array.isArray(localData.requiredDocuments) && localData.requiredDocuments.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  List the provided documents as required (attached as annex)
-                </p>
-                <div className="space-y-2">
-                  {localData.requiredDocuments.map((d, idx) => {
-                    // Backward compatibility: if old saved data exists
-                    if (typeof (d as any) === "string") {
-                      return (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
-                          <div className="text-sm">{String(d)}</div>
-                        </div>
-                      );
-                    }
-
-                    const doc = d as any;
-                    const label = String(doc.label || doc.name || "");
-                    const provided = Boolean(doc.provided);
-                    const url = typeof doc.url === "string" ? doc.url : undefined;
-                    const fileName = typeof doc.name === "string" ? doc.name : undefined;
-
-                    const setProvided = (nextProvided: boolean) => {
-                      const current = Array.isArray(localData.requiredDocuments) ? [...localData.requiredDocuments] : [];
-                      const next = current.map((x: any) => {
-                        if (!x || typeof x !== "object") return x;
-                        if (x.key === doc.key) return { ...x, provided: nextProvided };
-                        return x;
-                      });
-                      updateField("requiredDocuments" as any, next as any);
-                    };
-
-                    return (
-                      <div key={doc.key || idx} className="flex items-start justify-between gap-3 p-3 bg-muted/50 rounded-lg border">
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">{idx + 1}. {label}</div>
-                          {provided && fileName && (
-                            <div className="text-xs text-muted-foreground">
-                              Uploaded:{" "}
-                              {url ? (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-primary hover:underline inline-flex items-center gap-1"
-                                >
-                                  {fileName}
-                                  <ExternalLink className="h-3 w-3" />
-                                </a>
-                              ) : (
-                                fileName
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        {readOnly ? (
-                          <Badge variant={provided ? "default" : "outline"} className={provided ? "bg-green-600 text-white" : ""}>
-                            {provided ? "Provided" : "Missing"}
-                          </Badge>
-                        ) : (
-                          <div className="w-[160px]">
-                            <Select
-                              value={provided ? "provided" : "missing"}
-                              onValueChange={(v) => setProvided(v === "provided")}
-                            >
-                              <SelectTrigger className="h-9">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="provided">Provided</SelectItem>
-                                <SelectItem value="missing">Missing</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No required document checklist available</p>
-            )}
-
-            {Array.isArray((localData as any).annexDocuments) && (localData as any).annexDocuments.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Annex (All uploaded documents)</Label>
-                <div className="space-y-2">
-                  {(localData as any).annexDocuments.map((ad: any, i: number) => (
-                    <div key={`${ad?.name || "doc"}-${i}`} className="flex items-center justify-between p-3 bg-background rounded-lg border">
-                      <div className="text-sm">{ad?.name}</div>
-                      {ad?.url ? (
-                        <a
-                          href={ad.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline inline-flex items-center gap-1 text-sm"
-                        >
-                          Open <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">No URL</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

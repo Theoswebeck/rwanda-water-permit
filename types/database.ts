@@ -368,6 +368,11 @@ export interface Permit {
   is_transfer: boolean
   is_modification: boolean
   transfer_reason?: string
+
+  // Modification tagging (denormalized for fast UI)
+  modification_count?: number
+  last_modified_at?: string | null
+  last_modified_by?: string | null
   
   // Monitoring requirements
   monitoring_frequency?: string

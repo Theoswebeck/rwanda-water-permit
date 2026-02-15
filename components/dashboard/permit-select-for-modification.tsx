@@ -211,7 +211,7 @@ export function PermitSelectForModification({
             <FileEdit className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">
               <strong>Permit Modification:</strong> You can update details of your existing permit. 
-              Changes will go through the standard review process and require payment of modification fees.
+              Changes will go through the standard review process.
             </AlertDescription>
           </Alert>
 

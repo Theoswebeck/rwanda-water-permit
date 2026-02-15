@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
   try {
     console.log('💳 [PAYMENT INITIATE] Request received');
 
+    const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
     // Initialize Supabase client
     const supabase = await createClient();
 
@@ -114,6 +116,23 @@ export async function POST(request: NextRequest) {
     // =============================================
 
     if (application_data) {
+      // Permit modifications do not require payment. Reject early to avoid creating payment rows
+      // (and avoid creating accidental draft applications via the payment endpoint).
+      const looksLikeModification =
+        purpose !== 'annual_report_fee' &&
+        isRecord(application_data) &&
+        (application_data.isModification === true || application_data.is_modification === true);
+
+      if (looksLikeModification) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Payment is not required for permit modifications.',
+          },
+          { status: 400 }
+        );
+      }
+
       console.log('📝 [PAYMENT INITIATE] Received application data, creating draft...');
       const mappedData = mapFormDataToApplication(application_data, 'draft', userId);
       
@@ -155,6 +174,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           { success: false, error: 'Access denied' },
           { status: 403 }
+        );
+      }
+
+      // Permit modifications do not require payment.
+      if (purpose !== 'annual_report_fee' && (application.is_modification === true || application.application_type === 'modification')) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Payment is not required for permit modifications.',
+          },
+          { status: 400 }
         );
       }
     } else {

@@ -77,6 +77,8 @@ const formatDate = (dateString?: string) => {
 
 const RENEWAL_FEE = 35000; // 35,000 RWF
 
+// (debug instrumentation removed)
+
 export const PermitRenewalForm = memo(function PermitRenewalForm({
   permit,
   userData,

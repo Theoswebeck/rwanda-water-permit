@@ -1579,7 +1579,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   </div>
 
                   <PaymentTab
-                    application={currentApplication}
+                    application={currentApplication ?? undefined}
                     formData={!currentApplication?.id ? {
                       ...form.getValues(),
                       ...files,

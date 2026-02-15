@@ -569,6 +569,10 @@ export function ApplicationForm({
   // Polygon validation state
   const [coordinateValidation, setCoordinateValidation] = useState<ValidationResponse | null>(null);
   const [canSubmit, setCanSubmit] = useState(true);
+
+  // Payment is never required for permit modifications, and should never appear in the UI for them.
+  const shouldShowPaymentTab =
+    !isStaffView && !isModification && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
   
   const fileInputRefs = {
     identificationDoc: useRef<HTMLInputElement>(null),
@@ -1114,10 +1118,8 @@ export function ApplicationForm({
 
   const getTabs = () => {
     // Payment tab should only be available for draft/pending_payment AND never for staff views (review/assessment/approver)
-    const shouldShowPayment =
-      !isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
-
-    return shouldShowPayment
+    // Additionally, permit modifications do not require payment.
+    return shouldShowPaymentTab
       ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
       : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
   };
@@ -2137,7 +2139,7 @@ export function ApplicationForm({
                   void handleTabChange(value);
                 }}
               >
-                <TabsList className={`grid w-full ${isStaffView || (currentApplication?.status && !['draft', 'pending_payment'].includes(currentApplication.status)) ? 'grid-cols-4 md:grid-cols-4' : 'grid-cols-5 md:grid-cols-5'}`}>
+                <TabsList className={`grid w-full ${shouldShowPaymentTab ? 'grid-cols-5 md:grid-cols-5' : 'grid-cols-4 md:grid-cols-4'}`}>
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline">Applicant</span>
@@ -2155,7 +2157,7 @@ export function ApplicationForm({
                     <span className="hidden sm:inline">Land</span>
                   </TabsTrigger>
                   {/* Only show payment tab for draft or pending_payment status AND not for staff views (review/assessment/approver) */}
-                  {!isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
+                  {shouldShowPaymentTab && (
                     <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
                       <CreditCard className="h-4 w-4" />
                       <span className="hidden sm:inline">Payment</span>
@@ -4680,7 +4682,7 @@ export function ApplicationForm({
                 </TabsContent>
 
                 {/* PAYMENT TAB - Only show for draft or pending_payment AND not for staff views */}
-                {!isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status)) && (
+                {shouldShowPaymentTab && (
                   <TabsContent value="payment" className="pt-6 space-y-6">
                     <PaymentTab
                       application={currentApplication}
@@ -4779,10 +4781,7 @@ export function ApplicationForm({
                       type="button"
                       variant="outline"
                       onClick={() => {
-                        const shouldShowPayment = !isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
-                        const tabs = shouldShowPayment 
-                          ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
-                          : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+                        const tabs = getTabs();
                         const currentIndex = tabs.indexOf(activeTab);
                         if (currentIndex > 0) {
                           setActiveTab(tabs[currentIndex - 1]);
@@ -4797,11 +4796,7 @@ export function ApplicationForm({
                       <Button
                         type="button"
                         onClick={readOnly ? () => {
-                          // In view mode, show payment tab only if not staff view and status is draft/pending_payment
-                          const shouldShowPayment = !isStaffView && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
-                          const tabs = shouldShowPayment 
-                            ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
-                            : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+                          const tabs = getTabs();
                           const currentIndex = tabs.indexOf(activeTab);
                           if (currentIndex < tabs.length - 1) {
                             setActiveTab(tabs[currentIndex + 1]);
@@ -4815,60 +4810,84 @@ export function ApplicationForm({
                     )}
                     
                     {activeTab === "land-ownership" && !readOnly && (
-                      <Button 
-                        type="button"
-                        onClick={async (e) => {
-                          try {
-                            // Enforce Land tab requirements before proceeding to payment
+                      shouldShowPaymentTab ? (
+                        <Button 
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              // Enforce Land tab requirements before proceeding to payment
+                              const ok = await validateLandOwnershipTab();
+                              if (!ok) {
+                                setTimeout(() => setValidationError(null), 5000);
+                                return;
+                              }
+
+                              // Compute modification changes if in modification mode
+                              let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+                              if (isModification && originalApplicationData) {
+                                modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
+                              }
+
+                              // Automatically save as draft (like airline booking)
+                              const draftData = { 
+                                ...form.getValues(), 
+                                ...files, 
+                                additionalDocuments,
+                                ...(isModification && {
+                                  isModification: true,
+                                  modificationChanges: modificationChangesData,
+                                }),
+                              };
+
+                              // Navigate to payment tab immediately; save happens in the background
+                              setPaymentPrepError(null);
+                              setActiveTab('payment');
+                              
+                              // Scroll to top for better UX
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                              // Save in background (do not block navigation)
+                              void onSaveAsDraft(draftData, 'draft').catch((error) => {
+                                console.error('Error saving application:', error);
+                                setPaymentPrepError('Please try saving your application again before proceeding to payment.');
+                              });
+                            } catch (error) {
+                              console.error('Error saving application:', error);
+                              alert('Please try saving your application again before proceeding to payment.');
+                            }
+                          }}
+                          disabled={isLoading || !canSubmit}
+                          className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}
+                        >
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          {isLoading ? 'Saving…' : 'Continue to Payment'}
+                          {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
+                            <span className="ml-2 text-xs">(Fix polygon validation first)</span>
+                          )}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={async () => {
+                            // Enforce Land tab requirements before submission
                             const ok = await validateLandOwnershipTab();
                             if (!ok) {
                               setTimeout(() => setValidationError(null), 5000);
                               return;
                             }
 
-                            // Compute modification changes if in modification mode
-                            let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
-                            if (isModification && originalApplicationData) {
-                              modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
-                            }
-
-                            // Automatically save as draft (like airline booking)
-                            const draftData = { 
-                              ...form.getValues(), 
-                              ...files, 
-                              additionalDocuments,
-                              ...(isModification && {
-                                isModification: true,
-                                modificationChanges: modificationChangesData,
-                              }),
-                            };
-
-                            // Navigate to payment tab immediately; save happens in the background
-                            setPaymentPrepError(null);
-                            setActiveTab('payment');
-                            
-                            // Scroll to top for better UX
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-
-                            // Save in background (do not block navigation)
-                            void onSaveAsDraft(draftData, 'draft').catch((error) => {
-                              console.error('Error saving application:', error);
-                              setPaymentPrepError('Please try saving your application again before proceeding to payment.');
-                            });
-                          } catch (error) {
-                            console.error('Error saving application:', error);
-                            alert('Please try saving your application again before proceeding to payment.');
-                          }
-                        }}
-                        disabled={isLoading || !canSubmit}
-                        className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}
-                      >
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        {isLoading ? 'Saving…' : 'Continue to Payment'}
-                        {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
-                          <span className="ml-2 text-xs">(Fix polygon validation first)</span>
-                        )}
-                      </Button>
+                            // Trigger the actual form submission handler
+                            void form.handleSubmit(handleFormSubmit)();
+                          }}
+                          disabled={isLoading || !canSubmit}
+                          className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}
+                        >
+                          Submit {isModification ? 'Modification Request' : 'Application'}
+                          {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
+                            <span className="ml-2 text-xs">(Fix polygon validation first)</span>
+                          )}
+                        </Button>
+                      )
                     )}
                   </div>
                 </div>

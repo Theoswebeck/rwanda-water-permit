@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
 import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-utils";
@@ -73,7 +72,6 @@ const ApplicationForm = dynamic(
   }
 );
 
-// Lazy load the PermitRenewalForm component for renewal applications
 const PermitRenewalForm = dynamic(
   () => import("@/components/dashboard/permit-renewal-form").then(mod => ({ default: mod.PermitRenewalForm })),
   {
@@ -199,8 +197,6 @@ export default function ReviewApplicationPage() {
   // ApplicationForm state
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  // Merged documents list for Document Verification tab (includes original app docs for modifications)
-  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<Document[]>([]);
   
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -214,9 +210,6 @@ export default function ReviewApplicationPage() {
   const [isModificationApp, setIsModificationApp] = useState(false);
 
   // Assessment evidence (read-only) - matches Assessment/Approver UX
-  const [documentVerifications, setDocumentVerifications] = useState<
-    Record<string, { status: VerificationStatus; notes: string }>
-  >({});
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
@@ -417,9 +410,6 @@ export default function ReviewApplicationPage() {
         };
 
         // Collect ALL document rows for Document Verification tab
-        let mergedDocsList: Document[] = [...(appData.documents || [])];
-        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
-
         // 1. Process documents from this application first (they take priority)
         if (appData.documents && Array.isArray(appData.documents)) {
           processDocumentsIntoMap(appData.documents, 'Current App');
@@ -440,13 +430,6 @@ export default function ReviewApplicationPage() {
 
               if (!origDocsError && originalDocs && originalDocs.length > 0) {
                 processDocumentsIntoMap(originalDocs, 'Original App');
-                // Also merge into the documents list for verification tab (avoid duplicates)
-                for (const doc of originalDocs) {
-                  if (!seenDocIds.has(doc.id)) {
-                    mergedDocsList.push(doc);
-                    seenDocIds.add(doc.id);
-                  }
-                }
               } else if (origDocsError) {
                 console.error('❌ Error fetching original application documents:', origDocsError);
               } else {
@@ -459,9 +442,7 @@ export default function ReviewApplicationPage() {
         }
         
         setInitialDocuments(documentMap);
-        setAllDocumentsForVerification(mergedDocsList);
         console.log('📄 Final document map:', documentMap);
-        console.log('📄 Documents for verification:', mergedDocsList.length, 'total');
 
         // Fetch existing assessment evidence (read-only)
         const { data: existingAssessment } = await supabase
@@ -475,7 +456,6 @@ export default function ReviewApplicationPage() {
         let savedAssessmentReportData: Partial<AssessmentReportData> | null | undefined = null;
 
         if (existingAssessment) {
-          setDocumentVerifications(existingAssessment.document_verifications || {});
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
           setInspectionDate(existingAssessment.inspection_date || "");
@@ -1117,9 +1097,8 @@ export default function ReviewApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
+            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-2' : 'grid-cols-3'} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
-              <TabsTrigger value="doc_verification">Document Verification</TabsTrigger>
               {!isTransferApp && (
                 <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
               )}
@@ -1240,16 +1219,6 @@ export default function ReviewApplicationPage() {
                   isStaffView={true}
                 />
               ) : null}
-            </TabsContent>
-
-            {/* Document Verification Tab (read-only) */}
-            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
-              <DocumentVerificationComponent
-                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
-                verifications={documentVerifications}
-                onVerificationsChange={() => {}}
-                readOnly={true}
-              />
             </TabsContent>
 
             {/* Assessment Report Tab (read-only) - Hidden for transfer applications */}

@@ -22,6 +22,8 @@ export default function PermitDetailPage() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [applicationData, setApplicationData] = useState<any>(null);
+  const [changeEvents, setChangeEvents] = useState<any[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   
   useEffect(() => {
     const fetchPermitDetails = async () => {
@@ -47,6 +49,9 @@ export default function PermitDetailPage() {
               expiry_date,
               permit_pdf_url,
               conditions,
+              modification_count,
+              last_modified_at,
+              last_modified_by,
               application_id,
               application:applications(
                 id,
@@ -77,6 +82,8 @@ export default function PermitDetailPage() {
         const app = (data as any)?.application;
         const applicant = app?.applicant;
         const applicationId = (data as any)?.application_id;
+        const modificationCount = (data as any)?.modification_count ?? 0;
+        const lastModifiedAt = (data as any)?.last_modified_at ?? null;
         
         // Store application data for PDF generation
         setApplicationData(app);
@@ -160,6 +167,8 @@ export default function PermitDetailPage() {
           waterAllowance: `${data.water_allowance} ${data.allowance_unit}`,
           issuingAuthority: data.issuing_authority,
           permitPdfPath: (data as any).permit_pdf_url ?? null,
+          modifiedCount: modificationCount,
+          lastModifiedAt,
           applicationId,
           applicationDetails: {
             applicantName,
@@ -172,6 +181,26 @@ export default function PermitDetailPage() {
           conditions,
           inspections: inspectionsData,
         });
+
+        // Fetch permit change history (modifications/renewals/etc.)
+        setEventsLoading(true);
+        try {
+          const { data: events, error: eventsError } = await supabase
+            .from("permit_change_events")
+            .select("id, changed_at, changed_by, event_type, changed_fields, diff, summary")
+            .eq("permit_id", permitId)
+            .order("changed_at", { ascending: false })
+            .limit(50);
+
+          if (eventsError) {
+            console.warn("⚠️ Failed to fetch permit change events:", eventsError);
+            setChangeEvents([]);
+          } else {
+            setChangeEvents(events || []);
+          }
+        } finally {
+          setEventsLoading(false);
+        }
       } catch (e) {
         console.error("❌ Failed to load permit details:", e);
         setPermit(null);
@@ -506,6 +535,11 @@ export default function PermitDetailPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{permit.title}</h1>
               {getStatusBadge(permit.status)}
+              {(permit.modifiedCount ?? 0) > 0 ? (
+                <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                  Modified{permit.modifiedCount && permit.modifiedCount > 1 ? ` (${permit.modifiedCount})` : ""}
+                </Badge>
+              ) : null}
             </div>
             <p className="text-muted-foreground">
               Permit Number: {permit.permitNumber} • Issued on {formatDate(permit.issueDate)}
@@ -607,6 +641,45 @@ export default function PermitDetailPage() {
                     </ul>
                   ) : (
                     <p className="text-muted-foreground text-sm">No specific conditions listed for this permit.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Modification History</CardTitle>
+                  <CardDescription>Previous modifications applied to this permit</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {eventsLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading history…</p>
+                  ) : (changeEvents || []).filter((e) => e?.event_type === "modification").length > 0 ? (
+                    <ol className="space-y-4">
+                      {(changeEvents || [])
+                        .filter((e) => e?.event_type === "modification")
+                        .map((e: any) => (
+                          <li key={e.id} className="rounded-md border p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-50">
+                                  Modification
+                                </Badge>
+                                <span className="text-sm font-medium">{e.summary || "Permit modified"}</span>
+                              </div>
+                              <time className="text-xs text-muted-foreground">
+                                {e.changed_at ? new Date(e.changed_at).toLocaleString() : "—"}
+                              </time>
+                            </div>
+                            {Array.isArray(e.changed_fields) && e.changed_fields.length > 0 ? (
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                Changed: {e.changed_fields.join(", ")}
+                              </div>
+                            ) : null}
+                          </li>
+                        ))}
+                    </ol>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No modifications have been recorded for this permit yet.</p>
                   )}
                 </CardContent>
               </Card>
