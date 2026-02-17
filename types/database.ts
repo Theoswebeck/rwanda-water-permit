@@ -107,8 +107,7 @@ export type DocumentType =
   | 'business_license'
   | 'renewal_request_letter' // Letter requesting permit renewal
   // Transfer application documents
-  | 'transfer_application_letter'
-  | 'signed_transfer_form'
+  | 'certified_letter'
   | 'registration_certificate'
   | 'existing_permit_copy'
   | 'other'
@@ -368,7 +367,7 @@ export interface Permit {
   is_transfer: boolean
   is_modification: boolean
   transfer_reason?: string
-
+  
   // Modification tagging (denormalized for fast UI)
   modification_count?: number
   last_modified_at?: string | null

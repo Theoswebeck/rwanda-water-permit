@@ -111,8 +111,7 @@ const transferFormSchema = z.object({
   transfereeSignatureDate: z.string().min(1, "Date is required"),
 
   // Documents (paymentProof removed - using IremboPay instead)
-  applicationLetter: z.any().optional(),
-  signedTransferForm: z.any().optional(),
+  certifiedLetter: z.any().optional(),
   registrationCertificate: z.any().optional(),
   existingPermitCopy: z.any().optional(),
 });
@@ -178,8 +177,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
 
   const fileInputRefs = {
-    applicationLetter: useRef<HTMLInputElement>(null),
-    signedTransferForm: useRef<HTMLInputElement>(null),
+    certifiedLetter: useRef<HTMLInputElement>(null),
     registrationCertificate: useRef<HTMLInputElement>(null),
     existingPermitCopy: useRef<HTMLInputElement>(null),
   };
@@ -457,17 +455,12 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
   const validateDocumentsTab = async () => {
     // Check required documents (paymentProof removed - using IremboPay instead)
-    const hasApplicationLetter = files.applicationLetter || uploadedFileUrls.applicationLetter;
-    const hasSignedForm = files.signedTransferForm || uploadedFileUrls.signedTransferForm;
+    const hasCertifiedLetter = files.certifiedLetter || uploadedFileUrls.certifiedLetter;
     const hasRegistration = files.registrationCertificate || uploadedFileUrls.registrationCertificate;
     const hasExistingPermit = files.existingPermitCopy || uploadedFileUrls.existingPermitCopy;
 
-    if (!hasApplicationLetter) {
-      setValidationError("Application letter is required.");
-      return false;
-    }
-    if (!hasSignedForm) {
-      setValidationError("Signed transfer form is required.");
+    if (!hasCertifiedLetter) {
+      setValidationError("Certified letter is required.");
       return false;
     }
     if (!hasRegistration) {
@@ -1465,17 +1458,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <DocumentUploadField
-                      fieldName="applicationLetter"
-                      label="Application Letter"
+                      fieldName="certifiedLetter"
+                      label="Certified Letter"
                       required
-                      description="State the reasons for the transfer and the names of the new holder"
-                    />
-
-                    <DocumentUploadField
-                      fieldName="signedTransferForm"
-                      label="Signed Transfer Form"
-                      required
-                      description="A well-filled and signed physical transfer form"
+                      description="A notarized transfer agreement"
                     />
 
                     <DocumentUploadField

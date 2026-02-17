@@ -72,9 +72,8 @@ CREATE TABLE IF NOT EXISTS permit_transfers (
     
     -- Documents tracking (JSONB for flexibility)
     -- Contains references to uploaded documents:
-    -- - application_letter
+    -- - certified_letter
     -- - payment_proof
-    -- - signed_transfer_form
     -- - registration_certificate
     -- - existing_permit_copy
     documents JSONB DEFAULT '{}',

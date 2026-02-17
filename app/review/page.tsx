@@ -978,7 +978,11 @@ export default function ReviewerDashboard() {
                   </div>
                   <ApplicationTable 
                     applications={reviewApplications}
-                    emptyMessage="All Applications"
+                    emptyMessage={
+                      selectedStatId
+                        ? statsConfig.find(s => s.id === selectedStatId)?.title ?? "All Applications"
+                        : "All Applications"
+                    }
                   />
             </TabsContent>
 

@@ -46,8 +46,7 @@ CREATE TYPE document_type AS ENUM (
     'technical_drawings', 'environmental_impact_doc', 'intake_discharge_map',
     'water_quality_report', 'geological_survey', 'business_license',
     'land_access_doc', 'renewal_request_letter',
-    'transfer_application_letter', 'signed_transfer_form', 
-    'registration_certificate', 'existing_permit_copy',
+    'certified_letter', 'registration_certificate', 'existing_permit_copy',
     'other'
 );
 CREATE TYPE verification_status AS ENUM ('pending', 'verified', 'rejected');

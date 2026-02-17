@@ -219,7 +219,7 @@ export function PermitsList({ permits }: PermitsListProps) {
       setGeneratingPdf(permit.id);
       console.log("📄 Generating PDF on-demand for permit:", permit.permitNumber);
 
-      // Fetch permit with application data
+      // Fetch permit with application data + modification flag
       const { data: permitData, error: permitError } = await supabase
         .from("permits")
         .select(`
@@ -227,6 +227,8 @@ export function PermitsList({ permits }: PermitsListProps) {
           permit_number,
           conditions,
           application_id,
+          is_modification,
+          modification_count,
           application:applications!application_id(
             *,
             applicant:users!applicant_id(*)
@@ -260,12 +262,19 @@ export function PermitsList({ permits }: PermitsListProps) {
         }
       }
 
-      // Generate PDF blob
+      // Determine if this permit has been modified
+      const isModified =
+        (permitData as any).is_modification === true ||
+        ((permitData as any).modification_count ?? 0) > 0 ||
+        (permit.modifiedCount ?? 0) > 0;
+
+      // Generate PDF blob (with "MODIFIED PERMIT" badge when applicable)
       const pdfBlob = await generateDigitalWaterPermitBlob(
         application,
         permit.permitNumber,
         conditions,
-        5 // Default validity years
+        5, // Default validity years
+        isModified
       );
 
       // Upload to storage
@@ -308,8 +317,12 @@ export function PermitsList({ permits }: PermitsListProps) {
    * Get PDF blob - either from storage or by generating on-demand
    */
   const getPermitPdfBlob = async (permit: Permit): Promise<Blob | null> => {
-    // First try to download from storage if path exists
-    if (permit.pdfPath) {
+    // If the permit has been modified we MUST regenerate so the "MODIFIED PERMIT"
+    // badge is stamped on the PDF — the stored version was created before modification.
+    const permitIsModified = (permit.modifiedCount ?? 0) > 0;
+
+    if (!permitIsModified && permit.pdfPath) {
+      // Non-modified: try to download existing PDF from storage first
       console.log("📥 Attempting to download PDF from:", permit.pdfPath);
       const blob = await downloadFromDocumentsBucket(permit.pdfPath);
       if (blob) {
@@ -318,7 +331,11 @@ export function PermitsList({ permits }: PermitsListProps) {
       console.warn("⚠️ PDF not found in storage, will generate on-demand...");
     }
 
-    // PDF doesn't exist or couldn't be downloaded - generate on-demand
+    if (permitIsModified) {
+      console.log("🔧 Permit is modified — regenerating PDF with MODIFIED badge");
+    }
+
+    // PDF doesn't exist or couldn't be downloaded (or is modified) - generate on-demand
     return await generatePermitPdfOnDemand(permit);
   };
 

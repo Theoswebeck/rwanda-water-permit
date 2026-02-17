@@ -559,7 +559,8 @@ export function TermsConditionsModal({
           applicationData,
           permitData.permit_number,
           conditionsForPdf,
-          resolvedDurationYearsGlobal
+          resolvedDurationYearsGlobal,
+          isModificationApplication // stamp "MODIFIED PERMIT" badge on PDF
         );
         console.log('✅ PDF permit generated');
 
@@ -844,7 +845,7 @@ export function TermsConditionsModal({
               </div>
             ) : (
               <div className="space-y-6 pt-4">
-                <h3 className="text-xl font-semibold">How was your experience?</h3>
+                <h3 className="text-xl font-semibold">How was your experience using the water permit system?</h3>
                 <div className="flex items-center gap-2">
                   {[1, 2, 3, 4, 5].map((s) => (
                     <button key={s} onClick={() => setRating(s)} aria-label={`Rate ${s} stars`}>
@@ -864,16 +865,6 @@ export function TermsConditionsModal({
                   onChange={(e) => setFeedback(e.target.value)}
                 />
                 <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setShowFeedback(false);
-                      onTermsAccepted();
-                      onClose();
-                    }}
-                  >
-                    Skip
-                  </Button>
                   <Button
                     onClick={() => {
                       /* TODO: send feedback to supabase */

@@ -185,8 +185,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       livestockGeneralRequirements: 'other',
       livestockFeasibilityStudy: 'other',
       // Transfer documents
-      applicationLetter: 'transfer_application_letter',
-      signedTransferForm: 'signed_transfer_form',
+      certifiedLetter: 'certified_letter',
       registrationCertificate: 'registration_certificate',
       existingPermitCopy: 'existing_permit_copy'
     };
@@ -200,8 +199,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       if (formData.ownsAllLand === false) req.add("landAccessDocuments");
       const isTransferForm = Boolean(formData.permitNumber && formData.transfereeName);
       if (isTransferForm) {
-        req.add("applicationLetter");
-        req.add("signedTransferForm");
+        req.add("certifiedLetter");
         req.add("registrationCertificate");
         req.add("existingPermitCopy");
       }

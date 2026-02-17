@@ -500,8 +500,7 @@ export default function InspectorApplicationView() {
           geological_survey: 'miningHydrologicalReport',
           water_quality_report: 'waterQualityReport',
           renewal_request_letter: 'renewalRequestLetter',
-          transfer_application_letter: 'applicationLetter',
-          signed_transfer_form: 'signedTransferForm',
+          certified_letter: 'certifiedLetter',
           registration_certificate: 'registrationCertificate',
           existing_permit_copy: 'existingPermitCopy',
         };

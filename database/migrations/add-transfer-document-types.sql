@@ -3,8 +3,7 @@
 -- because the database enum didn't include the required transfer document types.
 
 -- Add transfer document types to the enum
-ALTER TYPE document_type ADD VALUE IF NOT EXISTS 'transfer_application_letter';
-ALTER TYPE document_type ADD VALUE IF NOT EXISTS 'signed_transfer_form';
+ALTER TYPE document_type ADD VALUE IF NOT EXISTS 'certified_letter';
 ALTER TYPE document_type ADD VALUE IF NOT EXISTS 'registration_certificate';
 ALTER TYPE document_type ADD VALUE IF NOT EXISTS 'existing_permit_copy';
 
@@ -20,8 +19,7 @@ ALTER TYPE document_type ADD VALUE IF NOT EXISTS 'existing_permit_copy';
 --     'technical_drawings', 'environmental_impact_doc', 'intake_discharge_map',
 --     'water_quality_report', 'geological_survey', 'business_license',
 --     'land_access_doc', 'renewal_request_letter',
---     'transfer_application_letter', 'signed_transfer_form', 
---     'registration_certificate', 'existing_permit_copy',
+--     'certified_letter', 'registration_certificate', 'existing_permit_copy',
 --     'other'
 -- );
 --

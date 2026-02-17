@@ -155,6 +155,39 @@ async function addWatermarkToAllPages(doc: jsPDF): Promise<void> {
   }
 }
 
+/**
+ * Draw a "MODIFIED PERMIT" badge in the top-right corner of page 1.
+ * This is called only when the permit has been modified at least once.
+ * The badge is clearly visible but does not obstruct the main content.
+ */
+function drawModifiedBadge(doc: jsPDF): void {
+  // Always draw on page 1
+  doc.setPage(1);
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  // Badge dimensions & position – top-right
+  const badgeW = 52;
+  const badgeH = 10;
+  const badgeX = pageWidth - badgeW - 8; // 8mm from the right edge
+  const badgeY = 4;
+
+  // Rounded rectangle background – dark orange/amber
+  doc.setFillColor(180, 83, 9); // amber-700
+  doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, "F");
+
+  // Badge text — plain text (no emoji) for PDF font compatibility
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.text("MODIFIED PERMIT", badgeX + badgeW / 2, badgeY + badgeH / 2 + 1, {
+    align: "center",
+  });
+
+  // Reset text color back to black
+  doc.setTextColor(0, 0, 0);
+}
+
 type Permit = {
   id: string;
   title: string;
@@ -693,8 +726,9 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears } = opts;
+  const { application, permitNumber, permitValidityYears, isModified } = opts;
   const doc = new jsPDF();
 
   const issueDate = new Date();
@@ -787,6 +821,9 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   // Add watermark to all pages BEFORE adding footer text (so watermark is behind everything)
   await addWatermarkToAllPages(doc);
 
+  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
+  if (isModified) drawModifiedBadge(doc);
+
   // Minimal page footer metadata (keep consistent with existing PDFs)
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -804,8 +841,9 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears } = opts;
+  const { application, permitNumber, permitValidityYears, isModified } = opts;
   const doc = new jsPDF();
 
   const issueDate = new Date();
@@ -897,6 +935,9 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   // Add watermark to all pages
   await addWatermarkToAllPages(doc);
 
+  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
+  if (isModified) drawModifiedBadge(doc);
+
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -913,8 +954,9 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears } = opts;
+  const { application, permitNumber, permitValidityYears, isModified } = opts;
   const doc = new jsPDF();
 
   const issueDate = new Date();
@@ -1002,6 +1044,9 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   // Add watermark to all pages
   await addWatermarkToAllPages(doc);
 
+  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
+  if (isModified) drawModifiedBadge(doc);
+
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -1018,8 +1063,9 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears } = opts;
+  const { application, permitNumber, permitValidityYears, isModified } = opts;
   const doc = new jsPDF();
 
   const issueDate = new Date();
@@ -1109,6 +1155,9 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   // Add watermark to all pages
   await addWatermarkToAllPages(doc);
 
+  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
+  if (isModified) drawModifiedBadge(doc);
+
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -1143,7 +1192,9 @@ export const generateDigitalWaterPermitBlob = async (
   application: Application,
   permitNumber: string,
   conditions: string[] = [],
-  permitValidityYears: number = 5
+  permitValidityYears: number = 5,
+  /** When true a visible "MODIFIED PERMIT" badge is stamped on the PDF. */
+  isModified: boolean = false
 ): Promise<Blob> => {
   // Use assessor recommended duration if available, otherwise fall back to passed value
   const resolvedValidityYears = resolvePermitDurationYears(application, permitValidityYears);
@@ -1154,6 +1205,7 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      isModified,
     });
   }
   if (variant === "abstraction_organization") {
@@ -1161,6 +1213,7 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      isModified,
     });
   }
   if (variant === "concession_individual") {
@@ -1168,6 +1221,7 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      isModified,
     });
   }
   if (variant === "concession_organization") {
@@ -1175,6 +1229,7 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      isModified,
     });
   }
 
@@ -1487,6 +1542,9 @@ export const generateDigitalWaterPermitBlob = async (
     doc.text(`Generated: ${formatDate(new Date().toISOString())}`, 15, 295);
     doc.text(`Document ID: ${permitNumber}`, 105, 295, { align: 'center' });
   }
+
+  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
+  if (isModified) drawModifiedBadge(doc);
 
   return doc.output('blob');
 };

@@ -371,8 +371,7 @@ export default function ReviewApplicationPage() {
           'water_quality_report': 'waterQualityReport',
           'renewal_request_letter': 'renewalRequestLetter',
           // Transfer document types
-          'transfer_application_letter': 'applicationLetter',
-          'signed_transfer_form': 'signedTransferForm',
+          'certified_letter': 'certifiedLetter',
           'registration_certificate': 'registrationCertificate',
           'existing_permit_copy': 'existingPermitCopy',
         };

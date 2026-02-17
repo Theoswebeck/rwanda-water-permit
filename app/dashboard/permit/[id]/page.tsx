@@ -167,6 +167,7 @@ export default function PermitDetailPage() {
           waterAllowance: `${data.water_allowance} ${data.allowance_unit}`,
           issuingAuthority: data.issuing_authority,
           permitPdfPath: (data as any).permit_pdf_url ?? null,
+          isModified: modificationCount > 0,
           modifiedCount: modificationCount,
           lastModifiedAt,
           applicationId,
@@ -219,8 +220,9 @@ export default function PermitDetailPage() {
     try {
       setIsDownloading(true);
       
-      // If PDF path exists, try to download from storage
-      if (permit.permitPdfPath) {
+      // If the permit has been modified, always regenerate so the "MODIFIED PERMIT" badge shows.
+      // For non-modified permits, try the stored PDF first.
+      if (!permit.isModified && permit.permitPdfPath) {
         console.log("📥 Attempting to download PDF from:", permit.permitPdfPath);
         const blob = await downloadFromDocumentsBucket(permit.permitPdfPath);
         if (blob) {
@@ -237,8 +239,9 @@ export default function PermitDetailPage() {
         console.warn("⚠️ PDF not found in storage, will try to regenerate...");
       }
       
-      // PDF doesn't exist or couldn't be downloaded - try to generate it
-      console.log("📄 Generating PDF for permit:", permit.permitNumber);
+      // PDF doesn't exist, couldn't be downloaded, or permit is modified - regenerate
+      console.log("📄 Generating PDF for permit:", permit.permitNumber,
+        permit.isModified ? "(modified — regenerating with badge)" : "");
       await handleGeneratePdf();
       
     } catch (error) {
@@ -274,12 +277,13 @@ export default function PermitDetailPage() {
         throw new Error("Failed to fetch application data for PDF generation");
       }
       
-      // Generate PDF blob
+      // Generate PDF blob (with "MODIFIED PERMIT" badge when applicable)
       const pdfBlob = await generateDigitalWaterPermitBlob(
         fullApp as any,
         permit.permitNumber,
         permit.conditions || [],
-        5 // Default validity years
+        5, // Default validity years
+        permit.isModified === true
       );
       
       // Upload to storage
