@@ -89,9 +89,17 @@ async function authenticate(): Promise<TokenCache> {
     throw new Error('Authentication succeeded but no token was returned')
   }
 
+  // Some environments return the full "Bearer <jwt>" string in the token field.
+  // Normalize so downstream always uses the raw JWT.
+  const rawToken = json.token.trim()
+  const token = rawToken.toLowerCase().startsWith('bearer ') ? rawToken.slice(7).trim() : rawToken
+  if (!token) {
+    throw new Error('Authentication token was empty after normalization')
+  }
+
   // Token validity is 24 hours per spec; refresh a bit early.
   const expiresAtMs = Date.now() + 23 * 60 * 60 * 1000
-  return { token: json.token, expiresAtMs }
+  return { token, expiresAtMs }
 }
 
 async function getBearerToken(): Promise<string> {
