@@ -722,6 +722,56 @@ function drawPermitQrFooter(opts: {
   });
 }
 
+function drawPortalQrFooter(opts: {
+  doc: jsPDF;
+  url: string;
+}): Promise<void> {
+  const { doc, url } = opts;
+
+  // Layout constants (jsPDF default is A4 in mm)
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const marginX = 15;
+
+  // Keep clear of existing footer text at y=290
+  const footerBottomPadding = 14;
+  const footerY = pageHeight - 60 - footerBottomPadding;
+  const footerH = 52; // a bit taller to allow a larger QR + caption
+  const footerW = pageWidth - marginX * 2;
+
+  // Bigger QR improves scan reliability (especially when printed or photographed)
+  const qrBox = 40;
+  const qrPadding = 2.5;
+  const qrX = marginX + (footerW - qrBox) / 2;
+  const qrY = footerY + 2;
+  const qrSize = qrBox - qrPadding * 2;
+
+  // Background container
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(251, 253, 255);
+  doc.roundedRect(marginX, footerY, footerW, footerH, 2, 2, "FD");
+
+  // QR "card"
+  doc.setDrawColor(226, 232, 240);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(qrX, qrY, qrBox, qrBox, 2, 2, "FD");
+
+  // Higher source pixel size keeps edges crisp after jsPDF scaling.
+  return qrPngDataUrl(url, 1024).then((png) => {
+    doc.addImage(png, "PNG", qrX + qrPadding, qrY + qrPadding, qrSize, qrSize);
+
+    // Subtle caption
+    doc.setFontSize(8);
+    doc.setTextColor(100, 100, 100);
+    doc.setFont("times", "italic");
+    doc.text("Scan to visit the Rwanda Water Permit Portal", pageWidth / 2, qrY + qrBox + 6, {
+      align: "center",
+      maxWidth: footerW - 20,
+    });
+    doc.setFont("times", "normal");
+  });
+}
+
 async function renderAbstractionIndividualPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
@@ -2009,17 +2059,17 @@ export const generateTermsConditionsPdfBlob = async (opts: {
   // Application reference info
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text(`Application: ${applicationNumber}`, 15, 96);
-  doc.text(`Project: ${projectTitle}`, 15, 102);
-  doc.text(`Applicant: ${applicantName}`, 15, 108);
+  // Intentionally omit application number from Terms & Conditions contract header
+  doc.text(`Project: ${projectTitle}`, 15, 96);
+  doc.text(`Applicant: ${applicantName}`, 15, 102);
   doc.text(`Date: ${formatDateDMY(issueDate)}`, 195, 96, { align: 'right' });
 
   // Divider
   doc.setDrawColor(200, 200, 200);
   doc.setLineWidth(0.3);
-  doc.line(15, 112, 195, 112);
+  doc.line(15, 106, 195, 106);
 
-  let currentY = 120;
+  let currentY = 114;
   const leftX = 15;
   const maxWidth = 175;
   const lineHeight = 5;
@@ -2102,6 +2152,24 @@ export const generateTermsConditionsPdfBlob = async (opts: {
 
     currentY += noticeHeight + 10;
   }
+
+  // Ensure QR footer has space on the last page (avoid overlapping contract text)
+  {
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const footerBottomPadding = 14;
+    const footerY = pageHeight - 60 - footerBottomPadding;
+    const safeContentBottomY = footerY - 6;
+    if (currentY > safeContentBottomY) {
+      doc.addPage();
+      currentY = 20;
+    }
+  }
+
+  // QR footer on the last page only (portal root URL as requested)
+  await drawPortalQrFooter({
+    doc,
+    url: "https://rwanda-water-permit-production.up.railway.app/",
+  });
 
   // Add watermark to all pages
   await addWatermarkToAllPages(doc);

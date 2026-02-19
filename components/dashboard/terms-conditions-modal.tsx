@@ -703,7 +703,18 @@ export function TermsConditionsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[95vw] md:max-w-6xl lg:max-w-7xl h-[92vh] max-h-[92vh] p-0 overflow-hidden">
+      <DialogContent
+        className="w-[95vw] max-w-[95vw] sm:max-w-[95vw] md:max-w-6xl lg:max-w-7xl h-[92vh] max-h-[92vh] p-0 overflow-hidden"
+        showCloseButton={!showFeedback}
+        onEscapeKeyDown={(e) => {
+          // Prevent "skipping" the feedback step via ESC
+          if (showFeedback) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          // Prevent "skipping" the feedback step via overlay click
+          if (showFeedback) e.preventDefault();
+        }}
+      >
         <div className="flex h-full min-h-0 flex-col">
           <div className="px-6 pt-6">
             <DialogHeader>

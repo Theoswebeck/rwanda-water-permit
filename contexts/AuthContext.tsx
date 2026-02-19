@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js'
-import type { User } from '@/types/database'
+import type { ProvinceType, User } from '@/types/database'
 
 interface SignUpData {
   email: string;
@@ -12,6 +12,7 @@ interface SignUpData {
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;
+  province?: ProvinceType;
   companyName?: string;
   companyTIN?: string;
   companyAddress?: string;

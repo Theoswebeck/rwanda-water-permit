@@ -184,6 +184,7 @@ export async function POST(req: NextRequest) {
       profile.last_name = rest.lastName || 'Profile'
       profile.date_of_birth = rest.dateOfBirth
       profile.phone = rest.phone
+      profile.province = rest.province || undefined
       // Store normalized digits (avoid persisting spaces or separators)
       profile.id_number = String(rest?.identification?.number || rest.idNumber || '').replace(/\D/g, '')
       profile.id_type = 'national_id'

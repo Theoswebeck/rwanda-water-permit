@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ArrowRight } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { ProvinceType } from "@/types/database";
 
 // Form data interface for passing to parent
 export interface SignUpFormData {
@@ -28,6 +29,7 @@ export interface SignUpFormData {
   idNumber?: string;
   idType?: string;
   phone?: string;
+  province?: ProvinceType;
 }
 
 interface SignUpFormProps {
@@ -66,6 +68,95 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const [idNumber, setIdNumber] = useState(initialData?.idNumber || "");
   const [idType, setIdType] = useState(initialData?.idType || "nationalId");
   const [phone, setPhone] = useState(initialData?.phone || "");
+  const [province, setProvince] = useState<ProvinceType | "">(initialData?.province || "");
+  const [nidaEnabled, setNidaEnabled] = useState<boolean>(false);
+  const [nidaChecking, setNidaChecking] = useState<boolean>(false);
+  const [nidaVerified, setNidaVerified] = useState<boolean>(false);
+  const [nidaError, setNidaError] = useState<string>("");
+
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/nida/status', { method: 'GET' });
+        const json = await res.json().catch(() => null);
+        if (!isMounted) return;
+        setNidaEnabled(Boolean(json?.enabled));
+      } catch {
+        // If the status endpoint fails, keep feature off in UI.
+        if (!isMounted) return;
+        setNidaEnabled(false);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const parseNidaDobToIso = (dobRaw?: string) => {
+    const v = String(dobRaw || "").trim();
+    // NIDA UAT observed format: DD/MM/YYYY
+    const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!m) return "";
+    const dd = m[1];
+    const mm = m[2];
+    const yyyy = m[3];
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const mapNidaProvince = (raw?: string): ProvinceType | "" => {
+    const v = String(raw || "").trim().toLowerCase();
+    if (!v) return "";
+    if (v.includes("kigali") || v.includes("umujyi wa kigali")) return "Kigali";
+    if (v.includes("northern") || v.includes("amajyaruguru")) return "Northern";
+    if (v.includes("southern") || v.includes("amajyepfo")) return "Southern";
+    if (v.includes("eastern") || v.includes("iburasirazuba")) return "Eastern";
+    if (v.includes("western") || v.includes("iburengerazuba")) return "Western";
+    return "";
+  };
+
+  const verifyWithNida = async (docDigits: string) => {
+    if (!/^\d{16}$/.test(docDigits)) return;
+    setNidaError("");
+    setNidaChecking(true);
+    setNidaVerified(false);
+    try {
+      const res = await fetch('/api/nida/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentNumber: docDigits }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setNidaError(json?.message || 'National ID could not be verified');
+        return;
+      }
+
+      const data = json?.data as {
+        foreName?: string;
+        surnames?: string;
+        dateOfBirth?: string;
+        documentNumber?: string;
+        province?: string;
+      } | undefined;
+      const dobIso = parseNidaDobToIso(data?.dateOfBirth);
+      if (!dobIso) {
+        setNidaError('NIDA returned an invalid date of birth');
+        return;
+      }
+
+      setFirstName(String(data?.foreName || '').trim());
+      setLastName(String(data?.surnames || '').trim());
+      setDateOfBirth(dobIso);
+      setProvince(mapNidaProvince(data?.province));
+      validateDateOfBirth(dobIso);
+      setNidaVerified(true);
+    } catch (e: unknown) {
+      setNidaError(e instanceof Error ? e.message : 'National ID could not be verified');
+    } finally {
+      setNidaChecking(false);
+    }
+  };
 
   // Validation states
   const [emailError, setEmailError] = useState("");
@@ -282,6 +373,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             idNumber,
             idType,
             phone,
+            province: province || undefined,
           }
       )
     };
@@ -319,10 +411,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     !passwordError;
 
   const individualFormReady =
+    // If NIDA is enabled, require successful verification and lock identity fields.
+    (!nidaEnabled || nidaVerified) &&
     !!firstName.trim() &&
     !!lastName.trim() &&
     !!dateOfBirth &&
     !dateOfBirthError &&
+    (!nidaEnabled || !!province) &&
     !!phone.trim() &&
     !phoneError &&
     !!idNumber.trim() &&
@@ -341,6 +436,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
     setIdNumber(digits);
     if (error) onClearError?.();
+    if (nidaError) setNidaError("");
+    if (nidaVerified) setNidaVerified(false);
+    if (province) setProvince("");
 
     // Don't show an "invalid" error while the user is still typing.
     // We validate on blur and on submit.
@@ -553,64 +651,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             
             <TabsContent value="individual">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input 
-                      id="firstName" 
-                      type="text" 
-                      placeholder="" 
-                      required 
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input 
-                      id="lastName" 
-                      type="text" 
-                      placeholder="" 
-                      required 
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading}
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input 
-                    id="dateOfBirth" 
-                    type="date" 
-                    required 
-                    value={dateOfBirth}
-                    max={getMaxAdultDob()}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setDateOfBirth(v);
-                      // Validate as the user edits (gives fast feedback and gates submit)
-                      validateDateOfBirth(v);
-                      if (error) onClearError?.();
-                    }}
-                    onBlur={() => {
-                      if (dateOfBirth) validateDateOfBirth(dateOfBirth);
-                    }}
-                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
-                      dateOfBirthError ? 'border-red-500 focus:ring-red-500' : ''
-                    }`}
-                    disabled={isLoading}
-                  />
-                  {dateOfBirthError && (
-                    <p className="text-xs text-red-500 mt-1">{dateOfBirthError}</p>
-                  )}
-                </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
                   <Input
@@ -671,6 +711,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       onChange={handleIdNumberChange}
                       onBlur={() => {
                         if (idNumber.trim()) validateNationalId(idNumber);
+                        if (nidaEnabled && idNumber.replace(/\D/g, "").length === 16) {
+                          void verifyWithNida(idNumber.replace(/\D/g, ""));
+                        }
                       }}
                       className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
                         idNumberError ? 'border-red-500 focus:ring-red-500' : ''
@@ -680,12 +723,99 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                     {idNumberError && (
                       <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
                     )}
+                    {nidaEnabled && nidaError && (
+                      <p className="text-xs text-red-500 mt-1">{nidaError}</p>
+                    )}
+                    {nidaEnabled && !nidaError && nidaChecking && (
+                      <p className="text-xs text-muted-foreground mt-1">Verifying National ID with NIDA…</p>
+                    )}
+                    {nidaEnabled && !nidaError && nidaVerified && (
+                      <p className="text-xs text-green-700 mt-1">National ID verified.</p>
+                    )}
                     {!idNumberError && idType === "nationalId" && (
                       <p className="text-xs text-muted-foreground mt-1">
                         Must be exactly 16 digits ({idNumber.length}/16).
                       </p>
                     )}
                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      type="text"
+                      placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                      required
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                      disabled={isLoading || (nidaEnabled && nidaVerified)}
+                      readOnly={nidaEnabled && nidaVerified}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      type="text"
+                      placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                      required
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                      disabled={isLoading || (nidaEnabled && nidaVerified)}
+                      readOnly={nidaEnabled && nidaVerified}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="province">Province</Label>
+                  <Input
+                    id="province"
+                    type="text"
+                    placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                    value={province}
+                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                    disabled={isLoading || nidaEnabled}
+                    readOnly
+                  />
+                  {nidaEnabled && nidaVerified && !province && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Province could not be mapped from NIDA response.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    required
+                    value={dateOfBirth}
+                    max={getMaxAdultDob()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setDateOfBirth(v);
+                      validateDateOfBirth(v);
+                      if (error) onClearError?.();
+                    }}
+                    onBlur={() => {
+                      if (dateOfBirth) validateDateOfBirth(dateOfBirth);
+                    }}
+                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                      dateOfBirthError ? 'border-red-500 focus:ring-red-500' : ''
+                    }`}
+                    disabled={isLoading || (nidaEnabled && nidaVerified)}
+                    readOnly={nidaEnabled && nidaVerified}
+                  />
+                  {dateOfBirthError && (
+                    <p className="text-xs text-red-500 mt-1">{dateOfBirthError}</p>
+                  )}
                 </div>
                 
                 <div className="space-y-2">

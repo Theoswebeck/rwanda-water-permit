@@ -8,6 +8,7 @@ import { PhoneVerification } from "@/components/auth/phone-verification";
 import { EmailVerificationStep } from "@/components/auth/email-verification-step";
 import { SuccessConfirmation } from "@/components/auth/success-confirmation";
 import { useAuth } from "@/contexts/AuthContext";
+import type { ProvinceType } from "@/types/database";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -67,6 +68,7 @@ export default function RegisterPage() {
           idNumber: formData.idNumber,
           idType: formData.idType,
           phone: normalizeRwandaPhone(formData.phone),
+          province: (formData as any).province as ProvinceType | undefined,
         } : {
           companyName: formData.companyName,
           companyTIN: formData.companyTIN,

@@ -190,6 +190,7 @@ export async function verifyNationalId(documentNumberRaw: string): Promise<{
   foreName?: string
   surnames?: string
   dateOfBirth?: string
+  province?: string
 }> {
   const info = await fetchNidaCitizenInfo(documentNumberRaw)
   const doc = normalizeDocNumber(info.response?.documentNumber || documentNumberRaw)
@@ -205,6 +206,7 @@ export async function verifyNationalId(documentNumberRaw: string): Promise<{
     foreName: info.response?.foreName,
     surnames: info.response?.surnames,
     dateOfBirth: info.response?.dateOfBirth,
+    province: info.response?.province,
   }
 }
 
