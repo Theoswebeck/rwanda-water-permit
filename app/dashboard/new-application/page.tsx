@@ -578,14 +578,24 @@ function NewApplicationContent() {
               return filePath.split("/").pop() || "";
             })();
 
-            const m = rawFileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-            return m?.[1] ?? null;
+            // Support both camelCase ("landAccessDocuments-123.pdf") and legacy snake_case
+            // ("land_access_documents-123.pdf") prefixes.
+            const m = rawFileName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z_]*)*)-\d+\./);
+            if (!m?.[1]) return null;
+            const raw = m[1];
+            if (!raw.includes("_")) return raw;
+            // snake_case -> camelCase
+            const parts = raw.split("_").filter(Boolean);
+            if (parts.length === 0) return null;
+            return parts[0] + parts.slice(1).map((p) => (p ? p[0].toUpperCase() + p.slice(1) : "")).join("");
           };
 
           // Fallback mapping (legacy rows that stored only doc.type)
           const typeMapping: Record<string, string> = {
             identification_doc: "identificationDoc",
             land_ownership_doc: "landOwnershipDoc",
+            land_access_documents: "landAccessDocuments",
+            land_access_doc: "landAccessDocuments",
             technical_drawings: "technicalDrawings",
             environmental_impact_doc: "environmentalImpactDoc",
             payment_proof: "paymentProof",
@@ -924,6 +934,29 @@ function NewApplicationContent() {
       
       if (newApplication) {
         console.log('✅ Transfer application created:', newApplication);
+
+        // Create transferee-facing transfer request + notify transferee (email/SMS).
+        // Non-blocking: transfer submission should not fail if notifications fail.
+        try {
+          const resp = await fetch('/api/transfers/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              applicationId: newApplication.id,
+              originalPermitId: selectedPermit?.id,
+              transfereeEmail: formData?.transfereeEmail,
+              transfereePhone: formData?.transfereePhone,
+            }),
+          });
+          const json = await resp.json().catch(() => null);
+          if (!resp.ok || !json?.success) {
+            console.warn('⚠️ Failed to create/notify transfer request (non-blocking):', json?.message || resp.statusText);
+          } else {
+            console.log('✅ Transfer request created and transferee notified');
+          }
+        } catch (e) {
+          console.warn('⚠️ Transfer request notification crashed (non-blocking):', e);
+        }
         
         // Upload documents
         await ensureStorageBucket();
@@ -1079,13 +1112,23 @@ function NewApplicationContent() {
               return filePath.split("/").pop() || "";
             })();
 
-            const m = rawFileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-            return m?.[1] ?? null;
+            // Support both camelCase ("landAccessDocuments-123.pdf") and legacy snake_case
+            // ("land_access_documents-123.pdf") prefixes.
+            const m = rawFileName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z_]*)*)-\d+\./);
+            if (!m?.[1]) return null;
+            const raw = m[1];
+            if (!raw.includes("_")) return raw;
+            // snake_case -> camelCase
+            const parts = raw.split("_").filter(Boolean);
+            if (parts.length === 0) return null;
+            return parts[0] + parts.slice(1).map((p) => (p ? p[0].toUpperCase() + p.slice(1) : "")).join("");
           };
 
           const typeMapping: Record<string, string> = {
             identification_doc: "identificationDoc",
             land_ownership_doc: "landOwnershipDoc",
+            land_access_documents: "landAccessDocuments",
+            land_access_doc: "landAccessDocuments",
             technical_drawings: "technicalDrawings",
             environmental_impact_doc: "environmentalImpactDoc",
             payment_proof: "paymentProof",

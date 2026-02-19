@@ -120,14 +120,17 @@ const applicationFormSchema = z.object({
   waterSourceLatitude: z.string().optional(),
   waterSourceLongitude: z.string().optional(),
   
-  // Water activity polygons (multiple polygons, variable points) - optional, required only for fish farming
+  // Water activity polygons (multiple polygons, variable points) - optional, required only for fish farming.
+  // Individual coordinate strings are intentionally permissive here (allow empty) because the form
+  // initialises a default 4-point placeholder with empty strings.  Real validation is handled in the
+  // Activity tab validator and superRefine — not at the base schema level.
   waterSourcePolygons: z.array(
     z.array(
       z.object({
-        latitude: z.string().min(1, { message: "Latitude is required" }),
-        longitude: z.string().min(1, { message: "Longitude is required" })
+        latitude: z.string(),
+        longitude: z.string()
       })
-    ).min(4, { message: "Each polygon must have at least 4 coordinate points" })
+    )
   ).optional(),
   
   // Reliability
@@ -541,7 +544,7 @@ export function ApplicationForm({
   readOnly = false,
   currentApplication,
   isStaffView = false,
-  isModification = false,
+  isModification: isModificationProp = false,
   originalApplicationData,
   modificationChanges
 }: ApplicationFormProps) {
@@ -570,9 +573,57 @@ export function ApplicationForm({
   const [coordinateValidation, setCoordinateValidation] = useState<ValidationResponse | null>(null);
   const [canSubmit, setCanSubmit] = useState(true);
 
+  // Treat the form as a "modification" flow if:
+  // - the caller explicitly sets isModification, OR
+  // - the loaded application row indicates it's a modification (common when resuming a saved draft).
+  // This prevents the payment tab / payment gating from appearing for modification drafts.
+  const isModification = Boolean(
+    isModificationProp ||
+      (currentApplication as any)?.is_modification ||
+      (initialData as any)?.is_modification ||
+      (initialData as any)?.isModification
+  );
+
   // Payment is never required for permit modifications, and should never appear in the UI for them.
   const shouldShowPaymentTab =
     !isStaffView && !isModification && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
+
+  const tabLabels: Record<string, string> = {
+    "applicant-info": "Applicant",
+    "water-source": "Water Source",
+    "intended-activity": "Activity",
+    "land-ownership": "Land",
+    payment: "Payment",
+  };
+
+  const validateAllTabsBeforeSubmit = async (): Promise<boolean> => {
+    const tabs = getTabs();
+    const validateByTab: Record<string, (() => Promise<boolean>) | undefined> = {
+      // Wrap in lambdas to avoid temporal-dead-zone issues with const-declared validators.
+      "applicant-info": () => validateApplicantTab(),
+      "water-source": () => validateWaterSourceTab(),
+      "intended-activity": () => validateIntendedActivityTab(),
+      "land-ownership": () => validateLandOwnershipTab(),
+    };
+
+    setValidationError(null);
+    for (const tab of tabs) {
+      if (tab === "payment") continue;
+      const validate = validateByTab[tab];
+      if (!validate) continue;
+
+      const ok = await validate();
+      if (!ok) {
+        setActiveTab(tab);
+        // Preserve the more specific validator error when present.
+        setValidationError((prev) => prev || `Please complete all required fields in ${tabLabels[tab] || 'this'} section before submitting.`);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => setValidationError(null), 5000);
+        return false;
+      }
+    }
+    return true;
+  };
   
   const fileInputRefs = {
     identificationDoc: useRef<HTMLInputElement>(null),
@@ -4705,10 +4756,10 @@ export function ApplicationForm({
                           ...form.getValues(),
                           ...files,
                           additionalDocuments,
-                          ...(isModification && {
+                          ...(isModification ? {
                             isModification: true,
                             modificationChanges: modificationChangesData,
-                          }),
+                          } : {}),
                         };
                         void onSaveAsDraft(draftData, 'draft').catch((error) => {
                           console.error('Error saving application:', error);
@@ -4815,10 +4866,9 @@ export function ApplicationForm({
                           type="button"
                           onClick={async () => {
                             try {
-                              // Enforce Land tab requirements before proceeding to payment
-                              const ok = await validateLandOwnershipTab();
+                              // Enforce all form requirements before proceeding to payment
+                              const ok = await validateAllTabsBeforeSubmit();
                               if (!ok) {
-                                setTimeout(() => setValidationError(null), 5000);
                                 return;
                               }
 
@@ -4833,10 +4883,10 @@ export function ApplicationForm({
                                 ...form.getValues(), 
                                 ...files, 
                                 additionalDocuments,
-                                ...(isModification && {
+                                ...(isModification ? {
                                   isModification: true,
                                   modificationChanges: modificationChangesData,
-                                }),
+                                } : {}),
                               };
 
                               // Navigate to payment tab immediately; save happens in the background
@@ -4869,15 +4919,17 @@ export function ApplicationForm({
                         <Button
                           type="button"
                           onClick={async () => {
-                            // Enforce Land tab requirements before submission
-                            const ok = await validateLandOwnershipTab();
+                            // Enforce all form requirements before submission
+                            const ok = await validateAllTabsBeforeSubmit();
                             if (!ok) {
-                              setTimeout(() => setValidationError(null), 5000);
                               return;
                             }
 
-                            // Trigger the actual form submission handler
-                            void form.handleSubmit(handleFormSubmit)();
+                            // Call the submit handler directly.
+                            // We already validated every tab above, so we bypass
+                            // form.handleSubmit() / Zod schema validation which can
+                            // silently reject empty optional polygon defaults.
+                            await handleFormSubmit(form.getValues());
                           }}
                           disabled={isLoading || !canSubmit}
                           className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}

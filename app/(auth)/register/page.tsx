@@ -8,7 +8,6 @@ import { PhoneVerification } from "@/components/auth/phone-verification";
 import { EmailVerificationStep } from "@/components/auth/email-verification-step";
 import { SuccessConfirmation } from "@/components/auth/success-confirmation";
 import { useAuth } from "@/contexts/AuthContext";
-import type { ProvinceType } from "@/types/database";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -37,6 +36,11 @@ export default function RegisterPage() {
     if (digits.length === 12 && digits.startsWith("250")) return `+${digits}`;
     return v;
   };
+
+  const readStringProp = (obj: Record<string, unknown>, key: string): string | undefined => {
+    const v = obj[key];
+    return typeof v === "string" ? v : undefined;
+  };
   
   const handleContinue = async (formData: SignUpFormData) => {
     setError("");
@@ -48,16 +52,17 @@ export default function RegisterPage() {
       console.log("📋 formData keys:", Object.keys(formData));
       console.log("📋 formData.companyPhone:", formData.companyPhone);
       
+      const formDataRecord = formData as unknown as Record<string, unknown>;
       const rawCompanyPhone =
         formData.companyPhone ||
-        (formData as any)?.companyPhoneNumber ||
-        (formData as any)?.company_phone ||
-        (formData as any)?.company_phone_number;
+        readStringProp(formDataRecord, "companyPhoneNumber") ||
+        readStringProp(formDataRecord, "company_phone") ||
+        readStringProp(formDataRecord, "company_phone_number");
       
       console.log("📞 rawCompanyPhone after fallbacks:", rawCompanyPhone);
       
       // Prepare signup data based on account type
-      const signUpData = {
+      const signUpData: Parameters<typeof signUp>[0] = {
         email: formData.email,
         password: formData.password,
         accountType: formData.accountType,
@@ -68,7 +73,7 @@ export default function RegisterPage() {
           idNumber: formData.idNumber,
           idType: formData.idType,
           phone: normalizeRwandaPhone(formData.phone),
-          province: (formData as any).province as ProvinceType | undefined,
+          province: formData.province,
         } : {
           companyName: formData.companyName,
           companyTIN: formData.companyTIN,
@@ -80,7 +85,7 @@ export default function RegisterPage() {
       console.log('🧾 signup payload (masked):', {
         accountType: signUpData.accountType,
         email: signUpData.email,
-        companyPhone: (signUpData as any).companyPhone,
+        companyPhone: signUpData.companyPhone,
         normalizedPhone: normalizeRwandaPhone(rawCompanyPhone),
         hasPassword: !!signUpData.password,
       });

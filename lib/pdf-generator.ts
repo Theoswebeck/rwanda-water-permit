@@ -278,6 +278,19 @@ function buildPermitVerificationUrl(permitNumber: string): string {
   return `${PRODUCTION_URL}/permit/view/${encodeURIComponent(cleanPermitNumber)}`;
 }
 
+/**
+ * Build the hosted Terms & Conditions (Contract) URL for QR codes printed on the contract.
+ * IMPORTANT: Always uses production URL because QR codes on printed contracts
+ * will be scanned by phones that cannot access localhost or internal servers.
+ */
+function buildContractTermsHostedUrl(contractNumber: string): string {
+  const raw = (contractNumber ?? "").trim();
+  // Contract PDFs currently pass contractNumber as permit_number without the "WP-" prefix.
+  // We normalize to a permit number so the hosted route can look up the right application context.
+  const permitNumber = raw.toUpperCase().startsWith("WP-") ? raw : `WP-${raw}`;
+  return `${PRODUCTION_URL}/contract/terms/${encodeURIComponent(permitNumber)}`;
+}
+
 type PermitVariant =
   | "abstraction_individual"
   | "abstraction_organization"
@@ -764,7 +777,7 @@ function drawPortalQrFooter(opts: {
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.setFont("times", "italic");
-    doc.text("Scan to visit the Rwanda Water Permit Portal", pageWidth / 2, qrY + qrBox + 6, {
+    doc.text("Scan to view the hosted Terms & Conditions", pageWidth / 2, qrY + qrBox + 6, {
       align: "center",
       maxWidth: footerW - 20,
     });
@@ -2168,7 +2181,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
   // QR footer on the last page only (portal root URL as requested)
   await drawPortalQrFooter({
     doc,
-    url: "https://rwanda-water-permit-production.up.railway.app/",
+    url: buildContractTermsHostedUrl(contractNumber),
   });
 
   // Add watermark to all pages

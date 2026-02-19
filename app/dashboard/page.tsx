@@ -26,6 +26,7 @@ import { PermitSelectModal } from "@/components/dashboard/permit-select-modal";
 // ⚡ PERFORMANCE: Use React Query hooks for automatic caching
 import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useApplicationsQuery";
 import { usePermitsQuery, PermitWithApplication } from "@/hooks/usePermitsQuery";
+import { useIncomingTransfersQuery, type IncomingTransferRequest } from "@/hooks/useIncomingTransfersQuery";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Permit as DatabasePermit } from "@/types/database";
 import type { Application, ApplicationStatus as DbApplicationStatus } from "@/types/database";
@@ -143,6 +144,13 @@ function DashboardContent() {
     isFetching: permitsFetching
   } = usePermitsQuery({ userId: user?.id, enabled: !!user?.id, includeApplication: true });
 
+  const {
+    data: incomingTransfers = [],
+    isLoading: incomingTransfersLoading,
+    error: incomingTransfersError,
+    refetch: refetchIncomingTransfers,
+  } = useIncomingTransfersQuery(!!user?.id);
+
   // ⚡ PERFORMANCE: Use mutation for deleting applications
   const deleteApplicationMutation = useDeleteApplicationMutation();
   
@@ -166,7 +174,12 @@ function DashboardContent() {
       const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
 
       let displayStatus: "active" | "expired" | "expiring-soon" = "active";
-      if (expiryDate < now) {
+      const dbStatus = dbPermit.status;
+      if (dbStatus === "revoked" || dbStatus === "suspended" || dbStatus === "expired") {
+        displayStatus = "expired";
+      } else if (dbStatus === "expiring_soon") {
+        displayStatus = "expiring-soon";
+      } else if (expiryDate < now) {
         displayStatus = "expired";
       } else if (expiryDate <= thirtyDaysFromNow) {
         displayStatus = "expiring-soon";
@@ -181,8 +194,8 @@ function DashboardContent() {
         type: dbPermit.purpose, // Use purpose as type
         location: "N/A", // We'll need to get this from related application
         permitNumber: dbPermit.permit_number,
-        modifiedCount: (dbPermit as any).modification_count ?? 0,
-        lastModifiedAt: (dbPermit as any).last_modified_at ?? null,
+        modifiedCount: dbPermit.modification_count ?? 0,
+        lastModifiedAt: dbPermit.last_modified_at ?? null,
         pdfPath: dbPermit.permit_pdf_url ?? null,
       };
     });
@@ -206,6 +219,44 @@ function DashboardContent() {
   // ⚡ FIX: Better loading state detection - only show loading when actually fetching
   const isLoading = (applicationsLoading || permitsLoading) && !!user?.id;
   const hasError = applicationsError || permitsError;
+
+  const [approvingTransferId, setApprovingTransferId] = useState<string | null>(null);
+  const [incomingTransferActionError, setIncomingTransferActionError] = useState<string | null>(null);
+
+  const approveIncomingTransfer = useCallback(
+    async (transferRequestId: string) => {
+      try {
+        setIncomingTransferActionError(null);
+        setApprovingTransferId(transferRequestId);
+        const resp = await fetch('/api/transfers/approve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transferRequestId }),
+        });
+        const json = await resp.json().catch(() => null);
+        if (!resp.ok || !json?.success) {
+          throw new Error(json?.message || 'Failed to approve transfer request');
+        }
+
+        // Refresh lists so the transfer application appears under the transferee's applications.
+        await Promise.all([
+          refreshApplications(),
+          refetchIncomingTransfers(),
+        ]);
+
+        if (json.applicationId) {
+          router.push(`/dashboard/application/${json.applicationId}`);
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('❌ Failed to approve incoming transfer:', e);
+        setIncomingTransferActionError(msg);
+      } finally {
+        setApprovingTransferId(null);
+      }
+    },
+    [refreshApplications, refetchIncomingTransfers, router]
+  );
 
   return (
     <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
@@ -324,6 +375,66 @@ function DashboardContent() {
                   loading={applicationsLoading}
                   onRefresh={() => refreshApplications()}
                 />
+
+                {/* Incoming Transfers (Transferee) */}
+                {((incomingTransfers?.length ?? 0) > 0) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <ArrowLeftRight className="h-5 w-5" />
+                        Incoming Transfer Requests
+                      </CardTitle>
+                      <CardDescription>
+                        Transfers sent to you (matched by your email and phone). You can approve only when the request is in the Pending Terms Acceptance stage.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {incomingTransferActionError && (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>{incomingTransferActionError}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="space-y-2">
+                        {incomingTransfers.map((tr: IncomingTransferRequest) => {
+                          const app = tr.application ?? null;
+                          const appNumber = app?.application_number || tr.application_id;
+                          const title = app?.project_title || 'Transfer application';
+                          return (
+                            <div
+                              key={tr.id}
+                              className="flex flex-col gap-2 rounded-md border bg-white p-3 md:flex-row md:items-center md:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium truncate">{title}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  Ref: {appNumber} • Stage: Pending Terms Acceptance
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  onClick={() => approveIncomingTransfer(tr.id)}
+                                  disabled={approvingTransferId === tr.id}
+                                >
+                                  {approvingTransferId === tr.id ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      Approving…
+                                    </>
+                                  ) : (
+                                    'Approve & Continue'
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 
                 {/* Applications List */}
                 <div className="grid gap-4">

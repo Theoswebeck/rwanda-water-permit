@@ -266,6 +266,7 @@ export default function ApplicationDetailPage() {
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
+  const [transferTermsBlocked, setTransferTermsBlocked] = useState(false);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -363,9 +364,29 @@ export default function ApplicationDetailPage() {
           
           console.log('📄 Documents found:', documents.length, 'documents');
           
-          // Show Terms modal if status is approved_pending_permit
+          // Show Terms modal if status is approved_pending_permit.
+          // Special case: for transfer applications, only the transferee who approved the transfer request
+          // can accept Terms & Conditions.
           if (appWithRelations.status === 'approved_pending_permit') {
-            setTermsModalOpen(true);
+            const isTransfer =
+              (appWithRelations as any).application_type === 'transfer' ||
+              parsedNotes?.isTransfer === true;
+
+            if (!isTransfer) {
+              setTransferTermsBlocked(false);
+              setTermsModalOpen(true);
+            } else {
+              const approval = parsedNotes?.transferApproval;
+              const transfereeApproved =
+                approval?.transfereeApproved === true &&
+                typeof approval?.transfereeUserId === 'string' &&
+                approval.transfereeUserId === userProfile?.id;
+
+              setTransferTermsBlocked(!transfereeApproved);
+              setTermsModalOpen(!!transfereeApproved);
+            }
+          } else {
+            setTransferTermsBlocked(false);
           }
         } else {
           setError('Application not found');
@@ -720,6 +741,18 @@ export default function ApplicationDetailPage() {
               </p>
             </div>
           </div>
+
+          {/* Transfer terms gate (transferor cannot accept terms) */}
+          {application.status === 'approved_pending_permit' &&
+            (application as any).application_type === 'transfer' &&
+            transferTermsBlocked && (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertTriangle className="h-4 w-4 text-amber-700" />
+                <AlertDescription className="text-amber-900">
+                  This is a <strong>permit transfer</strong>. Only the <strong>transferee</strong> (matching email + phone) can approve the request and accept the Terms &amp; Conditions at this stage.
+                </AlertDescription>
+              </Alert>
+            )}
           
 
           {/* Rejection Alert */}

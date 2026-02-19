@@ -1006,6 +1006,26 @@ export interface UINotification {
 }
 
 // =============================================
+// TRANSFER REQUESTS (TRANSFEREE APPROVAL)
+// =============================================
+
+export type TransferRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+export interface TransferRequest {
+  id: string
+  application_id: string
+  original_permit_id: string
+  transferor_user_id: string
+  transferee_email: string
+  transferee_phone: string
+  status: TransferRequestStatus
+  approved_by_user_id?: string | null
+  approved_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+// =============================================
 // SUPABASE DATABASE TYPE
 // =============================================
 
@@ -1071,6 +1091,11 @@ export interface Database {
         Row: Notification
         Insert: Omit<Notification, 'id' | 'created_at' | 'updated_at'>
         Update: Partial<Omit<Notification, 'id' | 'created_at' | 'updated_at'>>
+      }
+      transfer_requests: {
+        Row: TransferRequest
+        Insert: Omit<TransferRequest, 'id' | 'created_at' | 'updated_at'>
+        Update: Partial<Omit<TransferRequest, 'id' | 'created_at' | 'updated_at'>>
       }
       system_settings: {
         Row: SystemSetting

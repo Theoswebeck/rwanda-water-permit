@@ -286,6 +286,16 @@ export function TermsConditionsModal({
       
       const renewedFromPermitId = applicationData.renewed_from_permit_id || parsedNotes?.originalPermitId || null;
 
+      // Check if this is a transfer application
+      const isTransferApplication =
+        (applicationData as any).application_type === 'transfer' ||
+        parsedNotes?.isTransfer === true;
+
+      const transferOriginalPermitId =
+        (parsedNotes?.transferApproval?.originalPermitId as string | undefined) ||
+        (parsedNotes?.originalPermitId as string | undefined) ||
+        null;
+
       // Check if this is a modification application
       const isModificationApplication = applicationData.is_modification === true ||
         (parsedNotes?.isModification === true);
@@ -471,6 +481,68 @@ export function TermsConditionsModal({
         console.log('✅ Permit renewed successfully:', permitData.permit_number, 
           '| New issued date:', newIssuedDate, 
           '| New expiry date:', newExpiryDate);
+      } else if (isTransferApplication && transferOriginalPermitId) {
+        // TRANSFER: Create a new permit record for the transferee, linked to the original permit.
+        console.log('🔁 Processing TRANSFER - creating new permit from original permit:', transferOriginalPermitId);
+        console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
+
+        const newIssuedDate = new Date().toISOString().split('T')[0];
+        const newExpiryDate = new Date(Date.now() + resolvedDurationYearsGlobal * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        const permitData_insert = {
+          application_id: applicationId,
+          status: 'active',
+          water_source: applicationData.water_source,
+          purpose: applicationData.water_purpose,
+          water_allowance: resolvedVolumeM3,
+          allowance_unit: applicationData.usage_unit || 'm³',
+          issuing_authority: 'Rwanda Water Resources Board',
+          issued_date: newIssuedDate,
+          expiry_date: newExpiryDate,
+          is_transfer: true,
+          original_permit_id: transferOriginalPermitId,
+          transfer_reason: (() => {
+            const permitNo = parsedNotes?.originalPermitNumber ? String(parsedNotes.originalPermitNumber) : '';
+            return permitNo ? `Transferred from ${permitNo}` : 'Permit transfer';
+          })(),
+          conditions: { 
+            conditions: [
+              'Comply with all environmental regulations', 
+              'Submit quarterly usage reports', 
+              'Allow inspections as required',
+              ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
+            ],
+            location: {
+              province: applicationData.province,
+              district: applicationData.district,
+              sector: applicationData.sector,
+              cell: applicationData.cell,
+              village: applicationData.village,
+              coordinates: applicationData.coordinates,
+              description: applicationData.location_description
+            },
+            project: {
+              title: applicationData.project_title,
+              description: applicationData.project_description,
+              value: applicationData.project_value
+            }
+          }
+        };
+
+        const { data: newPermit, error: permitError } = await supabase
+          .from('permits')
+          .insert(permitData_insert as any)
+          .select()
+          .single() as { data: any; error: any };
+
+        if (permitError) {
+          console.error('❌ Error creating transfer permit:', permitError);
+          throw permitError;
+        }
+
+        permitData = newPermit;
+        console.log('✅ Transfer permit created successfully:', permitData.permit_number);
+
       } else {
         // NEW PERMIT: Create permit in database with comprehensive data
         // Use assessor-approved terms (duration + volume) instead of hardcoded/raw values
@@ -646,6 +718,29 @@ export function TermsConditionsModal({
         // Continue anyway - permit was created successfully
       } else {
         console.log('✅ Application status updated successfully');
+      }
+
+      // If this was a transfer, revoke the original permit (server-side via service role).
+      if (isTransferApplication && transferOriginalPermitId) {
+        try {
+          console.log('🧾 Revoking original permit after transfer issuance...');
+          const resp = await fetch('/api/transfers/revoke-old-permit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              applicationId,
+              oldPermitId: transferOriginalPermitId,
+            }),
+          });
+          const json = await resp.json().catch(() => null);
+          if (!resp.ok || !json?.success) {
+            console.warn('⚠️ Failed to revoke original permit (non-blocking):', json?.message || resp.statusText);
+          } else {
+            console.log('✅ Original permit revoked');
+          }
+        } catch (e) {
+          console.warn('⚠️ Revoke original permit crashed (non-blocking):', e);
+        }
       }
 
       console.log("✅ Terms accepted successfully! Your permit has been generated...");

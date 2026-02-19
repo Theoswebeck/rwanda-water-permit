@@ -13,6 +13,12 @@ export const permitKeys = {
 }
 
 export interface PermitWithApplication extends Permit {
+  /**
+   * Denormalized fields (optional, environment-dependent).
+   * Some deployments attach these via triggers/views; keep optional for compatibility.
+   */
+  modification_count?: number | null
+  last_modified_at?: string | null
   application?: {
     id: string
     application_number: string
