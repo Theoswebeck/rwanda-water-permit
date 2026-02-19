@@ -568,7 +568,14 @@ export default function VerificationDashboard() {
 
                     {error ? <div className="text-sm text-destructive">{error}</div> : null}
 
-                    <ApplicationTable apps={applications} emptyMessage="All Applications" />
+                    <ApplicationTable
+                      apps={applications}
+                      emptyMessage={
+                        selectedStatId
+                          ? statsConfig.find((s) => s.id === selectedStatId)?.title ?? "All Applications"
+                          : "All Applications"
+                      }
+                    />
                   </TabsContent>
 
                   <TabsContent value="map" className="space-y-4 mt-6">

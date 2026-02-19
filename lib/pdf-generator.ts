@@ -407,11 +407,42 @@ function resolvePermitTitleNumber(application: Application, fallbackPermitNumber
 }
 
 function resolvePermitTitleLine(application: Application, permitNumber: string, headerYear: number): string {
-  const derived = derivePermitTitleNumber(application);
-  // If we can derive from application number, it already includes `/RWB/YYYY`.
-  if (derived) return derived;
-  // Otherwise fall back to the existing permit number + `/RWB/<year>` as used previously.
-  return `${permitNumber} /RWB/${headerYear}`;
+  // IMPORTANT:
+  // For permit PDFs, the canonical source of truth is the permit's own number from `permits.permit_number`.
+  // We must NOT derive/override it from `application.application_number` (modifications/renewals can diverge).
+  const normalized = typeof permitNumber === "string" ? permitNumber.trim() : "";
+  if (!normalized) return `N/A/RWB/${headerYear}`;
+  // If the number already contains the expected suffix, keep it exactly (no additional formatting).
+  if (/\/rwb\/\d{4}$/i.test(normalized) || normalized.toLowerCase().includes("/rwb/")) return normalized;
+  // Legacy fallback: if only a sequence is provided, append `/RWB/<year>` without extra spaces.
+  return `${normalized}/RWB/${headerYear}`;
+}
+
+function parseDateOnlyToLocal(dateLike: unknown): Date | null {
+  if (dateLike instanceof Date && Number.isFinite(dateLike.getTime())) return dateLike;
+  if (typeof dateLike !== "string") return null;
+  const s = dateLike.trim();
+  if (!s) return null;
+  // Prefer parsing DATE columns from Postgres/Supabase (YYYY-MM-DD) as local dates to avoid TZ shifts.
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d)) return new Date(y, mo - 1, d);
+  }
+  const parsed = new Date(s);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+function computeValidityYearsFromDates(issued: Date, expiry: Date): number | null {
+  if (!Number.isFinite(issued.getTime()) || !Number.isFinite(expiry.getTime())) return null;
+  // Compute full-year difference, adjusting if expiry is before the anniversary in the expiry year.
+  let years = expiry.getFullYear() - issued.getFullYear();
+  const anniv = new Date(issued.getFullYear() + years, issued.getMonth(), issued.getDate());
+  if (expiry.getTime() < anniv.getTime()) years -= 1;
+  if (!Number.isFinite(years) || years < 1 || years > 50) return null;
+  return years;
 }
 
 // NOTE: variant selection is shared with the UI via `lib/permit-variant.ts`.
@@ -789,14 +820,21 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  issuedDate?: Date;
+  expiryDate?: Date;
   isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears, isModified } = opts;
+  const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
 
-  const issueDate = new Date();
-  const expiryDate = new Date(issueDate);
-  expiryDate.setFullYear(issueDate.getFullYear() + permitValidityYears);
+  const issueDate = issuedDate ?? new Date();
+  const resolvedExpiryDate =
+    expiryDate ??
+    (() => {
+      const d = new Date(issueDate);
+      d.setFullYear(issueDate.getFullYear() + permitValidityYears);
+      return d;
+    })();
 
   // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
   try {
@@ -845,10 +883,10 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
     `by a ${systemType} with a flow rate of ${yearlyStr}. ` +
     `Water abstracted will be used for ${activitiesText}.`;
-  const validityNumber = permitValidityYears;
+  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
   const validityWord = numberToEnglishWords(validityNumber);
   const para3 =
-    `This water use permit is valid for a period of ${validityNumber} (${validityWord}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
+    `This water use permit is valid for a period of ${validityNumber} (${validityWord}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.";
 
@@ -904,14 +942,21 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  issuedDate?: Date;
+  expiryDate?: Date;
   isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears, isModified } = opts;
+  const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
 
-  const issueDate = new Date();
-  const expiryDate = new Date(issueDate);
-  expiryDate.setFullYear(issueDate.getFullYear() + permitValidityYears);
+  const issueDate = issuedDate ?? new Date();
+  const resolvedExpiryDate =
+    expiryDate ??
+    (() => {
+      const d = new Date(issueDate);
+      d.setFullYear(issueDate.getFullYear() + permitValidityYears);
+      return d;
+    })();
 
   // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
   try {
@@ -947,7 +992,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const vols = resolveVolumes(application);
   const yearlyStr = vols.yearly != null ? `${formatNumber(vols.yearly)} m³/year` : "N/A m³/year";
 
-  const validityNumber = permitValidityYears;
+  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
   const validityWord = numberToEnglishWords(validityNumber);
 
   const para1 =
@@ -962,7 +1007,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     `Water abstracted will be used for ${activitiesText}.`;
 
   const para3 =
-    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
+    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
 
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.";
@@ -1017,14 +1062,21 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  issuedDate?: Date;
+  expiryDate?: Date;
   isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears, isModified } = opts;
+  const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
 
-  const issueDate = new Date();
-  const expiryDate = new Date(issueDate);
-  expiryDate.setFullYear(issueDate.getFullYear() + permitValidityYears);
+  const issueDate = issuedDate ?? new Date();
+  const resolvedExpiryDate =
+    expiryDate ??
+    (() => {
+      const d = new Date(issueDate);
+      d.setFullYear(issueDate.getFullYear() + permitValidityYears);
+      return d;
+    })();
 
   // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
   try {
@@ -1058,7 +1110,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   const loc = resolveWaterSourceAdminLocation(application);
   const provinceStr = formatProvinceOrKigali(loc.province);
 
-  const validityNumber = permitValidityYears;
+  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
   const validityWord = numberToEnglishWords(validityNumber);
 
   const para1 =
@@ -1071,7 +1123,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
     `as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
 
   const para3 =
-    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
+    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
 
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.";
@@ -1126,14 +1178,21 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   application: Application;
   permitNumber: string;
   permitValidityYears: number;
+  issuedDate?: Date;
+  expiryDate?: Date;
   isModified?: boolean;
 }): Promise<Blob> {
-  const { application, permitNumber, permitValidityYears, isModified } = opts;
+  const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
 
-  const issueDate = new Date();
-  const expiryDate = new Date(issueDate);
-  expiryDate.setFullYear(issueDate.getFullYear() + permitValidityYears);
+  const issueDate = issuedDate ?? new Date();
+  const resolvedExpiryDate =
+    expiryDate ??
+    (() => {
+      const d = new Date(issueDate);
+      d.setFullYear(issueDate.getFullYear() + permitValidityYears);
+      return d;
+    })();
 
   // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
   try {
@@ -1168,7 +1227,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   const loc = resolveWaterSourceAdminLocation(application);
   const provinceStr = formatProvinceOrKigali(loc.province);
 
-  const validityNumber = permitValidityYears;
+  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
   const validityWord = numberToEnglishWords(validityNumber);
 
   const para1 =
@@ -1182,7 +1241,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
     `as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
 
   const para3 =
-    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(expiryDate)}.`;
+    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
 
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.";
@@ -1237,9 +1296,10 @@ export const generateDigitalWaterPermit = async (
   application: Application,
   permitNumber: string,
   conditions: string[] = [],
-  permitValidityYears: number = 5
+  permitValidityYears: number = 5,
+  permitDates?: { issuedDate?: string | Date; expiryDate?: string | Date }
 ): Promise<void> => {
-  const pdfBlob = await generateDigitalWaterPermitBlob(application, permitNumber, conditions, permitValidityYears);
+  const pdfBlob = await generateDigitalWaterPermitBlob(application, permitNumber, conditions, permitValidityYears, false, permitDates);
   const pdfUrl = URL.createObjectURL(pdfBlob);
   window.open(pdfUrl, '_blank');
 };
@@ -1257,10 +1317,22 @@ export const generateDigitalWaterPermitBlob = async (
   conditions: string[] = [],
   permitValidityYears: number = 5,
   /** When true a visible "MODIFIED PERMIT" badge is stamped on the PDF. */
-  isModified: boolean = false
+  isModified: boolean = false,
+  /**
+   * Canonical permit validity dates from `permits` table.
+   * When provided, we MUST use these and never substitute `today` or recompute a new period.
+   */
+  permitDates?: { issuedDate?: string | Date; expiryDate?: string | Date }
 ): Promise<Blob> => {
-  // Use assessor recommended duration if available, otherwise fall back to passed value
-  const resolvedValidityYears = resolvePermitDurationYears(application, permitValidityYears);
+  const issuedFromPermit = parseDateOnlyToLocal(permitDates?.issuedDate);
+  const expiryFromPermit = parseDateOnlyToLocal(permitDates?.expiryDate);
+
+  // If canonical dates are available, they are the source of truth.
+  // Otherwise, use assessor recommended duration if available, falling back to passed value.
+  const resolvedValidityYears =
+    issuedFromPermit && expiryFromPermit
+      ? computeValidityYearsFromDates(issuedFromPermit, expiryFromPermit) ?? resolvePermitDurationYears(application, permitValidityYears)
+      : resolvePermitDurationYears(application, permitValidityYears);
   
   const variant = selectPermitVariant(application);
   if (variant === "abstraction_individual") {
@@ -1268,6 +1340,8 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      issuedDate: issuedFromPermit ?? undefined,
+      expiryDate: expiryFromPermit ?? undefined,
       isModified,
     });
   }
@@ -1276,6 +1350,8 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      issuedDate: issuedFromPermit ?? undefined,
+      expiryDate: expiryFromPermit ?? undefined,
       isModified,
     });
   }
@@ -1284,6 +1360,8 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      issuedDate: issuedFromPermit ?? undefined,
+      expiryDate: expiryFromPermit ?? undefined,
       isModified,
     });
   }
@@ -1292,6 +1370,8 @@ export const generateDigitalWaterPermitBlob = async (
       application,
       permitNumber,
       permitValidityYears: resolvedValidityYears,
+      issuedDate: issuedFromPermit ?? undefined,
+      expiryDate: expiryFromPermit ?? undefined,
       isModified,
     });
   }
@@ -1321,9 +1401,14 @@ export const generateDigitalWaterPermitBlob = async (
     ? `${application.applicant.first_name} ${application.applicant.last_name}`
     : application.applicant.company_name || 'Unknown';
 
-  const issueDate = new Date();
-  const expiryDate = new Date();
-  expiryDate.setFullYear(issueDate.getFullYear() + permitValidityYears);
+  const issueDate = issuedFromPermit ?? new Date();
+  const expiryDate =
+    expiryFromPermit ??
+    (() => {
+      const d = new Date(issueDate);
+      d.setFullYear(issueDate.getFullYear() + resolvedValidityYears);
+      return d;
+    })();
 
   try {
     // Add official logos with proper sizing

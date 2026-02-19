@@ -52,6 +52,11 @@ export interface Permit {
   modifiedCount?: number;
   lastModifiedAt?: string | null;
   /**
+   * Back-compat: older permits may have `is_modification=true` but `modification_count=0`
+   * (e.g. modified before the history trigger was deployed).
+   */
+  isModification?: boolean;
+  /**
    * Storage path or URL for the generated permit PDF.
    * Expected to match `permits.permit_pdf_url` (storage path preferred).
    */
@@ -225,6 +230,8 @@ export function PermitsList({ permits }: PermitsListProps) {
         .select(`
           id,
           permit_number,
+          issued_date,
+          expiry_date,
           conditions,
           application_id,
           is_modification,
@@ -274,7 +281,11 @@ export function PermitsList({ permits }: PermitsListProps) {
         permit.permitNumber,
         conditions,
         5, // Default validity years
-        isModified
+        isModified,
+        {
+          issuedDate: (permitData as any).issued_date ?? permit.issueDate,
+          expiryDate: (permitData as any).expiry_date ?? permit.expiryDate,
+        }
       );
 
       // Upload to storage
@@ -319,7 +330,7 @@ export function PermitsList({ permits }: PermitsListProps) {
   const getPermitPdfBlob = async (permit: Permit): Promise<Blob | null> => {
     // If the permit has been modified we MUST regenerate so the "MODIFIED PERMIT"
     // badge is stamped on the PDF — the stored version was created before modification.
-    const permitIsModified = (permit.modifiedCount ?? 0) > 0;
+    const permitIsModified = (permit.modifiedCount ?? 0) > 0 || permit.isModification === true;
 
     if (!permitIsModified && permit.pdfPath) {
       // Non-modified: try to download existing PDF from storage first
@@ -447,7 +458,7 @@ export function PermitsList({ permits }: PermitsListProps) {
                   <TableCell className="font-medium text-gray-900 py-4 px-6">
                     <div className="flex items-center gap-2">
                       <span>{permit.permitNumber}</span>
-                      {(permit.modifiedCount ?? 0) > 0 ? (
+                      {(permit.modifiedCount ?? 0) > 0 || permit.isModification === true ? (
                         <Badge variant="secondary" className="bg-blue-100 text-blue-800 hover:bg-blue-100">
                           Modified{permit.modifiedCount && permit.modifiedCount > 1 ? ` (${permit.modifiedCount})` : ''}
                         </Badge>

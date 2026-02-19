@@ -762,7 +762,11 @@ export default function AssessmentDashboard() {
                   </div>
                   <ApplicationTable 
                     applications={allApplications}
-                    emptyMessage="All Applications"
+                    emptyMessage={
+                      selectedStatId
+                        ? statsConfig.find((s) => s.id === selectedStatId)?.title ?? "All Applications"
+                        : "All Applications"
+                    }
                   />
                 </TabsContent>
 

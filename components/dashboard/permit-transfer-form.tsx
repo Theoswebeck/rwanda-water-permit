@@ -646,7 +646,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                 value={activeTab}
                 onValueChange={(value) => void handleTabChange(value)}
               >
-                <TabsList className="grid w-full grid-cols-5">
+                <TabsList className={`grid w-full ${isStaffView ? 'grid-cols-4' : 'grid-cols-5'}`}>
                   <TabsTrigger value="permit-info" className="flex items-center gap-1 text-xs">
                     <FileCheck className="h-4 w-4" />
                     <span className="hidden sm:inline">Permit</span>
@@ -663,10 +663,13 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     <FileText className="h-4 w-4" />
                     <span className="hidden sm:inline">Documents</span>
                   </TabsTrigger>
-                  <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
-                    <CreditCard className="h-4 w-4" />
-                    <span className="hidden sm:inline">Payment</span>
-                  </TabsTrigger>
+                  {/* Payment is applicant-only; never show on staff pages (review/assessment/verification/approver/inspection). */}
+                  {!isStaffView && (
+                    <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
+                      <CreditCard className="h-4 w-4" />
+                      <span className="hidden sm:inline">Payment</span>
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 {/* PART 1: PARTICULARS OF THE PERMIT */}
@@ -1552,45 +1555,51 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   </div>
                 </TabsContent>
 
-                {/* PART 5: PAYMENT */}
-                <TabsContent value="payment" className="pt-6 space-y-6">
-                  <div>
-                    <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                      <CreditCard className="h-5 w-5" />
-                      Part 5: Transfer Application Fee Payment
-                    </h3>
-                    <p className="text-muted-foreground mb-6">
-                      Pay the non-refundable transfer application fee to complete your submission.
-                    </p>
-                  </div>
+                {/* PART 5: PAYMENT (applicant-only) */}
+                {!isStaffView && (
+                  <TabsContent value="payment" className="pt-6 space-y-6">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                        <CreditCard className="h-5 w-5" />
+                        Part 5: Transfer Application Fee Payment
+                      </h3>
+                      <p className="text-muted-foreground mb-6">
+                        Pay the non-refundable transfer application fee to complete your submission.
+                      </p>
+                    </div>
 
-                  <PaymentTab
-                    application={currentApplication ?? undefined}
-                    formData={!currentApplication?.id ? {
-                      ...form.getValues(),
-                      ...files,
-                      // Customer info for payment - use transferor (the one paying)
-                      emailAddress: form.getValues('transferorEmail'),
-                      telephoneContact: form.getValues('transferorPhone'),
-                      fullNameApplicant: form.getValues('transferorName'),
-                      // Transfer-specific metadata
-                      isTransfer: true,
-                      permitId: permit.id,
-                      permitNumber: form.getValues('permitNumber'),
-                    } : undefined}
-                    isSavingApplication={isLoading}
-                    saveError={paymentPrepError}
-                    onRetrySave={() => {
-                      setPaymentPrepError(null);
-                      const draftData = { ...form.getValues(), ...files };
-                      void onSaveAsDraft(draftData, 'draft').catch((error) => {
-                        console.error('Error saving transfer application:', error);
-                        setPaymentPrepError('Please try saving your application again before proceeding to payment.');
-                      });
-                    }}
-                    onBack={() => setActiveTab("documents")}
-                  />
-                </TabsContent>
+                    <PaymentTab
+                      application={currentApplication ?? undefined}
+                      formData={
+                        !currentApplication?.id
+                          ? {
+                              ...form.getValues(),
+                              ...files,
+                              // Customer info for payment - use transferor (the one paying)
+                              emailAddress: form.getValues("transferorEmail"),
+                              telephoneContact: form.getValues("transferorPhone"),
+                              fullNameApplicant: form.getValues("transferorName"),
+                              // Transfer-specific metadata
+                              isTransfer: true,
+                              permitId: permit.id,
+                              permitNumber: form.getValues("permitNumber"),
+                            }
+                          : undefined
+                      }
+                      isSavingApplication={isLoading}
+                      saveError={paymentPrepError}
+                      onRetrySave={() => {
+                        setPaymentPrepError(null);
+                        const draftData = { ...form.getValues(), ...files };
+                        void onSaveAsDraft(draftData, "draft").catch((error) => {
+                          console.error("Error saving transfer application:", error);
+                          setPaymentPrepError("Please try saving your application again before proceeding to payment.");
+                        });
+                      }}
+                      onBack={() => setActiveTab("documents")}
+                    />
+                  </TabsContent>
+                )}
               </Tabs>
             </form>
           </Form>

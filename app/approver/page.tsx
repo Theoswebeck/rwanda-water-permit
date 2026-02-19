@@ -218,7 +218,14 @@ export default function ApproverDashboard() {
 
               {/* Tab Contents */}
               <TabsContent value="all_applications" className="space-y-4 mt-6">
-                <AllApplicationsList externalStatusFilter={statusFilter} />
+                <AllApplicationsList
+                  externalStatusFilter={statusFilter}
+                  title={
+                    selectedStatId
+                      ? statsConfig.find((s) => s.id === selectedStatId)?.title ?? "All Applications"
+                      : "All Applications"
+                  }
+                />
               </TabsContent>
 
               <TabsContent value="map" className="space-y-4 mt-6">

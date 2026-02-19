@@ -194,6 +194,7 @@ function DashboardContent() {
         type: dbPermit.purpose, // Use purpose as type
         location: "N/A", // We'll need to get this from related application
         permitNumber: dbPermit.permit_number,
+        isModification: (dbPermit as any).is_modification === true,
         modifiedCount: dbPermit.modification_count ?? 0,
         lastModifiedAt: dbPermit.last_modified_at ?? null,
         pdfPath: dbPermit.permit_pdf_url ?? null,

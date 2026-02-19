@@ -393,6 +393,15 @@ export default function AssessmentApplicationPage() {
     if (tabTouchedRef.current) return;
     setActiveTab(defaultTabValue);
   }, [defaultTabValue]);
+
+  // Transfer applications do not have an assessment report in staff workflows.
+  // If a user somehow lands on the hidden tab (e.g. back/forward nav), force them back to details.
+  useEffect(() => {
+    if (!isTransferApp) return;
+    if (activeTab === "field_report") {
+      setActiveTab(defaultTabValue);
+    }
+  }, [isTransferApp, activeTab, defaultTabValue]);
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -1527,11 +1536,15 @@ export default function AssessmentApplicationPage() {
             }}
             className="space-y-6"
           >
-            <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/80">
+            <TabsList
+              className={`grid w-full ${isTransferApp ? "grid-cols-2" : "grid-cols-3"} h-auto p-1 bg-muted/80`}
+            >
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
-              <TabsTrigger value="field_report" className="py-2.5">
-                Assessment Report
-              </TabsTrigger>
+              {!isTransferApp && (
+                <TabsTrigger value="field_report" className="py-2.5">
+                  Assessment Report
+                </TabsTrigger>
+              )}
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -1652,77 +1665,79 @@ export default function AssessmentApplicationPage() {
               
             </TabsContent>
 
-            {/* Assessment Report Tab */}
-            <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
-              {(() => {
-                const intended = (application as any)?.intended_activities as string[] | null | undefined;
-                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
-                return (
-                  <FieldReportUpload
-                    applicationId={application.id}
-                    existingFiles={fieldReportFiles}
-                    summary={fieldReportSummary}
-                    inspectorName={inspectorName}
-                    inspectionDate={inspectionDate}
-                    onFilesChange={setFieldReportFiles}
-                    onSummaryChange={setFieldReportSummary}
-                    onInspectorNameChange={setInspectorName}
-                    onInspectionDateChange={setInspectionDate}
-                    documentsTitle="Supporting Documents"
-                    documentsRequired={false}
-                    documentsDescription="Upload any supporting documents (optional): PDFs, Word docs, and photos"
-                    inspectorNameReadOnly={true}
-                    readOnly={isReadOnly}
-                    hideSummary={true}
-                    showInlineValidation={false}
-                    betweenDetailsAndDocuments={
-                      <div className="space-y-6">
-                        {/* Assessor Recommendations - Requested vs Recommended comparison */}
-                        <AssessorRecommendations
-                          requestedDurationYears={requestedDurationYears}
-                          requestedVolumeM3={requestedVolumeM3}
-                          recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
-                          recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
-                          onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}
-                          onVolumeChange={(application as any).is_renewal ? undefined : saveVolumeAdjustment}
-                          readOnly={isReadOnly || (application as any).is_renewal}
-                          durationSaving={permitLengthSaving}
-                          volumeSaving={volumeSaving}
-                        />
-                        
-                        {/* Assessment Report Form */}
-                        <AssessmentReportForm
-                          reportData={assessmentReportData}
-                          onReportDataChange={setAssessmentReportData}
-                          reportType={rt}
-                          readOnly={isReadOnly}
-                          inspectionDate={inspectionDate}
-                          recommendation={recommendation}
-                          onRecommendationChange={setRecommendation}
-                        />
-                      </div>
-                    }
-                    afterDocuments={
-                      isReadOnly ? null : (() => {
-                        return (
-                          <div className="flex justify-end">
-                            <Button
-                              size="lg"
-                              onClick={handleOpenSendToReviewDialog}
-                              disabled={submitLoading}
-                              className="gap-2 bg-black hover:bg-gray-800 text-white"
-                            >
-                              {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                              Send for review
-                            </Button>
-                          </div>
-                        );
-                      })()
-                    }
-                  />
-                );
-              })()}
-            </TabsContent>
+            {/* Assessment Report Tab - Hidden for transfer applications */}
+            {!isTransferApp && (
+              <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
+                {(() => {
+                  const intended = (application as any)?.intended_activities as string[] | null | undefined;
+                  const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
+                  return (
+                    <FieldReportUpload
+                      applicationId={application.id}
+                      existingFiles={fieldReportFiles}
+                      summary={fieldReportSummary}
+                      inspectorName={inspectorName}
+                      inspectionDate={inspectionDate}
+                      onFilesChange={setFieldReportFiles}
+                      onSummaryChange={setFieldReportSummary}
+                      onInspectorNameChange={setInspectorName}
+                      onInspectionDateChange={setInspectionDate}
+                      documentsTitle="Supporting Documents"
+                      documentsRequired={false}
+                      documentsDescription="Upload any supporting documents (optional): PDFs, Word docs, and photos"
+                      inspectorNameReadOnly={true}
+                      readOnly={isReadOnly}
+                      hideSummary={true}
+                      showInlineValidation={false}
+                      betweenDetailsAndDocuments={
+                        <div className="space-y-6">
+                          {/* Assessor Recommendations - Requested vs Recommended comparison */}
+                          <AssessorRecommendations
+                            requestedDurationYears={requestedDurationYears}
+                            requestedVolumeM3={requestedVolumeM3}
+                            recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
+                            recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
+                            onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}
+                            onVolumeChange={(application as any).is_renewal ? undefined : saveVolumeAdjustment}
+                            readOnly={isReadOnly || (application as any).is_renewal}
+                            durationSaving={permitLengthSaving}
+                            volumeSaving={volumeSaving}
+                          />
+                          
+                          {/* Assessment Report Form */}
+                          <AssessmentReportForm
+                            reportData={assessmentReportData}
+                            onReportDataChange={setAssessmentReportData}
+                            reportType={rt}
+                            readOnly={isReadOnly}
+                            inspectionDate={inspectionDate}
+                            recommendation={recommendation}
+                            onRecommendationChange={setRecommendation}
+                          />
+                        </div>
+                      }
+                      afterDocuments={
+                        isReadOnly ? null : (() => {
+                          return (
+                            <div className="flex justify-end">
+                              <Button
+                                size="lg"
+                                onClick={handleOpenSendToReviewDialog}
+                                disabled={submitLoading}
+                                className="gap-2 bg-black hover:bg-gray-800 text-white"
+                              >
+                                {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                Send for review
+                              </Button>
+                            </div>
+                          );
+                        })()
+                      }
+                    />
+                  );
+                })()}
+              </TabsContent>
+            )}
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">

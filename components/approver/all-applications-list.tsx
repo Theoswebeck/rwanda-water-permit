@@ -48,9 +48,10 @@ interface ApplicationWithApplicant extends Application {
 
 interface AllApplicationsListProps {
   externalStatusFilter?: string[];
+  title?: string;
 }
 
-export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicationsListProps) {
+export function AllApplicationsList({ externalStatusFilter = [], title = "All Applications" }: AllApplicationsListProps) {
   const [applications, setApplications] = useState<ApplicationWithApplicant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -321,9 +322,11 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
       
       <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">All Applications</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
           <p className="text-muted-foreground">
-            Complete list of all water permit applications in the system
+            {title === "All Applications"
+              ? "Complete list of all water permit applications in the system"
+              : "Filtered applications based on the selected queue"}
           </p>
         </div>
       </div>
@@ -411,7 +414,7 @@ export function AllApplicationsList({ externalStatusFilter = [] }: AllApplicatio
       {/* Applications Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Applications ({filteredApplications.length})</CardTitle>
+          <CardTitle>{title} ({filteredApplications.length})</CardTitle>
           <CardDescription>
             Click on any application to view details and add comments
           </CardDescription>

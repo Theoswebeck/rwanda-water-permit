@@ -283,7 +283,11 @@ export default function PermitDetailPage() {
         permit.permitNumber,
         permit.conditions || [],
         5, // Default validity years
-        permit.isModified === true
+        permit.isModified === true,
+        {
+          issuedDate: permit.issueDate,
+          expiryDate: permit.expiryDate,
+        }
       );
       
       // Upload to storage

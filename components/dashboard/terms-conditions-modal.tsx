@@ -211,7 +211,7 @@ export function TermsConditionsModal({
 
       const { data: permitRow, error: fetchPermitErr } = (await supabase
         .from("permits")
-        .select("id, permit_number, conditions")
+        .select("id, permit_number, issued_date, expiry_date, conditions")
         .eq("id", issuedPermit.permitId)
         .single()) as { data: any; error: any };
       if (fetchPermitErr || !permitRow) throw fetchPermitErr || new Error("Permit not found");
@@ -233,7 +233,11 @@ export function TermsConditionsModal({
         permitRow.permit_number,
         conditionsForPdf,
         issuedPermit.durationYears,
-        issuedPermit.isModification
+        issuedPermit.isModification,
+        {
+          issuedDate: permitRow.issued_date,
+          expiryDate: permitRow.expiry_date,
+        }
       );
 
       console.log("📤 Uploading permit PDF to storage...");
