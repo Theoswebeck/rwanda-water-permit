@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSupabaseServerAuth, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
+const isMissingTransferRequestsTable = (err: unknown): boolean => {
+  const code = (err as { code?: unknown } | null)?.code
+  const message = String((err as { message?: unknown } | null)?.message || '')
+  return (
+    code === '42P01' ||
+    message.includes('relation "public.transfer_requests" does not exist') ||
+    message.includes('relation "transfer_requests" does not exist')
+  )
+}
+
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
 type UserContactProfile = {
@@ -62,6 +72,16 @@ export async function POST(req: NextRequest) {
       .eq('id', transferRequestId)
       .single()
     if (trErr || !tr) {
+      if (isMissingTransferRequestsTable(trErr)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Permit transfer requests are not available yet (missing transfer_requests table). Please apply the transfer requests migration to your database.',
+          },
+          { status: 503 }
+        )
+      }
       return NextResponse.json({ success: false, message: 'Transfer request not found' }, { status: 404 })
     }
 
@@ -128,7 +148,19 @@ export async function POST(req: NextRequest) {
         updated_at: now,
       })
       .eq('id', tr.id)
-    if (updTrErr) throw updTrErr
+    if (updTrErr) {
+      if (isMissingTransferRequestsTable(updTrErr)) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'Permit transfer requests are not available yet (missing transfer_requests table). Please apply the transfer requests migration to your database.',
+          },
+          { status: 503 }
+        )
+      }
+      throw updTrErr
+    }
 
     const { error: updAppErr } = await supabaseAdmin
       .from('applications')

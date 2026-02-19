@@ -466,8 +466,10 @@ function computeModificationChanges(
     
     if (originalStr !== currentStr) {
       changes[field] = {
-        previous: originalValue,
-        current: currentValue
+        // Use null instead of undefined so JSON.stringify preserves the "previous" key.
+        // (undefined is silently dropped by JSON.stringify, losing the original value.)
+        previous: originalValue !== undefined ? originalValue : null,
+        current: currentValue !== undefined ? currentValue : null,
       };
     }
   }

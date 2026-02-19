@@ -53,3 +53,12 @@ export function getSupabaseAdmin() {
   return createClient<Database>(url, serviceKey)
 }
 
+export function isMissingTransferRequestsTable(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  const message = String((err as { message?: unknown } | null)?.message || '')
+  return (
+    code === '42P01' ||
+    message.includes('relation "public.transfer_requests" does not exist') ||
+    message.includes('relation "transfer_requests" does not exist')
+  )
+}

@@ -111,7 +111,10 @@ export default async function PublicContractTermsPage({
   const importantNotice = terms?.importantNotice
     ? {
         title: terms.importantNotice.title,
-        body: placeholderCtx ? fillContractText(terms.importantNotice.body, placeholderCtx) : terms.importantNotice.body,
+        // This page is intended to be accessed from the QR code on the downloaded contract,
+        // so we use the post-acceptance wording.
+        body:
+          "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
       }
     : null;
 

@@ -470,3 +470,75 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
   return mappedData;
 }
 
+
+/**
+ * Enriches modification_changes with missing `previous` values.
+ *
+ * When `computeModificationChanges` stored `undefined` as a previous value,
+ * JSON.stringify silently dropped the key, leaving `{ current: X }` without
+ * `previous`. This helper reconstructs the missing previous values from the
+ * original application's data (internal_notes + top-level columns).
+ *
+ * @param modificationChanges - The stored modification changes (may have missing `previous`)
+ * @param originalApplication - The original application that was being modified
+ * @returns A new object with missing `previous` values filled in
+ */
+export function enrichModificationChanges(
+  modificationChanges: Record<string, { previous?: any; current?: any }> | null | undefined,
+  originalApplication: any | null | undefined,
+): Record<string, { previous: any; current: any }> {
+  if (!modificationChanges || typeof modificationChanges !== 'object') return {};
+
+  // Parse internal_notes from the original application to get original form values
+  let originalFormData: Record<string, any> = {};
+  if (originalApplication) {
+    try {
+      const parsed = JSON.parse(originalApplication.internal_notes || '{}');
+      if (parsed && typeof parsed === 'object') {
+        originalFormData = parsed;
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  // Map of form field names -> application-level column names (fallback sources)
+  const columnFallbacks: Record<string, string> = {
+    permitLengthYears: 'proposed_duration_years',
+    intendedActivities: 'intended_activities',
+  };
+
+  const enriched: Record<string, { previous: any; current: any }> = {};
+
+  for (const [fieldName, change] of Object.entries(modificationChanges)) {
+    const hasPrevious = change && ('previous' in change) && change.previous !== undefined && change.previous !== null;
+
+    if (hasPrevious) {
+      // Previous value exists, keep as-is
+      enriched[fieldName] = { previous: change.previous, current: change.current };
+    } else {
+      // Previous value is missing - try to reconstruct from original application
+      let reconstructedPrevious: any = null;
+
+      // 1. Try internal_notes form data
+      if (originalFormData[fieldName] !== undefined && originalFormData[fieldName] !== null) {
+        reconstructedPrevious = originalFormData[fieldName];
+      }
+      // 2. Try application-level column fallback
+      else if (columnFallbacks[fieldName] && originalApplication) {
+        const colName = columnFallbacks[fieldName];
+        const colValue = originalApplication[colName];
+        if (colValue !== undefined && colValue !== null) {
+          reconstructedPrevious = colValue;
+        }
+      }
+
+      enriched[fieldName] = {
+        previous: reconstructedPrevious,
+        current: change.current,
+      };
+    }
+  }
+
+  return enriched;
+}

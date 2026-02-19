@@ -56,6 +56,32 @@ export function TermsConditionsModal({
   const [isLoadingTerms, setIsLoadingTerms] = useState(false);
   const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
   const [termsApplication, setTermsApplication] = useState<any | null>(null);
+  const [issuedPermit, setIssuedPermit] = useState<{
+    permitId: string;
+    permitNumber: string;
+    durationYears: number;
+    isModification: boolean;
+  } | null>(null);
+  const [isGeneratingPermitPdf, setIsGeneratingPermitPdf] = useState(false);
+  const [permitPdfError, setPermitPdfError] = useState<string | null>(null);
+  const [isGeneratingTermsPdf, setIsGeneratingTermsPdf] = useState(false);
+  const [termsPdfError, setTermsPdfError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Reset local UI state when modal opens (and when switching applications).
+    setIsProcessing(false);
+    setHasReadTerms(false);
+    setAcceptedTerms(false);
+    setShowFeedback(false);
+    setRating(0);
+    setFeedback("");
+    setIssuedPermit(null);
+    setIsGeneratingPermitPdf(false);
+    setPermitPdfError(null);
+    setIsGeneratingTermsPdf(false);
+    setTermsPdfError(null);
+  }, [isOpen, applicationId]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -161,6 +187,145 @@ export function TermsConditionsModal({
       return null;
     }
   }, [termsApplication, applicationNumber]);
+
+  const handleGeneratePermitPdf = async () => {
+    if (!issuedPermit) return;
+    if (isGeneratingPermitPdf) return;
+    setIsGeneratingPermitPdf(true);
+    setPermitPdfError(null);
+    try {
+      console.log("📄 Generating Water Permit PDF (user-triggered)...");
+
+      // Fetch the latest application + permit to ensure the PDF matches persisted state.
+      const { data: applicationData, error: fetchAppErr } = (await supabase
+        .from("applications")
+        .select(
+          `
+          *,
+          applicant:users!applicant_id(*)
+        `
+        )
+        .eq("id", applicationId)
+        .single()) as { data: any; error: any };
+      if (fetchAppErr || !applicationData) throw fetchAppErr || new Error("Application not found");
+
+      const { data: permitRow, error: fetchPermitErr } = (await supabase
+        .from("permits")
+        .select("id, permit_number, conditions")
+        .eq("id", issuedPermit.permitId)
+        .single()) as { data: any; error: any };
+      if (fetchPermitErr || !permitRow) throw fetchPermitErr || new Error("Permit not found");
+
+      const conditionsForPdf: string[] = (() => {
+        const c = permitRow?.conditions?.conditions;
+        if (Array.isArray(c)) return c;
+        return [
+          "Comply with all environmental regulations",
+          "Submit quarterly usage reports",
+          "Allow inspections as required",
+          ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : []),
+        ];
+      })();
+
+      const { generateDigitalWaterPermitBlob } = await import("@/lib/pdf-generator");
+      const pdfBlob = await generateDigitalWaterPermitBlob(
+        applicationData,
+        permitRow.permit_number,
+        conditionsForPdf,
+        issuedPermit.durationYears,
+        issuedPermit.isModification
+      );
+
+      console.log("📤 Uploading permit PDF to storage...");
+      const upload = await uploadPermitPdf({
+        permitId: issuedPermit.permitId,
+        permitNumber: permitRow.permit_number,
+        pdfBlob,
+      });
+
+      if (upload?.path) {
+        const { error: permitPdfUpdateError } = await (supabase as any)
+          .from("permits")
+          .update({
+            permit_pdf_url: upload.path,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", issuedPermit.permitId);
+
+        if (permitPdfUpdateError) {
+          console.warn("⚠️ Failed to persist permit_pdf_url on permit:", permitPdfUpdateError);
+        } else {
+          console.log("✅ permit_pdf_url saved on permit record");
+        }
+      } else {
+        console.warn("⚠️ PDF upload failed (no path returned).");
+      }
+
+      // Open the generated PDF in a new tab (user-initiated => less likely to be popup-blocked).
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, "_blank");
+      console.log("✅ Water Permit PDF opened in new tab");
+    } catch (e) {
+      console.error("❌ Permit PDF generation failed:", e);
+      setPermitPdfError(e instanceof Error ? e.message : "Failed to generate permit PDF.");
+    } finally {
+      setIsGeneratingPermitPdf(false);
+    }
+  };
+
+  const handleGenerateTermsPdf = async () => {
+    if (isGeneratingTermsPdf) return;
+    if (!resolvedTerms) return;
+    setIsGeneratingTermsPdf(true);
+    setTermsPdfError(null);
+    try {
+      console.log("📄 Generating Terms & Conditions PDF (user-triggered)...");
+
+      const applicantName = (() => {
+        const applicant = termsApplication?.applicant;
+        if (!applicant) return "N/A";
+        if (applicant.account_type === "individual") {
+          return `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "N/A";
+        }
+        return applicant.company_name || "N/A";
+      })();
+
+      // Fill placeholders in the terms sections
+      const filledSections = resolvedTerms.sections.map((section) => ({
+        title: section.title,
+        paragraphs: section.paragraphs.map((p) => (placeholderCtx ? fillContractText(p, placeholderCtx) : p)),
+      }));
+
+      // IMPORTANT:
+      // - In the modal (pre-acceptance), the notice uses "By accepting these terms..."
+      // - In the downloaded contract PDF (post-acceptance), use past-tense wording.
+      const postAcceptanceNoticeBody =
+        "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.";
+
+      const contractNumber = issuedPermit?.permitNumber ? issuedPermit.permitNumber.replace("WP-", "") : "N/A";
+
+      const termsBlob = await generateTermsConditionsPdfBlob({
+        applicationNumber: applicationNumber,
+        projectTitle: projectTitle,
+        applicantName: applicantName,
+        contractNumber,
+        termsHeading: resolvedTerms.heading,
+        termsSections: filledSections,
+        importantNotice: resolvedTerms.importantNotice
+          ? { ...resolvedTerms.importantNotice, body: postAcceptanceNoticeBody }
+          : null,
+      });
+
+      const termsUrl = URL.createObjectURL(termsBlob);
+      window.open(termsUrl, "_blank");
+      console.log("✅ Terms and Conditions PDF opened in new tab");
+    } catch (e) {
+      console.error("❌ Terms PDF generation failed:", e);
+      setTermsPdfError(e instanceof Error ? e.message : "Failed to generate terms PDF.");
+    } finally {
+      setIsGeneratingTermsPdf(false);
+    }
+  };
 
   const handleAcceptTerms = async () => {
     if (isProcessing) return;
@@ -608,97 +773,15 @@ export function TermsConditionsModal({
         console.log('✅ Permit created successfully:', permitData.permit_number);
       }
 
-      // Generate the exact PDF and persist it to Supabase Storage + save path in DB
-      try {
-        // Get conditions for PDF from permit data (handle both new and renewed permits)
-        const conditionsForPdf: string[] = (() => {
-          // First try to get from permitData (for renewals, this comes from the existing permit)
-          if (permitData?.conditions?.conditions && Array.isArray(permitData.conditions.conditions)) {
-            return permitData.conditions.conditions;
-          }
-          // Default conditions
-          return [
-            'Comply with all environmental regulations',
-            'Submit quarterly usage reports',
-            'Allow inspections as required',
-            ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
-          ];
-        })();
-
-        console.log('📄 Generating PDF permit (for storage + view) with duration:', resolvedDurationYearsGlobal, 'years');
-        const { generateDigitalWaterPermitBlob } = await import('@/lib/pdf-generator');
-        const pdfBlob = await generateDigitalWaterPermitBlob(
-          applicationData,
-          permitData.permit_number,
-          conditionsForPdf,
-          resolvedDurationYearsGlobal,
-          isModificationApplication // stamp "MODIFIED PERMIT" badge on PDF
-        );
-        console.log('✅ PDF permit generated');
-
-        console.log('📤 Uploading PDF to Supabase Storage...');
-        const upload = await uploadPermitPdf({
+      // Store issued permit info for the completion screen.
+      // (PDF generation is now optional/user-triggered to avoid blocking acceptance.)
+      if (permitData?.id && permitData?.permit_number) {
+        setIssuedPermit({
           permitId: permitData.id,
           permitNumber: permitData.permit_number,
-          pdfBlob,
+          durationYears: resolvedDurationYearsGlobal,
+          isModification: isModificationApplication,
         });
-
-        if (upload?.path) {
-          console.log('✅ PDF uploaded:', upload.path);
-
-          const { error: permitPdfUpdateError } = await (supabase as any)
-            .from('permits')
-            .update({
-              permit_pdf_url: upload.path, // store the storage path (preferred)
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', permitData.id);
-
-          if (permitPdfUpdateError) {
-            console.warn('⚠️ Failed to persist permit_pdf_url on permit:', permitPdfUpdateError);
-          } else {
-            console.log('✅ permit_pdf_url saved on permit record');
-          }
-        } else {
-          console.warn('⚠️ PDF upload failed (no path returned).');
-        }
-
-        // Generate Terms and Conditions PDF and open in new tab
-        if (resolvedTerms) {
-          console.log('📄 Generating Terms and Conditions PDF...');
-          const applicantName = applicationData.applicant?.account_type === 'individual'
-            ? `${applicationData.applicant.first_name || ''} ${applicationData.applicant.last_name || ''}`.trim() || 'N/A'
-            : applicationData.applicant?.company_name || 'N/A';
-
-          // Fill placeholders in the terms sections
-          const filledSections = resolvedTerms.sections.map((section) => ({
-            title: section.title,
-            paragraphs: section.paragraphs.map((p) => 
-              placeholderCtx ? fillContractText(p, placeholderCtx) : p
-            )
-          }));
-
-          const termsBlob = await generateTermsConditionsPdfBlob({
-            applicationNumber: applicationNumber,
-            projectTitle: projectTitle,
-            applicantName: applicantName,
-            contractNumber: permitData.permit_number.replace('WP-', ''),
-            termsHeading: resolvedTerms.heading,
-            termsSections: filledSections,
-            importantNotice: resolvedTerms.importantNotice || null,
-          });
-          
-          const termsUrl = URL.createObjectURL(termsBlob);
-          window.open(termsUrl, '_blank');
-          console.log('✅ Terms and Conditions PDF opened in new tab');
-        }
-
-        // Open the generated Permit PDF in a new tab for the user
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-        window.open(pdfUrl, '_blank');
-        console.log('✅ Water Permit PDF opened in new tab');
-      } catch (pdfStoreError) {
-        console.warn('⚠️ PDF generation/upload failed, but permit was created:', pdfStoreError);
       }
 
       // Finalize the workflow: once terms are accepted and permit is created, mark application as approved
@@ -744,7 +827,7 @@ export function TermsConditionsModal({
       }
 
       console.log("✅ Terms accepted successfully! Your permit has been generated...");
-      console.log('📋 Both Terms & Conditions and Water Permit PDFs have been opened in new tabs for download.');
+      console.log('📋 Permit issuance completed. PDFs can be downloaded from the completion screen.');
       
       setShowFeedback(true);
       // Don't call onTermsAccepted() immediately - let user see feedback first
@@ -797,18 +880,18 @@ export function TermsConditionsModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (open) return;
+        // If the user closes the modal after completing acceptance, make sure the parent refreshes.
+        if (showFeedback) onTermsAccepted();
+        onClose();
+      }}
+    >
       <DialogContent
         className="w-[95vw] max-w-[95vw] sm:max-w-[95vw] md:max-w-6xl lg:max-w-7xl h-[92vh] max-h-[92vh] p-0 overflow-hidden"
-        showCloseButton={!showFeedback}
-        onEscapeKeyDown={(e) => {
-          // Prevent "skipping" the feedback step via ESC
-          if (showFeedback) e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          // Prevent "skipping" the feedback step via overlay click
-          if (showFeedback) e.preventDefault();
-        }}
+        showCloseButton={true}
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="px-6 pt-6">
@@ -951,7 +1034,56 @@ export function TermsConditionsModal({
               </div>
             ) : (
               <div className="space-y-6 pt-4">
-                <h3 className="text-xl font-semibold">How was your experience using the water permit system?</h3>
+                <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+                  <p className="text-base font-medium text-green-800">
+                    ✅ Permit issued successfully{issuedPermit?.permitNumber ? ` (${issuedPermit.permitNumber})` : ""}.
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    Download your PDFs below. Feedback is optional.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    onClick={handleGeneratePermitPdf}
+                    disabled={!issuedPermit || isGeneratingPermitPdf}
+                    className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+                  >
+                    {isGeneratingPermitPdf ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileCheck className="h-4 w-4" />
+                    )}
+                    Download Water Permit (PDF)
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleGenerateTermsPdf}
+                    disabled={!resolvedTerms || isGeneratingTermsPdf}
+                    className="flex items-center gap-2"
+                  >
+                    {isGeneratingTermsPdf ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Shield className="h-4 w-4" />
+                    )}
+                    Download Terms (PDF)
+                  </Button>
+                </div>
+
+                {permitPdfError ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+                    ⚠️ Permit PDF: {permitPdfError}
+                  </div>
+                ) : null}
+                {termsPdfError ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-800">
+                    ⚠️ Terms PDF: {termsPdfError}
+                  </div>
+                ) : null}
+
+                <h3 className="text-xl font-semibold">How was your experience using the water permit system? (optional)</h3>
                 <div className="flex items-center gap-2">
                   {[1, 2, 3, 4, 5].map((s) => (
                     <button key={s} onClick={() => setRating(s)} aria-label={`Rate ${s} stars`}>
@@ -972,9 +1104,17 @@ export function TermsConditionsModal({
                 />
                 <div className="flex justify-end gap-2">
                   <Button
+                    variant="outline"
+                    onClick={() => {
+                      onTermsAccepted();
+                      onClose();
+                    }}
+                  >
+                    Skip
+                  </Button>
+                  <Button
                     onClick={() => {
                       /* TODO: send feedback to supabase */
-                      setShowFeedback(false);
                       onTermsAccepted();
                       onClose();
                     }}
@@ -1013,7 +1153,7 @@ export function TermsConditionsModal({
                   ) : (
                     <CheckCircle className="h-5 w-5" />
                   )}
-                  Accept Terms & Generate Permit
+                  Accept Terms & Issue Permit
                 </Button>
               </DialogFooter>
             </div>

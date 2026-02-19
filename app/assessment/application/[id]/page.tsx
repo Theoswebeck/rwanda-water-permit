@@ -44,6 +44,7 @@ import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { VerificationStatus } from "@/components/inspection/document-verification";
@@ -316,6 +317,7 @@ export default function AssessmentApplicationPage() {
   const [transferFormData, setTransferFormData] = useState<any>(null);
   const [isTransferApp, setIsTransferApp] = useState(false);
   const [isModificationApp, setIsModificationApp] = useState(false);
+  const [originalModificationApp, setOriginalModificationApp] = useState<any>(null);
   
   // Assessment State
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
@@ -564,6 +566,23 @@ export default function AssessmentApplicationPage() {
         const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
         setIsTransferApp(transferDetected);
         setIsModificationApp(modificationDetected);
+
+        // For modification apps: fetch the original application to reconstruct missing previous values
+        if (modificationDetected) {
+          const origAppId = (appData as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+          if (origAppId) {
+            try {
+              const { data: origApp } = await supabase
+                .from('applications')
+                .select('internal_notes, proposed_duration_years, intended_activities')
+                .eq('id', origAppId)
+                .maybeSingle();
+              setOriginalModificationApp(origApp || null);
+            } catch (err) {
+              console.error('⚠️ Could not fetch original application for modification enrichment:', err);
+            }
+          }
+        }
 
         if (transferDetected) {
           setTransferFormData(parsedNotes?.transferFormData || null);
@@ -1579,7 +1598,7 @@ export default function AssessmentApplicationPage() {
                     readOnly={true}
                     isStaffView={true}
                     isModification={true}
-                    modificationChanges={(application as any).modification_changes || undefined}
+                    modificationChanges={enrichModificationChanges((application as any).modification_changes, originalModificationApp)}
                   />
                 ) : null
               ) : (application as any).is_renewal && renewalPermit ? (

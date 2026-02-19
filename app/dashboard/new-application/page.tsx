@@ -1074,6 +1074,11 @@ function NewApplicationContent() {
             originalFormData.intendedActivities = (originalApplication as any).intended_activities;
           }
 
+          // Backfill permitLengthYears from proposed_duration_years if internal_notes didn't include it
+          if (originalFormData.permitLengthYears == null && (originalApplication as any).proposed_duration_years != null) {
+            originalFormData.permitLengthYears = Number((originalApplication as any).proposed_duration_years);
+          }
+
           // Back-compat: normalize legacy single polygon into waterSourcePolygons
           if (!Array.isArray(originalFormData.waterSourcePolygons) || originalFormData.waterSourcePolygons.length === 0) {
             if (Array.isArray(originalFormData.waterSourceCoordinates)) {

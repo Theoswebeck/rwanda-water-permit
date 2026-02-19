@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin, getSupabaseServerAuth, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
+const isMissingTransferRequestsTable = (err: unknown): boolean => {
+  const code = (err as { code?: unknown } | null)?.code
+  const message = String((err as { message?: unknown } | null)?.message || '')
+  return (
+    code === '42P01' ||
+    message.includes('relation "public.transfer_requests" does not exist') ||
+    message.includes('relation "transfer_requests" does not exist')
+  )
+}
+
 type UserContactProfile = {
   id: string
   email: string | null
@@ -84,9 +94,7 @@ export async function GET(req: NextRequest) {
     if (error) {
       // If the feature table isn't deployed yet, treat as "no incoming transfers"
       // to avoid breaking the dashboard UX.
-      const errCode = (error as { code?: string } | null)?.code
-      const errMsg = String((error as { message?: unknown } | null)?.message || '')
-      if (errCode === '42P01' || errMsg.includes('relation "public.transfer_requests" does not exist')) {
+      if (isMissingTransferRequestsTable(error)) {
         console.warn('⚠️ transfers/incoming: transfer_requests table missing; returning empty list')
         return NextResponse.json({ success: true, transfers: [] })
       }

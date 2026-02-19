@@ -322,7 +322,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     ],
     importantNotice: {
       title: "Important Notice",
-      body: "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
+      body: "By accepting these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
     },
   },
   abstraction_organization: {
@@ -644,7 +644,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     ],
     importantNotice: {
       title: "Important Notice",
-      body: "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
+      body: "By accepting these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
     },
   },
   concession_individual: {
@@ -974,7 +974,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     ],
     importantNotice: {
       title: "Important Notice",
-      body: "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
+      body: "By accepting these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
     },
   },
   concession_organization: {
@@ -1302,7 +1302,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     ],
     importantNotice: {
       title: "Important Notice",
-      body: "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
+      body: "By accepting these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
     },
   },
   fallback_generic: null,

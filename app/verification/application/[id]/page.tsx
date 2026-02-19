@@ -25,6 +25,7 @@ import { AssessorRecommendations } from "@/components/inspection/assessor-recomm
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
@@ -155,6 +156,7 @@ export default function VerificationApplicationPage() {
   const [transferFormData, setTransferFormData] = useState<any>(null);
   const [isTransferApp, setIsTransferApp] = useState(false);
   const [isModificationApp, setIsModificationApp] = useState(false);
+  const [originalModificationApp, setOriginalModificationApp] = useState<any>(null);
 
   const [documentVerifications, setDocumentVerifications] = useState<Record<string, { status: VerificationStatus; notes: string }>>({});
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
@@ -220,6 +222,23 @@ export default function VerificationApplicationPage() {
         const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
         setIsTransferApp(transferDetected);
         setIsModificationApp(modificationDetected);
+
+        // For modification apps: fetch the original application to reconstruct missing previous values
+        if (modificationDetected) {
+          const origAppId = (appData as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+          if (origAppId) {
+            try {
+              const { data: origApp } = await supabase
+                .from('applications')
+                .select('internal_notes, proposed_duration_years, intended_activities')
+                .eq('id', origAppId)
+                .maybeSingle();
+              setOriginalModificationApp(origApp || null);
+            } catch (err) {
+              console.error('⚠️ Could not fetch original application for modification enrichment:', err);
+            }
+          }
+        }
 
         if (transferDetected) {
           setTransferFormData(parsedNotes?.transferFormData || null);
@@ -814,7 +833,7 @@ export default function VerificationApplicationPage() {
                     readOnly={true}
                     isStaffView={true}
                     isModification={true}
-                    modificationChanges={(application as any).modification_changes || undefined}
+                    modificationChanges={enrichModificationChanges((application as any).modification_changes, originalModificationApp)}
                   />
                 ) : null
               ) : (application as any).is_renewal && renewalPermit ? (
