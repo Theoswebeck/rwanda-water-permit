@@ -2,161 +2,98 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-// import { ProtectedRoute } from "@/components/auth/protected-route"; // TEMPORARY: Disabled for testing
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getApproverDashboardStats } from "@/lib/supabase";
-import { 
-  CheckCircle, 
-  XCircle, 
-  Clock,
-  FileCheck, 
+import {
+  FileCheck,
   AlertTriangle,
   Loader2,
-  MapPin
+  MapPin,
 } from "lucide-react";
-import { ExecutiveOverview } from "@/components/approver/executive-overview";
-import { PerformanceMetrics } from "@/components/approver/performance-metrics";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { AllApplicationsList } from "@/components/approver/all-applications-list";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
-import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
-import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
+import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
+import { supabase } from "@/lib/supabase";
+import type { Application } from "@/types/database";
 
-interface DashboardStats {
-  pendingFinalApproval: number;
-  returnedToVerification: number;
-  approvedPendingPermit: number;
-  approved: number;
-  totalApplications: number;
-  avgDecisionTime: number;
-  complianceRate: number;
-}
+// ─── Chip definitions per RWB spec ────────────────────────────────────────────
+const APPROVER_CHIPS: StatusChipDef[] = [
+  { id: "pending_approval", label: "Pending Approval", statuses: ["pending_final_approval"], priority: "primary" },
+  { id: "returned_to_verifier", label: "Returned to Verifier", statuses: ["returned_to_verification"], priority: "secondary" },
+  { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "secondary" },
+  { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
+  { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+];
 
 export default function ApproverDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports">("approval");
-  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeChipId, setActiveChipId] = useState(APPROVER_CHIPS[0].id);
   const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
+  // All applications for chip count computation
+  const [allApplications, setAllApplications] = useState<Application[]>([]);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchApps = async () => {
       try {
         setLoading(true);
-        const dashboardStats = await getApproverDashboardStats();
-        setStats(dashboardStats);
+        const { data, error: fetchError } = await supabase
+          .from("applications")
+          .select("id, status")
+          .neq("status", "draft");
+
+        if (fetchError) throw fetchError;
+        setAllApplications((data || []) as Application[]);
       } catch (err) {
-        console.error('Failed to fetch approver dashboard stats:', err);
-        setError('Failed to load dashboard statistics');
+        console.error("Failed to fetch approver applications:", err);
+        setError("Failed to load dashboard");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStats();
+    fetchApps();
   }, []);
 
-  // Handle stats card click
-  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
-    setSelectedStatId(statId);
-    setStatusFilter(filterStatuses);
-  };
-
-  // Create stats configuration for clickable cards
-  // Pattern: Panel 1 = Pending (my queue), Panel 2 = Returned (under work), Panel 3 = Next Stage, Panel 4 = Next-Next Stage
-  const statsConfig: StatsConfig[] = useMemo(() => [
-    {
-      id: "pending_approval",
-      title: "Pending Approval",
-      value: stats?.pendingFinalApproval ?? 0,
-      description: "My queue - needs decision",
-      icon: Clock,
-      iconColor: "text-blue-600",
-      filterStatuses: ["pending_final_approval"],
-      badgeText: stats?.pendingFinalApproval === 0 ? "All caught up" : `${stats?.pendingFinalApproval} in queue`,
-      badgeClassName: stats?.pendingFinalApproval === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
-    },
-    {
-      id: "returned_to_verification",
-      title: "Returned to Verifier",
-      value: stats?.returnedToVerification ?? 0,
-      description: "Items I sent back",
-      icon: AlertTriangle,
-      iconColor: "text-amber-600",
-      filterStatuses: ["returned_to_verification"],
-      badgeText: stats?.returnedToVerification === 0 ? "No follow-ups" : `${stats?.returnedToVerification} returned`,
-      badgeClassName: stats?.returnedToVerification === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
-    },
-    {
-      id: "approved_pending_permit",
-      title: "Awaiting Terms",
-      value: stats?.approvedPendingPermit ?? 0,
-      description: "Next stage - with Applicant",
-      icon: CheckCircle,
-      iconColor: "text-green-600",
-      filterStatuses: ["approved_pending_permit"],
-      badgeText: stats?.approvedPendingPermit === 0 ? "None pending" : `${stats?.approvedPendingPermit} awaiting`,
-      badgeClassName: stats?.approvedPendingPermit === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-green-100 text-green-800 hover:bg-green-100",
-      isNextStage: true,
-    },
-    {
-      id: "approved",
-      title: "Permits Issued",
-      value: stats?.approved ?? 0,
-      description: "Next-next - active permits",
-      icon: FileCheck,
-      iconColor: "text-indigo-600",
-      filterStatuses: ["approved"],
-      badgeText: stats?.approved === 0 ? "None issued" : `${stats?.approved} permits`,
-      badgeClassName: stats?.approved === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-    },
-  ], [stats]);
+  // Derive active statuses from chip selection
+  const activeStatuses = useMemo(() => {
+    const chip = APPROVER_CHIPS.find((c) => c.id === activeChipId);
+    return chip?.statuses ?? [];
+  }, [activeChipId]);
 
   if (loading) {
     return (
-      // <ProtectedRoute allowedRoles={['approver']} requireProfile={true}>
-        <div className="container mx-auto px-6 py-8">
-          <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
-      // </ProtectedRoute>
+      </div>
     );
   }
 
   if (error) {
     return (
-      // <ProtectedRoute allowedRoles={['approver']} requireProfile={true}>
-        <div className="container mx-auto px-6 py-8">
-          <div className="text-center py-12">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
-            <p className="text-muted-foreground">{error}</p>
-          </div>
+      <div className="container mx-auto px-6 py-8">
+        <div className="text-center py-12">
+          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
+          <p className="text-muted-foreground">{error}</p>
         </div>
-      // </ProtectedRoute>
+      </div>
     );
   }
 
+  const activeChipLabel = APPROVER_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
+
   return (
-    // <ProtectedRoute allowedRoles={['approver']} requireProfile={true}>
-      <div className="container mx-auto px-6 py-8 space-y-8">
+    <div className="container mx-auto px-6 py-8 space-y-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -179,13 +116,13 @@ export default function ApproverDashboard() {
           </div>
         </div>
 
-        {/* Summary Cards - Clickable to filter applications */}
-        <ClickableStatsGrid
-          stats={statsConfig}
-          selectedStatId={selectedStatId}
-          onStatClick={handleStatClick}
-          isLoading={loading}
-          columns={4}
+        {/* Status Filter Chips */}
+        <StatusFilterChips
+          chips={APPROVER_CHIPS}
+          activeChipId={activeChipId}
+          onChipChange={setActiveChipId}
+          applications={allApplications}
+          className="mb-6"
         />
 
         <StaffTopTabs
@@ -200,7 +137,7 @@ export default function ApproverDashboard() {
 
         {topTab === "approval" ? (
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
                 <FileCheck className="h-5 w-5" />
                 Approval Management
@@ -209,28 +146,23 @@ export default function ApproverDashboard() {
             <CardContent>
               <Tabs value={activeApprovalTab} onValueChange={setActiveApprovalTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                  <TabsTrigger value="all_applications">Applications</TabsTrigger>
                   <TabsTrigger value="map" className="flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
                     Concession Map
                   </TabsTrigger>
                 </TabsList>
 
-              {/* Tab Contents */}
-              <TabsContent value="all_applications" className="space-y-4 mt-6">
-                <AllApplicationsList
-                  externalStatusFilter={statusFilter}
-                  title={
-                    selectedStatId
-                      ? statsConfig.find((s) => s.id === selectedStatId)?.title ?? "All Applications"
-                      : "All Applications"
-                  }
-                />
-              </TabsContent>
+                <TabsContent value="all_applications" className="space-y-4 mt-4">
+                  <AllApplicationsList
+                    externalStatusFilter={activeStatuses}
+                    title={activeChipLabel}
+                  />
+                </TabsContent>
 
-              <TabsContent value="map" className="space-y-4 mt-6">
-                <WaterConcessionMap />
-              </TabsContent>
+                <TabsContent value="map" className="space-y-4 mt-4">
+                  <WaterConcessionMap />
+                </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
@@ -242,7 +174,6 @@ export default function ApproverDashboard() {
           <WaterUseReportsList />
         )}
       </motion.div>
-      </div>
-    // </ProtectedRoute>
+    </div>
   );
-} 
+}

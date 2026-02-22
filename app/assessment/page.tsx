@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,21 +18,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, ArrowUpDown, MapPin, Loader2, Droplets, FileCheck, Calendar, Filter, ClipboardCheck } from "lucide-react";
+import { Eye, Search, XCircle, MapPin, Loader2, FileCheck } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
-import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
-import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
-import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
-import { ProtectedRoute } from "@/components/auth/protected-route";
+import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
-import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
+import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
+import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
+import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 
 interface AssessmentApplication extends Application {
   applicant_name?: string;
@@ -40,32 +39,33 @@ interface AssessmentApplication extends Application {
   deadline_90_days_remaining?: number;
 }
 
-interface AssessmentStatsData {
-  pendingAssessment: number;
-  underAssessment: number;
-  reviewerWork: number;
-  verifierWork: number;
-}
+// ─── Chip definitions per RWB spec ────────────────────────────────────────────
+const ASSESSOR_CHIPS: StatusChipDef[] = [
+  { id: "pending_assessment", label: "Pending Assessment", statuses: ["pending_assessment"], priority: "primary" },
+  { id: "under_assessment", label: "Under Assessment", statuses: ["under_review"], priority: "primary" },
+  { id: "returned_to_applicant", label: "Returned to Applicant", statuses: ["revision_required"], priority: "primary" },
+  { id: "pending_review", label: "Pending Review", statuses: ["pending_review"], priority: "secondary" },
+  { id: "re_assessment", label: "Re-Assessment", statuses: ["returned_to_assessment"], priority: "primary" },
+  { id: "pending_verification", label: "Pending Verification", statuses: ["pending_verification"], priority: "downstream" },
+  { id: "pending_approval", label: "Pending Approval", statuses: ["pending_final_approval"], priority: "downstream" },
+  { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
+  { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
+  { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+];
 
 export default function AssessmentDashboard() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
-  // Applications assigned to the current assessor (queue/worklist).
-  const [assignedApplications, setAssignedApplications] = useState<AssessmentApplication[]>([]);
-  // All non-draft applications visible to assessment staff (scope is enforced by Supabase RLS).
   const [allApplications, setAllApplications] = useState<AssessmentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
-  const [stats, setStats] = useState<AssessmentStatsData | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
   const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports">("assessment");
-  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeChipId, setActiveChipId] = useState(ASSESSOR_CHIPS[0].id);
   const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
+  const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
   const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
     return (data ?? []).map((app) => {
@@ -76,7 +76,6 @@ export default function AssessmentDashboard() {
           ? `${applicant.first_name} ${applicant.last_name}`
           : "Unknown Applicant");
 
-      // Calculate SLA days remaining
       let slaRemaining: number | null = null;
       if (app.due_date) {
         const dueDate = new Date(app.due_date);
@@ -86,7 +85,6 @@ export default function AssessmentDashboard() {
         slaRemaining = diffDays;
       }
 
-      // 90-day countdown starts from when completeness was confirmed (not submission)
       const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
         completenessConfirmedAt: app.completeness_confirmed_at,
       });
@@ -100,41 +98,19 @@ export default function AssessmentDashboard() {
     });
   };
 
-  // Fetch applications for assessment.
-  // - Applications for Assessment: ONLY assigned to this assessor
-  // - All Applications: everything the user is allowed to see (RLS enforced)
+  // Fetch all non-draft applications
   useEffect(() => {
     const fetchAssessmentApplications = async () => {
       try {
         if (authLoading) return;
         if (!user?.id) {
-          setAssignedApplications([]);
           setAllApplications([]);
           return;
         }
 
         setLoading(true);
-        setStatsLoading(true);
         setError(null);
 
-        // 1) Assigned queue (worklist) - includes returned_to_assessment for applications sent back for corrections
-        const { data: assignedData, error: assignedError } = await supabase
-          .from("applications")
-          .select(
-            `
-            *,
-            applicant:users!applicant_id(first_name, last_name, company_name)
-          `
-          )
-          .eq("assigned_assessor_id", user.id)
-          .in("status", ["pending_assessment", "under_review", "returned_to_assessment"])
-          // Always show latest submissions first (fallback to created_at when submitted_at is null).
-          .order("submitted_at", { ascending: false, nullsFirst: false })
-          .order("created_at", { ascending: false });
-
-        if (assignedError) throw assignedError;
-
-        // 2) All applications (for oversight/search)
         const { data: allData, error: allError } = await supabase
           .from('applications')
           .select(`
@@ -142,45 +118,24 @@ export default function AssessmentDashboard() {
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
           .neq('status', 'draft')
-          // Always show latest submissions first (fallback to created_at when submitted_at is null).
           .order("submitted_at", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
 
         if (allError) throw allError;
 
-        const processedAssigned = processApplications(assignedData);
         const processedAll = processApplications(allData);
-
-        setAssignedApplications(processedAssigned);
         setAllApplications(processedAll);
 
-        // Compute MY QUEUE stats from assigned applications (what's assigned to ME)
-        const myQueueCounts = processedAssigned.reduce(
-          (acc, app) => {
-            acc[app.status] = (acc[app.status] ?? 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>
+        // Batch-fetch workflow dates
+        const submittedAtMap: Record<string, string | null> = {};
+        for (const app of processedAll) {
+          submittedAtMap[app.id] = app.submitted_at || app.created_at;
+        }
+        const dates = await batchFetchWorkflowDates(
+          processedAll.map((a) => a.id),
+          submittedAtMap
         );
-
-        // Compute system-wide stats from all applications (for visibility into pipeline)
-        const allCounts = processedAll.reduce(
-          (acc, app) => {
-            acc[app.status] = (acc[app.status] ?? 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>
-        );
-
-        setStats({
-          // Pending current staff (me)
-          pendingAssessment: myQueueCounts.pending_assessment ?? 0,
-          // Under work (me)
-          underAssessment: myQueueCounts.under_review ?? 0,
-          // Next 2 staffs work (visibility)
-          reviewerWork: (allCounts.pending_review ?? 0) + (allCounts.returned_to_review ?? 0),
-          verifierWork: (allCounts.pending_verification ?? 0) + (allCounts.returned_to_verification ?? 0),
-        });
+        setWorkflowDatesMap(dates);
       } catch (err) {
         let errorMsg = 'Failed to fetch applications';
         if (err instanceof Error) {
@@ -196,7 +151,6 @@ export default function AssessmentDashboard() {
         setError(errorMsg);
       } finally {
         setLoading(false);
-        setStatsLoading(false);
       }
     };
 
@@ -207,7 +161,6 @@ export default function AssessmentDashboard() {
     try {
       setStartingAssessment(application.id);
       
-      // Update application status to under_review when starting assessment
       const { error } = await supabase
         .from('applications')
         .update({ status: 'under_review' })
@@ -220,15 +173,10 @@ export default function AssessmentDashboard() {
         return;
       }
 
-      // Update the local state to reflect the status change
-      setAssignedApplications((prevApps) =>
-        prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus } : app))
-      );
       setAllApplications((prevApps) =>
         prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus } : app))
       );
 
-      // Navigate to the assessment page
       router.push(`/assessment/application/${application.application_number}`);
     } catch (err) {
       console.error('Error starting assessment:', err);
@@ -237,139 +185,59 @@ export default function AssessmentDashboard() {
     }
   };
 
-  const filterApplications = (applications: AssessmentApplication[], applyStatusFilter = true) => {
-    let filtered = applications.filter(app => {
-      const matchesSearch = app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  // Derive active statuses from chip selection
+  const activeStatuses = useMemo(() => {
+    const chip = ASSESSOR_CHIPS.find((c) => c.id === activeChipId);
+    return chip?.statuses ?? [];
+  }, [activeChipId]);
+
+  const filterApplications = useCallback(
+    (applications: AssessmentApplication[]) => {
+      return applications.filter((app) => {
+        const matchesSearch =
+          app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            app.applicant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            app.project_title?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesType = filterType === "all" || 
+        const matchesType =
+          filterType === "all" ||
                          app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
                          app.application_type?.toLowerCase().includes(filterType.toLowerCase());
       
-      // Apply status filter from clicked stats card
-      const matchesStatus = !applyStatusFilter || statusFilter.length === 0 || statusFilter.includes(app.status);
+        const matchesStatus = activeStatuses.length === 0 || activeStatuses.includes(app.status);
       
       return matchesSearch && matchesType && matchesStatus;
-    });
-
-    // Apply date range filter if set
-    if (dateRange.from || dateRange.to) {
-      filtered = filtered.filter(app => {
-        const submissionDate = new Date(app.created_at);
-        if (dateRange.from && submissionDate < dateRange.from) return false;
-        if (dateRange.to && submissionDate > dateRange.to) return false;
-        return true;
       });
-    }
-
-    return filtered;
-  };
-
-  // Handle stats card click
-  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
-    setSelectedStatId(statId);
-    setStatusFilter(filterStatuses);
-  };
-
-  // Create stats configuration for clickable cards
-  const statsConfig: StatsConfig[] = useMemo(() => [
-    {
-      id: "pending_assessment",
-      title: "Pending Assessment",
-      value: stats?.pendingAssessment ?? 0,
-      description: "Pending my action",
-      icon: Clock,
-      iconColor: "text-blue-600",
-      filterStatuses: ["pending_assessment"],
-      badgeText: stats?.pendingAssessment === 0 ? "All caught up" : `${stats?.pendingAssessment} in queue`,
-      badgeClassName: stats?.pendingAssessment === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
     },
-    {
-      id: "under_assessment",
-      title: "Under Assessment",
-      value: stats?.underAssessment ?? 0,
-      description: "Under my work",
-      icon: AlertCircle,
-      iconColor: "text-amber-600",
-      filterStatuses: ["under_review"],
-      badgeText: stats?.underAssessment === 0 ? "No active work" : `${stats?.underAssessment} in progress`,
-      badgeClassName: stats?.underAssessment === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
-    },
-    {
-      id: "reviewer_work",
-      title: "Pending Review",
-      value: stats?.reviewerWork ?? 0,
-      description: "Next staff (Reviewer)",
-      icon: CheckCircle,
-      iconColor: "text-green-600",
-      filterStatuses: ["pending_review", "returned_to_review"],
-      badgeText: stats?.reviewerWork === 0 ? "None pending" : `${stats?.reviewerWork} with reviewer`,
-      badgeClassName: stats?.reviewerWork === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-green-100 text-green-800 hover:bg-green-100",
-      isNextStage: true,
-    },
-    {
-      id: "verifier_work",
-      title: "Pending Verification",
-      value: stats?.verifierWork ?? 0,
-      description: "Next-next staff (Verifier)",
-      icon: ClipboardCheck,
-      iconColor: "text-indigo-600",
-      filterStatuses: ["pending_verification", "returned_to_verification"],
-      badgeText: stats?.verifierWork === 0 ? "None pending" : `${stats?.verifierWork} with verifier`,
-      badgeClassName: stats?.verifierWork === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-    },
-  ], [stats]);
+    [searchTerm, filterType, activeStatuses]
+  );
 
-  const getStatusBadge = (status: ApplicationStatus) => {
-    // Keep flexible to avoid runtime issues if DB gains new statuses.
-    const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
-      draft: { label: "Draft", variant: "outline" },
-      submitted: { label: "Submitted", variant: "secondary" },
-      under_review: { label: "Under Assessment", variant: "default" },
-      pending_assessment: { label: "Pending Assessment", variant: "outline" },
-      pending_review: { label: "Ready for Review", variant: "default" },
-      pending_verification: { label: "Pending Verification", variant: "outline" },
-      pending_final_approval: { label: "Pending Approval", variant: "default" },
-      pending_payment: { label: "Pending Payment", variant: "secondary" },
-      approved: { label: "Approved", variant: "default" },
-      approved_pending_permit: { label: "Pending Terms Acceptance", variant: "default" },
-      expired: { label: "Expired", variant: "outline" },
-      rejected: { label: "Rejected", variant: "destructive" },
-      revision_required: { label: "Needs Revision", variant: "secondary" },
-      cancelled: { label: "Cancelled", variant: "outline" },
-      // Returned statuses
-      returned_to_assessment: { label: "🔄 Returned for Corrections", variant: "secondary" },
-      returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },
-      returned_to_verification: { label: "🔄 Returned to Verifier", variant: "secondary" },
+  // ─── Status badge helper ──────────────────────────────────────────────────
+  const getAssessmentStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      submitted: { label: "New Submission", className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800" },
+      under_review: { label: "Under Assessment", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800" },
+      pending_assessment: { label: "Pending Assessment", className: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800" },
+      pending_review: { label: "Ready for Review", className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800" },
+      pending_verification: { label: "Pending Verification", className: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800" },
+      pending_final_approval: { label: "Pending Approval", className: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-400 dark:border-violet-800" },
+      revision_required: { label: "Revision Required", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      approved: { label: "Approved", className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800" },
+      approved_pending_permit: { label: "Pending Terms", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800" },
+      rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      returned_to_assessment: { label: "🔄 Returned for Corrections", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+      returned_to_review: { label: "🔄 Returned to Reviewer", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+      returned_to_verification: { label: "🔄 Returned to Verifier", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
     };
-    
-    const config = statusConfig[status] || { label: status, variant: "outline" as const };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-
-  const ApplicationTable = ({ applications, emptyMessage }: { applications: AssessmentApplication[], emptyMessage: string }) => {
-    const filteredApps = filterApplications(applications);
-    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
-    
-    const getApplicantName = (app: AssessmentApplication) => {
-      return app.applicant_name || 'Unknown Applicant';
-    };
-
-    const getSubmittedDate = (app: AssessmentApplication) => {
-      return app.submitted_at || app.created_at;
+    const config = statusConfig[status] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800" };
+    return (
+      <Badge variant="outline" className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}>
+        {config.label}
+      </Badge>
+    );
     };
 
     const get90DayBadge = (daysRemaining: number | null | undefined) => {
-      // 90-day countdown hasn't started yet (completeness not confirmed)
       if (daysRemaining === null || daysRemaining === undefined) {
         return (
           <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">
@@ -378,150 +246,44 @@ export default function AssessmentDashboard() {
         );
       }
       if (daysRemaining <= 0) {
-        return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
-            Overdue
-          </Badge>
-        );
+      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">Overdue</Badge>;
       }
       if (daysRemaining <= 7) {
-        return (
-          <Badge
-            variant="outline"
-            className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
-          >
-            {daysRemaining}d
-          </Badge>
-        );
-      }
-      return (
-        <Badge
-          variant="outline"
-          className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800"
-        >
-          {daysRemaining}d
-        </Badge>
-      );
-    };
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">{daysRemaining}d</Badge>;
+    }
+    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800">{daysRemaining}d</Badge>;
+  };
 
-    const getLocationString = (app: AssessmentApplication) => {
-      return `${app.district || 'N/A'}, ${app.sector || 'N/A'}`;
-    };
-
-    const getWaterSourceLabel = (waterSource: string) => {
-      const labels: Record<string, string> = {
-        'surface_water': 'Surface Water',
-        'groundwater': 'Groundwater',
-        'borehole': 'Borehole',
-        'river': 'River',
-        'lake': 'Lake',
-        'spring': 'Spring',
-        'swamp': 'Swamp',
-        'other': 'Other'
-      };
-      return labels[waterSource] || waterSource;
-    };
-
-    const getWaterPurposeLabel = (purpose: string) => {
-      const labels: Record<string, string> = {
-        'domestic': 'Domestic Use',
-        'industrial': 'Industrial Use',
-        'agricultural': 'Agricultural Use',
-        'irrigation': 'Irrigation',
-        'livestock': 'Livestock',
-        'aquaculture': 'Aquaculture',
-        'recreation': 'Recreation',
-        'electricity_generation': 'Electricity Generation',
-        'mining': 'Mining',
-        'municipal_supply': 'Municipal Supply',
-        'other': 'Other'
-      };
-      return labels[purpose] || purpose;
-    };
-
-    const getAssessmentStatusBadge = (status: string) => {
-      const statusConfig = {
-        'submitted': { 
-          label: 'New Submission', 
-          className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
-        },
-        'under_review': { 
-          label: 'Under Assessment', 
-          className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
-        },
-        'pending_assessment': { 
-          label: 'Pending Assessment', 
-          className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
-        },
-        'pending_review': { 
-          label: 'Ready for Review', 
-          className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800' 
-        },
-        'revision_required': { 
-          label: 'Revision Required', 
-          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
-        },
-        'approved': { 
-          label: 'Approved', 
-          className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800' 
-        },
-        'rejected': { 
-          label: 'Rejected', 
-          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
-        },
-        // Returned statuses
-        'returned_to_assessment': { 
-          label: '🔄 Returned for Corrections', 
-          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
-        },
-        'returned_to_review': { 
-          label: '🔄 Returned to Reviewer', 
-          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
-        },
-        'returned_to_verification': { 
-          label: '🔄 Returned to Verifier', 
-          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
-        }
-      };
-      
-      const config = statusConfig[status as keyof typeof statusConfig] || { 
-        label: status, 
-        className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800' 
-      };
-      
-      return (
-        <Badge 
-          variant="outline" 
-          className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}
-        >
-          {config.label}
-        </Badge>
-      );
-    };
-
-    // Get application type badge (New, Modification, Transfer, Renewal)
     const getAppTypeBadge = (app: AssessmentApplication) => {
       const appType = app.application_type;
       const isModification = appType === 'modification' || (app as any).is_modification === true;
       const isTransfer = appType === 'transfer';
       const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
-      
-      if (isRenewal) {
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
-      }
-      if (isModification) {
-        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
-      }
-      if (isTransfer) {
-        return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
-      }
+    if (isRenewal) return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
+    if (isModification) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
+    if (isTransfer) return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
       return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 whitespace-nowrap">New</Badge>;
     };
 
+  const getWaterPurposeLabel = (purpose: string) => {
+    const labels: Record<string, string> = {
+      domestic: "Domestic Use", industrial: "Industrial Use", agricultural: "Agricultural Use",
+      irrigation: "Irrigation", livestock: "Livestock", aquaculture: "Aquaculture",
+      recreation: "Recreation", electricity_generation: "Electricity Generation",
+      mining: "Mining", municipal_supply: "Municipal Supply", other: "Other",
+    };
+    return labels[purpose] || purpose;
+  };
+
+  // ─── Application Table ──────────────────────────────────────────────────────
+  const ApplicationTable = ({ applications, emptyMessage }: { applications: AssessmentApplication[]; emptyMessage: string }) => {
+    const filteredApps = filterApplications(applications);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
+
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
-          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800 py-3">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold text-base">
             {emptyMessage} ({filteredApps.length})
           </CardTitle>
         </CardHeader>
@@ -530,7 +292,7 @@ export default function AssessmentDashboard() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
@@ -560,56 +322,37 @@ export default function AssessmentDashboard() {
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
                     >
                       <TableCell className="p-2 sm:p-3">
-                        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                          {formatDate(getSubmittedDate(app))}
-                        </div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {new Date(getSubmittedDate(app)).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+                        <WorkflowDatesCell dates={workflowDatesMap[app.id]} />
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                          {app.application_number}
-                        </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {getWaterPurposeLabel(app.water_purpose || '')}
-                        </div>
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || "")}</div>
                       </TableCell>
+                      <TableCell className="p-2 sm:p-3">{getAppTypeBadge(app)}</TableCell>
                       <TableCell className="p-2 sm:p-3">
-                        {getAppTypeBadge(app)}
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="flex justify-center">
-                          {getAssessmentStatusBadge(app.status)}
-                        </div>
+                        <div className="flex justify-center">{getAssessmentStatusBadge(app.status)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 hidden lg:table-cell">
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
                           <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                            {getLocationString(app)}
+                            {app.district || "N/A"}, {app.sector || "N/A"}
                           </span>
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        {app.status === 'submitted' ? (
+                        {app.status === "submitted" ? (
                           <Button 
                             size="sm" 
                             onClick={() => handleStartAssessment(app)}
                             disabled={startingAssessment === app.id}
                             className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                           >
-                            {startingAssessment === app.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Eye className="h-3 w-3" />
-                            )}
-                            <span className="hidden sm:inline">
-                              {startingAssessment === app.id ? 'Starting...' : 'Assess'}
-                            </span>
+                            {startingAssessment === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                            <span className="hidden sm:inline">{startingAssessment === app.id ? "Starting..." : "Assess"}</span>
                             <span className="sm:hidden">Go</span>
                           </Button>
                         ) : (
@@ -619,9 +362,7 @@ export default function AssessmentDashboard() {
                               className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                             >
                               <Eye className="h-3 w-3" />
-                              <span className="hidden sm:inline">
-                                {app.status === 'under_review' ? 'Continue' : 'View'}
-                              </span>
+                              <span className="hidden sm:inline">{app.status === "under_review" ? "Continue" : "View"}</span>
                               <span className="sm:hidden">Go</span>
                             </Button>
                           </Link>
@@ -638,6 +379,7 @@ export default function AssessmentDashboard() {
     );
   };
 
+  // ─── Loading / Error states ─────────────────────────────────────────────────
   if (loading) {
     return (
       <DashboardLayout>
@@ -669,6 +411,9 @@ export default function AssessmentDashboard() {
     );
   }
 
+  // ─── Active chip label for table title ──────────────────────────────────────
+  const activeChipLabel = ASSESSOR_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
+
   return (
     <DashboardLayout>
       <motion.div
@@ -695,13 +440,12 @@ export default function AssessmentDashboard() {
             </div>
           </div>
 
-          {/* Summary Stats - Clickable to filter applications */}
-          <ClickableStatsGrid
-            stats={statsConfig}
-            selectedStatId={selectedStatId}
-            onStatClick={handleStatClick}
-            isLoading={statsLoading}
-            columns={4}
+          {/* Status Filter Chips — replaces old stats grid */}
+          <StatusFilterChips
+            chips={ASSESSOR_CHIPS}
+            activeChipId={activeChipId}
+            onChipChange={setActiveChipId}
+            applications={allApplications}
           />
 
           <StaffTopTabs
@@ -716,7 +460,7 @@ export default function AssessmentDashboard() {
 
           {topTab === "assessment" ? (
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <FileCheck className="h-5 w-5" />
                   Assessment Management
@@ -725,17 +469,16 @@ export default function AssessmentDashboard() {
               <CardContent>
                 <Tabs value={activeInnerTab} onValueChange={(v) => setActiveInnerTab(v as any)} className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                    <TabsTrigger value="all_applications">Applications</TabsTrigger>
                     <TabsTrigger value="map" className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
                       Concession Map
                     </TabsTrigger>
                   </TabsList>
 
-                {/* Tab Contents */}
-                <TabsContent value="all_applications" className="space-y-4 mt-6">
+                  <TabsContent value="all_applications" className="space-y-4 mt-4">
                   {/* Search and Filter Controls */}
-                  <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                    <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
                       <Input
@@ -760,17 +503,10 @@ export default function AssessmentDashboard() {
                       </Select>
                     </div>
                   </div>
-                  <ApplicationTable 
-                    applications={allApplications}
-                    emptyMessage={
-                      selectedStatId
-                        ? statsConfig.find((s) => s.id === selectedStatId)?.title ?? "All Applications"
-                        : "All Applications"
-                    }
-                  />
+                    <ApplicationTable applications={allApplications} emptyMessage={activeChipLabel} />
                 </TabsContent>
 
-                <TabsContent value="map" className="space-y-4 mt-6">
+                  <TabsContent value="map" className="space-y-4 mt-4">
                   <WaterConcessionMap />
                 </TabsContent>
                 </Tabs>

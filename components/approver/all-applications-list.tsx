@@ -34,6 +34,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
+import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 
 interface ApplicationWithApplicant extends Application {
   applicant?: {
@@ -68,6 +70,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
   const [conditions, setConditions] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
   useEffect(() => {
     fetchApplications();
@@ -115,6 +118,17 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
       });
 
       setApplications(processedApplications);
+
+      // Batch-fetch workflow dates
+      const submittedAtMap: Record<string, string | null> = {};
+      for (const app of processedApplications) {
+        submittedAtMap[app.id] = app.submitted_at || app.created_at;
+      }
+      const dates = await batchFetchWorkflowDates(
+        processedApplications.map((a) => a.id),
+        submittedAtMap
+      );
+      setWorkflowDatesMap(dates);
     } catch (err) {
       console.error('Error fetching applications:', err);
       setError('Failed to load applications');
@@ -424,7 +438,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Dates</TableHead>
                   <TableHead>90-day</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Type</TableHead>
@@ -437,12 +451,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                 {sortedApplications.map((application) => (
                   <TableRow key={application.id}>
                     <TableCell className="whitespace-nowrap">
-                      <div className="text-sm text-muted-foreground">
-                        {formatDate(application.submitted_at || application.created_at)}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground/70">
-                        {new Date(application.submitted_at || application.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                      </div>
+                      <WorkflowDatesCell dates={workflowDatesMap[application.id]} />
                     </TableCell>
                     <TableCell>
                       {get90DayBadge(application.deadline_90_days_remaining)}

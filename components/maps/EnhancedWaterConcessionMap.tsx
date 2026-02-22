@@ -188,65 +188,123 @@ export function EnhancedWaterConcessionMap({
     setError(null);
 
     try {
-      // Load both point permits and polygon permits
-      await Promise.all([
-        loadPointPermits(),
-        loadPolygonPermits()
-      ]);
+      // Single API call to load ALL permits — then split into points vs polygons
+      const response = await fetch('/api/approved-permits/polygons?format=geojson&status=all&includeExpired=true');
+      if (!response.ok) {
+        throw new Error('Failed to fetch permits');
+      }
+
+      const data = await response.json();
+      if (!data.success || !data.data?.features) {
+        throw new Error('Invalid response from permits API');
+      }
+
+      const pointPermits: WaterPermit[] = [];
+      const polygonPermits: PermitPolygon[] = [];
+
+      for (const feature of data.data.features) {
+        try {
+          const geometry = feature.geometry;
+          const props = feature.properties;
+
+          if (geometry.type === 'Point' && geometry.coordinates) {
+            // ── Point geometry → render as CircleMarker ──
+            const [lng, lat] = geometry.coordinates;
+            pointPermits.push({
+              id: feature.id,
+              permit_number: props.permitNumber,
+              application_number: props.permitNumber, // fallback
+              project_title: props.projectTitle,
+              status: props.status,
+              water_source: '',
+              water_purpose: '',
+              water_allowance: 0,
+              allowance_unit: '',
+              province: '',
+              district: '',
+              sector: '',
+              latitude: lat,
+              longitude: lng,
+              applicant_name: '',
+              issued_date: props.issuedDate,
+              expiry_date: props.expiryDate,
+              monitoring_frequency: '',
+              coordinates: geometry
+            });
+          } else if (geometry.type === 'Polygon' && geometry.coordinates?.[0]) {
+            // ── Polygon geometry → render as Polygon shape ──
+            const ring = geometry.coordinates[0].map(
+              (coord: number[]) => [coord[1], coord[0]] as [number, number]
+            );
+            polygonPermits.push({
+              permitId: feature.id,
+              permitNumber: props.permitNumber,
+              projectTitle: props.projectTitle,
+              coordinates: ring,
+              status: props.status,
+              issuedDate: props.issuedDate,
+              expiryDate: props.expiryDate,
+              area: props.area
+            });
+          } else if (geometry.type === 'MultiPolygon' && geometry.coordinates) {
+            // ── MultiPolygon geometry → render each sub-polygon ──
+            for (const poly of geometry.coordinates) {
+              if (poly[0]) {
+                const ring = poly[0].map(
+                  (coord: number[]) => [coord[1], coord[0]] as [number, number]
+                );
+                polygonPermits.push({
+                  permitId: feature.id,
+                  permitNumber: props.permitNumber,
+                  projectTitle: props.projectTitle,
+                  coordinates: ring,
+                  status: props.status,
+                  issuedDate: props.issuedDate,
+                  expiryDate: props.expiryDate,
+                  area: props.area
+                });
+              }
+            }
+          } else {
+            console.warn(`⚠️ Permit ${props.permitNumber} has unsupported geometry type: ${geometry.type}`);
+          }
+        } catch (parseError) {
+          console.error(`❌ Error parsing permit ${feature?.properties?.permitNumber}:`, parseError);
+        }
+      }
+
+      console.log(`🗺️ Loaded ${pointPermits.length} point(s) + ${polygonPermits.length} polygon(s) from ${data.data.features.length} permits`);
+      setPermits(pointPermits);
+      setPermitPolygons(polygonPermits);
+
     } catch (err) {
-      console.error('Error loading permit data:', err);
+      console.error('❌ Error loading permit data:', err);
       setError('Failed to load permit data');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadPointPermits = async () => {
-    try {
-      // This would typically come from your existing permits API
-      // For now, using mock data structure similar to your existing component
-      const mockPermits: WaterPermit[] = []; // You can populate this from your existing API
-      setPermits(mockPermits);
-    } catch (error) {
-      console.error('Error loading point permits:', error);
-    }
-  };
-
-  const loadPolygonPermits = async () => {
-    try {
-      const response = await fetch('/api/approved-permits/polygons?format=geojson&includeExpired=false');
-      if (!response.ok) {
-        throw new Error('Failed to fetch polygon permits');
-      }
-
-      const data = await response.json();
-      if (data.success && data.data.features) {
-        const polygons: PermitPolygon[] = data.data.features.map((feature: any) => ({
-          permitId: feature.id,
-          permitNumber: feature.properties.permitNumber,
-          projectTitle: feature.properties.projectTitle,
-          coordinates: feature.geometry.coordinates[0].map((coord: number[]) => [coord[1], coord[0]]), // Convert to Leaflet format
-          status: feature.properties.status,
-          issuedDate: feature.properties.issuedDate,
-          expiryDate: feature.properties.expiryDate,
-          area: feature.properties.area
-        }));
-        
-        setPermitPolygons(polygons);
-      }
-    } catch (error) {
-      console.error('Error loading polygon permits:', error);
-    }
-  };
-
   const updateStats = () => {
-    const allPermits = [...permits, ...permitPolygons];
-    const total = allPermits.length;
-    const active = allPermits.filter(p => p.status === 'active').length;
-    const expiring = allPermits.filter(p => p.status === 'active' && isExpiringSoon(p.expiry_date || p.expiryDate)).length;
-    const expired = allPermits.filter(p => p.status === 'expired').length;
+    const pointCount = permits.length;
+    const polyCount = permitPolygons.length;
+    const total = pointCount + polyCount;
 
-    setStats({ total, active, expiring, expired });
+    const activePoints = permits.filter(p => p.status === 'active').length;
+    const activePolys = permitPolygons.filter(p => p.status === 'active').length;
+
+    const expiringPoints = permits.filter(p => p.status === 'active' && isExpiringSoon(p.expiry_date)).length;
+    const expiringPolys = permitPolygons.filter(p => p.status === 'active' && isExpiringSoon(p.expiryDate)).length;
+
+    const expiredPoints = permits.filter(p => p.status === 'expired').length;
+    const expiredPolys = permitPolygons.filter(p => p.status === 'expired').length;
+
+    setStats({
+      total,
+      active: activePoints + activePolys,
+      expiring: expiringPoints + expiringPolys,
+      expired: expiredPoints + expiredPolys
+    });
   };
 
   // =============================================
@@ -578,13 +636,15 @@ export function EnhancedWaterConcessionMap({
               {showPointLayer && filteredPermits.map((permit) => {
                 if (!permit.latitude || !permit.longitude) return null;
                 
+                const statusColor = STATUS_COLORS[permit.status as keyof typeof STATUS_COLORS] || '#6b7280';
+                
                 return (
                   <CircleMarker
                     key={`point-${permit.id}`}
                     center={[permit.latitude, permit.longitude]}
-                    radius={getCircleRadius(permit.water_body_surface_area || 0)}
+                    radius={8}
                     pathOptions={{
-                      fillColor: getCircleColor(permit.water_allowance, permit.status),
+                      fillColor: statusColor,
                       color: '#ffffff',
                       weight: 2,
                       opacity: 0.9,
@@ -594,11 +654,28 @@ export function EnhancedWaterConcessionMap({
                       click: () => onPermitSelect?.(permit)
                     }}
                   >
-                    <Popup>{renderPermitPopup(permit)}</Popup>
+                    <Popup>
+                      <div className="p-2 min-w-[250px] space-y-2">
+                        <div className="border-b pb-2">
+                          <h3 className="font-semibold text-sm">{permit.permit_number}</h3>
+                          <p className="text-xs text-muted-foreground">{permit.project_title}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <span className="font-medium">Status:</span>
+                            <Badge variant="outline" className="ml-1 text-xs">{permit.status}</Badge>
+                          </div>
+                          <div>
+                            <span className="font-medium">Expires:</span>
+                            <span className="ml-1">{new Date(permit.expiry_date).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </Popup>
                     <Tooltip>
                       <div className="text-xs">
                         <strong>{permit.permit_number}</strong><br />
-                        {permit.application_number}
+                        {permit.project_title}
                       </div>
                     </Tooltip>
                   </CircleMarker>

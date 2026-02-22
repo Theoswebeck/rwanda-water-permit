@@ -1609,6 +1609,7 @@ export default function AssessmentApplicationPage() {
                     initialDocuments={initialDocuments}
                     mode="view"
                     readOnly={true}
+                    currentApplication={application}
                     isStaffView={true}
                     isModification={true}
                     modificationChanges={enrichModificationChanges((application as any).modification_changes, originalModificationApp)}

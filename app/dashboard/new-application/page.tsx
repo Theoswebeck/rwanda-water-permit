@@ -1587,6 +1587,7 @@ function NewApplicationContent() {
         is_modification: true,
         modified_from_application_id: selectedPermitForModification?.application_id,
         modification_changes: formData.modificationChanges || {},
+        modification_reason: formData.modificationReason || undefined,
         // Save key permit-affecting fields at the application level (not just in internal_notes)
         // so they are properly picked up when the modification is approved and the permit is updated.
         proposed_duration_years: formData.permitLengthYears || undefined,
@@ -1722,6 +1723,7 @@ function NewApplicationContent() {
         is_modification: true,
         modified_from_application_id: selectedPermitForModification?.application_id,
         modification_changes: formData.modificationChanges || {},
+        modification_reason: formData.modificationReason || undefined,
         // Save key permit-affecting fields at the application level (not just in internal_notes)
         proposed_duration_years: formData.permitLengthYears || undefined,
         estimated_usage_volume: formData.waterAbstractionDetails?.[0]?.maxAverageYearly || undefined,

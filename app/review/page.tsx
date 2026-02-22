@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,19 +35,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Eye, Search, Clock, CheckCircle, XCircle, AlertCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send, ClipboardCheck } from "lucide-react";
+import { Eye, Search, XCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send } from "lucide-react";
 import Link from "next/link";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
-import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
-import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
-import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
+import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
+import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
+import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -61,14 +61,6 @@ interface ReviewApplication extends Application {
   } | null;
 }
 
-interface ReviewStatsData {
-  pendingReview: number;
-  returnedToReview: number;
-  pendingAssessment: number;
-  underReview: number;
-  pendingVerification: number;
-}
-
 interface StaffMember {
   id: string;
   first_name: string;
@@ -76,6 +68,19 @@ interface StaffMember {
   role: string;
   email: string;
 }
+
+// ─── Chip definitions per RWB spec ────────────────────────────────────────────
+const REVIEWER_CHIPS: StatusChipDef[] = [
+  { id: "new_submissions", label: "New Submissions", statuses: ["submitted"], priority: "primary" },
+  { id: "with_assessors", label: "With Assessors", statuses: ["pending_assessment", "under_review"], priority: "secondary" },
+  { id: "pending_review", label: "Pending Review", statuses: ["pending_review"], priority: "primary" },
+  { id: "returned_to_assessor", label: "Returned to Assessor", statuses: ["returned_to_assessment"], priority: "secondary" },
+  { id: "pending_verification", label: "Pending Verification", statuses: ["pending_verification"], priority: "downstream" },
+  { id: "re_review", label: "Re-Review", statuses: ["returned_to_review"], priority: "primary" },
+  { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
+  { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
+  { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+];
 
 export default function ReviewerDashboard() {
   const router = useRouter();
@@ -86,11 +91,9 @@ export default function ReviewerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingReview, setStartingReview] = useState<string | null>(null);
-  const [stats, setStats] = useState<ReviewStatsData | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeChipId, setActiveChipId] = useState(REVIEWER_CHIPS[0].id);
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
+  const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
   // Assessor assignment state
   const [assessors, setAssessors] = useState<StaffMember[]>([]);
@@ -99,16 +102,11 @@ export default function ReviewerDashboard() {
   const [selectedAssessorId, setSelectedAssessorId] = useState<string>("");
   const [assignLoading, setAssignLoading] = useState(false);
 
-  const isInApplicationsForReviewQueue = (status: string | null | undefined) => {
-    return status === "submitted" || status === "pending_review" || status === "under_review" || status === "returned_to_review";
-  };
-
   const isFinalizedStatus = (status: string | null | undefined) => {
     return status === "approved" || status === "rejected";
   };
 
   const canAssignOrReassignFromReviewDashboard = (status: string | null | undefined) => {
-    // Per requirements: allow from queue + allow from All Applications for these workflow statuses.
     return (
       status === "submitted" ||
       status === "pending_assessment" ||
@@ -136,8 +134,6 @@ export default function ReviewerDashboard() {
         setLoading(true);
         setError(null);
 
-        // Fetch all applications (powers the "All Applications" tab).
-        // We filter locally for the action queue ("submitted" per role-scoped workflow).
         const { data, error } = await supabase
            .from('applications')
            .select(`
@@ -145,13 +141,11 @@ export default function ReviewerDashboard() {
              applicant:users!applicant_id(first_name, last_name, company_name),
              assigned_assessor:users!assigned_assessor_id(first_name, last_name, email)
            `)
-           // Always show latest submissions first (fallback to created_at when submitted_at is null).
            .order('submitted_at', { ascending: false, nullsFirst: false })
            .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        // Process applications with calculated fields
         const processedApplications: ReviewApplication[] = data.map(app => {
            const applicant = app.applicant as any;
            const applicantName = applicant?.company_name || 
@@ -165,7 +159,6 @@ export default function ReviewerDashboard() {
                ? `${assignedAssessor.first_name} ${assignedAssessor.last_name}`
                : assignedAssessor?.email || null;
 
-           // Calculate SLA days remaining
            let slaRemaining: number | null = null;
            if (app.due_date) {
              const dueDate = new Date(app.due_date);
@@ -175,7 +168,6 @@ export default function ReviewerDashboard() {
              slaRemaining = diffDays;
            }
 
-           // 90-day countdown starts from when completeness was confirmed (not submission)
            const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
              completenessConfirmedAt: app.completeness_confirmed_at,
            });
@@ -191,13 +183,23 @@ export default function ReviewerDashboard() {
          });
 
         setReviewApplications(processedApplications);
+
+        // Batch-fetch workflow dates
+        const submittedAtMap: Record<string, string | null> = {};
+        for (const app of processedApplications) {
+          submittedAtMap[app.id] = app.submitted_at || app.created_at;
+        }
+        const dates = await batchFetchWorkflowDates(
+          processedApplications.map((a) => a.id),
+          submittedAtMap
+        );
+        setWorkflowDatesMap(dates);
       } catch (err) {
         let errorMsg = 'Failed to fetch applications';
         if (err instanceof Error) {
           errorMsg = err.message;
           console.error('❌ Error fetching review applications:', err);
         } else if (typeof err === 'object' && err !== null) {
-          // Safely access message/details if present
           const maybeMsg = (err as { message?: string; details?: string });
           errorMsg = maybeMsg.message || maybeMsg.details || JSON.stringify(err);
           console.error('❌ Error fetching review applications:', JSON.stringify(err, null, 2));
@@ -211,62 +213,6 @@ export default function ReviewerDashboard() {
     };
 
     fetchReviewApplications();
-  }, []);
-
-  // Fetch review statistics from database
-  useEffect(() => {
-    const fetchReviewStats = async () => {
-      try {
-        setStatsLoading(true);
-        
-        // Panel 1: Pending Review (my queue - needs my action)
-        // Includes 'submitted' (new submissions) and 'pending_review' (returned from assessor)
-        const { count: pendingReviewCount, error: pendingReviewError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['submitted', 'pending_review']);
-        
-        if (pendingReviewError) throw pendingReviewError;
-
-        // Panel 2: Returned to Review (follow-ups from later stages)
-        const { count: returnedToReviewCount, error: returnedError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'returned_to_review');
-        
-        if (returnedError) throw returnedError;
-
-        // Panel 3: With Assessors (next stage - out for assessment)
-        const { count: pendingAssessmentCount, error: pendingError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['pending_assessment', 'under_review', 'returned_to_assessment']);
-        
-        if (pendingError) throw pendingError;
-
-        // Panel 4: Pending Verification (next-next stage - with Verifiers)
-        const { count: pendingVerificationCount, error: verificationError } = await supabase
-          .from('applications')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['pending_verification', 'returned_to_verification']);
-        
-        if (verificationError) throw verificationError;
-
-        setStats({
-          pendingReview: pendingReviewCount || 0,
-          returnedToReview: returnedToReviewCount || 0,
-          pendingAssessment: pendingAssessmentCount || 0,
-          underReview: 0, // Not used anymore in new panel layout
-          pendingVerification: pendingVerificationCount || 0
-        });
-      } catch (err) {
-        console.error('Error fetching review stats:', err);
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    fetchReviewStats();
   }, []);
 
   // Fetch assessors for assignment dropdown
@@ -293,8 +239,6 @@ export default function ReviewerDashboard() {
   const handleStartReview = async (application: ReviewApplication) => {
     try {
       setStartingReview(application.id);
-      
-      // Navigate to the review page
       router.push(`/review/application/${application.application_number}`);
     } catch (err) {
       console.error('Error starting review:', err);
@@ -303,15 +247,12 @@ export default function ReviewerDashboard() {
     }
   };
 
-  // Open the assignment dialog for a specific application
   const openAssignDialog = (application: ReviewApplication) => {
     setSelectedAppForAssignment(application);
-    // Preselect current assessor when reassigning
     setSelectedAssessorId(application.assigned_assessor_id || "");
     setAssignDialogOpen(true);
   };
 
-  // Handle assigning an application to an assessor
   const handleAssignToAssessor = async () => {
     if (!selectedAppForAssignment || !selectedAssessorId) return;
 
@@ -320,7 +261,6 @@ export default function ReviewerDashboard() {
 
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Find the selected assessor
       const selectedAssessor = assessors.find(a => a.id === selectedAssessorId);
       if (!selectedAssessor) {
         alert('Please select a valid assessor');
@@ -332,7 +272,6 @@ export default function ReviewerDashboard() {
         ? getAssessorLabelForApp(selectedAppForAssignment)
         : null;
 
-      // Prevent no-op reassign
       if (previousAssessorId && previousAssessorId === selectedAssessorId) {
         alert('Please choose a different assessor to reassign this application.');
         return;
@@ -344,7 +283,6 @@ export default function ReviewerDashboard() {
         updated_at: new Date().toISOString()
       };
 
-      // Atomic/conditional update to avoid overwriting concurrent changes
       let updateQuery = supabase
         .from('applications')
         .update(updatePayload)
@@ -363,7 +301,6 @@ export default function ReviewerDashboard() {
         return;
       }
 
-      // Create workflow history record
       const isReassign = !!previousAssessorId;
       const action = isReassign ? 'reassigned_assessor' : 'assigned_to_assessor';
       const comment = isReassign
@@ -383,10 +320,8 @@ export default function ReviewerDashboard() {
 
       if (workflowError) {
         console.error('❌ Workflow history error:', workflowError);
-        // Don't throw - the main update succeeded
       }
 
-      // Create audit log entry
       try {
         await createAuditLog({
           action: isReassign ? 'application.reassigned' : 'application.assigned',
@@ -411,7 +346,6 @@ export default function ReviewerDashboard() {
 
       console.log(`✅ Application ${selectedAppForAssignment.application_number} ${isReassign ? 'reassigned' : 'assigned'} to ${selectedAssessor.first_name} ${selectedAssessor.last_name}`);
 
-      // Update local state with the new assignment + forced status
       setReviewApplications(prev =>
         prev.map(app =>
           app.id === selectedAppForAssignment.id
@@ -430,22 +364,9 @@ export default function ReviewerDashboard() {
         )
       );
 
-      // Update stats conservatively: re-fetch is ideal, but keep this safe/minimal.
-      // - Assign from new submissions: shift counts.
-      // - Reassign or re-queue from other statuses: counts may already be in pending_assessment; leave unchanged.
-      if (stats && !isReassign && (selectedAppForAssignment.status === 'submitted' || selectedAppForAssignment.status === 'pending_review')) {
-        setStats({
-          ...stats,
-          newSubmissions: Math.max(0, stats.newSubmissions - 1),
-          pendingAssessment: stats.pendingAssessment + 1
-        });
-      }
-
-      // Close dialog
       setAssignDialogOpen(false);
       setSelectedAppForAssignment(null);
       setSelectedAssessorId("");
-
     } catch (err) {
       console.error('❌ Error assigning application:', err);
       alert('Failed to assign application. Please try again.');
@@ -454,7 +375,14 @@ export default function ReviewerDashboard() {
     }
   };
 
-  const filterApplications = (applications: ReviewApplication[]) => {
+  // Derive active statuses from chip selection
+  const activeStatuses = useMemo(() => {
+    const chip = REVIEWER_CHIPS.find((c) => c.id === activeChipId);
+    return chip?.statuses ?? [];
+  }, [activeChipId]);
+
+  const filterApplications = useCallback(
+    (applications: ReviewApplication[]) => {
     return applications.filter(app => {
       const matchesSearch = app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            app.applicant_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -464,268 +392,88 @@ export default function ReviewerDashboard() {
                          app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
                          app.application_type?.toLowerCase().includes(filterType.toLowerCase());
       
-      // Apply status filter from clicked stats card
-      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(app.status);
+        const matchesStatus = activeStatuses.length === 0 || activeStatuses.includes(app.status);
       
       return matchesSearch && matchesType && matchesStatus;
     });
+    },
+    [searchTerm, filterType, activeStatuses]
+  );
+
+  const getReviewStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      submitted: { label: "Submitted", className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800" },
+      under_review: { label: "Under Review", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800" },
+      pending_assessment: { label: "Pending Assessment", className: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800" },
+      pending_review: { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800" },
+      pending_verification: { label: "Pending Verification", className: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800" },
+      pending_final_approval: { label: "Pending Approval", className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800" },
+      revision_required: { label: "Revision Required", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      approved: { label: "Approved", className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800" },
+      approved_pending_permit: { label: "Pending Terms", className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800" },
+      rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      returned_to_assessment: { label: "🔄 Returned to Assessor", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+      returned_to_review: { label: "🔄 Returned for Review", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+      returned_to_verification: { label: "🔄 Returned to Verifier", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+    };
+    const config = statusConfig[status] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800" };
+    return (
+      <Badge variant="outline" className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}>
+        {config.label}
+      </Badge>
+    );
   };
 
-  // Handle stats card click
-  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
-    setSelectedStatId(statId);
-    setStatusFilter(filterStatuses);
+  const get90DayBadge = (daysRemaining: number | null | undefined) => {
+    if (daysRemaining === null || daysRemaining === undefined) {
+      return <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">Not Started</Badge>;
+    }
+    if (daysRemaining <= 0) {
+      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">Overdue</Badge>;
+    }
+    if (daysRemaining <= 7) {
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">{daysRemaining}d</Badge>;
+    }
+    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800">{daysRemaining}d</Badge>;
   };
 
-  // Create stats configuration for clickable cards
-  // Pattern: Panel 1 = Pending (my queue), Panel 2 = Under Work (returned), Panel 3 = Next Stage, Panel 4 = Next-Next Stage
-  const statsConfig: StatsConfig[] = useMemo(() => [
-    {
-      id: "pending_review",
-      title: "Pending Review",
-      value: stats?.pendingReview ?? 0,
-      description: "My queue - needs my action",
-      icon: Clock,
-      iconColor: "text-blue-600",
-      filterStatuses: ["submitted", "pending_review"],
-      badgeText: stats?.pendingReview === 0 ? "All caught up" : `${stats?.pendingReview} in queue`,
-      badgeClassName: stats?.pendingReview === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
-    },
-    {
-      id: "returned_to_review",
-      title: "Returned to Me",
-      value: stats?.returnedToReview ?? 0,
-      description: "Follow-ups from later stages",
-      icon: AlertCircle,
-      iconColor: "text-amber-600",
-      filterStatuses: ["returned_to_review"],
-      badgeText: stats?.returnedToReview === 0 ? "No follow-ups" : `${stats?.returnedToReview} returned`,
-      badgeClassName: stats?.returnedToReview === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
-    },
-    {
-      id: "with_assessors",
-      title: "With Assessors",
-      value: stats?.pendingAssessment ?? 0,
-      description: "Next stage - out for assessment",
-      icon: CheckCircle,
-      iconColor: "text-green-600",
-      filterStatuses: ["pending_assessment", "under_review", "returned_to_assessment"],
-      badgeText: stats?.pendingAssessment === 0 ? "None with assessors" : `${stats?.pendingAssessment} with assessors`,
-      badgeClassName: stats?.pendingAssessment === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-green-100 text-green-800 hover:bg-green-100",
-      isNextStage: true,
-    },
-    {
-      id: "pending_verification",
-      title: "Pending Verification",
-      value: stats?.pendingVerification ?? 0,
-      description: "Next-next stage - with Verifiers",
-      icon: ClipboardCheck,
-      iconColor: "text-indigo-600",
-      filterStatuses: ["pending_verification", "returned_to_verification"],
-      badgeText: stats?.pendingVerification === 0 ? "None pending" : `${stats?.pendingVerification} with verifier`,
-      badgeClassName: stats?.pendingVerification === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-indigo-100 text-indigo-800 hover:bg-indigo-100",
-    },
-  ], [stats]);
-
-  const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[], emptyMessage: string }) => {
-    const filteredApps = filterApplications(applications);
-    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
-    
-    const getApplicantName = (app: ReviewApplication) => {
-      return app.applicant_name || 'Unknown Applicant';
-    };
-
-    const getLocationString = (app: ReviewApplication) => {
-      return `${app.district || 'N/A'}, ${app.sector || 'N/A'}`;
-    };
-
-    const getWaterSourceLabel = (waterSource: string) => {
-      const labels: Record<string, string> = {
-        'surface_water': 'Surface Water',
-        'groundwater': 'Groundwater',
-        'borehole': 'Borehole',
-        'river': 'River',
-        'lake': 'Lake',
-        'spring': 'Spring',
-        'swamp': 'Swamp',
-        'other': 'Other'
-      };
-      return labels[waterSource] || waterSource;
-    };
-
-    const getWaterPurposeLabel = (purpose: string) => {
-      const labels: Record<string, string> = {
-        'domestic': 'Domestic Use',
-        'industrial': 'Industrial Use',
-        'agricultural': 'Agricultural Use',
-        'irrigation': 'Irrigation',
-        'livestock': 'Livestock',
-        'aquaculture': 'Aquaculture',
-        'recreation': 'Recreation',
-        'electricity_generation': 'Electricity Generation',
-        'mining': 'Mining',
-        'municipal_supply': 'Municipal Supply',
-        'other': 'Other'
-      };
-      return labels[purpose] || purpose;
-    };
-
-    // Get application type badge for display - shows New, Modification, Transfer, or Renewal
     const getApplicationTypeBadge = (app: ReviewApplication) => {
       const appType = app.application_type;
       const isModification = appType === 'modification' || (app as any).is_modification === true;
       const isTransfer = appType === 'transfer';
       const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
-      
-      let displayType: 'new' | 'modification' | 'transfer' | 'renewal' = 'new';
-      if (isRenewal) displayType = 'renewal';
-      else if (isModification) displayType = 'modification';
-      else if (isTransfer) displayType = 'transfer';
-      
-      const typeConfig = {
-        'new': { 
-          label: 'New Application', 
-          className: 'bg-blue-50 text-blue-700 border-blue-200' 
-        },
-        'modification': { 
-          label: 'Modification', 
-          className: 'bg-amber-50 text-amber-700 border-amber-200' 
-        },
-        'transfer': { 
-          label: 'Transfer', 
-          className: 'bg-purple-50 text-purple-700 border-purple-200' 
-        },
-        'renewal': { 
-          label: 'Renewal', 
-          className: 'bg-green-50 text-green-700 border-green-200' 
-        },
-      };
-      
-      const config = typeConfig[displayType];
-      
-      return (
-        <Badge variant="outline" className={`${config.className} text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap`}>
-          {config.label}
-        </Badge>
-      );
-    };
+    if (isRenewal) return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Renewal</Badge>;
+    if (isModification) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Modification</Badge>;
+    if (isTransfer) return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Transfer</Badge>;
+    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">New Application</Badge>;
+  };
 
-    const getReviewStatusBadge = (status: string) => {
-      const statusConfig = {
-        'pending_review': {
-          label: 'Pending Review',
-          className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800'
-        },
-        'pending_verification': {
-          label: 'Pending Verification',
-          className: 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800'
-        },
-        'submitted': { 
-          label: 'Submitted', 
-          className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800' 
-        },
-        'under_review': { 
-          label: 'Under Review', 
-          className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800' 
-        },
-        'pending_assessment': { 
-          label: 'Pending Assessment', 
-          className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800' 
-        },
-        'pending_final_approval': { 
-          label: 'Pending Approval', 
-          className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800' 
-        },
-        'revision_required': { 
-          label: 'Revision Required', 
-          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
-        },
-        'approved': { 
-          label: 'Approved', 
-          className: 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800' 
-        },
-        'rejected': { 
-          label: 'Rejected', 
-          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800' 
-        },
-        // Returned statuses
-        'returned_to_assessment': { 
-          label: '🔄 Returned to Assessor', 
-          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
-        },
-        'returned_to_review': { 
-          label: '🔄 Returned for Review', 
-          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
-        },
-        'returned_to_verification': { 
-          label: '🔄 Returned to Verifier', 
-          className: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800' 
-        }
-      };
-      
-      const config = statusConfig[status as keyof typeof statusConfig] || { 
-        label: status, 
-        className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800' 
-      };
-      
-      return (
-        <Badge 
-          variant="outline" 
-          className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}
-        >
-          {config.label}
-        </Badge>
-      );
+  const getWaterPurposeLabel = (purpose: string) => {
+    const labels: Record<string, string> = {
+      domestic: "Domestic Use", industrial: "Industrial Use", agricultural: "Agricultural Use",
+      irrigation: "Irrigation", livestock: "Livestock", aquaculture: "Aquaculture",
+      recreation: "Recreation", electricity_generation: "Electricity Generation",
+      mining: "Mining", municipal_supply: "Municipal Supply", other: "Other",
     };
+    return labels[purpose] || purpose;
+  };
 
-    const get90DayBadge = (daysRemaining: number | null | undefined) => {
-      // 90-day countdown hasn't started yet (completeness not confirmed)
-      if (daysRemaining === null || daysRemaining === undefined) {
-        return (
-          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">
-            Not Started
-          </Badge>
-        );
-      }
-      if (daysRemaining <= 0) {
-        return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
-            Overdue
-          </Badge>
-        );
-      }
-      if (daysRemaining <= 7) {
-        return (
-          <Badge
-            variant="outline"
-            className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
-          >
-            {daysRemaining}d
-          </Badge>
-        );
-      }
-      return (
-        <Badge
-          variant="outline"
-          className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800"
-        >
-          {daysRemaining}d
-        </Badge>
-      );
+  const getWaterSourceLabel = (waterSource: string) => {
+    const labels: Record<string, string> = {
+      surface_water: "Surface Water", groundwater: "Groundwater", borehole: "Borehole",
+      river: "River", lake: "Lake", spring: "Spring", swamp: "Swamp", other: "Other",
     };
+    return labels[waterSource] || waterSource;
+  };
+
+  const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[]; emptyMessage: string }) => {
+    const filteredApps = filterApplications(applications);
+    const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
 
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
-          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800 py-3">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold text-base">
             {emptyMessage} ({filteredApps.length})
           </CardTitle>
         </CardHeader>
@@ -734,7 +482,7 @@ export default function ReviewerDashboard() {
             <Table className="w-full">
           <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
@@ -764,37 +512,24 @@ export default function ReviewerDashboard() {
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
                     >
                       <TableCell className="p-2 sm:p-3">
-                        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                          {new Date(app.submitted_at || app.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {new Date(app.submitted_at || app.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+                        <WorkflowDatesCell dates={workflowDatesMap[app.id]} />
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
-                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
-                          {app.application_number}
-                        </div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {getWaterPurposeLabel(app.water_purpose || '')}
-                        </div>
+                        <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || '')}</div>
                       </TableCell>
+                      <TableCell className="p-2 sm:p-3">{getApplicationTypeBadge(app)}</TableCell>
                       <TableCell className="p-2 sm:p-3">
-                        {getApplicationTypeBadge(app)}
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="flex justify-center">
-                          {getReviewStatusBadge(app.status)}
-                        </div>
+                        <div className="flex justify-center">{getReviewStatusBadge(app.status)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 hidden md:table-cell">
                         <div className="flex items-center gap-1 mb-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
                           <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                            {getLocationString(app)}
+                            {app.district || 'N/A'}, {app.sector || 'N/A'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -885,6 +620,8 @@ export default function ReviewerDashboard() {
     );
   }
 
+  const activeChipLabel = REVIEWER_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
+
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin', 'approver']} requireProfile={true}>
       <DashboardLayout>
@@ -912,13 +649,12 @@ export default function ReviewerDashboard() {
             </div>
           </div>
 
-          {/* Summary Stats - Clickable to filter applications */}
-          <ClickableStatsGrid
-            stats={statsConfig}
-            selectedStatId={selectedStatId}
-            onStatClick={handleStatClick}
-            isLoading={statsLoading}
-            columns={4}
+            {/* Status Filter Chips */}
+            <StatusFilterChips
+              chips={REVIEWER_CHIPS}
+              activeChipId={activeChipId}
+              onChipChange={setActiveChipId}
+              applications={reviewApplications}
           />
 
           {/* Main Content */}
@@ -934,7 +670,7 @@ export default function ReviewerDashboard() {
 
           {topTab === "review" ? (
             <Card>
-              <CardHeader>
+                <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
                   <FileCheck className="h-5 w-5" />
                   Review Management
@@ -943,17 +679,15 @@ export default function ReviewerDashboard() {
               <CardContent>
                 <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                      <TabsTrigger value="all_applications">Applications</TabsTrigger>
                     <TabsTrigger value="map" className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
                       Concession Map
                     </TabsTrigger>
                   </TabsList>
 
-                {/* Tab Contents */}
-                <TabsContent value="all_applications" className="space-y-4 mt-6">
-                  {/* Search and Filter Controls */}
-                  <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                    <TabsContent value="all_applications" className="space-y-4 mt-4">
+                      <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
                       <Input
@@ -978,15 +712,11 @@ export default function ReviewerDashboard() {
                   </div>
                   <ApplicationTable 
                     applications={reviewApplications}
-                    emptyMessage={
-                      selectedStatId
-                        ? statsConfig.find(s => s.id === selectedStatId)?.title ?? "All Applications"
-                        : "All Applications"
-                    }
+                        emptyMessage={activeChipLabel}
                   />
             </TabsContent>
 
-                <TabsContent value="map" className="space-y-4 mt-6">
+                    <TabsContent value="map" className="space-y-4 mt-4">
               <WaterConcessionMap />
                   </TabsContent>
                 </Tabs>

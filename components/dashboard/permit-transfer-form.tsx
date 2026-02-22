@@ -112,6 +112,7 @@ const transferFormSchema = z.object({
 
   // Documents (paymentProof removed - using IremboPay instead)
   certifiedLetter: z.any().optional(),
+  notifiedAgreement: z.any().optional(),
   registrationCertificate: z.any().optional(),
   existingPermitCopy: z.any().optional(),
 });
@@ -178,6 +179,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
   const fileInputRefs = {
     certifiedLetter: useRef<HTMLInputElement>(null),
+    notifiedAgreement: useRef<HTMLInputElement>(null),
     registrationCertificate: useRef<HTMLInputElement>(null),
     existingPermitCopy: useRef<HTMLInputElement>(null),
   };
@@ -456,11 +458,16 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const validateDocumentsTab = async () => {
     // Check required documents (paymentProof removed - using IremboPay instead)
     const hasCertifiedLetter = files.certifiedLetter || uploadedFileUrls.certifiedLetter;
+    const hasNotifiedAgreement = files.notifiedAgreement || uploadedFileUrls.notifiedAgreement;
     const hasRegistration = files.registrationCertificate || uploadedFileUrls.registrationCertificate;
     const hasExistingPermit = files.existingPermitCopy || uploadedFileUrls.existingPermitCopy;
 
     if (!hasCertifiedLetter) {
       setValidationError("Certified letter is required.");
+      return false;
+    }
+    if (!hasNotifiedAgreement) {
+      setValidationError("Notified agreement with the Transferee is required.");
       return false;
     }
     if (!hasRegistration) {
@@ -1451,6 +1458,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     <AlertDescription className="text-blue-800">
                       <ul className="mt-2 space-y-1 list-disc list-inside">
                         <li>Application Letter (stating reasons for transfer and the names of the new holder)</li>
+                        <li>Notified Agreement between the Transferor and Transferee</li>
                         <li>A well-filled and signed transfer form</li>
                         <li>Registration Certificate of Transferee (New Owner)</li>
                         <li>Copy of existing water use permit and its corresponding contract</li>
@@ -1465,6 +1473,13 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       label="Certified Letter"
                       required
                       description="A notarized transfer agreement"
+                    />
+
+                    <DocumentUploadField
+                      fieldName="notifiedAgreement"
+                      label="Notified Agreement with Transferee"
+                      required
+                      description="Agreement between Transferor and Transferee, signed and notified by both parties"
                     />
 
                     <DocumentUploadField

@@ -325,6 +325,7 @@ export interface Application {
   is_modification?: boolean
   modified_from_application_id?: string
   modification_changes?: Record<string, { previous: any; current: any }>
+  modification_reason?: string
   
   // Renewal tracking
   is_renewal?: boolean

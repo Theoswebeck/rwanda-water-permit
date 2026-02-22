@@ -12,10 +12,10 @@ import { z } from 'zod';
 // =============================================
 
 const QueryParamsSchema = z.object({
-  status: z.enum(['active', 'expiring_soon', 'all']).optional().default('active'),
-  includeExpired: z.boolean().optional().default(false),
+  status: z.enum(['active', 'expiring_soon', 'expired', 'suspended', 'revoked', 'all']).optional().default('all'),
+  includeExpired: z.boolean().optional().default(true),
   format: z.enum(['geojson', 'simple']).optional().default('geojson'),
-  limit: z.number().min(1).max(1000).optional().default(100),
+  limit: z.number().min(1).max(1000).optional().default(1000),
   offset: z.number().min(0).optional().default(0)
 });
 
@@ -34,10 +34,10 @@ export async function GET(request: NextRequest) {
     // Parse query parameters
     const { searchParams } = new URL(request.url);
     const queryParams = {
-      status: searchParams.get('status') || 'active',
-      includeExpired: searchParams.get('includeExpired') === 'true',
+      status: searchParams.get('status') || 'all',
+      includeExpired: searchParams.get('includeExpired') !== 'false',  // default true
       format: searchParams.get('format') || 'geojson',
-      limit: parseInt(searchParams.get('limit') || '100'),
+      limit: parseInt(searchParams.get('limit') || '1000'),
       offset: parseInt(searchParams.get('offset') || '0')
     };
 
@@ -132,10 +132,24 @@ export async function GET(request: NextRequest) {
     // Default GeoJSON format
     const geoJsonFeatureCollection = {
       type: 'FeatureCollection' as const,
-      features: paginatedPermits.map(permit => ({
+      features: paginatedPermits.map(permit => {
+        const geometry = permit.coordinates.geometry;
+        // Safely calculate area: handle both Polygon and MultiPolygon
+        let area = 0;
+        try {
+          if (geometry.type === 'Polygon' && geometry.coordinates?.[0]) {
+            area = calculatePolygonArea(geometry.coordinates[0]);
+          } else if (geometry.type === 'MultiPolygon' && geometry.coordinates?.[0]?.[0]) {
+            area = calculatePolygonArea(geometry.coordinates[0][0]);
+          }
+        } catch {
+          console.warn(`⚠️ Could not calculate area for permit ${permit.permitNumber}`);
+        }
+
+        return {
         type: 'Feature' as const,
         id: permit.permitId,
-        geometry: permit.coordinates.geometry,
+          geometry,
         properties: {
           permitId: permit.permitId,
           permitNumber: permit.permitNumber,
@@ -144,9 +158,12 @@ export async function GET(request: NextRequest) {
           issuedDate: permit.issuedDate,
           expiryDate: permit.expiryDate,
           isExpiring: isExpiringSoon(permit.expiryDate),
-          area: calculatePolygonArea(permit.coordinates.geometry.coordinates[0])
+            waterPurpose: permit.waterPurpose,
+            geometryType: geometry.type,
+            area
         }
-      }))
+        };
+      })
     };
 
     return NextResponse.json({
@@ -271,21 +288,30 @@ function calculateBounds(permits: any[]): [number, number, number, number] | nul
   let minLng = Infinity, minLat = Infinity;
   let maxLng = -Infinity, maxLat = -Infinity;
   
-  permits.forEach(permit => {
-    // Safe check for coordinates
-    if (!permit.coordinates?.geometry?.coordinates?.[0]) {
-      return;
-    }
-    
-    const coordinates = permit.coordinates.geometry.coordinates[0];
-    coordinates.forEach((coord: number[]) => {
+  const updateBounds = (coord: number[]) => {
       if (Array.isArray(coord) && coord.length >= 2) {
         minLng = Math.min(minLng, coord[0]);
         maxLng = Math.max(maxLng, coord[0]);
         minLat = Math.min(minLat, coord[1]);
         maxLat = Math.max(maxLat, coord[1]);
       }
-    });
+  };
+  
+  permits.forEach(permit => {
+    const geometry = permit.coordinates?.geometry;
+    if (!geometry?.coordinates) return;
+
+    try {
+      if (geometry.type === 'Polygon' && geometry.coordinates[0]) {
+        geometry.coordinates[0].forEach(updateBounds);
+      } else if (geometry.type === 'MultiPolygon') {
+        geometry.coordinates.forEach((poly: number[][][]) => {
+          if (poly[0]) poly[0].forEach(updateBounds);
+        });
+      }
+    } catch {
+      // Skip permits with malformed coordinates
+    }
   });
   
   // Return null if no valid coordinates were found

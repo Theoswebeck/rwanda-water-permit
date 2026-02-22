@@ -1,29 +1,29 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, FileCheck, Eye, Search, MapPin, Droplets, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, FileCheck, Eye, Search, MapPin } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
-import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
-import { ActivePermitsInspectionTab } from "@/components/inspection/active-permits-inspection-tab";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
-import { ClickableStatsGrid, StatsConfig } from "@/components/shared/clickable-stats-card";
+import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
+import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
+import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 
 interface VerificationApplication extends Application {
   applicant_name?: string;
@@ -31,11 +31,16 @@ interface VerificationApplication extends Application {
   deadline_90_days_remaining?: number;
 }
 
-interface VerificationStatsData {
-  pendingVerification: number;
-  underVerification: number;
-  pendingApproval: number;
-}
+// ─── Chip definitions per RWB spec ────────────────────────────────────────────
+const VERIFIER_CHIPS: StatusChipDef[] = [
+  { id: "pending_verification", label: "Pending Verification", statuses: ["pending_verification"], priority: "primary" },
+  { id: "returned_to_reviewer", label: "Returned to Reviewer", statuses: ["returned_to_review"], priority: "secondary" },
+  { id: "pending_approval", label: "Pending Approval", statuses: ["pending_final_approval"], priority: "secondary" },
+  { id: "re_verification", label: "Re-Verification", statuses: ["returned_to_verification"], priority: "primary" },
+  { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
+  { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
+  { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+];
 
 export default function VerificationDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -43,12 +48,10 @@ export default function VerificationDashboard() {
   const [applications, setApplications] = useState<VerificationApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<VerificationStatsData | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
   const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports">("verification");
-  const [selectedStatId, setSelectedStatId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [activeChipId, setActiveChipId] = useState(VERIFIER_CHIPS[0].id);
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
+  const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -56,16 +59,12 @@ export default function VerificationDashboard() {
         setLoading(true);
         setError(null);
 
-        // Fetch all applications for the "All Applications" tab, and locally filter for the queue.
         const { data, error } = await supabase
           .from("applications")
-          .select(
-            `
+          .select(`
             *,
             applicant:users!applicant_id(first_name, last_name, company_name)
-          `
-          )
-          // Always show latest submissions first (fallback to created_at when submitted_at is null).
+          `)
           .order("submitted_at", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
 
@@ -86,7 +85,6 @@ export default function VerificationDashboard() {
             slaRemaining = diffDays;
           }
 
-          // 90-day countdown starts from when completeness was confirmed (not submission)
           const deadline90Remaining = calculateDaysRemainingTo90DayDeadline({
             completenessConfirmedAt: app.completeness_confirmed_at,
           });
@@ -100,6 +98,17 @@ export default function VerificationDashboard() {
         });
 
         setApplications(processed);
+
+        // Batch-fetch workflow dates
+        const submittedAtMap: Record<string, string | null> = {};
+        for (const app of processed) {
+          submittedAtMap[app.id] = app.submitted_at || app.created_at;
+        }
+        const dates = await batchFetchWorkflowDates(
+          processed.map((a) => a.id),
+          submittedAtMap
+        );
+        setWorkflowDatesMap(dates);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load verification queue";
         console.error("❌ Failed to load verification queue:", e);
@@ -112,106 +121,14 @@ export default function VerificationDashboard() {
     fetchApps();
   }, []);
 
-  // Fetch verification statistics from database
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setStatsLoading(true);
+  // Derive active statuses from chip selection
+  const activeStatuses = useMemo(() => {
+    const chip = VERIFIER_CHIPS.find((c) => c.id === activeChipId);
+    return chip?.statuses ?? [];
+  }, [activeChipId]);
 
-        // Panel 1: Pending Verification (my queue - needs my action)
-        const { count: pendingVerificationCount, error: pendingVerificationError } = await supabase
-          .from("applications")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "pending_verification");
-        if (pendingVerificationError) throw pendingVerificationError;
-
-        // Panel 2: Under Verification (work in progress - returned for corrections)
-        const { count: underVerificationCount, error: underError } = await supabase
-          .from("applications")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "returned_to_verification");
-        if (underError) throw underError;
-
-        // Panel 3: Pending Approval (next stage - sent to Approver)
-        const { count: pendingApprovalCount, error: pendingApprovalError } = await supabase
-          .from("applications")
-          .select("*", { count: "exact", head: true })
-          .eq("status", "pending_final_approval");
-        if (pendingApprovalError) throw pendingApprovalError;
-
-        setStats({
-          pendingVerification: pendingVerificationCount || 0,
-          underVerification: underVerificationCount || 0,
-          pendingApproval: pendingApprovalCount || 0,
-        });
-      } catch (e) {
-        console.error("❌ Error fetching verification stats:", e);
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    fetchStats();
-  }, []);
-
-  const getVerificationStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending_verification: {
-        label: "Pending Verification",
-        className: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800",
-      },
-      pending_review: {
-        label: "Pending Review",
-        className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800",
-      },
-      pending_final_approval: {
-        label: "Pending Approval",
-        className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800",
-      },
-      approved_pending_permit: {
-        label: "Approved - Permit Pending",
-        className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800",
-      },
-      rejected: {
-        label: "Rejected",
-        className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800",
-      },
-      approved: {
-        label: "Approved",
-        className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800",
-      },
-      // Returned statuses
-      returned_to_assessment: {
-        label: "🔄 Returned to Assessor",
-        className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
-      },
-      returned_to_review: {
-        label: "🔄 Returned to Reviewer",
-        className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
-      },
-      returned_to_verification: {
-        label: "🔄 Returned for Re-verification",
-        className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800",
-      },
-    };
-
-    const config =
-      statusConfig[status as keyof typeof statusConfig] || ({
-        label: status,
-        className: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800",
-      } as const);
-
-    return (
-      <Badge
-        variant="outline"
-        className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}
-      >
-        {config.label}
-      </Badge>
-    );
-  };
-
-  const filterApplications = (apps: VerificationApplication[]) => {
+  const filterApplications = useCallback(
+    (apps: VerificationApplication[]) => {
     return apps.filter((app) => {
       const matchesSearch =
         app.application_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -223,92 +140,64 @@ export default function VerificationDashboard() {
         app.water_source?.toLowerCase().includes(filterType.toLowerCase()) ||
         app.application_type?.toLowerCase().includes(filterType.toLowerCase());
 
-      // Apply status filter from clicked stats card
-      const matchesStatus = statusFilter.length === 0 || statusFilter.includes(app.status);
+        const matchesStatus = activeStatuses.length === 0 || activeStatuses.includes(app.status);
 
       return matchesSearch && matchesType && matchesStatus;
     });
-  };
-
-  // Handle stats card click
-  const handleStatClick = (statId: string | null, filterStatuses: string[]) => {
-    setSelectedStatId(statId);
-    setStatusFilter(filterStatuses);
-  };
-
-  // Create stats configuration for clickable cards
-  const statsConfig: StatsConfig[] = useMemo(() => [
-    {
-      id: "pending_verification",
-      title: "Pending Verification",
-      value: stats?.pendingVerification ?? 0,
-      description: "My queue - needs my action",
-      icon: FileCheck,
-      iconColor: "text-blue-600",
-      filterStatuses: ["pending_verification"],
-      badgeText: stats?.pendingVerification === 0 ? "All caught up" : `${stats?.pendingVerification} in queue`,
-      badgeClassName: stats?.pendingVerification === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-blue-100 text-blue-800 hover:bg-blue-100",
     },
-    {
-      id: "under_verification",
-      title: "Under Verification",
-      value: stats?.underVerification ?? 0,
-      description: "Work in progress",
-      icon: AlertCircle,
-      iconColor: "text-amber-600",
-      filterStatuses: ["returned_to_verification"],
-      badgeText: (stats?.underVerification ?? 0) === 0 ? "None in progress" : `${stats?.underVerification ?? 0} in progress`,
-      badgeClassName: stats?.underVerification === 0 
-        ? "bg-green-100 text-green-800 hover:bg-green-100" 
-        : "bg-amber-100 text-amber-800 hover:bg-amber-100",
-    },
-    {
-      id: "pending_approval",
-      title: "Pending Approval",
-      value: stats?.pendingApproval ?? 0,
-      description: "Sent to Approver",
-      icon: CheckCircle,
-      iconColor: "text-green-600",
-      filterStatuses: ["pending_final_approval"],
-      badgeText: stats?.pendingApproval === 0 ? "None pending" : `${stats?.pendingApproval} with approver`,
-      badgeClassName: stats?.pendingApproval === 0 
-        ? "bg-gray-100 text-gray-800 hover:bg-gray-100" 
-        : "bg-green-100 text-green-800 hover:bg-green-100",
-      isNextStage: true,
-    },
-  ], [stats]);
+    [searchTerm, filterType, activeStatuses]
+  );
 
-  const getLocationString = (app: VerificationApplication) => `${app.district || "N/A"}, ${app.sector || "N/A"}`;
-
-  const getWaterSourceLabel = (waterSource: string) => {
-    const labels: Record<string, string> = {
-      surface_water: "Surface Water",
-      groundwater: "Groundwater",
-      borehole: "Borehole",
-      river: "River",
-      lake: "Lake",
-      spring: "Spring",
-      swamp: "Swamp",
-      other: "Other",
+  const getVerificationStatusBadge = (status: string) => {
+    const statusConfig: Record<string, { label: string; className: string }> = {
+      pending_verification: { label: "Pending Verification", className: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800" },
+      pending_review: { label: "Pending Review", className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800" },
+      pending_final_approval: { label: "Pending Approval", className: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800" },
+      approved_pending_permit: { label: "Approved - Permit Pending", className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800" },
+      rejected: { label: "Rejected", className: "bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800" },
+      approved: { label: "Approved", className: "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800" },
+      returned_to_assessment: { label: "🔄 Returned to Assessor", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+      returned_to_review: { label: "🔄 Returned to Reviewer", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
+      returned_to_verification: { label: "🔄 Returned for Re-verification", className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800" },
     };
-    return labels[waterSource] || waterSource;
+    const config = statusConfig[status] || { label: status, className: "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800" };
+    return (
+      <Badge variant="outline" className={`${config.className} text-xs font-medium px-1.5 py-0.5 rounded-full border backdrop-blur-sm whitespace-nowrap`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const get90DayBadge = (daysRemaining: number | null | undefined) => {
+    if (daysRemaining === null || daysRemaining === undefined) {
+      return <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">Not Started</Badge>;
+    }
+    if (daysRemaining <= 0) {
+      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">Overdue</Badge>;
+    }
+    if (daysRemaining <= 7) {
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">{daysRemaining}d</Badge>;
+    }
+    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800">{daysRemaining}d</Badge>;
+  };
+
+  const getAppTypeBadge = (app: VerificationApplication) => {
+    const appType = app.application_type;
+    const isModification = appType === 'modification' || (app as any).is_modification === true;
+    const isTransfer = appType === 'transfer';
+    const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
+    if (isRenewal) return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
+    if (isModification) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
+    if (isTransfer) return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
+    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 whitespace-nowrap">New</Badge>;
   };
 
   const getWaterPurposeLabel = (purpose: string) => {
     const labels: Record<string, string> = {
-      domestic: "Domestic Use",
-      industrial: "Industrial Use",
-      agricultural: "Agricultural Use",
-      irrigation: "Irrigation",
-      livestock: "Livestock",
-      aquaculture: "Aquaculture",
-      recreation: "Recreation",
-      electricity_generation: "Electricity Generation",
-      mining: "Mining",
-      municipal_supply: "Municipal Supply",
-      other: "Other",
+      domestic: "Domestic Use", industrial: "Industrial Use", agricultural: "Agricultural Use",
+      irrigation: "Irrigation", livestock: "Livestock", aquaculture: "Aquaculture",
+      recreation: "Recreation", electricity_generation: "Electricity Generation",
+      mining: "Mining", municipal_supply: "Municipal Supply", other: "Other",
     };
     return labels[purpose] || purpose;
   };
@@ -317,65 +206,10 @@ export default function VerificationDashboard() {
     const filteredApps = filterApplications(apps);
     const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
 
-    const get90DayBadge = (daysRemaining: number | null | undefined) => {
-      // 90-day countdown hasn't started yet (completeness not confirmed)
-      if (daysRemaining === null || daysRemaining === undefined) {
-        return (
-          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">
-            Not Started
-          </Badge>
-        );
-      }
-      if (daysRemaining <= 0) {
-        return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">
-            Overdue
-          </Badge>
-        );
-      }
-      if (daysRemaining <= 7) {
-        return (
-          <Badge
-            variant="outline"
-            className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
-          >
-            {daysRemaining}d
-          </Badge>
-        );
-      }
-      return (
-        <Badge
-          variant="outline"
-          className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800"
-        >
-          {daysRemaining}d
-        </Badge>
-      );
-    };
-
-    // Get application type badge (New, Modification, Transfer, Renewal)
-    const getAppTypeBadge = (app: VerificationApplication) => {
-      const appType = app.application_type;
-      const isModification = appType === 'modification' || (app as any).is_modification === true;
-      const isTransfer = appType === 'transfer';
-      const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
-      
-      if (isRenewal) {
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
-      }
-      if (isModification) {
-        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
-      }
-      if (isTransfer) {
-        return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
-      }
-      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 whitespace-nowrap">New</Badge>;
-    };
-
     return (
       <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800">
-          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800 py-3">
+          <CardTitle className="text-slate-900 dark:text-slate-100 font-semibold text-base">
             {emptyMessage} ({filteredApps.length})
           </CardTitle>
         </CardHeader>
@@ -384,7 +218,7 @@ export default function VerificationDashboard() {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Date</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
@@ -414,32 +248,25 @@ export default function VerificationDashboard() {
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors duration-150"
                     >
                       <TableCell className="p-2 sm:p-3">
-                        <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 whitespace-nowrap">
-                          {new Date(app.submitted_at || app.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                        </div>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {new Date(app.submitted_at || app.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+                        <WorkflowDatesCell dates={workflowDatesMap[app.id]} />
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
-                          {getWaterPurposeLabel(app.water_purpose || "")}
-                        </div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || "")}</div>
                       </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        {getAppTypeBadge(app)}
-                      </TableCell>
+                      <TableCell className="p-2 sm:p-3">{getAppTypeBadge(app)}</TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{getVerificationStatusBadge(app.status)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 hidden lg:table-cell">
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
-                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">{getLocationString(app)}</span>
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                            {app.district || "N/A"}, {app.sector || "N/A"}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
@@ -449,7 +276,9 @@ export default function VerificationDashboard() {
                             className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
                           >
                             <Eye className="h-3 w-3" />
-                            <span className="hidden sm:inline">{app.status === "pending_verification" || app.status === "returned_to_verification" ? "Verify" : "View"}</span>
+                            <span className="hidden sm:inline">
+                              {app.status === "pending_verification" || app.status === "returned_to_verification" ? "Verify" : "View"}
+                            </span>
                             <span className="sm:hidden">Go</span>
                           </Button>
                         </Link>
@@ -476,6 +305,8 @@ export default function VerificationDashboard() {
       </DashboardLayout>
     );
   }
+
+  const activeChipLabel = VERIFIER_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
 
   return (
     <ProtectedRoute allowedRoles={["verifier", "admin", "approver"]} requireProfile={true}>
@@ -504,13 +335,12 @@ export default function VerificationDashboard() {
             </div>
           </div>
 
-            {/* Summary Stats - Clickable to filter applications */}
-            <ClickableStatsGrid
-              stats={statsConfig}
-              selectedStatId={selectedStatId}
-              onStatClick={handleStatClick}
-              isLoading={statsLoading}
-              columns={3}
+            {/* Status Filter Chips */}
+            <StatusFilterChips
+              chips={VERIFIER_CHIPS}
+              activeChipId={activeChipId}
+              onChipChange={setActiveChipId}
+              applications={applications}
             />
 
             <StaffTopTabs
@@ -525,7 +355,7 @@ export default function VerificationDashboard() {
 
             {topTab === "verification" ? (
               <Card>
-                <CardHeader>
+                <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2">
                     <FileCheck className="h-5 w-5" />
                     Verification Management
@@ -534,15 +364,15 @@ export default function VerificationDashboard() {
                 <CardContent>
                   <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="all_applications">All Applications</TabsTrigger>
+                      <TabsTrigger value="all_applications">Applications</TabsTrigger>
                       <TabsTrigger value="map" className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
                         Concession Map
                       </TabsTrigger>
                     </TabsList>
 
-                  <TabsContent value="all_applications" className="space-y-4 mt-6">
-                    <div className="flex flex-col md:flex-row gap-4 p-6 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                    <TabsContent value="all_applications" className="space-y-4 mt-4">
+                      <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
                       <div className="flex-1 relative">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
                         <Input
@@ -570,15 +400,11 @@ export default function VerificationDashboard() {
 
                     <ApplicationTable
                       apps={applications}
-                      emptyMessage={
-                        selectedStatId
-                          ? statsConfig.find((s) => s.id === selectedStatId)?.title ?? "All Applications"
-                          : "All Applications"
-                      }
+                        emptyMessage={activeChipLabel}
                     />
                   </TabsContent>
 
-                  <TabsContent value="map" className="space-y-4 mt-6">
+                    <TabsContent value="map" className="space-y-4 mt-4">
                     <WaterConcessionMap />
                   </TabsContent>
                   </Tabs>
@@ -597,5 +423,3 @@ export default function VerificationDashboard() {
     </ProtectedRoute>
   );
 }
-
-

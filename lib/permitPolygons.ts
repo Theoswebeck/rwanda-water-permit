@@ -1,14 +1,15 @@
-import type { Feature, Polygon } from 'geojson';
+import type { Feature, Geometry } from 'geojson';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export interface PermitPolygon {
   permitId: string;
   permitNumber: string;
   projectTitle: string;
-  coordinates: Feature<Polygon>;
+  coordinates: Feature<Geometry>;
   status: string;
   issuedDate: string;
   expiryDate: string;
+  waterPurpose: string;
 }
 
 interface PermitPolygonData {
@@ -19,10 +20,12 @@ interface PermitPolygonData {
   status: string;
   issued_date: string;
   expiry_date: string;
+  water_purpose: string;
 }
 
 /**
- * Fetch all approved permit polygons from the database.
+ * Fetch all approved permit geometries from the database.
+ * Returns permits with Point, Polygon, or MultiPolygon geometry.
  * This is intended for server/API usage.
  */
 export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
@@ -37,9 +40,9 @@ export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
   return (data as PermitPolygonData[])
     .filter((permit) => Boolean(permit.coordinates_geojson))
     .map((permit) => {
-      const feature: Feature<Polygon> = {
+      const feature: Feature<Geometry> = {
         type: 'Feature',
-        geometry: permit.coordinates_geojson as Polygon,
+        geometry: permit.coordinates_geojson as Geometry,
         properties: {},
       };
 
@@ -51,6 +54,7 @@ export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
         status: permit.status,
         issuedDate: permit.issued_date,
         expiryDate: permit.expiry_date,
+        waterPurpose: permit.water_purpose,
       };
     });
 }

@@ -36,7 +36,7 @@ import {
   FormMessage
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, X, FileText, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2 } from "lucide-react";
+import { Upload, X, FileText, FileEdit, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -301,6 +301,9 @@ const applicationFormSchema = z.object({
     file: z.any().optional()
   })).optional(),
   
+  // Modification reason (required when modifying an existing permit)
+  modificationReason: z.string().optional(),
+
   // CERTIFICATION
   certificationAgreement: z.boolean().refine((val) => val === true, {
     message: "You must certify the information is accurate"
@@ -2091,6 +2094,14 @@ export function ApplicationForm({
 
   const handleFormSubmit = async (values: FormValues) => {
     try {
+      // Validate modification reason if in modification mode
+      if (isModification && !isStaffView && (!values.modificationReason || values.modificationReason.trim().length < 10)) {
+        setValidationError("Please provide a detailed reason for your modification request (at least 10 characters).");
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setTimeout(() => setValidationError(null), 5000);
+        return;
+      }
+
       // Compute modification changes if in modification mode
       let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
       if (isModification && originalApplicationData) {
@@ -2184,7 +2195,50 @@ export function ApplicationForm({
               />
             )}
 
+            {/* Show modification reason for staff viewing, or editable field for applicant */}
+            {isModification && isStaffView && currentApplication?.modification_reason && (
+              <Alert className="border-blue-200 bg-blue-50">
+                <FileText className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-800 font-semibold">Reason for Modification</AlertTitle>
+                <AlertDescription className="text-blue-700 whitespace-pre-line mt-1">
+                  {currentApplication.modification_reason}
+                </AlertDescription>
+              </Alert>
+            )}
+
             <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
+              {/* Modification Reason field - shown at the top for applicants in modification mode */}
+              {isModification && !isStaffView && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <FileEdit className="h-5 w-5 text-amber-600" />
+                    <h3 className="text-base font-semibold text-amber-800">
+                      Reason for Modification
+                    </h3>
+                    <span className="text-xs text-red-500 font-medium">* Required</span>
+                  </div>
+                  <p className="text-sm text-amber-700">
+                    Please provide a clear justification for why you are requesting this permit modification. This will be reviewed by RWB staff.
+                  </p>
+                  <FormField
+                    control={form.control}
+                    name="modificationReason"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Explain the reason for your modification request (e.g., change in water usage requirements, updated project scope, change of location, etc.)"
+                            className="min-h-[100px] bg-white border-amber-200 focus:border-amber-400 focus:ring-amber-400"
+                            disabled={readOnly}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
               <Tabs
                 defaultValue="applicant-info"
                 value={activeTab}
