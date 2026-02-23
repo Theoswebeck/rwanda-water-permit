@@ -521,6 +521,7 @@ export default function InspectorApplicationView() {
           renewal_request_letter: 'renewalRequestLetter',
           certified_letter: 'certifiedLetter',
           registration_certificate: 'registrationCertificate',
+          notified_agreement: 'notifiedAgreement',
           existing_permit_copy: 'existingPermitCopy',
         };
 

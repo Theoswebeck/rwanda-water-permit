@@ -186,6 +186,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       livestockFeasibilityStudy: 'other',
       // Transfer documents
       certifiedLetter: 'certified_letter',
+      notifiedAgreement: 'notified_agreement',
       registrationCertificate: 'registration_certificate',
       existingPermitCopy: 'existing_permit_copy'
     };

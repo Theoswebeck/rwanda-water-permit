@@ -108,6 +108,7 @@ export type DocumentType =
   | 'renewal_request_letter' // Letter requesting permit renewal
   // Transfer application documents
   | 'certified_letter'
+  | 'notified_agreement'
   | 'registration_certificate'
   | 'existing_permit_copy'
   | 'other'

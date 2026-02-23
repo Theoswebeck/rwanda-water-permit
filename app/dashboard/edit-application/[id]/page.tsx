@@ -641,6 +641,11 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       // Livestock documents
       livestockGeneralRequirements: 'other',
       livestockFeasibilityStudy: 'other',
+      // Transfer documents
+      certifiedLetter: 'certified_letter',
+      notifiedAgreement: 'notified_agreement',
+      registrationCertificate: 'registration_certificate',
+      existingPermitCopy: 'existing_permit_copy',
     };
 
     const requiredFieldNames = (() => {
@@ -988,6 +993,7 @@ export default function EditApplicationPage() {
             // Transfer document types
             'certified_letter': 'certifiedLetter',
             'registration_certificate': 'registrationCertificate',
+            'notified_agreement': 'notifiedAgreement',
             'existing_permit_copy': 'existingPermitCopy',
           };
 

@@ -414,6 +414,7 @@ export default function ReviewApplicationPage() {
           // Transfer document types
           'certified_letter': 'certifiedLetter',
           'registration_certificate': 'registrationCertificate',
+          'notified_agreement': 'notifiedAgreement',
           'existing_permit_copy': 'existingPermitCopy',
         };
 

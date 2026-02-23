@@ -309,6 +309,7 @@ export default function VerificationApplicationPage() {
           renewal_request_letter: "renewalRequestLetter",
           certified_letter: "certifiedLetter",
           registration_certificate: "registrationCertificate",
+          notified_agreement: "notifiedAgreement",
           existing_permit_copy: "existingPermitCopy",
         };
 

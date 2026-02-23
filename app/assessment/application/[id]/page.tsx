@@ -381,6 +381,7 @@ export default function AssessmentApplicationPage() {
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
   const isFieldReportComplete =
     isReadOnly ||
+    isTransferApp ||
     (fieldReportFiles.length > 0 &&
       !!assessmentReportData.waterUseConflict &&
       !!assessmentReportData.wastewaterSystemDescription &&
@@ -732,6 +733,7 @@ export default function AssessmentApplicationPage() {
           water_quality_report: 'waterQualityReport',
           renewal_request_letter: 'renewalRequestLetter',
           certified_letter: 'certifiedLetter',
+          notified_agreement: 'notifiedAgreement',
           registration_certificate: 'registrationCertificate',
           existing_permit_copy: 'existingPermitCopy',
         };
@@ -1235,22 +1237,25 @@ export default function AssessmentApplicationPage() {
   const handleOpenSendToReviewDialog = () => {
     if (!application) return;
 
-    // Validate ONLY on submit click
-    const missing: string[] = [];
-    if (!assessmentReportData.waterUseConflict) missing.push("Section 5: Water use conflict");
-    if (!assessmentReportData.wastewaterSystemDescription) missing.push("Section 6: Wastewater system description");
-    if (!assessmentReportData.pollutionDescription) missing.push("Section 6: Pollution description");
-    if (!assessmentReportData.conclusion) missing.push("Section 7: Assessment Report Summary");
-    if (!recommendation.recommendation) missing.push("Section 8: Assessor Recommendation");
-    if (recommendation.recommendation === "no" && !recommendation.explanationText) {
-      missing.push("Section 8: Explanation for Recommendation");
-    }
+    // Transfer applications do not require an assessment report – skip field-report validation.
+    if (!isTransferApp) {
+      // Validate ONLY on submit click
+      const missing: string[] = [];
+      if (!assessmentReportData.waterUseConflict) missing.push("Section 5: Water use conflict");
+      if (!assessmentReportData.wastewaterSystemDescription) missing.push("Section 6: Wastewater system description");
+      if (!assessmentReportData.pollutionDescription) missing.push("Section 6: Pollution description");
+      if (!assessmentReportData.conclusion) missing.push("Section 7: Assessment Report Summary");
+      if (!recommendation.recommendation) missing.push("Section 8: Assessor Recommendation");
+      if (recommendation.recommendation === "no" && !recommendation.explanationText) {
+        missing.push("Section 8: Explanation for Recommendation");
+      }
 
-    if (missing.length > 0) {
-      alert(`⚠️ Please complete the following before sending for final approval:\n\n${missing.map((m) => `- ${m}`).join("\n")}`);
-      tabTouchedRef.current = true;
-      setActiveTab("field_report");
-      return;
+      if (missing.length > 0) {
+        alert(`⚠️ Please complete the following before sending for final approval:\n\n${missing.map((m) => `- ${m}`).join("\n")}`);
+        tabTouchedRef.current = true;
+        setActiveTab("field_report");
+        return;
+      }
     }
 
     // All validations passed, show confirmation dialog
