@@ -30,7 +30,9 @@ import {
   CheckCircle,
   Loader2,
   XCircle,
-  ClipboardCheck
+  ClipboardCheck,
+  User2,
+  Mail
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
@@ -221,6 +223,9 @@ export default function ReviewApplicationPage() {
   const [reportType, setReportType] = useState<ReportType>("abstraction");
   const [banner, setBanner] = useState<Omit<UIBanner, "scope"> | null>(null);
   
+  // Assigned assessor info (for Return to Assessment dialog)
+  const [assignedAssessor, setAssignedAssessor] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+
   // Assessor Recommendations State (read-only for reviewers)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
@@ -282,6 +287,23 @@ export default function ReviewApplicationPage() {
             
           if (!assignedUserError && assignedUserData) {
             (appData as any).assigned_to_user = assignedUserData;
+          }
+        }
+
+        // Fetch assigned assessor info (for Return to Assessment dialog)
+        if (appData.assigned_assessor_id) {
+          const { data: assessorData } = await supabase
+            .from('users')
+            .select('first_name, last_name, email')
+            .eq('id', appData.assigned_assessor_id)
+            .single();
+
+          if (assessorData) {
+            setAssignedAssessor({
+              firstName: assessorData.first_name || '',
+              lastName: assessorData.last_name || '',
+              email: assessorData.email || '',
+            });
           }
         }
 
@@ -1324,7 +1346,7 @@ export default function ReviewApplicationPage() {
 
       {/* Revision Notes Dialog */}
       <Dialog open={showRevisionDialog} onOpenChange={setShowRevisionDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
             <DialogTitle>Return Application to Assessment</DialogTitle>
             <DialogDescription>
@@ -1332,6 +1354,26 @@ export default function ReviewApplicationPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Assigned Assessor Info */}
+            {assignedAssessor && (
+              <div className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/60 px-3.5 py-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <User2 className="h-4.5 w-4.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 leading-tight">
+                    {`${assignedAssessor.firstName} ${assignedAssessor.lastName}`.trim() || 'Assessor'}
+                  </p>
+                  <p className="flex items-center gap-1 text-xs text-gray-500 truncate leading-tight mt-0.5">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    {assignedAssessor.email}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0 text-[10px] font-medium border-blue-200 text-blue-700 bg-white">
+                  Assessor
+                </Badge>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="revision-notes">Revision Notes *</Label>
               <Textarea
