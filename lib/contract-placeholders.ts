@@ -258,12 +258,12 @@ export function buildContractPlaceholderContext(
   const appNo = (applicationNumber ?? "").trim();
   const contractNumber = (() => {
     if (!appNo) return "N/A";
-    // Common format: "RWB-2025-000025" -> "000025"
-    const m = appNo.match(/-(\d+)$/);
-    const raw = (m?.[1] ?? "").trim();
-    if (!raw) return "N/A";
-    // Preserve leading zeros; ensure at least 6 digits for consistency.
-    return raw.padStart(6, "0");
+    // Common format: "RWB-2025-000025" -> "000025/RWB/2025"
+    const m = appNo.match(/^RWB-(\d{4})-(\d+)$/i);
+    if (!m) return "N/A";
+    const year = m[1];
+    const seq = m[2].padStart(6, "0");
+    return `${seq}/RWB/${year}`;
   })();
   return {
     applicationNumber: (applicationNumber ?? "").trim() || "N/A",

@@ -2150,9 +2150,18 @@ export const generateTermsConditionsPdfBlob = async (opts: {
   doc.setFont("times", "bold");
   doc.text(termsHeading.toUpperCase(), 105, 80, { align: 'center' });
 
+  // Resolve contract display number — avoid duplicating /RWB/<year> suffix
+  // when contractNumber already contains it (e.g. "000004/RWB/2026").
+  const contractDisplayNumber = (() => {
+    const cn = (contractNumber ?? "").trim();
+    if (!cn || cn === "N/A") return `N/A/RWB/${issueDate.getFullYear()}`;
+    if (/\/RWB\/\d{4}$/i.test(cn)) return cn;
+    return `${cn}/RWB/${issueDate.getFullYear()}`;
+  })();
+
   doc.setFontSize(11);
   doc.setFont("times", "normal");
-  doc.text(`Contract No: ${contractNumber}/RWB/${issueDate.getFullYear()}`, 105, 88, { align: 'center' });
+  doc.text(`Contract No: ${contractDisplayNumber}`, 105, 88, { align: 'center' });
 
   // Application reference info
   doc.setFontSize(10);
@@ -2279,7 +2288,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.text(`Page ${i} of ${pageCount}`, 195, 290, { align: 'right' });
-    doc.text(`Contract: ${contractNumber}/RWB/${issueDate.getFullYear()}`, 105, 290, { align: 'center' });
+    doc.text(`Contract: ${contractDisplayNumber}`, 105, 290, { align: 'center' });
     doc.text('Rwanda Water Resources Board - Terms and Conditions', 15, 290);
   }
 

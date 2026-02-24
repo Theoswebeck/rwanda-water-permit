@@ -35,7 +35,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Eye, Search, XCircle, MapPin, Loader2, Droplets, FileCheck, MoreHorizontal, UserPlus, Send } from "lucide-react";
+import {
+  Download,
+  Eye,
+  FileCheck,
+  Loader2,
+  MapPin,
+  MoreHorizontal,
+  Droplets,
+  Search,
+  Send,
+  UserPlus,
+  XCircle,
+} from "lucide-react";
 import Link from "next/link";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -48,6 +60,11 @@ import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
+import { downloadFromDocumentsBucket, uploadPermitPdf, uploadTermsPdf } from "@/lib/supabase-storage";
+import { contractTermsByVariant } from "@/lib/contract-terms";
+import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
+import { selectPermitVariant } from "@/lib/permit-variant";
+import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -60,6 +77,12 @@ interface ReviewApplication extends Application {
     email?: string | null;
   } | null;
 }
+
+type LinkedPermitLite = {
+  id: string;
+  permit_number: string;
+  permit_pdf_url: string | null;
+};
 
 interface StaffMember {
   id: string;
@@ -76,7 +99,8 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
   { id: "pending_review", label: "Pending Review", statuses: ["pending_review"], priority: "primary" },
   { id: "returned_to_assessor", label: "Returned to Assessor", statuses: ["returned_to_assessment"], priority: "secondary" },
   { id: "pending_verification", label: "Pending Verification", statuses: ["pending_verification"], priority: "downstream" },
-  { id: "re_review", label: "Re-Review", statuses: ["returned_to_review"], priority: "primary" },
+  { id: "pending_approver", label: "Pending Approver", statuses: ["pending_final_approval"], priority: "downstream" },
+  { id: "re_review", label: "Returned for Review", statuses: ["returned_to_review"], priority: "primary" },
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
@@ -94,6 +118,8 @@ export default function ReviewerDashboard() {
   const [activeChipId, setActiveChipId] = useState(REVIEWER_CHIPS[0].id);
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
+  const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
+  const [busyAction, setBusyAction] = useState<{ appId: string; kind: "permit_pdf" | "terms_pdf" } | null>(null);
 
   // Assessor assignment state
   const [assessors, setAssessors] = useState<StaffMember[]>([]);
@@ -184,6 +210,95 @@ export default function ReviewerDashboard() {
 
         setReviewApplications(processedApplications);
 
+        // Fetch linked permits for approved applications (for Actions: View Permit / View PDF)
+        try {
+          const approvedApps = processedApplications.filter((a) => a.status === "approved");
+          if (approvedApps.length === 0) {
+            setPermitByApplicationId({});
+          } else {
+            const appIdSet = new Set<string>(approvedApps.map((a) => a.id));
+            const appToPermitId: Record<string, string> = {};
+            const permitIdsToFetch = new Set<string>();
+
+            for (const app of approvedApps) {
+              // Renewals: permit id is directly referenced
+              if ((app as any).is_renewal === true && (app as any).renewed_from_permit_id) {
+                const pid = String((app as any).renewed_from_permit_id);
+                appToPermitId[app.id] = pid;
+                permitIdsToFetch.add(pid);
+                continue;
+              }
+
+              // Modifications: permit id lives in internal_notes.originalPermitId
+              if ((app as any).is_modification === true && (app as any).internal_notes) {
+                try {
+                  const parsed = JSON.parse(String((app as any).internal_notes));
+                  const pid = parsed?.originalPermitId;
+                  if (typeof pid === "string" && pid.trim()) {
+                    appToPermitId[app.id] = pid;
+                    permitIdsToFetch.add(pid);
+                    continue;
+                  }
+                } catch {
+                  // ignore parse errors
+                }
+              }
+            }
+
+            // 1) Permits that are directly linked via `permits.application_id` (new permits + transfers)
+            const { data: permitsByApp, error: permitsByAppError } = await supabase
+              .from("permits")
+              .select("id, application_id, permit_number, permit_pdf_url")
+              .in("application_id", Array.from(appIdSet));
+            if (permitsByAppError) throw permitsByAppError;
+
+            // 2) Permits referenced via renewal/modification permit IDs
+            let permitsById: any[] = [];
+            if (permitIdsToFetch.size > 0) {
+              const { data: permits, error: permitsByIdError } = await supabase
+                .from("permits")
+                .select("id, application_id, permit_number, permit_pdf_url")
+                .in("id", Array.from(permitIdsToFetch));
+              if (permitsByIdError) throw permitsByIdError;
+              permitsById = permits || [];
+            }
+
+            const permitById = new Map<string, LinkedPermitLite>();
+            for (const p of permitsById as any[]) {
+              if (p?.id && p?.permit_number) {
+                permitById.set(String(p.id), {
+                  id: String(p.id),
+                  permit_number: String(p.permit_number),
+                  permit_pdf_url: (p as any).permit_pdf_url ?? null,
+                });
+              }
+            }
+
+            const linked: Record<string, LinkedPermitLite> = {};
+
+            for (const p of (permitsByApp || []) as any[]) {
+              const applicationId = String(p.application_id);
+              if (!appIdSet.has(applicationId)) continue;
+              if (!p?.id || !p?.permit_number) continue;
+              linked[applicationId] = {
+                id: String(p.id),
+                permit_number: String(p.permit_number),
+                permit_pdf_url: (p as any).permit_pdf_url ?? null,
+              };
+            }
+
+            for (const [appId, pid] of Object.entries(appToPermitId)) {
+              const permit = permitById.get(pid);
+              if (permit) linked[appId] = permit;
+            }
+
+            setPermitByApplicationId(linked);
+          }
+        } catch (e) {
+          console.warn("⚠️ Failed to load linked permits for approved apps:", e);
+          setPermitByApplicationId({});
+        }
+
         // Batch-fetch workflow dates
         const submittedAtMap: Record<string, string | null> = {};
         for (const app of processedApplications) {
@@ -214,6 +329,273 @@ export default function ReviewerDashboard() {
 
     fetchReviewApplications();
   }, []);
+
+  const openPermitPdf = async (app: ReviewApplication) => {
+    const permit = permitByApplicationId[app.id];
+    if (!permit?.id) {
+      alert("No linked permit found for this approved application.");
+      return;
+    }
+    if (busyAction) return;
+    setBusyAction({ appId: app.id, kind: "permit_pdf" });
+
+    // If we already have a stored PDF path/URL, open it.
+    if (permit.permit_pdf_url) {
+      const blob = await downloadFromDocumentsBucket(permit.permit_pdf_url);
+      if (!blob) {
+        alert("Failed to open permit PDF. Please try again.");
+        setBusyAction(null);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setBusyAction(null);
+      return;
+    }
+
+    // Otherwise, generate & persist a PDF on-demand, then open it.
+    try {
+      const { data: permitRow, error: permitError } = await supabase
+        .from("permits")
+        .select(
+          `
+          id,
+          permit_number,
+          issued_date,
+          expiry_date,
+          conditions,
+          is_modification,
+          application_id,
+          application:applications!application_id(
+            *,
+            applicant:users!applicant_id(*)
+          )
+        `
+        )
+        .eq("id", permit.id)
+        .single();
+
+      if (permitError || !permitRow) throw permitError ?? new Error("Permit not found");
+      const applicationData = (permitRow as any).application;
+      if (!applicationData) throw new Error("Application data not found for this permit");
+
+      const conditionsForPdf: string[] = (() => {
+        const c = (permitRow as any)?.conditions?.conditions;
+        if (Array.isArray(c)) return c;
+        return [
+          "Comply with all environmental regulations",
+          "Submit quarterly usage reports",
+          "Allow inspections as required",
+        ];
+      })();
+
+      const issuedDate = (permitRow as any).issued_date ?? null;
+      const expiryDate = (permitRow as any).expiry_date ?? null;
+      const durationYears = (() => {
+        try {
+          if (!issuedDate || !expiryDate) return 5;
+          const di = new Date(issuedDate).getTime();
+          const de = new Date(expiryDate).getTime();
+          if (!Number.isFinite(di) || !Number.isFinite(de) || de <= di) return 5;
+          const years = (de - di) / (365.25 * 24 * 60 * 60 * 1000);
+          const rounded = Math.round(years);
+          return rounded >= 1 && rounded <= 15 ? rounded : 5;
+        } catch {
+          return 5;
+        }
+      })();
+
+      const { generateDigitalWaterPermitBlob } = await import("@/lib/pdf-generator");
+      const pdfBlob = await generateDigitalWaterPermitBlob(
+        applicationData,
+        (permitRow as any).permit_number,
+        conditionsForPdf,
+        durationYears,
+        (permitRow as any).is_modification === true,
+        {
+          issuedDate,
+          expiryDate,
+        }
+      );
+
+      const upload = await uploadPermitPdf({
+        permitId: (permitRow as any).id,
+        permitNumber: (permitRow as any).permit_number,
+        pdfBlob,
+      });
+
+      if (upload?.path) {
+        // Persist via staff API (service role) to avoid RLS issues.
+        await fetch(`/api/staff/permits/${encodeURIComponent(String((permitRow as any).id))}/pdf`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: upload.path }),
+        }).catch(() => null);
+
+        setPermitByApplicationId((prev) => ({
+          ...prev,
+          [app.id]: {
+            id: String((permitRow as any).id),
+            permit_number: String((permitRow as any).permit_number),
+            permit_pdf_url: upload.path,
+          },
+        }));
+      }
+
+      const url = URL.createObjectURL(pdfBlob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      console.error("❌ Failed to generate/open permit PDF:", e);
+      alert("Failed to generate permit PDF. Please try again.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const openTermsPdf = async (app: ReviewApplication) => {
+    if (busyAction) return;
+    if (app.terms_status && app.terms_status !== "accepted") {
+      alert("Terms have not been accepted for this application yet.");
+      return;
+    }
+
+    const permit = permitByApplicationId[app.id];
+    if (!permit?.id || !permit?.permit_number) {
+      alert("No linked permit found for this approved application.");
+      return;
+    }
+
+    setBusyAction({ appId: app.id, kind: "terms_pdf" });
+
+    const parseNotes = (s: unknown): Record<string, any> => {
+      if (typeof s !== "string" || !s.trim()) return {};
+      try {
+        const v = JSON.parse(s);
+        if (v && typeof v === "object" && !Array.isArray(v)) return v;
+        return {};
+      } catch {
+        return {};
+      }
+    };
+
+    const notes = parseNotes(app.internal_notes);
+    const existingPath = typeof notes.accepted_terms_pdf_url === "string" ? notes.accepted_terms_pdf_url : null;
+    if (existingPath) {
+      const blob = await downloadFromDocumentsBucket(existingPath);
+      if (!blob) {
+        alert("Failed to open Terms PDF. Please try again.");
+        setBusyAction(null);
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      setBusyAction(null);
+      return;
+    }
+
+    try {
+      // Fetch enough application data to render the exact contract terms + placeholders.
+      const { data: applicationData, error: appErr } = await supabase
+        .from("applications")
+        .select(
+          `
+          id,
+          internal_notes,
+          water_source,
+          water_body_name,
+          max_daily_volume_m3,
+          max_yearly_volume_m3,
+          estimated_usage_volume,
+          usage_unit,
+          proposed_duration_years,
+          concession_area,
+          intended_activities,
+          province,
+          district,
+          sector,
+          cell,
+          village,
+          coordinates,
+          applicant:users!applicant_id(account_type, first_name, last_name, company_name, id_number)
+        `
+        )
+        .eq("id", app.id)
+        .single();
+
+      if (appErr || !applicationData) throw appErr ?? new Error("Application not found");
+
+      const variant = selectPermitVariant(applicationData as any);
+      const resolvedTerms = (contractTermsByVariant as any)[variant] ?? null;
+      if (!resolvedTerms) throw new Error("No contract terms configured for this application type.");
+
+      const placeholderCtx = buildContractPlaceholderContext(applicationData as any, app.application_number || "");
+      const filledSections = resolvedTerms.sections.map((section: any) => ({
+        title: section.title,
+        paragraphs: section.paragraphs.map((p: string) => fillContractText(p, placeholderCtx)),
+      }));
+
+      const applicantName = (() => {
+        const applicant = (applicationData as any).applicant;
+        if (!applicant) return "N/A";
+        if (applicant.account_type === "individual") {
+          return `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim() || "N/A";
+        }
+        return applicant.company_name || "N/A";
+      })();
+
+      const contractNumber = String(permit.permit_number).replace(/^WP-/, "");
+      const postAcceptanceNoticeBody =
+        "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.";
+
+      const termsBlob = await generateTermsConditionsPdfBlob({
+        applicationNumber: app.application_number || "N/A",
+        projectTitle: app.project_title || "N/A",
+        applicantName,
+        contractNumber,
+        termsHeading: resolvedTerms.heading,
+        termsSections: filledSections,
+        importantNotice: resolvedTerms.importantNotice
+          ? { ...resolvedTerms.importantNotice, body: postAcceptanceNoticeBody }
+          : null,
+      });
+
+      // Upload + persist path in internal_notes (best-effort).
+      const upload = await uploadTermsPdf({
+        permitId: permit.id,
+        contractNumber,
+        pdfBlob: termsBlob,
+      });
+
+      if (upload?.path) {
+        const mergedPatch = {
+          accepted_terms_pdf_url: upload.path,
+          accepted_terms_pdf_updated_at: new Date().toISOString(),
+        };
+
+        // Persist via staff API (service role) to avoid RLS issues.
+        await fetch(`/api/staff/applications/${encodeURIComponent(app.id)}/internal-notes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ patch: mergedPatch }),
+        }).catch(() => null);
+
+        const merged = { ...notes, ...mergedPatch };
+        setReviewApplications((prev) => prev.map((a) => (a.id === app.id ? ({ ...a, internal_notes: JSON.stringify(merged) } as any) : a)));
+      }
+
+      const url = URL.createObjectURL(termsBlob);
+      window.open(url, "_blank");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      console.error("❌ Failed to generate/open terms PDF:", e);
+      alert("Failed to generate Terms PDF. Please try again.");
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   // Fetch assessors for assignment dropdown
   useEffect(() => {
@@ -424,19 +806,6 @@ export default function ReviewerDashboard() {
     );
   };
 
-  const get90DayBadge = (daysRemaining: number | null | undefined) => {
-    if (daysRemaining === null || daysRemaining === undefined) {
-      return <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">Not Started</Badge>;
-    }
-    if (daysRemaining <= 0) {
-      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">Overdue</Badge>;
-    }
-    if (daysRemaining <= 7) {
-      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">{daysRemaining}d</Badge>;
-    }
-    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800">{daysRemaining}d</Badge>;
-  };
-
     const getApplicationTypeBadge = (app: ReviewApplication) => {
       const appType = app.application_type;
       const isModification = appType === 'modification' || (app as any).is_modification === true;
@@ -483,7 +852,6 @@ export default function ReviewerDashboard() {
           <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
@@ -494,7 +862,7 @@ export default function ReviewerDashboard() {
           <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -513,9 +881,6 @@ export default function ReviewerDashboard() {
                     >
                       <TableCell className="p-2 sm:p-3">
                         <WorkflowDatesCell dates={workflowDatesMap[app.id]} />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
@@ -540,7 +905,61 @@ export default function ReviewerDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        {canAssignOrReassignFromReviewDashboard(app.status) && !isFinalizedStatus(app.status) ? (
+                        {app.status === "approved" ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/review/application/${app.application_number}`}
+                                  className="flex items-center"
+                                >
+                                  <Eye className="h-4 w-4 mr-2" />
+                                  View Application
+                                </Link>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  await openPermitPdf(app);
+                                }}
+                                disabled={!!busyAction}
+                                className="flex items-center cursor-pointer"
+                              >
+                                {busyAction?.appId === app.id && busyAction.kind === "permit_pdf" ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4 mr-2" />
+                                )}
+                                {busyAction?.appId === app.id && busyAction.kind === "permit_pdf"
+                                  ? "Generating Permit PDF…"
+                                  : "View Permit PDF"}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  await openTermsPdf(app);
+                                }}
+                                disabled={!!busyAction}
+                                className="flex items-center cursor-pointer"
+                              >
+                                {busyAction?.appId === app.id && busyAction.kind === "terms_pdf" ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Download className="h-4 w-4 mr-2" />
+                                )}
+                                {busyAction?.appId === app.id && busyAction.kind === "terms_pdf"
+                                  ? "Generating Terms PDF…"
+                                  : "View Terms PDF"}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        ) : canAssignOrReassignFromReviewDashboard(app.status) && !isFinalizedStatus(app.status) ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -625,6 +1044,25 @@ export default function ReviewerDashboard() {
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin', 'approver']} requireProfile={true}>
       <DashboardLayout>
+        {busyAction ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+            <div className="w-[92vw] max-w-md rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-xl dark:border-slate-800 dark:bg-slate-950/90">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-slate-100 p-3 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {busyAction.kind === "permit_pdf" ? "Preparing Permit PDF" : "Preparing Terms PDF"}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    This can take a few seconds. Please keep this tab open.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

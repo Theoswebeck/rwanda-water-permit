@@ -223,21 +223,6 @@ export function FinalDecisions() {
     return null;
   };
 
-  const get90DayBadge = (daysRemaining: number | null | undefined) => {
-    // 90-day countdown hasn't started yet (completeness not confirmed)
-    if (daysRemaining === null || daysRemaining === undefined) {
-      return <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-200">Not Started</Badge>;
-    }
-
-    if (daysRemaining <= 0) {
-      return <Badge variant="outline" className="bg-red-100 text-red-700 border-red-200">Overdue</Badge>;
-    }
-    if (daysRemaining <= 7) {
-      return <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">{daysRemaining}d</Badge>;
-    }
-    return <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">{daysRemaining}d</Badge>;
-  };
-
   const getRecommendationBadge = (recommendation: "approve" | "reject") => {
     return recommendation === "approve" ? (
       <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">
@@ -411,7 +396,6 @@ export function FinalDecisions() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>90-day</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
@@ -429,9 +413,6 @@ export function FinalDecisions() {
                       <div className="text-[10px] text-muted-foreground/70">
                         {new Date(application.submittedDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      {get90DayBadge(application.deadline_90_days_remaining)}
                     </TableCell>
                     <TableCell>
                       <div>

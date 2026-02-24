@@ -173,9 +173,14 @@ export function useApplications({
           throw new Error('Approved, rejected, or expired applications cannot be edited. Please contact an administrator if changes are needed.')
         }
 
-        // If the caller is attempting to submit and this record never had a submission timestamp,
-        // set it exactly once (first submission timestamp should not move on resubmissions).
-        if ((workingData as any)?.status === 'submitted' && !(currentApp as any)?.submitted_at) {
+        // Update submitted_at:
+        // - On first submission (when submitted_at doesn't exist yet)
+        // - On resubmission after correction (when current status is 'revision_required')
+        //   so that the latest submission date reflects when the corrected application was resubmitted.
+        const isSubmitting = ['submitted', 'pending_assessment'].includes((workingData as any)?.status);
+        const isFirstSubmission = !(currentApp as any)?.submitted_at;
+        const isResubmissionAfterCorrection = currentApp?.status === 'revision_required';
+        if (isSubmitting && (isFirstSubmission || isResubmissionAfterCorrection)) {
           workingData = { ...workingData, submitted_at: new Date().toISOString() }
         }
       }

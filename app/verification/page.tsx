@@ -168,19 +168,6 @@ export default function VerificationDashboard() {
     );
   };
 
-  const get90DayBadge = (daysRemaining: number | null | undefined) => {
-    if (daysRemaining === null || daysRemaining === undefined) {
-      return <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/50 dark:text-slate-400 dark:border-slate-700">Not Started</Badge>;
-    }
-    if (daysRemaining <= 0) {
-      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800">Overdue</Badge>;
-    }
-    if (daysRemaining <= 7) {
-      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800">{daysRemaining}d</Badge>;
-    }
-    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800">{daysRemaining}d</Badge>;
-  };
-
   const getAppTypeBadge = (app: VerificationApplication) => {
     const appType = app.application_type;
     const isModification = appType === 'modification' || (app as any).is_modification === true;
@@ -219,7 +206,6 @@ export default function VerificationDashboard() {
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">90-day</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
@@ -230,7 +216,7 @@ export default function VerificationDashboard() {
               <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {apps.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -249,9 +235,6 @@ export default function VerificationDashboard() {
                     >
                       <TableCell className="p-2 sm:p-3">
                         <WorkflowDatesCell dates={workflowDatesMap[app.id]} />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <div className="flex justify-center">{get90DayBadge(app.deadline_90_days_remaining ?? null)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>

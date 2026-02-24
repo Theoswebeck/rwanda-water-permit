@@ -16,7 +16,8 @@ import {
   Loader2, 
   AlertTriangle,
   Edit,
-  CheckCircle
+  CheckCircle,
+  User2
 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
@@ -756,20 +757,48 @@ export default function ApplicationDetailPage() {
             )}
           
 
-          {/* Rejection Alert */}
+          {/* Rejection Alert — distinguish between RWB rejection and applicant T&C rejection */}
           {application.status === 'rejected' && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
+            <Alert className={(application as any).terms_status === 'rejected'
+              ? "border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-sm"
+              : "border-red-200 bg-red-50"
+            }>
+              {(application as any).terms_status === 'rejected' ? (
+                <User2 className="h-5 w-5 text-orange-600" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+              )}
               <AlertDescription>
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <p className="font-medium text-red-800">Application Rejected</p>
-                    <p className="text-red-700">
-                      Your water permit application has been rejected.
-                      {application.rejection_reason && (
-                        <span className="block mt-2 font-medium">Reason: {application.rejection_reason}</span>
-                      )}
-                    </p>
+                    {(application as any).terms_status === 'rejected' ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-orange-900 text-base">You Declined the Terms and Conditions</p>
+                          <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-100 text-xs">
+                            Terms Declined
+                          </Badge>
+                        </div>
+                        <p className="text-orange-800">
+                          You declined the Terms and Conditions for this application. The application has been rejected as a result. You may submit a new application if you wish to proceed.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-red-800">Application Rejected by RWB</p>
+                          <Badge variant="destructive" className="text-xs">
+                            RWB Decision
+                          </Badge>
+                        </div>
+                        <p className="text-red-700">
+                          Your water permit application has been rejected by Rwanda Water Resources Board.
+                          {application.rejection_reason && (
+                            <span className="block mt-2 font-medium">Reason: {application.rejection_reason}</span>
+                          )}
+                        </p>
+                      </>
+                    )}
                     <p className="text-red-600 text-sm">You may submit a new application with the necessary corrections.</p>
                   </div>
                 </div>

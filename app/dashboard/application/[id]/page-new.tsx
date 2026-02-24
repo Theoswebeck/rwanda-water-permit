@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, Loader2, MapPin, FileText, Calendar, User, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, FileText, Calendar, User, AlertTriangle, User2 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import type { Application } from "@/types/database";
@@ -169,15 +169,40 @@ export default function ApplicationDetailPage() {
             </div>
           </div>
 
-          {/* Rejection Reason Alert */}
-          {application.status === 'rejected' && application.rejection_reason && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
+          {/* Rejection Reason Alert — distinguish between RWB rejection and applicant T&C rejection */}
+          {application.status === 'rejected' && (
+            <Alert className={(application as any).terms_status === 'rejected'
+              ? "border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-sm"
+              : "border-red-200 bg-red-50"
+            }>
+              {(application as any).terms_status === 'rejected' ? (
+                <User2 className="h-5 w-5 text-orange-600" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+              )}
               <AlertDescription>
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <p className="font-medium text-red-800">Application Rejected</p>
-                    <p className="text-red-700">{application.rejection_reason}</p>
+                    {(application as any).terms_status === 'rejected' ? (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-orange-900 text-base">You Declined the Terms and Conditions</p>
+                          <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-100 text-xs">
+                            Terms Declined
+                          </Badge>
+                        </div>
+                        <p className="text-orange-800">
+                          You declined the Terms and Conditions for this application. The application has been rejected as a result.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-medium text-red-800">Application Rejected by RWB</p>
+                        {application.rejection_reason && (
+                          <p className="text-red-700">{application.rejection_reason}</p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </AlertDescription>

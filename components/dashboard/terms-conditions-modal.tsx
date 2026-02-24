@@ -22,7 +22,7 @@ import {
   Star
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { uploadPermitPdf } from "@/lib/supabase-storage";
+import { uploadPermitPdf, uploadTermsPdf } from "@/lib/supabase-storage";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { contractTermsByVariant } from "@/lib/contract-terms";
@@ -294,10 +294,20 @@ export function TermsConditionsModal({
         return applicant.company_name || "N/A";
       })();
 
+      // Derive the canonical contract number from the permit (header + preamble must match).
+      const contractNumber = issuedPermit?.permitNumber ? issuedPermit.permitNumber.replace("WP-", "") : "N/A";
+
+      // Override the placeholder context so preamble "No {{CONTRACT_NUMBER}}" uses the
+      // same permit-derived contract number as the PDF header, instead of the
+      // application-derived sequence.
+      const pdfPlaceholderCtx = placeholderCtx
+        ? { ...placeholderCtx, contractNumber: contractNumber !== "N/A" ? contractNumber : placeholderCtx.contractNumber }
+        : null;
+
       // Fill placeholders in the terms sections
       const filledSections = resolvedTerms.sections.map((section) => ({
         title: section.title,
-        paragraphs: section.paragraphs.map((p) => (placeholderCtx ? fillContractText(p, placeholderCtx) : p)),
+        paragraphs: section.paragraphs.map((p) => (pdfPlaceholderCtx ? fillContractText(p, pdfPlaceholderCtx) : p)),
       }));
 
       // IMPORTANT:
@@ -305,8 +315,6 @@ export function TermsConditionsModal({
       // - In the downloaded contract PDF (post-acceptance), use past-tense wording.
       const postAcceptanceNoticeBody =
         "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.";
-
-      const contractNumber = issuedPermit?.permitNumber ? issuedPermit.permitNumber.replace("WP-", "") : "N/A";
 
       const termsBlob = await generateTermsConditionsPdfBlob({
         applicationNumber: applicationNumber,
@@ -319,6 +327,51 @@ export function TermsConditionsModal({
           ? { ...resolvedTerms.importantNotice, body: postAcceptanceNoticeBody }
           : null,
       });
+
+      // Persist the Terms PDF so staff can view the exact agreed contract later.
+      // Store path in application.internal_notes.accepted_terms_pdf_url (best-effort).
+      if (issuedPermit?.permitId && contractNumber && contractNumber !== "N/A") {
+        try {
+          const upload = await uploadTermsPdf({
+            permitId: issuedPermit.permitId,
+            contractNumber,
+            pdfBlob: termsBlob,
+          });
+
+          if (upload?.path) {
+            // Merge into internal_notes JSON
+            let merged: Record<string, any> = {};
+            try {
+              merged = termsApplication?.internal_notes ? JSON.parse(termsApplication.internal_notes) : {};
+              if (!merged || typeof merged !== "object" || Array.isArray(merged)) merged = {};
+            } catch {
+              merged = {};
+            }
+            merged.accepted_terms_pdf_url = upload.path;
+            merged.accepted_terms_pdf_updated_at = new Date().toISOString();
+
+            const { error: updateErr } = await (supabase as any)
+              .from("applications")
+              .update({
+                internal_notes: JSON.stringify(merged),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", applicationId);
+
+            if (updateErr) {
+              console.warn("⚠️ Failed to persist accepted_terms_pdf_url on application:", updateErr);
+            } else {
+              console.log("✅ accepted_terms_pdf_url saved on application internal_notes");
+              // Update local cache so subsequent downloads don't need to refetch
+              setTermsApplication((prev: any) =>
+                prev ? { ...prev, internal_notes: JSON.stringify(merged) } : prev
+              );
+            }
+          }
+        } catch (e) {
+          console.warn("⚠️ Failed to upload/persist Terms PDF (best-effort):", e);
+        }
+      }
 
       const termsUrl = URL.createObjectURL(termsBlob);
       window.open(termsUrl, "_blank");
@@ -862,18 +915,21 @@ export function TermsConditionsModal({
   const handleRejectTerms = async () => {
     setIsProcessing(true);
     try {
-      // Update application with terms rejection
+      // Update application with terms rejection — move to rejected status
       const { error: updateError } = await (supabase as any)
         .from('applications')
         .update({
           terms_status: 'rejected',
-          status: 'revision_required' // Send back for revision
+          status: 'rejected',
+          rejection_reason: 'Applicant declined the Terms and Conditions.',
+          rejected_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .eq('id', applicationId);
 
       if (updateError) throw updateError;
 
-      console.log("Terms rejected. Application returned for revision.");
+      console.log("Terms rejected. Application moved to rejected status.");
       onClose();
     } catch (error) {
       console.error('Error rejecting terms:', error);

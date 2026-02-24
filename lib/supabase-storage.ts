@@ -254,6 +254,47 @@ export const uploadPermitPdf = async (opts: {
 };
 
 /**
+ * Upload a generated Terms & Conditions (Contract) PDF to Supabase Storage.
+ *
+ * We store it in the same bucket as other documents to avoid additional setup.
+ * Path format:
+ *   permits/{permitId}/terms-{contractNumber}.pdf
+ */
+export const uploadTermsPdf = async (opts: {
+  permitId: string;
+  contractNumber: string;
+  pdfBlob: Blob;
+}): Promise<{ path: string; url: string } | null> => {
+  const { permitId, contractNumber, pdfBlob } = opts;
+
+  try {
+    const safeContractNumber = String(contractNumber || "contract").replace(/[^a-zA-Z0-9-_]/g, "_");
+    const filePath = `permits/${permitId}/terms-${safeContractNumber}.pdf`;
+
+    console.log("📤 Uploading terms PDF to storage:", { bucket: DOCUMENTS_BUCKET, filePath });
+
+    const { data, error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(filePath, pdfBlob, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: "application/pdf",
+      });
+
+    if (error || !data?.path) {
+      console.error("❌ Failed to upload terms PDF:", error);
+      return null;
+    }
+
+    const url = getDocumentUrl(data.path) || "";
+    return { path: data.path, url };
+  } catch (error) {
+    console.error("❌ Error uploading terms PDF:", error);
+    return null;
+  }
+};
+
+/**
  * Download a file from the documents bucket (works for private buckets too if policies allow).
  */
 export async function downloadFromDocumentsBucket(filePath: string): Promise<Blob | null> {
