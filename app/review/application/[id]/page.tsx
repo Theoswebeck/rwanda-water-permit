@@ -1258,6 +1258,7 @@ export default function ReviewApplicationPage() {
                   initialDocuments={initialDocuments}
                   mode="view"
                   readOnly={true}
+                  currentApplication={application}
                   isStaffView={true}
                 />
               ) : null}
