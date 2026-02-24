@@ -40,11 +40,28 @@ export async function GET(
 
     const userId = user.id;
 
+    // Determine whether the current user is staff (reviewer/verifier/approver/assessor/inspector/admin).
+    // Applicants can only check their own payments; staff can verify any payment to support assessment.
+    const staffRoles = ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'] as const;
+    let isStaff = false;
+    try {
+      const { data: currentUserRow } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+      const role = (currentUserRow as any)?.role as string | undefined;
+      isStaff = !!role && (staffRoles as readonly string[]).includes(role);
+    } catch {
+      // If role lookup fails, default to non-staff behavior.
+      isStaff = false;
+    }
+
     // =============================================
     // 1. FETCH PAYMENT FROM DATABASE
     // =============================================
 
-    const { data: payment, error: paymentError } = await supabase
+    const paymentQuery = supabase
       .from('payments')
       .select(`
         *,
@@ -55,17 +72,23 @@ export async function GET(
           project_title
         )
       `)
-      .eq('id', paymentId)
-      .eq('applicant_id', userId)
-      .single();
+      .eq('id', paymentId);
 
-    if (paymentError || !payment) {
+    const scopedQuery = isStaff ? paymentQuery : paymentQuery.eq('applicant_id', userId);
+
+    const { data: paymentRow, error: paymentError } = await scopedQuery.single();
+
+    if (paymentError || !paymentRow) {
       console.error('❌ [PAYMENT STATUS] Payment not found:', paymentError);
       return NextResponse.json(
         { success: false, error: 'Payment not found or access denied' },
         { status: 404 }
       );
     }
+
+    // Supabase typing in this repo is not fully aligned with generated DB types for all tables.
+    // Cast to any to avoid "never" inference breaking compilation for this route.
+    const payment = paymentRow as any;
 
     console.log('✅ [PAYMENT STATUS] Payment found:', {
       id: payment.id,

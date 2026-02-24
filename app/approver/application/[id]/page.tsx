@@ -829,6 +829,7 @@ export default function ApproverApplicationPage() {
               initialDocuments={initialDocuments}
               mode="view"
               readOnly={true}
+              currentApplication={application}
               isStaffView={true}
             />
               ) : null}
@@ -883,6 +884,7 @@ export default function ApproverApplicationPage() {
               })()}
         </TabsContent>
             )}
+
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
           {application.id && (

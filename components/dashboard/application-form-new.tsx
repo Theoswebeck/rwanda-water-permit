@@ -65,6 +65,18 @@ const PaymentTab = dynamic(
   }
 );
 
+const PaymentConfirmationPanel = dynamic(
+  () => import("@/components/payments/payment-confirmation-panel").then((mod) => ({ default: mod.PaymentConfirmationPanel })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        Loading payment info…
+      </div>
+    ),
+  }
+);
+
 const MultiPolygonInputWithValidation = dynamic(
   () =>
     import("@/components/forms/MultiPolygonInputWithValidation").then((mod) => ({
@@ -578,6 +590,50 @@ export function ApplicationForm({
   const [coordinateValidation, setCoordinateValidation] = useState<ValidationResponse | null>(null);
   const [canSubmit, setCanSubmit] = useState(true);
 
+  // -----------------------------
+  // Coordinate parsing helpers
+  // Accept common pasted formats like:
+  // - "-2.490513°, 28.894413°"
+  // - "-2.490513, 28.894413"
+  // - "2.490513 S, 28.894413 E"
+  // -----------------------------
+  const parseSingleCoordinate = useCallback((raw: string): number | null => {
+    if (!raw) return null;
+    const s = String(raw).trim().toUpperCase();
+    const m = s.match(/-?\d+(?:\.\d+)?/);
+    if (!m) return null;
+    let n = Number.parseFloat(m[0]);
+    if (!Number.isFinite(n)) return null;
+    // Direction letters override sign if present
+    if (/[SW]/.test(s)) n = -Math.abs(n);
+    if (/[NE]/.test(s)) n = Math.abs(n);
+    return n;
+  }, []);
+
+  const parseLatLngPair = useCallback((raw: string): { lat: string; lng: string } | null => {
+    const s = String(raw ?? "").trim();
+    if (!s) return null;
+
+    // Prefer comma-separated inputs: "lat, lng"
+    if (s.includes(",")) {
+      const parts = s.split(",").map((p) => p.trim()).filter(Boolean);
+      if (parts.length >= 2) {
+        const latN = parseSingleCoordinate(parts[0]);
+        const lngN = parseSingleCoordinate(parts[1]);
+        if (latN === null || lngN === null) return null;
+        return { lat: String(latN), lng: String(lngN) };
+      }
+    }
+
+    // Fallback: extract first 2 numbers from a space-separated string
+    const nums = s.match(/-?\d+(?:\.\d+)?/g);
+    if (!nums || nums.length < 2) return null;
+    const latN = parseSingleCoordinate(nums[0]);
+    const lngN = parseSingleCoordinate(nums[1]);
+    if (latN === null || lngN === null) return null;
+    return { lat: String(latN), lng: String(lngN) };
+  }, [parseSingleCoordinate]);
+
   // Treat the form as a "modification" flow if:
   // - the caller explicitly sets isModification, OR
   // - the loaded application row indicates it's a modification (common when resuming a saved draft).
@@ -590,8 +646,12 @@ export function ApplicationForm({
   );
 
   // Payment is never required for permit modifications, and should never appear in the UI for them.
-  const shouldShowPaymentTab =
+  // For applicants: show the payment widget during draft/pending_payment
+  // For staff: show the payment confirmation panel (read-only) for non-modification apps
+  const shouldShowApplicantPaymentTab =
     !isStaffView && !isModification && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
+  const shouldShowStaffPaymentTab = isStaffView && !isModification;
+  const shouldShowPaymentTab = shouldShowApplicantPaymentTab || shouldShowStaffPaymentTab;
 
   const tabLabels: Record<string, string> = {
     "applicant-info": "Applicant",
@@ -2094,6 +2154,17 @@ export function ApplicationForm({
 
   const handleFormSubmit = async (values: FormValues) => {
     try {
+      // Hard rule: for payment-required applications (new/renewal/transfer), the application must NOT be
+      // submitted via form submit. Users should complete payment first (the payment flow will submit).
+      // This also closes the "press Enter to submit" loophole.
+      if (!isStaffView && shouldShowApplicantPaymentTab) {
+        setValidationError("Payment is required before submission. Please continue to the Payment tab to complete payment.");
+        setActiveTab("payment");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setTimeout(() => setValidationError(null), 7000);
+        return;
+      }
+
       // Validate modification reason if in modification mode
       if (isModification && !isStaffView && (!values.modificationReason || values.modificationReason.trim().length < 10)) {
         setValidationError("Please provide a detailed reason for your modification request (at least 10 characters).");
@@ -3160,18 +3231,24 @@ export function ApplicationForm({
                                     placeholder="e.g., -1.9441"
                                     disabled={readOnly}
                                     onChange={(e) => {
-                                      // Only allow numbers, decimal point, and minus sign
+                                      if (readOnly) return;
                                       const value = e.target.value;
-                                      // Allow: numbers, single decimal point, minus sign at start
-                                      const validPattern = /^-?\d*\.?\d*$/;
-                                      if (value === "" || validPattern.test(value)) {
+
+                                      // If the user pasted a full pair "lat, lng", split and populate both fields.
+                                      const pair = parseLatLngPair(value);
+                                      if (pair) {
+                                        form.setValue("waterSourceLatitude", pair.lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                        form.setValue("waterSourceLongitude", pair.lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                      } else {
+                                        // Allow freeform input; schema validation will normalize/check on blur/submit.
                                         field.onChange(value);
-                                        // Trigger validation after input
-                                        setTimeout(() => {
-                                          form.trigger("waterSourceLatitude");
-                                          form.trigger("waterSourceLongitude");
-                                        }, 100);
                                       }
+
+                                      // Trigger validation after input
+                                      setTimeout(() => {
+                                        form.trigger("waterSourceLatitude");
+                                        form.trigger("waterSourceLongitude");
+                                      }, 100);
                                     }}
                                     onBlur={() => {
                                       // Validate on blur
@@ -3199,18 +3276,22 @@ export function ApplicationForm({
                                     placeholder="e.g., 29.8739"
                                     disabled={readOnly}
                                     onChange={(e) => {
-                                      // Only allow numbers, decimal point, and minus sign
+                                      if (readOnly) return;
                                       const value = e.target.value;
-                                      // Allow: numbers, single decimal point, minus sign at start
-                                      const validPattern = /^-?\d*\.?\d*$/;
-                                      if (value === "" || validPattern.test(value)) {
+
+                                      // Support pasting "lat, lng" into either field.
+                                      const pair = parseLatLngPair(value);
+                                      if (pair) {
+                                        form.setValue("waterSourceLatitude", pair.lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                        form.setValue("waterSourceLongitude", pair.lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                      } else {
                                         field.onChange(value);
-                                        // Trigger validation after input
-                                        setTimeout(() => {
-                                          form.trigger("waterSourceLatitude");
-                                          form.trigger("waterSourceLongitude");
-                                        }, 100);
                                       }
+
+                                      setTimeout(() => {
+                                        form.trigger("waterSourceLatitude");
+                                        form.trigger("waterSourceLongitude");
+                                      }, 100);
                                     }}
                                     onBlur={() => {
                                       // Validate on blur
@@ -4788,42 +4869,53 @@ export function ApplicationForm({
                 </div>
                 </TabsContent>
 
-                {/* PAYMENT TAB - Only show for draft or pending_payment AND not for staff views */}
+                {/* PAYMENT TAB - For applicants: payment widget; For staff: payment confirmation panel */}
                 {shouldShowPaymentTab && (
                   <TabsContent value="payment" className="pt-6 space-y-6">
-                    <PaymentTab
-                      application={currentApplication}
-                      formData={!currentApplication?.id ? {
-                        ...form.getValues(),
-                        ...files,
-                        additionalDocuments
-                      } : undefined}
-                      onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
-                      isSavingApplication={isLoading}
-                      saveError={paymentPrepError}
-                      onRetrySave={() => {
-                        setPaymentPrepError(null);
-                        // Compute modification changes if in modification mode
-                        let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
-                        if (isModification && originalApplicationData) {
-                          modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
-                        }
-                        const draftData = {
+                    {shouldShowStaffPaymentTab ? (
+                      <PaymentConfirmationPanel
+                        applicationId={(currentApplication as any)?.id ?? (initialData as any)?.id ?? ""}
+                        applicationStatus={(currentApplication as any)?.status}
+                        applicationNumber={(currentApplication as any)?.application_number}
+                        applicantName={(userData as any)?.name}
+                        applicantEmail={(userData as any)?.email}
+                        applicantPhone={(userData as any)?.phone}
+                      />
+                    ) : (
+                      <PaymentTab
+                        application={currentApplication}
+                        formData={!currentApplication?.id ? {
                           ...form.getValues(),
                           ...files,
-                          additionalDocuments,
-                          ...(isModification ? {
-                            isModification: true,
-                            modificationChanges: modificationChangesData,
-                          } : {}),
-                        };
-                        void onSaveAsDraft(draftData, 'draft').catch((error) => {
-                          console.error('Error saving application:', error);
-                          setPaymentPrepError('Please try saving your application again before proceeding to payment.');
-                        });
-                      }}
-                      onBack={() => setActiveTab('land-ownership')}
-                    />
+                          additionalDocuments
+                        } : undefined}
+                        onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
+                        isSavingApplication={isLoading}
+                        saveError={paymentPrepError}
+                        onRetrySave={() => {
+                          setPaymentPrepError(null);
+                          // Compute modification changes if in modification mode
+                          let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+                          if (isModification && originalApplicationData) {
+                            modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
+                          }
+                          const draftData = {
+                            ...form.getValues(),
+                            ...files,
+                            additionalDocuments,
+                            ...(isModification ? {
+                              isModification: true,
+                              modificationChanges: modificationChangesData,
+                            } : {}),
+                          };
+                          void onSaveAsDraft(draftData, 'draft').catch((error) => {
+                            console.error('Error saving application:', error);
+                            setPaymentPrepError('Please try saving your application again before proceeding to payment.');
+                          });
+                        }}
+                        onBack={() => setActiveTab('land-ownership')}
+                      />
+                    )}
                   </TabsContent>
                 )}
                 {/* Form Actions */}

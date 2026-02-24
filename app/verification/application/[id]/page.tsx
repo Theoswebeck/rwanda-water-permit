@@ -885,6 +885,7 @@ export default function VerificationApplicationPage() {
                   initialDocuments={initialDocuments}
                   mode="view"
                   readOnly={true}
+                  currentApplication={application}
                   isStaffView={true}
                 />
               ) : null}
@@ -944,6 +945,7 @@ export default function VerificationApplicationPage() {
               </div>
             </TabsContent>
             )}
+
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               <div className="space-y-6">

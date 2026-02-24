@@ -259,12 +259,24 @@ export async function POST(request: NextRequest) {
 
     // Get customer details (from application if exists, otherwise from user/customer)
     const userDetails = application?.users;
-    const customerEmail = customer?.email || userDetails?.email || user.email || 'test@example.com';
-    const customerPhone = customer?.phone || userDetails?.phone || userDetails?.company_phone || '+250788123456';
-    const customerName = customer?.name || 
-      `${userDetails?.first_name || ''} ${userDetails?.last_name || ''}`.trim() || 
-      userDetails?.company_name || 
-      'Test User';
+    const customerEmail = (customer?.email || userDetails?.email || user.email || '').trim();
+    const customerPhone = (customer?.phone || userDetails?.phone || userDetails?.company_phone || '').trim();
+    const customerName =
+      (customer?.name ||
+        `${userDetails?.first_name || ''} ${userDetails?.last_name || ''}`.trim() ||
+        userDetails?.company_name ||
+        '')?.trim();
+
+    if (!customerEmail || !customerPhone || !customerName) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'Missing customer details (name, email, phone). Please update your profile information before initiating payment.',
+        },
+        { status: 400 }
+      );
+    }
 
     // Validate customer details
     const emailValidation = validateCustomerEmail(customerEmail);
@@ -275,18 +287,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (customerPhone) {
-      const phoneValidation = validateCustomerPhone(customerPhone);
-      if (!phoneValidation.valid) {
-        return NextResponse.json(
-          { success: false, error: `Invalid phone: ${phoneValidation.error}` },
-          { status: 400 }
-        );
-      }
+    const phoneValidation = validateCustomerPhone(customerPhone);
+    if (!phoneValidation.valid) {
+      return NextResponse.json(
+        { success: false, error: `Invalid phone: ${phoneValidation.error}` },
+        { status: 400 }
+      );
     }
 
     // Normalize phone number
-    const normalizedPhone = customerPhone ? normalizeRwandaPhone(customerPhone) : '';
+    const normalizedPhone = normalizeRwandaPhone(customerPhone);
 
     console.log('👤 [PAYMENT INITIATE] Customer details:', {
       name: customerName,

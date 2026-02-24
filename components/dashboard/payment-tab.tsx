@@ -75,6 +75,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [customerValidationError, setCustomerValidationError] = useState<string | null>(null);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
@@ -137,6 +138,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     try {
       setIsInitializing(true);
       clearError();
+      setCustomerValidationError(null);
 
       console.log('🚀 Initiating payment...');
 
@@ -146,20 +148,43 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       };
 
       if (application) {
+        const email = application.applicant?.email?.trim();
+        const phone = (application.applicant?.phone || application.applicant?.company_phone || '')?.trim();
+        const name =
+          `${application.applicant?.first_name || ''} ${application.applicant?.last_name || ''}`.trim() ||
+          application.applicant?.company_name?.trim() ||
+          '';
+
+        if (!email || !phone || !name) {
+          setCustomerValidationError(
+            "Missing applicant contact details. Please update the applicant profile (name, email, phone) before initiating payment."
+          );
+          return;
+        }
+
         requestData.application_id = application.id;
         requestData.customer = {
-          email: application.applicant?.email || 'test@example.com',
-          phone: application.applicant?.phone || application.applicant?.company_phone || '+250788123456',
-          name: `${application.applicant?.first_name || ''} ${application.applicant?.last_name || ''}`.trim() ||
-                 application.applicant?.company_name || 
-                 'Test User',
+          email,
+          phone,
+          name,
         };
       } else if (formData) {
+        const email = String(formData.emailAddress || "").trim();
+        const phone = String(formData.telephoneContact || "").trim();
+        const name = String(formData.fullNameApplicant || "").trim();
+
+        if (!email || !phone || !name) {
+          setCustomerValidationError(
+            "Missing applicant contact details in the form. Please provide full name, email, and phone before initiating payment."
+          );
+          return;
+        }
+
         requestData.application_data = formData;
         requestData.customer = {
-          email: formData.emailAddress || 'test@example.com',
-          phone: formData.telephoneContact || '+250788123456',
-          name: formData.fullNameApplicant || 'Test User',
+          email,
+          phone,
+          name,
         };
       } else {
           console.error('❌ Cannot initiate payment without application or form data.');
@@ -380,6 +405,13 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
+      {customerValidationError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Missing applicant details</AlertTitle>
+          <AlertDescription>{customerValidationError}</AlertDescription>
+        </Alert>
+      )}
       {saveError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />

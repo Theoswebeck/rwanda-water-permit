@@ -171,6 +171,43 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
         ]
       ];
     }
+
+    // Backfill critical fields from top-level application columns when internal_notes is incomplete
+    const provinceReverseMap: Record<string, string> = {
+      'Kigali': 'Kigali',
+      'Northern': 'North',
+      'Southern': 'South',
+      'Eastern': 'East',
+      'Western': 'West'
+    };
+
+    // Office address (fallback)
+    if (!formData.officeProvince) formData.officeProvince = provinceReverseMap[application.province] || application.province || '';
+    if (!formData.officeDistrict) formData.officeDistrict = application.district || '';
+    if (!formData.officeSector) formData.officeSector = application.sector || '';
+    if (!formData.officeCell) formData.officeCell = application.cell || '';
+    if (!formData.officeVillage) formData.officeVillage = application.village || '';
+
+    // Water source basics (fallback)
+    if (!formData.nameSourceWater) formData.nameSourceWater = application.water_body_name || '';
+    if (!formData.tributaryToMain) formData.tributaryToMain = application.tributary_name || '';
+
+    // Water source location (fallback)
+    if (!formData.waterSourceProvince) formData.waterSourceProvince = provinceReverseMap[application.province] || application.province || '';
+    if (!formData.waterSourceDistrict) formData.waterSourceDistrict = application.district || '';
+    if (!formData.waterSourceSector) formData.waterSourceSector = application.sector || '';
+    if (!formData.waterSourceCell) formData.waterSourceCell = application.cell || '';
+    if (!formData.waterSourceVillage) formData.waterSourceVillage = application.village || '';
+
+    // Abstraction point (fallback) — derive from Point geometry when present
+    try {
+      const geom: any = (application as any).coordinates;
+      if ((!formData.waterSourceLatitude || !formData.waterSourceLongitude) && geom?.type === 'Point' && Array.isArray(geom.coordinates)) {
+        const [lng, lat] = geom.coordinates as [number, number];
+        if (!formData.waterSourceLatitude) formData.waterSourceLatitude = String(lat);
+        if (!formData.waterSourceLongitude) formData.waterSourceLongitude = String(lng);
+      }
+    } catch {}
     
   } else {
     // Legacy format: reconstruct from basic database fields and legacy notes
@@ -744,19 +781,32 @@ export default function AssessmentApplicationPage() {
             const publicUrl = getDocumentUrl(doc.file_path);
             if (!publicUrl) continue;
 
-            const pathParts = doc.file_path.split('/');
-            const fileName = pathParts[pathParts.length - 1];
-            const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-            if (fieldNameMatch) {
-              const fieldName = fieldNameMatch[1];
-              if (!fieldName.startsWith('additional_') && !documentMap[fieldName]) {
-                documentMap[fieldName] = { url: publicUrl, name: doc.name };
+            const getFileName = (fp: string) => {
+              try {
+                if (fp.startsWith("http://") || fp.startsWith("https://")) {
+                  const p = new URL(fp).pathname;
+                  return (p.split("/").pop() || "").split("?")[0];
+                }
+              } catch {}
+              return (fp.split("/").pop() || "").split("?")[0];
+            };
+
+            const normalizeFieldKey = (k: string) => {
+              const mapped = typeMapping[k];
+              if (mapped) return mapped;
+              // Convert snake_case -> camelCase for legacy keys
+              if (k.includes("_")) {
+                return k.replace(/_([a-z])/g, (_, c) => String(c).toUpperCase());
               }
-            } else {
-              const fieldName = typeMapping[doc.type] || doc.type;
-              if (!documentMap[fieldName]) {
-                documentMap[fieldName] = { url: publicUrl, name: doc.name };
-              }
+              return k;
+            };
+
+            const fileName = getFileName(String(doc.file_path));
+            const fieldNameMatch = fileName.match(/^([a-zA-Z0-9_]+)[-_]\d+\./);
+            const inferredKey = fieldNameMatch?.[1] ? normalizeFieldKey(fieldNameMatch[1]) : normalizeFieldKey(String(doc.type || ""));
+
+            if (inferredKey && !String(inferredKey).startsWith("additional_") && !documentMap[inferredKey]) {
+              documentMap[inferredKey] = { url: publicUrl, name: doc.name };
             }
           }
         };
@@ -1665,6 +1715,7 @@ export default function AssessmentApplicationPage() {
                   initialDocuments={initialDocuments}
                   mode="view"
                   readOnly={true}
+                  currentApplication={application}
                   isStaffView={true}
                 />
               ) : null}
