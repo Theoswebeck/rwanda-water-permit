@@ -148,12 +148,13 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       };
 
       if (application) {
-        const email = application.applicant?.email?.trim();
-        const phone = (application.applicant?.phone || application.applicant?.company_phone || '')?.trim();
+        // application.applicant is populated via Supabase join (users!applications_applicant_id_fkey)
+        const applicant = application.applicant;
+        const email = (applicant?.email || '').trim();
+        const phone = (applicant?.phone || applicant?.mobile_phone || applicant?.company_phone || '').trim();
         const name =
-          `${application.applicant?.first_name || ''} ${application.applicant?.last_name || ''}`.trim() ||
-          application.applicant?.company_name?.trim() ||
-          '';
+          `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() ||
+          (applicant?.company_name || '').trim();
 
         if (!email || !phone || !name) {
           setCustomerValidationError(
@@ -163,11 +164,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
         }
 
         requestData.application_id = application.id;
-        requestData.customer = {
-          email,
-          phone,
-          name,
-        };
+        requestData.customer = { email, phone, name };
       } else if (formData) {
         const email = String(formData.emailAddress || "").trim();
         const phone = String(formData.telephoneContact || "").trim();

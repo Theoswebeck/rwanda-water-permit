@@ -260,7 +260,14 @@ export async function POST(request: NextRequest) {
     // Get customer details (from application if exists, otherwise from user/customer)
     const userDetails = application?.users;
     const customerEmail = (customer?.email || userDetails?.email || user.email || '').trim();
-    const customerPhone = (customer?.phone || userDetails?.phone || userDetails?.company_phone || '').trim();
+    const customerPhone = (
+      customer?.phone ||
+      userDetails?.phone ||
+      userDetails?.mobile_phone ||
+      userDetails?.company_phone ||
+      userDetails?.landline_phone ||
+      ''
+    ).trim();
     const customerName =
       (customer?.name ||
         `${userDetails?.first_name || ''} ${userDetails?.last_name || ''}`.trim() ||

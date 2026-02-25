@@ -106,7 +106,7 @@ export function useApplications({
       const { data: newApplication, error } = await supabase
         .from('applications')
         .insert([data])
-        .select()
+        .select('*, applicant:users!applications_applicant_id_fkey(*)')
         .single()
 
       if (error) throw error
@@ -204,7 +204,7 @@ export function useApplications({
           .from('applications')
           .update(safeData)
           .eq('id', id)
-          .select()
+          .select('*, applicant:users!applications_applicant_id_fkey(*)')
           .maybeSingle()
 
       let resp = await attemptUpdate()
@@ -277,16 +277,19 @@ export function useApplications({
     try {
       setError(null)
       
-      // ⚡ PERFORMANCE: Check local cache first
+      // ⚡ PERFORMANCE: Check local cache first — but only if the cached version includes
+      // the applicant join (older cache entries from fetchApplications may not have it).
       const cachedApp = applications.find(app => app.id === id)
-      if (cachedApp) {
+      if (cachedApp && (cachedApp as any).applicant) {
         return cachedApp
       }
       
-      // Simplified query to avoid join issues with nullable foreign keys
+      // Join the users table via the applicant_id FK so that application.applicant
+      // is populated with name, email, phone, etc.  This is required by PaymentTab
+      // (and other consumers) to display/validate applicant contact details.
       const { data, error } = await supabase
         .from('applications')
-        .select('*')
+        .select('*, applicant:users!applications_applicant_id_fkey(*)')
         .eq('id', id)
         .single()
 
@@ -296,7 +299,7 @@ export function useApplications({
       if (data) {
         setApplications(prev => {
           const exists = prev.some(app => app.id === data.id)
-          return exists ? prev : [data, ...prev]
+          return exists ? prev.map(app => app.id === data.id ? data : app) : [data, ...prev]
         })
       }
 
