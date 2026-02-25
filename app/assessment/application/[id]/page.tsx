@@ -521,14 +521,26 @@ export default function AssessmentApplicationPage() {
             (authUser.email || "");
         }
 
-        const defaultInspectorName =
-          (existingAssessment?.inspector_name || "").trim() ||
-          currentAssessorName ||
-          assignedInspectorName;
+        // If the current user IS the assigned assessor, always use their name
+        // (handles reassignment: old assessment may still carry the previous assessor's name)
+        const currentUserIsAssignedAssessor =
+          !!authUser?.id && !!appData.assigned_assessor_id && authUser.id === appData.assigned_assessor_id;
 
-        // Only set if still empty, so we don't overwrite manual edits
+        const defaultInspectorName = currentUserIsAssignedAssessor
+          ? currentAssessorName ||
+            (existingAssessment?.inspector_name || "").trim() ||
+            assignedInspectorName
+          : (existingAssessment?.inspector_name || "").trim() ||
+            currentAssessorName ||
+            assignedInspectorName;
+
+        // When the assessor was reassigned, force-update even if a previous value exists
         if (defaultInspectorName) {
-          setInspectorName((prev) => (prev ? prev : defaultInspectorName));
+          if (currentUserIsAssignedAssessor) {
+            setInspectorName(defaultInspectorName);
+          } else {
+            setInspectorName((prev) => (prev ? prev : defaultInspectorName));
+          }
         }
 
         if (existingAssessment) {

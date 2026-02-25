@@ -4543,9 +4543,24 @@ export function ApplicationForm({
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>Method of Water Abstraction</FormLabel>
-                                    <FormControl>
-                                      <Input {...field} placeholder="Abstraction method" />
-                                    </FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select abstraction method" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="Pumping">Pumping</SelectItem>
+                                        <SelectItem value="Gravity">Gravity</SelectItem>
+                                        <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
+                                        <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
+                                        <SelectItem value="Borehole">Borehole</SelectItem>
+                                        <SelectItem value="Spring Capture">Spring Capture</SelectItem>
+                                        <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
+                                        <SelectItem value="Rainwater Harvesting">Rainwater Harvesting</SelectItem>
+                                        <SelectItem value="Other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                     <FormMessage />
                                   </FormItem>
                                 )}

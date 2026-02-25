@@ -73,7 +73,7 @@ const documentTypeLabels: Record<string, string> = {
   waterQualityReport: "Water Quality Report",
   miningLicense: "Mining License",
   miningHydrologicalReport: "Mining Hydrological Report",
-  generalRequirements: "General Requirements",
+  generalRequirements: "Application letter addressed to RWB DG through District Mayor",
   landAccessDocuments: "Land Access Document",
   renewalRequestLetter: "Renewal Request Letter",
   certifiedLetter: "Certified Letter",

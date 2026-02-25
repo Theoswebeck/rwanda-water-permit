@@ -15,6 +15,7 @@ export function getAnnexRequirementForActivity(
 ): AnnexRequirement {
   const irrigationArea = ctx.irrigationTotalArea ?? 0;
   const req = (label: string, fieldName: string): AnnexRequiredAttachment => ({ label, fieldName, required: true });
+  const applicationLetterLabel = "Application letter addressed to RWB DG through District Mayor";
 
   switch (activity) {
     // Annex A (Irrigation)
@@ -24,11 +25,11 @@ export function getAnnexRequirementForActivity(
         attachments:
           irrigationArea > 10
             ? [
-                req("General requirements", "irrigationGeneralRequirements"),
+                req(applicationLetterLabel, "irrigationGeneralRequirements"),
                 req("Environmental Impact Assessment certificate", "irrigationEIA"),
                 req("Feasibility study", "irrigationFeasibilityStudy"),
               ]
-            : [req("General requirements", "irrigationGeneralRequirements")],
+            : [req(applicationLetterLabel, "irrigationGeneralRequirements")],
       };
 
     // Annex B (Water Supply)
@@ -36,7 +37,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX B (Only for Water Supply)",
         attachments: [
-          req("General requirements", "waterSupplyGeneralRequirements"),
+          req(applicationLetterLabel, "waterSupplyGeneralRequirements"),
           req("Feasibility study", "waterSupplyFeasibilityStudy"),
         ],
       };
@@ -46,7 +47,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX C (Only for Aquaculture) — Aquaculture in lakes",
         attachments: [
-          req("General requirements", "aquacultureGeneralRequirements"),
+          req(applicationLetterLabel, "aquacultureGeneralRequirements"),
           req("Recommendation Letter from MINAGRI/RAB", "aquacultureRecommendationLetter"),
           req("Polygon area map", "aquaculturePolygonAreaMap"),
         ],
@@ -55,7 +56,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX C (Only for Aquaculture) — Aquaculture in ponds",
         attachments: [
-          req("General requirements", "aquacultureGeneralRequirements"),
+          req(applicationLetterLabel, "aquacultureGeneralRequirements"),
           req("Recommendation Letter from MINAGRI/RAB", "aquacultureRecommendationLetter"),
           req("Hydrological report", "aquacultureHydrologicalReport"),
         ],
@@ -66,7 +67,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX D (Only for Coffee Washing)",
         attachments: [
-          req("General requirements", "coffeeWashingGeneralRequirements"),
+          req(applicationLetterLabel, "coffeeWashingGeneralRequirements"),
           req("Hydrological report", "coffeeWashingHydrologicalReport"),
         ],
       };
@@ -76,7 +77,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX E (Only for Industries)",
         attachments: [
-          req("General requirements", "industrialGeneralRequirements"),
+          req(applicationLetterLabel, "industrialGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "industrialEIA"),
           req("Hydrological report", "industrialHydrologicalReport"),
         ],
@@ -87,7 +88,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX F (Only for Hydropower)",
         attachments: [
-          req("General requirements", "hydropowerGeneralRequirements"),
+          req(applicationLetterLabel, "hydropowerGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "hydropowerEIA"),
           req("Feasibility study (Hydrological assessment)", "hydropowerFeasibilityStudy"),
         ],
@@ -98,7 +99,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX G (Only for Mining)",
         attachments: [
-          req("General requirements", "miningGeneralRequirements"),
+          req(applicationLetterLabel, "miningGeneralRequirements"),
           req("Mining license", "miningLicense"),
           req("Environmental Impact Assessment certificate", "miningEIA"),
           req("Hydrological report", "miningHydrologicalReport"),
@@ -110,7 +111,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX H (Construction of a dam, ports, and infrastructure in water bodies)",
         attachments: [
-          req("General requirements", "constructionDamGeneralRequirements"),
+          req(applicationLetterLabel, "constructionDamGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "constructionDamEIA"),
           req("Feasibility study", "constructionDamFeasibilityStudy"),
         ],
@@ -119,7 +120,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX H (Construction of a dam, ports, and infrastructure in water bodies)",
         attachments: [
-          req("General requirements", "infrastructureGeneralRequirements"),
+          req(applicationLetterLabel, "infrastructureGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "infrastructureEIA"),
           req("Feasibility study", "infrastructureFeasibilityStudy"),
         ],
@@ -130,7 +131,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX I (Only for Recreational activities)",
         attachments: [
-          req("General requirements", "recreationGeneralRequirements"),
+          req(applicationLetterLabel, "recreationGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "recreationEIA"),
           req("Polygon area map", "recreationPolygonAreaMap"),
         ],
@@ -141,7 +142,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX J (Only for gaz extraction)",
         attachments: [
-          req("General requirements", "gazExtractionGeneralRequirements"),
+          req(applicationLetterLabel, "gazExtractionGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "gazExtractionEIA"),
           req("Feasibility study", "gazExtractionFeasibilityStudy"),
         ],
@@ -152,7 +153,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX K (Only for Livestock)",
         attachments: [
-          req("General requirements", "livestockGeneralRequirements"),
+          req(applicationLetterLabel, "livestockGeneralRequirements"),
           req("Feasibility study", "livestockFeasibilityStudy"),
         ],
       };
