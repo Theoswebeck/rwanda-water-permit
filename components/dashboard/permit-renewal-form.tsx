@@ -104,10 +104,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   // Determine template type based on permit's intended activities
   const waterUseTemplate: WaterUseReportTemplate = useMemo(() => {
     const activities = permit.application?.intended_activities || [];
-    // Fish farming activities use 'concession' template
+    // Only fish farming in lakes uses 'concession' template; ponds is abstraction
     if (activities.some((a: string) => 
-      a?.toLowerCase().includes('fish') || 
-      a?.toLowerCase().includes('aquaculture')
+      a?.toLowerCase() === 'fish_farming_lakes' || 
+      a?.toLowerCase() === 'aquaculture'
     )) {
       return 'concession';
     }

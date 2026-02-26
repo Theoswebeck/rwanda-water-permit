@@ -89,8 +89,8 @@ function toNumberOrUndefined(v: string): number | undefined {
 
 function templateFromPermit(purpose?: string): InspectionTemplate {
   const p = (purpose || "").toLowerCase();
-  // Concession aligns with fish farming / aquaculture use cases
-  if (p.includes("fish") || p.includes("aquaculture")) return "concession";
+  // Only fish farming in lakes is a concession; ponds is abstraction (single point)
+  if (p === "fish_farming_lakes" || p.includes("aquaculture")) return "concession";
   return "authorization";
 }
 

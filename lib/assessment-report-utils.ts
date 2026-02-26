@@ -87,8 +87,8 @@ export interface AssessmentReportData {
 
 /**
  * Determines if the report type should be concession or abstraction
- * Concession: fish_farming_lakes or fish_farming_ponds
- * Abstraction: All other activities
+ * Concession: fish_farming_lakes only (lake-based, requires polygon area)
+ * Abstraction: All other activities including fish_farming_ponds (single point)
  */
 export function determineReportType(
   activities?: string[] | null,
@@ -97,14 +97,14 @@ export function determineReportType(
   // Check intended_activities first (new format)
   if (activities && Array.isArray(activities) && activities.length > 0) {
     const primaryActivity = activities[0];
-    if (primaryActivity === 'fish_farming_lakes' || primaryActivity === 'fish_farming_ponds') {
+    if (primaryActivity === 'fish_farming_lakes') {
       return 'concession';
     }
     return 'abstraction';
   }
   
   // Fallback to water_purpose (legacy format)
-  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'fish_farming_ponds') {
+  if (waterPurpose === 'fish_farming_lakes') {
     return 'concession';
   }
   

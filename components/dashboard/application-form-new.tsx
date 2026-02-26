@@ -328,14 +328,11 @@ const applicationFormSchema = z.object({
   // Single activity selection is enforced by schema (.max(1))
   // No need to check for mixing concession and abstraction activities
 
-  const hasFishFarming =
-    selectedActivities.includes("fish_farming_lakes") || selectedActivities.includes("fish_farming_ponds");
+  const hasFishFarmingLakes = selectedActivities.includes("fish_farming_lakes");
   
-  if (hasFishFarming) {
-    // For fish farming, polygons are required (but only validated on Activity tab or final submission)
-    // Don't block if polygons are empty - let tab-specific validation handle it
+  if (hasFishFarmingLakes) {
+    // For fish farming in lakes, polygons are required (concession)
     if (data.waterSourcePolygons && data.waterSourcePolygons.length > 0) {
-      // Only validate format if polygons are provided
       const hasValidPolygons = data.waterSourcePolygons.every((poly: any) => {
         return (
           Array.isArray(poly) &&
@@ -357,9 +354,9 @@ const applicationFormSchema = z.object({
     }
   }
 
-    // For abstraction activities, validate LAT/LONG format if provided (but don't require them here)
-  // (Any non-fish-farming activity implies abstraction point can be required by tab validation.)
-  const hasNonFishActivity = selectedActivities.some((a) => a && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
+  // For abstraction activities (including fish_farming_ponds), validate LAT/LONG format if provided
+  // fish_farming_ponds is abstraction (single point), NOT a concession
+  const hasNonFishActivity = selectedActivities.some((a) => a && a !== "fish_farming_lakes");
   if (hasNonFishActivity) {
     // Tab-specific validation will handle the requirement
     const latitude = String(data.waterSourceLatitude ?? "").trim();
@@ -1119,10 +1116,11 @@ export function ApplicationForm({
       return false;
     }
 
-    // For concession activities (fish farming), polygons are required and should be validated here
+    // For concession activities (fish farming in lakes only), polygons are required
+    // fish_farming_ponds is abstraction (single point), not concession
     const intended = form.getValues('intendedActivities') || [];
-    const requiresConcessionPolygons = intended.includes('fish_farming_lakes') || intended.includes('fish_farming_ponds');
-    const requiresAbstractionDetails = intended.some((a: string) => a && a !== 'fish_farming_lakes' && a !== 'fish_farming_ponds');
+    const requiresConcessionPolygons = intended.includes('fish_farming_lakes');
+    const requiresAbstractionDetails = intended.some((a: string) => a && a !== 'fish_farming_lakes');
     
     // For abstraction activities, LAT/LONG and water abstraction details are required
     if (requiresAbstractionDetails) {
@@ -1364,11 +1362,12 @@ export function ApplicationForm({
           return true; // Disable Next button
         }
         
-        // Determine if this is a concession (fish farming) or abstraction activity
-        const isConcessionActivity = intendedActivities.includes('fish_farming_lakes') || intendedActivities.includes('fish_farming_ponds');
-        const isAbstractionActivity = intendedActivities.some((a: string) => a && a !== 'fish_farming_lakes' && a !== 'fish_farming_ponds');
+        // Determine if this is a concession (fish farming in lakes) or abstraction activity
+        // fish_farming_ponds is abstraction (single point), not concession
+        const isConcessionActivity = intendedActivities.includes('fish_farming_lakes');
+        const isAbstractionActivity = intendedActivities.some((a: string) => a && a !== 'fish_farming_lakes');
         
-        // For concession activities (fish farming), polygons are required but NOT water abstraction details
+        // For concession activities (fish farming in lakes), polygons are required but NOT water abstraction details
         if (isConcessionActivity) {
           const polygons = form.watch('waterSourcePolygons') || form.getValues('waterSourcePolygons') || [];
           const hasValidPolygons =
@@ -3180,13 +3179,12 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Abstraction Point (LAT, LONG) - only for abstraction activities, right after Q13 */}
+                  {/* Water Abstraction Point (LAT, LONG) - for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const hasFishFarming = selected.includes("fish_farming_lakes") || selected.includes("fish_farming_ponds");
-                    const hasNonFishActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
-                    // Show for any non-fish-farming activity
-                    return hasNonFishActivity ? (
+                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes");
+                    // Show for any abstraction activity (fish_farming_ponds needs single point)
+                    return hasAbstractionActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           14. Water Abstraction Point * (LAT, LONG)
@@ -3322,9 +3320,9 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* Water Concession Area (Multiple Polygons) - only for fish farming, after Q13 selection */}
+                  {/* Water Concession Area (Multiple Polygons) - only for fish farming in lakes (concession) */}
                   {watchedIntendedActivities && watchedIntendedActivities.length > 0 && 
-                   (watchedIntendedActivities.includes("fish_farming_lakes") || watchedIntendedActivities.includes("fish_farming_ponds")) && (
+                   watchedIntendedActivities.includes("fish_farming_lakes") && (
                     <div className="space-y-4">
                       <FormField
                         control={form.control}
@@ -3361,7 +3359,7 @@ export function ApplicationForm({
 
                       <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <p className="text-sm text-yellow-800">
-                          <strong>Note:</strong> This concession area is required for fish farming. Each polygon needs at least 4 points.
+                          <strong>Note:</strong> This concession area is required for fish farming in lakes. Each polygon needs at least 4 points.
                           If you have multiple separate areas, add multiple polygons.
                         </p>
                       </div>
@@ -4442,12 +4440,12 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* 15. Water Abstraction Details - only show for abstraction activities (not fish farming) */}
+                  {/* 15. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const hasNonFishActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes" && a !== "fish_farming_ponds");
-                    // Show if the selected activity is a non-fish-farming activity
-                    return hasNonFishActivity ? (
+                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes");
+                    // Show for any abstraction activity (fish_farming_ponds needs single-point abstraction details)
+                    return hasAbstractionActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           15. Water Abstraction Details *
