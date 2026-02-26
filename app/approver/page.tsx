@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -34,7 +35,7 @@ const APPROVER_CHIPS: StatusChipDef[] = [
 export default function ApproverDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports">("approval");
+  const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports" | "permit-registry">("approval");
   const [activeChipId, setActiveChipId] = useState(APPROVER_CHIPS[0].id);
   const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
   // All applications for chip count computation
@@ -132,6 +133,7 @@ export default function ApproverDashboard() {
             { value: "approval", label: "Application Approval" },
             { value: "inspections", label: "Inspections" },
             { value: "water-reports", label: "Water Use Reports" },
+            { value: "permit-registry", label: "Permit Registry" },
           ]}
         />
 
@@ -170,8 +172,10 @@ export default function ApproverDashboard() {
           <div className="space-y-6">
             <InspectionsWorkbench />
           </div>
-        ) : (
+        ) : topTab === "water-reports" ? (
           <WaterUseReportsList />
+        ) : (
+          <PermitRegistryList />
         )}
       </motion.div>
     </div>

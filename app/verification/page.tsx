@@ -19,6 +19,7 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
@@ -48,7 +49,7 @@ export default function VerificationDashboard() {
   const [applications, setApplications] = useState<VerificationApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports">("verification");
+  const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports" | "permit-registry">("verification");
   const [activeChipId, setActiveChipId] = useState(VERIFIER_CHIPS[0].id);
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
@@ -333,6 +334,7 @@ export default function VerificationDashboard() {
                 { value: "verification", label: "Verification" },
                 { value: "inspections", label: "Inspections" },
                 { value: "water-reports", label: "Water Use Reports" },
+                { value: "permit-registry", label: "Permit Registry" },
               ]}
             />
 
@@ -397,8 +399,10 @@ export default function VerificationDashboard() {
               <div className="space-y-6">
                 <InspectionsWorkbench />
               </div>
-            ) : (
+            ) : topTab === "water-reports" ? (
               <WaterUseReportsList />
+            ) : (
+              <PermitRegistryList />
             )}
           </div>
         </motion.div>

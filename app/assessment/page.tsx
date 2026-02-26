@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
@@ -62,7 +63,7 @@ export default function AssessmentDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports">("assessment");
+  const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports" | "permit-registry">("assessment");
   const [activeChipId, setActiveChipId] = useState(ASSESSOR_CHIPS[0].id);
   const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
@@ -434,6 +435,7 @@ export default function AssessmentDashboard() {
               { value: "assessment", label: "Assessment" },
               { value: "inspections", label: "Inspections" },
               { value: "water-reports", label: "Water Use Reports" },
+              { value: "permit-registry", label: "Permit Registry" },
             ]}
           />
 
@@ -495,8 +497,10 @@ export default function AssessmentDashboard() {
             <div className="space-y-6">
               <InspectionsWorkbench />
             </div>
-          ) : (
+          ) : topTab === "water-reports" ? (
             <WaterUseReportsList />
+          ) : (
+            <PermitRegistryList />
           )}
         </div>
       </motion.div>

@@ -55,6 +55,7 @@ import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
@@ -108,7 +109,7 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
 
 export default function ReviewerDashboard() {
   const router = useRouter();
-  const [topTab, setTopTab] = useState<"review" | "inspections" | "water-reports">("review");
+  const [topTab, setTopTab] = useState<"review" | "inspections" | "water-reports" | "permit-registry">("review");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [reviewApplications, setReviewApplications] = useState<ReviewApplication[]>([]);
@@ -1103,6 +1104,7 @@ export default function ReviewerDashboard() {
               { value: "review", label: "Review" },
               { value: "inspections", label: "Inspections" },
               { value: "water-reports", label: "Water Use Reports" },
+              { value: "permit-registry", label: "Permit Registry" },
             ]}
           />
 
@@ -1164,8 +1166,10 @@ export default function ReviewerDashboard() {
             <div className="space-y-6">
               <InspectionsWorkbench />
             </div>
-          ) : (
+          ) : topTab === "water-reports" ? (
             <WaterUseReportsList />
+          ) : (
+            <PermitRegistryList />
           )}
         </div>
       </motion.div>

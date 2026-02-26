@@ -4528,7 +4528,8 @@ export function ApplicationForm({
                                       <Input
                                         type="number"
                                         {...field}
-                                        onChange={(e) => field.onChange(Number(e.target.value))}
+                                        value={field.value || ""}
+                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : "")}
                                         placeholder="Yearly average"
                                       />
                                     </FormControl>

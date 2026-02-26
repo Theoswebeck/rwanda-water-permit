@@ -53,7 +53,7 @@ export default function PermitDetailPage() {
               last_modified_at,
               last_modified_by,
               application_id,
-              application:applications(
+              application:applications!permits_application_id_fkey(
                 id,
                 application_number,
                 project_title,

@@ -97,7 +97,7 @@ export function CreateInspectionDialog({
             status,
             issued_date,
             expiry_date,
-            application:applications(
+            application:applications!permits_application_id_fkey(
               id,
               application_number,
               project_title,

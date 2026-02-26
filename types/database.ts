@@ -388,6 +388,28 @@ export interface Permit {
   updated_at: string
 }
 
+export interface PermitRegistryEntry {
+  id: string
+  serial_number: number | null
+  permit_holder: string
+  permit_number: string
+  regime: string | null
+  water_source: string | null
+  volume_or_area: string | null
+  method_of_water_taking: string | null
+  authorized_activity: string | null
+  location: string | null
+  latitude: number | null
+  longitude: number | null
+  issuance_date: string | null
+  duration: string | null
+  expiration_date: string | null
+  status: string | null
+  contact: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface WaterUseReport {
   id: string
 

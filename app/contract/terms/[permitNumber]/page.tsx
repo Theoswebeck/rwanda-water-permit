@@ -58,7 +58,7 @@ export default async function PublicContractTermsPage({
       `
         permit_number,
         issued_date,
-        application:applications(
+        application:applications!permits_application_id_fkey(
           id,
           application_number,
           project_title,
