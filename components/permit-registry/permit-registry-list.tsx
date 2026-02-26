@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
   CardContent,
@@ -37,6 +38,13 @@ import {
   MapPin,
   Upload,
   X,
+  Droplets,
+  ChevronDown,
+  ChevronRight,
+  Calendar,
+  Shield,
+  Activity,
+  FileText,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
@@ -60,8 +68,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("serial_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  // CSV upload state
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     inserted: number;
@@ -79,6 +87,14 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const availableStatuses = useMemo(() => {
     const statuses = new Set(entries.map((e) => e.status).filter(Boolean) as string[]);
     return Array.from(statuses).sort();
+  }, [entries]);
+
+  const stats = useMemo(() => {
+    const total = entries.length;
+    const operational = entries.filter((e) => e.status?.toUpperCase() === "OPERATIONAL").length;
+    const expired = entries.filter((e) => e.status?.toUpperCase() === "EXPIRED").length;
+    const regimeSet = new Set(entries.map((e) => e.regime).filter(Boolean));
+    return { total, operational, expired, regimeTypes: regimeSet.size };
   }, [entries]);
 
   const filteredAndSorted = useMemo(() => {
@@ -134,11 +150,11 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   );
 
   const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
     return sortDir === "asc" ? (
-      <ArrowUp className="h-3 w-3 ml-1" />
+      <ArrowUp className="h-3 w-3 ml-1 text-blue-600" />
     ) : (
-      <ArrowDown className="h-3 w-3 ml-1" />
+      <ArrowDown className="h-3 w-3 ml-1 text-blue-600" />
     );
   };
 
@@ -185,31 +201,31 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     switch (s) {
       case "OPERATIONAL":
         return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100 border-green-200">
+          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 text-xs font-medium px-2 py-0.5 rounded-full border shadow-none hover:bg-emerald-50">
             Operational
           </Badge>
         );
       case "EXPIRED":
         return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+          <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
             Expired
           </Badge>
         );
       case "SUSPENDED":
         return (
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">
             Suspended
           </Badge>
         );
       case "REVOKED":
         return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+          <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
             Revoked
           </Badge>
         );
       default:
         return (
-          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
+          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-xs font-medium px-2 py-0.5 rounded-full">
             {status || "Unknown"}
           </Badge>
         );
@@ -217,23 +233,23 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   };
 
   const getRegimeBadge = (regime: string | null | undefined) => {
-    if (!regime) return null;
+    if (!regime) return <span className="text-xs text-muted-foreground">--</span>;
     if (regime.toLowerCase() === "concession") {
       return (
-        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+        <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/50 dark:text-violet-400 dark:border-violet-800 text-xs font-medium px-2 py-0.5 rounded-full">
           Concession
         </Badge>
       );
     }
     if (regime.toLowerCase() === "authorization") {
       return (
-        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-400 dark:border-sky-800 text-xs font-medium px-2 py-0.5 rounded-full">
           Authorization
         </Badge>
       );
     }
     return (
-      <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
+      <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-xs font-medium px-2 py-0.5 rounded-full">
         {regime}
       </Badge>
     );
@@ -252,38 +268,89 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   };
 
   const content = (
-    <>
-      {/* Filters */}
-      <div className="flex flex-col gap-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
+    <div className="space-y-6">
+      {/* Summary Stats */}
+      {!isLoading && !error && entries.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            {
+              label: "Total Permits",
+              value: stats.total,
+              icon: FileText,
+              color: "text-slate-700 dark:text-slate-300",
+              bg: "bg-slate-50 dark:bg-slate-900",
+              border: "border-slate-200 dark:border-slate-800",
+            },
+            {
+              label: "Operational",
+              value: stats.operational,
+              icon: Shield,
+              color: "text-emerald-700 dark:text-emerald-400",
+              bg: "bg-emerald-50/70 dark:bg-emerald-950/30",
+              border: "border-emerald-200 dark:border-emerald-800",
+            },
+            {
+              label: "Expired",
+              value: stats.expired,
+              icon: AlertCircle,
+              color: "text-red-600 dark:text-red-400",
+              bg: "bg-red-50/70 dark:bg-red-950/30",
+              border: "border-red-200 dark:border-red-800",
+            },
+            {
+              label: "Regime Types",
+              value: stats.regimeTypes,
+              icon: Activity,
+              color: "text-violet-700 dark:text-violet-400",
+              bg: "bg-violet-50/70 dark:bg-violet-950/30",
+              border: "border-violet-200 dark:border-violet-800",
+            },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className={`${stat.bg} ${stat.border} border rounded-xl p-4 transition-all duration-200`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <stat.icon className={`h-4 w-4 ${stat.color} opacity-70`} />
+                <span className="text-xs font-medium text-muted-foreground">{stat.label}</span>
+              </div>
+              <p className={`text-2xl font-bold ${stat.color} tracking-tight`}>
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Search & Filters */}
+      <div className="p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm space-y-4">
+        <div className="flex flex-col md:flex-row gap-3">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
-              placeholder="Search permit holder, number, location, water source, activity..."
+              placeholder="Search by permit holder, number, location, water source, activity..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              className="pl-10 border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm focus:bg-white dark:focus:bg-slate-800 transition-all duration-200 rounded-lg h-10"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
             <Select value={regimeFilter} onValueChange={setRegimeFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-[150px] border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg h-10">
                 <SelectValue placeholder="Regime" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
                 <SelectItem value="all">All Regimes</SelectItem>
                 {availableRegimes.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
+                  <SelectItem key={r} value={r}>{r}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-[150px] border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 backdrop-blur-sm hover:bg-white dark:hover:bg-slate-800 transition-all duration-200 rounded-lg h-10">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
                 <SelectItem value="all">All Statuses</SelectItem>
                 {availableStatuses.map((s) => (
                   <SelectItem key={s} value={s}>
@@ -293,21 +360,33 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               </SelectContent>
             </Select>
             {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-10 px-3">
-                <X className="h-4 w-4 mr-1" />
-                Clear
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearFilters}
+                className="h-10 px-3 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5 mr-1" />
+                Clear ({activeFilterCount})
               </Button>
             )}
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-1">
           <p className="text-sm text-muted-foreground">
-            Showing <span className="font-medium text-foreground">{filteredAndSorted.length}</span>
-            {filteredAndSorted.length !== entries.length && (
-              <> of {entries.length}</>
-            )}{" "}
-            permit{entries.length !== 1 ? "s" : ""}
+            {filteredAndSorted.length === entries.length ? (
+              <>
+                Showing all{" "}
+                <span className="font-semibold text-foreground">{entries.length}</span>{" "}
+                permit{entries.length !== 1 ? "s" : ""}
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-foreground">{filteredAndSorted.length}</span>{" "}
+                of {entries.length} permit{entries.length !== 1 ? "s" : ""}
+              </>
+            )}
           </p>
           <label className="cursor-pointer">
             <input
@@ -317,7 +396,13 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               className="hidden"
               disabled={uploading}
             />
-            <Button variant="outline" size="sm" asChild disabled={uploading}>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              disabled={uploading}
+              className="border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 rounded-lg"
+            >
               <span>
                 {uploading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -329,183 +414,318 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
             </Button>
           </label>
         </div>
+      </div>
 
+      {/* Upload Result Banner */}
+      <AnimatePresence>
         {uploadResult && (
-          <div
-            className={`p-3 rounded-lg border text-sm ${
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className={`p-4 rounded-xl border text-sm ${
               uploadResult.errors?.length
-                ? "bg-amber-50 border-amber-200 text-amber-800"
-                : "bg-green-50 border-green-200 text-green-800"
+                ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300"
+                : "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300"
             }`}
           >
-            Imported {uploadResult.inserted} record{uploadResult.inserted !== 1 ? "s" : ""}, skipped{" "}
-            {uploadResult.skipped}.
-            {uploadResult.errors?.length ? (
-              <ul className="mt-1 list-disc list-inside">
-                {uploadResult.errors.slice(0, 5).map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-                {uploadResult.errors.length > 5 && (
-                  <li>...and {uploadResult.errors.length - 5} more errors</li>
-                )}
-              </ul>
-            ) : null}
-          </div>
+            <div className="flex items-start justify-between">
+              <div>
+                Imported <span className="font-semibold">{uploadResult.inserted}</span>{" "}
+                record{uploadResult.inserted !== 1 ? "s" : ""}, skipped{" "}
+                {uploadResult.skipped}.
+                {uploadResult.errors?.length ? (
+                  <ul className="mt-2 list-disc list-inside space-y-0.5 text-xs">
+                    {uploadResult.errors.slice(0, 5).map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                    {uploadResult.errors.length > 5 && (
+                      <li>...and {uploadResult.errors.length - 5} more errors</li>
+                    )}
+                  </ul>
+                ) : null}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setUploadResult(null)}
+                className="h-6 w-6 p-0 shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
       {/* Loading State */}
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-          <span className="ml-3 text-sm text-muted-foreground">Loading permit registry...</span>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="relative">
+            <div className="h-12 w-12 rounded-full border-2 border-slate-200 dark:border-slate-700" />
+            <Loader2 className="h-12 w-12 animate-spin text-blue-600 absolute inset-0" />
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">Loading permit registry...</p>
         </div>
       )}
 
       {/* Error State */}
       {error && (
-        <div className="flex items-center justify-center py-12 text-destructive">
-          <AlertCircle className="h-5 w-5 mr-2" />
-          <span>Failed to load permit registry: {error.message}</span>
+        <div className="flex flex-col items-center justify-center py-16">
+          <div className="h-14 w-14 rounded-full bg-red-50 dark:bg-red-950/30 flex items-center justify-center mb-4">
+            <AlertCircle className="h-7 w-7 text-red-500" />
+          </div>
+          <p className="font-medium text-foreground">Failed to load permit registry</p>
+          <p className="text-sm text-muted-foreground mt-1">{error.message}</p>
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-4">
+            Try again
+          </Button>
         </div>
       )}
 
       {/* Empty State */}
       {!isLoading && !error && filteredAndSorted.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <BookOpen className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <p className="text-muted-foreground font-medium">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="h-16 w-16 rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center mb-4">
+            <BookOpen className="h-8 w-8 text-muted-foreground/50" />
+          </div>
+          <p className="font-medium text-foreground">
             {entries.length === 0
-              ? "No permits in the registry"
+              ? "No permits in the registry yet"
               : "No permits match your filters"}
           </p>
-          <p className="text-sm text-muted-foreground/70 mt-1">
+          <p className="text-sm text-muted-foreground mt-1 max-w-sm">
             {entries.length === 0
-              ? "Import a CSV file to populate the registry"
-              : "Try adjusting your search or filter criteria"}
+              ? "Import a CSV file to populate the water permit registry"
+              : "Try broadening your search or adjusting the filters"}
           </p>
         </div>
       )}
 
       {/* Registry Table */}
       {!isLoading && !error && filteredAndSorted.length > 0 && (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => toggleSort("serial_number")}
-                >
-                  <span className="flex items-center">
-                    S/N
-                    <SortIcon field="serial_number" />
-                  </span>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => toggleSort("permit_holder")}
-                >
-                  <span className="flex items-center">
-                    Permit Holder
-                    <SortIcon field="permit_holder" />
-                  </span>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => toggleSort("permit_number")}
-                >
-                  <span className="flex items-center">
-                    Permit Number
-                    <SortIcon field="permit_number" />
-                  </span>
-                </TableHead>
-                <TableHead className="whitespace-nowrap">Regime</TableHead>
-                <TableHead className="whitespace-nowrap">Water Source</TableHead>
-                <TableHead className="whitespace-nowrap hidden lg:table-cell">Volume/Area</TableHead>
-                <TableHead className="whitespace-nowrap hidden xl:table-cell">Activity</TableHead>
-                <TableHead className="whitespace-nowrap hidden lg:table-cell">Location</TableHead>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => toggleSort("issuance_date")}
-                >
-                  <span className="flex items-center">
-                    Issued
-                    <SortIcon field="issuance_date" />
-                  </span>
-                </TableHead>
-                <TableHead className="whitespace-nowrap hidden md:table-cell">Duration</TableHead>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => toggleSort("expiration_date")}
-                >
-                  <span className="flex items-center">
-                    Expires
-                    <SortIcon field="expiration_date" />
-                  </span>
-                </TableHead>
-                <TableHead
-                  className="cursor-pointer select-none whitespace-nowrap"
-                  onClick={() => toggleSort("status")}
-                >
-                  <span className="flex items-center">
-                    Status
-                    <SortIcon field="status" />
-                  </span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAndSorted.map((entry) => (
-                <TableRow key={entry.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                  <TableCell className="font-medium text-muted-foreground">
-                    {entry.serial_number ?? "-"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium max-w-[200px] truncate">{entry.permit_holder}</div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono text-sm">{entry.permit_number}</span>
-                  </TableCell>
-                  <TableCell>{getRegimeBadge(entry.regime)}</TableCell>
-                  <TableCell>
-                    <span className="text-sm max-w-[150px] truncate block">
-                      {entry.water_source || "N/A"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <span className="text-sm">{entry.volume_or_area || "N/A"}</span>
-                  </TableCell>
-                  <TableCell className="hidden xl:table-cell">
-                    <span className="text-sm max-w-[180px] truncate block">
-                      {entry.authorized_activity || "N/A"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    <div className="flex items-start gap-1 max-w-[220px]">
-                      <MapPin className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                      <span className="text-xs text-muted-foreground truncate">
-                        {entry.location || "N/A"}
+        <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
+                    <TableHead className="w-[44px]" />
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      onClick={() => toggleSort("serial_number")}
+                    >
+                      <span className="flex items-center">
+                        #
+                        <SortIcon field="serial_number" />
                       </span>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      onClick={() => toggleSort("permit_holder")}
+                    >
+                      <span className="flex items-center">
+                        Permit Holder
+                        <SortIcon field="permit_holder" />
+                      </span>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      onClick={() => toggleSort("permit_number")}
+                    >
+                      <span className="flex items-center">
+                        Permit No.
+                        <SortIcon field="permit_number" />
+                      </span>
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                      Regime
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                      Water Source
+                    </TableHead>
+                    <TableHead className="whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider hidden xl:table-cell">
+                      Activity
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      onClick={() => toggleSort("issuance_date")}
+                    >
+                      <span className="flex items-center">
+                        Issued
+                        <SortIcon field="issuance_date" />
+                      </span>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      onClick={() => toggleSort("expiration_date")}
+                    >
+                      <span className="flex items-center">
+                        Expires
+                        <SortIcon field="expiration_date" />
+                      </span>
+                    </TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      onClick={() => toggleSort("status")}
+                    >
+                      <span className="flex items-center">
+                        Status
+                        <SortIcon field="status" />
+                      </span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSorted.map((entry) => {
+                    const isExpanded = expandedRow === entry.id;
+                    return (
+                      <motion.tr
+                        key={entry.id}
+                        layout
+                        className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-blue-50/40 dark:hover:bg-slate-800/40 transition-colors duration-150 cursor-pointer"
+                        onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
+                      >
+                        <TableCell className="p-2 sm:p-3 w-[44px]">
+                          <div className="flex items-center justify-center">
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3 text-muted-foreground text-sm tabular-nums">
+                          {entry.serial_number ?? "-"}
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3">
+                          <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                            {entry.permit_holder}
+                          </span>
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3">
+                          <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                            {entry.permit_number}
+                          </code>
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3">
+                          {getRegimeBadge(entry.regime)}
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3">
+                          <div className="flex items-center gap-1.5">
+                            <Droplets className="h-3 w-3 text-blue-500/70 shrink-0" />
+                            <span className="text-sm text-slate-700 dark:text-slate-300 max-w-[140px] truncate">
+                              {entry.water_source || "N/A"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3 hidden xl:table-cell">
+                          <span className="text-sm text-slate-600 dark:text-slate-400 max-w-[160px] truncate block">
+                            {entry.authorized_activity || "N/A"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
+                          {formatDate(entry.issuance_date)}
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
+                          {formatDate(entry.expiration_date)}
+                        </TableCell>
+                        <TableCell className="p-2 sm:p-3">
+                          {getStatusBadge(entry.status)}
+                        </TableCell>
+                      </motion.tr>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Expanded Detail Panels (rendered outside table for correct layout) */}
+            <AnimatePresence>
+              {filteredAndSorted.map((entry) => {
+                if (expandedRow !== entry.id) return null;
+                return (
+                  <motion.div
+                    key={`detail-${entry.id}`}
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden border-b border-slate-200 dark:border-slate-800"
+                  >
+                    <div className="px-6 py-5 bg-slate-50/50 dark:bg-slate-900/50">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+                        <DetailField
+                          icon={<FileText className="h-3.5 w-3.5" />}
+                          label="Permit Number"
+                          value={entry.permit_number}
+                        />
+                        <DetailField
+                          icon={<Shield className="h-3.5 w-3.5" />}
+                          label="Regime of Water Use"
+                          value={entry.regime}
+                        />
+                        <DetailField
+                          icon={<Droplets className="h-3.5 w-3.5" />}
+                          label="Water Source"
+                          value={entry.water_source}
+                        />
+                        <DetailField
+                          icon={<Activity className="h-3.5 w-3.5" />}
+                          label="Volume / Area"
+                          value={entry.volume_or_area}
+                        />
+                        <DetailField
+                          label="Method of Water Taking"
+                          value={entry.method_of_water_taking}
+                        />
+                        <DetailField
+                          label="Authorized Activity"
+                          value={entry.authorized_activity}
+                        />
+                        <DetailField
+                          icon={<MapPin className="h-3.5 w-3.5" />}
+                          label="Location"
+                          value={entry.location}
+                          wide
+                        />
+                        {(entry.latitude || entry.longitude) && (
+                          <DetailField
+                            label="Coordinates"
+                            value={`${entry.latitude ?? "N/A"}, ${entry.longitude ?? "N/A"}`}
+                          />
+                        )}
+                        <DetailField
+                          icon={<Calendar className="h-3.5 w-3.5" />}
+                          label="Issuance Date"
+                          value={formatDate(entry.issuance_date)}
+                        />
+                        <DetailField
+                          label="Duration"
+                          value={entry.duration}
+                        />
+                        <DetailField
+                          icon={<Calendar className="h-3.5 w-3.5" />}
+                          label="Expiration Date"
+                          value={formatDate(entry.expiration_date)}
+                        />
+                        {entry.contact && entry.contact.trim() !== "Email:                                 Tel:" && (
+                          <DetailField
+                            label="Contact"
+                            value={entry.contact}
+                          />
+                        )}
+                      </div>
                     </div>
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {formatDate(entry.issuance_date)}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell text-sm">
-                    {entry.duration || "N/A"}
-                  </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">
-                    {formatDate(entry.expiration_date)}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(entry.status)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
       )}
-    </>
+    </div>
   );
 
   if (!showCard) {
@@ -513,17 +733,45 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <BookOpen className="h-5 w-5" />
+    <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
+      <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border-b border-slate-200 dark:border-slate-800 pb-4">
+        <CardTitle className="flex items-center gap-2.5 text-slate-900 dark:text-slate-100">
+          <div className="h-8 w-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+            <BookOpen className="h-4 w-4 text-blue-700 dark:text-blue-400" />
+          </div>
           Water Permit Registry
         </CardTitle>
-        <CardDescription>
-          Registry of all water use permits issued across Rwanda
+        <CardDescription className="text-slate-500 dark:text-slate-400">
+          Comprehensive registry of all water use permits issued across Rwanda
         </CardDescription>
       </CardHeader>
-      <CardContent>{content}</CardContent>
+      <CardContent className="p-6">{content}</CardContent>
     </Card>
+  );
+}
+
+function DetailField({
+  icon,
+  label,
+  value,
+  wide,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string | null | undefined;
+  wide?: boolean;
+}) {
+  return (
+    <div className={wide ? "md:col-span-2" : ""}>
+      <div className="flex items-center gap-1.5 mb-0.5">
+        {icon && <span className="text-muted-foreground">{icon}</span>}
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          {label}
+        </span>
+      </div>
+      <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
+        {value || "N/A"}
+      </p>
+    </div>
   );
 }
