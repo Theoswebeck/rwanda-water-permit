@@ -36,7 +36,7 @@ import {
   FormMessage
 } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Upload, X, FileText, FileEdit, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2 } from "lucide-react";
+import { Upload, X, FileText, FileEdit, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2, Map, Edit3 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -86,6 +86,21 @@ const MultiPolygonInputWithValidation = dynamic(
     ssr: false,
     loading: () => (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+        Loading map…
+      </div>
+    ),
+  }
+);
+
+const AbstractionPointMap = dynamic(
+  () =>
+    import("@/components/maps/AbstractionPointMap").then((mod) => ({
+      default: mod.AbstractionPointMap,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[400px] w-full flex items-center justify-center bg-gray-100 rounded text-sm text-muted-foreground">
         Loading map…
       </div>
     ),
@@ -2826,7 +2841,7 @@ export function ApplicationForm({
                         <FormItem>
                           <FormLabel>Please specify water source</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="Specify water source" />
+                            <Input {...field} placeholder="Specify water source" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -3201,99 +3216,130 @@ export function ApplicationForm({
                           14. Water Abstraction Point * (LAT, LONG)
                         </Label>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="waterSourceLatitude"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Latitude *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    type="text"
-                                    value={(field.value ?? "").toString()}
-                                    placeholder="e.g., -1.9441"
-                                    disabled={readOnly}
-                                    onChange={(e) => {
-                                      if (readOnly) return;
-                                      const value = e.target.value;
+                        <Tabs defaultValue="manual" className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="manual" className="flex items-center gap-2">
+                              <Edit3 className="h-4 w-4" />
+                              Manual Entry
+                            </TabsTrigger>
+                            <TabsTrigger value="map" className="flex items-center gap-2">
+                              <Map className="h-4 w-4" />
+                              Map View
+                            </TabsTrigger>
+                          </TabsList>
 
-                                      // If the user pasted a full pair "lat, lng", split and populate both fields.
-                                      const pair = parseLatLngPair(value);
-                                      if (pair) {
-                                        form.setValue("waterSourceLatitude", pair.lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
-                                        form.setValue("waterSourceLongitude", pair.lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
-                                      } else {
-                                        // Allow freeform input; schema validation will normalize/check on blur/submit.
-                                        field.onChange(value);
-                                      }
+                          <TabsContent value="manual" className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="waterSourceLatitude"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Latitude *</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="text"
+                                        value={(field.value ?? "").toString()}
+                                        placeholder="e.g., -1.9441"
+                                        disabled={readOnly}
+                                        onChange={(e) => {
+                                          if (readOnly) return;
+                                          const value = e.target.value;
 
-                                      // Trigger validation after input
-                                      setTimeout(() => {
-                                        form.trigger("waterSourceLatitude");
-                                        form.trigger("waterSourceLongitude");
-                                      }, 100);
-                                    }}
-                                    onBlur={() => {
-                                      // Validate on blur
-                                      form.trigger("waterSourceLatitude");
-                                      form.trigger("waterSourceLongitude");
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
+                                          // If the user pasted a full pair "lat, lng", split and populate both fields.
+                                          const pair = parseLatLngPair(value);
+                                          if (pair) {
+                                            form.setValue("waterSourceLatitude", pair.lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                            form.setValue("waterSourceLongitude", pair.lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                          } else {
+                                            // Allow freeform input; schema validation will normalize/check on blur/submit.
+                                            field.onChange(value);
+                                          }
 
-                          <FormField
-                            control={form.control}
-                            name="waterSourceLongitude"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Longitude *</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    type="text"
-                                    value={(field.value ?? "").toString()}
-                                    placeholder="e.g., 29.8739"
-                                    disabled={readOnly}
-                                    onChange={(e) => {
-                                      if (readOnly) return;
-                                      const value = e.target.value;
+                                          // Trigger validation after input
+                                          setTimeout(() => {
+                                            form.trigger("waterSourceLatitude");
+                                            form.trigger("waterSourceLongitude");
+                                          }, 100);
+                                        }}
+                                        onBlur={() => {
+                                          // Validate on blur
+                                          form.trigger("waterSourceLatitude");
+                                          form.trigger("waterSourceLongitude");
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
 
-                                      // Support pasting "lat, lng" into either field.
-                                      const pair = parseLatLngPair(value);
-                                      if (pair) {
-                                        form.setValue("waterSourceLatitude", pair.lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
-                                        form.setValue("waterSourceLongitude", pair.lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
-                                      } else {
-                                        field.onChange(value);
-                                      }
+                              <FormField
+                                control={form.control}
+                                name="waterSourceLongitude"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Longitude *</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="text"
+                                        value={(field.value ?? "").toString()}
+                                        placeholder="e.g., 29.8739"
+                                        disabled={readOnly}
+                                        onChange={(e) => {
+                                          if (readOnly) return;
+                                          const value = e.target.value;
 
-                                      setTimeout(() => {
-                                        form.trigger("waterSourceLatitude");
-                                        form.trigger("waterSourceLongitude");
-                                      }, 100);
-                                    }}
-                                    onBlur={() => {
-                                      // Validate on blur
-                                      form.trigger("waterSourceLatitude");
-                                      form.trigger("waterSourceLongitude");
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
+                                          // Support pasting "lat, lng" into either field.
+                                          const pair = parseLatLngPair(value);
+                                          if (pair) {
+                                            form.setValue("waterSourceLatitude", pair.lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                            form.setValue("waterSourceLongitude", pair.lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                          } else {
+                                            field.onChange(value);
+                                          }
 
-                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <p className="text-sm text-blue-800">
+                                          setTimeout(() => {
+                                            form.trigger("waterSourceLatitude");
+                                            form.trigger("waterSourceLongitude");
+                                          }, 100);
+                                        }}
+                                        onBlur={() => {
+                                          // Validate on blur
+                                          form.trigger("waterSourceLatitude");
+                                          form.trigger("waterSourceLongitude");
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </TabsContent>
+
+                          <TabsContent value="map" className="space-y-4">
+                            <AbstractionPointMap
+                              latitude={form.watch("waterSourceLatitude")}
+                              longitude={form.watch("waterSourceLongitude")}
+                              onPointChange={(lat, lng) => {
+                                form.setValue("waterSourceLatitude", lat, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                form.setValue("waterSourceLongitude", lng, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+                                form.trigger("waterSourceLatitude");
+                                form.trigger("waterSourceLongitude");
+                              }}
+                              readOnly={readOnly}
+                              height="400px"
+                            />
+                          </TabsContent>
+                        </Tabs>
+
+                        <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-950/30 dark:border-blue-800">
+                          <p className="text-sm text-blue-800 dark:text-blue-200">
                             <strong>Note:</strong> For water abstraction activities, only a single point is required (LAT/LONG).
+                            {!readOnly && " Use the Map View tab to click on the map to set your abstraction location."}
                           </p>
                         </div>
                       </div>
@@ -3769,7 +3815,7 @@ export function ApplicationForm({
                                 <FormItem>
                                   <FormLabel>Quantity of abstracted water (m³/day)</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="e.g., 120" />
+                                    <Input {...field} placeholder="e.g., 120" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -3782,7 +3828,7 @@ export function ApplicationForm({
                                 <FormItem>
                                   <FormLabel>Quantity of abstracted water (m³/month)</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="e.g., 3500" />
+                                    <Input {...field} placeholder="e.g., 3500" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -3796,7 +3842,7 @@ export function ApplicationForm({
                                 <FormItem className="md:col-span-2">
                                   <FormLabel>Type of minerals</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="e.g., Tin, Coltan, Wolfram" />
+                                    <Input {...field} placeholder="e.g., Tin, Coltan, Wolfram" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -3814,8 +3860,11 @@ export function ApplicationForm({
                                       type="number"
                                       {...field}
                                       value={field.value ?? ""}
-                                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                      onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                       placeholder="e.g., 10000"
+                                      disabled={readOnly}
+                                      readOnly={readOnly}
+                                      className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}
                                     />
                                   </FormControl>
                                   <FormMessage />
@@ -3865,7 +3914,9 @@ export function ApplicationForm({
                                                 {...field}
                                                 value={field.value ?? ""}
                                                 placeholder="Lake name"
-                                                className="border-0 bg-transparent"
+                                                className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                                disabled={readOnly}
+                                                readOnly={readOnly}
                                               />
                                             </FormControl>
                                           )}
@@ -3881,11 +3932,14 @@ export function ApplicationForm({
                                                 type="number"
                                                 value={field.value ?? ""}
                                                 onChange={(e) => {
+                                                  if (readOnly) return;
                                                   const v = e.target.value;
                                                   field.onChange(v === "" ? undefined : Number(v));
                                                 }}
                                                 placeholder="Number of cages"
-                                                className="border-0 bg-transparent"
+                                                className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                                disabled={readOnly}
+                                                readOnly={readOnly}
                                               />
                                             </FormControl>
                                           )}
@@ -3901,11 +3955,14 @@ export function ApplicationForm({
                                                 type="number"
                                                 value={field.value ?? ""}
                                                 onChange={(e) => {
+                                                  if (readOnly) return;
                                                   const v = e.target.value;
                                                   field.onChange(v === "" ? undefined : Number(v));
                                                 }}
                                                 placeholder="Fishes per cage"
-                                                className="border-0 bg-transparent"
+                                                className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                                disabled={readOnly}
+                                                readOnly={readOnly}
                                               />
                                             </FormControl>
                                           )}
@@ -3921,11 +3978,14 @@ export function ApplicationForm({
                                   type="number"
                                   value={field.value ?? ""}
                                   onChange={(e) => {
+                                    if (readOnly) return;
                                     const v = e.target.value;
                                     field.onChange(v === "" ? undefined : Number(v));
                                   }}
                                   placeholder="Area" 
-                                  className="border-0 bg-transparent" 
+                                  className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                  disabled={readOnly}
+                                  readOnly={readOnly}
                                 />
                               </FormControl>
                                           )}
@@ -3954,14 +4014,14 @@ export function ApplicationForm({
                                   <tbody>
                                     <tr>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Surface area" className="border-0 bg-transparent" />
+                                        <Input placeholder="Surface area" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Capacity (m³)" className="border-0 bg-transparent" />
+                                        <Input placeholder="Capacity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Select>
-                                          <SelectTrigger className="border-0 bg-transparent h-8">
+                                        <Select disabled={readOnly}>
+                                          <SelectTrigger className={`border-0 bg-transparent h-8 ${readOnly ? "cursor-default opacity-60" : ""}`}>
                                             <SelectValue placeholder="Select frequency" />
                                           </SelectTrigger>
                                           <SelectContent>
@@ -3986,11 +4046,14 @@ export function ApplicationForm({
                                   type="number"
                                   value={field.value ?? ""}
                                   onChange={(e) => {
+                                    if (readOnly) return;
                                     const v = e.target.value;
                                     field.onChange(v === "" ? undefined : Number(v));
                                   }}
                                   placeholder="Monthly usage (m³)" 
-                                  className="border-0 bg-transparent" 
+                                  className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                  disabled={readOnly}
+                                  readOnly={readOnly}
                                 />
                               </FormControl>
                                           )}
@@ -4038,16 +4101,16 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Quantity of abstracted water</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Daily quantity (m³)" className="border-0 bg-transparent" />
+                                    <Input placeholder="Daily quantity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Monthly quantity (m³)" className="border-0 bg-transparent" />
+                                    <Input placeholder="Monthly quantity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Washing capacity (tons/year)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2" colSpan={2}>
-                                    <Input placeholder="Annual washing capacity" className="border-0 bg-transparent" />
+                                    <Input placeholder="Annual washing capacity" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4192,20 +4255,20 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Quantity of abstracted water (m³/year)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Annual quantity (m³)" className="border-0 bg-transparent" />
+                                    <Input placeholder="Annual quantity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Distance between intake and Power House (m)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Distance" className="border-0 bg-transparent" />
+                                    <Input placeholder="Distance" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Is there any water user along this distance?</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select>
-                                      <SelectTrigger className="border-0 bg-transparent">
+                                    <Select disabled={readOnly}>
+                                      <SelectTrigger className={`border-0 bg-transparent ${readOnly ? "cursor-default opacity-60" : ""}`}>
                                         <SelectValue placeholder="Select" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -4218,7 +4281,7 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Capacity of Power Plant (Megawatt)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Capacity in MW" className="border-0 bg-transparent" />
+                                    <Input placeholder="Capacity in MW" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4427,20 +4490,20 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of construction or installation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe purpose of construction or installation" className="border-0 bg-transparent min-h-[60px]" />
+                                    <Textarea placeholder="Describe purpose of construction or installation" className={`border-0 bg-transparent min-h-[60px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project (Materials, construction methods, temporary facilities, impact on water flow, impact on water quality, etc.)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Detailed project description..." className="border-0 bg-transparent min-h-[120px]" />
+                                    <Textarea placeholder="Detailed project description..." className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction or installation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select>
-                                      <SelectTrigger className="border-0 bg-transparent h-8">
+                                    <Select disabled={readOnly}>
+                                      <SelectTrigger className={`border-0 bg-transparent h-8 ${readOnly ? "cursor-default opacity-60" : ""}`}>
                                         <SelectValue placeholder="Select duration" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -4490,13 +4553,13 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Type of recreation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Specify recreation type" className="border-0 bg-transparent" />
+                                    <Input placeholder="Specify recreation type" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe the recreational project..." className="border-0 bg-transparent min-h-[120px]" />
+                                    <Textarea placeholder="Describe the recreational project..." className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4586,8 +4649,11 @@ export function ApplicationForm({
                                         type="number"
                                         {...field}
                                         value={field.value || ""}
-                                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : "")}
+                                        onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : "")}
                                         placeholder="Yearly average"
+                                        disabled={readOnly}
+                                        readOnly={readOnly}
+                                        className={readOnly ? "bg-gray-50 border-gray-200 cursor-default opacity-60" : ""}
                                       />
                                     </FormControl>
                                     <FormMessage />
@@ -4601,9 +4667,9 @@ export function ApplicationForm({
                                 render={({ field }) => (
                                   <FormItem>
                                     <FormLabel>Method of Water Abstraction</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
                                       <FormControl>
-                                        <SelectTrigger>
+                                        <SelectTrigger className={readOnly ? "cursor-default opacity-60" : ""}>
                                           <SelectValue placeholder="Select abstraction method" />
                                         </SelectTrigger>
                                       </FormControl>
