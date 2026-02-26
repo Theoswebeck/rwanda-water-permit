@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Application } from "@/types/database";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 interface ApplicationsListProps {
   applications: Application[];
@@ -241,12 +242,9 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     return notes?.originalPermitId ?? undefined;
   };
 
-  // Format application type for display
-  // For modification/transfer/renewal types, try to show a more meaningful type based on intended activities or water purpose
   const formatApplicationType = (type: string, app?: Application) => {
     const notes = parseNotes(app);
 
-    // Check if it's a renewal application (supports legacy rows created before renewal flags were persisted consistently)
     const isRenewal =
       type === 'renewal' ||
       Boolean(notes?.isRenewal) ||
@@ -256,45 +254,19 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
       return 'Renewal';
     }
     
-    // If it's a modification or transfer, try to get a better type from intended_activities or water_purpose
-    if ((type === 'modification' || type === 'transfer') && app) {
+    // Show the actual intended activity name for all application types
+    if (app) {
       const activities = app.intended_activities as string[] | null;
       const primaryActivity = activities?.[0] || app.water_purpose;
       
       if (primaryActivity) {
-        // Map activity to display type
-        const activityToType: Record<string, string> = {
-          'mining': 'Mining Water Use',
-          'irrigation': 'Agricultural',
-          'livestock': 'Agricultural',
-          'aquaculture': 'Agricultural',
-          'fish_farming_lakes': 'Agricultural',
-          'fish_farming_ponds': 'Agricultural',
-          'coffee_washing': 'Industrial',
-          'industry': 'Industrial',
-          'industrial': 'Industrial',
-          'electricity_generation': 'Industrial',
-          'construction_of_dam': 'Industrial',
-          'construction_of_infrastructures': 'Industrial',
-          'gaz_extraction': 'Industrial',
-          'navigation': 'Commercial',
-          'recreation': 'Commercial',
-          'recreation_activities': 'Commercial',
-          'domestic': 'Domestic',
-          'water_supply': 'Domestic',
-          'municipal_supply': 'Municipal',
-        };
-        
-        const betterType = activityToType[primaryActivity];
-        if (betterType) {
-          // Append (Modification) or (Transfer) suffix to indicate the type
-          const suffix = type === 'modification' ? ' (Mod)' : ' (Transfer)';
-          return betterType + suffix;
-        }
+        const activityName = getActivityLabel(primaryActivity);
+        if (type === 'modification') return `${activityName} (Mod)`;
+        if (type === 'transfer') return `${activityName} (Transfer)`;
+        return activityName;
       }
     }
     
-    // Default formatting
     return type
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))

@@ -153,12 +153,14 @@ function resolveActivityLabel(application: ApplicationForContract): string {
     water_supply: "Water Supply",
     industry: "Industry",
     coffee_washing: "Coffee Washing",
-    electricity_generation: "Electricity Generation",
+    electricity_generation: "Electricity Generation (Hydropower)",
     mining: "Mining",
     construction_of_dam: "Construction of Dam",
-    construction_of_infrastructures: "Construction of Infrastructures",
+    construction_of_infrastructures: "Construction or installation of infrastructure",
     navigation: "Navigation",
-    recreation_activities: "Recreation Activities",
+    recreation_activities: "Recreational Activities",
+    gaz_extraction: "Gaz Extraction",
+    livestock: "Livestock",
     other: "Other",
   };
   return labels[primary] || (primary ? primary.replaceAll("_", " ") : "N/A");

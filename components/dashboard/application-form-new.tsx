@@ -328,10 +328,10 @@ const applicationFormSchema = z.object({
   // Single activity selection is enforced by schema (.max(1))
   // No need to check for mixing concession and abstraction activities
 
-  const hasFishFarmingLakes = selectedActivities.includes("fish_farming_lakes");
+  const concessionActivities = ["fish_farming_lakes", "recreation_activities"];
+  const hasConcessionActivity = selectedActivities.some((a) => concessionActivities.includes(a));
   
-  if (hasFishFarmingLakes) {
-    // For fish farming in lakes, polygons are required (concession)
+  if (hasConcessionActivity) {
     if (data.waterSourcePolygons && data.waterSourcePolygons.length > 0) {
       const hasValidPolygons = data.waterSourcePolygons.every((poly: any) => {
         return (
@@ -354,9 +354,8 @@ const applicationFormSchema = z.object({
     }
   }
 
-  // For abstraction activities (including fish_farming_ponds), validate LAT/LONG format if provided
-  // fish_farming_ponds is abstraction (single point), NOT a concession
-  const hasNonFishActivity = selectedActivities.some((a) => a && a !== "fish_farming_lakes");
+  const nonAbstractionActivities = ["fish_farming_lakes", "construction_of_dam", "recreation_activities", "construction_of_infrastructures"];
+  const hasNonFishActivity = selectedActivities.some((a) => a && !nonAbstractionActivities.includes(a));
   if (hasNonFishActivity) {
     // Tab-specific validation will handle the requirement
     const latitude = String(data.waterSourceLatitude ?? "").trim();
@@ -788,7 +787,7 @@ export function ApplicationForm({
       waterSourceLongitude: "",
       waterReliability: "water_always_available",
       permitLengthYears: undefined,
-      waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: 0, abstractionMethod: "" }],
+      waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: undefined, abstractionMethod: "" }],
       intendedActivities: [],
       intendedActivityOther: "",
       ownsAllLand: false,
@@ -802,7 +801,7 @@ export function ApplicationForm({
       miningQuantityPerDay: "",
       miningQuantityPerMonth: "",
       miningMineralsType: "",
-      miningProductionCapacityTonsPerYear: 0,
+      miningProductionCapacityTonsPerYear: undefined,
       fishLakeAreaHectares: undefined,
       fishLakeNumberOfCages: undefined,
       fishLakeCageCapacity: undefined,
@@ -1116,11 +1115,11 @@ export function ApplicationForm({
       return false;
     }
 
-    // For concession activities (fish farming in lakes only), polygons are required
-    // fish_farming_ponds is abstraction (single point), not concession
     const intended = form.getValues('intendedActivities') || [];
-    const requiresConcessionPolygons = intended.includes('fish_farming_lakes');
-    const requiresAbstractionDetails = intended.some((a: string) => a && a !== 'fish_farming_lakes');
+    const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
+    const nonAbstractionActivities = ['fish_farming_lakes', 'construction_of_dam', 'recreation_activities', 'construction_of_infrastructures'];
+    const requiresConcessionPolygons = intended.some((a: string) => concessionActivities.includes(a));
+    const requiresAbstractionDetails = intended.some((a: string) => a && !nonAbstractionActivities.includes(a));
     
     // For abstraction activities, LAT/LONG and water abstraction details are required
     if (requiresAbstractionDetails) {
@@ -1191,6 +1190,7 @@ export function ApplicationForm({
     const errors = await form.trigger(fields as any);
     
     const ownsAllLand = form.getValues('ownsAllLand');
+    const hasLandAccess = form.getValues('hasLandAccess');
     
     // Check land ownership document if user owns all land
     if (ownsAllLand) {
@@ -1206,16 +1206,37 @@ export function ApplicationForm({
       form.clearErrors('landOwnershipDoc' as any);
     }
     
-    // Check land access documents if user doesn't own all land
-    if (!ownsAllLand && !checkLandAccessDocuments()) {
-      form.setError('landAccessDocuments' as any, {
-        type: 'manual',
-        message: 'Proof of land access is required when you do not own all the required land.'
-      });
-      setValidationError("Please upload the required land access documents before proceeding.");
-      return false;
+    // When user doesn't own all land: must answer Q17 (hasLandAccess)
+    if (!ownsAllLand) {
+      if (hasLandAccess === undefined) {
+        form.setError('hasLandAccess' as any, {
+          type: 'manual',
+          message: 'Please indicate whether you have access to the land.'
+        });
+        setValidationError("Please indicate whether you have access to the land before proceeding.");
+        return false;
+      }
+      if (hasLandAccess === false) {
+        form.setError('hasLandAccess' as any, {
+          type: 'manual',
+          message: 'You cannot proceed without access to the land. Please obtain land access before applying for a water permit.'
+        });
+        setValidationError("You cannot proceed without access to the land. Please obtain land access before applying.");
+        return false;
+      }
+      form.clearErrors('hasLandAccess' as any);
+      
+      // Only require land access documents when user has indicated they have access
+      if (!checkLandAccessDocuments()) {
+        form.setError('landAccessDocuments' as any, {
+          type: 'manual',
+          message: 'Proof of land access is required when you do not own all the required land.'
+        });
+        setValidationError("Please upload the required land access documents before proceeding.");
+        return false;
+      }
+      form.clearErrors('landAccessDocuments' as any);
     }
-    form.clearErrors('landAccessDocuments' as any);
     
     return errors;
   };
@@ -1224,8 +1245,8 @@ export function ApplicationForm({
     // Payment tab should only be available for draft/pending_payment AND never for staff views (review/assessment/approver)
     // Additionally, permit modifications do not require payment.
     return shouldShowPaymentTab
-      ? ["applicant-info", "water-source", "intended-activity", "land-ownership", "payment"]
-      : ["applicant-info", "water-source", "intended-activity", "land-ownership"];
+      ? ["applicant-info", "intended-activity", "water-source", "land-ownership", "payment"]
+      : ["applicant-info", "intended-activity", "water-source", "land-ownership"];
   };
 
   const handleTabChange = async (nextTab: string) => {
@@ -1362,12 +1383,11 @@ export function ApplicationForm({
           return true; // Disable Next button
         }
         
-        // Determine if this is a concession (fish farming in lakes) or abstraction activity
-        // fish_farming_ponds is abstraction (single point), not concession
-        const isConcessionActivity = intendedActivities.includes('fish_farming_lakes');
-        const isAbstractionActivity = intendedActivities.some((a: string) => a && a !== 'fish_farming_lakes');
+        const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
+        const nonAbstractionActivities = ['fish_farming_lakes', 'construction_of_dam', 'recreation_activities', 'construction_of_infrastructures'];
+        const isConcessionActivity = intendedActivities.some((a: string) => concessionActivities.includes(a));
+        const isAbstractionActivity = intendedActivities.some((a: string) => a && !nonAbstractionActivities.includes(a));
         
-        // For concession activities (fish farming in lakes), polygons are required but NOT water abstraction details
         if (isConcessionActivity) {
           const polygons = form.watch('waterSourcePolygons') || form.getValues('waterSourcePolygons') || [];
           const hasValidPolygons =
@@ -1396,12 +1416,24 @@ export function ApplicationForm({
       }
         
       case "land-ownership": {
-        // Check required fields and documents for land ownership tab
-        // Use form.watch() to ensure reactive updates when fields change
         const ownsAllLand = form.watch('ownsAllLand') ?? form.getValues('ownsAllLand');
-        const hasLandDocs = checkLandAccessDocuments();
+        const hasLandAccess = form.watch('hasLandAccess') ?? form.getValues('hasLandAccess');
         const hasCertified = Boolean(form.watch('certificationAgreement') ?? form.getValues('certificationAgreement'));
-        return ownsAllLand === undefined || !hasLandDocs || !hasCertified;
+        
+        if (ownsAllLand === undefined) return true;
+        if (!hasCertified) return true;
+        
+        // Cannot proceed without land access when user doesn't own all land
+        if (!ownsAllLand && hasLandAccess === false) return true;
+        if (!ownsAllLand && hasLandAccess === undefined) return true;
+        
+        if (ownsAllLand) {
+          const hasLandOwnershipDoc = Boolean(files.landOwnershipDoc || uploadedFileUrls.landOwnershipDoc);
+          if (!hasLandOwnershipDoc) return true;
+        } else {
+          if (!checkLandAccessDocuments()) return true;
+        }
+        return false;
       }
         
       default:
@@ -1493,7 +1525,7 @@ export function ApplicationForm({
         waterAbstractionDetails: [{
           flowRate: "",
           flowRateUnit: "m³/s",
-          maxAverageYearly: 0,
+          maxAverageYearly: undefined,
           abstractionMethod: "pump"
         }],
         concessionArea: undefined,
@@ -1507,13 +1539,7 @@ export function ApplicationForm({
         annexD_coffeeWashingDetails: "",
         annexE_industryDetails: "",
         industryDetails: [
-          { industryType: "Food Processing", dailyQuantity: undefined, monthlyQuantity: undefined },
-          { industryType: "Horticultural Packaging", dailyQuantity: undefined, monthlyQuantity: undefined },
-          { industryType: "Chemical Manufacturing", dailyQuantity: undefined, monthlyQuantity: undefined },
-          { industryType: "Mineral water", dailyQuantity: undefined, monthlyQuantity: undefined },
-          { industryType: "Brewing/Beverage manufacturing", dailyQuantity: undefined, monthlyQuantity: undefined },
-          { industryType: "Fruit and vegetable canning or pickling", dailyQuantity: undefined, monthlyQuantity: undefined },
-          { industryType: "Others (Specify)", dailyQuantity: undefined, monthlyQuantity: undefined },
+          { industryType: "", dailyQuantity: undefined, monthlyQuantity: undefined },
         ],
         annexF_electricityDetails: "",
         annexG_miningDetails: "",
@@ -1557,25 +1583,11 @@ export function ApplicationForm({
         } as any);
       }
       
-      // Ensure industryDetails always has all 7 industry types, merging saved values where they exist
+      // Normalize industryDetails: keep only the first entry with data (dropdown selection model)
       const savedIndustryDetails = form.getValues('industryDetails');
-      const defaultIndustryTypes = [
-        "Food Processing",
-        "Horticultural Packaging",
-        "Chemical Manufacturing",
-        "Mineral water",
-        "Brewing/Beverage manufacturing",
-        "Fruit and vegetable canning or pickling",
-        "Others (Specify)"
-      ];
-      if (!savedIndustryDetails || !Array.isArray(savedIndustryDetails) || savedIndustryDetails.length !== defaultIndustryTypes.length) {
-        const mergedIndustryDetails = defaultIndustryTypes.map((industryType, index) => {
-          const saved = savedIndustryDetails?.[index];
-          return saved && saved.industryType === industryType
-            ? saved
-            : { industryType, dailyQuantity: undefined, monthlyQuantity: undefined };
-        });
-        form.setValue('industryDetails', mergedIndustryDetails, {
+      if (savedIndustryDetails && Array.isArray(savedIndustryDetails)) {
+        const firstWithType = savedIndustryDetails.find((d: any) => d?.industryType);
+        form.setValue('industryDetails', [firstWithType || { industryType: "", dailyQuantity: undefined, monthlyQuantity: undefined }], {
           shouldDirty: false,
           shouldTouch: false,
           shouldValidate: false
@@ -2297,13 +2309,13 @@ export function ApplicationForm({
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline">Applicant</span>
                   </TabsTrigger>
-                  <TabsTrigger value="water-source" className="flex items-center gap-1 text-xs">
-                    <Droplet className="h-4 w-4" />
-                    <span className="hidden sm:inline">Water Source</span>
-                  </TabsTrigger>
                   <TabsTrigger value="intended-activity" className="flex items-center gap-1 text-xs">
                     <Factory className="h-4 w-4" />
                     <span className="hidden sm:inline">Activity</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="water-source" className="flex items-center gap-1 text-xs">
+                    <Droplet className="h-4 w-4" />
+                    <span className="hidden sm:inline">Water Source</span>
                   </TabsTrigger>
                   <TabsTrigger value="land-ownership" className="flex items-center gap-1 text-xs">
                     <Globe className="h-4 w-4" />
@@ -3149,20 +3161,19 @@ export function ApplicationForm({
                             }`}
                           >
                             {[
-                              { value: "irrigation", label: "Irrigation" },
+                              { value: "coffee_washing", label: "Coffee washing" },
                               { value: "construction_of_dam", label: "Construction of a dam" },
+                              { value: "construction_of_infrastructures", label: "Construction or installation of infrastructure" },
+                              { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
                               { value: "fish_farming_lakes", label: "Fish farming in lakes" },
                               { value: "fish_farming_ponds", label: "Fish farming in ponds" },
-                              { value: "mining", label: "Mining" },
-                              { value: "industry", label: "Industry" },
-                              { value: "water_supply", label: "Water supply" },
-                              { value: "coffee_washing", label: "Coffee washing" },
-                              { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
-                              { value: "navigation", label: "Navigation" },
-                              { value: "recreation_activities", label: "Recreational activities" },
-                              { value: "construction_of_infrastructures", label: "Construction of infrastructures" },
                               { value: "gaz_extraction", label: "Gaz extraction" },
+                              { value: "industry", label: "Industry" },
+                              { value: "irrigation", label: "Irrigation" },
                               { value: "livestock", label: "Livestock" },
+                              { value: "mining", label: "Mining" },
+                              { value: "recreation_activities", label: "Recreational activities" },
+                              { value: "water_supply", label: "Water supply" },
                               { value: "other", label: "Other (specify)" },
                             ].map((opt) => (
                               <div key={opt.value} className="flex items-center gap-3">
@@ -3182,8 +3193,8 @@ export function ApplicationForm({
                   {/* Water Abstraction Point (LAT, LONG) - for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes");
-                    // Show for any abstraction activity (fish_farming_ponds needs single point)
+                    const nonAbstractionActivities = ["fish_farming_lakes", "construction_of_dam", "recreation_activities", "construction_of_infrastructures"];
+                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && !nonAbstractionActivities.includes(a));
                     return hasAbstractionActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
@@ -3320,9 +3331,9 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* Water Concession Area (Multiple Polygons) - only for fish farming in lakes (concession) */}
+                  {/* Water Concession Area (Multiple Polygons) - for concession activities (fish farming in lakes, recreational activities) */}
                   {watchedIntendedActivities && watchedIntendedActivities.length > 0 && 
-                   watchedIntendedActivities.includes("fish_farming_lakes") && (
+                   (watchedIntendedActivities.includes("fish_farming_lakes") || watchedIntendedActivities.includes("recreation_activities")) && (
                     <div className="space-y-4">
                       <FormField
                         control={form.control}
@@ -3359,7 +3370,7 @@ export function ApplicationForm({
 
                       <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <p className="text-sm text-yellow-800">
-                          <strong>Note:</strong> This concession area is required for fish farming in lakes. Each polygon needs at least 4 points.
+                          <strong>Note:</strong> This concession area is required for fish farming in lakes and recreational activities. Each polygon needs at least 4 points.
                           If you have multiple separate areas, add multiple polygons.
                         </p>
                       </div>
@@ -3802,7 +3813,8 @@ export function ApplicationForm({
                                     <Input
                                       type="number"
                                       {...field}
-                                      onChange={(e) => field.onChange(Number(e.target.value))}
+                                      value={field.value ?? ""}
+                                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                       placeholder="e.g., 10000"
                                     />
                                   </FormControl>
@@ -3838,7 +3850,7 @@ export function ApplicationForm({
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Name of the lake</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Number of cages</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Capacity of each cage</th>
-                                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Concession area (m² or ha)</th>
+                                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Concession area (m²)</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -3933,7 +3945,7 @@ export function ApplicationForm({
                                 <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-4">
                                   <thead>
                                     <tr className="bg-gray-50 dark:bg-gray-700">
-                                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Pond Surface (m² or ha)</th>
+                                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Pond Surface (m²)</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Pond Capacity (m³)</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Frequency of refilling water in ponds (number / month)</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Amount of water to be used (m³/month)</th>
@@ -4058,71 +4070,104 @@ export function ApplicationForm({
                             Industrial Water Use Details
                           </h4>
                           
-                          <div className="overflow-x-auto mb-6">
-                            <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
-                              <thead>
-                                <tr className="bg-gray-50 dark:bg-gray-700">
-                                  <th className="border border-gray-300 dark:border-gray-600 p-3 text-left text-sm font-medium">INDUSTRIES (Type of industry)</th>
-                                  <th className="border border-gray-300 dark:border-gray-600 p-3 text-left text-sm font-medium">Quantity of abstracted water (m³/day)</th>
-                                  <th className="border border-gray-300 dark:border-gray-600 p-3 text-left text-sm font-medium">(m³/month)</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {[
-                                  'Food Processing',
-                                  'Horticultural Packaging', 
-                                  'Chemical Manufacturing',
-                                  'Mineral water',
-                                  'Brewing/Beverage manufacturing',
-                                  'Fruit and vegetable canning or pickling',
-                                  'Others (Specify)'
-                                ].map((industry, index) => (
-                                  <tr key={index}>
-                                    <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">{industry}</td>
-                                    <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                      <FormField
-                                        control={form.control}
-                                        name={`industryDetails.${index}.dailyQuantity`}
-                                        render={({ field }) => (
-                                          <FormControl>
-                                            <Input
-                                              {...field}
-                                              type="number"
-                                              step="0.01"
-                                              placeholder="Daily (m³)"
-                                              className="border-0 bg-transparent"
-                                              value={field.value ?? ""}
-                                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                              disabled={readOnly}
-                                            />
-                                          </FormControl>
-                                        )}
-                                      />
-                                    </td>
-                                    <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                      <FormField
-                                        control={form.control}
-                                        name={`industryDetails.${index}.monthlyQuantity`}
-                                        render={({ field }) => (
-                                          <FormControl>
-                                            <Input
-                                              {...field}
-                                              type="number"
-                                              step="0.01"
-                                              placeholder="Monthly (m³)"
-                                              className="border-0 bg-transparent"
-                                              value={field.value ?? ""}
-                                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                              disabled={readOnly}
-                                            />
-                                          </FormControl>
-                                        )}
-                                      />
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                          <div className="space-y-4 mb-6">
+                            <FormField
+                              control={form.control}
+                              name="industryDetails.0.industryType"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Type of Industry *</FormLabel>
+                                  <Select
+                                    onValueChange={(val) => {
+                                      field.onChange(val);
+                                      const details = form.getValues('industryDetails') || [];
+                                      if (details.length > 0) {
+                                        form.setValue('industryDetails', [{ industryType: val, dailyQuantity: details[0]?.dailyQuantity, monthlyQuantity: details[0]?.monthlyQuantity }]);
+                                      }
+                                    }}
+                                    value={field.value || ""}
+                                    disabled={readOnly}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select type of industry" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="Food Processing">Food Processing</SelectItem>
+                                      <SelectItem value="Horticultural Packaging">Horticultural Packaging</SelectItem>
+                                      <SelectItem value="Chemical Manufacturing">Chemical Manufacturing</SelectItem>
+                                      <SelectItem value="Mineral water">Mineral water</SelectItem>
+                                      <SelectItem value="Brewing/Beverage manufacturing">Brewing/Beverage manufacturing</SelectItem>
+                                      <SelectItem value="Fruit and vegetable canning or pickling">Fruit and vegetable canning or pickling</SelectItem>
+                                      <SelectItem value="Others (Specify)">Others (Specify)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+
+                            {form.watch('industryDetails.0.industryType') && (
+                              <div className="overflow-x-auto">
+                                <table className="w-full border-collapse border border-gray-300 dark:border-gray-600">
+                                  <thead>
+                                    <tr className="bg-gray-50 dark:bg-gray-700">
+                                      <th className="border border-gray-300 dark:border-gray-600 p-3 text-left text-sm font-medium">Selected Industry</th>
+                                      <th className="border border-gray-300 dark:border-gray-600 p-3 text-left text-sm font-medium">Quantity of abstracted water (m³/day)</th>
+                                      <th className="border border-gray-300 dark:border-gray-600 p-3 text-left text-sm font-medium">(m³/month)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    <tr>
+                                      <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">
+                                        {form.watch('industryDetails.0.industryType')}
+                                      </td>
+                                      <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                        <FormField
+                                          control={form.control}
+                                          name="industryDetails.0.dailyQuantity"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                {...field}
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="Daily (m³)"
+                                                className="border-0 bg-transparent"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                                disabled={readOnly}
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
+                                      </td>
+                                      <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                        <FormField
+                                          control={form.control}
+                                          name="industryDetails.0.monthlyQuantity"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                {...field}
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="Monthly (m³)"
+                                                className="border-0 bg-transparent"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                                disabled={readOnly}
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
+                                      </td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </div>
 
                           {renderRequiredAttachmentsForActivity("industry")}
@@ -4151,7 +4196,7 @@ export function ApplicationForm({
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Distance between intake and Power House (m or km)</td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Distance between intake and Power House (m)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <Input placeholder="Distance" className="border-0 bg-transparent" />
                                   </td>
@@ -4195,6 +4240,63 @@ export function ApplicationForm({
                           <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
                             Construction of Dam Details
                           </h4>
+
+                          <div className="mb-6 space-y-4">
+                            <Label className="text-base font-medium">Construction Point (Location)</Label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="waterSourceLatitude"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Latitude *</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="text"
+                                        value={(field.value ?? "").toString()}
+                                        placeholder="e.g., -1.9441"
+                                        disabled={readOnly}
+                                        onChange={(e) => {
+                                          if (readOnly) return;
+                                          field.onChange(e.target.value);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="waterSourceLongitude"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Longitude *</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="text"
+                                        value={(field.value ?? "").toString()}
+                                        placeholder="e.g., 29.8739"
+                                        disabled={readOnly}
+                                        onChange={(e) => {
+                                          if (readOnly) return;
+                                          field.onChange(e.target.value);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-sm text-blue-800">
+                                <strong>Note:</strong> Provide the coordinates of the dam construction point.
+                              </p>
+                            </div>
+                          </div>
                           
                           <div className="overflow-x-auto">
                             <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-6">
@@ -4252,30 +4354,90 @@ export function ApplicationForm({
                         </div>
                       )}
 
-                      {/* Infrastructure Construction Details */}
+                      {/* Construction or Installation of Infrastructure Details */}
                       {watchedIntendedActivities?.includes("construction_of_infrastructures") && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
                           <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
-                            Infrastructure Construction Details
+                            Construction or Installation of Infrastructure Details
                           </h4>
+
+                          <div className="mb-6 space-y-4">
+                            <Label className="text-base font-medium">Construction or Installation Site</Label>
+                            <p className="text-sm text-muted-foreground">
+                              Provide the location of the construction or installation site. You can provide a single point (LAT/LONG) or use the polygon input in the Water Source tab for multi-point areas.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField
+                                control={form.control}
+                                name="waterSourceLatitude"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Latitude *</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="text"
+                                        value={(field.value ?? "").toString()}
+                                        placeholder="e.g., -1.9441"
+                                        disabled={readOnly}
+                                        onChange={(e) => {
+                                          if (readOnly) return;
+                                          field.onChange(e.target.value);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={form.control}
+                                name="waterSourceLongitude"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Longitude *</FormLabel>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        type="text"
+                                        value={(field.value ?? "").toString()}
+                                        placeholder="e.g., 29.8739"
+                                        disabled={readOnly}
+                                        onChange={(e) => {
+                                          if (readOnly) return;
+                                          field.onChange(e.target.value);
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-sm text-blue-800">
+                                <strong>Note:</strong> Provide the coordinates of the construction or installation site.
+                              </p>
+                            </div>
+                          </div>
                           
                           <div className="overflow-x-auto">
                             <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-6">
                               <tbody>
                                 <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of construction</td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of construction or installation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe purpose of construction" className="border-0 bg-transparent min-h-[60px]" />
+                                    <Textarea placeholder="Describe purpose of construction or installation" className="border-0 bg-transparent min-h-[60px]" />
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the construction project (Materials, construction methods, temporary facilities, impact on water flow, impact on water quality, etc.)</td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project (Materials, construction methods, temporary facilities, impact on water flow, impact on water quality, etc.)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <Textarea placeholder="Detailed project description..." className="border-0 bg-transparent min-h-[120px]" />
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction</td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction or installation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <Select>
                                       <SelectTrigger className="border-0 bg-transparent h-8">
@@ -4315,62 +4477,6 @@ export function ApplicationForm({
                         </div>
                       )}
 
-                      {/* Navigation Details */}
-                      {watchedIntendedActivities?.includes("navigation") && (
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
-                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
-                            Navigation Details
-                          </h4>
-                          
-                          <div className="overflow-x-auto">
-                            <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-6">
-                              <tbody>
-                                <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Type of navigation activity</td>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Specify navigation type" className="border-0 bg-transparent" />
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project</td>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe the navigation project..." className="border-0 bg-transparent min-h-[120px]" />
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Coordinates of the navigation area</td>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Enter coordinates" className="border-0 bg-transparent" />
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected duration of navigation activities</td>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select>
-                                      <SelectTrigger className="border-0 bg-transparent h-8">
-                                        <SelectValue placeholder="Select duration type" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="permanent">Permanent</SelectItem>
-                                        <SelectItem value="seasonal">Seasonal</SelectItem>
-                                        <SelectItem value="temporary">Temporary</SelectItem>
-                                        <SelectItem value="annual">Annual</SelectItem>
-                                        <SelectItem value="monthly">Monthly</SelectItem>
-                                        <SelectItem value="weekly">Weekly</SelectItem>
-                                        <SelectItem value="other">Other</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </td>
-                                </tr>
-                              </tbody>
-                            </table>
-                          </div>
-
-                          {/* No specific annex/required attachments defined for Navigation in the original annex list */}
-                          <AdditionalDocumentsSection category="navigation" activityType="navigation" />
-                        </div>
-                      )}
-
                       {/* Recreational Activities Details */}
                       {watchedIntendedActivities?.includes("recreation_activities") && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
@@ -4391,12 +4497,6 @@ export function ApplicationForm({
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <Textarea placeholder="Describe the recreational project..." className="border-0 bg-transparent min-h-[120px]" />
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Coordinates of the recreation area</td>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Enter coordinates" className="border-0 bg-transparent" />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4443,8 +4543,8 @@ export function ApplicationForm({
                   {/* 15. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && a !== "fish_farming_lakes");
-                    // Show for any abstraction activity (fish_farming_ponds needs single-point abstraction details)
+                    const nonAbstractionActivities = ["fish_farming_lakes", "construction_of_dam", "recreation_activities", "construction_of_infrastructures"];
+                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && !nonAbstractionActivities.includes(a));
                     return hasAbstractionActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
@@ -4515,7 +4615,6 @@ export function ApplicationForm({
                                         <SelectItem value="Borehole">Borehole</SelectItem>
                                         <SelectItem value="Spring Capture">Spring Capture</SelectItem>
                                         <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
-                                        <SelectItem value="Rainwater Harvesting">Rainwater Harvesting</SelectItem>
                                         <SelectItem value="Other">Other</SelectItem>
                                       </SelectContent>
                                     </Select>
@@ -4705,7 +4804,18 @@ export function ApplicationForm({
                         )}
                       />
 
-                      {/* Land access documents */}
+                      {form.watch('hasLandAccess') === false && (
+                        <Alert variant="destructive" className="mt-4">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertTitle>Cannot proceed</AlertTitle>
+                          <AlertDescription>
+                            You cannot proceed with this application without access to the land. Please obtain legal access to the land (easement, consent, lease, etc.) before applying for a water permit.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {/* Land access documents - only shown when user has indicated they have access */}
+                      {form.watch('hasLandAccess') === true && (
                       <FormField
                         control={form.control}
                         name={"landAccessDocuments" as any}
@@ -4805,6 +4915,7 @@ export function ApplicationForm({
                           </FormItem>
                         )}
                       />
+                      )}
                     </>
                   )}
 
