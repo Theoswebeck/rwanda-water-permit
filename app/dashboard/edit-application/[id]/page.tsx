@@ -306,7 +306,6 @@ function mapFormDataToApplication(formData: any, status: 'draft' | 'submitted' |
       fishLakeAreaHectares: formData.fishLakeAreaHectares,
       fishLakeNumberOfCages: formData.fishLakeNumberOfCages,
       fishLakeCageCapacity: formData.fishLakeCageCapacity,
-      fishLakeConcessionCoordinates: formData.fishLakeConcessionCoordinates,
       fishPondsDiscardWaterQuantityM3PerDay: formData.fishPondsDiscardWaterQuantityM3PerDay,
       
       // Terms & Conditions

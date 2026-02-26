@@ -418,7 +418,6 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       fishLakeAreaHectares: formData.fishLakeAreaHectares,
       fishLakeNumberOfCages: formData.fishLakeNumberOfCages,
       fishLakeCageCapacity: formData.fishLakeCageCapacity,
-      fishLakeConcessionCoordinates: formData.fishLakeConcessionCoordinates,
       fishPondsDiscardWaterQuantityM3PerDay: formData.fishPondsDiscardWaterQuantityM3PerDay,
       
       // Irrigation structured fields
@@ -470,7 +469,6 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
   return mappedData;
 }
 
-
 /**
  * Enriches modification_changes with missing `previous` values.
  *
@@ -502,7 +500,7 @@ export function enrichModificationChanges(
     }
   }
 
-  // Map of form field names -> application-level column names (fallback sources)
+  // Map of form field names → application-level column names (fallback sources)
   const columnFallbacks: Record<string, string> = {
     permitLengthYears: 'proposed_duration_years',
     intendedActivities: 'intended_activities',
@@ -517,7 +515,7 @@ export function enrichModificationChanges(
       // Previous value exists, keep as-is
       enriched[fieldName] = { previous: change.previous, current: change.current };
     } else {
-      // Previous value is missing - try to reconstruct from original application
+      // Previous value is missing – try to reconstruct from original application
       let reconstructedPrevious: any = null;
 
       // 1. Try internal_notes form data

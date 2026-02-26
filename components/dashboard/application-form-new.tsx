@@ -209,7 +209,6 @@ const applicationFormSchema = z.object({
   fishLakeAreaHectares: z.number().optional(),
   fishLakeNumberOfCages: z.number().optional(),
   fishLakeCageCapacity: z.number().optional(),
-  fishLakeConcessionCoordinates: z.string().optional(),
   fishPondsDiscardWaterQuantityM3PerDay: z.number().optional(),
   
   // Irrigation specific fields
@@ -573,14 +572,6 @@ export function ApplicationForm({
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
 
-  const formatPolygonCoordinatesForDisplay = useCallback((coords?: Array<{ latitude: string; longitude: string }>) => {
-    if (!coords || !Array.isArray(coords) || coords.length === 0) return "";
-    const pairs = coords
-      .filter((c) => c && typeof c.latitude === "string" && typeof c.longitude === "string")
-      .map((c) => `${c.latitude},${c.longitude}`)
-      .filter(Boolean);
-    return pairs.join("; ");
-  }, []);
   
   // ⚡ PERFORMANCE: Memoize location states to reduce re-renders
   const [selectedProvince, setSelectedProvince] = useState("");
@@ -818,7 +809,6 @@ export function ApplicationForm({
       fishLakeAreaHectares: undefined,
       fishLakeNumberOfCages: undefined,
       fishLakeCageCapacity: undefined,
-      fishLakeConcessionCoordinates: "",
       fishPondsDiscardWaterQuantityM3PerDay: undefined,
       irrigationCropType: "",
       irrigationGrowingSeasonFrom: "",
@@ -1468,19 +1458,6 @@ export function ApplicationForm({
           return a;
         });
       }
-      if (
-        (!normalizedInitialData.fishLakeConcessionCoordinates || normalizedInitialData.fishLakeConcessionCoordinates.trim() === "") &&
-        (Array.isArray((normalizedInitialData as any).waterSourcePolygons) || Array.isArray((normalizedInitialData as any).waterSourceCoordinates))
-      ) {
-        const firstPoly =
-          Array.isArray((normalizedInitialData as any).waterSourcePolygons) && (normalizedInitialData as any).waterSourcePolygons?.[0]
-            ? (normalizedInitialData as any).waterSourcePolygons[0]
-            : (normalizedInitialData as any).waterSourceCoordinates;
-        if (Array.isArray(firstPoly)) {
-          normalizedInitialData.fishLakeConcessionCoordinates = formatPolygonCoordinatesForDisplay(firstPoly);
-        }
-      }
-
       form.reset({
         // Start with defaults
         fullNameApplicant: "",
@@ -1552,7 +1529,6 @@ export function ApplicationForm({
         fishLakeAreaHectares: undefined,
         fishLakeNumberOfCages: undefined,
         fishLakeCageCapacity: undefined,
-        fishLakeConcessionCoordinates: "",
         fishPondsDiscardWaterQuantityM3PerDay: undefined,
         irrigationCropType: "",
         irrigationGrowingSeasonFrom: "",
@@ -1638,7 +1614,7 @@ export function ApplicationForm({
         console.log('📎 No additionalDocuments in initialData:', { has: !!initialData.additionalDocuments, isArray: Array.isArray(initialData.additionalDocuments) });
       }
     }
-  }, [initialData, form, formatPolygonCoordinatesForDisplay]);
+  }, [initialData, form]);
 
   // Load initial documents when provided
   useEffect(() => {
@@ -3865,7 +3841,6 @@ export function ApplicationForm({
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Number of cages</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Capacity of each cage</th>
                                       <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Concession area (m² or ha)</th>
-                                      <th className="border border-gray-300 dark:border-gray-600 p-2 text-left text-sm font-medium">Coordinates of concession area</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -3943,22 +3918,6 @@ export function ApplicationForm({
                                   className="border-0 bg-transparent" 
                                 />
                               </FormControl>
-                                          )}
-                                        />
-                                      </td>
-                                      <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <FormField
-                                          control={form.control}
-                                          name="fishLakeConcessionCoordinates"
-                                          render={({ field }) => (
-                                            <FormControl>
-                                              <Input
-                                                {...field}
-                                                value={field.value ?? ""}
-                                                placeholder="Coordinates"
-                                                className="border-0 bg-transparent"
-                                              />
-                                            </FormControl>
                                           )}
                                         />
                                       </td>
