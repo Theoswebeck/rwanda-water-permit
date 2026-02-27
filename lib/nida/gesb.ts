@@ -43,9 +43,6 @@ export type GesbCitizenInfoError = {
 
 type TokenCache = { token: string; expiresAtMs: number }
 
-let cachedToken: TokenCache | null = null
-let inflightAuth: Promise<TokenCache> | null = null
-
 function requiredEnv(name: string): string {
   const v = process.env[name]
   if (!v || !v.trim()) {
@@ -57,11 +54,6 @@ function requiredEnv(name: string): string {
 function getBaseUrl(): string {
   const raw = requiredEnv('NIDA_BASE_URL')
   return raw.replace(/\/+$/, '')
-}
-
-function isAuthExpired(cache: TokenCache): boolean {
-  // Add a small skew so we refresh before actual expiry.
-  return Date.now() > cache.expiresAtMs - 60_000
 }
 
 async function authenticate(): Promise<TokenCache> {
@@ -103,19 +95,9 @@ async function authenticate(): Promise<TokenCache> {
 }
 
 async function getBearerToken(): Promise<string> {
-  if (cachedToken && !isAuthExpired(cachedToken)) return cachedToken.token
-
-  if (!inflightAuth) {
-    inflightAuth = (async () => {
-      const t = await authenticate()
-      cachedToken = t
-      return t
-    })().finally(() => {
-      inflightAuth = null
-    })
-  }
-
-  const t = await inflightAuth
+  // Per deployment requirement: always regenerate a token before each data call.
+  // This avoids relying on cached JWT state across requests.
+  const t = await authenticate()
   return t.token
 }
 
@@ -151,12 +133,11 @@ export async function fetchNidaCitizenInfo(documentNumberRaw: string): Promise<G
     return { res, json }
   }
 
-  // Attempt once with cached/new token; on 401, re-auth and retry once.
+  // Attempt once with fresh token; on 401, re-auth and retry once.
   const token1 = await getBearerToken()
   let { res, json } = await doRequest(token1)
 
   if (res.status === 401) {
-    cachedToken = null
     const token2 = await getBearerToken()
     ;({ res, json } = await doRequest(token2))
   }
