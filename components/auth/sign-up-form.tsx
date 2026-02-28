@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ProvinceType } from "@/types/database";
@@ -717,6 +717,27 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       transition={{ duration: 0.25, ease: "easeOut" }}
                       className="space-y-4"
                     >
+                      {nidaEnabled && nidaVerified && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ duration: 0.28, ease: "easeOut" }}
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
+                          aria-live="polite"
+                        >
+                          <div className="flex items-center gap-2 text-emerald-800">
+                            <motion.span
+                              initial={{ scale: 0.8, rotate: -12 }}
+                              animate={{ scale: [0.8, 1.12, 1], rotate: [0, 8, 0] }}
+                              transition={{ duration: 0.4, ease: "easeOut" }}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </motion.span>
+                            <span className="text-xs font-medium">National ID verified successfully</span>
+                          </div>
+                        </motion.div>
+                      )}
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="idType">ID Type</Label>
