@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -463,6 +463,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     }
   };
 
+  const showNidaFirstStep = accountType === "individual" && nidaEnabled;
+  const showIndividualDetails = !showNidaFirstStep || nidaVerified;
+  const showIndividualCredentials = !showNidaFirstStep || nidaVerified;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -651,228 +655,288 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             
             <TabsContent value="individual">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="07XXXXXXXX"
-                    required
-                    value={phone}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setPhone(v);
-                      if (phoneError) validateRwandaPhone(v, setPhoneError);
-                      else if (v.trim()) validateRwandaPhone(v, setPhoneError);
-                      if (error) onClearError?.();
-                    }}
-                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
-                      phoneError ? 'border-red-500 focus:ring-red-500' : ''
-                    }`}
-                    disabled={isLoading}
-                  />
-                  {phoneError && (
-                    <p className="text-xs text-red-500 mt-1">{phoneError}</p>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="idType">ID Type</Label>
-                    <Select 
-                      value={idType} 
-                      onValueChange={(v) => {
-                        setIdType(v);
-                        if (error) onClearError?.();
-                      }}
-                      defaultValue="nationalId"
-                      disabled={isLoading}
-                    >
-                      <SelectTrigger id="idType" className="w-full">
-                        <SelectValue placeholder="National ID" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="nationalId">National ID</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="idNumber">ID Number</Label>
-                    <Input 
-                      id="idNumber" 
-                      type="text" 
-                      inputMode="numeric"
-                      pattern="\d*"
-                      maxLength={16}
-                      placeholder="Enter your ID number (16 digits)"
-                      required 
-                      value={idNumber}
-                      onChange={handleIdNumberChange}
-                      onBlur={() => {
-                        if (idNumber.trim()) validateNationalId(idNumber);
-                        if (nidaEnabled && idNumber.replace(/\D/g, "").length === 16) {
-                          void verifyWithNida(idNumber.replace(/\D/g, ""));
-                        }
-                      }}
-                      className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
-                        idNumberError ? 'border-red-500 focus:ring-red-500' : ''
-                      }`}
-                      disabled={isLoading}
-                    />
-                    {idNumberError && (
-                      <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
-                    )}
-                    {nidaEnabled && nidaError && (
-                      <p className="text-xs text-red-500 mt-1">{nidaError}</p>
-                    )}
-                    {nidaEnabled && !nidaError && nidaChecking && (
-                      <p className="text-xs text-muted-foreground mt-1">Verifying National ID with NIDA…</p>
-                    )}
-                    {nidaEnabled && !nidaError && nidaVerified && (
-                      <p className="text-xs text-green-700 mt-1">National ID verified.</p>
-                    )}
-                    {!idNumberError && idType === "nationalId" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Must be exactly 16 digits ({idNumber.length}/16).
+                {showNidaFirstStep && !nidaVerified ? (
+                  <div className="rounded-xl border bg-muted/30 p-4">
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-foreground">Verify National ID to continue</p>
+                      <p className="text-xs text-muted-foreground">
+                        Enter your 16-digit NIDA ID. We will fetch your details automatically.
                       </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input
-                      id="firstName"
-                      type="text"
-                      placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
-                      required
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading || (nidaEnabled && nidaVerified)}
-                      readOnly={nidaEnabled && nidaVerified}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      type="text"
-                      placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
-                      required
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading || (nidaEnabled && nidaVerified)}
-                      readOnly={nidaEnabled && nidaVerified}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="province">Province</Label>
-                  <Input
-                    id="province"
-                    type="text"
-                    placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
-                    value={province}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    disabled={isLoading || nidaEnabled}
-                    readOnly
-                  />
-                  {nidaEnabled && nidaVerified && !province && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Province could not be mapped from NIDA response.
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input
-                    id="dateOfBirth"
-                    type="date"
-                    required
-                    value={dateOfBirth}
-                    max={getMaxAdultDob()}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setDateOfBirth(v);
-                      validateDateOfBirth(v);
-                      if (error) onClearError?.();
-                    }}
-                    onBlur={() => {
-                      if (dateOfBirth) validateDateOfBirth(dateOfBirth);
-                    }}
-                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
-                      dateOfBirthError ? 'border-red-500 focus:ring-red-500' : ''
-                    }`}
-                    disabled={isLoading || (nidaEnabled && nidaVerified)}
-                    readOnly={nidaEnabled && nidaVerified}
-                  />
-                  {dateOfBirthError && (
-                    <p className="text-xs text-red-500 mt-1">{dateOfBirthError}</p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="personEmail">Email</Label>
-                  <Input 
-                    id="personEmail" 
-                    type="email" 
-                    placeholder="" 
-                    required 
-                    value={email}
-                    onChange={handleEmailChange}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    disabled={isLoading}
-                  />
-                  {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="personPassword">Password</Label>
-                  <div className="relative">
-                    <Input 
-                      id="personPassword" 
-                      type={showPassword ? "text" : "password"}
-                      required 
-                      value={password}
-                      onChange={handlePasswordChange}
-                      className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading}
-                    />
-                    <button 
-                      type="button" 
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      onClick={() => setShowPassword(!showPassword)}
-                      disabled={isLoading}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="idNumber">NIDA ID Number</Label>
+                      <Input
+                        id="idNumber"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d*"
+                        maxLength={16}
+                        placeholder="Enter your ID number (16 digits)"
+                        required
+                        value={idNumber}
+                        onChange={handleIdNumberChange}
+                        onBlur={() => {
+                          if (idNumber.trim()) validateNationalId(idNumber);
+                          if (nidaEnabled && idNumber.replace(/\D/g, "").length === 16) {
+                            void verifyWithNida(idNumber.replace(/\D/g, ""));
+                          }
+                        }}
+                        className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                          idNumberError ? 'border-red-500 focus:ring-red-500' : ''
+                        }`}
+                        disabled={isLoading}
+                      />
+                      {idNumberError && (
+                        <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
                       )}
-                    </button>
+                      {nidaEnabled && nidaError && (
+                        <p className="text-xs text-red-500 mt-1">{nidaError}</p>
+                      )}
+                      {nidaEnabled && !nidaError && nidaChecking && (
+                        <p className="text-xs text-muted-foreground mt-1">Verifying National ID with NIDA…</p>
+                      )}
+                      {nidaEnabled && !nidaError && nidaVerified && (
+                        <p className="text-xs text-green-700 mt-1">National ID verified.</p>
+                      )}
+                      {!idNumberError && idType === "nationalId" && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Must be exactly 16 digits ({idNumber.length}/16).
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
-                </div>
+                ) : null}
 
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={isLoading || !individualFormReady}
-                >
-                  {isLoading ? "Please wait..." : (
-                    <>
-                      Continue
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
+                <AnimatePresence initial={false}>
+                  {showIndividualDetails && (
+                    <motion.div
+                      key="individual-details"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="space-y-4"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="idType">ID Type</Label>
+                          <Select
+                            value={idType}
+                            onValueChange={(v) => {
+                              setIdType(v);
+                              if (error) onClearError?.();
+                            }}
+                            defaultValue="nationalId"
+                            disabled={isLoading}
+                          >
+                            <SelectTrigger id="idType" className="w-full">
+                              <SelectValue placeholder="National ID" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="nationalId">National ID</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="idNumberExpanded">ID Number</Label>
+                          <Input
+                            id="idNumberExpanded"
+                            type="text"
+                            inputMode="numeric"
+                            pattern="\d*"
+                            maxLength={16}
+                            placeholder="Enter your ID number (16 digits)"
+                            required
+                            value={idNumber}
+                            onChange={handleIdNumberChange}
+                            onBlur={() => {
+                              if (idNumber.trim()) validateNationalId(idNumber);
+                              if (nidaEnabled && idNumber.replace(/\D/g, "").length === 16) {
+                                void verifyWithNida(idNumber.replace(/\D/g, ""));
+                              }
+                            }}
+                            className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                              idNumberError ? 'border-red-500 focus:ring-red-500' : ''
+                            }`}
+                            disabled={isLoading}
+                          />
+                          {idNumberError && (
+                            <p className="text-xs text-red-500 mt-1">{idNumberError}</p>
+                          )}
+                          {!idNumberError && idType === "nationalId" && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Must be exactly 16 digits ({idNumber.length}/16).
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName">First Name</Label>
+                          <Input
+                            id="firstName"
+                            type="text"
+                            placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                            required
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                            disabled={isLoading || (nidaEnabled && nidaVerified)}
+                            readOnly={nidaEnabled && nidaVerified}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName">Last Name</Label>
+                          <Input
+                            id="lastName"
+                            type="text"
+                            placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                            required
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                            disabled={isLoading || (nidaEnabled && nidaVerified)}
+                            readOnly={nidaEnabled && nidaVerified}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="province">Province</Label>
+                        <Input
+                          id="province"
+                          type="text"
+                          placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                          value={province}
+                          className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                          disabled={isLoading || nidaEnabled}
+                          readOnly
+                        />
+                        {nidaEnabled && nidaVerified && !province && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Province could not be mapped from NIDA response.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                        <Input
+                          id="dateOfBirth"
+                          type="date"
+                          required
+                          value={dateOfBirth}
+                          max={getMaxAdultDob()}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setDateOfBirth(v);
+                            validateDateOfBirth(v);
+                            if (error) onClearError?.();
+                          }}
+                          onBlur={() => {
+                            if (dateOfBirth) validateDateOfBirth(dateOfBirth);
+                          }}
+                          className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                            dateOfBirthError ? 'border-red-500 focus:ring-red-500' : ''
+                          }`}
+                          disabled={isLoading || (nidaEnabled && nidaVerified)}
+                          readOnly={nidaEnabled && nidaVerified}
+                        />
+                        {dateOfBirthError && (
+                          <p className="text-xs text-red-500 mt-1">{dateOfBirthError}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <Input
+                          id="phone"
+                          type="tel"
+                          placeholder="07XXXXXXXX"
+                          required
+                          value={phone}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setPhone(v);
+                            if (phoneError) validateRwandaPhone(v, setPhoneError);
+                            else if (v.trim()) validateRwandaPhone(v, setPhoneError);
+                            if (error) onClearError?.();
+                          }}
+                          className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                            phoneError ? 'border-red-500 focus:ring-red-500' : ''
+                          }`}
+                          disabled={isLoading}
+                        />
+                        {phoneError && (
+                          <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+                        )}
+                      </div>
+
+                      {showIndividualCredentials && (
+                        <>
+                          <div className="space-y-2">
+                            <Label htmlFor="personEmail">Email</Label>
+                            <Input
+                              id="personEmail"
+                              type="email"
+                              placeholder=""
+                              required
+                              value={email}
+                              onChange={handleEmailChange}
+                              className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                              disabled={isLoading}
+                            />
+                            {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="personPassword">Password</Label>
+                            <div className="relative">
+                              <Input
+                                id="personPassword"
+                                type={showPassword ? "text" : "password"}
+                                required
+                                value={password}
+                                onChange={handlePasswordChange}
+                                className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
+                                disabled={isLoading}
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                onClick={() => setShowPassword(!showPassword)}
+                                disabled={isLoading}
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </button>
+                            </div>
+                            {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+                          </div>
+
+                          <Button
+                            type="submit"
+                            className="w-full"
+                            disabled={isLoading || !individualFormReady}
+                          >
+                            {isLoading ? "Please wait..." : (
+                              <>
+                                Continue
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      )}
+                    </motion.div>
                   )}
-                </Button>
+                </AnimatePresence>
               </form>
             </TabsContent>
           </Tabs>
