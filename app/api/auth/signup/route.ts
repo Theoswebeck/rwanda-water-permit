@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { verifyNationalId } from '@/lib/nida/gesb'
-
-function getSupabaseProjectRef(supabaseUrl: string): string | null {
-  try {
-    const u = new URL(supabaseUrl)
-    const host = u.hostname || ''
-    // Typical: https://<ref>.supabase.co
-    const first = host.split('.')[0]
-    return first || null
-  } catch {
-    return null
-  }
-}
+import { query } from '@/lib/db/postgres'
+import { hashPassword } from '@/lib/auth/password'
 
 export async function POST(req: NextRequest) {
   try {
@@ -97,140 +86,92 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceKey) {
-      return NextResponse.json({ success: false, message: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing' }, { status: 500 })
-    }
-    const supabase = createClient(url, serviceKey)
-
     const emailLower = String(email).trim().toLowerCase()
-    const supabaseRef = getSupabaseProjectRef(url)
-    const supabaseHost = (() => {
-      try { return new URL(url).hostname } catch { return null }
-    })()
+    const passwordHash = await hashPassword(String(password))
 
-    // Debug: when users report "email already exists" but DB shows none,
-    // it's usually because the app is pointed at a different Supabase project/environment.
-    console.log('🔎 signup: supabaseHost=', supabaseHost, 'projectRef=', supabaseRef, 'email=', emailLower)
-
-    // Pre-check: if a profile already exists for this email (case-insensitive),
-    // fail early with a friendly message instead of creating an auth user then crashing on unique(email).
-    try {
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id,email')
-        .ilike('email', emailLower)
-        .maybeSingle()
-
-      if (existing?.id) {
-        console.log('🔎 signup: existing profile found for email=', emailLower, 'id=', existing.id)
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              'An account with this email already exists. Please log in instead, or delete the existing user before signing up again.',
-            ...(process.env.NODE_ENV !== 'production'
-              ? { debug: { supabaseHost, supabaseProjectRef: supabaseRef } }
-              : {}),
-          },
-          { status: 409 }
-        )
-      }
-    } catch {
-      // ignore pre-check failures; we still have the unique constraint as a backstop
+    const existing = await query<{ id: string }>(
+      `select id from public.users where lower(email) = $1 limit 1`,
+      [emailLower]
+    )
+    if (existing.rows[0]?.id) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'An account with this email already exists. Please log in instead, or delete the existing user before signing up again.',
+        },
+        { status: 409 }
+      )
     }
 
-    // Email verification already happened in the dialog - the code was consumed there
-    // We trust the frontend only calls this after successful verification
+    const isIndividual = accountType === 'individual'
+    const idDigits = String(rest?.identification?.number || rest?.idNumber || '').replace(/\D/g, '')
 
-    // Create auth user with confirmed email
-    const { data: userCreate, error: userError } = await supabase.auth.admin.createUser({
-      email: emailLower,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        role: 'applicant',
-        status: 'active',
-        account_type: accountType
-      }
-    })
+    const inserted = await query<{ id: string }>(
+      `
+      insert into public.users (
+        email,
+        password_hash,
+        role,
+        status,
+        account_type,
+        id_type,
+        id_number,
+        first_name,
+        last_name,
+        date_of_birth,
+        phone,
+        province,
+        company_name,
+        company_tin,
+        company_address,
+        company_phone,
+        applications_count,
+        reviews_count,
+        inspections_count,
+        profile_completed,
+        account_confirmed,
+        email_verified
+      ) values (
+        $1, $2, 'applicant', 'active', $3::public.account_type, $4::public.id_type, $5,
+        $6, $7, $8::date, $9, $10::public.province_type,
+        $11, $12, $13, $14,
+        0, 0, 0, false, false, false
+      )
+      returning id
+      `,
+      [
+        emailLower,
+        passwordHash,
+        isIndividual ? 'individual' : 'company',
+        isIndividual ? 'national_id' : 'tin',
+        isIndividual ? idDigits : String(rest?.companyTIN || ''),
+        isIndividual ? String(rest?.firstName || 'User') : null,
+        isIndividual ? String(rest?.lastName || 'Profile') : null,
+        isIndividual ? String(rest?.dateOfBirth || '') : null,
+        isIndividual ? String(rest?.phone || '') : null,
+        isIndividual ? (rest?.province || null) : null,
+        isIndividual ? null : String(rest?.companyName || ''),
+        isIndividual ? null : String(rest?.companyTIN || ''),
+        isIndividual ? null : String(rest?.companyAddress || ''),
+        isIndividual ? null : String(rest?.companyPhone || ''),
+      ]
+    )
 
-    if (userError || !userCreate?.user) {
-      console.error('❌ createUser error:', userError)
-      return NextResponse.json({ success: false, message: userError?.message || 'Failed to create user' }, { status: 400 })
-    }
-
-    const userId = userCreate.user.id
-
-    // Build profile data similar to previous client logic
-    const profile: Record<string, any> = {
-      id: userId,
-      email: emailLower,
-      role: 'applicant',
-      status: 'active',
-      account_type: accountType,
-      applications_count: 0,
-      reviews_count: 0,
-      inspections_count: 0,
-      // We confirm the Supabase auth email (so it doesn't require link-click verification),
-      // but we still track app-level email verification via our Resend OTP flow.
-      email_verified: false,
-      email_verified_at: null,
-    }
-
-    if (accountType === 'individual') {
-      profile.first_name = rest.firstName || 'User'
-      profile.last_name = rest.lastName || 'Profile'
-      profile.date_of_birth = rest.dateOfBirth
-      profile.phone = rest.phone
-      profile.province = rest.province || undefined
-      // Store normalized digits (avoid persisting spaces or separators)
-      profile.id_number = String(rest?.identification?.number || rest.idNumber || '').replace(/\D/g, '')
-      profile.id_type = 'national_id'
-      profile.company_name = undefined
-    } else {
-      profile.company_name = rest.companyName
-      profile.company_tin = rest.companyTIN
-      profile.company_address = rest.companyAddress
-      profile.company_phone = rest.companyPhone
-      profile.id_type = 'tin'
-      profile.id_number = rest.companyTIN
-      profile.first_name = undefined
-      profile.last_name = undefined
-    }
-
-    const { error: upsertError } = await supabase
-      .from('users')
-      .upsert(profile, { onConflict: 'id' })
-
-    if (upsertError) {
-      console.error('❌ profile upsert error:', upsertError)
-      // best-effort cleanup
-      try { await supabase.auth.admin.deleteUser(userId) } catch {}
-      const code = (upsertError as any)?.code
-      const message = (upsertError as any)?.message || ''
-      const details = (upsertError as any)?.details || ''
-
-      // If the email unique constraint is hit, it means there's a stale profile row with this email tied to a different id.
-      if (code === '23505' && (message.includes('users_email_key') || details.includes('users_email_key') || details.includes('Key (email)'))) {
-        return NextResponse.json(
-          {
-            success: false,
-            message:
-              'An account/profile with this email already exists in the system. ' +
-              'Please log in instead, or delete the existing row in public.users for this email before signing up again.',
-          },
-          { status: 409 }
-        )
-      }
-
-      return NextResponse.json({ success: false, message: 'Failed to create profile' }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true, userId })
+    return NextResponse.json({ success: true, userId: inserted.rows[0]?.id })
   } catch (err) {
     console.error('❌ signup server error', err)
+    const message = err instanceof Error ? err.message : 'Server error'
+    if (message.includes('users_email_key')) {
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            'An account with this email already exists. Please log in instead, or delete the existing user before signing up again.',
+        },
+        { status: 409 }
+      )
+    }
     return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 })
   }
 }
