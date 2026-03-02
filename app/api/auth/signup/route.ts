@@ -162,12 +162,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('❌ signup server error', err)
     const message = err instanceof Error ? err.message : 'Server error'
-    const isUniqueEmailViolation =
-      (err as { code?: string; constraint?: string } | null)?.code === '23505' ||
-      (err as { code?: string; constraint?: string } | null)?.constraint === 'users_email_key' ||
-      message.includes('users_email_key')
+    const pgErr = err as { code?: string; constraint?: string; detail?: string } | null
+    const isUniqueViolation = pgErr?.code === '23505'
+    const detail = String(pgErr?.detail || '')
+    const isEmailConflict =
+      pgErr?.constraint === 'users_email_key' || /key\s+\(email\)\s*=/.test(detail.toLowerCase())
 
-    if (isUniqueEmailViolation) {
+    if (isUniqueViolation && isEmailConflict) {
       return NextResponse.json(
         {
           success: false,
@@ -177,6 +178,26 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       )
     }
+
+    if (isUniqueViolation) {
+      if (/key\s+\(id_number\)\s*=/.test(detail.toLowerCase())) {
+        return NextResponse.json(
+          { success: false, message: 'An account with this National ID already exists.' },
+          { status: 409 }
+        )
+      }
+      if (/key\s+\(company_tin\)\s*=/.test(detail.toLowerCase())) {
+        return NextResponse.json(
+          { success: false, message: 'An account with this company TIN already exists.' },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json(
+        { success: false, message: process.env.NODE_ENV === 'production' ? 'A duplicate account value already exists.' : `Duplicate value: ${detail || message}` },
+        { status: 409 }
+      )
+    }
+
     return NextResponse.json({ success: false, message: `Server error: ${message}` }, { status: 500 })
   }
 }
