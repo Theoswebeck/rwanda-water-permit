@@ -7,7 +7,24 @@ declare global {
 
 function getConnectionString(): string {
   const fromUrl = process.env.DATABASE_URL
-  if (fromUrl && fromUrl.trim()) return fromUrl.trim()
+  if (fromUrl && fromUrl.trim()) {
+    const value = fromUrl.trim()
+    try {
+      const host = new URL(value).hostname.toLowerCase()
+      const allowSupabaseUrl = process.env.ALLOW_SUPABASE_DATABASE_URL === 'true'
+      if (!allowSupabaseUrl && host.includes('supabase.co')) {
+        throw new Error(
+          'DATABASE_URL points to Supabase. For self-hosted mode, set DATABASE_URL to your local Postgres or use PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD.'
+        )
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('DATABASE_URL points to Supabase')) {
+        throw err
+      }
+      // If URL parsing fails, preserve previous behavior and let pg surface connection errors.
+    }
+    return value
+  }
 
   const host = process.env.PGHOST
   const port = process.env.PGPORT
