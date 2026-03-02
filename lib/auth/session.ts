@@ -21,6 +21,17 @@ export function getSessionTtlSeconds(): number {
   return 60 * 60 * 24 * 30
 }
 
+function getAuthCookieSecure(): boolean {
+  const raw = process.env.AUTH_COOKIE_SECURE?.trim().toLowerCase()
+  if (raw === 'true' || raw === '1' || raw === 'yes') return true
+  if (raw === 'false' || raw === '0' || raw === 'no') return false
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim().toLowerCase()
+  if (appUrl?.startsWith('http://')) return false
+
+  return process.env.NODE_ENV === 'production'
+}
+
 function getJwtSecret(): string {
   const secret = process.env.AUTH_JWT_SECRET?.trim()
   if (!secret) {
@@ -77,7 +88,7 @@ export function setSessionCookie(response: NextResponse, token: string): void {
     name: getAuthCookieName(),
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: getAuthCookieSecure(),
     sameSite: 'lax',
     path: '/',
     maxAge: getSessionTtlSeconds(),
@@ -89,7 +100,7 @@ export function clearSessionCookie(response: NextResponse): void {
     name: getAuthCookieName(),
     value: '',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: getAuthCookieSecure(),
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
