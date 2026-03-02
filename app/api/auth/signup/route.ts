@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     const passwordHash = await hashPassword(String(password))
 
     const existing = await query<{ id: string }>(
-      `select id from public.users where lower(email) = $1 limit 1`,
+      `select id from public.users where lower(trim(email)) = $1 limit 1`,
       [emailLower]
     )
     if (existing.rows[0]?.id) {
@@ -162,7 +162,12 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('❌ signup server error', err)
     const message = err instanceof Error ? err.message : 'Server error'
-    if (message.includes('users_email_key')) {
+    const isUniqueEmailViolation =
+      (err as { code?: string; constraint?: string } | null)?.code === '23505' ||
+      (err as { code?: string; constraint?: string } | null)?.constraint === 'users_email_key' ||
+      message.includes('users_email_key')
+
+    if (isUniqueEmailViolation) {
       return NextResponse.json(
         {
           success: false,
@@ -172,7 +177,7 @@ export async function POST(req: NextRequest) {
         { status: 409 }
       )
     }
-    return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 })
+    return NextResponse.json({ success: false, message: `Server error: ${message}` }, { status: 500 })
   }
 }
 
