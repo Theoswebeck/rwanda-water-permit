@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import serverPhoneVerificationService from '@/lib/phone-verification-server';
+import { query } from '@/lib/db/postgres';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,10 +17,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🔍 API: Checking verification status for user ${userId}`);
+    const result = await query<{ phone_verified: boolean | null }>(
+      `
+      select phone_verified
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [userId]
+    );
 
-    // Check verification status
-    const isVerified = await serverPhoneVerificationService.isPhoneVerified(userId);
+    const isVerified = Boolean(result.rows[0]?.phone_verified);
 
     return NextResponse.json({
       success: true,

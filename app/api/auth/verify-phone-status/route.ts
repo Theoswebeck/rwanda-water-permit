@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query } from '@/lib/db/postgres';
+
+function normalizeRwandaPhoneToE164(raw: string): string | null {
+  const v = String(raw || '').trim();
+  if (!v) return null;
+  const digits = v.replace(/\D/g, '');
+  if (digits.length === 10 && digits.startsWith('07')) return `+250${digits.substring(1)}`;
+  if (digits.length === 12 && digits.startsWith('2507')) return `+${digits}`;
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,28 +28,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if we have proper Supabase configuration
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceRoleKey && serviceRoleKey !== 'your_supabase_service_role_key_here' 
-        ? serviceRoleKey 
-        : anonKey!
+    const normalizedPhone = normalizeRwandaPhoneToE164(phoneNumber);
+    if (!normalizedPhone) {
+      return NextResponse.json(
+        {
+          success: false,
+          verified: false,
+          error: 'Invalid phone number format. Use 07XXXXXXXX (10 digits).',
+        },
+        { status: 400 }
+      );
+    }
+
+    const statusResult = await query<{ status: string | null; sent_at: string | null }>(
+      `
+      select status, sent_at
+      from public.phone_verification_logs
+      where phone_number = $1
+      order by sent_at desc nulls last, created_at desc nulls last, id desc
+      limit 1
+      `,
+      [normalizedPhone]
     );
 
-    // Check if phone number has been verified
-    const { data: verification, error } = await supabase
-      .from('phone_verification_logs')
-      .select('status, expires_at, sent_at')
-      .eq('phone_number', phoneNumber)
-      .eq('status', 'verified')
-      .order('sent_at', { ascending: false })
-      .limit(1)
-      .single();
+    const verification = statusResult.rows[0];
 
-    if (error || !verification) {
+    if (!verification || verification.status !== 'verified') {
       console.log('❌ No verified record found for phone:', phoneNumber);
       return NextResponse.json({
         success: true,

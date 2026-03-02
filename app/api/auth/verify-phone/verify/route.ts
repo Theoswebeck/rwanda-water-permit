@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query } from '@/lib/db/postgres';
 
 function normalizeRwandaPhoneToE164(raw: string): string | null {
   const v = String(raw || '').trim();
@@ -46,172 +46,157 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // In development mode we still verify against the stored code in the database.
-    // (We print the generated code to the server terminal from the send endpoint.)
+    const normalizedCode = String(code).trim();
+    let verificationCode: string | null = null;
+    let verificationExpiresAt: string | null = null;
+    let verificationLogId: number | null = null;
+    let alreadyVerified = false;
 
-    // Production mode - check against database
-    try {
-      // Check if we have proper Supabase configuration
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      
-      if (!serviceRoleKey || serviceRoleKey === 'your_supabase_service_role_key_here') {
-        console.log('⚠️ Service role key not configured, using anon key');
-      }
-      
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        serviceRoleKey && serviceRoleKey !== 'your_supabase_service_role_key_here' 
-          ? serviceRoleKey 
-          : anonKey!
+    // Primary lookup by phone in phone_verification_logs (signup flow).
+    if (normalizedPhone) {
+      const phoneVerification = await query<{
+        id: number;
+        verification_code: string;
+        expires_at: string;
+        status: string | null;
+      }>(
+        `
+        select id, verification_code, expires_at, status
+        from public.phone_verification_logs
+        where phone_number = $1
+        order by sent_at desc nulls last, created_at desc nulls last, id desc
+        limit 1
+        `,
+        [normalizedPhone]
       );
 
-      let verificationData = null;
-
-      // Try to get verification from phone_verification_logs table first (for registration)
-      if (phoneNumber) {
-        console.log('🔍 Looking up verification for phone (suffix):', String(normalizedPhone || '').slice(-3));
-        
-        const { data: phoneVerification, error: phoneError } = await supabase
-          .from('phone_verification_logs')
-          .select('verification_code, expires_at, status')
-          .eq('phone_number', normalizedPhone)
-          .eq('status', 'sent')
-          .order('sent_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        console.log('📊 Database lookup result:', {
-          data: phoneVerification,
-          error: phoneError,
-          phoneSuffix: String(normalizedPhone || '').slice(-3)
-        });
-
-        if (!phoneError && phoneVerification) {
-          verificationData = {
-            phone_verification_code: phoneVerification.verification_code,
-            phone_verification_expires_at: phoneVerification.expires_at,
-            phone_verified: phoneVerification.status === 'verified'
-          };
-          console.log('✅ Found verification data:', verificationData);
-        } else {
-          console.log('❌ No verification data found, error:', phoneError);
-        }
+      const row = phoneVerification.rows[0];
+      if (row) {
+        verificationLogId = row.id;
+        verificationCode = row.verification_code;
+        verificationExpiresAt = row.expires_at;
+        alreadyVerified = row.status === 'verified';
       }
+    }
 
-      // Fallback to users table if userId is provided and no verification found
-      if (!verificationData && userId) {
-        const { data: userVerification, error: userError } = await supabase
-          .from('users')
-          .select('phone_verification_code, phone_verification_expires_at, phone_verified')
-          .eq('id', userId)
-          .single();
+    // Fallback lookup by user from users table.
+    if (!verificationCode && userId) {
+      const userVerification = await query<{
+        phone_verification_code: string | null;
+        phone_verification_expires_at: string | null;
+        phone_verified: boolean | null;
+      }>(
+        `
+        select phone_verification_code, phone_verification_expires_at, phone_verified
+        from public.users
+        where id = $1
+        limit 1
+        `,
+        [userId]
+      );
 
-        if (!userError && userVerification) {
-          verificationData = userVerification;
-        }
+      const row = userVerification.rows[0];
+      if (row) {
+        verificationCode = row.phone_verification_code;
+        verificationExpiresAt = row.phone_verification_expires_at;
+        alreadyVerified = Boolean(row.phone_verified);
       }
+    }
 
-      if (!verificationData) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: 'No verification code found for this phone number',
-            error: 'NO_VERIFICATION_FOUND',
-            verified: false,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Check if already verified
-      if (verificationData.phone_verified) {
-        return NextResponse.json({
-          success: true,
-          message: 'Phone number already verified',
-          verified: true,
-        });
-      }
-
-      // Check if code has expired
-      if (verificationData.phone_verification_expires_at) {
-        const expiresAt = new Date(verificationData.phone_verification_expires_at);
-        if (new Date() > expiresAt) {
-          return NextResponse.json(
-            {
-              success: false,
-              message: 'Verification code has expired',
-              error: 'CODE_EXPIRED',
-              verified: false,
-            },
-            { status: 400 }
-          );
-        }
-      }
-
-      // Verify the code
-      if (!verificationData.phone_verification_code || verificationData.phone_verification_code !== code) {
-        return NextResponse.json(
-          {
-            success: false,
-            message: 'Invalid verification code',
-            error: 'INVALID_CODE',
-            verified: false,
-          },
-          { status: 400 }
-        );
-      }
-
-      // Update verification status
-      if (phoneNumber) {
-        // Update phone_verification_logs table
-        await supabase
-          .from('phone_verification_logs')
-          .update({ status: 'verified' })
-          .eq('phone_number', normalizedPhone)
-          .eq('status', 'sent');
-      }
-
-      if (userId) {
-        // Update users table if userId provided
-        const update: Record<string, any> = {
-          phone_verified: true,
-          phone_verification_code: null,
-          phone_verification_expires_at: null,
-          phone_verification_attempts: 0,
-          // update phone on account after verification
-          phone: normalizedPhone || phoneNumber,
-        };
-        if (accountType === 'company') {
-          update.company_phone = normalizedPhone || phoneNumber;
-        }
-
-        await supabase
-          .from('users')
-          .update(update)
-          .eq('id', userId);
-      }
-
-      console.log('✅ Production phone verification completed successfully');
-
-      return NextResponse.json({
-        success: true,
-        message: 'Phone number verified successfully',
-        verified: true,
-      });
-
-    } catch (error) {
-      console.error('❌ Database error in verification:', error);
+    if (!verificationCode) {
       return NextResponse.json(
         {
           success: false,
-          message: 'Database error during verification',
-          error: 'DATABASE_ERROR',
+          message: 'No verification code found for this phone number',
+          error: 'NO_VERIFICATION_FOUND',
           verified: false,
         },
-        { status: 500 }
+        { status: 400 }
       );
     }
+
+    if (alreadyVerified) {
+      return NextResponse.json({
+        success: true,
+        message: 'Phone number already verified',
+        verified: true,
+      });
+    }
+
+    if (verificationExpiresAt) {
+      const expiresAt = new Date(verificationExpiresAt);
+      if (new Date() > expiresAt) {
+        if (verificationLogId) {
+          await query(
+            `
+            update public.phone_verification_logs
+            set status = 'expired', updated_at = now()
+            where id = $1
+            `,
+            [verificationLogId]
+          );
+        }
+        return NextResponse.json(
+          {
+            success: false,
+            message: 'Verification code has expired',
+            error: 'CODE_EXPIRED',
+            verified: false,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (verificationCode !== normalizedCode) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: 'Invalid verification code',
+          error: 'INVALID_CODE',
+          verified: false,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (verificationLogId) {
+      await query(
+        `
+        update public.phone_verification_logs
+        set status = 'verified', updated_at = now()
+        where id = $1
+        `,
+        [verificationLogId]
+      );
+    }
+
+    if (userId) {
+      const basePhone = normalizedPhone || phoneNumber || null;
+      await query(
+        `
+        update public.users
+        set
+          phone_verified = true,
+          phone_verification_code = null,
+          phone_verification_expires_at = null,
+          phone_verification_attempts = 0,
+          phone = coalesce($2, phone),
+          company_phone = case when $3 = 'company' then coalesce($2, company_phone) else company_phone end,
+          updated_at = now()
+        where id = $1
+        `,
+        [userId, basePhone, accountType || null]
+      );
+    }
+
+    console.log('✅ Phone verification completed successfully');
+
+    return NextResponse.json({
+      success: true,
+      message: 'Phone number verified successfully',
+      verified: true,
+    });
 
   } catch (error) {
     console.error('❌ Error in simple verify code:', error);

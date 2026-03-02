@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query } from '@/lib/db/postgres';
 
 function normalizeRwandaPhoneToE164(raw: string): string | null {
   const v = String(raw || '').trim();
@@ -134,87 +134,61 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store verification code in temporary table (for registration flow)
-    try {
-      // Check if we have proper Supabase configuration
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      
-      if (!serviceRoleKey || serviceRoleKey === 'your_supabase_service_role_key_here') {
-        console.log('⚠️ Service role key not configured, using anon key');
-      }
-      
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        serviceRoleKey && serviceRoleKey !== 'your_supabase_service_role_key_here' 
-          ? serviceRoleKey 
-          : anonKey!
+    // Store verification code in self-hosted PostgreSQL.
+    // Do not swallow DB errors: if code is not persisted, verification cannot work.
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    if (userId) {
+      await query(
+        `
+        update public.phone_verification_logs
+        set status = 'superseded', updated_at = now()
+        where status = 'sent' and user_id = $1
+        `,
+        [userId]
       );
+    }
 
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await query(
+      `
+      update public.phone_verification_logs
+      set status = 'superseded', updated_at = now()
+      where status = 'sent' and phone_number = $1
+      `,
+      [normalizedPhone]
+    );
 
-      // Invalidate any previous pending codes (best effort)
-      try {
-        if (userId) {
-          await supabase
-            .from('phone_verification_logs')
-            .update({ status: 'superseded' })
-            .eq('status', 'sent')
-            .eq('user_id', userId);
-        }
-        await supabase
-          .from('phone_verification_logs')
-          .update({ status: 'superseded' })
-          .eq('status', 'sent')
-          .eq('phone_number', normalizedPhone);
-      } catch {}
+    await query(
+      `
+      insert into public.phone_verification_logs (
+        phone_number,
+        verification_code,
+        expires_at,
+        attempts,
+        sent_at,
+        status,
+        user_id,
+        created_at,
+        updated_at
+      ) values ($1, $2, $3, 1, now(), 'sent', $4, now(), now())
+      `,
+      [normalizedPhone, verificationCode, expiresAt.toISOString(), userId || null]
+    );
 
-      // Store in phone_verification_logs table for registration flow
-      console.log('📝 Storing verification in database:', {
-        phone_number: normalizedPhone,
-        verification_code: verificationCode,
-        expires_at: expiresAt.toISOString(),
-        user_id: userId || null,
-      });
-
-      const { data: insertResult, error: insertError } = await supabase
-        .from('phone_verification_logs')
-        .insert({
-          phone_number: normalizedPhone,
-          verification_code: verificationCode,
-          expires_at: expiresAt.toISOString(),
-          attempts: 1,
-          sent_at: new Date().toISOString(),
-          status: 'sent',
-          user_id: userId || null,
-        });
-
-      if (insertError) {
-        console.error('❌ Failed to store verification in database:', insertError);
-      } else {
-        console.log('✅ Verification stored successfully:', insertResult);
-      }
-
-      // If userId is provided, also update the users table
-      if (userId) {
-        const { error: userUpdateError } = await supabase
-          .from('users')
-          .update({
-            phone_verification_code: verificationCode,
-            phone_verification_expires_at: expiresAt.toISOString(),
-            phone_verification_attempts: 1,
-            phone_verification_last_sent: new Date().toISOString(),
-          })
-          .eq('id', userId);
-
-        if (userUpdateError) {
-          console.error('❌ Failed to update user table:', userUpdateError);
-        } else {
-          console.log('✅ User table updated successfully');
-        }
-      }
-    } catch (dbError) {
-      console.error('❌ Database operation failed:', dbError);
+    if (userId) {
+      await query(
+        `
+        update public.users
+        set
+          phone_verification_code = $2,
+          phone_verification_expires_at = $3,
+          phone_verification_attempts = coalesce(phone_verification_attempts, 0) + 1,
+          phone_verification_last_sent = now(),
+          updated_at = now()
+        where id = $1
+        `,
+        [userId, verificationCode, expiresAt.toISOString()]
+      );
     }
 
     return NextResponse.json({
