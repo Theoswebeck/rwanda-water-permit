@@ -20,6 +20,54 @@ function quoteIdent(value: string) {
   return `"${value.replaceAll('"', '""')}"`
 }
 
+const JSONB_COLUMNS_BY_TABLE: Record<string, Set<string>> = {
+  applications: new Set([
+    'affected_landowners',
+    'recreation_details',
+    'intersection_details',
+    'intended_activities',
+    'modification_changes',
+  ]),
+  audit_logs: new Set(['old_values', 'new_values']),
+  inspections: new Set(['gps_data']),
+  payment_transactions: new Set(['provider_response']),
+  payments: new Set(['gateway_response', 'gateway_metadata']),
+  permits: new Set(['conditions']),
+  system_settings: new Set(['value']),
+  technical_assessments: new Set(['document_verifications', 'assessment_report_data']),
+  users: new Set(['alternative_contact']),
+  water_use_reports: new Set([
+    'section3',
+    'section3_quarterly',
+    'section4',
+    'section5_monitoring',
+    'section5_incidents',
+    'section6_employment',
+    'section6_ohs',
+    'section7',
+    'section8',
+    'section9_declaration',
+  ]),
+  webhook_logs: new Set(['payload', 'headers']),
+}
+
+function isJsonbColumn(table: string, column: string): boolean {
+  return Boolean(JSONB_COLUMNS_BY_TABLE[table]?.has(column))
+}
+
+function toJsonbParamValue(value: unknown): string {
+  if (value === undefined || value === null) return 'null'
+  if (typeof value === 'string') {
+    try {
+      JSON.parse(value)
+      return value
+    } catch {
+      return JSON.stringify(value)
+    }
+  }
+  return JSON.stringify(value)
+}
+
 function buildBaseSelect(table: string, requestedSelect?: string) {
   if (table === 'applications') {
     return `
@@ -185,8 +233,8 @@ export async function POST(req: NextRequest) {
       if (!rows.length) return NextResponse.json({ data: null, error: { message: 'Missing payload' } }, { status: 400 })
       const row = rows[0] as Record<string, unknown>
       const keys = Object.keys(row).filter(isSafeIdent)
-      const vals = keys.map((k) => row[k])
-      const ph = keys.map((_, i) => `$${i + 1}`)
+      const vals = keys.map((k) => (isJsonbColumn(table, k) ? toJsonbParamValue(row[k]) : row[k]))
+      const ph = keys.map((k, i) => (isJsonbColumn(table, k) ? `$${i + 1}::jsonb` : `$${i + 1}`))
       const sql = `insert into public.${quoteIdent(table)} (${keys.map(quoteIdent).join(', ')}) values (${ph.join(', ')}) returning *`
       const res = await query(sql, vals)
       const data = body.singleMode ? (res.rows[0] || null) : res.rows
@@ -239,8 +287,10 @@ export async function POST(req: NextRequest) {
       const setClauses: string[] = []
       const setVals: unknown[] = []
       for (const k of keys) {
-        setVals.push(payload[k])
-        setClauses.push(`${quoteIdent(k)} = $${setVals.length}`)
+        const value = isJsonbColumn(table, k) ? toJsonbParamValue(payload[k]) : payload[k]
+        setVals.push(value)
+        const placeholder = isJsonbColumn(table, k) ? `$${setVals.length}::jsonb` : `$${setVals.length}`
+        setClauses.push(`${quoteIdent(k)} = ${placeholder}`)
       }
       const whereWithShift = where.map((w) => w.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + keys.length}`))
       const sql = `

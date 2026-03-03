@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { buildWaterUseReportUpdateParts } from '@/lib/db/water-use-report-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 async function getClaims(req: NextRequest) {
@@ -86,8 +87,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ success: false, message: 'No update fields provided' }, { status: 400 })
     }
 
-    const sets = keys.map((k, i) => `${k} = $${i + 1}`)
-    const values = keys.map((k) => payload[k])
+    const { sets, values } = buildWaterUseReportUpdateParts(payload)
 
     const where = isStaffRole(String(claims.role))
       ? `id = $${keys.length + 1}`

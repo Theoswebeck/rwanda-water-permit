@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { buildApplicationInsertParts } from '@/lib/db/application-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 function parseCsvList(value: string | null): string[] {
@@ -100,13 +101,10 @@ export async function POST(req: NextRequest) {
     payload.applicant_id = userId
     payload.updated_at = new Date().toISOString()
 
-    const columns = Object.keys(payload)
+    const { columns, placeholders, values } = buildApplicationInsertParts(payload)
     if (!columns.length) {
       return NextResponse.json({ success: false, message: 'No application data provided' }, { status: 400 })
     }
-
-    const values = columns.map((c) => payload[c])
-    const placeholders = columns.map((_, i) => `$${i + 1}`)
 
     const created = await query(
       `

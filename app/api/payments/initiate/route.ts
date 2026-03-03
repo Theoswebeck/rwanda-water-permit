@@ -15,6 +15,7 @@ import {
 } from '@/lib/payment-utils';
 import type { InitiatePaymentRequest, InitiatePaymentResponse } from '@/types/payment';
 import { mapFormDataToApplication } from '@/lib/application-utils';
+import { buildApplicationInsertParts } from '@/lib/db/application-payload';
 import { query } from '@/lib/db/postgres';
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
 
@@ -150,9 +151,8 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      const cols = entries.map(([key]) => key);
-      const vals = entries.map(([, value]) => value);
-      const placeholders = cols.map((_, idx) => `$${idx + 1}`);
+      const mappedPayload = Object.fromEntries(entries);
+      const { columns: cols, placeholders, values: vals } = buildApplicationInsertParts(mappedPayload);
 
       const appInsert = await query(
         `

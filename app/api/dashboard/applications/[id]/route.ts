@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { buildApplicationUpdateParts } from '@/lib/db/application-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
@@ -134,8 +135,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ success: false, message: 'No update fields provided' }, { status: 400 })
     }
 
-    const sets = keys.map((k, idx) => `${k} = $${idx + 1}`)
-    const values = keys.map((k) => payload[k])
+    const { sets, values } = buildApplicationUpdateParts(payload)
     values.push(id, userId)
 
     const updated = await query(

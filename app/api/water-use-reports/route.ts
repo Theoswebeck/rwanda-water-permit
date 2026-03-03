@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { buildWaterUseReportInsertParts } from '@/lib/db/water-use-report-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 async function getClaims(req: NextRequest) {
@@ -94,12 +95,13 @@ export async function POST(req: NextRequest) {
     delete payload.id
     delete payload.created_at
 
-    const keys = Object.keys(payload).filter((k) => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(k))
+    const safePayload = Object.fromEntries(
+      Object.entries(payload).filter(([k]) => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(k))
+    )
+    const { columns: keys, placeholders, values } = buildWaterUseReportInsertParts(safePayload)
     if (!keys.length) {
       return NextResponse.json({ success: false, message: 'No report fields provided' }, { status: 400 })
     }
-    const values = keys.map((k) => payload[k])
-    const placeholders = keys.map((_, i) => `$${i + 1}`)
 
     const created = await query(
       `
