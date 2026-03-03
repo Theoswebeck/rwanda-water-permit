@@ -112,7 +112,7 @@ export function InspectionDocumentsUpload({
     try {
       const uploaded: InspectionDocumentFile[] = [];
       for (const file of valid) {
-        const uploadResult = await uploadDocument(file, applicationId, "inspection-document");
+        const uploadResult = await uploadDocument(file, applicationId, "inspectionDocument");
         if (!uploadResult) {
           setUploadError(`Failed to upload "${file.name}"`);
           continue;

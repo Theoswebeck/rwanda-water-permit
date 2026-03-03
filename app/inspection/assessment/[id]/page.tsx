@@ -45,6 +45,7 @@ import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus, User, Document } from "@/types/database";
 import dynamic from "next/dynamic";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { generateFieldReportPdf, FieldReportAssessment, FieldReportApplicationData } from "@/lib/pdf-generator";
 
 // Lazy load the ApplicationForm component
@@ -296,27 +297,6 @@ export default function AssessmentPage() {
         // Process documents using smart classification (copied from review page)
         const documentMap: Record<string, { url: string; name: string }> = {};
         
-        // Document type mapping for form fields
-        const typeMapping: Record<string, string> = {
-          'identification_doc': 'identificationDoc',
-          'land_ownership_doc': 'landOwnershipDoc',
-          'land_access_doc': 'landAccessDocuments',
-          'technical_drawings': 'technicalDrawings',
-          'environmental_impact_doc': 'environmentalImpactDoc',
-          'payment_proof': 'paymentProof',
-          'intake_discharge_map': 'intakeDischargeMap',
-          'business_license': 'miningLicense',
-          'geological_survey': 'miningHydrologicalReport',
-          'water_quality_report': 'waterQualityReport',
-          'renewal_request_letter': 'renewalRequestLetter',
-          // Transfer document types
-          'certified_letter': 'certifiedLetter',
-          'registration_certificate': 'registrationCertificate',
-          'notified_agreement': 'notifiedAgreement',
-          'existing_permit_copy': 'existingPermitCopy',
-          'other': 'other',
-        };
-
         console.log('🔍 Raw documents from database:', appData.documents);
         if (appData.documents && Array.isArray(appData.documents)) {
           for (const doc of appData.documents) {
@@ -325,36 +305,17 @@ export default function AssessmentPage() {
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
-                // Extract field name from file path if it follows our naming convention
-                const pathParts = doc.file_path.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
+                const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
+                console.log('🎯 Resolved field name:', fieldName);
 
-                if (fieldNameMatch) {
-                  // This is a structured document with field name in path
-                  const fieldName = fieldNameMatch[1];
-                  console.log('🎯 Identified field name from path:', fieldName);
-
-                  // Check if it's an additional document
-                  if (fieldName.startsWith('additional_')) {
-                    console.log('📎 Skipping additional document for now:', fieldName);
-                    // Skip additional documents for now since ApplicationForm handles them differently
-                  } else {
-                    // This is a standard/activity-specific document
-                    documentMap[fieldName] = {
-                      url: publicUrl,
-                      name: doc.name
-                    };
-                    console.log('✅ Mapped document:', fieldName, '→', doc.name);
-                  }
+                if (fieldName.startsWith('additional_')) {
+                  console.log('📎 Skipping additional document for now:', fieldName);
                 } else {
-                  // Fallback to old type-based mapping
-                  const fieldName = typeMapping[doc.type] || doc.type;
                   documentMap[fieldName] = {
                     url: publicUrl,
                     name: doc.name
                   };
-                  console.log('✅ Mapped document (fallback):', fieldName, '→', doc.name);
+                  console.log('✅ Mapped document:', fieldName, '→', doc.name);
                 }
               } else {
                 console.log('❌ Failed to get public URL for:', doc.file_path);

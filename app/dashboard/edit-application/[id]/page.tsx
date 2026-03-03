@@ -20,6 +20,7 @@ import { getApplicationExpiration } from "@/lib/application-expiration";
 import type { Application, Document, User as UserType } from "@/types/database";
 import { geometryToCoordinatePolygons, polygonsToGeoJSON, type CoordinatePoint } from "@/lib/geoUtils";
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
+import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
@@ -642,7 +643,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       livestockFeasibilityStudy: 'other',
       // Transfer documents
       certifiedLetter: 'certified_letter',
-      notifiedAgreement: 'notified_agreement',
+      notifiedAgreement: 'signed_transfer_form',
       registrationCertificate: 'registration_certificate',
       existingPermitCopy: 'existing_permit_copy',
     };
@@ -675,11 +676,12 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
             // IMPORTANT:
             // Do NOT upsert by `type` because many distinct fields share the same type (e.g. "other", "geological_survey").
             // Upsert by fieldName encoded into the storage path: applications/{applicationId}/{fieldName}-{timestamp}.{ext}
+            const pathPatterns = buildDocumentLookupPathPatterns(applicationId, fieldName);
             const { data: existingDoc, error: checkError } = await supabase
               .from('documents')
               .select('id,file_path,created_at')
               .eq('application_id', applicationId)
-              .ilike('file_path', `%applications/${applicationId}/${fieldName}-%`)
+              .or(pathPatterns.map((p) => `file_path.ilike.${p}`).join(','))
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -778,16 +780,19 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
             console.log(`✅ Upload result for additional document ${additionalDoc.name}:`, uploadResult);
             
             if (uploadResult) {
-              // Check if document already exists
+              // Upsert additional docs by field marker in file_path to avoid
+              // collisions when names or shared "other" types repeat.
+              const pathPatterns = buildDocumentLookupPathPatterns(applicationId, fieldName);
               const { data: existingDoc, error: checkError } = await supabase
                 .from('documents')
-                .select('id')
+                .select('id,file_path,created_at')
                 .eq('application_id', applicationId)
-                .eq('name', additionalDoc.name)
-                .eq('type', 'other')
+                .or(pathPatterns.map((p) => `file_path.ilike.${p}`).join(','))
+                .order('created_at', { ascending: false })
+                .limit(1)
                 .maybeSingle();
-                
-              if (checkError && checkError.code !== 'PGRST116') {
+
+              if (checkError) {
                 console.error(`Error checking existing additional document ${additionalDoc.name}:`, checkError);
                 continue;
               }
@@ -977,30 +982,6 @@ export default function EditApplicationPage() {
           const documentMap: Record<string, { url: string; name: string }> = {};
           const additionalDocsList: any[] = [];
           
-          const typeMapping: Record<string, string> = {
-            'identification_doc': 'identificationDoc',
-            'land_ownership_doc': 'landOwnershipDoc',
-            'land_access_doc': 'landAccessDocuments',
-            'technical_drawings': 'technicalDrawings',
-            'environmental_impact_doc': 'environmentalImpactDoc',
-            'payment_proof': 'paymentProof',
-            'intake_discharge_map': 'intakeDischargeMap',
-            'business_license': 'miningLicense',
-            'geological_survey': 'miningHydrologicalReport',
-            'water_quality_report': 'waterQualityReport',
-            'renewal_request_letter': 'renewalRequestLetter',
-            // Transfer document types
-            'certified_letter': 'certifiedLetter',
-            'registration_certificate': 'registrationCertificate',
-            'notified_agreement': 'notifiedAgreement',
-            'existing_permit_copy': 'existingPermitCopy',
-          };
-
-          // Create reverse mapping to find field names from documents
-          const documentTypeToField: Record<string, string[]> = {
-            'other': [] // Will be populated with activity-specific documents
-          };
-          
           // Smart document classification based on file path patterns
           for (const doc of documents) {
             if (doc.file_path && doc.name) {
@@ -1008,14 +989,8 @@ export default function EditApplicationPage() {
               if (publicUrl) {
                 console.log(`📋 Processing document: ${doc.name} (type: ${doc.type}, path: ${doc.file_path})`);
                 
-                // Extract field name from file path if it follows our naming convention
-                const pathParts = doc.file_path.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-                
-                if (fieldNameMatch) {
-                  // This is a structured document with field name in path
-                  const fieldName = fieldNameMatch[1];
+                const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
+                if (fieldName) {
                   console.log(`📋 Identified field name from path: ${fieldName}`);
                   
                   // Check if it's an additional document
@@ -1036,11 +1011,7 @@ export default function EditApplicationPage() {
                     };
                   }
                 } else {
-                  // Fallback to old logic for documents without structured naming
-                  const isStandardDoc = Object.keys(typeMapping).includes(doc.type) && 
-                                      doc.type !== 'other';
-                  
-                  if (!isStandardDoc && doc.type === 'other') {
+                  if (doc.type === 'other') {
                     // This is likely an additional document
                     additionalDocsList.push({
                       id: doc.id || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -1052,7 +1023,7 @@ export default function EditApplicationPage() {
                     });
                   } else {
                     // This is a standard document
-                    const fieldName = typeMapping[doc.type] || doc.type;
+                    const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
                     documentMap[fieldName] = {
                       url: publicUrl,
                       name: doc.name
@@ -1246,11 +1217,8 @@ export default function EditApplicationPage() {
             for (const doc of uploadedDocuments) {
               // Extract field name from file path
               if (doc.file_path) {
-                const pathParts = doc.file_path.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-                if (fieldNameMatch) {
-                  const fieldName = fieldNameMatch[1];
+                const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
+                if (fieldName) {
                   const publicUrl = getDocumentUrl(doc.file_path);
                   if (publicUrl) {
                     newDocMap[fieldName] = { url: publicUrl, name: doc.name };

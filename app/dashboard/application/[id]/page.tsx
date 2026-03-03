@@ -23,6 +23,7 @@ import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
@@ -298,44 +299,15 @@ export default function ApplicationDetailPage() {
           
           // Process documents for form (smart classification by file path when possible)
           const documentMap: Record<string, { url: string; name: string }> = {};
-          const typeMapping: Record<string, string> = {
-            'identification_doc': 'identificationDoc',
-            'land_ownership_doc': 'landOwnershipDoc',
-            'land_access_doc': 'landAccessDocuments',
-            'technical_drawings': 'technicalDrawings',
-            'environmental_impact_doc': 'environmentalImpactDoc',
-            'payment_proof': 'paymentProof',
-            'intake_discharge_map': 'intakeDischargeMap',
-            'business_license': 'miningLicense',
-            'geological_survey': 'miningHydrologicalReport',
-            'water_quality_report': 'waterQualityReport',
-            'renewal_request_letter': 'renewalRequestLetter',
-            // Transfer document types
-            'certified_letter': 'certifiedLetter',
-            'registration_certificate': 'registrationCertificate',
-            'notified_agreement': 'notifiedAgreement',
-            'existing_permit_copy': 'existingPermitCopy',
-          };
-
           const processDocsIntoMap = (docs: any[]) => {
             for (const doc of docs) {
               if (!doc.file_path || !doc.name) continue;
               const publicUrl = getDocumentUrl(doc.file_path);
               if (!publicUrl) continue;
 
-              const pathParts = doc.file_path.split('/');
-              const fileName = pathParts[pathParts.length - 1];
-              const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-              if (fieldNameMatch) {
-                const fieldName = fieldNameMatch[1];
-                if (!fieldName.startsWith('additional_') && !documentMap[fieldName]) {
-                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
-                }
-              } else {
-                const fieldName = typeMapping[doc.type] || doc.type;
-                if (!documentMap[fieldName]) {
-                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
-                }
+              const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
+              if (!fieldName.startsWith('additional_') && !documentMap[fieldName]) {
+                documentMap[fieldName] = { url: publicUrl, name: doc.name };
               }
             }
           };

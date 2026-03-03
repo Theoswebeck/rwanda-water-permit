@@ -171,7 +171,7 @@ export function FieldReportUpload({
       const uploadedFiles: FieldReportFile[] = [];
 
       for (const file of validFiles) {
-        const uploadResult = await uploadDocument(file, applicationId, "field-report");
+        const uploadResult = await uploadDocument(file, applicationId, "fieldReport");
         if (!uploadResult) {
           setUploadError(`Failed to upload "${file.name}"`);
           continue;

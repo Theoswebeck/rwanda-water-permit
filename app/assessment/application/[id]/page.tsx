@@ -45,6 +45,7 @@ import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { enrichModificationChanges } from "@/lib/application-utils";
+import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { VerificationStatus } from "@/components/inspection/document-verification";
@@ -769,54 +770,13 @@ export default function AssessmentApplicationPage() {
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
-        const typeMapping: Record<string, string> = {
-          identification_doc: 'identificationDoc',
-          land_ownership_doc: 'landOwnershipDoc',
-          land_access_doc: 'landAccessDocuments',
-          technical_drawings: 'technicalDrawings',
-          environmental_impact_doc: 'environmentalImpactDoc',
-          payment_proof: 'paymentProof',
-          intake_discharge_map: 'intakeDischargeMap',
-          business_license: 'miningLicense',
-          geological_survey: 'miningHydrologicalReport',
-          water_quality_report: 'waterQualityReport',
-          renewal_request_letter: 'renewalRequestLetter',
-          certified_letter: 'certifiedLetter',
-          notified_agreement: 'notifiedAgreement',
-          registration_certificate: 'registrationCertificate',
-          existing_permit_copy: 'existingPermitCopy',
-        };
-
         const processDocsIntoMap = (docs: any[]) => {
           for (const doc of docs) {
             if (!doc.file_path || !doc.name) continue;
             const publicUrl = getDocumentUrl(doc.file_path);
             if (!publicUrl) continue;
 
-            const getFileName = (fp: string) => {
-              try {
-                if (fp.startsWith("http://") || fp.startsWith("https://")) {
-                  const p = new URL(fp).pathname;
-                  return (p.split("/").pop() || "").split("?")[0];
-                }
-              } catch {}
-              return (fp.split("/").pop() || "").split("?")[0];
-            };
-
-            const normalizeFieldKey = (k: string) => {
-              const mapped = typeMapping[k];
-              if (mapped) return mapped;
-              // Convert snake_case -> camelCase for legacy keys
-              if (k.includes("_")) {
-                return k.replace(/_([a-z])/g, (_, c) => String(c).toUpperCase());
-              }
-              return k;
-            };
-
-            const fileName = getFileName(String(doc.file_path));
-            const fieldNameMatch = fileName.match(/^([a-zA-Z0-9_]+)[-_]\d+\./);
-            const inferredKey = fieldNameMatch?.[1] ? normalizeFieldKey(fieldNameMatch[1]) : normalizeFieldKey(String(doc.type || ""));
-
+            const inferredKey = resolveDocumentFieldToken(String(doc.file_path), String(doc.type || ""));
             if (inferredKey && !String(inferredKey).startsWith("additional_") && !documentMap[inferredKey]) {
               documentMap[inferredKey] = { url: publicUrl, name: doc.name };
             }

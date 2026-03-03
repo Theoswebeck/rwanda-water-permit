@@ -66,6 +66,7 @@ import { supabase } from "@/lib/supabase";
 import type { Application, Document } from "@/types/database";
 import { mapFormDataToApplication, formatProvinceForDB, formatWaterSourceForDB, formatWaterPurposeForDB, formatApplicationTypeForDB } from "@/lib/application-utils";
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
+import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 
 // Helper function to create storage bucket if it doesn't exist
 async function ensureStorageBucket() {
@@ -186,7 +187,7 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       livestockFeasibilityStudy: 'other',
       // Transfer documents
       certifiedLetter: 'certified_letter',
-      notifiedAgreement: 'notified_agreement',
+      notifiedAgreement: 'signed_transfer_form',
       registrationCertificate: 'registration_certificate',
       existingPermitCopy: 'existing_permit_copy'
     };
@@ -217,11 +218,12 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
           
           if (uploadResult) {
             // Upsert by fieldName in file_path (NOT by type) to avoid collisions for shared types.
+            const pathPatterns = buildDocumentLookupPathPatterns(applicationId, fieldName);
             const { data: existingDoc, error: checkError } = await supabase
               .from('documents')
               .select('id,file_path,created_at')
               .eq('application_id', applicationId)
-              .ilike('file_path', `%applications/${applicationId}/${fieldName}-%`)
+              .or(pathPatterns.map((p) => `file_path.ilike.${p}`).join(','))
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -307,11 +309,12 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
             }
 
             // Upsert by fieldName in file_path to avoid collisions if two docs share the same name.
+            const pathPatterns = buildDocumentLookupPathPatterns(applicationId, fieldName);
             const { data: existingDoc, error: checkError } = await supabase
               .from('documents')
               .select('id,file_path,created_at')
               .eq('application_id', applicationId)
-              .ilike('file_path', `%applications/${applicationId}/${fieldName}-%`)
+              .or(pathPatterns.map((p) => `file_path.ilike.${p}`).join(','))
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -565,48 +568,6 @@ function NewApplicationContent() {
           const documentMap: Record<string, { url: string; name: string }> = {};
           const additionalDocsFromDb: Array<{ id?: string; name: string; url: string }> = [];
 
-          // Prefer extracting the exact fieldName from the stored storage path:
-          // applications/{applicationId}/{fieldName}-{timestamp}.{ext}
-          // This is the only 100% reliable way to map docs back to the correct form field,
-          // since multiple different fields can share the same `doc.type` (e.g. "other", "geological_survey").
-          const fieldNameFromFilePath = (filePath: string): string | null => {
-            const rawFileName = (() => {
-              try {
-                if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
-                  return new URL(filePath).pathname.split("/").pop() || "";
-                }
-              } catch {}
-              return filePath.split("/").pop() || "";
-            })();
-
-            // Support both camelCase ("landAccessDocuments-123.pdf") and legacy snake_case
-            // ("land_access_documents-123.pdf") prefixes.
-            const m = rawFileName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z_]*)*)-\d+\./);
-            if (!m?.[1]) return null;
-            const raw = m[1];
-            if (!raw.includes("_")) return raw;
-            // snake_case -> camelCase
-            const parts = raw.split("_").filter(Boolean);
-            if (parts.length === 0) return null;
-            return parts[0] + parts.slice(1).map((p) => (p ? p[0].toUpperCase() + p.slice(1) : "")).join("");
-          };
-
-          // Fallback mapping (legacy rows that stored only doc.type)
-          const typeMapping: Record<string, string> = {
-            identification_doc: "identificationDoc",
-            land_ownership_doc: "landOwnershipDoc",
-            land_access_documents: "landAccessDocuments",
-            land_access_doc: "landAccessDocuments",
-            technical_drawings: "technicalDrawings",
-            environmental_impact_doc: "environmentalImpactDoc",
-            payment_proof: "paymentProof",
-            intake_discharge_map: "intakeDischargeMap",
-            business_license: "miningLicense",
-            geological_survey: "miningHydrologicalReport",
-            water_quality_report: "waterQualityReport",
-            other: "waterSupplyGeneralRequirements",
-          };
-
           console.log('📄 Processing documents from DB:', documents.length);
           for (const doc of documents) {
             console.log('📄 Document:', { name: doc.name, type: doc.type, file_path: doc.file_path });
@@ -630,7 +591,7 @@ function NewApplicationContent() {
                   console.log('📄 Matched additional doc ID:', m?.[1]);
                   additionalDocsFromDb.push({ id: m?.[1], name: doc.name, url: publicUrl });
                 } else {
-                  const fieldName = fieldNameFromFilePath(doc.file_path) || typeMapping[doc.type] || doc.type;
+                  const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
                   documentMap[fieldName] = {
                     url: publicUrl,
                     name: doc.name
@@ -1108,43 +1069,6 @@ function NewApplicationContent() {
           const documentMap: Record<string, { url: string; name: string }> = {};
           const additionalDocsFromDb: Array<{ id?: string; name: string; url: string }> = [];
 
-          const fieldNameFromFilePath = (filePath: string): string | null => {
-            const rawFileName = (() => {
-              try {
-                if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
-                  return new URL(filePath).pathname.split("/").pop() || "";
-                }
-              } catch {}
-              return filePath.split("/").pop() || "";
-            })();
-
-            // Support both camelCase ("landAccessDocuments-123.pdf") and legacy snake_case
-            // ("land_access_documents-123.pdf") prefixes.
-            const m = rawFileName.match(/^([a-zA-Z_]+(?:[A-Z][a-zA-Z_]*)*)-\d+\./);
-            if (!m?.[1]) return null;
-            const raw = m[1];
-            if (!raw.includes("_")) return raw;
-            // snake_case -> camelCase
-            const parts = raw.split("_").filter(Boolean);
-            if (parts.length === 0) return null;
-            return parts[0] + parts.slice(1).map((p) => (p ? p[0].toUpperCase() + p.slice(1) : "")).join("");
-          };
-
-          const typeMapping: Record<string, string> = {
-            identification_doc: "identificationDoc",
-            land_ownership_doc: "landOwnershipDoc",
-            land_access_documents: "landAccessDocuments",
-            land_access_doc: "landAccessDocuments",
-            technical_drawings: "technicalDrawings",
-            environmental_impact_doc: "environmentalImpactDoc",
-            payment_proof: "paymentProof",
-            intake_discharge_map: "intakeDischargeMap",
-            business_license: "miningLicense",
-            geological_survey: "miningHydrologicalReport",
-            water_quality_report: "waterQualityReport",
-            other: "waterSupplyGeneralRequirements",
-          };
-
           console.log('📄 [Modification] Processing documents from DB:', documents.length);
           for (const doc of documents) {
             console.log('📄 [Modification] Document:', { name: doc.name, type: doc.type, file_path: doc.file_path });
@@ -1164,7 +1088,7 @@ function NewApplicationContent() {
                   const m = rawFileName.match(/^additional_(.+?)-\d+\./);
                   additionalDocsFromDb.push({ id: m?.[1], name: doc.name, url: publicUrl });
                 } else {
-                  const fieldName = fieldNameFromFilePath(doc.file_path) || typeMapping[doc.type] || doc.type;
+                  const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
                   documentMap[fieldName] = {
                     url: publicUrl,
                     name: doc.name

@@ -39,6 +39,7 @@ import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { enrichModificationChanges } from "@/lib/application-utils";
+import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
@@ -399,25 +400,6 @@ export default function ReviewApplicationPage() {
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
-        const typeMapping: Record<string, string> = {
-          'identification_doc': 'identificationDoc',
-          'land_ownership_doc': 'landOwnershipDoc',
-          'land_access_doc': 'landAccessDocuments',
-          'technical_drawings': 'technicalDrawings',
-          'environmental_impact_doc': 'environmentalImpactDoc',
-          'payment_proof': 'paymentProof',
-          'intake_discharge_map': 'intakeDischargeMap',
-          'business_license': 'miningLicense',
-          'geological_survey': 'miningHydrologicalReport',
-          'water_quality_report': 'waterQualityReport',
-          'renewal_request_letter': 'renewalRequestLetter',
-          // Transfer document types
-          'certified_letter': 'certifiedLetter',
-          'registration_certificate': 'registrationCertificate',
-          'notified_agreement': 'notifiedAgreement',
-          'existing_permit_copy': 'existingPermitCopy',
-        };
-
         // Helper: process a list of document rows into the documentMap
         const processDocumentsIntoMap = (docs: any[], label: string) => {
           console.log(`🔍 [${label}] Processing ${docs.length} documents`);
@@ -425,25 +407,13 @@ export default function ReviewApplicationPage() {
             if (doc.file_path && doc.name) {
               const publicUrl = getDocumentUrl(doc.file_path);
               if (publicUrl) {
-                const pathParts = doc.file_path.split('/');
-                const fileName = pathParts[pathParts.length - 1];
-                const fieldNameMatch = fileName.match(/^([a-zA-Z]+(?:[A-Z][a-zA-Z]*)*)-\d+\./);
-
-                if (fieldNameMatch) {
-                  const fieldName = fieldNameMatch[1];
-                  if (fieldName.startsWith('additional_')) {
-                    // Skip additional documents for now
-                  } else if (!documentMap[fieldName]) {
-                    // Only set if not already mapped (modification's own docs take priority)
-                    documentMap[fieldName] = { url: publicUrl, name: doc.name };
-                    console.log(`✅ [${label}] Mapped document:`, fieldName, '→', doc.name);
-                  }
-                } else {
-                  const fieldName = typeMapping[doc.type] || doc.type;
-                  if (!documentMap[fieldName]) {
-                    documentMap[fieldName] = { url: publicUrl, name: doc.name };
-                    console.log(`✅ [${label}] Mapped document (fallback):`, fieldName, '→', doc.name);
-                  }
+                const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
+                if (fieldName.startsWith('additional_')) {
+                  // Skip additional documents for now
+                } else if (!documentMap[fieldName]) {
+                  // Only set if not already mapped (modification's own docs take priority)
+                  documentMap[fieldName] = { url: publicUrl, name: doc.name };
+                  console.log(`✅ [${label}] Mapped document:`, fieldName, '→', doc.name);
                 }
               }
             }

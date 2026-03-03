@@ -3,45 +3,9 @@ import path from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { query } from '@/lib/db/postgres'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { normalizeDocumentType, safeStorageToken } from '@/lib/documents/upload-mapping'
 
 export const runtime = 'nodejs'
-
-const ALLOWED_DOCUMENT_TYPES = new Set([
-  'payment_proof',
-  'identification_doc',
-  'land_ownership_doc',
-  'technical_drawings',
-  'environmental_impact_doc',
-  'intake_discharge_map',
-  'water_quality_report',
-  'geological_survey',
-  'business_license',
-  'other',
-  'land_access_doc',
-  'renewal_request_letter',
-  'transfer_application_letter',
-  'signed_transfer_form',
-  'registration_certificate',
-  'existing_permit_copy',
-  'certified_letter',
-])
-
-const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
-  paymentProof: 'payment_proof',
-  identificationDoc: 'identification_doc',
-  landOwnershipDoc: 'land_ownership_doc',
-  technicalDrawings: 'technical_drawings',
-  environmentalImpactDoc: 'environmental_impact_doc',
-  intakeDischargeMap: 'intake_discharge_map',
-  landAccessDocuments: 'land_access_doc',
-  renewalRequestLetter: 'renewal_request_letter',
-  transferApplicationLetter: 'transfer_application_letter',
-  signedTransferForm: 'signed_transfer_form',
-  notifiedAgreement: 'signed_transfer_form',
-  registrationCertificate: 'registration_certificate',
-  existingPermitCopy: 'existing_permit_copy',
-  certifiedLetter: 'certified_letter',
-}
 
 async function getClaims(req: NextRequest) {
   const token = readSessionTokenFromRequest(req)
@@ -51,38 +15,6 @@ async function getClaims(req: NextRequest) {
 
 function safeSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_')
-}
-
-function toSnakeCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-    .replace(/[\s-]+/g, '_')
-    .toLowerCase()
-}
-
-function normalizeDocumentType(raw: string): string {
-  const value = raw.trim()
-  if (!value) return 'other'
-
-  if (ALLOWED_DOCUMENT_TYPES.has(value)) return value
-  if (DOCUMENT_TYPE_ALIASES[value]) return DOCUMENT_TYPE_ALIASES[value]
-
-  const snake = toSnakeCase(value)
-  if (ALLOWED_DOCUMENT_TYPES.has(snake)) return snake
-
-  if (snake.endsWith('_hydrological_report')) return 'geological_survey'
-  if (snake.endsWith('_eia')) return 'environmental_impact_doc'
-  if (
-    snake.endsWith('_general_requirements') ||
-    snake.endsWith('_feasibility_study') ||
-    snake.endsWith('_management_plan') ||
-    snake.endsWith('_recommendation_letter') ||
-    snake.endsWith('_waste_management_plan')
-  ) {
-    return 'other'
-  }
-
-  return 'other'
 }
 
 async function assertApplicationOwnership(applicationId: string, userId: string): Promise<boolean> {
@@ -163,7 +95,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
 
     // Keep the original field token in filename so UI can map documents
     // back to their exact form field (especially for shared enum types like "other").
-    const fileMarker = safeSegment(typeRaw || docType || 'other')
+    const fileMarker = safeStorageToken(typeRaw || docType || 'other')
     const diskName = `${fileMarker}-${now}${safeSegment(ext)}`
     const fileAbs = path.join(dirAbs, diskName)
     await writeFile(fileAbs, bytes)
