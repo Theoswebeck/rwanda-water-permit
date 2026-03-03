@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -396,6 +396,7 @@ function NewApplicationContent() {
   const [currentApplication, setCurrentApplication] = useState<Application | null>(null);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
+  const loadedDraftIdRef = useRef<string | null>(null);
   
   // Application type state (new application vs transfer vs modification vs renewal)
   const [applicationMode, setApplicationMode] = useState<ApplicationMode | null>(
@@ -496,12 +497,21 @@ function NewApplicationContent() {
   useEffect(() => {
     const loadDraft = async () => {
       if (!draftId) {
+        loadedDraftIdRef.current = null;
         setLoadingDraft(false);
+        return;
+      }
+
+      // Prevent duplicate reload of same draft, which causes skeleton flicker.
+      if (loadedDraftIdRef.current === draftId) {
         return;
       }
       
       try {
-        setLoadingDraft(true);
+        // Keep existing form visible if already hydrated.
+        if (!initialFormData) {
+          setLoadingDraft(true);
+        }
         setError(null);
         
         // ⚡ PERFORMANCE: Load application and documents in parallel
@@ -638,6 +648,7 @@ function NewApplicationContent() {
           // Set initial form data after documents are processed/merged
           setInitialFormData(restored);
           setInitialDocuments(documentMap);
+          loadedDraftIdRef.current = draftId;
         } else {
           setError('Draft application not found');
         }
@@ -650,7 +661,7 @@ function NewApplicationContent() {
     };
     
     loadDraft();
-  }, [draftId, getApplication, getDocuments, userProfile]);
+  }, [draftId, getApplication, getDocuments, initialFormData]);
   
   // ⚡ PERFORMANCE: Memoize user data to prevent re-renders
   const userData = useMemo(() => {
@@ -1761,7 +1772,7 @@ function NewApplicationContent() {
     }
   }, [selectedPermitForModification, userProfile?.id, createApplication, updateApplication, currentModificationApplication]);
   
-  if (loadingDraft) {
+  if (loadingDraft && !initialFormData) {
     return (
       <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
         <DashboardLayout>

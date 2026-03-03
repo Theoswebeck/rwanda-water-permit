@@ -418,7 +418,37 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       fishLakeAreaHectares: formData.fishLakeAreaHectares,
       fishLakeNumberOfCages: formData.fishLakeNumberOfCages,
       fishLakeCageCapacity: formData.fishLakeCageCapacity,
+      fishPondsSurfaceAreaM2: formData.fishPondsSurfaceAreaM2,
+      fishPondsCapacityM3: formData.fishPondsCapacityM3,
+      fishPondsRefillFrequency: formData.fishPondsRefillFrequency,
       fishPondsDiscardWaterQuantityM3PerDay: formData.fishPondsDiscardWaterQuantityM3PerDay,
+      
+      // Coffee washing fields
+      coffeeWashingQuantityPerDay: formData.coffeeWashingQuantityPerDay,
+      coffeeWashingQuantityPerMonth: formData.coffeeWashingQuantityPerMonth,
+      coffeeWashingCapacityTonsPerYear: formData.coffeeWashingCapacityTonsPerYear,
+      
+      // Hydropower/electricity fields
+      hydropowerQuantityPerYear: formData.hydropowerQuantityPerYear,
+      hydropowerIntakeToPowerhouseDistanceM: formData.hydropowerIntakeToPowerhouseDistanceM,
+      hydropowerHasDownstreamUsers: formData.hydropowerHasDownstreamUsers,
+      hydropowerPlantCapacityMw: formData.hydropowerPlantCapacityMw,
+      
+      // Construction of dam fields
+      constructionDamPurpose: formData.constructionDamPurpose,
+      constructionDamDescription: formData.constructionDamDescription,
+      constructionDamExpectedDuration: formData.constructionDamExpectedDuration,
+      constructionDamAlterationPlans: formData.constructionDamAlterationPlans,
+      
+      // Infrastructure fields
+      infrastructurePurpose: formData.infrastructurePurpose,
+      infrastructureDescription: formData.infrastructureDescription,
+      infrastructureExpectedDuration: formData.infrastructureExpectedDuration,
+      infrastructureAlterationPlans: formData.infrastructureAlterationPlans,
+      
+      // Recreation fields
+      recreationType: formData.recreationType,
+      recreationProjectDescription: formData.recreationProjectDescription,
       
       // Irrigation structured fields
       irrigationCropType: formData.irrigationCropType,

@@ -224,7 +224,37 @@ const applicationFormSchema = z.object({
   fishLakeAreaHectares: z.number().optional(),
   fishLakeNumberOfCages: z.number().optional(),
   fishLakeCageCapacity: z.number().optional(),
+  fishPondsSurfaceAreaM2: z.number().optional(),
+  fishPondsCapacityM3: z.number().optional(),
+  fishPondsRefillFrequency: z.string().optional(),
   fishPondsDiscardWaterQuantityM3PerDay: z.number().optional(),
+  
+  // Coffee washing specific fields
+  coffeeWashingQuantityPerDay: z.number().optional(),
+  coffeeWashingQuantityPerMonth: z.number().optional(),
+  coffeeWashingCapacityTonsPerYear: z.number().optional(),
+  
+  // Hydropower/Electricity specific fields
+  hydropowerQuantityPerYear: z.number().optional(),
+  hydropowerIntakeToPowerhouseDistanceM: z.number().optional(),
+  hydropowerHasDownstreamUsers: z.enum(["yes", "no"]).optional(),
+  hydropowerPlantCapacityMw: z.number().optional(),
+  
+  // Construction of dam fields
+  constructionDamPurpose: z.string().optional(),
+  constructionDamDescription: z.string().optional(),
+  constructionDamExpectedDuration: z.string().optional(),
+  constructionDamAlterationPlans: z.string().optional(),
+  
+  // Construction of infrastructure fields
+  infrastructurePurpose: z.string().optional(),
+  infrastructureDescription: z.string().optional(),
+  infrastructureExpectedDuration: z.string().optional(),
+  infrastructureAlterationPlans: z.string().optional(),
+  
+  // Recreation fields
+  recreationType: z.string().optional(),
+  recreationProjectDescription: z.string().optional(),
   
   // Irrigation specific fields
   irrigationCropType: z.string().optional(),
@@ -820,7 +850,27 @@ export function ApplicationForm({
       fishLakeAreaHectares: undefined,
       fishLakeNumberOfCages: undefined,
       fishLakeCageCapacity: undefined,
+      fishPondsSurfaceAreaM2: undefined,
+      fishPondsCapacityM3: undefined,
+      fishPondsRefillFrequency: "",
       fishPondsDiscardWaterQuantityM3PerDay: undefined,
+      coffeeWashingQuantityPerDay: undefined,
+      coffeeWashingQuantityPerMonth: undefined,
+      coffeeWashingCapacityTonsPerYear: undefined,
+      hydropowerQuantityPerYear: undefined,
+      hydropowerIntakeToPowerhouseDistanceM: undefined,
+      hydropowerHasDownstreamUsers: undefined,
+      hydropowerPlantCapacityMw: undefined,
+      constructionDamPurpose: "",
+      constructionDamDescription: "",
+      constructionDamExpectedDuration: "",
+      constructionDamAlterationPlans: "",
+      infrastructurePurpose: "",
+      infrastructureDescription: "",
+      infrastructureExpectedDuration: "",
+      infrastructureAlterationPlans: "",
+      recreationType: "",
+      recreationProjectDescription: "",
       irrigationCropType: "",
       irrigationGrowingSeasonFrom: "",
       irrigationGrowingSeasonTo: "",
@@ -1569,7 +1619,27 @@ export function ApplicationForm({
         fishLakeAreaHectares: undefined,
         fishLakeNumberOfCages: undefined,
         fishLakeCageCapacity: undefined,
+        fishPondsSurfaceAreaM2: undefined,
+        fishPondsCapacityM3: undefined,
+        fishPondsRefillFrequency: "",
         fishPondsDiscardWaterQuantityM3PerDay: undefined,
+        coffeeWashingQuantityPerDay: undefined,
+        coffeeWashingQuantityPerMonth: undefined,
+        coffeeWashingCapacityTonsPerYear: undefined,
+        hydropowerQuantityPerYear: undefined,
+        hydropowerIntakeToPowerhouseDistanceM: undefined,
+        hydropowerHasDownstreamUsers: undefined,
+        hydropowerPlantCapacityMw: undefined,
+        constructionDamPurpose: "",
+        constructionDamDescription: "",
+        constructionDamExpectedDuration: "",
+        constructionDamAlterationPlans: "",
+        infrastructurePurpose: "",
+        infrastructureDescription: "",
+        infrastructureExpectedDuration: "",
+        infrastructureAlterationPlans: "",
+        recreationType: "",
+        recreationProjectDescription: "",
         irrigationCropType: "",
         irrigationGrowingSeasonFrom: "",
         irrigationGrowingSeasonTo: "",
@@ -4014,27 +4084,75 @@ export function ApplicationForm({
                                   <tbody>
                                     <tr>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Surface area" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                        <FormField
+                                          control={form.control}
+                                          name="fishPondsSurfaceAreaM2"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                type="number"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => {
+                                                  if (readOnly) return;
+                                                  const v = e.target.value;
+                                                  field.onChange(v === "" ? undefined : Number(v));
+                                                }}
+                                                placeholder="Surface area"
+                                                className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                                disabled={readOnly}
+                                                readOnly={readOnly}
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Input placeholder="Capacity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                        <FormField
+                                          control={form.control}
+                                          name="fishPondsCapacityM3"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Input
+                                                type="number"
+                                                value={field.value ?? ""}
+                                                onChange={(e) => {
+                                                  if (readOnly) return;
+                                                  const v = e.target.value;
+                                                  field.onChange(v === "" ? undefined : Number(v));
+                                                }}
+                                                placeholder="Capacity (m³)"
+                                                className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                                disabled={readOnly}
+                                                readOnly={readOnly}
+                                              />
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                        <Select disabled={readOnly}>
-                                          <SelectTrigger className={`border-0 bg-transparent h-8 ${readOnly ? "cursor-default opacity-60" : ""}`}>
-                                            <SelectValue placeholder="Select frequency" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="daily">Daily</SelectItem>
-                                            <SelectItem value="weekly">Weekly</SelectItem>
-                                            <SelectItem value="bi-weekly">Bi-weekly</SelectItem>
-                                            <SelectItem value="monthly">Monthly</SelectItem>
-                                            <SelectItem value="quarterly">Quarterly</SelectItem>
-                                            <SelectItem value="semi-annually">Semi-annually</SelectItem>
-                                            <SelectItem value="annually">Annually</SelectItem>
-                                            <SelectItem value="as-needed">As needed</SelectItem>
-                                          </SelectContent>
-                                        </Select>
+                                        <FormField
+                                          control={form.control}
+                                          name="fishPondsRefillFrequency"
+                                          render={({ field }) => (
+                                            <FormControl>
+                                              <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                                <SelectTrigger className={`border-0 bg-transparent h-8 ${readOnly ? "cursor-default opacity-60" : ""}`}>
+                                                  <SelectValue placeholder="Select frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="daily">Daily</SelectItem>
+                                                  <SelectItem value="weekly">Weekly</SelectItem>
+                                                  <SelectItem value="bi-weekly">Bi-weekly</SelectItem>
+                                                  <SelectItem value="monthly">Monthly</SelectItem>
+                                                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                                                  <SelectItem value="semi-annually">Semi-annually</SelectItem>
+                                                  <SelectItem value="annually">Annually</SelectItem>
+                                                  <SelectItem value="as-needed">As needed</SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            </FormControl>
+                                          )}
+                                        />
                                       </td>
                                       <td className="border border-gray-300 dark:border-gray-600 p-2">
                           <FormField
@@ -4101,16 +4219,76 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Quantity of abstracted water</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Daily quantity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="coffeeWashingQuantityPerDay"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Daily quantity (m³)"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Monthly quantity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="coffeeWashingQuantityPerMonth"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Monthly quantity (m³)"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm">Washing capacity (tons/year)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2" colSpan={2}>
-                                    <Input placeholder="Annual washing capacity" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="coffeeWashingCapacityTonsPerYear"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Annual washing capacity"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4255,33 +4433,102 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Quantity of abstracted water (m³/year)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Annual quantity (m³)" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="hydropowerQuantityPerYear"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Annual quantity (m³)"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Distance between intake and Power House (m)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Distance" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="hydropowerIntakeToPowerhouseDistanceM"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Distance"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Is there any water user along this distance?</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select disabled={readOnly}>
-                                      <SelectTrigger className={`border-0 bg-transparent ${readOnly ? "cursor-default opacity-60" : ""}`}>
-                                        <SelectValue placeholder="Select" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="yes">Yes</SelectItem>
-                                        <SelectItem value="no">No</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                    <FormField
+                                      control={form.control}
+                                      name="hydropowerHasDownstreamUsers"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                            <SelectTrigger className={`border-0 bg-transparent ${readOnly ? "cursor-default opacity-60" : ""}`}>
+                                              <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="yes">Yes</SelectItem>
+                                              <SelectItem value="no">No</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Capacity of Power Plant (Megawatt)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Capacity in MW" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="hydropowerPlantCapacityMw"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Capacity in MW"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4367,41 +4614,91 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of construction</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe purpose of construction" className="border-0 bg-transparent min-h-[60px]" />
+                                    <FormField
+                                      control={form.control}
+                                      name="constructionDamPurpose"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Describe purpose of construction"
+                                            className={`border-0 bg-transparent min-h-[60px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the construction project (Materials, construction methods, temporary facilities, impact on water flow, impact on water quality, etc.)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Detailed project description..." className="border-0 bg-transparent min-h-[120px]" />
+                                    <FormField
+                                      control={form.control}
+                                      name="constructionDamDescription"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Detailed project description..."
+                                            className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select>
-                                      <SelectTrigger className="border-0 bg-transparent h-8">
-                                        <SelectValue placeholder="Select duration" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="1-month">1 month</SelectItem>
-                                        <SelectItem value="3-months">3 months</SelectItem>
-                                        <SelectItem value="6-months">6 months</SelectItem>
-                                        <SelectItem value="12-months">12 months</SelectItem>
-                                        <SelectItem value="18-months">18 months</SelectItem>
-                                        <SelectItem value="24-months">24 months</SelectItem>
-                                        <SelectItem value="36-months">36 months</SelectItem>
-                                        <SelectItem value="48-months">48 months</SelectItem>
-                                        <SelectItem value="60-months">60 months (5 years)</SelectItem>
-                                        <SelectItem value="other">Other</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                    <FormField
+                                      control={form.control}
+                                      name="constructionDamExpectedDuration"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                            <SelectTrigger className="border-0 bg-transparent h-8">
+                                              <SelectValue placeholder="Select duration" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="1-month">1 month</SelectItem>
+                                              <SelectItem value="3-months">3 months</SelectItem>
+                                              <SelectItem value="6-months">6 months</SelectItem>
+                                              <SelectItem value="12-months">12 months</SelectItem>
+                                              <SelectItem value="18-months">18 months</SelectItem>
+                                              <SelectItem value="24-months">24 months</SelectItem>
+                                              <SelectItem value="36-months">36 months</SelectItem>
+                                              <SelectItem value="48-months">48 months</SelectItem>
+                                              <SelectItem value="60-months">60 months (5 years)</SelectItem>
+                                              <SelectItem value="other">Other</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Plans or maps showing proposed alterations and/or constructions at the end of construction works</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe plans and alterations..." className="border-0 bg-transparent min-h-[80px]" />
+                                    <FormField
+                                      control={form.control}
+                                      name="constructionDamAlterationPlans"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Describe plans and alterations..."
+                                            className={`border-0 bg-transparent min-h-[80px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4490,41 +4787,91 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of construction or installation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe purpose of construction or installation" className={`border-0 bg-transparent min-h-[60px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="infrastructurePurpose"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Describe purpose of construction or installation"
+                                            className={`border-0 bg-transparent min-h-[60px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project (Materials, construction methods, temporary facilities, impact on water flow, impact on water quality, etc.)</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Detailed project description..." className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="infrastructureDescription"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Detailed project description..."
+                                            className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction or installation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Select disabled={readOnly}>
-                                      <SelectTrigger className={`border-0 bg-transparent h-8 ${readOnly ? "cursor-default opacity-60" : ""}`}>
-                                        <SelectValue placeholder="Select duration" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="1-month">1 month</SelectItem>
-                                        <SelectItem value="3-months">3 months</SelectItem>
-                                        <SelectItem value="6-months">6 months</SelectItem>
-                                        <SelectItem value="12-months">12 months</SelectItem>
-                                        <SelectItem value="18-months">18 months</SelectItem>
-                                        <SelectItem value="24-months">24 months</SelectItem>
-                                        <SelectItem value="36-months">36 months</SelectItem>
-                                        <SelectItem value="48-months">48 months</SelectItem>
-                                        <SelectItem value="60-months">60 months (5 years)</SelectItem>
-                                        <SelectItem value="other">Other</SelectItem>
-                                      </SelectContent>
-                                    </Select>
+                                    <FormField
+                                      control={form.control}
+                                      name="infrastructureExpectedDuration"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                            <SelectTrigger className={`border-0 bg-transparent h-8 ${readOnly ? "cursor-default opacity-60" : ""}`}>
+                                              <SelectValue placeholder="Select duration" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="1-month">1 month</SelectItem>
+                                              <SelectItem value="3-months">3 months</SelectItem>
+                                              <SelectItem value="6-months">6 months</SelectItem>
+                                              <SelectItem value="12-months">12 months</SelectItem>
+                                              <SelectItem value="18-months">18 months</SelectItem>
+                                              <SelectItem value="24-months">24 months</SelectItem>
+                                              <SelectItem value="36-months">36 months</SelectItem>
+                                              <SelectItem value="48-months">48 months</SelectItem>
+                                              <SelectItem value="60-months">60 months (5 years)</SelectItem>
+                                              <SelectItem value="other">Other</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Plans or maps showing proposed alterations and/or constructions at the end of construction works</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe plans and alterations..." className="border-0 bg-transparent min-h-[80px]" />
+                                    <FormField
+                                      control={form.control}
+                                      name="infrastructureAlterationPlans"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Describe plans and alterations..."
+                                            className={`border-0 bg-transparent min-h-[80px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
@@ -4553,13 +4900,41 @@ export function ApplicationForm({
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Type of recreation</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Input placeholder="Specify recreation type" className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="recreationType"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            {...field}
+                                            placeholder="Specify recreation type"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                                 <tr>
                                   <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project</td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
-                                    <Textarea placeholder="Describe the recreational project..." className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`} disabled={readOnly} readOnly={readOnly} />
+                                    <FormField
+                                      control={form.control}
+                                      name="recreationProjectDescription"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Textarea
+                                            {...field}
+                                            placeholder="Describe the recreational project..."
+                                            className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
                                   </td>
                                 </tr>
                               </tbody>
