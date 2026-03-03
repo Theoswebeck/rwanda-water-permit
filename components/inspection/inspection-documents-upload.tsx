@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { getDocumentUrl } from "@/lib/supabase-storage";
+import { getDocumentUrl, uploadDocument } from "@/lib/supabase-storage";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -113,25 +112,16 @@ export function InspectionDocumentsUpload({
     try {
       const uploaded: InspectionDocumentFile[] = [];
       for (const file of valid) {
-        const timestamp = Date.now();
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-        const filePath = `inspection-documents/${applicationId}/${timestamp}-${sanitizedName}`;
-
-        const { error } = await supabase.storage.from("application-documents").upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: false,
-        });
-
-        if (error) {
-          console.error("Upload error:", error);
-          setUploadError(`Failed to upload "${file.name}": ${error.message}`);
+        const uploadResult = await uploadDocument(file, applicationId, "inspection-document");
+        if (!uploadResult) {
+          setUploadError(`Failed to upload "${file.name}"`);
           continue;
         }
 
         uploaded.push({
-          id: `${timestamp}-${Math.random().toString(36).slice(2, 10)}`,
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           name: file.name,
-          path: filePath,
+          path: uploadResult.path,
           size: file.size,
           type: file.type,
           uploadedAt: new Date().toISOString(),
@@ -149,20 +139,7 @@ export function InspectionDocumentsUpload({
   };
 
   const handleRemoveFile = async (fileId: string) => {
-    const f = files.find((x) => x.id === fileId);
-    if (!f) return;
-
-    try {
-      const { error } = await supabase.storage.from("application-documents").remove([f.path]);
-      if (error) {
-        setUploadError(`Failed to remove file: ${error.message}`);
-        return;
-      }
-      onFilesChange(files.filter((x) => x.id !== fileId));
-    } catch (err) {
-      console.error("Delete error:", err);
-      setUploadError("Failed to remove file. Please try again.");
-    }
+    onFilesChange(files.filter((x) => x.id !== fileId));
   };
 
   const handleViewFile = (file: InspectionDocumentFile) => {

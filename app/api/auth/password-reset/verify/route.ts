@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { query } from "@/lib/db/postgres";
 
 const isValidEmail = (email: string) => /[^@\s]+@[^@\s]+\.[^@\s]+/.test(email);
 
@@ -28,53 +28,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Missing code" }, { status: 400 });
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceKey) {
-      return NextResponse.json(
-        { success: false, message: "Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing" },
-        { status: 500 }
-      );
-    }
-
-    const admin = createClient(url, serviceKey);
-
-    // Verify/consume OTP for password reset
-    const { data: verified, error: verifyErr } = await admin.rpc("verify_email_code", {
-      p_email: email,
-      p_code: code,
-      p_purpose: "password_reset",
-    });
-
-    if (verifyErr) {
-      console.error("❌ password-reset verify: verify_email_code error:", verifyErr);
+    const codeRes = await query<{ id: string; expires_at: string; consumed_at: string | null }>(
+      `
+      select id, expires_at, consumed_at
+      from public.email_verification_codes
+      where lower(email) = lower($1)
+        and purpose = 'password_reset'
+        and code = $2
+      order by created_at desc
+      limit 1
+      `,
+      [email, code]
+    );
+    const codeRow = codeRes.rows[0];
+    const valid = !!codeRow?.id && !codeRow.consumed_at && new Date(String(codeRow.expires_at)).getTime() > Date.now();
+    if (!valid) {
       return NextResponse.json({ success: false, message: "Invalid or expired code" }, { status: 400 });
     }
-    if (!verified) {
-      return NextResponse.json({ success: false, message: "Invalid or expired code" }, { status: 400 });
-    }
+    await query(
+      `
+      update public.email_verification_codes
+      set consumed_at = now(), updated_at = now()
+      where id = $1
+      `,
+      [codeRow.id]
+    ).catch(() => undefined);
 
     // Invalidate any previous active reset tokens for this email
-    await admin
-      .from("password_reset_tokens")
-      .update({ consumed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("email", email)
-      .is("consumed_at", null);
+    await query(
+      `
+      update public.password_reset_tokens
+      set consumed_at = now(), updated_at = now()
+      where lower(email) = lower($1) and consumed_at is null
+      `,
+      [email]
+    );
 
     const resetToken = randomToken(32);
     const tokenHash = sha256Hex(resetToken);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-    const { error: insertErr } = await admin.from("password_reset_tokens").insert({
-      email,
-      token_hash: tokenHash,
-      expires_at: expiresAt,
-    });
-
-    if (insertErr) {
-      console.error("❌ password-reset verify: insert token error:", insertErr);
-      return NextResponse.json({ success: false, message: "Server error" }, { status: 500 });
-    }
+    await query(
+      `
+      insert into public.password_reset_tokens (email, token_hash, expires_at, created_at, updated_at)
+      values ($1, $2, $3, now(), now())
+      `,
+      [email, tokenHash, expiresAt]
+    );
 
     return NextResponse.json({ success: true, resetToken });
   } catch (err) {

@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSupabaseServerAuth, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
-
-const isMissingTransferRequestsTable = (err: unknown): boolean => {
-  const code = (err as { code?: unknown } | null)?.code
-  const message = String((err as { message?: unknown } | null)?.message || '')
-  return (
-    code === '42P01' ||
-    message.includes('relation "public.transfer_requests" does not exist') ||
-    message.includes('relation "transfer_requests" does not exist')
-  )
-}
+import { query } from '@/lib/db/postgres'
+import { getAuthenticatedUserId, isMissingTransferRequestsTable, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
@@ -29,18 +20,8 @@ const asRecord = (v: unknown): Record<string, unknown> => {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabaseAdmin = getSupabaseAdmin()
-    const auth = getSupabaseServerAuth(req)
-    if (!supabaseAdmin || !auth) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: missing Supabase env vars' },
-        { status: 500 }
-      )
-    }
-
-    const { supabaseAuth } = auth
-    const user = (await supabaseAuth.auth.getUser()).data.user
-    if (!user) {
+    const userId = await getAuthenticatedUserId(req)
+    if (!userId) {
       return NextResponse.json({ success: false, message: 'Authentication required' }, { status: 401 })
     }
 
@@ -51,27 +32,39 @@ export async function POST(req: NextRequest) {
     }
 
     // Load current user's profile to match phone/email.
-    const { data: profile, error: profileErr } = await supabaseAdmin
-      .from('users')
-      .select('id, email, phone, mobile_phone, company_phone, landline_phone')
-      .eq('id', user.id)
-      .single()
-    if (profileErr || !profile) {
+    const profileRes = await query<UserContactProfile>(
+      `
+      select id, email, phone, mobile_phone, company_phone, landline_phone
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [userId]
+    )
+    const profile = profileRes.rows[0]
+    if (!profile) {
       return NextResponse.json({ success: false, message: 'User profile not found' }, { status: 404 })
     }
 
-    const p = profile as unknown as UserContactProfile
-    const emailLower = normalizeEmail(p.email || user.email || '')
+    const p = profile
+    const emailLower = normalizeEmail(p.email || '')
     const rawPhone = p.phone || p.mobile_phone || p.company_phone || p.landline_phone || ''
     const phoneKey = normalizeRwandaPhoneKey(rawPhone)
 
     // Load transfer request
-    const { data: tr, error: trErr } = await supabaseAdmin
-      .from('transfer_requests')
-      .select('*')
-      .eq('id', transferRequestId)
-      .single()
-    if (trErr || !tr) {
+    let tr: Record<string, unknown> | undefined
+    try {
+      const trRes = await query(
+        `
+        select *
+        from public.transfer_requests
+        where id = $1
+        limit 1
+        `,
+        [transferRequestId]
+      )
+      tr = trRes.rows[0]
+    } catch (trErr) {
       if (isMissingTransferRequestsTable(trErr)) {
         return NextResponse.json(
           {
@@ -82,8 +75,9 @@ export async function POST(req: NextRequest) {
           { status: 503 }
         )
       }
-      return NextResponse.json({ success: false, message: 'Transfer request not found' }, { status: 404 })
+      throw trErr
     }
+    if (!tr) return NextResponse.json({ success: false, message: 'Transfer request not found' }, { status: 404 })
 
     if (String(tr.status) !== 'pending') {
       return NextResponse.json({ success: false, message: `Transfer request is not pending (status=${tr.status})` }, { status: 400 })
@@ -94,12 +88,25 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate application state
-    const { data: app, error: appErr } = await supabaseAdmin
-      .from('applications')
-      .select('id, applicant_id, status, terms_status, application_type, internal_notes, application_number')
-      .eq('id', tr.application_id)
-      .single()
-    if (appErr || !app) {
+    const appRes = await query<{
+      id: string
+      applicant_id: string
+      status: string
+      terms_status: string | null
+      application_type: string | null
+      internal_notes: string | null
+      application_number: string | null
+    }>(
+      `
+      select id, applicant_id, status, terms_status, application_type, internal_notes::text as internal_notes, application_number
+      from public.applications
+      where id = $1
+      limit 1
+      `,
+      [String(tr.application_id)]
+    )
+    const app = appRes.rows[0]
+    if (!app) {
       return NextResponse.json({ success: false, message: 'Linked application not found' }, { status: 404 })
     }
     if (app.application_type !== 'transfer') {
@@ -126,29 +133,33 @@ export async function POST(req: NextRequest) {
       const prevTransferApproval = asRecord(parsed.transferApproval)
       const transferApproval = {
         ...prevTransferApproval,
-        transferRequestId: tr.id,
+        transferRequestId: String(tr.id),
         transfereeApproved: true,
-        transfereeUserId: user.id,
+        transfereeUserId: userId,
         transfereeEmail: emailLower,
         transfereePhoneKey: phoneKey,
         approvedAt: now,
-        transferorUserId: tr.transferor_user_id,
-        originalPermitId: tr.original_permit_id,
+        transferorUserId: String(tr.transferor_user_id || ''),
+        originalPermitId: String(tr.original_permit_id || ''),
       }
       return JSON.stringify({ ...parsed, transferApproval })
     })()
 
     // Idempotent updates: mark transfer request approved + handoff application ownership to transferee.
-    const { error: updTrErr } = await supabaseAdmin
-      .from('transfer_requests')
-      .update({
-        status: 'approved',
-        approved_by_user_id: user.id,
-        approved_at: now,
-        updated_at: now,
-      })
-      .eq('id', tr.id)
-    if (updTrErr) {
+    try {
+      await query(
+        `
+        update public.transfer_requests
+        set
+          status = 'approved',
+          approved_by_user_id = $2,
+          approved_at = $3,
+          updated_at = $3
+        where id = $1
+        `,
+        [String(tr.id), userId, now]
+      )
+    } catch (updTrErr) {
       if (isMissingTransferRequestsTable(updTrErr)) {
         return NextResponse.json(
           {
@@ -162,17 +173,19 @@ export async function POST(req: NextRequest) {
       throw updTrErr
     }
 
-    const { error: updAppErr } = await supabaseAdmin
-      .from('applications')
-      .update({
-        applicant_id: user.id,
-        internal_notes: nextNotes,
-        updated_at: now,
-      })
-      .eq('id', tr.application_id)
-    if (updAppErr) throw updAppErr
+    await query(
+      `
+      update public.applications
+      set
+        applicant_id = $2,
+        internal_notes = $3::jsonb,
+        updated_at = $4
+      where id = $1
+      `,
+      [String(tr.application_id), userId, nextNotes, now]
+    )
 
-    return NextResponse.json({ success: true, applicationId: tr.application_id })
+    return NextResponse.json({ success: true, applicationId: String(tr.application_id) })
   } catch (err) {
     console.error('❌ transfers/approve error:', err)
     return NextResponse.json({ success: false, message: 'Server error' }, { status: 500 })

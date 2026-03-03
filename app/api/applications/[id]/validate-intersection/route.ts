@@ -4,7 +4,7 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { query } from '@/lib/db/postgres';
 import { geometryToCoordinatePolygons, coordinatesToGeoJSON, validatePolygon } from '@/lib/geoUtils';
 import { polygonToKey } from '@/lib/polygonKey';
 import { z } from 'zod';
@@ -77,16 +77,22 @@ export async function POST(
 
     console.log(`📋 Validating application ${applicationId}, updateRecord: ${updateRecord}`);
 
-    const admin = createAdminClient();
-
-    // Fetch application coordinates
-    const { data: application, error: fetchError } = await admin
-      .from('applications')
-      .select('id, coordinates, status, project_title')
-      .eq('id', applicationId)
-      .single();
-
-    if (fetchError) {
+    const appRes = await query<{
+      id: string
+      coordinates: unknown
+      status: string
+      project_title: string | null
+    }>(
+      `
+      select id, st_asgeojson(coordinates)::jsonb as coordinates, status::text as status, project_title
+      from public.applications
+      where id = $1
+      limit 1
+      `,
+      [applicationId]
+    )
+    const application = appRes.rows[0]
+    if (!application) {
       console.error('❌ Error fetching application:', fetchError);
       return NextResponse.json(
         {
@@ -152,23 +158,23 @@ export async function POST(
     // Duplicate polygon check against other applications
     if (errors.length === 0) {
       const candidateKeys = polyFeatures.map((p) => polygonToKey(p));
-      const { data: apps, error: appsError } = await admin
-        .from('applications')
-        .select('id, project_title, coordinates')
-        .not('coordinates', 'is', null)
-        .neq('id', applicationId);
+      const apps = await query<{ id: string; project_title: string | null; coordinates: unknown }>(
+        `
+        select id, project_title, st_asgeojson(coordinates)::jsonb as coordinates
+        from public.applications
+        where coordinates is not null
+          and id <> $1
+        `,
+        [applicationId]
+      )
 
-      if (appsError) {
-        throw new Error(`Failed to check existing applications: ${appsError.message}`);
-      }
-
-      const match = (apps || []).some((app: any) => {
-        const geom = app?.coordinates;
+      const match = apps.rows.some((app) => {
+        const geom = app.coordinates as { type?: string; coordinates?: unknown } | null;
         if (!geom) return false;
 
-        const existingPolys: any[] = [];
+        const existingPolys: Array<{ type: 'Polygon'; coordinates: unknown }> = [];
         if (geom.type === 'Polygon' && geom.coordinates?.[0]) {
-          existingPolys.push(geom);
+          existingPolys.push({ type: 'Polygon', coordinates: geom.coordinates });
         } else if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)) {
           for (const poly of geom.coordinates) {
             if (poly?.[0]) existingPolys.push({ type: 'Polygon', coordinates: poly });
@@ -179,7 +185,7 @@ export async function POST(
 
         return existingPolys.some((g) => {
           const feature = { type: 'Feature', properties: {}, geometry: g } as const;
-          return candidateKeys.includes(polygonToKey(feature as any));
+          return candidateKeys.includes(polygonToKey(feature));
         });
       });
 
@@ -197,21 +203,21 @@ export async function POST(
 
     // Update application record if requested (reuse existing columns for status)
     if (updateRecord) {
-      const { error: updateError } = await admin
-        .from('applications')
-        .update({
-          intersection_validation_status: isValid ? 'valid' : 'invalid',
-          intersecting_permits: [],
-          intersection_details: [],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', applicationId);
-
-      if (updateError) {
-        console.warn('⚠️ Failed to update application validation status:', updateError.message);
-      } else {
-        console.log('✅ Application validation status updated');
-      }
+      await query(
+        `
+        update public.applications
+        set
+          intersection_validation_status = $2,
+          intersecting_permits = '[]'::jsonb,
+          intersection_details = '[]'::jsonb,
+          updated_at = now()
+        where id = $1
+        `,
+        [applicationId, isValid ? 'valid' : 'invalid']
+      ).then(
+        () => console.log('✅ Application validation status updated'),
+        (updateError) => console.warn('⚠️ Failed to update application validation status:', updateError)
+      )
     }
 
     // Return validation result
@@ -251,7 +257,7 @@ export async function POST(
  * Get current validation status for an application
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -272,29 +278,40 @@ export async function GET(
 
     const { id: applicationId } = paramsValidation.data;
 
-    // Fetch application validation status
-    const { data: application, error: fetchError } = await supabase
-      .from('applications')
-      .select(`
+    const appRes = await query<{
+      id: string
+      project_title: string | null
+      status: string
+      coordinates: unknown
+      intersection_validation_status: string | null
+      intersecting_permits: unknown
+      intersection_details: unknown
+      updated_at: string | null
+    }>(
+      `
+      select
         id,
         project_title,
-        status,
-        coordinates,
+        status::text as status,
+        st_asgeojson(coordinates)::jsonb as coordinates,
         intersection_validation_status,
         intersecting_permits,
         intersection_details,
-        updated_at
-      `)
-      .eq('id', applicationId)
-      .single();
-
-    if (fetchError) {
-      console.error('❌ Error fetching application:', fetchError);
+        updated_at::text as updated_at
+      from public.applications
+      where id = $1
+      limit 1
+      `,
+      [applicationId]
+    )
+    const application = appRes.rows[0]
+    if (!application) {
+      console.error('❌ Error fetching application: not found');
       return NextResponse.json(
         {
           success: false,
           error: 'Application not found',
-          message: fetchError.message
+          message: 'Application not found'
         },
         { status: 404 }
       );

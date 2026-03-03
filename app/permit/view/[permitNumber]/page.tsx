@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db/postgres";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { PermitStatus } from "@/types/database";
@@ -56,43 +56,42 @@ export default async function PublicPermitViewPage({
 
   if (!permitNumber) notFound();
 
-  const supabase = await createClient();
-
-  // Attempt to join related entities. If RLS prevents joining, we still show the permit core fields.
-  const { data: permit, error } = await supabase
-    .from("permits")
-    .select(
-      `
-        id,
-        permit_number,
-        status,
-        water_source,
-        purpose,
-        water_allowance,
-        allowance_unit,
-        issuing_authority,
-        issued_date,
-        expiry_date,
-        application:applications!permits_application_id_fkey(
-          id,
-          project_title,
-          province,
-          district,
-          sector,
-          cell,
-          village,
-          applicant:users(
-            first_name,
-            last_name,
-            company_name,
-            email,
-            account_type
-          )
-        )
-      `
-    )
-    .eq("permit_number", permitNumber)
-    .maybeSingle();
+  const permitRes = await query(
+    `
+    select
+      p.id,
+      p.permit_number,
+      p.status::text as status,
+      p.water_source::text as water_source,
+      p.purpose::text as purpose,
+      p.water_allowance,
+      p.allowance_unit,
+      p.issuing_authority,
+      p.issued_date::text as issued_date,
+      p.expiry_date::text as expiry_date,
+      row_to_json(a) as application,
+      row_to_json(u) as applicant
+    from public.permits p
+    left join public.applications a on a.id = p.application_id
+    left join public.users u on u.id = a.applicant_id
+    where p.permit_number = $1
+    limit 1
+    `,
+    [permitNumber]
+  );
+  const row = permitRes.rows[0] as (Record<string, unknown> & { application?: Record<string, unknown> | null; applicant?: Record<string, unknown> | null }) | undefined;
+  const permit = row
+    ? {
+        ...row,
+        application: row.application
+          ? {
+              ...row.application,
+              applicant: row.applicant || null,
+            }
+          : null,
+      }
+    : null;
+  const error = !permit;
 
   if (error || !permit) {
     // Likely either not found, or RLS blocks public access. Keep the response generic.

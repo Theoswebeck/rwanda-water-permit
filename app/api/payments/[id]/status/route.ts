@@ -4,11 +4,12 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getIremboPayClient } from '@/lib/irembopay-client';
 import { getApplicationStatusFromPayment, mapIremboPayStatus } from '@/lib/payment-utils';
 import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
 import type { PaymentStatusResponse } from '@/types/payment';
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
+import { query } from '@/lib/db/postgres';
 
 // Demo mode removed - using real payment flow only
 
@@ -20,14 +21,10 @@ export async function GET(
     const { id: paymentId } = await params;
     console.log('🔍 [PAYMENT STATUS] Checking status for payment:', paymentId);
 
-    // Initialize Supabase client
-    const supabase = await createClient();
-
-    // Check authentication using getUser() which is more reliable for API routes
-    const {
-      data: { user },
-      error: authError
-    } = await supabase.auth.getUser();
+    const token = readSessionTokenFromRequest(request);
+    const claims = token ? await verifySessionToken(token) : null;
+    const user = claims ? { id: claims.sub } : null;
+    const authError = user ? null : new Error('Missing/invalid session');
 
     if (!user || authError) {
       console.error('❌ [PAYMENT STATUS] Unauthorized: No authenticated user');
@@ -45,12 +42,16 @@ export async function GET(
     const staffRoles = ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'] as const;
     let isStaff = false;
     try {
-      const { data: currentUserRow } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle();
-      const role = (currentUserRow as any)?.role as string | undefined;
+      const roleRes = await query<{ role: string | null }>(
+        `
+        select role
+        from public.users
+        where id = $1
+        limit 1
+        `,
+        [userId]
+      );
+      const role = roleRes.rows[0]?.role || undefined;
       isStaff = !!role && (staffRoles as readonly string[]).includes(role);
     } catch {
       // If role lookup fails, default to non-staff behavior.
@@ -61,22 +62,34 @@ export async function GET(
     // 1. FETCH PAYMENT FROM DATABASE
     // =============================================
 
-    const paymentQuery = supabase
-      .from('payments')
-      .select(`
-        *,
-        applications (
-          id,
-          application_number,
-          status,
-          project_title
+    const paymentRes = isStaff
+      ? await query(
+          `
+          select
+            p.*,
+            row_to_json(a) as applications
+          from public.payments p
+          left join public.applications a on a.id = p.application_id
+          where p.id = $1
+          limit 1
+          `,
+          [paymentId]
         )
-      `)
-      .eq('id', paymentId);
-
-    const scopedQuery = isStaff ? paymentQuery : paymentQuery.eq('applicant_id', userId);
-
-    const { data: paymentRow, error: paymentError } = await scopedQuery.single();
+      : await query(
+          `
+          select
+            p.*,
+            row_to_json(a) as applications
+          from public.payments p
+          left join public.applications a on a.id = p.application_id
+          where p.id = $1
+            and p.applicant_id = $2
+          limit 1
+          `,
+          [paymentId, userId]
+        );
+    const paymentRow = paymentRes.rows[0];
+    const paymentError = !paymentRow ? new Error('not found') : null;
 
     if (paymentError || !paymentRow) {
       console.error('❌ [PAYMENT STATUS] Payment not found:', paymentError);
@@ -86,9 +99,7 @@ export async function GET(
       );
     }
 
-    // Supabase typing in this repo is not fully aligned with generated DB types for all tables.
-    // Cast to any to avoid "never" inference breaking compilation for this route.
-    const payment = paymentRow as any;
+    const payment = paymentRow as Record<string, unknown>;
 
     console.log('✅ [PAYMENT STATUS] Payment found:', {
       id: payment.id,
@@ -100,13 +111,17 @@ export async function GET(
     // 2. FETCH LATEST TRANSACTION
     // =============================================
 
-    const { data: latestTransaction } = await supabase
-      .from('payment_transactions')
-      .select('*')
-      .eq('payment_id', paymentId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const latestTxRes = await query(
+      `
+      select *
+      from public.payment_transactions
+      where payment_id = $1
+      order by created_at desc nulls last
+      limit 1
+      `,
+      [paymentId]
+    );
+    const latestTransaction = latestTxRes.rows[0] || null;
 
     // =============================================
     // 3. VERIFY WITH IREMBOPAY (OPTIONAL)
@@ -138,12 +153,13 @@ export async function GET(
           if (mappedStatus !== payment.status) {
             console.log('🔄 [PAYMENT STATUS] Updating local status from IremboPay');
             
-            const updateData: any = {
+            const gatewayResponse = (payment.gateway_response as Record<string, unknown> | null | undefined) || {};
+            const updateData: Record<string, unknown> = {
               status: mappedStatus,
               irembo_transaction_id: iremboStatus.data.transactionId || payment.irembo_transaction_id,
               payment_method: iremboStatus.data.paymentMethod?.toLowerCase() || payment.payment_method,
               gateway_response: {
-                ...(payment.gateway_response as any || {}),
+                ...gatewayResponse,
                 status_check: iremboStatus.data,
                 checked_at: new Date().toISOString(),
               },
@@ -156,13 +172,32 @@ export async function GET(
               updateData.failed_at = new Date().toISOString();
             }
 
-            await supabase
-              .from('payments')
-              .update(updateData)
-              .eq('id', paymentId);
+            await query(
+              `
+              update public.payments
+              set
+                status = $2,
+                irembo_transaction_id = $3,
+                payment_method = $4,
+                gateway_response = $5::jsonb,
+                completed_at = coalesce($6::timestamptz, completed_at),
+                failed_at = coalesce($7::timestamptz, failed_at),
+                updated_at = now()
+              where id = $1
+              `,
+              [
+                paymentId,
+                mappedStatus,
+                updateData.irembo_transaction_id || null,
+                updateData.payment_method || null,
+                JSON.stringify(updateData.gateway_response || {}),
+                updateData.completed_at || null,
+                updateData.failed_at || null,
+              ]
+            );
 
             // Update the payment object with new status
-            payment.status = mappedStatus as any;
+            payment.status = mappedStatus;
             payment.irembo_transaction_id = iremboStatus.data.transactionId || payment.irembo_transaction_id;
 
             console.log('✅ [PAYMENT STATUS] Local status updated to:', mappedStatus);
@@ -179,29 +214,36 @@ export async function GET(
                 new_status: newApplicationStatus,
               });
 
-              const { error: appUpdateError } = await supabase
-                .from('applications')
-                .update({ 
-                  status: newApplicationStatus,
-                  submitted_at: now,
-                })
-                .eq('id', payment.application_id);
+              const appUpdateRes = await query(
+                `
+                update public.applications
+                set status = $2, submitted_at = $3, updated_at = now()
+                where id = $1
+                returning id, status
+                `,
+                [payment.application_id, newApplicationStatus, now]
+              );
+              const appUpdateError = !appUpdateRes.rowCount ? new Error('application not updated') : null;
 
               if (appUpdateError) {
                 console.error('⚠️  [PAYMENT STATUS] Failed to update application:', appUpdateError);
                 console.error('   Error details:', JSON.stringify(appUpdateError));
                 // Check if application exists
-                const { data: checkApp } = await supabase
-                  .from('applications')
-                  .select('id, status')
-                  .eq('id', payment.application_id)
-                  .single();
-                console.log('   Application check:', checkApp);
+                const checkApp = await query(
+                  `
+                  select id, status
+                  from public.applications
+                  where id = $1
+                  limit 1
+                  `,
+                  [payment.application_id]
+                );
+                console.log('   Application check:', checkApp.rows[0] || null);
               } else {
                 console.log('✅ [PAYMENT STATUS] Application updated to:', newApplicationStatus);
                 // Update the payment.applications object if it exists
                 if (payment.applications) {
-                  payment.applications.status = newApplicationStatus as any;
+                  (payment.applications as Record<string, unknown>).status = newApplicationStatus;
                 }
                 if (newApplicationStatus === 'submitted') {
                   try {
@@ -220,20 +262,25 @@ export async function GET(
             } else if ((mappedStatus === 'failed' || mappedStatus === 'cancelled') && payment.application_id) {
               // ✅ Requirement: if payment fails, application should still be draft.
               // Race-safety: only revert if app is still pending payment (avoid clobbering submitted).
-              const { data: updatedApp, error: revertError } = await supabase
-                .from('applications')
-                .update({ status: 'draft' })
-                .eq('id', payment.application_id)
-                .in('status', ['pending_payment', 'draft'])
-                .select('id,status')
-                .maybeSingle();
+              const revertRes = await query(
+                `
+                update public.applications
+                set status = 'draft', updated_at = now()
+                where id = $1
+                  and status in ('pending_payment', 'draft')
+                returning id, status
+                `,
+                [payment.application_id]
+              );
+              const updatedApp = revertRes.rows[0] || null;
+              const revertError = null;
 
               if (revertError) {
                 console.error('⚠️  [PAYMENT STATUS] Failed to revert application to draft:', revertError);
               } else if (updatedApp) {
                 console.log('✅ [PAYMENT STATUS] Application status reverted to draft');
                 if (payment.applications) {
-                  payment.applications.status = 'draft' as any;
+                  (payment.applications as Record<string, unknown>).status = 'draft';
                 }
               } else {
                 console.log('ℹ️  [PAYMENT STATUS] Application not reverted (already progressed beyond payment stage)');
@@ -253,8 +300,8 @@ export async function GET(
 
     const response: PaymentStatusResponse = {
       success: true,
-      payment: payment as any,
-      transaction: latestTransaction as any,
+      payment: payment,
+      transaction: (latestTransaction as Record<string, unknown> | null) || undefined,
     };
 
     console.log('✅ [PAYMENT STATUS] Returning status:', payment.status);
@@ -274,7 +321,7 @@ export async function GET(
 }
 
 // OPTIONS method for CORS
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return NextResponse.json({}, { status: 200 });
 }
 

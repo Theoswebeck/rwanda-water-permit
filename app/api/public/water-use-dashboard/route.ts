@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { query } from "@/lib/db/postgres";
 
 const QuerySchema = z.object({
   // shared filters
@@ -128,40 +128,52 @@ export async function GET(req: NextRequest) {
     const to = parseDate(toRaw);
     const today = new Date();
 
-    const supabase = createAdminClient();
-
     // Single query for all required public dashboard data.
     // NOTE: We intentionally DO NOT expose raw volumes in the response.
-    const { data, error } = await supabase
-      .from("permits")
-      .select(
-        `
-        id,
-        permit_number,
-        status,
-        water_source,
-        purpose,
-        water_allowance,
-        allowance_unit,
-        issued_date,
-        expiry_date,
-        created_at,
-        application:applications!application_id(
-          province,
-          district,
-          sector,
-          catchment_name_level_1,
-          catchment_name_level_2,
-          coordinates
-        )
+    const permitsRes = await query<{
+      id: string;
+      permit_number: string;
+      status: string;
+      water_source: string;
+      purpose: string;
+      water_allowance: string | number | null;
+      allowance_unit: string | null;
+      issued_date: string | null;
+      expiry_date: string | null;
+      created_at: string | null;
+      province: string | null;
+      district: string | null;
+      sector: string | null;
+      catchment_name_level_1: string | null;
+      catchment_name_level_2: string | null;
+      coordinates: { type?: string; coordinates?: [number, number] } | null;
+    }>(
       `
-      );
-
-    if (error) throw error;
+      select
+        p.id,
+        p.permit_number,
+        p.status::text as status,
+        p.water_source::text as water_source,
+        p.purpose::text as purpose,
+        p.water_allowance,
+        p.allowance_unit,
+        p.issued_date::text as issued_date,
+        p.expiry_date::text as expiry_date,
+        p.created_at::text as created_at,
+        a.province::text as province,
+        a.district,
+        a.sector,
+        a.catchment_name_level_1,
+        a.catchment_name_level_2,
+        st_asgeojson(a.coordinates)::jsonb as coordinates
+      from public.permits p
+      left join public.applications a on a.id = p.application_id
+      `
+    );
 
     const qLower = q?.toLowerCase().trim();
 
-    const filtered = (data || []).filter((p: any) => {
+    const filtered = permitsRes.rows.filter((p) => {
       if (!includeExpired) {
         const exp = p.expiry_date ? new Date(p.expiry_date) : null;
         if (exp && exp <= today) return false;
@@ -170,10 +182,9 @@ export async function GET(req: NextRequest) {
       if (water_source && water_source !== "all" && String(p.water_source) !== water_source) return false;
       if (purpose && purpose !== "all" && String(p.purpose) !== purpose) return false;
 
-      const app = p.application || {};
-      if (province && province !== "all" && String(app.province) !== province) return false;
-      if (district && district !== "all" && String(app.district ?? "").toLowerCase() !== district.toLowerCase()) return false;
-      if (sector && sector !== "all" && String(app.sector ?? "").toLowerCase() !== sector.toLowerCase()) return false;
+      if (province && province !== "all" && String(p.province) !== province) return false;
+      if (district && district !== "all" && String(p.district ?? "").toLowerCase() !== district.toLowerCase()) return false;
+      if (sector && sector !== "all" && String(p.sector ?? "").toLowerCase() !== sector.toLowerCase()) return false;
 
       const issued = p.issued_date ? new Date(p.issued_date) : p.created_at ? new Date(p.created_at) : undefined;
       if (issued) {
@@ -182,7 +193,7 @@ export async function GET(req: NextRequest) {
       }
 
       if (qLower) {
-        const hay = `${p.permit_number} ${app.district ?? ""} ${app.sector ?? ""} ${app.catchment_name_level_1 ?? ""} ${app.catchment_name_level_2 ?? ""}`.toLowerCase();
+        const hay = `${p.permit_number} ${p.district ?? ""} ${p.sector ?? ""} ${p.catchment_name_level_1 ?? ""} ${p.catchment_name_level_2 ?? ""}`.toLowerCase();
         if (!hay.includes(qLower)) return false;
       }
 
@@ -191,17 +202,17 @@ export async function GET(req: NextRequest) {
 
     // Snapshot aggregations
     const totalPermitsIssued = filtered.length;
-    const statusCounts = filtered.reduce((acc: Record<string, number>, p: any) => {
+    const statusCounts = filtered.reduce((acc: Record<string, number>, p) => {
       const s = String(p.status);
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
-    const purposeCounts = filtered.reduce((acc: Record<string, number>, p: any) => {
+    const purposeCounts = filtered.reduce((acc: Record<string, number>, p) => {
       const k = String(p.purpose);
       acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});
-    const waterSourceCounts = filtered.reduce((acc: Record<string, number>, p: any) => {
+    const waterSourceCounts = filtered.reduce((acc: Record<string, number>, p) => {
       const k = String(p.water_source);
       acc[k] = (acc[k] || 0) + 1;
       return acc;
@@ -252,10 +263,9 @@ export async function GET(req: NextRequest) {
 
     // Map points (public-safe, no volumes)
     const points = filtered
-      .filter((p: any) => Boolean(p.application?.coordinates))
-      .map((p: any) => {
-        const app = p.application || {};
-        const coords = app.coordinates;
+      .filter((p) => Boolean(p.coordinates))
+      .map((p) => {
+        const coords = p.coordinates;
         const lng = coords?.coordinates?.[0] ?? null;
         const lat = coords?.coordinates?.[1] ?? null;
         const m3Day = convertAllowanceToM3PerDay(Number(p.water_allowance || 0), p.allowance_unit);
@@ -267,11 +277,11 @@ export async function GET(req: NextRequest) {
           status: p.status,
           waterSource: p.water_source,
           useType: p.purpose,
-          province: app.province ?? null,
-          district: app.district ?? null,
-          sector: app.sector ?? null,
-          catchment1: app.catchment_name_level_1 ?? null,
-          catchment2: app.catchment_name_level_2 ?? null,
+          province: p.province ?? null,
+          district: p.district ?? null,
+          sector: p.sector ?? null,
+          catchment1: p.catchment_name_level_1 ?? null,
+          catchment2: p.catchment_name_level_2 ?? null,
           lat,
           lng,
           intensity,
@@ -281,19 +291,18 @@ export async function GET(req: NextRequest) {
       });
 
     // Registry (non-confidential fields only) – paginated view
-    const registryItems = filtered.slice(offset, offset + limit).map((p: any) => {
-      const app = p.application || {};
+    const registryItems = filtered.slice(offset, offset + limit).map((p) => {
       return {
         permitId: p.id,
         permitNumber: p.permit_number,
         status: p.status,
         waterSource: p.water_source,
         useType: p.purpose,
-        province: app.province ?? null,
-        district: app.district ?? null,
-        sector: app.sector ?? null,
-        catchment1: app.catchment_name_level_1 ?? null,
-        catchment2: app.catchment_name_level_2 ?? null,
+        province: p.province ?? null,
+        district: p.district ?? null,
+        sector: p.sector ?? null,
+        catchment1: p.catchment_name_level_1 ?? null,
+        catchment2: p.catchment_name_level_2 ?? null,
         issuedDate: p.issued_date,
         expiryDate: p.expiry_date,
         duration: durationLabel(p.issued_date, p.expiry_date),

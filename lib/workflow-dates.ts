@@ -7,7 +7,6 @@
  * Reviewed, Verified, Approved) without N+1 queries.
  */
 
-import { supabase } from "@/lib/supabase";
 
 /** Dates we extract from workflow_history for each application. */
 export interface WorkflowDates {
@@ -72,22 +71,23 @@ export async function batchFetchWorkflowDates(
     }
 
     for (const chunk of chunks) {
-      const { data, error } = await supabase
-        .from("workflow_history")
-        .select("application_id, to_status, created_at")
-        .in("application_id", chunk)
-        .in("to_status", Object.keys(STATUS_TO_DATE_KEY))
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        console.error("❌ Failed to fetch workflow dates:", error);
+      const res = await fetch('/api/workflow/dates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ applicationIds: chunk }),
+      })
+      if (!res.ok) {
+        console.error("❌ Failed to fetch workflow dates:", await res.text());
         continue;
       }
+      const json = (await res.json()) as { rows?: Array<{ application_id: string; to_status: string; created_at: string }> };
+      const data = json.rows || [];
 
       // For each row, populate the *first* (earliest) occurrence per key
-      for (const row of data ?? []) {
-        const appId = row.application_id as string;
-        const dateKey = STATUS_TO_DATE_KEY[row.to_status as string];
+      for (const row of data) {
+        const appId = row.application_id;
+        const dateKey = STATUS_TO_DATE_KEY[row.to_status];
         if (!dateKey) continue;
 
         if (!result[appId]) {
@@ -96,7 +96,7 @@ export async function batchFetchWorkflowDates(
 
         // Only set if not already set (we ordered ascending, so first hit wins)
         if (!result[appId][dateKey]) {
-          result[appId][dateKey] = row.created_at as string;
+          result[appId][dateKey] = row.created_at;
         }
       }
     }

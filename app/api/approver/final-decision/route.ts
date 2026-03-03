@@ -1,34 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { query } from '@/lib/db/postgres'
 import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { sendResendEmail, renderAppEmailHtml } from '@/lib/notifications/resend-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
 
 type Decision = 'approve' | 'reject' | 'return_to_assessment'
-
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
-
-const getSupabaseAdmin = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  // Note: this repo's `types/database.ts` is app-domain types, not Supabase-generated Database types.
-  // Using generics here collapses to `never`, so keep the client untyped and validate at runtime.
-  return createClient(url, serviceKey)
-}
-
 const clamp = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1)}…`)
 
-function buildDecisionCopy(params: {
-  decision: Decision
-  applicantName: string
-  applicationNumber: string
-  reason?: string
-}) {
+function buildDecisionCopy(params: { decision: Decision; applicantName: string; applicationNumber: string; reason?: string }) {
   const { decision, applicantName, applicationNumber } = params
   const reason = (params.reason || '').trim()
-
   const portalUrl = getPortalUrl()
   const supportEmail = process.env.SUPPORT_EMAIL || 'info@rwb.rw'
   const orgName = 'Rwanda Water Resources Board'
@@ -54,8 +37,7 @@ function buildDecisionCopy(params: {
     return { sms, email: { subject, title, text, type: 'success' as const } }
   }
 
-    if (decision === 'return_to_assessment') {
-    const reasonLine = reason ? ` Details: ${reason}` : ''
+  if (decision === 'return_to_assessment') {
     const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} is undergoing further verification. No action is required from you at this time. Support: ${supportEmail}.`
     const subject = `Further verification in progress — ${applicationNumber}`
     const title = 'Further Verification in Progress'
@@ -79,7 +61,6 @@ function buildDecisionCopy(params: {
     return { sms, email: { subject, title, text, type: 'info' as const } }
   }
 
-  // reject
   const reasonLine = reason ? `Reason provided: ${reason}` : `Reason provided: (not specified)`
   const sms = `Rwanda Water Resources Board: Dear ${applicantName}, your water permit application ${applicationNumber} has been REJECTED. ${clamp(reasonLine, 220)} Support: ${supportEmail}.`
   const subject = `Application rejected — ${applicationNumber}`
@@ -102,19 +83,10 @@ function buildDecisionCopy(params: {
   return { sms, email: { subject, title, text, type: 'error' as const } }
 }
 
-// Use shared Resend + HTML helpers (avoid duplicating email logic across routes)
 const renderDecisionEmailHtml = renderAppEmailHtml
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getSupabaseAdmin()
-    if (!supabase) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
-        { status: 500 }
-      )
-    }
-
     const body = await req.json()
     const decision = body?.decision as Decision
     const applicationId = body?.applicationId as string
@@ -128,195 +100,141 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Reason is required for rejection or return-to-assessment' }, { status: 400 })
     }
 
-    console.log(`🔄 Approver final decision requested: decision=${decision} applicationId=${applicationId}`)
-
-    // Fetch application
-    const { data: application, error: appErr } = await supabase
-      .from('applications')
-      .select('id, application_number, applicant_id')
-      .eq('id', applicationId)
-      .single()
-
-    if (appErr || !application) {
-      console.error('❌ Failed to fetch application:', appErr)
+    const appRes = await query<{ id: string; application_number: string | null; applicant_id: string }>(
+      `select id, application_number, applicant_id from public.applications where id = $1 limit 1`,
+      [applicationId]
+    )
+    const application = appRes.rows[0]
+    if (!application) {
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
     }
-
     const applicationNumber = application.application_number || application.id
 
-    // Fetch applicant
-    const { data: applicant, error: userErr } = await supabase
-      .from('users')
-      .select('id, email, first_name, last_name, company_name, account_type, phone, mobile_phone, landline_phone, company_phone')
-      .eq('id', application.applicant_id)
-      .single()
-
-    if (userErr || !applicant) {
-      console.error('❌ Failed to fetch applicant:', userErr)
+    const applicantRes = await query<ApplicantContact & { email: string }>(
+      `
+      select id, email, first_name, last_name, company_name, account_type, phone, mobile_phone, landline_phone, company_phone
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [application.applicant_id]
+    )
+    const applicant = applicantRes.rows[0]
+    if (!applicant) {
       return NextResponse.json({ success: false, message: 'Applicant not found' }, { status: 404 })
     }
 
     const applicantName = getApplicantName(applicant as ApplicantContact)
     const applicantPhone = getApplicantPhone(applicant as ApplicantContact)
-    // Recipient email must be the applicant account email for THIS application (users.email).
-    const applicantEmail = (applicant.email || '').trim().toLowerCase()
-
-    if (!isNonEmptyString(applicantEmail)) {
-      return NextResponse.json({ success: false, message: 'Cannot send update: applicant email not found' }, { status: 400 })
-    }
-    if (!isNonEmptyString(applicantPhone)) {
-      return NextResponse.json({ success: false, message: 'Cannot send update: applicant phone number not found' }, { status: 400 })
+    const applicantEmail = String(applicant.email || '').trim().toLowerCase()
+    if (!isNonEmptyString(applicantEmail) || !isNonEmptyString(applicantPhone)) {
+      return NextResponse.json({ success: false, message: 'Applicant contact info missing' }, { status: 400 })
     }
 
-    // Compose messages
-    const copy = buildDecisionCopy({
-      decision,
-      applicantName,
-      applicationNumber,
-      reason,
-    })
-
-    // Skip SMS/Email for return_to_assessment as per user request
+    const copy = buildDecisionCopy({ decision, applicantName, applicationNumber, reason })
     if (decision !== 'return_to_assessment') {
-      // Send SMS
       const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
       const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
       if (!pindo.isValidRwandanPhone(applicantPhone)) {
         return NextResponse.json({ success: false, message: 'Invalid applicant phone number format' }, { status: 400 })
       }
-
-      console.log(`📱 Sending decision SMS: to=${applicantPhone} application=${applicationNumber}`)
       await pindo.sendSMS(applicantPhone, copy.sms, senderName)
-
-      // Send Email
-      console.log(`✉️ Sending decision email: to=${applicantEmail} application=${applicationNumber}`)
-      await sendResendEmail({
-        to: applicantEmail,
-        subject: copy.email.subject,
-        title: copy.email.title,
-        text: copy.email.text,
-      })
-    } else {
-      console.log(`ℹ️ Skipping SMS/Email for return_to_assessment for application=${applicationNumber}`)
+      await sendResendEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
     }
 
-    // Assign an approver id (fallback for environments without auth wired)
-    const { data: approver, error: approverErr } = await supabase
-      .from('users')
-      .select('id')
-      .eq('role', 'approver')
-      .limit(1)
-      .single()
-
-    if (approverErr || !approver) {
-      console.error('❌ No approver user found:', approverErr)
+    const approverRes = await query<{ id: string }>(
+      `select id from public.users where role = 'approver' order by created_at asc limit 1`
+    )
+    const approver = approverRes.rows[0]
+    if (!approver) {
       return NextResponse.json({ success: false, message: 'No approver found in users table' }, { status: 500 })
     }
 
-    // Update application status only after notifications are successfully sent (prevents partial success).
-    const now = new Date().toISOString()
     if (decision === 'approve') {
-      const update: Record<string, unknown> = {
-        // Important workflow: approval should move to "approved_pending_permit"
-        // so the applicant must accept Terms & Conditions before the permit is issued.
-        status: 'approved_pending_permit',
-        assigned_approver_id: approver.id,
-        approved_at: now,
-        updated_at: now,
-        // Terms tracking (added by DB migration). Keep these consistent so the dashboard can drive the flow.
-        terms_status: 'pending',
-        terms_presented_at: now,
-      }
-      if (isNonEmptyString(conditions)) update.approval_conditions = conditions.trim()
-
-      const { error: updErr } = await supabase.from('applications').update(update).eq('id', applicationId)
-      if (updErr) throw updErr
+      await query(
+        `
+        update public.applications
+        set
+          status = 'approved_pending_permit',
+          assigned_approver_id = $2,
+          approved_at = now(),
+          updated_at = now(),
+          terms_status = 'pending',
+          terms_presented_at = now(),
+          approval_conditions = case when $3 <> '' then $3 else approval_conditions end
+        where id = $1
+        `,
+        [applicationId, approver.id, conditions.trim()]
+      )
     } else if (decision === 'reject') {
-      const { error: updErr } = await supabase
-        .from('applications')
-        .update({
-          status: 'rejected',
-          assigned_approver_id: approver.id,
-          rejection_reason: reason.trim(),
-          rejected_at: now,
-          updated_at: now,
-        })
-        .eq('id', applicationId)
-      if (updErr) throw updErr
+      await query(
+        `
+        update public.applications
+        set
+          status = 'rejected',
+          assigned_approver_id = $2,
+          rejection_reason = $3,
+          rejected_at = now(),
+          updated_at = now()
+        where id = $1
+        `,
+        [applicationId, approver.id, reason.trim()]
+      )
     } else {
-      // return_to_assessment (updated workflow: return to verification stage with explicit returned status)
-      const { error: updErr } = await supabase
-        .from('applications')
-        .update({
-          status: 'returned_to_verification',
-          internal_notes: `Returned from Approval for further verification: ${reason.trim()}`,
-          assigned_approver_id: approver.id,
-          updated_at: now,
-        })
-        .eq('id', applicationId)
-      if (updErr) throw updErr
+      await query(
+        `
+        update public.applications
+        set
+          status = 'returned_to_verification',
+          internal_notes = $3,
+          assigned_approver_id = $2,
+          updated_at = now()
+        where id = $1
+        `,
+        [applicationId, approver.id, `Returned from Approval for further verification: ${reason.trim()}`]
+      )
     }
 
-    // Create in-app notification record
-    const title =
-      decision === 'approve' ? 'Application Approved' : decision === 'reject' ? 'Application Rejected' : 'Further Assessment in Progress'
-    const message = copy.email.text
+    await query(
+      `
+      insert into public.notifications (user_id, title, message, type, application_id, email_sent, sms_sent, created_at, updated_at)
+      values ($1, $2, $3, $4, $5, $6, $7, now(), now())
+      `,
+      [
+        application.applicant_id,
+        decision === 'approve' ? 'Application Approved' : decision === 'reject' ? 'Application Rejected' : 'Further Assessment in Progress',
+        copy.email.text,
+        copy.email.type,
+        applicationId,
+        decision !== 'return_to_assessment',
+        decision !== 'return_to_assessment',
+      ]
+    ).catch(() => undefined)
 
-    const { error: notifErr } = await supabase.from('notifications').insert({
-      user_id: application.applicant_id,
-      title,
-      message,
-      type: copy.email.type,
-      application_id: applicationId,
-      email_sent: decision !== 'return_to_assessment',
-      sms_sent: decision !== 'return_to_assessment',
-    })
-    if (notifErr) {
-      // Don’t fail the workflow for a non-critical dashboard notification record.
-      console.warn('⚠️ Failed to insert notifications row:', notifErr)
-    }
-
-    // Log the decision to audit logs
-    try {
-      const actionMap = {
-        approve: 'application.approved',
-        reject: 'application.rejected',
-        return_to_assessment: 'application.revision_requested'
-      }
-      const severityMap = {
-        approve: 'info',
-        reject: 'warning',
-        return_to_assessment: 'info'
-      }
-      const descriptionMap = {
-        approve: `Approved application ${applicationNumber} for ${applicantName}`,
-        reject: `Rejected application ${applicationNumber}. Reason: ${reason || 'Not specified'}`,
-        return_to_assessment: `Returned application ${applicationNumber} for further verification`
-      }
-
-      await supabase.from('audit_logs').insert({
-        user_id: approver.id,
-        action: actionMap[decision],
-        entity_type: 'application',
-        table_name: 'applications',
-        record_id: applicationId,
-        old_values: { status: 'pending_final_approval' },
-        new_values: { 
+    await query(
+      `
+      insert into public.audit_logs (
+        user_id, action, entity_type, table_name, record_id, old_values, new_values, description, severity, status, request_id, created_at
+      ) values ($1, $2, 'application', 'applications', $3, $4::jsonb, $5::jsonb, $6, $7, 'success', $8, now())
+      `,
+      [
+        approver.id,
+        decision === 'approve' ? 'application.approved' : decision === 'reject' ? 'application.rejected' : 'application.revision_requested',
+        applicationId,
+        JSON.stringify({ status: 'pending_final_approval' }),
+        JSON.stringify({
           status: decision === 'approve' ? 'approved_pending_permit' : decision === 'reject' ? 'rejected' : 'returned_to_verification',
-          ...(decision === 'reject' ? { rejection_reason: reason } : {}),
-          ...(decision === 'approve' && conditions ? { approval_conditions: conditions } : {})
-        },
-        description: descriptionMap[decision],
-        severity: severityMap[decision] as 'info' | 'warning' | 'critical',
-        status: 'success',
-        request_id: crypto.randomUUID()
-      })
-      console.log('📝 Audit log created for final decision')
-    } catch (auditErr) {
-      console.warn('⚠️ Failed to create audit log:', auditErr)
-    }
+        }),
+        decision === 'approve'
+          ? `Approved application ${applicationNumber} for ${applicantName}`
+          : decision === 'reject'
+            ? `Rejected application ${applicationNumber}. Reason: ${reason || 'Not specified'}`
+            : `Returned application ${applicationNumber} for further verification`,
+        decision === 'reject' ? 'warning' : 'info',
+        crypto.randomUUID(),
+      ]
+    ).catch(() => undefined)
 
-    console.log(`✅ Final decision completed: decision=${decision} application=${applicationNumber}`)
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('❌ final-decision error:', err)
@@ -326,5 +244,3 @@ export async function POST(req: NextRequest) {
     )
   }
 }
-
-

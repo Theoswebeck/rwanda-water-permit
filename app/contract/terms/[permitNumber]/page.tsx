@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db/postgres";
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
@@ -50,48 +50,36 @@ export default async function PublicContractTermsPage({
   const sp = (await searchParams) ?? {};
   const variantOverride = isPermitVariant(sp.variant) ? (sp.variant as PermitVariant) : null;
 
-  const supabase = await createClient();
+  const permitRes = await query(
+    `
+    select
+      p.permit_number,
+      p.issued_date::text as issued_date,
+      row_to_json(a) as application,
+      row_to_json(u) as applicant
+    from public.permits p
+    left join public.applications a on a.id = p.application_id
+    left join public.users u on u.id = a.applicant_id
+    where p.permit_number = $1
+    limit 1
+    `,
+    [permitNumber]
+  );
+  const row = permitRes.rows[0] as (Record<string, unknown> & { application?: Record<string, unknown> | null; applicant?: Record<string, unknown> | null }) | undefined;
+  const permit = row
+    ? {
+        ...row,
+        application: row.application
+          ? {
+              ...row.application,
+              applicant: row.applicant || null,
+            }
+          : null,
+      }
+    : null;
+  const error = !permit;
 
-  const { data: permit, error } = await supabase
-    .from("permits")
-    .select(
-      `
-        permit_number,
-        issued_date,
-        application:applications!permits_application_id_fkey(
-          id,
-          application_number,
-          project_title,
-          intended_activities,
-          internal_notes,
-          province,
-          district,
-          sector,
-          cell,
-          village,
-          coordinates,
-          water_body_name,
-          water_source,
-          max_daily_volume_m3,
-          max_yearly_volume_m3,
-          estimated_usage_volume,
-          usage_unit,
-          proposed_duration_years,
-          concession_area,
-          applicant:users(
-            account_type,
-            first_name,
-            last_name,
-            company_name,
-            id_number
-          )
-        )
-      `
-    )
-    .eq("permit_number", permitNumber)
-    .maybeSingle();
-
-  const application = (permit as any)?.application ?? null;
+  const application = (permit as Record<string, unknown> | null)?.application ?? null;
 
   const inferredVariant: PermitVariant | null = application ? selectPermitVariant(application) : null;
   const variant: PermitVariant =

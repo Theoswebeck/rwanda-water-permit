@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import type { Permit } from '@/types/database'
 
 // ⚡ PERFORMANCE: Query keys for cache management
@@ -57,40 +56,19 @@ export function usePermitsQuery({ userId, enabled = true, includeApplication = t
       if (!userId) {
         return []
       }
-      
-      // First get the user's application IDs
-      const { data: userApplications, error: appsError } = await supabase
-        .from('applications')
-        .select('id')
-        .eq('applicant_id', userId)
 
-      if (appsError) {
-        console.error('❌ Error fetching user applications for permits:', appsError.message)
-        throw appsError
+      const response = await fetch(
+        `/api/dashboard/permits?includeApplication=${includeApplication ? 'true' : 'false'}`,
+        {
+          method: 'GET',
+          cache: 'no-store',
+        }
+      )
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to fetch permits')
       }
-
-      const applicationIds = userApplications?.map(app => app.id) || []
-
-      if (applicationIds.length === 0) {
-        return []
-      }
-
-      // Get permits for those applications with optional application data
-      const selectQuery = includeApplication 
-        ? `*, application:applications!application_id(id, application_number, project_title, intended_activities, province, district, sector, cell, village, water_body_name, max_daily_volume_m3, max_yearly_volume_m3, concession_area, applicant:users!applicant_id(id, first_name, last_name, company_name))`
-        : '*'
-
-      const { data, error } = await supabase
-        .from('permits')
-        .select(selectQuery)
-        .in('application_id', applicationIds)
-        .order('issued_date', { ascending: false })
-
-      if (error) {
-        console.error('❌ Error fetching permits:', error.message)
-        throw error
-      }
-      return data || []
+      return (json.permits || []) as PermitWithApplication[]
     },
     // ⚡ FIX: Only enable when we have a valid userId
     enabled: enabled && !!userId,

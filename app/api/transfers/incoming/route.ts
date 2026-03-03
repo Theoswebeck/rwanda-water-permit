@@ -1,15 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseAdmin, getSupabaseServerAuth, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
-
-const isMissingTransferRequestsTable = (err: unknown): boolean => {
-  const code = (err as { code?: unknown } | null)?.code
-  const message = String((err as { message?: unknown } | null)?.message || '')
-  return (
-    code === '42P01' ||
-    message.includes('relation "public.transfer_requests" does not exist') ||
-    message.includes('relation "transfer_requests" does not exist')
-  )
-}
+import { query } from '@/lib/db/postgres'
+import { getAuthenticatedUserId, isMissingTransferRequestsTable, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
 type UserContactProfile = {
   id: string
@@ -46,34 +37,28 @@ type TransferApplicationRow = {
 
 export async function GET(req: NextRequest) {
   try {
-    const supabaseAdmin = getSupabaseAdmin()
-    const auth = getSupabaseServerAuth(req)
-    if (!supabaseAdmin || !auth) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: missing Supabase env vars' },
-        { status: 500 }
-      )
-    }
-
-    const { supabaseAuth } = auth
-    const user = (await supabaseAuth.auth.getUser()).data.user
-    if (!user) {
+    const userId = await getAuthenticatedUserId(req)
+    if (!userId) {
       return NextResponse.json({ success: false, message: 'Authentication required' }, { status: 401 })
     }
 
     // Fetch profile to get phone (email comes from auth user).
-    const { data: profile, error: profileErr } = await supabaseAdmin
-      .from('users')
-      .select('id, email, phone, mobile_phone, company_phone, landline_phone')
-      .eq('id', user.id)
-      .single()
-
-    if (profileErr || !profile) {
+    const profileRes = await query<UserContactProfile>(
+      `
+      select id, email, phone, mobile_phone, company_phone, landline_phone
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [userId]
+    )
+    const profile = profileRes.rows[0]
+    if (!profile) {
       return NextResponse.json({ success: false, message: 'User profile not found' }, { status: 404 })
     }
 
-    const p = profile as unknown as UserContactProfile
-    const emailLower = normalizeEmail(p.email || user.email || '')
+    const p = profile
+    const emailLower = normalizeEmail(p.email || '')
     const rawPhone = p.phone || p.mobile_phone || p.company_phone || p.landline_phone || ''
     const phoneKey = normalizeRwandaPhoneKey(rawPhone)
 
@@ -81,17 +66,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: true, transfers: [] })
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('transfer_requests')
-      .select(
-        'id,application_id,original_permit_id,transferor_user_id,transferee_email,transferee_phone,status,approved_by_user_id,approved_at,created_at,updated_at'
+    let transferRows: TransferRequestRow[] = []
+    try {
+      const trRes = await query<TransferRequestRow>(
+        `
+        select id,application_id,original_permit_id,transferor_user_id,transferee_email,transferee_phone,status,approved_by_user_id,approved_at,created_at,updated_at
+        from public.transfer_requests
+        where transferee_email = $1
+          and transferee_phone = $2
+          and status = 'pending'
+        order by created_at desc
+        `,
+        [emailLower, phoneKey]
       )
-      .eq('transferee_email', emailLower)
-      .eq('transferee_phone', phoneKey)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-
-    if (error) {
+      transferRows = trRes.rows
+    } catch (error) {
       // If the feature table isn't deployed yet, treat as "no incoming transfers"
       // to avoid breaking the dashboard UX.
       if (isMissingTransferRequestsTable(error)) {
@@ -102,8 +91,6 @@ export async function GET(req: NextRequest) {
       console.error('❌ transfers/incoming error:', error)
       return NextResponse.json({ success: false, message: 'Failed to fetch incoming transfers' }, { status: 500 })
     }
-
-    const transferRows = (data || []) as TransferRequestRow[]
     const applicationIds = Array.from(
       new Set(transferRows.map((r) => r.application_id).filter((id): id is string => Boolean(id)))
     )
@@ -114,18 +101,17 @@ export async function GET(req: NextRequest) {
 
     // NOTE: PostgREST "embedding" (applications!application_id) requires a real FK, which
     // isn't present in some environments. We do a second query and stitch results manually.
-    const { data: apps, error: appsErr } = await supabaseAdmin
-      .from('applications')
-      .select('id,application_number,project_title,status,terms_status,application_type,internal_notes')
-      .in('id', applicationIds)
-
-    if (appsErr) {
-      console.error('❌ transfers/incoming applications fetch error:', appsErr)
-      return NextResponse.json({ success: false, message: 'Failed to fetch incoming transfers' }, { status: 500 })
-    }
+    const apps = await query<TransferApplicationRow>(
+      `
+      select id,application_number,project_title,status,terms_status,application_type,internal_notes::text as internal_notes
+      from public.applications
+      where id = any($1::uuid[])
+      `,
+      [applicationIds]
+    )
 
     const appById = new Map<string, TransferApplicationRow>()
-    ;((apps || []) as TransferApplicationRow[]).forEach((a) => {
+    ;(apps.rows || []).forEach((a) => {
       appById.set(a.id, a)
     })
 

@@ -1,5 +1,5 @@
 import type { Feature, Geometry } from 'geojson';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { query } from '@/lib/db/postgres';
 
 export interface PermitPolygon {
   permitId: string;
@@ -16,7 +16,7 @@ interface PermitPolygonData {
   permit_id: string;
   permit_number: string;
   project_title: string;
-  coordinates_geojson: any;
+  coordinates_geojson: unknown;
   status: string;
   issued_date: string;
   expiry_date: string;
@@ -29,15 +29,25 @@ interface PermitPolygonData {
  * This is intended for server/API usage.
  */
 export async function fetchApprovedPermitPolygons(): Promise<PermitPolygon[]> {
-  const supabase = createAdminClient();
+  const data = await query<PermitPolygonData>(
+    `
+    select
+      p.id as permit_id,
+      p.permit_number,
+      coalesce(a.project_title, '') as project_title,
+      st_asgeojson(a.coordinates)::jsonb as coordinates_geojson,
+      p.status::text as status,
+      p.issued_date::text as issued_date,
+      p.expiry_date::text as expiry_date,
+      p.purpose::text as water_purpose
+    from public.permits p
+    join public.applications a on a.id = p.application_id
+    where p.status in ('active', 'expiring_soon')
+      and a.coordinates is not null
+    `
+  )
 
-  const { data, error } = await supabase.rpc('get_approved_permit_polygons');
-  if (error) {
-    throw new Error(`Failed to fetch permit polygons: ${error.message}`);
-  }
-  if (!data) return [];
-
-  return (data as PermitPolygonData[])
+  return data.rows
     .filter((permit) => Boolean(permit.coordinates_geojson))
     .map((permit) => {
       const feature: Feature<Geometry> = {

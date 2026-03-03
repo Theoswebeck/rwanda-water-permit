@@ -1,29 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import type { DelegatableRole } from '@/types/database'
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { query } from '@/lib/db/postgres'
+
+async function getCurrentUserId(request: NextRequest): Promise<string | null> {
+  const token = readSessionTokenFromRequest(request)
+  const claims = token ? await verifySessionToken(token) : null
+  return claims?.sub || null
+}
 
 // GET /api/role-delegations - Get all role delegations
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    const userId = await getCurrentUserId(request)
+    if (!userId) {
       return NextResponse.json(
         { success: false, message: 'Unauthorized' },
         { status: 401 }
       )
     }
 
-    // Get user's role to check permissions
-    const { data: currentUser, error: userError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (userError || !currentUser) {
+    const currentUserRes = await query<{ role: string }>(
+      `
+      select role
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [userId]
+    )
+    const currentUser = currentUserRes.rows[0]
+    if (!currentUser) {
       return NextResponse.json(
         { success: false, message: 'User not found' },
         { status: 404 }
@@ -32,79 +39,77 @@ export async function GET(request: NextRequest) {
 
     // First, expire any ended delegations
     const now = new Date().toISOString()
-    await supabase
-      .from('role_delegations')
-      .update({ status: 'expired' })
-      .eq('status', 'active')
-      .not('end_date', 'is', null)
-      .lt('end_date', now)
+    await query(
+      `
+      update public.role_delegations
+      set status = 'expired', updated_at = now()
+      where status = 'active'
+        and end_date is not null
+        and end_date < $1
+      `,
+      [now]
+    ).catch(() => undefined)
 
     // Parse query params for filtering
     const searchParams = request.nextUrl.searchParams
     const filterType = searchParams.get('filter') // 'all', 'my', 'active'
     const statusFilter = searchParams.get('status') // 'active', 'revoked', 'expired'
 
-    let query = supabase
-      .from('role_delegations')
-      .select(`
-        *,
-        delegator:users!delegator_id(
-          id,
-          email,
-          first_name,
-          last_name,
-          role
-        ),
-        delegate:users!delegate_id(
-          id,
-          email,
-          first_name,
-          last_name,
-          role
-        ),
-        revoker:users!revoked_by(
-          id,
-          email,
-          first_name,
-          last_name
-        )
-      `)
-      .order('created_at', { ascending: false })
-
-    // Apply filters based on user role
-    if (currentUser.role !== 'admin') {
-      // Non-admins can only see delegations they're involved in
-      query = query.or(`delegator_id.eq.${user.id},delegate_id.eq.${user.id}`)
-    } else if (filterType === 'my') {
-      query = query.or(`delegator_id.eq.${user.id},delegate_id.eq.${user.id}`)
+    const values: unknown[] = []
+    const where: string[] = []
+    const nextParam = (value: unknown) => {
+      values.push(value)
+      return `$${values.length}`
     }
 
-    // Apply status filter
+    if (currentUser.role !== 'admin' || filterType === 'my') {
+      const p = nextParam(userId)
+      where.push(`(rd.delegator_id = ${p} or rd.delegate_id = ${p})`)
+    }
     if (statusFilter && statusFilter !== 'all') {
-      query = query.eq('status', statusFilter)
+      const p = nextParam(statusFilter)
+      where.push(`rd.status = ${p}`)
     }
-
-    // Apply active filter (only currently active delegations)
     if (filterType === 'active') {
-      query = query
-        .eq('status', 'active')
-        .lte('start_date', now)
-        .or(`end_date.is.null,end_date.gt.${now}`)
+      const p = nextParam(now)
+      where.push(`rd.status = 'active' and rd.start_date <= ${p} and (rd.end_date is null or rd.end_date > ${p})`)
     }
 
-    const { data, error } = await query
-
-    if (error) {
-      console.error('❌ Error fetching role delegations:', error)
-      return NextResponse.json(
-        { success: false, message: 'Failed to fetch delegations' },
-        { status: 500 }
-      )
-    }
+    const rows = await query(
+      `
+      select
+        rd.*,
+        row_to_json(dg) as delegator,
+        row_to_json(dd) as delegate,
+        row_to_json(rv) as revoker
+      from public.role_delegations rd
+      left join lateral (
+        select id, email, first_name, last_name, role
+        from public.users
+        where id = rd.delegator_id
+        limit 1
+      ) dg on true
+      left join lateral (
+        select id, email, first_name, last_name, role
+        from public.users
+        where id = rd.delegate_id
+        limit 1
+      ) dd on true
+      left join lateral (
+        select id, email, first_name, last_name
+        from public.users
+        where id = rd.revoked_by
+        limit 1
+      ) rv on true
+      ${where.length ? `where ${where.join(' and ')}` : ''}
+      order by rd.created_at desc nulls last
+      `,
+      values
+    )
 
     return NextResponse.json({
       success: true,
-      data: data || [],
+      data: rows.rows || [],
     })
   } catch (error) {
     console.error('❌ Unexpected error in GET /api/role-delegations:', error)
@@ -118,11 +123,8 @@ export async function GET(request: NextRequest) {
 // POST /api/role-delegations - Create a new role delegation
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    
-    // Get current user
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
+    const userId = await getCurrentUserId(request)
+    if (!userId) {
       return NextResponse.json(
         { success: false, message: 'Unauthorized' },
         { status: 401 }
@@ -163,7 +165,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate delegate is not self
-    if (delegate_id === user.id) {
+    if (delegate_id === userId) {
       return NextResponse.json(
         { success: false, message: 'You cannot delegate a role to yourself' },
         { status: 400 }
@@ -171,13 +173,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Get delegator's role
-    const { data: delegator, error: delegatorError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (delegatorError || !delegator) {
+    const delegatorRes = await query<{ role: string }>(
+      `select role from public.users where id = $1 limit 1`,
+      [userId]
+    )
+    const delegator = delegatorRes.rows[0]
+    if (!delegator) {
       return NextResponse.json(
         { success: false, message: 'Could not verify your user information' },
         { status: 404 }
@@ -193,13 +194,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify delegate exists and is active staff
-    const { data: delegate, error: delegateError } = await supabase
-      .from('users')
-      .select('id, status, role')
-      .eq('id', delegate_id)
-      .single()
-
-    if (delegateError || !delegate) {
+    const delegateRes = await query<{ id: string; status: string; role: string }>(
+      `
+      select id, status, role
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [delegate_id]
+    )
+    const delegate = delegateRes.rows[0]
+    if (!delegate) {
       return NextResponse.json(
         { success: false, message: 'Selected delegate user not found' },
         { status: 404 }
@@ -223,13 +228,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for existing active delegation for this role from this user
-    const { data: existingDelegation } = await supabase
-      .from('role_delegations')
-      .select('id')
-      .eq('delegator_id', user.id)
-      .eq('delegated_role', delegated_role)
-      .eq('status', 'active')
-      .single()
+    const existingRes = await query<{ id: string }>(
+      `
+      select id
+      from public.role_delegations
+      where delegator_id = $1
+        and delegated_role = $2
+        and status = 'active'
+      limit 1
+      `,
+      [userId, delegated_role]
+    )
+    const existingDelegation = existingRes.rows[0]
 
     if (existingDelegation) {
       return NextResponse.json(
@@ -250,69 +260,79 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the delegation
-    const { data: delegation, error: createError } = await supabase
-      .from('role_delegations')
-      .insert([{
-        delegator_id: user.id,
-        delegate_id,
-        delegated_role,
-        reason: reason || null,
-        start_date: startDateTime.toISOString(),
-        end_date: endDateTime?.toISOString() || null,
-        status: 'active',
-      }])
-      .select(`
-        *,
-        delegator:users!delegator_id(
-          id,
-          email,
-          first_name,
-          last_name,
-          role
-        ),
-        delegate:users!delegate_id(
-          id,
-          email,
-          first_name,
-          last_name,
-          role
-        )
-      `)
-      .single()
-
-    if (createError) {
-      console.error('❌ Error creating delegation:', createError)
-      return NextResponse.json(
-        { success: false, message: `Failed to create delegation: ${createError.message}` },
-        { status: 500 }
-      )
-    }
-
-    // Create audit log
-    await supabase.from('audit_logs').insert({
-      user_id: user.id,
-      action: 'role_delegation.created',
-      entity_type: 'user',
-      table_name: 'role_delegations',
-      record_id: delegation.id,
-      new_values: {
+    const inserted = await query(
+      `
+      insert into public.role_delegations (
+        delegator_id,
         delegate_id,
         delegated_role,
         reason,
-        start_date: startDateTime.toISOString(),
-        end_date: endDateTime?.toISOString() || null,
-      },
-      description: `Role ${delegated_role} delegated to user`,
-      severity: 'warning',
-      status: 'success',
-    })
+        start_date,
+        end_date,
+        status,
+        created_at,
+        updated_at
+      ) values ($1,$2,$3,$4,$5,$6,'active',now(),now())
+      returning *
+      `,
+      [
+        userId,
+        delegate_id,
+        delegated_role,
+        reason || null,
+        startDateTime.toISOString(),
+        endDateTime?.toISOString() || null,
+      ]
+    )
+    const delegation = inserted.rows[0]
+    if (!delegation) {
+      return NextResponse.json(
+        { success: false, message: 'Failed to create delegation' },
+        { status: 500 }
+      )
+    }
+    const [delegatorUser, delegateUser] = await Promise.all([
+      query(`select id, email, first_name, last_name, role from public.users where id = $1 limit 1`, [delegation.delegator_id]),
+      query(`select id, email, first_name, last_name, role from public.users where id = $1 limit 1`, [delegation.delegate_id]),
+    ])
+    const delegationOut = {
+      ...delegation,
+      delegator: delegatorUser.rows[0] || null,
+      delegate: delegateUser.rows[0] || null,
+    }
+
+    // Create audit log
+    await query(
+      `
+      insert into public.audit_logs (
+        user_id, action, entity_type, table_name, record_id, new_values, description, severity, status, created_at
+      ) values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,now())
+      `,
+      [
+        userId,
+        'role_delegation.created',
+        'user',
+        'role_delegations',
+        delegation.id,
+        JSON.stringify({
+          delegate_id,
+          delegated_role,
+          reason,
+          start_date: startDateTime.toISOString(),
+          end_date: endDateTime?.toISOString() || null,
+        }),
+        `Role ${delegated_role} delegated to user`,
+        'warning',
+        'success',
+      ]
+    ).catch(() => undefined)
 
     console.log('✅ Role delegation created successfully:', delegation.id)
 
     return NextResponse.json({
       success: true,
       message: 'Delegation created successfully',
-      data: delegation,
+      data: delegationOut,
     }, { status: 201 })
 
   } catch (error) {

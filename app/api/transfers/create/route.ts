@@ -2,34 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { PindoClient } from '@/lib/pindo-client'
 import { sendResendEmail } from '@/lib/notifications/resend-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
-import { getSupabaseAdmin, getSupabaseServerAuth, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
-
-const isMissingTransferRequestsTable = (err: unknown): boolean => {
-  const code = (err as { code?: unknown } | null)?.code
-  const message = String((err as { message?: unknown } | null)?.message || '')
-  return (
-    code === '42P01' ||
-    message.includes('relation "public.transfer_requests" does not exist') ||
-    message.includes('relation "transfer_requests" does not exist')
-  )
-}
+import { query } from '@/lib/db/postgres'
+import { getAuthenticatedUserId, isMissingTransferRequestsTable, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
 export async function POST(req: NextRequest) {
   try {
-    const supabaseAdmin = getSupabaseAdmin()
-    const auth = getSupabaseServerAuth(req)
-    if (!supabaseAdmin || !auth) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: missing Supabase env vars' },
-        { status: 500 }
-      )
-    }
-
-    const { supabaseAuth } = auth
-    const user = (await supabaseAuth.auth.getUser()).data.user
-    if (!user) {
+    const userId = await getAuthenticatedUserId(req)
+    if (!userId) {
       return NextResponse.json({ success: false, message: 'Authentication required' }, { status: 401 })
     }
 
@@ -56,16 +37,27 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate application is owned by the current user and is a transfer application.
-    const { data: app, error: appErr } = await supabaseAdmin
-      .from('applications')
-      .select('id, applicant_id, application_number, project_title, application_type, internal_notes')
-      .eq('id', applicationId)
-      .single()
-
-    if (appErr || !app) {
+    const appRes = await query<{
+      id: string
+      applicant_id: string
+      application_number: string | null
+      project_title: string | null
+      application_type: string | null
+      internal_notes: string | null
+    }>(
+      `
+      select id, applicant_id, application_number, project_title, application_type, internal_notes::text as internal_notes
+      from public.applications
+      where id = $1
+      limit 1
+      `,
+      [applicationId]
+    )
+    const app = appRes.rows[0]
+    if (!app) {
       return NextResponse.json({ success: false, message: 'Transfer application not found' }, { status: 404 })
     }
-    if (app.applicant_id !== user.id) {
+    if (app.applicant_id !== userId) {
       return NextResponse.json({ success: false, message: 'Forbidden: not your transfer application' }, { status: 403 })
     }
     if (app.application_type !== 'transfer') {
@@ -73,23 +65,33 @@ export async function POST(req: NextRequest) {
     }
 
     // Create or update transfer request (idempotent per application).
-    const { data: tr, error: trErr } = await supabaseAdmin
-      .from('transfer_requests')
-      .upsert(
-        {
-          application_id: applicationId,
-          original_permit_id: originalPermitId,
-          transferor_user_id: user.id,
-          transferee_email: transfereeEmail,
-          transferee_phone: transfereePhoneKey,
-          status: 'pending',
-        },
-        { onConflict: 'application_id' }
+    let tr: Record<string, unknown> | undefined
+    try {
+      const trRes = await query(
+        `
+        insert into public.transfer_requests (
+          application_id,
+          original_permit_id,
+          transferor_user_id,
+          transferee_email,
+          transferee_phone,
+          status,
+          created_at,
+          updated_at
+        ) values ($1,$2,$3,$4,$5,'pending',now(),now())
+        on conflict (application_id) do update set
+          original_permit_id = excluded.original_permit_id,
+          transferor_user_id = excluded.transferor_user_id,
+          transferee_email = excluded.transferee_email,
+          transferee_phone = excluded.transferee_phone,
+          status = 'pending',
+          updated_at = now()
+        returning *
+        `,
+        [applicationId, originalPermitId, userId, transfereeEmail, transfereePhoneKey]
       )
-      .select()
-      .single()
-
-    if (trErr || !tr) {
+      tr = trRes.rows[0]
+    } catch (trErr) {
       if (isMissingTransferRequestsTable(trErr)) {
         return NextResponse.json(
           {
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
       console.error('❌ Failed to create transfer request:', trErr)
       return NextResponse.json({ success: false, message: 'Failed to create transfer request' }, { status: 500 })
     }
+    if (!tr) return NextResponse.json({ success: false, message: 'Failed to create transfer request' }, { status: 500 })
 
     // Notify transferee (may not have an account yet).
     const portalUrl = getPortalUrl()

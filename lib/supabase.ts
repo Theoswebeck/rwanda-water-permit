@@ -1,13 +1,9 @@
-import { createClient } from './supabase/client'
-import type { Database } from '@/types/database'
-
-// Use the browser client for all operations
-export const supabase = createClient()
+import { supabase } from './selfhosted-supabase-client'
 
 // DEV ONLY: expose supabase for quick debugging in browser console.
 // This helps diagnose RLS/auth issues (e.g., auth.uid() is NULL when session is missing).
 if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-  (window as any).supabase = supabase
+  ;(window as unknown as { supabase?: unknown }).supabase = supabase
 }
 
 // Helper function to get the current user

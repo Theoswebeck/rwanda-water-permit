@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { query } from "@/lib/db/postgres";
 
 const QuerySchema = z.object({
   q: z.string().optional(),
@@ -35,47 +35,54 @@ export async function GET(req: NextRequest) {
     }
 
     const { q, province, district, sector, water_source, purpose, limit, offset } = parsed.data;
-    const supabase = createAdminClient();
-
-    // Fetch permits + minimal linked application fields (non-confidential only)
-    const { data, error } = await supabase
-      .from("permits")
-      .select(
-        `
-        id,
-        permit_number,
-        status,
-        water_source,
-        purpose,
-        issued_date,
-        expiry_date,
-        application:applications!application_id(
-          province,
-          district,
-          sector,
-          catchment_name_level_1,
-          catchment_name_level_2
-        )
+    const dbRows = await query<{
+      id: string;
+      permit_number: string;
+      status: string;
+      water_source: string;
+      purpose: string;
+      issued_date: string | null;
+      expiry_date: string | null;
+      province: string | null;
+      district: string | null;
+      sector: string | null;
+      catchment_name_level_1: string | null;
+      catchment_name_level_2: string | null;
+    }>(
       `
-      )
-      .order("issued_date", { ascending: false })
-      .range(offset, offset + limit - 1);
+      select
+        p.id,
+        p.permit_number,
+        p.status::text as status,
+        p.water_source::text as water_source,
+        p.purpose::text as purpose,
+        p.issued_date::text as issued_date,
+        p.expiry_date::text as expiry_date,
+        a.province::text as province,
+        a.district,
+        a.sector,
+        a.catchment_name_level_1,
+        a.catchment_name_level_2
+      from public.permits p
+      left join public.applications a on a.id = p.application_id
+      order by p.issued_date desc nulls last, p.created_at desc nulls last
+      offset $1 limit $2
+      `,
+      [offset, limit]
+    );
 
-    if (error) throw error;
-
-    const rows = (data || []).map((p: any) => {
-      const app = p.application || {};
+    const rows = dbRows.rows.map((p) => {
       return {
         permitId: p.id,
         permitNumber: p.permit_number,
         status: p.status,
         waterSource: p.water_source,
         useType: p.purpose,
-        province: app.province ?? null,
-        district: app.district ?? null,
-        sector: app.sector ?? null,
-        catchment1: app.catchment_name_level_1 ?? null,
-        catchment2: app.catchment_name_level_2 ?? null,
+        province: p.province ?? null,
+        district: p.district ?? null,
+        sector: p.sector ?? null,
+        catchment1: p.catchment_name_level_1 ?? null,
+        catchment2: p.catchment_name_level_2 ?? null,
         issuedDate: p.issued_date,
         expiryDate: p.expiry_date,
         duration: durationLabel(p.issued_date, p.expiry_date),

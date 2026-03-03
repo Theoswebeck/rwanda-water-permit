@@ -1,11 +1,5 @@
-import { supabase } from './supabase';
-
-/**
- * Utility functions for Supabase Storage operations
- */
-
-// Default storage bucket for documents
-const DOCUMENTS_BUCKET = 'application-documents';
+// Storage compatibility layer for self-hosted mode.
+// Files are served from /public/uploads and related API routes.
 
 /**
  * Normalize a stored file path (strip leading slash).
@@ -27,25 +21,11 @@ export const getDocumentUrl = (filePath: string | null | undefined): string | nu
       return filePath;
     }
     
-    // Remove leading slash if present to avoid double slashes
-    let normalizedPath = filePath.startsWith('/') ? filePath.substring(1) : filePath;
-    
-    // Handle legacy paths that start with "uploads/" - convert them to use storage bucket
-    if (normalizedPath.startsWith('uploads/')) {
-      // For legacy paths, we'll construct a storage URL
-      // You may need to adjust this based on your actual storage setup
-      normalizedPath = normalizedPath.replace('uploads/', 'legacy/');
-    }
-    
-    // Generate public URL using Supabase storage
-    const { data } = supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .getPublicUrl(normalizedPath);
-      
-    return data.publicUrl;
+    if (filePath.startsWith('/')) return filePath;
+    if (filePath.startsWith('uploads/')) return `/${filePath}`;
+    return `/${filePath}`;
   } catch (error) {
     console.error('Error generating document URL:', error);
-    // Fallback: return a placeholder or the original path
     return filePath;
   }
 };
@@ -63,42 +43,22 @@ export const uploadDocument = async (
   documentType: string
 ): Promise<{ path: string; url: string } | null> => {
   try {
-    console.log(`🔧 uploadDocument called with:`, { fileName: file.name, applicationId, documentType });
-    
-    // Generate unique filename
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${documentType}-${Date.now()}.${fileExt}`;
-    const filePath = `applications/${applicationId}/${fileName}`;
-    
-    console.log(`🔧 Generated file path: ${filePath}`);
-    console.log(`🔧 Using bucket: ${DOCUMENTS_BUCKET}`);
-    
-    // Upload file
-    const { data, error } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
-      
-    if (error) {
-      console.error('❌ Upload error:', error);
+    const form = new FormData();
+    form.set('file', file);
+    form.set('documentType', documentType);
+    const res = await fetch(`/api/dashboard/applications/${encodeURIComponent(applicationId)}/documents`, {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('❌ Upload error:', await res.text());
       return null;
     }
-    
-    console.log(`✅ Storage upload successful:`, data);
-    
-    // Get public URL
-    const url = getDocumentUrl(data.path);
-    console.log(`🔧 Generated URL: ${url}`);
-    
-    const result = {
-      path: data.path,
-      url: url || ''
-    };
-    
-    console.log(`✅ uploadDocument returning:`, result);
-    return result;
+    const json = (await res.json()) as { document?: { file_path?: string | null } };
+    const path = String(json.document?.file_path || '');
+    if (!path) return null;
+    return { path, url: getDocumentUrl(path) || path };
   } catch (error) {
     console.error('❌ Upload error in catch block:', error);
     return null;
@@ -111,23 +71,8 @@ export const uploadDocument = async (
  * @returns Success status
  */
 export const deleteDocument = async (filePath: string): Promise<boolean> => {
-  try {
-    const normalizedPath = normalizeStoragePath(filePath);
-    
-    const { error } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .remove([normalizedPath]);
-      
-    if (error) {
-      console.error('Delete error:', error);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('Error deleting document:', error);
-    return false;
-  }
+  void filePath;
+  return false;
 };
 
 /**
@@ -136,24 +81,8 @@ export const deleteDocument = async (filePath: string): Promise<boolean> => {
  * @returns File info or null
  */
 export const getDocumentInfo = async (filePath: string) => {
-  try {
-    const normalizedPath = normalizeStoragePath(filePath);
-    
-    const { data, error } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .list(normalizedPath.split('/').slice(0, -1).join('/'), {
-        search: normalizedPath.split('/').pop()
-      });
-      
-    if (error || !data || data.length === 0) {
-      return null;
-    }
-    
-    return data[0];
-  } catch (error) {
-    console.error('Error getting document info:', error);
-    return null;
-  }
+  void filePath;
+  return null;
 };
 
 /**
@@ -227,26 +156,24 @@ export const uploadPermitPdf = async (opts: {
   const { permitId, permitNumber, pdfBlob } = opts;
 
   try {
-    const safePermitNumber = permitNumber.replace(/[^a-zA-Z0-9-_]/g, "_");
-    const filePath = `permits/${permitId}/permit-${safePermitNumber}.pdf`;
-
-    console.log("📤 Uploading permit PDF to storage:", { bucket: DOCUMENTS_BUCKET, filePath });
-
-    const { data, error } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .upload(filePath, pdfBlob, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType: "application/pdf",
-      });
-
-    if (error || !data?.path) {
-      console.error("❌ Failed to upload permit PDF:", error);
+    const file = new File([pdfBlob], `permit-${permitNumber}.pdf`, { type: 'application/pdf' });
+    const form = new FormData();
+    form.set('file', file);
+    form.set('permitId', permitId);
+    form.set('kind', 'permit');
+    form.set('label', permitNumber);
+    const res = await fetch('/api/files/upload', {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('❌ Failed to upload permit PDF:', await res.text());
       return null;
     }
-
-    const url = getDocumentUrl(data.path) || "";
-    return { path: data.path, url };
+    const json = (await res.json()) as { path?: string; url?: string };
+    if (!json.path || !json.url) return null;
+    return { path: json.path, url: json.url };
   } catch (error) {
     console.error("❌ Error uploading permit PDF:", error);
     return null;
@@ -268,26 +195,24 @@ export const uploadTermsPdf = async (opts: {
   const { permitId, contractNumber, pdfBlob } = opts;
 
   try {
-    const safeContractNumber = String(contractNumber || "contract").replace(/[^a-zA-Z0-9-_]/g, "_");
-    const filePath = `permits/${permitId}/terms-${safeContractNumber}.pdf`;
-
-    console.log("📤 Uploading terms PDF to storage:", { bucket: DOCUMENTS_BUCKET, filePath });
-
-    const { data, error } = await supabase.storage
-      .from(DOCUMENTS_BUCKET)
-      .upload(filePath, pdfBlob, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType: "application/pdf",
-      });
-
-    if (error || !data?.path) {
-      console.error("❌ Failed to upload terms PDF:", error);
+    const file = new File([pdfBlob], `terms-${contractNumber || 'contract'}.pdf`, { type: 'application/pdf' });
+    const form = new FormData();
+    form.set('file', file);
+    form.set('permitId', permitId);
+    form.set('kind', 'terms');
+    form.set('label', contractNumber || 'contract');
+    const res = await fetch('/api/files/upload', {
+      method: 'POST',
+      body: form,
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      console.error('❌ Failed to upload terms PDF:', await res.text());
       return null;
     }
-
-    const url = getDocumentUrl(data.path) || "";
-    return { path: data.path, url };
+    const json = (await res.json()) as { path?: string; url?: string };
+    if (!json.path || !json.url) return null;
+    return { path: json.path, url: json.url };
   } catch (error) {
     console.error("❌ Error uploading terms PDF:", error);
     return null;
@@ -311,12 +236,13 @@ export async function downloadFromDocumentsBucket(filePath: string): Promise<Blo
     }
 
     const normalizedPath = normalizeStoragePath(filePath);
-    const { data, error } = await supabase.storage.from(DOCUMENTS_BUCKET).download(normalizedPath);
-    if (error || !data) {
-      console.error("❌ Storage download failed:", error);
+    const url = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error("❌ Storage download failed:", res.status, res.statusText);
       return null;
     }
-    return data;
+    return await res.blob();
   } catch (error) {
     console.error("❌ Error downloading from storage:", error);
     return null;

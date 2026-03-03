@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { query } from '@/lib/db/postgres'
+import { hashPassword } from '@/lib/auth/password'
 import { buildPortalLink } from '@/lib/notifications/portal-url'
 
 // Generate a secure random password
@@ -73,26 +74,14 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    
-    if (!serviceKey) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: SUPABASE_SERVICE_ROLE_KEY is missing' },
-        { status: 500 }
-      )
-    }
-
-    const supabase = createClient(url, serviceKey)
     const emailLower = String(email).trim().toLowerCase()
 
     // Check if user already exists
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id, email')
-      .ilike('email', emailLower)
-      .maybeSingle()
-
+    const existingRes = await query<{ id: string; email: string }>(
+      `select id, email from public.users where lower(email) = lower($1) limit 1`,
+      [emailLower]
+    )
+    const existingUser = existingRes.rows[0]
     if (existingUser) {
       return NextResponse.json({
         success: false,
@@ -102,86 +91,65 @@ export async function POST(req: NextRequest) {
 
     // Generate temporary password
     const tempPassword = generateTempPassword()
+    const passwordHash = await hashPassword(tempPassword)
     
     console.log('📝 Creating staff user:', emailLower, 'with role:', role)
 
-    // Create auth user with confirmed email
-    const { data: userCreate, error: userError } = await supabase.auth.admin.createUser({
-      email: emailLower,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: {
+    const insertRes = await query<{ id: string }>(
+      `
+      insert into public.users (
+        email, password_hash, role, status, account_type,
+        first_name, last_name, phone, company_name,
+        applications_count, reviews_count, inspections_count,
+        profile_completed, must_change_password, account_confirmed, confirmed_at,
+        created_at, updated_at
+      ) values (
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9,
+        0, 0, 0,
+        false, true, true, now(),
+        now(), now()
+      )
+      returning id
+      `,
+      [
+        emailLower,
+        passwordHash,
         role,
         status,
         account_type,
-        must_change_password: true,
-        first_name: first_name || 'Staff',
-        last_name: last_name || 'User',
-      }
-    })
-
-    if (userError || !userCreate?.user) {
-      console.error('❌ createUser error:', userError)
-      return NextResponse.json({ 
-        success: false, 
-        message: userError?.message || 'Failed to create auth user' 
-      }, { status: 400 })
+        first_name || 'Staff',
+        last_name || 'User',
+        phone || null,
+        company_name || null,
+      ]
+    )
+    const userId = insertRes.rows[0]?.id
+    if (!userId) {
+      return NextResponse.json({ success: false, message: 'Failed to create user' }, { status: 500 })
     }
-
-    const userId = userCreate.user.id
     console.log('✅ Auth user created:', userId)
-
-    // Create profile in public.users
-    const profile = {
-      id: userId,
-      email: emailLower,
-      role,
-      status,
-      account_type,
-      first_name: first_name || 'Staff',
-      last_name: last_name || 'User',
-      phone: phone || null,
-      company_name: company_name || null,
-      applications_count: 0,
-      reviews_count: 0,
-      inspections_count: 0,
-      profile_completed: false,
-      must_change_password: true,
-      account_confirmed: false,
-      confirmed_at: null,
-    }
-
-    const { error: profileError } = await supabase
-      .from('users')
-      .upsert(profile, { onConflict: 'id' })
-
-    if (profileError) {
-      console.error('❌ Profile upsert error:', profileError)
-      // Best-effort cleanup of auth user
-      try { await supabase.auth.admin.deleteUser(userId) } catch {}
-      return NextResponse.json({ 
-        success: false, 
-        message: `Failed to create user profile: ${profileError.message}` 
-      }, { status: 500 })
-    }
-
-    console.log('✅ User profile created')
 
     // Log the user creation action
     try {
-      await supabase
-        .from('audit_logs')
-        .insert({
-          action: 'user.created',
-          entity_type: 'user',
-          table_name: 'users',
-          record_id: userId,
-          new_values: { email: emailLower, role, status, account_type },
-          description: `Created new staff account for ${emailLower} with role ${role}`,
-          severity: 'info',
-          status: 'success',
-          request_id: crypto.randomUUID()
-        })
+      await query(
+        `
+        insert into public.audit_logs (
+          action, entity_type, table_name, record_id, new_values, description, severity, status, request_id, created_at
+        ) values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, now())
+        `,
+        [
+          'user.created',
+          'user',
+          'users',
+          userId,
+          JSON.stringify({ email: emailLower, role, status, account_type }),
+          `Created new staff account for ${emailLower} with role ${role}`,
+          'info',
+          'success',
+          crypto.randomUUID(),
+        ]
+      )
       console.log('📝 Audit log created for user creation')
     } catch (auditErr) {
       console.warn('⚠️ Failed to create audit log:', auditErr)

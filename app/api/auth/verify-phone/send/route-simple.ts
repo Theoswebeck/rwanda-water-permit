@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query } from '@/lib/db/postgres';
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,22 +88,21 @@ export async function POST(request: NextRequest) {
 
     // Try to update user verification status (optional - graceful fail)
     try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-      await supabase
-        .from('users')
-        .update({
-          phone_verification_code: verificationCode,
-          phone_verification_expires_at: expiresAt.toISOString(),
-          phone_verification_attempts: 1,
-          phone_verification_last_sent: new Date().toISOString(),
-        })
-        .eq('id', userId);
+      await query(
+        `
+        update public.users
+        set
+          phone_verification_code = $2,
+          phone_verification_expires_at = $3,
+          phone_verification_attempts = 1,
+          phone_verification_last_sent = now(),
+          updated_at = now()
+        where id = $1
+        `,
+        [userId, verificationCode, expiresAt.toISOString()]
+      );
     } catch (dbError) {
       console.log('⚠️ Database update failed (non-critical):', dbError);
     }

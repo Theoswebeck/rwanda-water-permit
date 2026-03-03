@@ -34,7 +34,6 @@ import {
 import { Eye, AlertCircle, Search, Loader2, List } from "lucide-react";
 import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
 import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
-import { supabase } from "@/lib/supabase";
 
 export interface Permit {
   id: string;
@@ -100,99 +99,15 @@ export function PermitsList({ permits }: PermitsListProps) {
     "id, application_number, project_title, status, application_type, created_at, submitted_at, is_renewal, is_modification";
 
   const fetchPermitApplications = async (permitId: string) => {
-    const { data: permitRow, error: permitError } = await supabase
-      .from("permits")
-      .select("id, application_id, permit_number")
-      .eq("id", permitId)
-      .single();
-
-    if (permitError || !permitRow) throw permitError ?? new Error("Permit not found");
-
-    const originalApplicationId = (permitRow as any).application_id as string | undefined;
-
-    const items: PermitApplicationListItem[] = [];
-
-    // Original application (the one that created this permit)
-    if (originalApplicationId) {
-      const { data: original, error: originalError } = await supabase
-        .from("applications")
-        .select(appSelectFields)
-        .eq("id", originalApplicationId)
-        .maybeSingle();
-
-      if (!originalError && original) {
-        items.push({
-          ...(original as any),
-          kind: "original",
-        });
-      }
-
-      // Modifications are linked by modified_from_application_id
-      const { data: modifications, error: modError } = await supabase
-        .from("applications")
-        .select(appSelectFields)
-        .eq("modified_from_application_id", originalApplicationId)
-        .order("created_at", { ascending: false });
-
-      if (!modError && modifications?.length) {
-        for (const app of modifications as any[]) {
-          items.push({ ...(app as any), kind: "modification" });
-        }
-      }
-    }
-
-    // Renewals are linked by renewed_from_permit_id (fallback: internal_notes contains originalPermitId)
-    let renewalApps: any[] = [];
-    try {
-      const { data: renewals, error: renewalsError } = await supabase
-        .from("applications")
-        .select(appSelectFields)
-        .eq("renewed_from_permit_id", permitId)
-        .order("created_at", { ascending: false });
-
-      if (!renewalsError && renewals?.length) renewalApps = renewals as any[];
-    } catch {
-      // ignore - fallback below
-    }
-
-    if (renewalApps.length === 0) {
-      // Fallback for environments where renewed_from_permit_id isn't available
-      const { data: renewalsFallback, error: renewalsFallbackError } = await supabase
-        .from("applications")
-        .select(appSelectFields)
-        .eq("is_renewal", true)
-        .ilike("internal_notes", `%\"originalPermitId\":\"${permitId}\"%`)
-        .order("created_at", { ascending: false });
-
-      if (!renewalsFallbackError && renewalsFallback?.length) renewalApps = renewalsFallback as any[];
-    }
-
-    for (const app of renewalApps) {
-      items.push({ ...(app as any), kind: "renewal" });
-    }
-
-    // Transfers are tracked in internal_notes with originalPermitId (application_type = transfer)
-    const { data: transfers, error: transferError } = await supabase
-      .from("applications")
-      .select(appSelectFields)
-      .eq("application_type", "transfer")
-      .ilike("internal_notes", `%\"originalPermitId\":\"${permitId}\"%`)
-      .order("created_at", { ascending: false });
-
-    if (!transferError && transfers?.length) {
-      for (const app of transfers as any[]) {
-        items.push({ ...(app as any), kind: "transfer" });
-      }
-    }
-
-    // De-dupe and sort (newest first)
-    const deduped = Array.from(new Map(items.map((i) => [i.id, i])).values()).sort((a, b) => {
-      const da = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const db = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return db - da;
+    const response = await fetch(`/api/dashboard/permits/${permitId}/applications`, {
+      method: "GET",
+      cache: "no-store",
     });
-
-    return deduped;
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !json?.success) {
+      throw new Error(json?.message || "Failed to fetch permit applications");
+    }
+    return (json.applications || []) as PermitApplicationListItem[];
   };
 
   const openApplicationsDialog = async (permit: Permit) => {
@@ -225,31 +140,17 @@ export function PermitsList({ permits }: PermitsListProps) {
       console.log("📄 Generating PDF on-demand for permit:", permit.permitNumber);
 
       // Fetch permit with application data + modification flag
-      const { data: permitData, error: permitError } = await supabase
-        .from("permits")
-        .select(`
-          id,
-          permit_number,
-          issued_date,
-          expiry_date,
-          conditions,
-          application_id,
-          is_modification,
-          modification_count,
-          application:applications!application_id(
-            *,
-            applicant:users!applicant_id(*)
-          )
-        `)
-        .eq("id", permit.id)
-        .single();
-
-      if (permitError || !permitData) {
-        console.error("❌ Failed to fetch permit data:", permitError);
-        throw new Error("Failed to fetch permit data for PDF generation");
+      const metadataRes = await fetch(`/api/dashboard/permits/${permit.id}/pdf`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const metadataJson = await metadataRes.json().catch(() => null);
+      if (!metadataRes.ok || !metadataJson?.success) {
+        throw new Error(metadataJson?.message || "Failed to fetch permit data for PDF generation");
       }
 
-      const application = (permitData as any).application;
+      const permitData = metadataJson.permit as Record<string, unknown>;
+      const application = metadataJson.application as Record<string, unknown> | null;
       if (!application) {
         throw new Error("No application data found for this permit");
       }
@@ -277,7 +178,7 @@ export function PermitsList({ permits }: PermitsListProps) {
 
       // Generate PDF blob (with "MODIFIED PERMIT" badge when applicable)
       const pdfBlob = await generateDigitalWaterPermitBlob(
-        application,
+        application as any,
         permit.permitNumber,
         conditions,
         5, // Default validity years
@@ -299,16 +200,14 @@ export function PermitsList({ permits }: PermitsListProps) {
         console.log("✅ PDF uploaded:", upload.path);
 
         // Update permit record with PDF path
-        const { error: updateError } = await supabase
-          .from("permits")
-          .update({
-            permit_pdf_url: upload.path,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", permit.id);
-
-        if (updateError) {
-          console.warn("⚠️ Failed to update permit_pdf_url:", updateError);
+        const updateRes = await fetch(`/api/dashboard/permits/${permit.id}/pdf`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ permitPdfUrl: upload.path }),
+        });
+        const updateJson = await updateRes.json().catch(() => null);
+        if (!updateRes.ok || !updateJson?.success) {
+          console.warn("⚠️ Failed to update permit_pdf_url:", updateJson?.message || updateRes.statusText);
         } else {
           console.log("✅ permit_pdf_url saved on permit record");
           // Update the permit's pdfPath in the local state (won't affect props, but logs are useful)

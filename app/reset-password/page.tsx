@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/client";
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 
 function ResetPasswordContent() {
@@ -19,19 +18,14 @@ function ResetPasswordContent() {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  const supabase = createClient();
+  const searchParams = useSearchParams();
+  const resetToken = searchParams.get("resetToken") || "";
 
   useEffect(() => {
-    // Check if we have the necessary URL fragments for password reset
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const refreshToken = hashParams.get('refresh_token');
-    
-    if (!accessToken || !refreshToken) {
-      setError('Invalid reset password link. Please request a new password reset.');
+    if (!resetToken) {
+      setError('Invalid reset password link. Missing reset token.');
     }
-  }, []);
+  }, [resetToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,19 +50,24 @@ function ResetPasswordContent() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
+      const res = await fetch("/api/auth/password-reset/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resetToken,
+          newPassword: password,
+        }),
       });
-
-      if (error) {
-        setError(error.message);
+      const json = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
+      if (!res.ok || !json.success) {
+        setError(json.message || "Failed to update password");
       } else {
         setSuccess("Password updated successfully! Redirecting to login...");
         setTimeout(() => {
           router.push("/login?message=Password updated successfully! Please sign in with your new password.");
         }, 2000);
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred");
     } finally {
       setIsLoading(false);

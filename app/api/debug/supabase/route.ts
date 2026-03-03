@@ -16,19 +16,13 @@ function getProjectRefFromHost(hostname: string | null): string | null {
 }
 
 export async function GET() {
-  // Never expose env details in production
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ message: 'Not found' }, { status: 404 })
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const hostname = safeHostname(supabaseUrl)
+  const hostname = safeHostname(process.env.NEXT_PUBLIC_APP_URL)
   const projectRef = getProjectRefFromHost(hostname)
-
   return NextResponse.json({
-    supabaseHostname: hostname,
-    supabaseProjectRef: projectRef,
-    hasServiceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+    mode: 'self-hosted',
+    appHostname: hostname,
+    appRef: projectRef,
+    hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
   })
 }
 

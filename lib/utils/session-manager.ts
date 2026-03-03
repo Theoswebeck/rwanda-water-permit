@@ -1,5 +1,3 @@
-import { createClient } from '@/lib/supabase/client'
-
 interface SessionManager {
   initialize: () => void
   updateLastActivity: () => void
@@ -23,7 +21,6 @@ function throttle<T extends (...args: unknown[]) => void>(
 }
 
 class SessionManagerImpl implements SessionManager {
-  private supabase = createClient()
   private lastActivity: Date = new Date()
   private sessionTimeout = 30 * 60 * 1000 // 30 minutes
   // ⚡ PERFORMANCE: Increased heartbeat from 30s to 5 minutes
@@ -75,7 +72,7 @@ class SessionManagerImpl implements SessionManager {
   }
 
   async invalidateSession() {
-    await this.supabase.auth.signOut()
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
     try {
       localStorage.removeItem('lastActivity')
     } catch {
@@ -134,18 +131,8 @@ class SessionManagerImpl implements SessionManager {
 
   private async handleColdStart() {
     try {
-      // ⚡ PERFORMANCE: Use getSession instead of getUser (cached, no network call)
-      const { data: { session }, error } = await this.supabase.auth.getSession()
-      
-      if (error || !session) {
-        await this.invalidateSession()
-        return
-      }
-
-      // Only refresh if session exists but might be stale
-      const { error: refreshError } = await this.supabase.auth.refreshSession()
-      
-      if (refreshError) {
+      const meRes = await fetch('/api/auth/me', { credentials: 'include' })
+      if (!meRes.ok) {
         await this.invalidateSession()
         return
       }
@@ -165,7 +152,7 @@ export const authUtils = {
   clearAuthCache: () => {
     // Clear localStorage
     const authKeys = Object.keys(localStorage).filter(key => 
-      key.startsWith('supabase.') || 
+      key.startsWith('wp_') || 
       key.includes('auth') || 
       key.includes('session') ||
       key === 'lastActivity'
@@ -175,7 +162,7 @@ export const authUtils = {
     
     // Clear sessionStorage
     const sessionKeys = Object.keys(sessionStorage).filter(key => 
-      key.startsWith('supabase.') || 
+      key.startsWith('wp_') || 
       key.includes('auth') || 
       key.includes('session')
     )
@@ -193,7 +180,7 @@ export const authUtils = {
   detectAuthConflicts: () => {
     // Check for multiple auth sessions indicators
     const authKeys = Object.keys(localStorage).filter(key => 
-      key.startsWith('supabase.auth.token')
+      key.includes('auth') || key.includes('session')
     )
     
     return authKeys.length > 1

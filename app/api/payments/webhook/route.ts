@@ -5,50 +5,26 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getIremboPayClient } from '@/lib/irembopay-client';
 import { mapIremboPayStatus, getApplicationStatusFromPayment, generateReceiptNumber } from '@/lib/payment-utils';
 import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
-import type { IremboPayWebhookPayload, WebhookProcessingResult } from '@/types/payment';
-
-// IMPORTANT:
-// Do NOT create Supabase clients at module scope.
-// Next.js may import route modules during build to collect route data; if env vars
-// aren't available at build-time, this would throw and fail the build.
-const getSupabaseAdmin = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) {
-    return null;
-  }
-  return createClient(url, serviceKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-};
+import type { WebhookProcessingResult } from '@/types/payment';
+import { query } from '@/lib/db/postgres';
 
 export async function POST(request: NextRequest) {
+  let rawBody = '';
+  let signature = '';
+  let sourceIp = '';
   try {
     console.log('🔔 [WEBHOOK] Payment webhook received');
-
-    const supabaseAdmin = getSupabaseAdmin();
-    if (!supabaseAdmin) {
-      console.error('❌ [WEBHOOK] Server misconfiguration: missing Supabase keys');
-      return NextResponse.json(
-        { success: false, error: 'Server misconfiguration: missing Supabase keys' },
-        { status: 500 }
-      );
-    }
 
     // =============================================
     // 1. EXTRACT WEBHOOK DATA
     // =============================================
 
-    const body = await request.text();
-    const signature = request.headers.get('x-irembo-signature') || request.headers.get('x-signature') || '';
-    const sourceIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
+    rawBody = await request.text();
+    signature = request.headers.get('x-irembo-signature') || request.headers.get('x-signature') || '';
+    sourceIp = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || '';
 
     console.log('📨 [WEBHOOK] Source IP:', sourceIp);
 
@@ -57,7 +33,7 @@ export async function POST(request: NextRequest) {
     // =============================================
 
     const iremboPayClient = getIremboPayClient();
-    const isValidSignature = iremboPayClient.validateWebhookSignature(body, signature);
+    const isValidSignature = iremboPayClient.validateWebhookSignature(rawBody, signature);
 
     // Note: Webhook signature validation is optional
     // To enable strict validation, set IREMBOPAY_WEBHOOK_SECRET and uncomment the check below
@@ -68,16 +44,7 @@ export async function POST(request: NextRequest) {
     // Uncomment below to enforce signature validation in production:
     // if (!isValidSignature && process.env.NODE_ENV === 'production') {
     //   console.error('❌ [WEBHOOK] Invalid signature');
-    //   await supabaseAdmin.from('webhook_logs').insert({
-    //     event_type: 'payment.failed',
-    //     payload: JSON.parse(body),
-    //     headers: Object.fromEntries(request.headers.entries()),
-    //     source_ip: sourceIp,
-    //     signature: signature,
-    //     signature_valid: false,
-    //     processed: false,
-    //     processing_error: 'Invalid webhook signature',
-    //   });
+    //   // Persist a failed signature attempt in public.webhook_logs, then reject.
     //   return NextResponse.json(
     //     { success: false, error: 'Invalid signature' },
     //     { status: 401 }
@@ -90,7 +57,7 @@ export async function POST(request: NextRequest) {
     // 3. PARSE WEBHOOK PAYLOAD
     // =============================================
 
-    const payload = iremboPayClient.parseWebhook(body);
+    const payload = iremboPayClient.parseWebhook(rawBody);
 
     if (!payload) {
       console.error('❌ [WEBHOOK] Invalid payload format');
@@ -111,27 +78,42 @@ export async function POST(request: NextRequest) {
     // 4. FIND PAYMENT RECORD
     // =============================================
 
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from('payments')
-      .select('*, applications(*)')
-      .eq('irembo_payment_ref', payload.data.reference)
-      .single();
+    const paymentRes = await query(
+      `
+      select
+        p.*,
+        row_to_json(a) as applications
+      from public.payments p
+      left join public.applications a on a.id = p.application_id
+      where p.irembo_payment_ref = $1
+      limit 1
+      `,
+      [payload.data.reference]
+    );
+    const payment = paymentRes.rows[0] as Record<string, unknown> | undefined;
+    const paymentError = !payment ? new Error('Payment not found') : null;
 
     if (paymentError || !payment) {
       console.error('❌ [WEBHOOK] Payment not found:', payload.data.reference);
       
       // Log webhook for unknown payment
-      await supabaseAdmin.from('webhook_logs').insert({
-        event_type: payload.event,
-        event_id: payload.data.transaction_id,
-        payload: payload as any,
-        headers: Object.fromEntries(request.headers.entries()),
-        source_ip: sourceIp,
-        signature: signature,
-        signature_valid: isValidSignature,
-        processed: false,
-        processing_error: 'Payment not found',
-      });
+      await query(
+        `
+        insert into public.webhook_logs (
+          event_type, event_id, payload, headers, source_ip, signature, signature_valid, processed, processing_error, received_at, created_at
+        ) values ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, false, $8, now(), now())
+        `,
+        [
+          payload.event,
+          payload.data.transaction_id || null,
+          JSON.stringify(payload),
+          JSON.stringify(Object.fromEntries(request.headers.entries())),
+          sourceIp || null,
+          signature || null,
+          isValidSignature,
+          'Payment not found',
+        ]
+      ).catch(() => undefined);
 
       return NextResponse.json(
         { success: false, error: 'Payment not found' },
@@ -151,12 +133,13 @@ export async function POST(request: NextRequest) {
     console.log('🔄 [WEBHOOK] Processing event:', payload.event, '→ Status:', internalStatus);
 
     // Prepare update data
-    const paymentUpdate: any = {
+    const paymentGateway = (payment.gateway_response as Record<string, unknown> | null | undefined) || {};
+    const paymentUpdate: Record<string, unknown> = {
       status: internalStatus,
       irembo_transaction_id: payload.data.transaction_id || payment.irembo_transaction_id,
       payment_method: payload.data.payment_method || payment.payment_method,
       gateway_response: {
-        ...(payment.gateway_response as any || {}),
+        ...paymentGateway,
         webhook: payload,
       },
       updated_at: now,
@@ -179,10 +162,32 @@ export async function POST(request: NextRequest) {
     // 6. UPDATE PAYMENT RECORD
     // =============================================
 
-    const { error: updateError } = await supabaseAdmin
-      .from('payments')
-      .update(paymentUpdate)
-      .eq('id', payment.id);
+    const updateRes = await query(
+      `
+      update public.payments
+      set
+        status = $2,
+        irembo_transaction_id = $3,
+        payment_method = $4,
+        gateway_response = $5::jsonb,
+        processing_at = coalesce($6::timestamptz, processing_at),
+        completed_at = coalesce($7::timestamptz, completed_at),
+        failed_at = coalesce($8::timestamptz, failed_at),
+        updated_at = now()
+      where id = $1
+      `,
+      [
+        payment.id,
+        internalStatus,
+        paymentUpdate.irembo_transaction_id || null,
+        paymentUpdate.payment_method || null,
+        JSON.stringify(paymentUpdate.gateway_response || {}),
+        paymentUpdate.processing_at || null,
+        paymentUpdate.completed_at || null,
+        paymentUpdate.failed_at || null,
+      ]
+    );
+    const updateError = !updateRes.rowCount ? new Error('payment not updated') : null;
 
     if (updateError) {
       console.error('❌ [WEBHOOK] Failed to update payment:', updateError);
@@ -195,19 +200,41 @@ export async function POST(request: NextRequest) {
     // 7. CREATE TRANSACTION LOG
     // =============================================
 
-    await supabaseAdmin.from('payment_transactions').insert({
-      payment_id: payment.id,
-      irembo_txn_id: payload.data.transaction_id,
-      transaction_ref: payload.data.reference,
-      payment_method: payload.data.payment_method as any,
-      payment_channel: payload.data.payment_channel as any,
-      amount: payload.data.amount,
-      currency: payload.data.currency,
-      status: internalStatus,
-      provider_response: payload.data as any,
-      provider_code: payload.data.status,
-      provider_message: payload.data.failed_reason,
-      processed_at: now,
+    await query(
+      `
+      insert into public.payment_transactions (
+        payment_id,
+        irembo_txn_id,
+        transaction_ref,
+        payment_method,
+        payment_channel,
+        amount,
+        currency,
+        status,
+        provider_response,
+        provider_code,
+        provider_message,
+        processed_at,
+        created_at,
+        updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,now(),now())
+      `,
+      [
+        payment.id,
+        payload.data.transaction_id || null,
+        payload.data.reference || null,
+        payload.data.payment_method || null,
+        payload.data.payment_channel || null,
+        payload.data.amount,
+        payload.data.currency,
+        internalStatus,
+        JSON.stringify(payload.data || {}),
+        payload.data.status || null,
+        payload.data.failed_reason || null,
+        now,
+      ]
+    ).catch((err) => {
+      console.warn('⚠️ [WEBHOOK] Failed creating payment transaction log:', err);
     });
 
     console.log('✅ [WEBHOOK] Transaction log created');
@@ -219,13 +246,18 @@ export async function POST(request: NextRequest) {
     if (internalStatus === 'completed') {
       const newApplicationStatus = getApplicationStatusFromPayment(internalStatus);
       
-      const { error: appUpdateError } = await supabaseAdmin
-        .from('applications')
-        .update({ 
-          status: newApplicationStatus,
-          submitted_at: now,
-        })
-        .eq('id', payment.application_id);
+      const appUpdateRes = payment.application_id
+        ? await query(
+            `
+            update public.applications
+            set status = $2, submitted_at = $3, updated_at = now()
+            where id = $1
+            returning id
+            `,
+            [payment.application_id, newApplicationStatus, now]
+          )
+        : { rowCount: 0 };
+      const appUpdateError = !appUpdateRes.rowCount ? new Error('application not updated') : null;
 
       if (appUpdateError) {
         console.error('⚠️  [WEBHOOK] Failed to update application status:', appUpdateError);
@@ -248,11 +280,18 @@ export async function POST(request: NextRequest) {
       // =============================================
 
       try {
-        const { data: application } = await supabaseAdmin
-          .from('applications')
-          .select('*, users!applications_applicant_id_fkey(*)')
-          .eq('id', payment.application_id)
-          .single();
+        const applicationRes = payment.application_id
+          ? await query(
+              `
+              select *
+              from public.applications
+              where id = $1
+              limit 1
+              `,
+              [payment.application_id]
+            )
+          : { rows: [] as Record<string, unknown>[] };
+        const application = applicationRes.rows[0];
 
         const receiptData = {
           receipt_number: generateReceiptNumber(),
@@ -270,15 +309,27 @@ export async function POST(request: NextRequest) {
           description: payment.description,
         };
 
-        const { error: receiptError } = await supabaseAdmin
-          .from('payment_receipts')
-          .insert({
-            payment_id: payment.id,
-            application_id: payment.application_id,
-            receipt_number: receiptData.receipt_number,
-            receipt_data: receiptData as any,
-            generated_at: now,
-          });
+        const receiptInsert = await query(
+          `
+          insert into public.payment_receipts (
+            payment_id,
+            application_id,
+            receipt_number,
+            receipt_data,
+            generated_at,
+            created_at,
+            updated_at
+          ) values ($1,$2,$3,$4::jsonb,$5,now(),now())
+          `,
+          [
+            payment.id,
+            payment.application_id,
+            receiptData.receipt_number,
+            JSON.stringify(receiptData),
+            now,
+          ]
+        );
+        const receiptError = !receiptInsert.rowCount ? new Error('receipt not inserted') : null;
 
         if (receiptError) {
           console.error('⚠️  [WEBHOOK] Failed to generate receipt:', receiptError);
@@ -295,13 +346,18 @@ export async function POST(request: NextRequest) {
       const newStatus = 'draft';
 
       if (payment.application_id) {
-        const { data: updatedApp, error: revertError } = await supabaseAdmin
-          .from('applications')
-          .update({ status: newStatus })
-          .eq('id', payment.application_id)
-          .in('status', ['pending_payment', 'draft'])
-          .select('id,status')
-          .maybeSingle();
+        const revertRes = await query(
+          `
+          update public.applications
+          set status = $2, updated_at = now()
+          where id = $1
+            and status in ('pending_payment', 'draft')
+          returning id, status
+          `,
+          [payment.application_id, newStatus]
+        );
+        const updatedApp = revertRes.rows[0];
+        const revertError = null;
 
         if (revertError) {
           console.error('⚠️  [WEBHOOK] Failed to revert application to draft:', revertError);
@@ -317,17 +373,38 @@ export async function POST(request: NextRequest) {
     // 10. LOG WEBHOOK EVENT
     // =============================================
 
-    await supabaseAdmin.from('webhook_logs').insert({
-      payment_id: payment.id,
-      event_type: payload.event,
-      event_id: payload.data.transaction_id,
-      payload: payload as any,
-      headers: Object.fromEntries(request.headers.entries()),
-      source_ip: sourceIp,
-      signature: signature,
-      signature_valid: isValidSignature,
-      processed: true,
-      processed_at: now,
+    await query(
+      `
+      insert into public.webhook_logs (
+        payment_id,
+        event_type,
+        event_id,
+        payload,
+        headers,
+        source_ip,
+        signature,
+        signature_valid,
+        processed,
+        processed_at,
+        received_at,
+        created_at
+      ) values (
+        $1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,true,$9,now(),now()
+      )
+      `,
+      [
+        payment.id,
+        payload.event,
+        payload.data.transaction_id || null,
+        JSON.stringify(payload),
+        JSON.stringify(Object.fromEntries(request.headers.entries())),
+        sourceIp || null,
+        signature || null,
+        isValidSignature,
+        now,
+      ]
+    ).catch((err) => {
+      console.warn('⚠️ [WEBHOOK] Failed to write webhook log:', err);
     });
 
     console.log('✅ [WEBHOOK] Webhook logged successfully');
@@ -351,17 +428,31 @@ export async function POST(request: NextRequest) {
 
     // Try to log error
     try {
-      const body = await request.text();
-      await supabaseAdmin.from('webhook_logs').insert({
-        event_type: 'payment.failed',
-        payload: JSON.parse(body),
-        headers: Object.fromEntries(request.headers.entries()),
-        source_ip: request.headers.get('x-forwarded-for') || '',
-        signature: request.headers.get('x-irembo-signature') || '',
-        signature_valid: false,
-        processed: false,
-        processing_error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      const parsed = rawBody ? JSON.parse(rawBody) : {};
+      await query(
+        `
+        insert into public.webhook_logs (
+          event_type,
+          payload,
+          headers,
+          source_ip,
+          signature,
+          signature_valid,
+          processed,
+          processing_error,
+          received_at,
+          created_at
+        ) values ($1, $2::jsonb, $3::jsonb, $4, $5, false, false, $6, now(), now())
+        `,
+        [
+          'payment.failed',
+          JSON.stringify(parsed),
+          JSON.stringify(Object.fromEntries(request.headers.entries())),
+          sourceIp || request.headers.get('x-forwarded-for') || null,
+          signature || request.headers.get('x-irembo-signature') || null,
+          error instanceof Error ? error.message : 'Unknown error',
+        ]
+      ).catch(() => undefined);
     } catch (logError) {
       console.error('❌ [WEBHOOK] Failed to log error:', logError);
     }
@@ -377,12 +468,12 @@ export async function POST(request: NextRequest) {
 }
 
 // OPTIONS method for CORS
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return NextResponse.json({}, { status: 200 });
 }
 
 // GET method to verify webhook endpoint is accessible
-export async function GET(request: NextRequest) {
+export async function GET() {
   return NextResponse.json(
     {
       message: 'IremboPay Webhook Endpoint',

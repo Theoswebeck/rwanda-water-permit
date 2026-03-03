@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { query } from "@/lib/db/postgres";
 
 const QuerySchema = z.object({
   status: z.string().optional().default("active"),
@@ -45,38 +45,49 @@ export async function GET(req: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: "Invalid query params" }, { status: 400 });
 
     const { status, includeExpired } = parsed.data;
-    const supabase = createAdminClient();
-
-    const { data, error } = await supabase
-      .from("permits")
-      .select(
-        `
-        id,
-        permit_number,
-        status,
-        water_source,
-        purpose,
-        water_allowance,
-        allowance_unit,
-        issued_date,
-        expiry_date,
-        application:applications!application_id(
-          province,
-          district,
-          sector,
-          catchment_name_level_1,
-          catchment_name_level_2,
-          coordinates
-        )
+    const data = await query<{
+      id: string;
+      permit_number: string;
+      status: string;
+      water_source: string;
+      purpose: string;
+      water_allowance: string | number | null;
+      allowance_unit: string | null;
+      issued_date: string | null;
+      expiry_date: string | null;
+      province: string | null;
+      district: string | null;
+      sector: string | null;
+      catchment_name_level_1: string | null;
+      catchment_name_level_2: string | null;
+      coordinates: { type?: string; coordinates?: [number, number] } | null;
+    }>(
       `
-      )
-      .not("application.coordinates", "is", null);
-
-    if (error) throw error;
+      select
+        p.id,
+        p.permit_number,
+        p.status::text as status,
+        p.water_source::text as water_source,
+        p.purpose::text as purpose,
+        p.water_allowance,
+        p.allowance_unit,
+        p.issued_date::text as issued_date,
+        p.expiry_date::text as expiry_date,
+        a.province::text as province,
+        a.district,
+        a.sector,
+        a.catchment_name_level_1,
+        a.catchment_name_level_2,
+        st_asgeojson(a.coordinates)::jsonb as coordinates
+      from public.permits p
+      join public.applications a on a.id = p.application_id
+      where a.coordinates is not null
+      `
+    );
 
     const today = new Date();
 
-    const filtered = (data || []).filter((p: any) => {
+    const filtered = data.rows.filter((p) => {
       if (!includeExpired) {
         const exp = p.expiry_date ? new Date(p.expiry_date) : null;
         if (exp && exp <= today) return false;
@@ -87,9 +98,8 @@ export async function GET(req: NextRequest) {
       return true;
     });
 
-    const points = filtered.map((p: any) => {
-      const app = p.application || {};
-      const coords = app.coordinates;
+    const points = filtered.map((p) => {
+      const coords = p.coordinates;
       const lng = coords?.coordinates?.[0] ?? null;
       const lat = coords?.coordinates?.[1] ?? null;
       const m3Day = convertAllowanceToM3PerDay(Number(p.water_allowance || 0), p.allowance_unit);
@@ -101,11 +111,11 @@ export async function GET(req: NextRequest) {
         status: p.status,
         waterSource: p.water_source,
         useType: p.purpose,
-        province: app.province ?? null,
-        district: app.district ?? null,
-        sector: app.sector ?? null,
-        catchment1: app.catchment_name_level_1 ?? null,
-        catchment2: app.catchment_name_level_2 ?? null,
+        province: p.province ?? null,
+        district: p.district ?? null,
+        sector: p.sector ?? null,
+        catchment1: p.catchment_name_level_1 ?? null,
+        catchment2: p.catchment_name_level_2 ?? null,
         lat,
         lng,
         intensity, // bucket only (no volumes)

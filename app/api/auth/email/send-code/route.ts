@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { query } from '@/lib/db/postgres'
 import { setDevEmailCode } from '../dev-store'
 
 // Util: basic email validation
@@ -13,71 +13,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid email' }, { status: 400 })
     }
 
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
-    const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    const supabaseKey = adminKey || anonKey
-
-    if (!supabaseKey) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: missing Supabase keys (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY)' },
-        { status: 500 }
-      )
-    }
-
-    if (!adminKey && isDev) {
-      console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY is missing; using NEXT_PUBLIC_SUPABASE_ANON_KEY for email code generation.')
-    }
-
-    const supabase = createClient(url, supabaseKey)
 
     // Create a new verification code (TTL 15 minutes)
-    let code: string | undefined
+    let code = String(Math.floor(100000 + Math.random() * 900000))
+    const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    await query(
+      `
+      update public.email_verification_codes
+      set consumed_at = now(), updated_at = now()
+      where lower(email) = lower($1) and purpose = $2 and consumed_at is null
+      `,
+      [email.toLowerCase(), purpose]
+    ).catch(() => undefined)
     try {
-      const { data: rows, error: codeError } = await supabase
-        .rpc('create_email_verification_code', { p_email: email.toLowerCase(), p_purpose: purpose, p_ttl_minutes: 15 })
-
-      if (codeError) throw codeError
-      const firstRow = Array.isArray(rows) ? rows[0] : rows
-      if (firstRow && typeof firstRow === 'object') {
-        const rec = firstRow as Record<string, unknown>
-        const maybe = rec.code ?? rec.out_code
-        if (typeof maybe === 'string' && maybe.trim()) {
-          code = maybe
-        }
-      }
-      if (!code) {
-        throw new Error('Email code RPC returned no code')
-      }
-    } catch (rpcErr) {
-      console.warn('⚠️ Email code RPC failed:', rpcErr)
-
-      // Dev fallback when service role is missing (RLS blocks direct inserts):
-      // generate a real code, keep it in a server-side dev store, and print it to the terminal.
-      if (!adminKey && isDev) {
-        const fallback = String(Math.floor(100000 + Math.random() * 900000))
-        setDevEmailCode({ email, purpose, code: fallback, ttlMinutes: 15 })
-        code = fallback
+      await query(
+        `
+        insert into public.email_verification_codes (email, code, purpose, expires_at, created_at, updated_at)
+        values ($1, $2, $3, $4, now(), now())
+        `,
+        [email.toLowerCase(), code, purpose, expires]
+      )
+    } catch (dbErr) {
+      console.error('❌ Failed to create verification code in PostgreSQL:', dbErr)
+      if (isDev) {
+        setDevEmailCode({ email, purpose, code, ttlMinutes: 15 })
       } else {
-        // Production / service-role path: try direct insert (service role bypasses RLS)
-        console.warn('⚠️ Falling back to manual insert (requires service role)...')
-        const fallback = String(Math.floor(100000 + Math.random() * 900000))
-        const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString()
-        const { error: insertErr } = await supabase
-          .from('email_verification_codes')
-          .insert({ email: email.toLowerCase(), code: fallback, purpose, expires_at: expires })
-        if (insertErr) {
-          console.error('❌ Fallback insert failed:', insertErr)
-          return NextResponse.json(
-            {
-              success: false,
-              message: 'Could not create verification code. Configure SUPABASE_SERVICE_ROLE_KEY or grant RPC access for anon/authenticated.',
-            },
-            { status: 500 }
-          )
-        }
-        code = fallback
+        return NextResponse.json({ success: false, message: 'Could not create verification code' }, { status: 500 })
       }
     }
 

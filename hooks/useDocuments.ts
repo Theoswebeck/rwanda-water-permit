@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
 import type { Document } from '@/types/database'
 
 interface UseDocumentsReturn {
@@ -20,16 +19,15 @@ export function useDocuments(): UseDocumentsReturn {
     try {
       setLoading(true)
       setError(null)
-
-      const { data, error } = await supabase
-        .from('documents')
-        .select('*')
-        .eq('application_id', applicationId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
-      const documents = data || []
+      const response = await fetch(`/api/dashboard/applications/${applicationId}/documents`, {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to fetch documents')
+      }
+      const documents = (json.documents || []) as Document[]
       setDocuments(documents)
       return documents
     } catch (err) {
@@ -48,38 +46,18 @@ export function useDocuments(): UseDocumentsReturn {
   ): Promise<Document | null> => {
     try {
       setError(null)
-
-      // Upload file to Supabase Storage
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${applicationId}/${documentType}_${Date.now()}.${fileExt}`
-      
-      const { error: uploadError } = await supabase.storage
-        .from('application-documents')
-        .upload(fileName, file)
-
-      if (uploadError) throw uploadError
-
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('application-documents')
-        .getPublicUrl(fileName)
-
-      // Create document record
-      const { data: newDocument, error: dbError } = await supabase
-        .from('documents')
-        .insert({
-          application_id: applicationId,
-          name: file.name,
-          type: documentType,
-          file_path: publicUrl,
-          file_size: file.size,
-          mime_type: file.type,
-          uploaded_by: (await supabase.auth.getUser()).data.user?.id || '',
-        })
-        .select()
-        .single()
-
-      if (dbError) throw dbError
+      const form = new FormData()
+      form.set('file', file)
+      form.set('documentType', documentType)
+      const response = await fetch(`/api/dashboard/applications/${applicationId}/documents`, {
+        method: 'POST',
+        body: form,
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to upload document')
+      }
+      const newDocument = json.document as Document
 
       // Update local state
       setDocuments(prev => [newDocument, ...prev])
@@ -95,31 +73,11 @@ export function useDocuments(): UseDocumentsReturn {
   const deleteDocument = useCallback(async (documentId: string): Promise<boolean> => {
     try {
       setError(null)
-
-      // Get document info first
-      const { data: document, error: fetchError } = await supabase
-        .from('documents')
-        .select('file_path')
-        .eq('id', documentId)
-        .single()
-
-      if (fetchError) throw fetchError
-
-      // Delete from storage if file exists
-      if (document?.file_path) {
-        const fileName = document.file_path.split('/').slice(-2).join('/')
-        await supabase.storage
-          .from('application-documents')
-          .remove([fileName])
+      const response = await fetch(`/api/dashboard/documents/${documentId}`, { method: 'DELETE' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to delete document')
       }
-
-      // Delete from database
-      const { error } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', documentId)
-
-      if (error) throw error
 
       // Update local state
       setDocuments(prev => prev.filter(doc => doc.id !== documentId))

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createAuthedClient } from '@/lib/supabase/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { query } from '@/lib/db/postgres'
 import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission'
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
@@ -15,36 +15,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Require auth to prevent abuse/spam
-    const supabaseAuthed = await createAuthedClient()
-    const {
-      data: { user },
-    } = await supabaseAuthed.auth.getUser()
-    if (!user) {
+    const token = readSessionTokenFromRequest(req)
+    const claims = token ? await verifySessionToken(token) : null
+    if (!claims?.sub) {
       return NextResponse.json({ success: false, message: 'Unauthorized' }, { status: 401 })
     }
 
     // Only the applicant can trigger their own submission notification from the client.
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!url || !serviceKey) {
-      return NextResponse.json(
-        { success: false, message: 'Server misconfiguration: missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' },
-        { status: 500 }
-      )
-    }
-
-    const supabaseAdmin = createAdminClient(url, serviceKey)
-    const { data: appRow, error: appErr } = await supabaseAdmin
-      .from('applications')
-      .select('id, applicant_id')
-      .eq('id', applicationId)
-      .single()
-
-    if (appErr || !appRow) {
+    const appRes = await query<{ id: string; applicant_id: string }>(
+      `
+      select id, applicant_id
+      from public.applications
+      where id = $1
+      limit 1
+      `,
+      [applicationId]
+    )
+    const appRow = appRes.rows[0]
+    if (!appRow) {
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
     }
 
-    if (appRow.applicant_id !== user.id) {
+    if (appRow.applicant_id !== claims.sub) {
       return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
     }
 

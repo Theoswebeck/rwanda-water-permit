@@ -7,23 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import {
   Upload,
   FileText,
   FileImage,
   File,
   X,
-  Download,
   Eye,
   Loader2,
   AlertTriangle,
-  CheckCircle,
-  Calendar,
   User
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { getDocumentUrl } from "@/lib/supabase-storage";
+import { getDocumentUrl, uploadDocument } from "@/lib/supabase-storage";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ACCEPTED_FILE_TYPES = [
@@ -176,29 +171,16 @@ export function FieldReportUpload({
       const uploadedFiles: FieldReportFile[] = [];
 
       for (const file of validFiles) {
-        // Generate unique file path
-        const timestamp = Date.now();
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const filePath = `field-reports/${applicationId}/${timestamp}-${sanitizedName}`;
-
-        // Upload to Supabase storage
-        const { data, error } = await supabase.storage
-          .from('application-documents')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (error) {
-          console.error('Upload error:', error);
-          setUploadError(`Failed to upload "${file.name}": ${error.message}`);
+        const uploadResult = await uploadDocument(file, applicationId, "field-report");
+        if (!uploadResult) {
+          setUploadError(`Failed to upload "${file.name}"`);
           continue;
         }
 
         uploadedFiles.push({
-          id: `${timestamp}-${Math.random().toString(36).substr(2, 9)}`,
+          id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: file.name,
-          path: filePath,
+          path: uploadResult.path,
           size: file.size,
           type: file.type,
           uploadedAt: new Date().toISOString()
@@ -220,27 +202,7 @@ export function FieldReportUpload({
   };
 
   const handleRemoveFile = async (fileId: string) => {
-    const fileToRemove = existingFiles.find(f => f.id === fileId);
-    if (!fileToRemove) return;
-
-    try {
-      // Remove from Supabase storage
-      const { error } = await supabase.storage
-        .from('application-documents')
-        .remove([fileToRemove.path]);
-
-      if (error) {
-        console.error('Delete error:', error);
-        setUploadError(`Failed to remove file: ${error.message}`);
-        return;
-      }
-
-      // Remove from list
-      onFilesChange(existingFiles.filter(f => f.id !== fileId));
-    } catch (err) {
-      console.error('Delete error:', err);
-      setUploadError('Failed to remove file. Please try again.');
-    }
+    onFilesChange(existingFiles.filter(f => f.id !== fileId));
   };
 
   const handleViewFile = (file: FieldReportFile) => {

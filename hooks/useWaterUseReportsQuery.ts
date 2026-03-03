@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import type { WaterUseReport } from '@/types/database'
 
 export const waterUseReportKeys = {
@@ -17,19 +16,15 @@ export function useWaterUseReportsQuery(userId?: string, enabled: boolean = true
     queryKey: waterUseReportKeys.list(userId),
     queryFn: async (): Promise<WaterUseReport[]> => {
       if (!userId) return []
-
-      const { data, error } = await supabase
-        .from('water_use_reports')
-        .select('*')
-        .eq('applicant_id', userId)
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('❌ Error fetching water use reports:', error.message)
-        throw error
+      const response = await fetch('/api/water-use-reports?includeRelations=false', {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to fetch water use reports')
       }
-
-      return data || []
+      return (json.reports || []) as WaterUseReport[]
     },
     enabled: enabled && !!userId,
     staleTime: 2 * 60 * 1000,
@@ -42,14 +37,13 @@ export function useWaterUseReportQuery(id: string, enabled: boolean = true) {
   return useQuery({
     queryKey: waterUseReportKeys.detail(id),
     queryFn: async (): Promise<WaterUseReport> => {
-      const { data, error } = await supabase
-        .from('water_use_reports')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-      return data as WaterUseReport
+      const response = await fetch(`/api/water-use-reports/${id}`, {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch report')
+      return json.report as WaterUseReport
     },
     enabled: enabled && !!id,
     staleTime: 5 * 60 * 1000,
@@ -64,15 +58,16 @@ export function useWaterUseReportByPermitYearQuery(
   return useQuery({
     queryKey: waterUseReportKeys.byPermitYear(permitId, reportingYear),
     queryFn: async (): Promise<WaterUseReport | null> => {
-      const { data, error } = await supabase
-        .from('water_use_reports')
-        .select('*')
-        .eq('permit_id', permitId)
-        .eq('reporting_year', reportingYear)
-        .maybeSingle()
-
-      if (error && error.code !== 'PGRST116') throw error
-      return (data as WaterUseReport) || null
+      const response = await fetch(
+        `/api/water-use-reports?permitId=${encodeURIComponent(permitId)}&reportingYear=${encodeURIComponent(
+          String(reportingYear)
+        )}&includeRelations=false`,
+        { method: 'GET', cache: 'no-store' }
+      )
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch report')
+      const rows = (json.reports || []) as WaterUseReport[]
+      return rows[0] || null
     },
     enabled: enabled && !!permitId && !!reportingYear,
     staleTime: 30 * 1000,
@@ -86,14 +81,14 @@ export function useCreateWaterUseReportMutation() {
 
   return useMutation({
     mutationFn: async (data: Partial<WaterUseReport>) => {
-      const { data: created, error } = await supabase
-        .from('water_use_reports')
-        .insert([data])
-        .select()
-        .single()
-
-      if (error) throw error
-      return created as WaterUseReport
+      const response = await fetch('/api/water-use-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) throw new Error(json?.message || 'Failed to create report')
+      return json.report as WaterUseReport
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: waterUseReportKeys.lists() })
@@ -106,15 +101,14 @@ export function useUpdateWaterUseReportMutation() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<WaterUseReport> }) => {
-      const { data: updated, error } = await supabase
-        .from('water_use_reports')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      return updated as WaterUseReport
+      const response = await fetch(`/api/water-use-reports/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) throw new Error(json?.message || 'Failed to update report')
+      return json.report as WaterUseReport
     },
     onSuccess: (data) => {
       queryClient.setQueryData(waterUseReportKeys.detail(data.id), data)

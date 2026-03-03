@@ -4,7 +4,6 @@
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getIremboPayClient } from '@/lib/irembopay-client';
 import { 
   getApplicationFee, 
@@ -16,6 +15,8 @@ import {
 } from '@/lib/payment-utils';
 import type { InitiatePaymentRequest, InitiatePaymentResponse } from '@/types/payment';
 import { mapFormDataToApplication } from '@/lib/application-utils';
+import { query } from '@/lib/db/postgres';
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,14 +24,15 @@ export async function POST(request: NextRequest) {
 
     const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
-    // Initialize Supabase client
-    const supabase = await createClient();
-
-    // Check authentication using getUser() which is more reliable for API routes
-    const {
-      data: { user },
-      error: authError
-    } = await supabase.auth.getUser();
+    const token = readSessionTokenFromRequest(request);
+    const claims = token ? await verifySessionToken(token) : null;
+    const user = claims
+      ? {
+          id: claims.sub,
+          email: claims.email,
+        }
+      : null;
+    const authError = user ? null : new Error('Missing/invalid session');
 
     console.log('🔐 [PAYMENT INITIATE] Auth check:', {
       hasUser: !!user,
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
       has_application_data: !!application_data
     });
 
-    let application: any = null;
+    let application: Record<string, unknown> | null = null;
     let applicationIdToUse = application_id;
 
     // If initiating an annual report fee, validate the report ownership and derive application_id from it.
@@ -86,14 +88,19 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { data: reportRow, error: reportError } = await supabase
-        .from('water_use_reports')
-        .select('id, applicant_id, application_id')
-        .eq('id', water_use_report_id)
-        .single();
+      const reportRes = await query<{ id: string; applicant_id: string; application_id: string }>(
+        `
+        select id, applicant_id, application_id
+        from public.water_use_reports
+        where id = $1
+        limit 1
+        `,
+        [water_use_report_id]
+      );
+      const reportRow = reportRes.rows[0];
 
-      if (reportError || !reportRow) {
-        console.error('❌ [PAYMENT INITIATE] Failed to fetch water use report:', reportError);
+      if (!reportRow) {
+        console.error('❌ [PAYMENT INITIATE] Failed to fetch water use report');
         return NextResponse.json(
           { success: false, error: 'Water use report not found' },
           { status: 404 }
@@ -136,34 +143,75 @@ export async function POST(request: NextRequest) {
       console.log('📝 [PAYMENT INITIATE] Received application data, creating draft...');
       const mappedData = mapFormDataToApplication(application_data, 'draft', userId);
       
-      const { data: newApplication, error: createError } = await supabase
-        .from('applications')
-        .insert(mappedData)
-        .select('*, users!applications_applicant_id_fkey(*)')
-        .single();
-
-      if (createError) {
-        console.error('❌ [PAYMENT INITIATE] Failed to create draft application:', createError);
+      const entries = Object.entries(mappedData).filter(([key]) => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(key));
+      if (!entries.length) {
         return NextResponse.json(
           { success: false, error: 'Failed to create draft application before payment' },
           { status: 500 }
         );
       }
-      application = newApplication;
+      const cols = entries.map(([key]) => key);
+      const vals = entries.map(([, value]) => value);
+      const placeholders = cols.map((_, idx) => `$${idx + 1}`);
+
+      const appInsert = await query(
+        `
+        insert into public.applications (${cols.join(', ')})
+        values (${placeholders.join(', ')})
+        returning *
+        `,
+        vals
+      );
+      const newApplication = appInsert.rows[0];
+      if (!newApplication?.id) {
+        return NextResponse.json(
+          { success: false, error: 'Failed to create draft application before payment' },
+          { status: 500 }
+        );
+      }
+      const applicantRes = await query(
+        `
+        select *
+        from public.users
+        where id = $1
+        limit 1
+        `,
+        [newApplication.applicant_id]
+      );
+      application = { ...newApplication, users: applicantRes.rows[0] || null };
       applicationIdToUse = newApplication.id;
       console.log('✅ [PAYMENT INITIATE] Draft application created:', applicationIdToUse);
     } else if (applicationIdToUse) {
       console.log(`🔍 [PAYMENT INITIATE] Fetching application ${applicationIdToUse}...`);
-      const { data: existingApplication, error: appError } = await supabase
-        .from('applications')
-        .select('*, users!applications_applicant_id_fkey(*)')
-        .eq('id', applicationIdToUse)
-        .single();
-      
-      if (appError) {
-        console.error('❌ [PAYMENT INITIATE] Error fetching application:', appError);
+      const appRes = await query(
+        `
+        select *
+        from public.applications
+        where id = $1
+        limit 1
+        `,
+        [applicationIdToUse]
+      );
+      const existingApplication = appRes.rows[0];
+      if (!existingApplication) {
+        console.error('❌ [PAYMENT INITIATE] Error fetching application: not found');
       }
+      let appUser: Record<string, unknown> | null = null;
+      if (existingApplication?.applicant_id) {
+        const appUserRes = await query(
+          `
+          select *
+          from public.users
+          where id = $1
+          limit 1
+          `,
+          [existingApplication.applicant_id]
+        );
+        appUser = (appUserRes.rows[0] as Record<string, unknown> | undefined) || null;
+      }
+      
       application = existingApplication;
+      if (application) application = { ...application, users: appUser };
     }
 
     if (application) {
@@ -198,13 +246,19 @@ export async function POST(request: NextRequest) {
 
     if (purpose === 'annual_report_fee') {
       // Block duplicate completed report-fee payments for this report
-      const { data: existingReportPayment } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('purpose', 'annual_report_fee')
-        .eq('water_use_report_id', water_use_report_id!)
-        .eq('status', 'completed')
-        .maybeSingle();
+      const reportPaymentRes = await query(
+        `
+        select *
+        from public.payments
+        where purpose = 'annual_report_fee'
+          and water_use_report_id = $1
+          and status = 'completed'
+        order by created_at desc nulls last
+        limit 1
+        `,
+        [water_use_report_id]
+      );
+      const existingReportPayment = reportPaymentRes.rows[0];
 
       if (existingReportPayment) {
         console.warn('⚠️  [PAYMENT INITIATE] Annual report fee already completed for this report');
@@ -220,12 +274,18 @@ export async function POST(request: NextRequest) {
     } else {
       // Default behavior: block duplicate completed application fee payments for this application
       if (applicationIdToUse) {
-        const { data: existingPayment } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('application_id', applicationIdToUse)
-          .eq('status', 'completed')
-          .maybeSingle();
+        const existingPaymentRes = await query(
+          `
+          select *
+          from public.payments
+          where application_id = $1
+            and status = 'completed'
+          order by created_at desc nulls last
+          limit 1
+          `,
+          [applicationIdToUse]
+        );
+        const existingPayment = existingPaymentRes.rows[0];
 
         if (existingPayment) {
           console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
@@ -382,7 +442,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Map IremboPay response fields to our database fields
-    const iremboData: any = iremboResponse.data;
+    const iremboData = iremboResponse.data as Record<string, unknown>;
     const paymentRef = iremboData.invoiceNumber || iremboData.payment_ref;
     const paymentUrl = iremboData.paymentLinkUrl || iremboData.payment_url;
     const requestId = iremboData.transactionId || iremboData.request_id;
@@ -399,7 +459,7 @@ export async function POST(request: NextRequest) {
     const expiresAt = getPaymentExpiryTime(initiatedAt);
 
     // Build payment record data - application_id may be null initially
-    const paymentData: any = {
+    const paymentData: Record<string, unknown> = {
       applicant_id: userId,
       application_id: applicationIdToUse || null,
       purpose,
@@ -414,10 +474,8 @@ export async function POST(request: NextRequest) {
       customer_email: customerEmail,
       customer_phone: normalizedPhone,
       customer_name: customerName,
-      gateway_response: iremboResponse.data as any,
-      gateway_metadata: {
-        ...((iremboPayRequest as any).metadata || {}),
-      },
+      gateway_response: iremboResponse.data as Record<string, unknown>,
+      gateway_metadata: {},
       initiated_at: initiatedAtIso,
       expires_at: expiresAt.toISOString(),
       created_by: userId,
@@ -429,14 +487,61 @@ export async function POST(request: NextRequest) {
       application_exists: !!application,
     });
 
-    const { data: paymentRecord, error: paymentError } = (await supabase
-      .from('payments')
-      .insert(paymentData)
-      .select()
-      .single()) as any;
+    const paymentInsert = await query(
+      `
+      insert into public.payments (
+        applicant_id,
+        application_id,
+        purpose,
+        water_use_report_id,
+        amount,
+        currency,
+        description,
+        status,
+        irembo_payment_ref,
+        irembo_request_id,
+        payment_url,
+        customer_email,
+        customer_phone,
+        customer_name,
+        gateway_response,
+        gateway_metadata,
+        initiated_at,
+        expires_at,
+        created_by,
+        created_at,
+        updated_at
+      ) values (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16::jsonb,$17,$18,$19,now(),now()
+      )
+      returning *
+      `,
+      [
+        paymentData.applicant_id,
+        paymentData.application_id,
+        paymentData.purpose,
+        paymentData.water_use_report_id,
+        paymentData.amount,
+        paymentData.currency,
+        paymentData.description,
+        paymentData.status,
+        paymentData.irembo_payment_ref,
+        paymentData.irembo_request_id,
+        paymentData.payment_url,
+        paymentData.customer_email,
+        paymentData.customer_phone,
+        paymentData.customer_name,
+        JSON.stringify(paymentData.gateway_response ?? {}),
+        JSON.stringify(paymentData.gateway_metadata ?? {}),
+        paymentData.initiated_at,
+        paymentData.expires_at,
+        paymentData.created_by,
+      ]
+    );
+    const paymentRecord = paymentInsert.rows[0] as Record<string, unknown> | undefined;
 
-    if (paymentError || !paymentRecord) {
-      console.error('❌ [PAYMENT INITIATE] Failed to create payment record:', paymentError);
+    if (!paymentRecord) {
+      console.error('❌ [PAYMENT INITIATE] Failed to create payment record');
       return NextResponse.json(
         {
           success: false,
@@ -454,20 +559,17 @@ export async function POST(request: NextRequest) {
 
     if (application && purpose !== 'annual_report_fee') {
       const nextStatus = 'pending_payment';
-      const updateResult = await supabase
-        .from('applications')
-        // @ts-ignore - Type inference issue with conditional query
-        .update({ status: nextStatus })
-        .eq('id', applicationIdToUse);
-      
-      const { error: updateError } = updateResult as any;
-
-      if (updateError) {
-        console.error('⚠️  [PAYMENT INITIATE] Failed to update application status:', updateError);
-        // Not a critical error, continue
-      } else {
-        console.log('✅ [PAYMENT INITIATE] Application status updated to', nextStatus);
-      }
+      await query(
+        `
+        update public.applications
+        set status = $2, updated_at = now()
+        where id = $1
+        `,
+        [applicationIdToUse, nextStatus]
+      ).then(
+        () => console.log('✅ [PAYMENT INITIATE] Application status updated to', nextStatus),
+        (updateError) => console.error('⚠️  [PAYMENT INITIATE] Failed to update application status:', updateError)
+      );
     } else {
       console.log('ℹ️  [PAYMENT INITIATE] No application status update required for this payment purpose');
     }
@@ -476,16 +578,31 @@ export async function POST(request: NextRequest) {
     // 7. CREATE INITIAL TRANSACTION LOG
     // =============================================
 
-    await supabase.from('payment_transactions').insert({
-      payment_id: paymentRecord.id,
-      irembo_txn_id: paymentRef,
-      transaction_ref: requestId,
-      amount: paymentAmount,
-      currency: paymentCurrency,
-      status: 'pending',
-      provider_response: iremboResponse.data as any,
-      initiated_at: initiatedAtIso,
-    } as any);
+    await query(
+      `
+      insert into public.payment_transactions (
+        payment_id,
+        irembo_txn_id,
+        transaction_ref,
+        amount,
+        currency,
+        status,
+        provider_response,
+        initiated_at,
+        created_at,
+        updated_at
+      ) values ($1,$2,$3,$4,$5,'pending',$6::jsonb,$7,now(),now())
+      `,
+      [
+        paymentRecord.id,
+        paymentRef || null,
+        requestId || null,
+        paymentAmount,
+        paymentCurrency,
+        JSON.stringify(iremboResponse.data ?? {}),
+        initiatedAtIso,
+      ]
+    );
 
     // =============================================
     // 8. RETURN SUCCESS RESPONSE
@@ -493,7 +610,7 @@ export async function POST(request: NextRequest) {
 
     const response: InitiatePaymentResponse = {
       success: true,
-      payment: paymentRecord as any,
+      payment: paymentRecord,
       payment_url: paymentUrl,
     };
 
@@ -515,7 +632,7 @@ export async function POST(request: NextRequest) {
 }
 
 // OPTIONS method for CORS
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS() {
   return NextResponse.json({}, { status: 200 });
 }
 

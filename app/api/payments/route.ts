@@ -3,9 +3,9 @@
 // Endpoint: GET /api/payments?application_id=xxx
 // =============================================
 
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import type { Payment } from '@/types/payment';
+import { NextRequest, NextResponse } from 'next/server'
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { query } from '@/lib/db/postgres'
 
 /**
  * GET /api/payments?application_id=xxx
@@ -13,49 +13,46 @@ import type { Payment } from '@/types/payment';
  */
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const applicationId = searchParams.get('application_id');
-    const waterUseReportId = searchParams.get('water_use_report_id');
+    const searchParams = request.nextUrl.searchParams
+    const applicationId = searchParams.get('application_id')
+    const waterUseReportId = searchParams.get('water_use_report_id')
 
     if (!applicationId && !waterUseReportId) {
       return NextResponse.json(
         { error: 'application_id or water_use_report_id is required' },
         { status: 400 }
-      );
+      )
     }
 
-    // Create Supabase client
-    const supabase = await createClient();
+    const paymentRes = waterUseReportId
+      ? await query(
+          `
+          select *
+          from public.payments
+          where water_use_report_id = $1
+          order by created_at desc nulls last
+          limit 1
+          `,
+          [waterUseReportId]
+        )
+      : await query(
+          `
+          select *
+          from public.payments
+          where application_id = $1
+          order by created_at desc nulls last
+          limit 1
+          `,
+          [applicationId]
+        )
 
-    // Fetch payment for this application
-    const query = supabase.from('payments').select('*');
-    const filtered = waterUseReportId
-      ? query.eq('water_use_report_id', waterUseReportId)
-      : query.eq('application_id', applicationId);
-
-    const { data: payment, error } = await filtered
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    // No payment found is OK - return null
-    if (!payment || (error && error.code === 'PGRST116')) {
-      return NextResponse.json({ success: true, payment: null }, { status: 200 });
-    }
-
-    if (error) {
-      // Log but don't fail on UUID format errors (testing mode)
-      console.warn('⚠️  Error fetching payment:', error);
-      return NextResponse.json({ success: true, payment: null }, { status: 200 });
-    }
-
-    return NextResponse.json({ success: true, payment }, { status: 200 });
+    return NextResponse.json({ success: true, payment: paymentRes.rows[0] ?? null }, { status: 200 })
   } catch (error) {
-    console.error('❌ Unexpected error in GET /api/payments:', error);
+    console.error('❌ Unexpected error in GET /api/payments:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    );
+    )
   }
 }
 
@@ -64,57 +61,47 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { application_id, amount, currency } = body;
+    const body = await request.json()
+    const { application_id, amount, currency } = body
 
     if (!application_id || !amount) {
       return NextResponse.json(
         { error: 'application_id and amount are required' },
         { status: 400 }
-      );
+      )
     }
 
-    // Create Supabase client
-    const supabase = await createClient();
-
-    // Get current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    const token = readSessionTokenFromRequest(request)
+    const claims = token ? await verifySessionToken(token) : null
+    if (!claims?.sub) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Create payment record
-    const { data: payment, error } = await supabase
-      .from('payments')
-      .insert({
+    const payment = await query(
+      `
+      insert into public.payments (
         application_id,
+        applicant_id,
         amount,
-        currency: currency || 'RWF',
-        status: 'pending',
-        user_id: user.id,
-      })
-      .select()
-      .single();
+        currency,
+        status,
+        purpose,
+        created_by,
+        created_at,
+        updated_at
+      ) values ($1, $2, $3, $4, 'pending', 'application_fee', $2, now(), now())
+      returning *
+      `,
+      [application_id, claims.sub, amount, currency || 'RWF']
+    )
 
-    if (error) {
-      console.error('❌ Error creating payment:', error);
-      return NextResponse.json(
-        { error: 'Failed to create payment' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ payment }, { status: 201 });
+    return NextResponse.json({ payment: payment.rows[0] ?? null }, { status: 201 })
   } catch (error) {
-    console.error('❌ Unexpected error in POST /api/payments:', error);
+    console.error('❌ Unexpected error in POST /api/payments:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    );
+    )
   }
 }
 

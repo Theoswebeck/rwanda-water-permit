@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { query } from "@/lib/db/postgres";
 
 const QuerySchema = z.object({
   from: z.string().optional(),
@@ -62,17 +62,30 @@ export async function GET(req: NextRequest) {
     const from = parseDate(parsed.data.from);
     const to = parseDate(parsed.data.to);
 
-    const supabase = createAdminClient();
-
-    // Permits (non-confidential summary)
-    const { data: permits, error: permitsError } = await supabase
-      .from("permits")
-      .select("id,status,water_source,purpose,issued_date,expiry_date,created_at");
-
-    if (permitsError) throw permitsError;
+    const permits = await query<{
+      id: string;
+      status: string;
+      water_source: string;
+      purpose: string;
+      issued_date: string | null;
+      expiry_date: string | null;
+      created_at: string | null;
+    }>(
+      `
+      select
+        id,
+        status::text as status,
+        water_source::text as water_source,
+        purpose::text as purpose,
+        issued_date::text as issued_date,
+        expiry_date::text as expiry_date,
+        created_at::text as created_at
+      from public.permits
+      `
+    );
 
     const now = new Date();
-    const filteredPermits = (permits || []).filter((p: any) => {
+    const filteredPermits = permits.rows.filter((p) => {
       const issued = p.issued_date ? new Date(p.issued_date) : p.created_at ? new Date(p.created_at) : undefined;
       if (!issued) return true;
       if (from && issued < from) return false;
@@ -81,19 +94,19 @@ export async function GET(req: NextRequest) {
     });
 
     const totalPermitsIssued = filteredPermits.length;
-    const statusCounts = filteredPermits.reduce((acc: Record<string, number>, p: any) => {
+    const statusCounts = filteredPermits.reduce((acc: Record<string, number>, p) => {
       const s = String(p.status);
       acc[s] = (acc[s] || 0) + 1;
       return acc;
     }, {});
 
-    const purposeCounts = filteredPermits.reduce((acc: Record<string, number>, p: any) => {
+    const purposeCounts = filteredPermits.reduce((acc: Record<string, number>, p) => {
       const k = String(p.purpose);
       acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});
 
-    const waterSourceCounts = filteredPermits.reduce((acc: Record<string, number>, p: any) => {
+    const waterSourceCounts = filteredPermits.reduce((acc: Record<string, number>, p) => {
       const k = String(p.water_source);
       acc[k] = (acc[k] || 0) + 1;
       return acc;

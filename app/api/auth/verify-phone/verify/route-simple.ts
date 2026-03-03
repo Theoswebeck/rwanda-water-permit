@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { query } from '@/lib/db/postgres';
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,20 +37,19 @@ export async function POST(request: NextRequest) {
         
         // Try to mark as verified in database (optional)
         try {
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+          await query(
+            `
+            update public.users
+            set
+              phone_verified = true,
+              phone_verification_code = null,
+              phone_verification_expires_at = null,
+              phone_verification_attempts = 0,
+              updated_at = now()
+            where id = $1
+            `,
+            [userId]
           );
-
-          await supabase
-            .from('users')
-            .update({
-              phone_verified: true,
-              phone_verification_code: null,
-              phone_verification_expires_at: null,
-              phone_verification_attempts: 0,
-            })
-            .eq('id', userId);
         } catch (dbError) {
           console.log('⚠️ Database update failed (non-critical):', dbError);
         }
@@ -75,24 +74,28 @@ export async function POST(request: NextRequest) {
 
     // Production mode - check against database
     try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      const userResult = await query<{
+        phone_verification_code: string | null;
+        phone_verification_expires_at: string | null;
+        phone_verified: boolean | null;
+      }>(
+        `
+        select phone_verification_code, phone_verification_expires_at, phone_verified
+        from public.users
+        where id = $1
+        limit 1
+        `,
+        [userId]
       );
+      const userVerification = userResult.rows[0];
 
-      const { data: userVerification, error: userError } = await supabase
-        .from('users')
-        .select('phone_verification_code, phone_verification_expires_at, phone_verified')
-        .eq('id', userId)
-        .single();
-
-      if (userError) {
-        console.error('❌ Error fetching user verification status:', userError);
+      if (!userVerification) {
+        console.error('❌ Error fetching user verification status: user not found');
         return NextResponse.json(
           {
             success: false,
             message: 'Error checking verification status',
-            error: userError.message,
+            error: 'USER_NOT_FOUND',
             verified: false,
           },
           { status: 400 }
@@ -138,15 +141,19 @@ export async function POST(request: NextRequest) {
       }
 
       // Update user as verified
-      await supabase
-        .from('users')
-        .update({
-          phone_verified: true,
-          phone_verification_code: null,
-          phone_verification_expires_at: null,
-          phone_verification_attempts: 0,
-        })
-        .eq('id', userId);
+      await query(
+        `
+        update public.users
+        set
+          phone_verified = true,
+          phone_verification_code = null,
+          phone_verification_expires_at = null,
+          phone_verification_attempts = 0,
+          updated_at = now()
+        where id = $1
+        `,
+        [userId]
+      );
 
       console.log('✅ Production phone verification completed successfully');
 

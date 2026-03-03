@@ -1,7 +1,5 @@
-import type { Database } from '@/types/database'
-import { createServerClient } from '@supabase/ssr'
-import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 export function normalizeEmail(raw: unknown): string {
   return String(raw || '').trim().toLowerCase()
@@ -21,36 +19,10 @@ export function normalizeRwandaPhoneKey(raw: unknown): string {
   return digits.slice(-9)
 }
 
-export function getSupabaseServerAuth(req: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  if (!url || !anonKey) return null
-
-  let supabaseResponse = NextResponse.next({ request: { headers: req.headers } })
-  const supabaseAuth = createServerClient<Database>(url, anonKey, {
-    cookies: {
-      get(name: string) {
-        return req.cookies.get(name)?.value
-      },
-      set(name: string, value: string, options: object) {
-        supabaseResponse = NextResponse.next({ request: { headers: req.headers } })
-        supabaseResponse.cookies.set({ name, value, ...options })
-      },
-      remove(name: string, options: object) {
-        supabaseResponse = NextResponse.next({ request: { headers: req.headers } })
-        supabaseResponse.cookies.set({ name, value: '', ...options })
-      },
-    },
-  })
-
-  return { supabaseAuth, supabaseResponse }
-}
-
-export function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return null
-  return createClient<Database>(url, serviceKey)
+export async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
+  const token = readSessionTokenFromRequest(req)
+  const claims = token ? await verifySessionToken(token) : null
+  return claims?.sub || null
 }
 
 export function isMissingTransferRequestsTable(err: unknown): boolean {

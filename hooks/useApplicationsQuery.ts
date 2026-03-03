@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
 import type { Application, ApplicationFilters } from '@/types/database'
 
 // ⚡ PERFORMANCE: Query keys for cache management
@@ -26,33 +25,23 @@ export function useApplicationsQuery(
       if (!userId) {
         return []
       }
-      
-      let query = supabase
-        .from('applications')
-        .select('*')
-        .eq('applicant_id', userId)
 
-      if (filters?.status) {
-        query = query.in('status', filters.status)
+      const params = new URLSearchParams()
+      if (filters?.status?.length) params.set('status', filters.status.join(','))
+      if (filters?.type?.length) params.set('type', filters.type.join(','))
+      if (filters?.province?.length) params.set('province', filters.province.join(','))
+      const qs = params.toString()
+
+      const response = await fetch(`/api/dashboard/applications${qs ? `?${qs}` : ''}`, {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      const json = await response.json().catch(() => null)
+
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to fetch applications')
       }
-
-      if (filters?.type) {
-        query = query.in('application_type', filters.type)
-      }
-
-      if (filters?.province) {
-        query = query.in('province', filters.province)
-      }
-
-      query = query.order('created_at', { ascending: false })
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('❌ Error fetching applications:', error.message)
-        throw error
-      }
-      return data || []
+      return (json.applications || []) as Application[]
     },
     // ⚡ FIX: Only enable when we have a valid userId
     enabled: enabled && !!userId,
@@ -69,14 +58,14 @@ export function useApplicationQuery(id: string, enabled: boolean = true) {
   return useQuery({
     queryKey: applicationKeys.detail(id),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-      return data
+      const response = await fetch('/api/dashboard/applications', { method: 'GET', cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to fetch applications')
+      }
+      const app = ((json.applications || []) as Application[]).find((a) => a.id === id) || null
+      if (!app) throw new Error('Application not found')
+      return app
     },
     enabled: enabled && !!id,
     staleTime: 5 * 60 * 1000,
@@ -88,44 +77,14 @@ export function useApplicationByNumberQuery(applicationNumber: string, enabled: 
   return useQuery({
     queryKey: applicationKeys.byNumber(applicationNumber),
     queryFn: async () => {
-      // Get basic application data
-      const { data: application, error } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('application_number', applicationNumber)
-        .single()
-
-      if (error) throw error
-      if (!application) return null
-
-      // ⚡ PERFORMANCE: Fetch related data in parallel
-      const [
-        applicantResult,
-        documentsResult,
-        reviewsResult,
-      ] = await Promise.all([
-        supabase
-          .from('users')
-          .select('id, first_name, last_name, email, phone, account_type, company_name')
-          .eq('id', application.applicant_id)
-          .single(),
-        supabase
-          .from('documents')
-          .select('*')
-          .eq('application_id', application.id),
-        supabase
-          .from('reviews')
-          .select('*')
-          .eq('application_id', application.id)
-          .order('created_at', { ascending: false }),
-      ])
-
-      return {
-        ...application,
-        applicant: applicantResult.data || null,
-        documents: documentsResult.data || [],
-        reviews: reviewsResult.data || [],
+      const response = await fetch('/api/dashboard/applications', { method: 'GET', cache: 'no-store' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to fetch applications')
       }
+      const app =
+        ((json.applications || []) as Application[]).find((a) => a.application_number === applicationNumber) || null
+      return app
     },
     enabled: enabled && !!applicationNumber,
     staleTime: 5 * 60 * 1000,
@@ -138,15 +97,7 @@ export function useUpdateApplicationMutation() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Application> }) => {
-      const { data: updated, error } = await supabase
-        .from('applications')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw error
-      return updated
+      throw new Error('Direct application updates are not supported in self-hosted Phase 2 hook. Use route-specific APIs.')
     },
     onSuccess: (data) => {
       // ⚡ Update cache immediately
@@ -163,14 +114,7 @@ export function useCreateApplicationMutation() {
 
   return useMutation({
     mutationFn: async (data: Partial<Application>) => {
-      const { data: created, error } = await supabase
-        .from('applications')
-        .insert([data])
-        .select()
-        .single()
-
-      if (error) throw error
-      return created
+      throw new Error('Direct application creation is not supported in self-hosted Phase 2 hook. Use app APIs.')
     },
     onSuccess: () => {
       // Invalidate all application lists
@@ -185,12 +129,11 @@ export function useDeleteApplicationMutation() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('applications')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      const response = await fetch(`/api/dashboard/applications/${id}`, { method: 'DELETE' })
+      const json = await response.json().catch(() => null)
+      if (!response.ok || !json?.success) {
+        throw new Error(json?.message || 'Failed to delete application')
+      }
       return id
     },
     onSuccess: (deletedId) => {

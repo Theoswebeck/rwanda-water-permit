@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabase";
 import type { PermitRegistryEntry } from "@/types/database";
 
 export const permitRegistryKeys = {
@@ -11,16 +10,14 @@ export function usePermitRegistryQuery(enabled: boolean = true) {
   return useQuery({
     queryKey: permitRegistryKeys.list(),
     queryFn: async (): Promise<PermitRegistryEntry[]> => {
-      const { data, error } = await supabase
-        .from("permit_registry")
-        .select("*")
-        .order("serial_number", { ascending: true, nullsFirst: false });
-
-      if (error) {
-        console.error("❌ Error fetching permit registry:", error.message);
-        throw error;
+      const res = await fetch("/api/staff/permit-registry?limit=500&offset=0&sort_by=serial_number&sort_dir=asc", {
+        credentials: "include",
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to fetch permit registry (${res.status})`);
       }
-      return data || [];
+      const json = (await res.json()) as { items?: PermitRegistryEntry[] };
+      return json.items || [];
     },
     enabled,
     staleTime: 5 * 60 * 1000,

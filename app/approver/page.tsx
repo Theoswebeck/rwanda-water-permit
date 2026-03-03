@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getApproverDashboardStats } from "@/lib/supabase";
 import {
   FileCheck,
   AlertTriangle,
@@ -20,7 +19,6 @@ import { InspectionsWorkbench } from "@/components/inspection/inspections-workbe
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
-import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
@@ -33,6 +31,8 @@ const APPROVER_CHIPS: StatusChipDef[] = [
 ];
 
 export default function ApproverDashboard() {
+  const isTopTab = (v: string): v is "approval" | "inspections" | "water-reports" | "permit-registry" =>
+    v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry";
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports" | "permit-registry">("approval");
@@ -45,13 +45,10 @@ export default function ApproverDashboard() {
     const fetchApps = async () => {
       try {
         setLoading(true);
-        const { data, error: fetchError } = await supabase
-          .from("applications")
-          .select("id, status")
-          .neq("status", "draft");
-
-        if (fetchError) throw fetchError;
-        setAllApplications((data || []) as Application[]);
+        const res = await fetch('/api/staff/applications/summary', { credentials: 'include' });
+        if (!res.ok) throw new Error(`Failed to load applications (${res.status})`);
+        const json = (await res.json()) as { applications?: Application[] };
+        setAllApplications(json.applications || []);
       } catch (err) {
         console.error("Failed to fetch approver applications:", err);
         setError("Failed to load dashboard");
@@ -128,7 +125,9 @@ export default function ApproverDashboard() {
 
         <StaffTopTabs
           value={topTab}
-          onValueChange={(v) => setTopTab(v as any)}
+          onValueChange={(v) => {
+            if (isTopTab(v)) setTopTab(v);
+          }}
           tabs={[
             { value: "approval", label: "Application Approval" },
             { value: "inspections", label: "Inspections" },

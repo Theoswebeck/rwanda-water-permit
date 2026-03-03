@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { query } from "@/lib/db/postgres";
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,25 +12,6 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "200", 10), 1), 500);
     const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10), 0);
 
-    const supabase = createAdminClient();
-
-    let query = supabase
-      .from("permit_registry")
-      .select("*", { count: "exact" });
-
-    if (regime && regime !== "all") {
-      query = query.eq("regime", regime);
-    }
-    if (status && status !== "all") {
-      query = query.eq("status", status.toUpperCase());
-    }
-
-    if (q) {
-      query = query.or(
-        `permit_holder.ilike.%${q}%,permit_number.ilike.%${q}%,location.ilike.%${q}%,water_source.ilike.%${q}%,authorized_activity.ilike.%${q}%`
-      );
-    }
-
     const validSortColumns = [
       "serial_number",
       "permit_holder",
@@ -41,14 +22,41 @@ export async function GET(req: NextRequest) {
       "regime",
     ];
     const column = validSortColumns.includes(sortBy) ? sortBy : "serial_number";
+    const orderDir = sortDir ? "asc" : "desc";
+    const where: string[] = [];
+    const values: unknown[] = [];
+    const p = (value: unknown) => {
+      values.push(value);
+      return `$${values.length}`;
+    };
 
-    query = query
-      .order(column, { ascending: sortDir, nullsFirst: false })
-      .range(offset, offset + limit - 1);
+    if (regime && regime !== "all") where.push(`regime = ${p(regime)}`);
+    if (status && status !== "all") where.push(`status = ${p(status.toUpperCase())}`);
+    if (q) {
+      const term = `%${q}%`;
+      const pv = p(term);
+      where.push(
+        `(lower(permit_holder) like ${pv} or lower(permit_number) like ${pv} or lower(location) like ${pv} or lower(water_source) like ${pv} or lower(authorized_activity) like ${pv})`
+      );
+    }
+    const whereSql = where.length ? `where ${where.join(" and ")}` : "";
 
-    const { data, error, count } = await query;
-
-    if (error) throw error;
+    const totalRes = await query<{ count: string }>(
+      `select count(*)::text as count from public.permit_registry ${whereSql}`,
+      values
+    );
+    const pageRes = await query(
+      `
+      select *
+      from public.permit_registry
+      ${whereSql}
+      order by ${column} ${orderDir} nulls last
+      offset ${p(offset)} limit ${p(limit)}
+      `,
+      values
+    );
+    const count = Number(totalRes.rows[0]?.count || "0");
+    const data = pageRes.rows;
 
     return NextResponse.json({
       items: data || [],

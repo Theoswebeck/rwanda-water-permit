@@ -12,7 +12,7 @@ import {
   type CoordinatePoint
 } from '@/lib/geoUtils';
 import { polygonToKey } from '@/lib/polygonKey';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { query } from '@/lib/db/postgres';
 import { z } from 'zod';
 
 // =============================================
@@ -159,27 +159,35 @@ export async function POST(request: NextRequest) {
 
     // Duplicate polygon check across existing applications (excluding self if applicationId provided).
     const candidateKeys = polyFeatures.map((f) => polygonToKey(f));
-    const admin = createAdminClient();
+    const appsRes = applicationId
+      ? await query<{ id: string; project_title: string | null; coordinates: unknown }>(
+          `
+          select id, project_title, st_asgeojson(coordinates)::jsonb as coordinates
+          from public.applications
+          where coordinates is not null
+            and id <> $1
+          `,
+          [applicationId]
+        )
+      : await query<{ id: string; project_title: string | null; coordinates: unknown }>(
+          `
+          select id, project_title, st_asgeojson(coordinates)::jsonb as coordinates
+          from public.applications
+          where coordinates is not null
+          `
+        )
+    const apps = appsRes.rows
 
-    let query = admin
-      .from('applications')
-      .select('id, project_title, coordinates')
-      .not('coordinates', 'is', null);
-
-    if (applicationId) query = query.neq('id', applicationId);
-
-    const { data: apps, error: appsError } = await query;
-    if (appsError) throw new Error(`Failed to check existing applications: ${appsError.message}`);
-
-    const isDuplicate = (apps || []).some((app: any) => {
+    const isDuplicate = (apps || []).some((app: { coordinates: unknown }) => {
       const geom = app?.coordinates;
       if (!geom) return false;
 
-      const existingPolys: any[] = [];
-      if (geom.type === 'Polygon' && geom.coordinates?.[0]) {
+      const existingPolys: Array<{ type: 'Polygon'; coordinates: unknown }> = [];
+      const g = geom as { type?: string; coordinates?: unknown }
+      if (g.type === 'Polygon' && Array.isArray((g.coordinates as unknown[])?.[0])) {
         existingPolys.push(geom);
-      } else if (geom.type === 'MultiPolygon' && Array.isArray(geom.coordinates)) {
-        for (const poly of geom.coordinates) {
+      } else if (g.type === 'MultiPolygon' && Array.isArray(g.coordinates)) {
+        for (const poly of g.coordinates as unknown[]) {
           if (poly?.[0]) existingPolys.push({ type: 'Polygon', coordinates: poly });
         }
       } else {
@@ -188,7 +196,7 @@ export async function POST(request: NextRequest) {
 
       return existingPolys.some((g) => {
         const feature = { type: 'Feature', properties: {}, geometry: g } as const;
-        return candidateKeys.includes(polygonToKey(feature as any));
+        return candidateKeys.includes(polygonToKey(feature));
       });
     });
 

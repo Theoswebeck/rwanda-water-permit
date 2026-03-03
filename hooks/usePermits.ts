@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
 import type { Permit } from '@/types/database'
 
 interface UsePermitsOptions {
@@ -32,77 +31,25 @@ export function usePermits({
     try {
       setLoading(true)
       setError(null)
-
-      if (userId) {
-        // First get the user's application IDs
-        const { data: userApplications, error: appsError } = await supabase
-          .from('applications')
-          .select('id')
-          .eq('applicant_id', userId)
-
-        if (appsError) throw appsError
-
-        const applicationIds = userApplications?.map(app => app.id) || []
-
-        if (applicationIds.length === 0) {
-          // User has no applications, so no permits
-          setPermits([])
-          return
-        }
-
-        // Now get permits for those applications
-        let query = supabase
-          .from('permits')
-          .select('*')
-          .in('application_id', applicationIds)
-
-        // Apply filters
-        if (filters?.status) {
-          query = query.in('status', filters.status)
-        }
-
-        if (filters?.expiring_soon) {
-          // Get permits expiring in next 30 days
-          const thirtyDaysFromNow = new Date()
-          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
-          query = query.lte('expiry_date', thirtyDaysFromNow.toISOString())
-        }
-
-        // Order by issue date desc
-        query = query.order('issued_date', { ascending: false })
-
-        const { data, error } = await query
-
-        if (error) throw error
-
-        setPermits(data || [])
-      } else {
-        // No userId provided, fetch all permits (for admin/reviewer use cases)
-        let query = supabase
-          .from('permits')
-          .select('*')
-
-        // Apply filters
-        if (filters?.status) {
-          query = query.in('status', filters.status)
-        }
-
-        if (filters?.expiring_soon) {
-          // Get permits expiring in next 30 days
-          const thirtyDaysFromNow = new Date()
-          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
-          query = query.lte('expiry_date', thirtyDaysFromNow.toISOString())
-        }
-
-        // Order by issue date desc
-        query = query.order('issued_date', { ascending: false })
-
-        const { data, error } = await query
-
-        if (error) throw error
-
-        setPermits(data || [])
+      const res = await fetch('/api/dashboard/permits?includeApplication=false', {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch permits')
+      let rows = (json.permits || []) as Permit[]
+      if (filters?.status?.length) {
+        rows = rows.filter((row: any) => filters.status?.includes(String(row.status)))
       }
+      if (filters?.expiring_soon) {
+        const threshold = new Date()
+        threshold.setDate(threshold.getDate() + 30)
+        rows = rows.filter((row: any) => {
+          const expiry = row?.expiry_date ? new Date(String(row.expiry_date)) : null
+          return !!expiry && expiry <= threshold
+        })
+      }
+      setPermits(rows)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch permits')
       console.error('Error fetching permits:', err)
@@ -114,15 +61,14 @@ export function usePermits({
   const getPermit = useCallback(async (id: string): Promise<Permit | null> => {
     try {
       setError(null)
-      const { data, error } = await supabase
-        .from('permits')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (error) throw error
-
-      return data
+      const res = await fetch('/api/dashboard/permits?includeApplication=false', {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.success) throw new Error(json?.message || 'Failed to fetch permit')
+      const found = ((json.permits || []) as Permit[]).find((p: any) => String((p as any).id) === id) || null
+      return found
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch permit')
       console.error('Error fetching permit:', err)
