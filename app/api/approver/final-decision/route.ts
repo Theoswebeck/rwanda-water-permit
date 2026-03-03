@@ -4,6 +4,7 @@ import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { sendResendEmail, renderAppEmailHtml } from '@/lib/notifications/resend-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
+import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 type Decision = 'approve' | 'reject' | 'return_to_assessment'
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
@@ -87,6 +88,27 @@ const renderDecisionEmailHtml = renderAppEmailHtml
 
 export async function POST(req: NextRequest) {
   try {
+    const token = readSessionTokenFromRequest(req)
+    const claims = token ? await verifySessionToken(token) : null
+    const actorUserId = claims?.sub
+    if (!actorUserId) {
+      return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 })
+    }
+
+    const actorRoleRes = await query<{ role: string | null }>(
+      `
+      select role
+      from public.users
+      where id = $1
+      limit 1
+      `,
+      [actorUserId]
+    )
+    const actorRole = String(actorRoleRes.rows[0]?.role || '').toLowerCase()
+    if (!['approver', 'admin'].includes(actorRole)) {
+      return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
+    }
+
     const body = await req.json()
     const decision = body?.decision as Decision
     const applicationId = body?.applicationId as string
@@ -142,14 +164,6 @@ export async function POST(req: NextRequest) {
       await sendResendEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
     }
 
-    const approverRes = await query<{ id: string }>(
-      `select id from public.users where role = 'approver' order by created_at asc limit 1`
-    )
-    const approver = approverRes.rows[0]
-    if (!approver) {
-      return NextResponse.json({ success: false, message: 'No approver found in users table' }, { status: 500 })
-    }
-
     if (decision === 'approve') {
       await query(
         `
@@ -164,7 +178,7 @@ export async function POST(req: NextRequest) {
           approval_conditions = case when $3 <> '' then $3 else approval_conditions end
         where id = $1
         `,
-        [applicationId, approver.id, conditions.trim()]
+        [applicationId, actorUserId, conditions.trim()]
       )
     } else if (decision === 'reject') {
       await query(
@@ -178,7 +192,7 @@ export async function POST(req: NextRequest) {
           updated_at = now()
         where id = $1
         `,
-        [applicationId, approver.id, reason.trim()]
+        [applicationId, actorUserId, reason.trim()]
       )
     } else {
       await query(
@@ -191,7 +205,7 @@ export async function POST(req: NextRequest) {
           updated_at = now()
         where id = $1
         `,
-        [applicationId, approver.id, `Returned from Approval for further verification: ${reason.trim()}`]
+        [applicationId, actorUserId, `Returned from Approval for further verification: ${reason.trim()}`]
       )
     }
 
@@ -218,7 +232,7 @@ export async function POST(req: NextRequest) {
       ) values ($1, $2, 'application', 'applications', $3, $4::jsonb, $5::jsonb, $6, $7, 'success', $8, now())
       `,
       [
-        approver.id,
+        actorUserId,
         decision === 'approve' ? 'application.approved' : decision === 'reject' ? 'application.rejected' : 'application.revision_requested',
         applicationId,
         JSON.stringify({ status: 'pending_final_approval' }),
@@ -237,6 +251,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Server error'
+    if (message.includes('Invalid session') || message.includes('JWT')) {
+      const res = NextResponse.json({ success: false, message: 'Invalid session' }, { status: 401 })
+      clearSessionCookie(res)
+      return res
+    }
     console.error('❌ final-decision error:', err)
     return NextResponse.json(
       { success: false, message: 'Failed to process decision. Please try again.', debug: process.env.NODE_ENV !== 'production' ? String(err) : undefined },

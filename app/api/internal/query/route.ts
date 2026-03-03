@@ -70,6 +70,8 @@ function toJsonbParamValue(value: unknown): string {
 
 function buildBaseSelect(table: string, requestedSelect?: string) {
   if (table === 'applications') {
+    const wantsDocuments = requestedSelect?.includes('documents(') ?? false
+    const wantsReviews = requestedSelect?.includes('reviews:') || requestedSelect?.includes('reviews(') || false
     return `
       select
         a.*,
@@ -82,6 +84,26 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
           'phone', u.phone,
           'account_type', u.account_type
         ) as applicant
+        ${wantsDocuments ? `,
+        coalesce(
+          (
+            select json_agg(d order by d.created_at desc)
+            from public.documents d
+            where d.application_id = a.id
+          ),
+          '[]'::json
+        ) as documents
+        ` : ''}
+        ${wantsReviews ? `,
+        coalesce(
+          (
+            select json_agg(r order by r.created_at desc)
+            from public.reviews r
+            where r.application_id = a.id
+          ),
+          '[]'::json
+        ) as reviews
+        ` : ''}
       from public.applications a
       left join public.users u on u.id = a.applicant_id
     `

@@ -33,6 +33,7 @@ import type { AssessmentReportData, ReportType } from "@/lib/assessment-report-u
 import { determineReportType, mergeAssessmentReportData, normalizeAssessmentReportData, prefillAssessmentReportFromApplication } from "@/lib/assessment-report-utils";
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
@@ -629,10 +630,11 @@ export default function ApproverApplicationPage() {
   }
   
   return (
-    <DashboardLayout>
-      <div className="flex justify-end p-6">
-        <UserProfileButton />
-      </div>
+    <ProtectedRoute allowedRoles={['approver', 'admin']} requireProfile={true}>
+      <DashboardLayout>
+        <div className="flex justify-end p-6">
+          <UserProfileButton />
+        </div>
       
       <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
@@ -875,6 +877,7 @@ export default function ApproverApplicationPage() {
       </Tabs>
         </motion.div>
     </div>
-    </DashboardLayout>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
 } 

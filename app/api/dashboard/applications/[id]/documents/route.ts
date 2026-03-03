@@ -30,6 +30,20 @@ async function assertApplicationOwnership(applicationId: string, userId: string)
   return Boolean(res.rows[0]?.id)
 }
 
+async function isStaffUser(userId: string): Promise<boolean> {
+  const res = await query<{ role: string | null }>(
+    `
+    select role
+    from public.users
+    where id = $1
+    limit 1
+    `,
+    [userId]
+  )
+  const role = String(res.rows[0]?.role || '').toLowerCase()
+  return ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'].includes(role)
+}
+
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
     const claims = await getClaims(req)
@@ -38,8 +52,11 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     const { id: applicationId } = await context.params
-    const owned = await assertApplicationOwnership(applicationId, claims.sub)
-    if (!owned) {
+    const [owned, staff] = await Promise.all([
+      assertApplicationOwnership(applicationId, claims.sub),
+      isStaffUser(claims.sub),
+    ])
+    if (!owned && !staff) {
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
     }
 

@@ -20,6 +20,7 @@ import { WaterUseReportsList } from "@/components/water-use-reports/water-use-re
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import type { Application } from "@/types/database";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const APPROVER_CHIPS: StatusChipDef[] = [
@@ -91,12 +92,13 @@ export default function ApproverDashboard() {
   const activeChipLabel = APPROVER_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
 
   return (
-    <div className="container mx-auto px-6 py-8 space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
+    <ProtectedRoute allowedRoles={['approver', 'admin']} requireProfile={true}>
+      <div className="container mx-auto px-6 py-8 space-y-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
         {/* Header */}
         <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
           <div>
@@ -176,7 +178,8 @@ export default function ApproverDashboard() {
         ) : (
           <PermitRegistryList />
         )}
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </ProtectedRoute>
   );
 }
