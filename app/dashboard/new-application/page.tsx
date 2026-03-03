@@ -791,29 +791,29 @@ function NewApplicationContent() {
           console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
         } catch (docError) {
           console.error('⚠️ Document upload failed:', docError);
-          // Don't fail the whole save, but warn the user
           setError('Draft saved but some documents failed to upload. Please try uploading them again.');
         }
         
+        // Re-fetch the full application (includes applicant join from users table)
+        // so that the payment tab can read applicant contact details.
+        const fullApplication = await getApplication(result.id);
+
         // Update URL with draft ID if this is a new draft
-        // IMPORTANT: Use history.replaceState instead of router.replace to avoid re-render
-        // This preserves the current activeTab state (especially important for payment flow)
         if (!draftId && result.id) {
           const newUrl = `/dashboard/new-application?id=${result.id}`;
-          // Use native history API to update URL without triggering Next.js re-render
           window.history.replaceState(
             { ...window.history.state, as: newUrl, url: newUrl },
             '',
             newUrl
           );
-          setCurrentApplication(result);
         }
+
+        setCurrentApplication(fullApplication ?? result);
         
-        // Draft saves should NOT redirect away (payment flow depends on staying on this page)
         setDraftSaved(true);
         setTimeout(() => setDraftSaved(false), 2000);
         
-        return result;
+        return fullApplication ?? result;
       } else {
         throw new Error('Failed to save draft - no result returned from database operation');
       }
@@ -826,7 +826,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [createApplication, updateApplication, userProfile?.id, router]);
+  }, [createApplication, updateApplication, getApplication, userProfile?.id, router]);
 
   // Auto-redirect ONLY after submit (draft saves must not redirect)
   useEffect(() => {

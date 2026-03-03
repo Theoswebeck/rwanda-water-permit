@@ -24,6 +24,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Warm connections to OSM tile servers so maps load faster */}
+        <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+        <link rel="dns-prefetch" href="https://b.tile.openstreetmap.org" />
+        <link rel="dns-prefetch" href="https://c.tile.openstreetmap.org" />
+        <link rel="preconnect" href="https://a.tile.openstreetmap.org" crossOrigin="" />
+        <link rel="preconnect" href="https://b.tile.openstreetmap.org" crossOrigin="" />
+        <link rel="preconnect" href="https://c.tile.openstreetmap.org" crossOrigin="" />
+
         {/* Speed up IremboPay SDK + checkout by warming connections early */}
         <link rel="dns-prefetch" href="https://dashboard.sandbox.irembopay.com" />
         <link rel="preconnect" href="https://dashboard.sandbox.irembopay.com" crossOrigin="" />

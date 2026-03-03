@@ -127,6 +127,20 @@
 
 @import "leaflet/dist/leaflet.css";
 
+/* Tailwind v4 preflight sets img { max-width:100%; height:auto } which
+   collapses Leaflet tile images to 0px. Force correct sizing so tiles render. */
+.leaflet-container img {
+  max-width: none !important;
+  max-height: none !important;
+  height: auto;
+}
+.leaflet-tile-pane img {
+  max-width: none !important;
+  max-height: none !important;
+  width: 256px !important;
+  height: 256px !important;
+}
+
 @layer base {
   :root {
     --background: 150 20% 99%;
