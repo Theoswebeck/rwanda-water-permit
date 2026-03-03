@@ -79,6 +79,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
+  const [awaitingGatewayConfirmation, setAwaitingGatewayConfirmation] = useState(false);
   
   const {
     payment,
@@ -103,6 +104,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       console.log('✅ Payment completed detected via polling');
       setCompletedApplication(payment.application);
       setPaymentCompleted(true);
+      setAwaitingGatewayConfirmation(false);
 
       // Close Irembo modal if it is open (helps demo flow)
       try {
@@ -118,6 +120,12 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     }
   }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
 
+  useEffect(() => {
+    if (payment?.status === 'failed' || payment?.status === 'cancelled') {
+      setAwaitingGatewayConfirmation(false);
+    }
+  }, [payment?.status]);
+
   /**
    * If a user comes back to an existing pending payment, automatically show the widget
    * (the widget itself auto-opens the Irembo modal when the script loads).
@@ -126,10 +134,10 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     const isPendingWithRef =
       (payment?.status === 'pending' || payment?.status === 'processing') && !!payment?.irembo_payment_ref;
 
-    if (isPendingWithRef && !showWidget) {
+    if (isPendingWithRef && !showWidget && !awaitingGatewayConfirmation) {
       setShowWidget(true);
     }
-  }, [payment?.status, payment?.irembo_payment_ref, showWidget]);
+  }, [payment?.status, payment?.irembo_payment_ref, showWidget, awaitingGatewayConfirmation]);
 
   /**
    * Handle payment initiation
@@ -217,6 +225,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
     
     try {
+      setAwaitingGatewayConfirmation(true);
+      setShowWidget(false);
       setIsCompletingPayment(true);
       console.log('💾 [PAYMENT TAB] Verifying payment status...');
 
@@ -233,6 +243,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
         if (finalPayment && finalPayment.status === 'completed') {
           setCompletedApplication(finalPayment.application);
           setPaymentCompleted(true);
+          setAwaitingGatewayConfirmation(false);
           console.log('✅ [PAYMENT TAB] Application submitted:', finalPayment.application?.application_number);
 
           // Auto-redirect to dashboard after 4 seconds
@@ -264,6 +275,17 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       errors: error?.errors,
       fullError: error ? JSON.stringify(error, null, 2) : 'no error object',
     });
+    const isAlreadyPaid = error?.code === 'BAD_INVOICES_PAID';
+    if (isAlreadyPaid) {
+      console.log('ℹ️ [PAYMENT TAB] Invoice already paid - treating as completed and waiting for status confirmation');
+      setAwaitingGatewayConfirmation(true);
+      setShowWidget(false);
+      if (payment?.id) {
+        checkStatus(payment.id);
+      }
+      return;
+    }
+    
     console.log('❌ [PAYMENT TAB] Payment failed');
     
     if (payment?.id) {
@@ -389,6 +411,24 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           <p className="text-lg font-medium">Verifying payment...</p>
           <p className="text-sm text-muted-foreground">
             This may take a few seconds. Please do not close this page.
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (awaitingGatewayConfirmation && !paymentCompleted) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="flex flex-col items-center justify-center py-16 space-y-4"
+      >
+        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        <div className="text-center space-y-2">
+          <p className="text-lg font-medium">Confirming payment with gateway...</p>
+          <p className="text-sm text-muted-foreground">
+            We received a success callback. Final confirmation can take a few seconds.
           </p>
         </div>
       </motion.div>
@@ -536,7 +576,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
                 onRetry={isPaymentFailed ? handleRetryPayment : undefined}
               />
 
-              {showWidget && payment.irembo_payment_ref && isPaymentPending && (
+              {showWidget && payment.irembo_payment_ref && isPaymentPending && !awaitingGatewayConfirmation && (
                 <div className="pt-6 border-t">
                   <IremboPayWidget
                     invoiceNumber={payment.irembo_payment_ref}

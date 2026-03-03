@@ -5,7 +5,7 @@
 // Uses JavaScript SDK Integration (NOT redirect)
 // =============================================
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -63,6 +63,7 @@ export function IremboPayWidget({
   const [scriptLoaded, setScriptLoaded] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const hasInitiatedRef = useRef(false);
 
   // Use explicit sandbox flag (more reliable than guessing from key)
   const scriptUrl = isSandbox
@@ -121,6 +122,10 @@ export function IremboPayWidget({
    * Initiate payment when script is loaded
    */
   const initiatePayment = () => {
+    if (hasInitiatedRef.current || paymentStatus === 'processing' || paymentStatus === 'success') {
+      return;
+    }
+
     if (!window.IremboPay) {
       console.error('❌ IremboPay SDK not loaded');
       setError('Payment system not loaded. Please refresh the page.');
@@ -136,6 +141,7 @@ export function IremboPayWidget({
     });
 
     setPaymentStatus('processing');
+    hasInitiatedRef.current = true;
 
     try {
       window.IremboPay.initiate({
@@ -179,6 +185,7 @@ export function IremboPayWidget({
           if (err) {
             console.error('❌ [IREMBOPAY WIDGET] Payment failed:', err);
             setPaymentStatus('error');
+            hasInitiatedRef.current = false;
             setError(
               err.message || 
               err.detail || 
@@ -201,10 +208,17 @@ export function IremboPayWidget({
     } catch (err) {
       console.error('❌ Failed to initiate payment:', err);
       setPaymentStatus('error');
+      hasInitiatedRef.current = false;
       setError(err instanceof Error ? err.message : 'Failed to initiate payment');
       onFailed?.(err);
     }
   };
+
+  // Reset one-shot initiation guard when invoice changes.
+  useEffect(() => {
+    hasInitiatedRef.current = false;
+    setPaymentStatus('idle');
+  }, [invoiceNumber, publicKey]);
 
   /**
    * Auto-initiate payment when script loads
