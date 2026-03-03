@@ -161,7 +161,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const dirAbs = path.join(process.cwd(), 'public', dirRel)
     await mkdir(dirAbs, { recursive: true })
 
-    const diskName = `${safeSegment(docType)}_${now}${safeSegment(ext)}`
+    // Keep the original field token in filename so UI can map documents
+    // back to their exact form field (especially for shared enum types like "other").
+    const fileMarker = safeSegment(typeRaw || docType || 'other')
+    const diskName = `${fileMarker}-${now}${safeSegment(ext)}`
     const fileAbs = path.join(dirAbs, diskName)
     await writeFile(fileAbs, bytes)
 
