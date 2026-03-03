@@ -11,6 +11,29 @@ import type { PaymentStatusResponse } from '@/types/payment';
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
 import { query } from '@/lib/db/postgres';
 
+const PAYMENT_METHOD_ENUM_VALUES = new Set([
+  'mobile_money',
+  'card',
+  'bank_transfer',
+  'ussd',
+  'cash',
+]);
+
+function normalizeGatewayPaymentMethod(rawMethod: unknown): string | null {
+  if (typeof rawMethod !== 'string' || !rawMethod.trim()) return null;
+
+  const normalized = rawMethod.trim().toLowerCase();
+
+  if (PAYMENT_METHOD_ENUM_VALUES.has(normalized)) return normalized;
+  if (normalized.includes('momo') || normalized.includes('mobile')) return 'mobile_money';
+  if (normalized.includes('card') || normalized.includes('visa') || normalized.includes('master')) return 'card';
+  if (normalized.includes('bank')) return 'bank_transfer';
+  if (normalized.includes('ussd')) return 'ussd';
+  if (normalized.includes('cash')) return 'cash';
+
+  return null;
+}
+
 // Demo mode removed - using real payment flow only
 
 export async function GET(
@@ -154,10 +177,13 @@ export async function GET(
             console.log('🔄 [PAYMENT STATUS] Updating local status from IremboPay');
             
             const gatewayResponse = (payment.gateway_response as Record<string, unknown> | null | undefined) || {};
+            const normalizedPaymentMethod =
+              normalizeGatewayPaymentMethod(iremboStatus.data.paymentMethod) ||
+              normalizeGatewayPaymentMethod(payment.payment_method);
             const updateData: Record<string, unknown> = {
               status: mappedStatus,
               irembo_transaction_id: iremboStatus.data.transactionId || payment.irembo_transaction_id,
-              payment_method: iremboStatus.data.paymentMethod?.toLowerCase() || payment.payment_method,
+              payment_method: normalizedPaymentMethod,
               gateway_response: {
                 ...gatewayResponse,
                 status_check: iremboStatus.data,
