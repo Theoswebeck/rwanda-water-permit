@@ -6,6 +6,43 @@ import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } f
 
 export const runtime = 'nodejs'
 
+const ALLOWED_DOCUMENT_TYPES = new Set([
+  'payment_proof',
+  'identification_doc',
+  'land_ownership_doc',
+  'technical_drawings',
+  'environmental_impact_doc',
+  'intake_discharge_map',
+  'water_quality_report',
+  'geological_survey',
+  'business_license',
+  'other',
+  'land_access_doc',
+  'renewal_request_letter',
+  'transfer_application_letter',
+  'signed_transfer_form',
+  'registration_certificate',
+  'existing_permit_copy',
+  'certified_letter',
+])
+
+const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
+  paymentProof: 'payment_proof',
+  identificationDoc: 'identification_doc',
+  landOwnershipDoc: 'land_ownership_doc',
+  technicalDrawings: 'technical_drawings',
+  environmentalImpactDoc: 'environmental_impact_doc',
+  intakeDischargeMap: 'intake_discharge_map',
+  landAccessDocuments: 'land_access_doc',
+  renewalRequestLetter: 'renewal_request_letter',
+  transferApplicationLetter: 'transfer_application_letter',
+  signedTransferForm: 'signed_transfer_form',
+  notifiedAgreement: 'signed_transfer_form',
+  registrationCertificate: 'registration_certificate',
+  existingPermitCopy: 'existing_permit_copy',
+  certifiedLetter: 'certified_letter',
+}
+
 async function getClaims(req: NextRequest) {
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
@@ -14,6 +51,38 @@ async function getClaims(req: NextRequest) {
 
 function safeSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_')
+}
+
+function toSnakeCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[\s-]+/g, '_')
+    .toLowerCase()
+}
+
+function normalizeDocumentType(raw: string): string {
+  const value = raw.trim()
+  if (!value) return 'other'
+
+  if (ALLOWED_DOCUMENT_TYPES.has(value)) return value
+  if (DOCUMENT_TYPE_ALIASES[value]) return DOCUMENT_TYPE_ALIASES[value]
+
+  const snake = toSnakeCase(value)
+  if (ALLOWED_DOCUMENT_TYPES.has(snake)) return snake
+
+  if (snake.endsWith('_hydrological_report')) return 'geological_survey'
+  if (snake.endsWith('_eia')) return 'environmental_impact_doc'
+  if (
+    snake.endsWith('_general_requirements') ||
+    snake.endsWith('_feasibility_study') ||
+    snake.endsWith('_management_plan') ||
+    snake.endsWith('_recommendation_letter') ||
+    snake.endsWith('_waste_management_plan')
+  ) {
+    return 'other'
+  }
+
+  return 'other'
 }
 
 async function assertApplicationOwnership(applicationId: string, userId: string): Promise<boolean> {
@@ -80,7 +149,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const form = await req.formData()
     const file = form.get('file')
     const typeRaw = String(form.get('documentType') || '').trim()
-    const docType = typeRaw || 'other'
+    const docType = normalizeDocumentType(typeRaw)
     if (!(file instanceof File)) {
       return NextResponse.json({ success: false, message: 'File is required' }, { status: 400 })
     }
@@ -97,8 +166,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     await writeFile(fileAbs, bytes)
 
     const filePath = `/${path.join(dirRel, diskName).replaceAll(path.sep, '/')}`
-    const insertRes = await query(
-      `
+    const insertSql = `
       insert into public.documents (
         application_id,
         type,
@@ -114,9 +182,38 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         $1, $2, $3, $4, $5, $6, $7, 'pending', now(), now()
       )
       returning *
-      `,
-      [applicationId, docType, file.name || diskName, filePath, file.size || bytes.length, file.type || null, claims.sub]
-    )
+    `
+    let insertRes
+    try {
+      insertRes = await query(insertSql, [
+        applicationId,
+        docType,
+        file.name || diskName,
+        filePath,
+        file.size || bytes.length,
+        file.type || null,
+        claims.sub,
+      ])
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      const code = typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code?: unknown }).code || '')
+        : ''
+      // Final safety net: never fail upload due to an unknown document type token.
+      if (code === '22P02' && message.includes('enum document_type') && docType !== 'other') {
+        insertRes = await query(insertSql, [
+          applicationId,
+          'other',
+          file.name || diskName,
+          filePath,
+          file.size || bytes.length,
+          file.type || null,
+          claims.sub,
+        ])
+      } else {
+        throw error
+      }
+    }
 
     return NextResponse.json({ success: true, document: insertRes.rows[0] || null })
   } catch (err) {
