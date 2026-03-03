@@ -148,8 +148,9 @@ function parseOrExpression(orExpr: string, alias: string, params: unknown[], sta
     if (!m) continue
     const [, col, op, rawVal] = m
     if (!isSafeIdent(col)) continue
+    const colExpr = alias ? `${alias}.${quoteIdent(col)}` : quoteIdent(col)
     if (op === 'is' && rawVal === 'null') {
-      sqlParts.push(`${alias}.${quoteIdent(col)} is null`)
+      sqlParts.push(`${colExpr} is null`)
       continue
     }
     params.push(rawVal)
@@ -162,7 +163,7 @@ function parseOrExpression(orExpr: string, alias: string, params: unknown[], sta
       op === 'lt' ? '<' :
       op === 'gte' ? '>=' :
       op === 'lte' ? '<=' : '='
-    sqlParts.push(`${alias}.${quoteIdent(col)} ${opSql} ${ph}`)
+    sqlParts.push(`${colExpr} ${opSql} ${ph}`)
   }
   return { sql: sqlParts.length ? `(${sqlParts.join(' or ')})` : '', nextIdx: idx }
 }
@@ -242,6 +243,8 @@ export async function POST(req: NextRequest) {
     }
 
     const alias = tableAlias(table)
+    const useAliasedColumns = action === 'select'
+    const columnPrefix = useAliasedColumns ? `${alias}.` : ''
     const filters = body.filters || []
     const orders = body.orders || []
     const where: string[] = []
@@ -250,13 +253,13 @@ export async function POST(req: NextRequest) {
 
     for (const f of filters) {
       if (f.op === 'or' && typeof f.value === 'string') {
-        const parsed = parseOrExpression(String(f.value), alias, params, idx)
+        const parsed = parseOrExpression(String(f.value), useAliasedColumns ? alias : '', params, idx)
         idx = parsed.nextIdx
         if (parsed.sql) where.push(parsed.sql)
         continue
       }
       if (!f.column || !isSafeIdent(f.column)) continue
-      const col = `${alias}.${quoteIdent(f.column)}`
+      const col = `${columnPrefix}${quoteIdent(f.column)}`
       if (f.op === 'eq') {
         params.push(f.value); where.push(`${col} = $${idx++}`)
       } else if (f.op === 'neq') {
