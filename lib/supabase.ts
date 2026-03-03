@@ -1,4 +1,6 @@
-import { supabase } from './selfhosted-supabase-client'
+import { supabase as selfHostedSupabase } from './selfhosted-supabase-client'
+
+export const supabase = selfHostedSupabase
 
 // DEV ONLY: expose supabase for quick debugging in browser console.
 // This helps diagnose RLS/auth issues (e.g., auth.uid() is NULL when session is missing).
