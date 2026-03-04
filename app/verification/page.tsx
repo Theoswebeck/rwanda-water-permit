@@ -191,33 +191,6 @@ export default function VerificationDashboard() {
     return labels[purpose] || purpose;
   };
 
-  const getWaterSourceLocation = (app: VerificationApplication) => {
-    if (typeof app.internal_notes === "string" && app.internal_notes.trim().length > 0) {
-      try {
-        const parsed = JSON.parse(app.internal_notes) as Record<string, unknown>;
-        const sourceParts = [
-          parsed.waterSourceVillage,
-          parsed.waterSourceCell,
-          parsed.waterSourceSector,
-          parsed.waterSourceDistrict,
-          parsed.waterSourceProvince,
-        ]
-          .map((part) => (typeof part === "string" ? part.trim() : ""))
-          .filter((part) => part.length > 0);
-        if (sourceParts.length > 0) {
-          return sourceParts.join(", ");
-        }
-      } catch {
-        // Ignore invalid JSON and fallback to top-level application location.
-      }
-    }
-
-    const fallbackParts = [app.village, app.cell, app.sector, app.district, app.province]
-      .map((part) => (typeof part === "string" ? part.trim() : ""))
-      .filter((part) => part.length > 0);
-    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A";
-  };
-
   const ApplicationTable = ({ apps, emptyMessage }: { apps: VerificationApplication[]; emptyMessage: string }) => {
     const filteredApps = filterApplications(apps);
     const sortedApps = sortBySubmissionDateDescending(filteredApps, (app) => app.submitted_at || app.created_at);
@@ -230,8 +203,8 @@ export default function VerificationDashboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="w-full">
+          <div className="overflow-x-hidden">
+            <Table className="w-full table-fixed">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
@@ -239,14 +212,13 @@ export default function VerificationDashboard() {
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden lg:table-cell">Location of Water Source</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {apps.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -278,14 +250,6 @@ export default function VerificationDashboard() {
                       <TableCell className="p-2 sm:p-3">{getAppTypeBadge(app)}</TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{getVerificationStatusBadge(app.status)}</div>
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3 hidden lg:table-cell">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
-                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                            {getWaterSourceLocation(app)}
-                          </span>
-                        </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
                         <Link href={`/verification/application/${app.application_number}`}>

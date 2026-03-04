@@ -107,18 +107,26 @@ export function ApplicationsList({
   };
 
   // Filter applications based on search and filters
-  const getPrimaryActivity = (app: Application): string | null => {
-    const activities = app.intended_activities as string[] | null;
-    const primaryActivity = activities?.[0] || app.water_purpose;
-    return primaryActivity ?? null;
+  const getApplicationActivities = (app: Application): string[] => {
+    const raw = app.intended_activities as unknown;
+    const values = Array.isArray(raw)
+      ? raw.filter((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+      : [];
+
+    if (typeof app.water_purpose === "string" && app.water_purpose.trim().length > 0) {
+      values.push(app.water_purpose);
+    }
+
+    return [...new Set(values)];
   };
 
   const availableActivities = useMemo(() => {
     const labelsByCode = new Map<string, string>();
     for (const app of applications) {
-      const activityCode = getPrimaryActivity(app);
-      if (!activityCode) continue;
-      labelsByCode.set(activityCode, getActivityLabel(activityCode));
+      const activityCodes = getApplicationActivities(app);
+      for (const activityCode of activityCodes) {
+        labelsByCode.set(activityCode, getActivityLabel(activityCode));
+      }
     }
 
     return Array.from(labelsByCode.entries())
@@ -129,14 +137,14 @@ export function ApplicationsList({
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
       const displayStatus = getDisplayStatus(app);
-      const primaryActivity = getPrimaryActivity(app);
+      const activityCodes = getApplicationActivities(app);
       const matchesSearch = 
         app.project_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.application_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.district?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.province?.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesActivity = activityFilter === "all" || primaryActivity === activityFilter;
+      const matchesActivity = activityFilter === "all" || activityCodes.includes(activityFilter);
       const matchesStatus = effectiveStatusFilter === "all" || displayStatus === effectiveStatusFilter;
       
       return matchesSearch && matchesActivity && matchesStatus;

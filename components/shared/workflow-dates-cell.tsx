@@ -30,11 +30,6 @@ function fmtTimestamp(iso?: string | null): string | null {
   }
 }
 
-interface DateRow {
-  label: string;
-  value: string | null;
-}
-
 export function WorkflowDatesCell({ dates }: WorkflowDatesCellProps) {
   if (!dates) {
     return <span className="text-xs text-muted-foreground">--</span>;
@@ -53,25 +48,20 @@ export function WorkflowDatesCell({ dates }: WorkflowDatesCellProps) {
     .filter((d): d is Date => d !== null && Number.isFinite(d.getTime()))
     .sort((a, b) => b.getTime() - a.getTime())[0];
 
-  const rows: DateRow[] = [
-    { label: "Submitted", value: fmtTimestamp(submittedAt) },
-    { label: "Last activity", value: fmtTimestamp(latestActivitySource?.toISOString() ?? null) },
-  ].filter((r) => r.value !== null);
+  const rows = [
+    fmtTimestamp(submittedAt),
+    fmtTimestamp(latestActivitySource?.toISOString() ?? null),
+  ].filter((value): value is string => value !== null);
 
   if (rows.length === 0) {
     return <span className="text-xs text-muted-foreground">--</span>;
   }
 
   return (
-    <div className="space-y-0.5 min-w-[110px]">
-      {rows.map((r) => (
-        <div key={r.label} className="flex items-baseline gap-1.5 text-[11px] leading-tight">
-          <span className="text-muted-foreground/70 font-medium w-[52px] shrink-0 text-right">
-            {r.label}
-          </span>
-          <span className="text-slate-700 dark:text-slate-300 tabular-nums">
-            {r.value}
-          </span>
+    <div className="space-y-0.5 min-w-0">
+      {rows.map((value, idx) => (
+        <div key={`${value}-${idx}`} className="text-[11px] leading-tight text-slate-700 dark:text-slate-300 tabular-nums">
+          {value}
         </div>
       ))}
     </div>
