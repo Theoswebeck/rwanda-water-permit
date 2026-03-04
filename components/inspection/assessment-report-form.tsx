@@ -580,6 +580,16 @@ export function AssessmentReportForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div>
+            <Label>Assessment report completion note</Label>
+            <Input
+              value={localData.conclusion || ''}
+              onChange={(e) => updateField('conclusion', e.target.value)}
+              placeholder="Enter completion note"
+              disabled={readOnly}
+              className={readOnlyClass}
+            />
+          </div>
           <div className="text-sm text-muted-foreground mt-4">
             Done at Kigali, on {localData.reportDate || new Date().toLocaleDateString()}
           </div>

@@ -40,7 +40,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Application } from "@/types/database";
-import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { ALL_WATER_ACTIVITY_CODES, getActivityLabel } from "@/lib/assessment-report-utils";
 
 interface ApplicationsListProps {
   applications: Application[];
@@ -122,6 +122,13 @@ export function ApplicationsList({
 
   const availableActivities = useMemo(() => {
     const labelsByCode = new Map<string, string>();
+
+    // Always expose the full known catalog in the filter dropdown.
+    for (const activityCode of ALL_WATER_ACTIVITY_CODES) {
+      labelsByCode.set(activityCode, getActivityLabel(activityCode));
+    }
+
+    // Include any additional/legacy codes found in data.
     for (const app of applications) {
       const activityCodes = getApplicationActivities(app);
       for (const activityCode of activityCodes) {

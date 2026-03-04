@@ -171,26 +171,40 @@ export function extractBeaconCoordinates(
 /**
  * Gets activity label from activity code
  */
+export const ACTIVITY_LABELS: Record<string, string> = {
+  irrigation: "Irrigation",
+  water_supply: "Water Supply",
+  fish_farming_lakes: "Fish farming in lakes",
+  fish_farming_ponds: "Fish farming in ponds",
+  industry: "Industry",
+  industrial: "Industry",
+  coffee_washing: "Coffee Washing",
+  electricity_generation: "Electricity Generation (Hydropower)",
+  mining: "Mining",
+  construction_of_dam: "Construction of Dam",
+  construction_of_infrastructures: "Construction or installation of infrastructure",
+  navigation: "Navigation",
+  recreation_activities: "Recreational Activities",
+  recreation: "Recreational Activities",
+  gaz_extraction: "Gaz Extraction",
+  livestock: "Livestock",
+  domestic: "Domestic Use",
+  municipal_supply: "Municipal Supply",
+  aquaculture: "Aquaculture",
+  other: "Other",
+};
+
+export const ALL_WATER_ACTIVITY_CODES: string[] = Object.keys(ACTIVITY_LABELS);
+
 export function getActivityLabel(activity: string): string {
-  const activityLabels: Record<string, string> = {
-    'irrigation': 'Irrigation',
-    'water_supply': 'Water Supply',
-    'fish_farming_lakes': 'Fish farming in lakes',
-    'fish_farming_ponds': 'Fish farming in ponds',
-    'industry': 'Industry',
-    'coffee_washing': 'Coffee Washing',
-    'electricity_generation': 'Electricity Generation (Hydropower)',
-    'mining': 'Mining',
-    'construction_of_dam': 'Construction of Dam',
-    'construction_of_infrastructures': 'Construction or installation of infrastructure',
-    'navigation': 'Navigation',
-    'recreation_activities': 'Recreational Activities',
-    'gaz_extraction': 'Gaz Extraction',
-    'livestock': 'Livestock',
-    'other': 'Other'
-  };
-  
-  return activityLabels[activity] || activity;
+  const directLabel = ACTIVITY_LABELS[activity];
+  if (directLabel) return directLabel;
+
+  // Fallback for unknown/legacy codes to keep UI readable.
+  return activity
+    .split("_")
+    .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
+    .join(" ");
 }
 
 /**

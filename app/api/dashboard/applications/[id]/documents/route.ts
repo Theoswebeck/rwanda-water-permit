@@ -90,8 +90,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     }
 
     const { id: applicationId } = await context.params
-    const owned = await assertApplicationOwnership(applicationId, claims.sub)
-    if (!owned) {
+    const [owned, staff] = await Promise.all([
+      assertApplicationOwnership(applicationId, claims.sub),
+      isStaffUser(claims.sub),
+    ])
+    if (!owned && !staff) {
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
     }
 
