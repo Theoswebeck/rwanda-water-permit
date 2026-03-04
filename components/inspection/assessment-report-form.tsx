@@ -40,18 +40,36 @@ export function AssessmentReportForm({
   }, [reportData]);
 
   useEffect(() => {
-    if (inspectionDate && !localData.reportDate) {
-      const updated = { ...localData, reportDate: inspectionDate };
-      setLocalData(updated);
+    if (!inspectionDate) return;
+    setLocalData((prev) => {
+      if (prev.reportDate === inspectionDate) return prev;
+      const updated = { ...prev, reportDate: inspectionDate };
       onReportDataChange(updated);
-    }
-  }, [inspectionDate]); // eslint-disable-line react-hooks/exhaustive-deps
+      return updated;
+    });
+  }, [inspectionDate, onReportDataChange]);
 
   const updateField = <K extends keyof AssessmentReportData>(field: K, value: AssessmentReportData[K]) => {
-    const updated = { ...localData, [field]: value };
-    setLocalData(updated);
-    onReportDataChange(updated);
+    setLocalData((prev) => {
+      const updated = { ...prev, [field]: value };
+      onReportDataChange(updated);
+      return updated;
+    });
   };
+
+  const toDerivedM3Day = (lpsRaw: string): string => {
+    const parsed = Number(lpsRaw);
+    if (!Number.isFinite(parsed)) return "";
+    // 1 L/s = 86.4 m3/day
+    return (parsed * 86.4).toFixed(2);
+  };
+  const sourceFlowLpsValue = ((localData as any).sourceFlowLps as string | undefined) || "";
+  const sourceFlowM3DayValue = ((localData as any).sourceFlowM3Day as string | undefined) || "";
+
+  useEffect(() => {
+    if (!sourceFlowLpsValue || sourceFlowM3DayValue) return;
+    updateField("sourceFlowM3Day" as any, toDerivedM3Day(sourceFlowLpsValue) as any);
+  }, [sourceFlowLpsValue, sourceFlowM3DayValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateBeacon = (index: number, field: 'latitude' | 'longitude', value: string) => {
     const beacons = [...(localData.beacons || [])];
@@ -219,7 +237,18 @@ export function AssessmentReportForm({
                 <Label className="text-sm text-muted-foreground">L/sec</Label>
                 <Input
                   value={(localData as any).sourceFlowLps || ''}
-                  onChange={(e) => updateField('sourceFlowLps' as any, e.target.value as any)}
+                  onChange={(e) => {
+                    const sourceFlowLps = e.target.value;
+                    setLocalData((prev) => {
+                      const updated = {
+                        ...prev,
+                        sourceFlowLps,
+                        sourceFlowM3Day: toDerivedM3Day(sourceFlowLps),
+                      };
+                      onReportDataChange(updated);
+                      return updated;
+                    });
+                  }}
                   placeholder="L/sec"
                   disabled={readOnly}
                   className={readOnlyClass}
@@ -229,9 +258,9 @@ export function AssessmentReportForm({
                 <Label className="text-sm text-muted-foreground">Equivalent to m³/day</Label>
                 <Input
                   value={(localData as any).sourceFlowM3Day || ''}
-                  onChange={(e) => updateField('sourceFlowM3Day' as any, e.target.value as any)}
                   placeholder="m³/day"
-                  disabled={readOnly}
+                  readOnly
+                  disabled
                   className={readOnlyClass}
                 />
               </div>
@@ -267,7 +296,18 @@ export function AssessmentReportForm({
                   <Label>Flow rate (L/sec)</Label>
                   <Input
                     value={localData.flowRateLps || ''}
-                    onChange={(e) => updateField('flowRateLps', e.target.value)}
+                    onChange={(e) => {
+                      const flowRateLps = e.target.value;
+                      setLocalData((prev) => {
+                        const updated = {
+                          ...prev,
+                          flowRateLps,
+                          flowRateM3Day: toDerivedM3Day(flowRateLps),
+                        };
+                        onReportDataChange(updated);
+                        return updated;
+                      });
+                    }}
                     placeholder="L/sec"
                     disabled={readOnly}
                     className={readOnlyClass}
@@ -544,25 +584,13 @@ export function AssessmentReportForm({
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            {reportType === 'abstraction' ? '7' : '7'}. Assessment Report Summary <span className="text-destructive">*</span>
+            {reportType === 'abstraction' ? '7' : '7'}. Assessment Report Completion
           </CardTitle>
           <CardDescription>
-            Provide a brief summary of the field visit findings
+            Report completion details
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Provide a general conclusion and recommendations</Label>
-            <Textarea
-              value={localData.conclusion || ''}
-              onChange={(e) => updateField('conclusion', e.target.value)}
-              placeholder="Provide general conclusion and recommendations..."
-              rows={6}
-              disabled={readOnly}
-              className={readOnlyClass}
-              required
-            />
-          </div>
           <div className="text-sm text-muted-foreground mt-4">
             Done at Kigali, on {localData.reportDate || new Date().toLocaleDateString()}
           </div>

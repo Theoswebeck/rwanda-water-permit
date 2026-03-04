@@ -25,6 +25,8 @@ export function LoginForm() {
   const [isClearingSession, setIsClearingSession] = useState(false);
   const [shouldRedirect, setShouldRedirect] = useState(false);
 
+  const normalizeRole = (role: unknown): string => String(role ?? "").trim().toLowerCase();
+
   const clearSavedSession = async () => {
     setIsClearingSession(true);
     try {
@@ -119,7 +121,7 @@ export function LoginForm() {
     };
 
     // Get role from userProfile (preferred) or user metadata (fallback)
-    const role = userProfile?.role || (user.user_metadata?.role as string | undefined);
+    const role = normalizeRole(userProfile?.role || (user.user_metadata?.role as string | undefined));
     const redirectPath = getRedirectPath(role);
     
     console.log("✅ Login successful, redirecting to:", redirectPath);

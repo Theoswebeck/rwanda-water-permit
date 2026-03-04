@@ -172,6 +172,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const router = useRouter();
   const { userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState("permit-info");
+  const hasMountedRef = useRef(false);
   const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
@@ -304,6 +305,14 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       setUploadedFileUrls(urlMap);
     }
   }, [initialDocuments]);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     const file = event.target.files?.[0];

@@ -24,6 +24,7 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const APPROVER_CHIPS: StatusChipDef[] = [
+  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
   { id: "pending_approval", label: "Pending Approval", statuses: ["pending_final_approval"], priority: "primary" },
   { id: "returned_to_verifier", label: "Returned to Verifier", statuses: ["returned_to_verification"], priority: "secondary" },
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "secondary" },

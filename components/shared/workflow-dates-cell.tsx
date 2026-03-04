@@ -3,27 +3,28 @@
 import type { WorkflowDates } from "@/lib/workflow-dates";
 
 /**
- * Compact table cell that displays key workflow dates for an application.
- * Shows dates progressively -- only the ones that exist.
- *
- * Usage:
- *   <WorkflowDatesCell dates={workflowDatesMap[app.id]} />
+ * Compact staff table cell that shows the core timeline points:
+ * - Submitted timestamp
+ * - Last activity timestamp
  */
 
 interface WorkflowDatesCellProps {
   dates?: WorkflowDates | null;
 }
 
-const DATE_FMT: Intl.DateTimeFormatOptions = {
+const TIMESTAMP_FMT: Intl.DateTimeFormatOptions = {
   day: "2-digit",
   month: "short",
   year: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
 };
 
-function fmtShort(iso?: string | null): string | null {
+function fmtTimestamp(iso?: string | null): string | null {
   if (!iso) return null;
   try {
-    return new Date(iso).toLocaleDateString("en-GB", DATE_FMT);
+    return new Date(iso).toLocaleString("en-GB", TIMESTAMP_FMT);
   } catch {
     return null;
   }
@@ -39,13 +40,22 @@ export function WorkflowDatesCell({ dates }: WorkflowDatesCellProps) {
     return <span className="text-xs text-muted-foreground">--</span>;
   }
 
+  const submittedAt = dates.appliedAt ?? null;
+  const latestActivitySource = [
+    dates.approvedAt,
+    dates.verifiedAt,
+    dates.reviewedAt,
+    dates.assessedAt,
+    dates.assignedAt,
+    dates.appliedAt,
+  ]
+    .map((iso) => (iso ? new Date(iso) : null))
+    .filter((d): d is Date => d !== null && Number.isFinite(d.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime())[0];
+
   const rows: DateRow[] = [
-    { label: "Applied", value: fmtShort(dates.appliedAt) },
-    { label: "Assigned", value: fmtShort(dates.assignedAt) },
-    { label: "Assessed", value: fmtShort(dates.assessedAt) },
-    { label: "Reviewed", value: fmtShort(dates.reviewedAt) },
-    { label: "Verified", value: fmtShort(dates.verifiedAt) },
-    { label: "Approved", value: fmtShort(dates.approvedAt) },
+    { label: "Submitted", value: fmtTimestamp(submittedAt) },
+    { label: "Last activity", value: fmtTimestamp(latestActivitySource?.toISOString() ?? null) },
   ].filter((r) => r.value !== null);
 
   if (rows.length === 0) {

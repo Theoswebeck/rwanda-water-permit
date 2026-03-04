@@ -65,22 +65,34 @@ type ApplicantDashboardApplication = Application & {
   display_status?: DbApplicationStatus;
 };
 
+type DashboardStatusPanelFilter = "all" | "in_progress" | "approved" | "expired";
+type ApplicantListStatusFilter = "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
+
 function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationStatus {
   // Applicant-visible statuses:
-  // - draft, submitted, under_review, approved, expired
+  // - draft, submitted, under_review, revision_required, approved, expired
   // - plus: approved_pending_permit (approved pending signature/terms acceptance)
   // - plus: pending_payment (payment failed or not yet completed)
+  // Returned workflow statuses are surfaced to applicants as revision_required.
   // Any other internal status is mapped to under_review on the dashboard UI.
   if (
     status === "draft" ||
     status === "submitted" ||
     status === "under_review" ||
+    status === "revision_required" ||
     status === "approved" ||
     status === "expired" ||
     status === "approved_pending_permit" ||
     status === "pending_payment"
   ) {
     return status;
+  }
+  if (
+    status === "returned_to_assessment" ||
+    status === "returned_to_review" ||
+    status === "returned_to_verification"
+  ) {
+    return "revision_required";
   }
   return "under_review";
 }
@@ -94,6 +106,8 @@ function DashboardContent() {
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [showPermitSelectModal, setShowPermitSelectModal] = useState(false);
+  const [activeApplicationStatusPanel, setActiveApplicationStatusPanel] = useState<DashboardStatusPanelFilter>("all");
+  const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<ApplicantListStatusFilter>("all");
   
   // Check for success parameters from URL
   useEffect(() => {
@@ -259,6 +273,49 @@ function DashboardContent() {
     [refreshApplications, refetchIncomingTransfers, router]
   );
 
+  const handleApplicationStatusPanelChange = useCallback((panel: DashboardStatusPanelFilter) => {
+    setActiveApplicationStatusPanel(panel);
+    if (panel === "all") {
+      setApplicationsStatusFilter("all");
+      return;
+    }
+    if (panel === "approved") {
+      setApplicationsStatusFilter("approved");
+      return;
+    }
+    if (panel === "expired") {
+      setApplicationsStatusFilter("expired");
+      return;
+    }
+    setApplicationsStatusFilter("under_review");
+  }, []);
+
+  const handleApplicationsStatusFilterChange = useCallback((status: ApplicantListStatusFilter) => {
+    setApplicationsStatusFilter(status);
+    if (status === "all") {
+      setActiveApplicationStatusPanel("all");
+      return;
+    }
+    if (status === "approved" || status === "approved_pending_permit") {
+      setActiveApplicationStatusPanel("approved");
+      return;
+    }
+    if (status === "expired") {
+      setActiveApplicationStatusPanel("expired");
+      return;
+    }
+    if (
+      status === "submitted" ||
+      status === "under_review" ||
+      status === "revision_required" ||
+      status === "pending_payment"
+    ) {
+      setActiveApplicationStatusPanel("in_progress");
+      return;
+    }
+    setActiveApplicationStatusPanel("all");
+  }, []);
+
   return (
     <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
       <DashboardLayout>
@@ -374,6 +431,8 @@ function DashboardContent() {
                 <ApplicationStatus 
                   applications={applicantDashboardApplications} 
                   loading={applicationsLoading}
+                  activeFilter={activeApplicationStatusPanel}
+                  onFilterChange={handleApplicationStatusPanelChange}
                   onRefresh={() => refreshApplications()}
                 />
 
@@ -453,6 +512,8 @@ function DashboardContent() {
                       <ApplicationsList 
                         applications={applicantDashboardApplications} 
                         loading={applicationsLoading}
+                        statusFilter={applicationsStatusFilter}
+                        onStatusFilterChange={handleApplicationsStatusFilterChange}
                         onDeleteApplications={handleBulkDeleteApplications}
                       />
                     </CardContent>

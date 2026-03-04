@@ -215,15 +215,6 @@ export default function ApproverApplicationPage() {
   const [inspectorName, setInspectorName] = useState("");
   const [inspectionDate, setInspectionDate] = useState("");
   
-  // Verification Checklist State
-  const [checklist, setChecklist] = useState<VerificationChecklist>({
-    locationVerified: false,
-    waterSourceAccessible: false,
-    environmentalImpactAssessed: false,
-    technicalFeasibilityConfirmed: false,
-    infrastructureAdequate: false
-  });
-  
   // Recommendation State
   const [recommendation, setRecommendation] = useState<RecommendationData>({
     recommendation: null,
@@ -277,14 +268,6 @@ export default function ApproverApplicationPage() {
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
           setInspectionDate(existingAssessment.inspection_date || "");
-          
-          setChecklist({
-            locationVerified: existingAssessment.location_verified || false,
-            waterSourceAccessible: existingAssessment.water_source_accessible || false,
-            environmentalImpactAssessed: existingAssessment.environmental_impact_assessed || false,
-            technicalFeasibilityConfirmed: existingAssessment.technical_feasibility_confirmed || false,
-            infrastructureAdequate: existingAssessment.infrastructure_adequate || false
-          });
           
           setRecommendation({
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,

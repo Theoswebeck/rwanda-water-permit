@@ -41,6 +41,7 @@ type RawPendingApprovalApplication = {
   sla_status?: string | null
   due_date?: string | null
   is_modification?: boolean | null
+  internal_notes?: string | null
   applicant?: {
     account_type?: "individual" | "company" | string | null
     first_name?: string | null
@@ -95,6 +96,33 @@ export function FinalDecisions() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const getWaterSourceLocation = (app: RawPendingApprovalApplication) => {
+    if (typeof app.internal_notes === "string" && app.internal_notes.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(app.internal_notes) as Record<string, unknown>;
+        const sourceParts = [
+          parsed.waterSourceVillage,
+          parsed.waterSourceCell,
+          parsed.waterSourceSector,
+          parsed.waterSourceDistrict,
+          parsed.waterSourceProvince,
+        ]
+          .map((part) => (typeof part === "string" ? part.trim() : ""))
+          .filter((part) => part.length > 0);
+        if (sourceParts.length > 0) {
+          return sourceParts.join(", ");
+        }
+      } catch {
+        // Ignore invalid JSON and fallback to top-level fields.
+      }
+    }
+
+    const fallbackParts = [app.district, app.province]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter((part) => part.length > 0);
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A";
+  };
+
   useEffect(() => {
     fetchApplications();
   }, []);
@@ -126,7 +154,7 @@ export function FinalDecisions() {
           applicationType: app.application_type,
           waterSource: app.water_source,
           waterPurpose: app.water_purpose || '',
-          location: `${app.district}, ${app.province}`,
+          location: getWaterSourceLocation(app),
           submittedDate: app.submitted_at || app.created_at,
           reviewCompletedDate: app.reviewed_at || undefined,
           inspectionCompletedDate: app.inspected_at || undefined,
@@ -397,9 +425,10 @@ export function FinalDecisions() {
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Application</TableHead>
+                  <TableHead>Applicant</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Location</TableHead>
+                  <TableHead className="hidden lg:table-cell">Location of Water Source</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -421,6 +450,9 @@ export function FinalDecisions() {
                           {getWaterPurposeLabel(application.waterPurpose)}
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{application.applicantName}</div>
                     </TableCell>
                     <TableCell>
                       {getAppTypeBadge(application)}
@@ -526,7 +558,7 @@ export function FinalDecisions() {
                   <p className="mt-1 font-medium">{selectedApplication.applicationType}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-muted-foreground">Location:</span>
+                  <span className="font-medium text-muted-foreground">Location of Water Source:</span>
                   <p className="mt-1 font-medium">{selectedApplication.location}</p>
                 </div>
               </div>

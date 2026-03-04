@@ -17,12 +17,14 @@ import {
   AlertTriangle,
   Edit,
   CheckCircle,
-  User2
+  User2,
+  Download,
+  FileText
 } from "lucide-react";
 import Link from "next/link";
 import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
-import { getDocumentUrl } from "@/lib/supabase-storage";
+import { getDocumentUrl, downloadFromDocumentsBucket } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
@@ -62,6 +64,12 @@ interface ApplicationWithRelations extends Application {
   documents?: Document[];
   reviews?: Review[];
   approval_conditions?: string;
+}
+
+interface IssuedPermitMeta {
+  id: string;
+  permitNumber: string;
+  permitPdfPath: string | null;
 }
 
 // Transform Application data back to form format for viewing
@@ -273,8 +281,91 @@ export default function ApplicationDetailPage() {
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
   const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
+  const [issuedPermit, setIssuedPermit] = useState<IssuedPermitMeta | null>(null);
+  const [isDownloadingPermit, setIsDownloadingPermit] = useState(false);
+  const [isDownloadingTerms, setIsDownloadingTerms] = useState(false);
   const { getApplication, loading, refresh } = useApplications();
   const { getDocuments } = useDocuments();
+
+  const downloadBlobAsFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const getAcceptedTermsPdfPath = (app: ApplicationWithRelations | null): string | null => {
+    if (!app?.internal_notes) return null;
+    try {
+      const parsed = JSON.parse(app.internal_notes);
+      const termsPath = parsed?.accepted_terms_pdf_url;
+      return typeof termsPath === "string" && termsPath.trim().length > 0 ? termsPath : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleDownloadPermit = async () => {
+    if (!application || application.status !== "approved") return;
+
+    try {
+      setIsDownloadingPermit(true);
+
+      if (issuedPermit?.permitPdfPath) {
+        const blob = await downloadFromDocumentsBucket(issuedPermit.permitPdfPath);
+        if (blob) {
+          downloadBlobAsFile(blob, `permit-${issuedPermit.permitNumber}.pdf`);
+          return;
+        }
+      }
+
+      if (issuedPermit?.id) {
+        window.open(`/dashboard/permit/${issuedPermit.id}`, "_blank");
+        return;
+      }
+
+      alert("Permit is not available yet. Please try again shortly.");
+    } catch (err) {
+      console.error("❌ Failed to download permit PDF:", err);
+      alert("Failed to download permit. Please try again.");
+    } finally {
+      setIsDownloadingPermit(false);
+    }
+  };
+
+  const handleDownloadTerms = async () => {
+    if (!application || application.status !== "approved") return;
+
+    try {
+      setIsDownloadingTerms(true);
+
+      const termsPdfPath = getAcceptedTermsPdfPath(application);
+      if (termsPdfPath) {
+        const blob = await downloadFromDocumentsBucket(termsPdfPath);
+        if (blob) {
+          const suffix = issuedPermit?.permitNumber || application.application_number || application.id;
+          downloadBlobAsFile(blob, `terms-and-conditions-${suffix}.pdf`);
+          return;
+        }
+      }
+
+      if (issuedPermit?.permitNumber) {
+        window.open(`/contract/terms/${encodeURIComponent(issuedPermit.permitNumber)}`, "_blank");
+        return;
+      }
+
+      alert("Terms and conditions are not available yet. Please try again shortly.");
+    } catch (err) {
+      console.error("❌ Failed to download terms and conditions PDF:", err);
+      alert("Failed to download terms and conditions. Please try again.");
+    } finally {
+      setIsDownloadingTerms(false);
+    }
+  };
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -292,6 +383,29 @@ export default function ApplicationDetailPage() {
           const appWithRelations = app as ApplicationWithRelations;
           setApplication(appWithRelations);
           console.log('✅ Application details loaded:', appWithRelations);
+
+          const { data: permitRows, error: permitLookupError } = await supabase
+            .from("permits")
+            .select("id, permit_number, permit_pdf_url, created_at")
+            .eq("application_id", appWithRelations.id)
+            .order("created_at", { ascending: false })
+            .limit(1);
+
+          if (permitLookupError) {
+            console.warn("⚠️ Failed to load permit reference for application:", permitLookupError);
+            setIssuedPermit(null);
+          } else {
+            const permitRow = Array.isArray(permitRows) ? (permitRows[0] as any) : null;
+            if (permitRow?.id && permitRow?.permit_number) {
+              setIssuedPermit({
+                id: permitRow.id,
+                permitNumber: permitRow.permit_number,
+                permitPdfPath: permitRow.permit_pdf_url ?? null,
+              });
+            } else {
+              setIssuedPermit(null);
+            }
+          }
           
           // Transform application data to form format
           const formData = mapApplicationToFormData(appWithRelations, userProfile);
@@ -488,7 +602,7 @@ export default function ApplicationDetailPage() {
       case "pending_payment":
         return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Pending Payment</Badge>;
       case "revision_required":
-        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Revision Required</Badge>;
+        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Returned for Review</Badge>;
       case "cancelled":
         return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Cancelled</Badge>;
       default:
@@ -789,6 +903,38 @@ export default function ApplicationDetailPage() {
                     <p className="text-green-700">
                       Congratulations! Your water permit application has been approved by Rwanda Water Resources Board.
                     </p>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="bg-white hover:bg-green-100 border-green-300 text-green-800"
+                        onClick={handleDownloadPermit}
+                        disabled={isDownloadingPermit}
+                      >
+                        {isDownloadingPermit ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-2" />
+                        )}
+                        {isDownloadingPermit ? "Downloading Permit..." : "Download Permit"}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="bg-white hover:bg-green-100 border-green-300 text-green-800"
+                        onClick={handleDownloadTerms}
+                        disabled={isDownloadingTerms}
+                      >
+                        {isDownloadingTerms ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileText className="h-4 w-4 mr-2" />
+                        )}
+                        {isDownloadingTerms ? "Downloading Terms..." : "Download Terms & Conditions"}
+                      </Button>
+                    </div>
                     {application.approval_conditions && (
                       <div className="mt-2">
                         <p className="font-medium text-green-800">Approval Conditions:</p>

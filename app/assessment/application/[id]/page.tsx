@@ -417,16 +417,52 @@ export default function AssessmentApplicationPage() {
   const isReadOnly = application ? !isEditableAssessment : true;
   const defaultTabValue = "application_details";
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
-  const isFieldReportComplete =
-    isReadOnly ||
-    isTransferApp ||
-    (fieldReportFiles.length > 0 &&
-      !!assessmentReportData.waterUseConflict &&
-      !!assessmentReportData.wastewaterSystemDescription &&
-      !!assessmentReportData.pollutionDescription &&
-      !!assessmentReportData.conclusion &&
-      !!recommendation.recommendation &&
-      (recommendation.recommendation === "yes" || !!recommendation.explanationText));
+  const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+  const reportTypeForAssessment: ReportType = determineReportType(
+    ((application as any)?.intended_activities as string[] | null | undefined) || null,
+    application?.water_purpose || null
+  );
+  const missingFieldReportRequirements = (() => {
+    if (isReadOnly || isTransferApp) return [] as string[];
+    const missing: string[] = [];
+
+    if (fieldReportFiles.length === 0) {
+      missing.push("Supporting documents");
+    }
+
+    if (reportTypeForAssessment === "abstraction") {
+      if (!hasText(assessmentReportData.sourceFlowLps)) missing.push("Section 3: Flow of the water source (L/sec)");
+      if (!hasText(assessmentReportData.sourceFlowM3Day)) missing.push("Section 3: Flow of the water source (m3/day)");
+      if (!hasText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted (m3/day)");
+      if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
+      if (!hasText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q)");
+      if (!hasText(assessmentReportData.waterDemandD)) missing.push("Section 5: Water demand (D)");
+      if (!hasText(assessmentReportData.existingDemandED)) missing.push("Section 5: Existing demand (ED)");
+      if (!hasText(assessmentReportData.remainingWater)) missing.push("Section 5: Remaining Water (Q-D-ED)");
+      if (!hasText(assessmentReportData.waterStorage)) missing.push("Section 5: Water Storage");
+      if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
+    } else {
+      if (!hasText(assessmentReportData.surfaceAreaHa)) missing.push("Section 4: Surface area");
+      if (!hasText(assessmentReportData.existingWaterUses)) missing.push("Section 5: Existing water uses");
+      if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
+    }
+
+    if (!hasText(assessmentReportData.wastewaterSystemDescription)) {
+      missing.push("Section 6: Wastewater system description");
+    }
+    if (!hasText(assessmentReportData.pollutionDescription)) {
+      missing.push("Section 6: Pollution description");
+    }
+    if (!recommendation.recommendation) {
+      missing.push("Section 8: Assessor recommendation");
+    }
+    if (recommendation.recommendation === "no" && !hasText(recommendation.explanationText)) {
+      missing.push("Section 8: Explanation for recommendation");
+    }
+    return missing;
+  })();
+  const canSendForReview =
+    isReadOnly || isTransferApp || missingFieldReportRequirements.length === 0;
 
   useEffect(() => {
     if (tabTouchedRef.current) return;
@@ -1261,16 +1297,7 @@ export default function AssessmentApplicationPage() {
 
     // Transfer applications do not require an assessment report – skip field-report validation.
     if (!isTransferApp) {
-      // Validate ONLY on submit click
-      const missing: string[] = [];
-      if (!assessmentReportData.waterUseConflict) missing.push("Section 5: Water use conflict");
-      if (!assessmentReportData.wastewaterSystemDescription) missing.push("Section 6: Wastewater system description");
-      if (!assessmentReportData.pollutionDescription) missing.push("Section 6: Pollution description");
-      if (!assessmentReportData.conclusion) missing.push("Section 7: Assessment Report Summary");
-      if (!recommendation.recommendation) missing.push("Section 8: Assessor Recommendation");
-      if (recommendation.recommendation === "no" && !recommendation.explanationText) {
-        missing.push("Section 8: Explanation for Recommendation");
-      }
+      const missing = missingFieldReportRequirements;
 
       if (missing.length > 0) {
         alert(`⚠️ Please complete the following before sending for final approval:\n\n${missing.map((m) => `- ${m}`).join("\n")}`);
@@ -1541,7 +1568,7 @@ export default function AssessmentApplicationPage() {
               <Button
                 size="sm"
                 onClick={handleOpenSendToReviewDialog}
-                disabled={submitLoading}
+                disabled={submitLoading || !canSendForReview}
                 className="gap-2 bg-black hover:bg-gray-800 text-white"
               >
                 {submitLoading ? (
@@ -1752,7 +1779,7 @@ export default function AssessmentApplicationPage() {
                               <Button
                                 size="lg"
                                 onClick={handleOpenSendToReviewDialog}
-                                disabled={submitLoading}
+                                disabled={submitLoading || !canSendForReview}
                                 className="gap-2 bg-black hover:bg-gray-800 text-white"
                               >
                                 {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

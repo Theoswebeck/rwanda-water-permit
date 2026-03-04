@@ -138,6 +138,37 @@ function resolveWaterSourceName(application: ApplicationForContract): string {
   return ws.replaceAll("_", " ");
 }
 
+function resolveWaterSourceAdminLocation(application: ApplicationForContract): {
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
+} {
+  const notes = getInternalNotes(application);
+  const province =
+    typeof notes?.waterSourceProvince === "string" && notes.waterSourceProvince.trim()
+      ? notes.waterSourceProvince.trim()
+      : (application.province ?? "").trim() || "N/A";
+  const district =
+    typeof notes?.waterSourceDistrict === "string" && notes.waterSourceDistrict.trim()
+      ? notes.waterSourceDistrict.trim()
+      : (application.district ?? "").trim() || "N/A";
+  const sector =
+    typeof notes?.waterSourceSector === "string" && notes.waterSourceSector.trim()
+      ? notes.waterSourceSector.trim()
+      : (application.sector ?? "").trim() || "N/A";
+  const cell =
+    typeof notes?.waterSourceCell === "string" && notes.waterSourceCell.trim()
+      ? notes.waterSourceCell.trim()
+      : (application.cell ?? "").trim() || "N/A";
+  const village =
+    typeof notes?.waterSourceVillage === "string" && notes.waterSourceVillage.trim()
+      ? notes.waterSourceVillage.trim()
+      : (application.village ?? "").trim() || "N/A";
+  return { province, district, sector, cell, village };
+}
+
 function resolveActivityLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
   const intended = Array.isArray((application as any).intended_activities)
@@ -254,7 +285,7 @@ export function buildContractPlaceholderContext(
   application: ApplicationForContract,
   applicationNumber?: string
 ): ContractPlaceholderContext {
-  const provinceRaw = (application.province ?? "").trim();
+  const waterSourceLocation = resolveWaterSourceAdminLocation(application);
   const { lat, lng } = resolveLatLng(application);
   const isIndividual = (application.applicant?.account_type ?? null) === "individual";
   const appNo = (applicationNumber ?? "").trim();
@@ -277,11 +308,11 @@ export function buildContractPlaceholderContext(
     representativeName: resolveRepresentativeName(application),
     representativeTitle: resolveRepresentativeTitle(application),
     waterSourceName: resolveWaterSourceName(application),
-    provinceLabel: provinceLabelForContract(provinceRaw),
-    district: (application.district ?? "").trim() || "N/A",
-    sector: (application.sector ?? "").trim() || "N/A",
-    cell: (application.cell ?? "").trim() || "N/A",
-    village: (application.village ?? "").trim() || "N/A",
+    provinceLabel: provinceLabelForContract(waterSourceLocation.province),
+    district: waterSourceLocation.district,
+    sector: waterSourceLocation.sector,
+    cell: waterSourceLocation.cell,
+    village: waterSourceLocation.village,
     lat,
     lng,
     volumeLabel: resolveVolumeLabel(application),
@@ -293,6 +324,7 @@ export function buildContractPlaceholderContext(
 
 export function fillContractText(raw: string, ctx: ContractPlaceholderContext): string {
   let s = raw;
+  s = s.replaceAll("registered office address as follows:", "water source location as follows:");
 
   // Application
   s = s.replaceAll("{{APPLICATION_NUMBER}}", ctx.applicationNumber);

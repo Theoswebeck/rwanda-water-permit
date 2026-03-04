@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Table,
@@ -38,6 +38,7 @@ import {
   MoreHorizontal
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Application } from "@/types/database";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 
@@ -45,12 +46,32 @@ interface ApplicationsListProps {
   applications: Application[];
   loading?: boolean;
   onDeleteApplications?: (applicationIds: string[]) => Promise<void>;
+  statusFilter?: "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
+  onStatusFilterChange?: (status: "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired") => void;
 }
 
-export function ApplicationsList({ applications, loading = false, onDeleteApplications }: ApplicationsListProps) {
+export function ApplicationsList({
+  applications,
+  loading = false,
+  onDeleteApplications,
+  statusFilter: controlledStatusFilter,
+  onStatusFilterChange,
+}: ApplicationsListProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [activityFilter, setActivityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const effectiveStatusFilter = controlledStatusFilter ?? statusFilter;
+
+  const handleStatusFilterChange = (
+    value: "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired"
+  ) => {
+    if (controlledStatusFilter === undefined) {
+      setStatusFilter(value);
+    }
+    onStatusFilterChange?.(value);
+  };
+
   const [page, setPage] = useState(1);
   const [selectedApplications, setSelectedApplications] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -68,28 +89,64 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
     // Fallback: ensure internal statuses never leak to applicants even if parent forgets to attach `display_status`.
     const raw = app.status;
     if (raw === "draft") return "draft";
-    if (raw === "submitted" || raw === "under_review" || raw === "approved" || raw === "expired" || raw === "pending_payment") return raw;
+    if (
+      raw === "submitted" ||
+      raw === "under_review" ||
+      raw === "revision_required" ||
+      raw === "rejected" ||
+      raw === "approved" ||
+      raw === "expired" ||
+      raw === "pending_payment"
+    ) return raw;
+    if (
+      raw === "returned_to_assessment" ||
+      raw === "returned_to_review" ||
+      raw === "returned_to_verification"
+    ) return "revision_required";
     return "under_review";
   };
 
   // Filter applications based on search and filters
+  const getPrimaryActivity = (app: Application): string | null => {
+    const activities = app.intended_activities as string[] | null;
+    const primaryActivity = activities?.[0] || app.water_purpose;
+    return primaryActivity ?? null;
+  };
+
+  const availableActivities = useMemo(() => {
+    const labelsByCode = new Map<string, string>();
+    for (const app of applications) {
+      const activityCode = getPrimaryActivity(app);
+      if (!activityCode) continue;
+      labelsByCode.set(activityCode, getActivityLabel(activityCode));
+    }
+
+    return Array.from(labelsByCode.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [applications]);
+
   const filteredApplications = useMemo(() => {
     return applications.filter((app) => {
       const displayStatus = getDisplayStatus(app);
+      const primaryActivity = getPrimaryActivity(app);
       const matchesSearch = 
         app.project_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.application_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.district?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         app.province?.toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchesType = typeFilter === "all" || app.application_type === typeFilter;
-      const matchesStatus = statusFilter === "all" || displayStatus === statusFilter;
+      const matchesActivity = activityFilter === "all" || primaryActivity === activityFilter;
+      const matchesStatus = effectiveStatusFilter === "all" || displayStatus === effectiveStatusFilter;
       
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesActivity && matchesStatus;
     });
-  }, [applications, searchQuery, typeFilter, statusFilter]);
+  }, [applications, searchQuery, activityFilter, effectiveStatusFilter]);
 
   // Reset to first page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, activityFilter, effectiveStatusFilter]);
   
   // Current page slice
   const totalPages = Math.max(1, Math.ceil(filteredApplications.length / pageSize));
@@ -137,7 +194,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
   };
 
   // Function to get the appropriate status with icon and color
-  // Only handles applicant-visible statuses: draft, submitted, under_review, approved, expired
+  // Only handles applicant-visible statuses: draft, submitted, under_review, revision_required, approved, expired
   // All other statuses (internal) are mapped to "Under Review" for applicants
   const getStatusConfig = (status: string) => {
     switch (status) {
@@ -159,6 +216,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           icon: <AlertCircle className="h-4 w-4" />,
           className: "bg-amber-100 text-amber-700 border-0 hover:bg-amber-100 px-3 py-2 rounded-full font-medium"
         };
+      case "revision_required":
+        return {
+          label: "Returned for Review",
+          icon: <AlertCircle className="h-4 w-4" />,
+          className: "bg-orange-100 text-orange-700 border-0 hover:bg-orange-100 px-3 py-2 rounded-full font-medium"
+        };
       case "approved_pending_permit":
         return {
           label: "Approved (Pending Signature)",
@@ -170,6 +233,12 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           label: "Approved",
           icon: <CheckCircle2 className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
+        };
+      case "rejected":
+        return {
+          label: "Rejected",
+          icon: <XCircle className="h-4 w-4" />,
+          className: "bg-red-100 text-red-700 border-0 hover:bg-red-100 px-3 py-2 rounded-full font-medium"
         };
       case "pending_payment":
         return {
@@ -273,6 +342,11 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
       .join(' ');
   };
 
+  const shouldIgnoreRowNavigation = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest('[data-row-click-ignore="true"]'));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -296,33 +370,35 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           />
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <Label className="text-sm whitespace-nowrap">Filter by:</Label>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-40">
+          <Select value={activityFilter} onValueChange={setActivityFilter}>
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="domestic">Domestic</SelectItem>
-              <SelectItem value="industrial">Industrial</SelectItem>
-              <SelectItem value="agricultural">Agricultural</SelectItem>
-              <SelectItem value="commercial">Commercial</SelectItem>
-              <SelectItem value="municipal">Municipal</SelectItem>
-              <SelectItem value="mining_water_use">Mining Water Use</SelectItem>
+              <SelectItem value="all">All Activities</SelectItem>
+              {availableActivities.map((activity) => (
+                <SelectItem key={activity.value} value={activity.value}>
+                  {activity.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40">
+          <Select value={effectiveStatusFilter} onValueChange={handleStatusFilterChange}>
+            <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
+              <SelectItem value="revision_required">Returned for Review</SelectItem>
               <SelectItem value="approved_pending_permit">Approved (Pending Signature)</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="pending_payment">Pending Payment</SelectItem>
               <SelectItem value="expired">Expired</SelectItem>
             </SelectContent>
           </Select>
@@ -335,9 +411,9 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between"
+          className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="text-sm font-medium text-blue-900">
               {selectedApplications.length} application{selectedApplications.length !== 1 ? 's' : ''} selected
             </div>
@@ -351,7 +427,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
             </Button>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex w-full justify-end sm:w-auto items-center gap-2">
             {onDeleteApplications && (
               <Button
                 variant="destructive"
@@ -377,8 +453,103 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
         </motion.div>
       )}
       
-      {/* Applications Table */}
-      <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
+      {/* Mobile Applications List */}
+      <div className="space-y-3 md:hidden">
+        {pagedApplications.length > 0 ? (
+          pagedApplications.map((application) => (
+            <div key={application.id} className="rounded-lg border bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900 break-words">
+                    {application.application_number || `RWB-${application.id.slice(-6)}`}
+                  </p>
+                  <p className="text-xs text-gray-500">{formatDate(application.created_at)}</p>
+                </div>
+                <div className="shrink-0">{getStatusBadge(getDisplayStatus(application))}</div>
+              </div>
+              <div className="space-y-1 text-sm text-gray-600">
+                <p className="break-words">{formatApplicationType(application.application_type, application)}</p>
+                <p className="break-words">
+                  {application.district}, {application.province}
+                </p>
+              </div>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                {(application.status === 'draft' || application.status === 'revision_required') && (
+                  <Link href={
+                    isRenewalApplication(application)
+                      ? `/dashboard/new-application?mode=renewal&applicationId=${application.id}&permitId=${getRenewalPermitId(application)}`
+                      : `/dashboard/edit-application/${application.id}`
+                  }>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                      title="Edit Application"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                )}
+                {application.status === 'approved_pending_permit' && (
+                  <Link href={`/dashboard/application/${application.id}`}>
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
+                      title="Accept Terms & Conditions"
+                    >
+                      <FileText className="h-4 w-4 mr-1" />
+                      Accept Terms
+                    </Button>
+                  </Link>
+                )}
+                <Link href={`/dashboard/application/${application.id}`}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                    title="View Application"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                </Link>
+                {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && application.status !== 'expired' && onDeleteApplications && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Delete Application"
+                    onClick={() => onDeleteApplications([application.id])}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border bg-white p-8 text-center text-gray-500 shadow-sm">
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-3 bg-gray-100 rounded-full">
+                <FileText className="h-6 w-6 text-gray-400" />
+              </div>
+              <div>
+                <p className="font-medium text-gray-900 mb-1">
+                  {applications.length === 0 ? "No applications yet" : "No matches found"}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {applications.length === 0
+                    ? "Create your first water permit application to get started."
+                    : "Try adjusting your search or filter criteria."
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Applications Table */}
+      <div className="hidden rounded-lg border bg-white shadow-sm overflow-hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-gray-50/50">
@@ -400,8 +571,15 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
           <TableBody>
             {pagedApplications.length > 0 ? (
               pagedApplications.map((application) => (
-                <TableRow key={application.id} className="hover:bg-blue-50/30 transition-colors duration-150 border-b border-gray-100">
-                  <TableCell className="px-4 py-4">
+                <TableRow
+                  key={application.id}
+                  className="hover:bg-blue-50/30 transition-colors duration-150 border-b border-gray-100 cursor-pointer"
+                  onClick={(event) => {
+                    if (shouldIgnoreRowNavigation(event.target)) return;
+                    router.push(`/dashboard/application/${application.id}`);
+                  }}
+                >
+                  <TableCell className="px-4 py-4" data-row-click-ignore="true">
                     <Checkbox
                       checked={selectedApplications.includes(application.id)}
                       onCheckedChange={(checked) => handleSelectApplication(application.id, checked as boolean)}
@@ -431,7 +609,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
                       {application.district}, {application.province}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right px-6 py-4">
+                  <TableCell className="text-right px-6 py-4" data-row-click-ignore="true">
                     <div className="flex justify-end gap-1.5">
                       {(application.status === 'draft' || application.status === 'revision_required') && (
                         <Link href={
@@ -515,7 +693,7 @@ export function ApplicationsList({ applications, loading = false, onDeleteApplic
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between py-2">
+      <div className="flex flex-col gap-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
           Page {currentPage} of {totalPages} • Showing {pagedApplications.length} of {filteredApplications.length}
         </div>

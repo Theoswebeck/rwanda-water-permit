@@ -42,6 +42,7 @@ interface AssessmentApplication extends Application {
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const ASSESSOR_CHIPS: StatusChipDef[] = [
+  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
   { id: "pending_assessment", label: "Pending Assessment", statuses: ["pending_assessment"], priority: "primary" },
   { id: "under_assessment", label: "Under Assessment", statuses: ["under_review"], priority: "primary" },
   { id: "returned_to_applicant", label: "Returned to Applicant", statuses: ["revision_required"], priority: "primary" },
@@ -259,6 +260,33 @@ export default function AssessmentDashboard() {
     return labels[purpose] || purpose;
   };
 
+  const getWaterSourceLocation = (app: AssessmentApplication) => {
+    if (typeof app.internal_notes === "string" && app.internal_notes.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(app.internal_notes) as Record<string, unknown>;
+        const sourceParts = [
+          parsed.waterSourceVillage,
+          parsed.waterSourceCell,
+          parsed.waterSourceSector,
+          parsed.waterSourceDistrict,
+          parsed.waterSourceProvince,
+        ]
+          .map((part) => (typeof part === "string" ? part.trim() : ""))
+          .filter((part) => part.length > 0);
+        if (sourceParts.length > 0) {
+          return sourceParts.join(", ");
+        }
+      } catch {
+        // Ignore invalid JSON and fallback to top-level application location.
+      }
+    }
+
+    const fallbackParts = [app.village, app.cell, app.sector, app.district, app.province]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter((part) => part.length > 0);
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A";
+  };
+
   // ─── Application Table ──────────────────────────────────────────────────────
   const ApplicationTable = ({ applications, emptyMessage }: { applications: AssessmentApplication[]; emptyMessage: string }) => {
     const filteredApps = filterApplications(applications);
@@ -278,16 +306,17 @@ export default function AssessmentDashboard() {
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Dates</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden lg:table-cell">Location</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium hidden lg:table-cell">Location of Water Source</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedApps.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
                         <div className="text-muted-foreground/50 text-lg">
                           {applications.length === 0 ? "No applications found" : "No applications match your filters"}
@@ -311,6 +340,11 @@ export default function AssessmentDashboard() {
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
                         <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || "")}</div>
                       </TableCell>
+                      <TableCell className="p-2 sm:p-3">
+                        <div className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                          {app.applicant_name || "Unknown Applicant"}
+                        </div>
+                      </TableCell>
                       <TableCell className="p-2 sm:p-3">{getAppTypeBadge(app)}</TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="flex justify-center">{getAssessmentStatusBadge(app.status)}</div>
@@ -319,7 +353,7 @@ export default function AssessmentDashboard() {
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400 shrink-0" />
                           <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                            {app.district || "N/A"}, {app.sector || "N/A"}
+                            {getWaterSourceLocation(app)}
                           </span>
                         </div>
                       </TableCell>

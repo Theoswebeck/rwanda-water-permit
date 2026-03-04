@@ -449,6 +449,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       // Recreation fields
       recreationType: formData.recreationType,
       recreationProjectDescription: formData.recreationProjectDescription,
+      recreationConcessionAreaM2: formData.recreationConcessionAreaM2,
       
       // Irrigation structured fields
       irrigationCropType: formData.irrigationCropType,

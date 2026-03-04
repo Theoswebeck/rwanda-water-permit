@@ -44,8 +44,8 @@ interface ApplicationWithApplicant extends Application {
     company_name?: string;
     account_type?: string;
   };
-  sla_days_remaining?: number;
-  deadline_90_days_remaining?: number;
+  sla_days_remaining?: number | null;
+  deadline_90_days_remaining?: number | null;
 }
 
 interface AllApplicationsListProps {
@@ -94,7 +94,8 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
       if (error) throw error;
 
       // Process applications with calculated fields
-      const processedApplications: ApplicationWithApplicant[] = data.map(app => {
+      const rows = (data ?? []) as ApplicationWithApplicant[];
+      const processedApplications: ApplicationWithApplicant[] = rows.map((app) => {
         // Calculate SLA days remaining
         let slaRemaining: number | null = null;
         if (app.due_date) {
@@ -195,6 +196,35 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
     } else {
       return app.applicant?.company_name || 'Unknown Applicant';
     }
+  };
+
+  const getWaterSourceLocation = (app: ApplicationWithApplicant) => {
+    let waterSourceLocation = "";
+    if (typeof app.internal_notes === "string" && app.internal_notes.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(app.internal_notes) as Record<string, unknown>;
+        const sourceParts = [
+          parsed.waterSourceVillage,
+          parsed.waterSourceCell,
+          parsed.waterSourceSector,
+          parsed.waterSourceDistrict,
+          parsed.waterSourceProvince,
+        ]
+          .map((part) => (typeof part === "string" ? part.trim() : ""))
+          .filter((part) => part.length > 0);
+        if (sourceParts.length > 0) {
+          waterSourceLocation = sourceParts.join(", ");
+        }
+      } catch {
+        // Ignore invalid internal_notes JSON and rely on fallback fields.
+      }
+    }
+
+    if (waterSourceLocation) return waterSourceLocation;
+    const fallbackParts = [app.village, app.cell, app.sector, app.district, app.province]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter((part) => part.length > 0);
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A";
   };
 
   const getWaterPurposeLabel = (purpose: string | undefined | null) => {
@@ -425,10 +455,11 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                 <TableRow>
                   <TableHead>Dates</TableHead>
                   <TableHead>Application</TableHead>
+                  <TableHead>Applicant</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Location</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="hidden lg:table-cell">Location of Water Source</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -446,6 +477,9 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                       </div>
                     </TableCell>
                     <TableCell>
+                      <div className="text-sm font-medium">{getApplicantName(application)}</div>
+                    </TableCell>
+                    <TableCell>
                       {getAppTypeBadge(application)}
                     </TableCell>
                     <TableCell>
@@ -454,52 +488,54 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                     <TableCell className="hidden lg:table-cell">
                       <div className="text-sm flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
-                        {application.district}, {application.province}
+                        {getWaterSourceLocation(application)}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm" className="gap-2 bg-gray-900 hover:bg-gray-800 text-white">
-                            Actions
-                            <ChevronDown className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/approver/application/${application.application_number}`} className="flex items-center gap-2 cursor-pointer">
-                              <Eye className="h-4 w-4" />
-                              View Details
-                            </Link>
-                          </DropdownMenuItem>
-                          {application.status === 'pending_final_approval' && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => openDecisionDialog(application, 'approve')}
-                                className="flex items-center gap-2 cursor-pointer text-green-600 focus:text-green-600"
-                              >
-                                <CheckCircle2 className="h-4 w-4" />
-                                Approve
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => openDecisionDialog(application, 'reject')}
-                                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-                              >
-                                <XCircle className="h-4 w-4" />
-                                Reject
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => openDecisionDialog(application, 'return_to_assessment')}
-                                className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                                Return to Verification
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" className="gap-2 bg-gray-900 hover:bg-gray-800 text-white">
+                              Actions
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/approver/application/${application.application_number}`} className="flex items-center gap-2 cursor-pointer">
+                                <Eye className="h-4 w-4" />
+                                View Details
+                              </Link>
+                            </DropdownMenuItem>
+                            {application.status === 'pending_final_approval' && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem 
+                                  onClick={() => openDecisionDialog(application, 'approve')}
+                                  className="flex items-center gap-2 cursor-pointer text-green-600 focus:text-green-600"
+                                >
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  Approve
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => openDecisionDialog(application, 'reject')}
+                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Reject
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => openDecisionDialog(application, 'return_to_assessment')}
+                                  className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600"
+                                >
+                                  <RotateCcw className="h-4 w-4" />
+                                  Return to Verification
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -552,8 +588,8 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                   <p className="mt-1 font-medium">{getWaterPurposeLabel(selectedApplication.water_purpose)}</p>
                 </div>
                 <div>
-                  <span className="font-medium text-muted-foreground">Location:</span>
-                  <p className="mt-1 font-medium">{selectedApplication.district}, {selectedApplication.province}</p>
+                  <span className="font-medium text-muted-foreground">Location of Water Source:</span>
+                  <p className="mt-1 font-medium">{getWaterSourceLocation(selectedApplication)}</p>
                 </div>
               </div>
               

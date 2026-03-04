@@ -63,7 +63,7 @@ export default function ApplicationDetailPage() {
       case "pending_payment":
         return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Pending Payment</Badge>;
       case "revision_required":
-        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Revision Required</Badge>;
+        return <Badge variant="outline" className="bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">Returned for Review</Badge>;
       case "cancelled":
         return <Badge variant="outline" className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-gray-200">Cancelled</Badge>;
       default:

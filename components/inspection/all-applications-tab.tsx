@@ -42,6 +42,8 @@ interface Application {
   province: string
   district: string
   sector: string
+  cell?: string
+  village?: string
   project_title: string
   project_description: string
   created_at: string
@@ -50,6 +52,7 @@ interface Application {
   usage_unit?: string
   permit_number?: string
   inspected_at?: string
+  internal_notes?: string
   applicant: {
     id: string
     first_name: string
@@ -162,8 +165,31 @@ export function AllApplicationsTab() {
     return matchesSearch && matchesStatus && matchesWaterSource
   })
 
-  const getLocationString = (app: Application) => {
-    return `${app.district}, ${app.sector}`
+  const getWaterSourceLocation = (app: Application) => {
+    if (typeof app.internal_notes === "string" && app.internal_notes.trim().length > 0) {
+      try {
+        const parsed = JSON.parse(app.internal_notes) as Record<string, unknown>
+        const sourceParts = [
+          parsed.waterSourceVillage,
+          parsed.waterSourceCell,
+          parsed.waterSourceSector,
+          parsed.waterSourceDistrict,
+          parsed.waterSourceProvince,
+        ]
+          .map((part) => (typeof part === "string" ? part.trim() : ""))
+          .filter((part) => part.length > 0)
+        if (sourceParts.length > 0) {
+          return sourceParts.join(", ")
+        }
+      } catch {
+        // Ignore invalid JSON and fallback to top-level fields.
+      }
+    }
+
+    const fallbackParts = [app.village, app.cell, app.sector, app.district, app.province]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter((part) => part.length > 0)
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A"
   }
 
   const getWaterSourceLabel = (waterSource: string) => {
@@ -326,7 +352,7 @@ export function AllApplicationsTab() {
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Application</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Applicant</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Location</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Location of Water Source</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Type</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium">Status</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium">Actions</TableHead>
@@ -364,9 +390,8 @@ export function AllApplicationsTab() {
                       <TableCell className="p-4">
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3 text-slate-500 dark:text-slate-400" />
-                          <span className="text-sm text-slate-700 dark:text-slate-300">{getLocationString(app)}</span>
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{getWaterSourceLocation(app)}</span>
                         </div>
-                        <div className="text-sm text-slate-600 dark:text-slate-400">{app.province}</div>
                       </TableCell>
                       <TableCell className="p-4">
                         <div className="flex items-center gap-1">

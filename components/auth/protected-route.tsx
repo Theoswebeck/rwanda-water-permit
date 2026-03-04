@@ -8,6 +8,10 @@ import { RefreshCw } from "lucide-react";
 
 const SUPERUSER_EMAILS = new Set(["nizzogentl1@gmail.com", "nshutidavy@gmail.com"]);
 
+function normalizeRole(role: unknown): string {
+  return String(role ?? "").trim().toLowerCase();
+}
+
 function getUserEmail(user: any): string {
   const direct = String(user?.email ?? "").trim().toLowerCase();
   if (direct) return direct;
@@ -37,7 +41,8 @@ export function ProtectedRoute({
   const router = useRouter();
   const { user, userProfile, loading, isAuthenticated } = useAuth();
   const isSuperuser = SUPERUSER_EMAILS.has(getUserEmail(user));
-  const isAdmin = userProfile?.role === 'admin';
+  const normalizedProfileRole = normalizeRole(userProfile?.role);
+  const isAdmin = normalizedProfileRole === 'admin';
 
   useEffect(() => {
     if (loading) return; // Wait for auth state to load
@@ -79,10 +84,11 @@ export function ProtectedRoute({
 
     // Check role-based access
     if (allowedRoles.length > 0 && userProfile) {
+      const normalizedAllowedRoles = allowedRoles.map((role) => normalizeRole(role));
       // Admins can access all pages even if a page forgot to include 'admin' in allowedRoles.
-      if (!isAdmin && !allowedRoles.includes(userProfile.role)) {
+      if (!isAdmin && !normalizedAllowedRoles.includes(normalizedProfileRole)) {
         // Redirect based on user role if access denied
-        const roleRedirects = {
+        const roleRedirects: Record<string, string> = {
           admin: '/admin',
           approver: '/approver',
           inspector: '/inspection',
@@ -92,7 +98,7 @@ export function ProtectedRoute({
           applicant: '/dashboard'
         };
         
-        const redirectPath = redirectTo || roleRedirects[userProfile.role as keyof typeof roleRedirects] || '/dashboard';
+        const redirectPath = redirectTo || roleRedirects[normalizedProfileRole] || '/dashboard';
         router.push(redirectPath);
         return;
       }
@@ -164,7 +170,13 @@ export function ProtectedRoute({
   }
 
   // Check role access again (redundant but safe)
-  if (!isSuperuser && !isAdmin && allowedRoles.length > 0 && userProfile && !allowedRoles.includes(userProfile.role)) {
+  if (
+    !isSuperuser &&
+    !isAdmin &&
+    allowedRoles.length > 0 &&
+    userProfile &&
+    !allowedRoles.map((role) => normalizeRole(role)).includes(normalizedProfileRole)
+  ) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">

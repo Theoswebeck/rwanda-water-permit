@@ -292,6 +292,7 @@ export function ApplicationForm({
   mode = 'create' 
 }: ApplicationFormProps) {
   const [activeTab, setActiveTab] = useState("personal");
+  const hasMountedRef = useRef(false);
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedPurpose, setSelectedPurpose] = useState("");
@@ -414,6 +415,8 @@ export function ApplicationForm({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: mergedDefaultValues,
+    // Preserve values for conditionally rendered activity fields across tab navigation.
+    shouldUnregister: false,
   });
 
   // Watch for activity changes to show/hide conditional fields
@@ -550,6 +553,14 @@ export function ApplicationForm({
       return () => clearTimeout(timer);
     }
   }, [activeTab, validationError?.show]);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab]);
 
   // Helper function to check if industrial fields should be shown
   const shouldShowIndustryFields = () => {

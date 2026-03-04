@@ -45,10 +45,13 @@ export function StatusFilterChips({
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const chip of chips) {
-      map[chip.id] = 0;
+      map[chip.id] = chip.statuses.length === 0 ? applications.length : 0;
     }
     for (const app of applications) {
       for (const chip of chips) {
+        if (chip.statuses.length === 0) {
+          continue;
+        }
         if (chip.statuses.includes(app.status)) {
           map[chip.id]++;
         }

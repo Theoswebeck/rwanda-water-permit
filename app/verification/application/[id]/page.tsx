@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { DocumentVerificationComponent, VerificationStatus } from "@/components/inspection/document-verification";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
@@ -145,7 +144,6 @@ export default function VerificationApplicationPage() {
 
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
-  const [allDocumentsForVerification, setAllDocumentsForVerification] = useState<any[]>([]);
 
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
@@ -159,7 +157,6 @@ export default function VerificationApplicationPage() {
   const [isModificationApp, setIsModificationApp] = useState(false);
   const [originalModificationApp, setOriginalModificationApp] = useState<any>(null);
 
-  const [documentVerifications, setDocumentVerifications] = useState<Record<string, { status: VerificationStatus; notes: string }>>({});
   const [fieldReportFiles, setFieldReportFiles] = useState<FieldReportFile[]>([]);
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
@@ -309,10 +306,6 @@ export default function VerificationApplicationPage() {
           }
         };
 
-        // Collect ALL document rows for Document Verification tab
-        let mergedDocsList: any[] = [...(appData.documents || [])];
-        const seenDocIds = new Set((appData.documents || []).map((d: any) => d.id));
-
         // 1. Process this application's own documents first
         if (appData.documents && Array.isArray(appData.documents)) {
           processDocsIntoMap(appData.documents);
@@ -330,12 +323,6 @@ export default function VerificationApplicationPage() {
                 .order('created_at', { ascending: false });
               if (originalDocs) {
                 processDocsIntoMap(originalDocs);
-                for (const doc of originalDocs) {
-                  if (!seenDocIds.has(doc.id)) {
-                    mergedDocsList.push(doc);
-                    seenDocIds.add(doc.id);
-                  }
-                }
               }
             } catch (e) {
               console.error('⚠️ Failed to load original application documents:', e);
@@ -344,7 +331,6 @@ export default function VerificationApplicationPage() {
         }
 
         setInitialDocuments(documentMap);
-        setAllDocumentsForVerification(mergedDocsList);
 
         // Load latest technical assessment as read-only evidence for verifier
         const { data: existingAssessment } = await supabase
@@ -358,7 +344,6 @@ export default function VerificationApplicationPage() {
         let savedAssessmentReportData: Partial<AssessmentReportData> | null | undefined = null;
 
         if (existingAssessment) {
-          setDocumentVerifications(existingAssessment.document_verifications || {});
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
           setInspectionDate(existingAssessment.inspection_date || "");
@@ -724,12 +709,9 @@ export default function VerificationApplicationPage() {
             )}
 
             <Tabs defaultValue="application_details" className="space-y-6">
-              <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
+              <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-2' : 'grid-cols-3'} h-auto p-1 bg-muted/80`}>
                 <TabsTrigger value="application_details" className="py-2.5">
                   Application Details
-                </TabsTrigger>
-                <TabsTrigger value="doc_verification" className="py-2.5">
-                  Document Verification
                 </TabsTrigger>
                 {!isTransferApp && (
                 <TabsTrigger value="field_report" className="py-2.5">
@@ -862,15 +844,6 @@ export default function VerificationApplicationPage() {
                   isStaffView={true}
                 />
               ) : null}
-            </TabsContent>
-
-            <TabsContent value="doc_verification" className="space-y-6 focus-visible:outline-none">
-              <DocumentVerificationComponent
-                documents={allDocumentsForVerification.length > 0 ? allDocumentsForVerification : (application.documents || [])}
-                verifications={documentVerifications}
-                onVerificationsChange={() => {}}
-                readOnly={true}
-              />
             </TabsContent>
 
             {/* Assessment Report Tab - Hidden for transfer applications */}

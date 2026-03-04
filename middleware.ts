@@ -94,6 +94,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isProtectedRoute) {
+    if (isSuperuser || normalizedRole === 'admin') {
+      return NextResponse.next()
+    }
+
     if (
       pathname.startsWith('/dashboard') &&
       !pathname.startsWith('/dashboard/profile') &&

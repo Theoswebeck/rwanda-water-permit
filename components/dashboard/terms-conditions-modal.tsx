@@ -950,11 +950,11 @@ export function TermsConditionsModal({
       }}
     >
       <DialogContent
-        className="w-[95vw] max-w-[95vw] sm:max-w-[95vw] md:max-w-6xl lg:max-w-7xl h-[92vh] max-h-[92vh] p-0 overflow-hidden"
+        className="w-[98vw] max-w-[98vw] sm:max-w-[98vw] md:max-w-[96vw] lg:max-w-[94vw] xl:max-w-[90rem] h-[96vh] max-h-[96vh] p-0 overflow-hidden"
         showCloseButton={true}
       >
         <div className="flex h-full min-h-0 flex-col">
-          <div className="px-6 pt-6">
+          <div className="px-5 pt-4">
             <DialogHeader>
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-green-100 rounded-full">
@@ -984,17 +984,17 @@ export function TermsConditionsModal({
             </DialogHeader>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
             {!showFeedback ? (
-              <div className="space-y-8 pt-4">
+              <div className="space-y-6 pt-3">
                 <div>
-                  <h3 className="text-xl font-semibold mb-6 flex items-center gap-2">
+                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                     <Shield className="h-6 w-6 text-blue-600" />
                     {resolvedTerms?.heading ?? "Terms and Conditions for Water Permit"}
                   </h3>
 
                   <Card className="border-blue-200">
-                    <CardContent className="p-8 space-y-6">
+                    <CardContent className="max-h-[62vh] overflow-y-auto p-5 space-y-4">
                 {isLoadingTerms ? (
                   <div className="flex items-center gap-2 text-gray-700">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1012,7 +1012,7 @@ export function TermsConditionsModal({
                   </div>
                 ) : resolvedTerms ? (
                   <>
-                    <div className="space-y-6 text-base">
+                    <div className="space-y-5 text-base">
                       {visibleSections
                         .filter((section) => !section.title.toLowerCase().includes("signature"))
                         .map((section, idx, filteredSections) => (

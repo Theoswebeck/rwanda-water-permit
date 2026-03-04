@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { query } from "@/lib/db/postgres";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { PermitStatus } from "@/types/database";
+import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
+import { PermitPublicActions } from "@/components/public/permit-public-actions";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -31,66 +32,17 @@ function statusBadgeVariant(status: PermitStatus): { label: string; className: s
   }
 }
 
-function normalizePermitNumber(raw: string): string | null {
-  const decoded = (() => {
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return null;
-    }
-  })();
-
-  if (!decoded) return null;
-  const trimmed = decoded.trim();
-  if (trimmed.length < 3 || trimmed.length > 64) return null;
-  return trimmed;
-}
-
 export default async function PublicPermitViewPage({
   params,
 }: {
   params: Promise<{ permitNumber: string }>;
 }) {
   const { permitNumber: permitNumberParam } = await params;
-  const permitNumber = normalizePermitNumber(permitNumberParam);
+  const { inputPermitNumber, permit } = await findPublicPermitByNumber(permitNumberParam, {
+    includeRegistryFallback: true,
+  });
+  if (!inputPermitNumber) notFound();
 
-  if (!permitNumber) notFound();
-
-  const permitRes = await query(
-    `
-    select
-      p.id,
-      p.permit_number,
-      p.status::text as status,
-      p.water_source::text as water_source,
-      p.purpose::text as purpose,
-      p.water_allowance,
-      p.allowance_unit,
-      p.issuing_authority,
-      p.issued_date::text as issued_date,
-      p.expiry_date::text as expiry_date,
-      row_to_json(a) as application,
-      row_to_json(u) as applicant
-    from public.permits p
-    left join public.applications a on a.id = p.application_id
-    left join public.users u on u.id = a.applicant_id
-    where p.permit_number = $1
-    limit 1
-    `,
-    [permitNumber]
-  );
-  const row = permitRes.rows[0] as (Record<string, unknown> & { application?: Record<string, unknown> | null; applicant?: Record<string, unknown> | null }) | undefined;
-  const permit = row
-    ? {
-        ...row,
-        application: row.application
-          ? {
-              ...row.application,
-              applicant: row.applicant || null,
-            }
-          : null,
-      }
-    : null;
   const error = !permit;
 
   if (error || !permit) {
@@ -103,10 +55,10 @@ export default async function PublicPermitViewPage({
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              We couldn’t load this permit. It may not exist, may be inactive, or may not be publicly accessible.
+              We couldn’t load this permit. It may not exist yet, may be inactive, or the permit number format may be invalid.
             </p>
             <p className="text-sm">
-              Permit number: <span className="font-mono">{permitNumber}</span>
+              Permit number: <span className="font-mono">{inputPermitNumber}</span>
             </p>
             <p className="text-sm text-muted-foreground">
               If you believe this is an error, please contact support from the portal.
@@ -121,6 +73,9 @@ export default async function PublicPermitViewPage({
   }
 
   const applicantName = (() => {
+    if (permit.source === "permit_registry") {
+      return typeof permit.permit_holder === "string" && permit.permit_holder.trim() ? permit.permit_holder.trim() : "N/A";
+    }
     const a = permit.application?.applicant;
     if (!a) return "N/A";
     if (a.account_type === "individual") {
@@ -130,6 +85,11 @@ export default async function PublicPermitViewPage({
   })();
 
   const location = (() => {
+    if (permit.source === "permit_registry") {
+      return typeof permit.registry_location === "string" && permit.registry_location.trim()
+        ? permit.registry_location.trim()
+        : "N/A";
+    }
     const app = permit.application;
     if (!app) return "N/A";
     const parts = [app.village, app.cell, app.sector, app.district, app.province].filter(Boolean);
@@ -209,7 +169,7 @@ export default async function PublicPermitViewPage({
                 <div className="rounded-xl border p-4 md:col-span-2">
                   <div className="text-xs text-slate-500">Authorized volume</div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
-                    {permit.water_allowance} {permit.allowance_unit}
+                    {permit.water_allowance || "N/A"} {permit.allowance_unit || ""}
                   </div>
                 </div>
                 <div className="rounded-xl border p-4 md:col-span-2">
@@ -228,6 +188,10 @@ export default async function PublicPermitViewPage({
                 If you received this link from a QR code on a permit, compare the permit number above with the printed
                 certificate.
               </div>
+              <PermitPublicActions
+                permitNumber={String(permit.permit_number || inputPermitNumber)}
+                canViewPdf={permit.source === "permits"}
+              />
             </div>
           </div>
         </div>

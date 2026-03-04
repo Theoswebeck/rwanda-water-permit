@@ -92,6 +92,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 }: PermitRenewalFormProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("how-it-works");
+  const hasMountedRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
@@ -224,6 +225,14 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const handleTabChange = (value: string) => {
     setActiveTab(value);
   };
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab]);
 
   const handleNext = () => {
     const tabs = ["how-it-works", "water-use-report", "attachments", "payment"];

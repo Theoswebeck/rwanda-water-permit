@@ -184,8 +184,8 @@ const applicationFormSchema = z.object({
   permitPeriod: z.string().optional(),
   
   // SECTION 4: OWNERSHIP OF ADJOINING LAND
-  ownsAllLand: z.boolean(),
-  hasLandAccess: z.boolean().optional(),
+  ownsAllLand: z.boolean().nullable(),
+  hasLandAccess: z.boolean().nullable().optional(),
   
   // SECTION 5: PAYMENT INFORMATION (removed per RWB request)
   
@@ -255,6 +255,7 @@ const applicationFormSchema = z.object({
   // Recreation fields
   recreationType: z.string().optional(),
   recreationProjectDescription: z.string().optional(),
+  recreationConcessionAreaM2: z.string().optional(),
   
   // Irrigation specific fields
   irrigationCropType: z.string().optional(),
@@ -365,6 +366,13 @@ const applicationFormSchema = z.object({
     message: "You must certify the information is accurate"
   }),
 }).superRefine((data, ctx) => {
+  const isFilled = (value: unknown): boolean => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (typeof value === "number") return Number.isFinite(value);
+    return true;
+  };
+
   // Conditional validation based on activity type
   // Note: This validation only runs on form submission, not on individual tab validation
   const selectedActivities = Array.isArray(data.intendedActivities) ? data.intendedActivities : [];
@@ -399,7 +407,7 @@ const applicationFormSchema = z.object({
     }
   }
 
-  const nonAbstractionActivities = ["fish_farming_lakes", "construction_of_dam", "recreation_activities", "construction_of_infrastructures"];
+  const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "construction_of_infrastructures"];
   const hasNonFishActivity = selectedActivities.some((a) => a && !nonAbstractionActivities.includes(a));
   if (hasNonFishActivity) {
     // Tab-specific validation will handle the requirement
@@ -455,6 +463,61 @@ const applicationFormSchema = z.object({
         });
       }
     }
+
+    const abstractionDetails = Array.isArray(data.waterAbstractionDetails) ? data.waterAbstractionDetails : [];
+    if (!abstractionDetails.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["waterAbstractionDetails"],
+        message: "Water abstraction details are required for abstraction activities."
+      });
+      return;
+    }
+
+    abstractionDetails.forEach((detail, index) => {
+      if (!isFilled(detail?.flowRate)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterAbstractionDetails", index, "flowRate"],
+          message: "Flow rate is required."
+        });
+      }
+
+      if (!isFilled(detail?.maxAverageYearly)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterAbstractionDetails", index, "maxAverageYearly"],
+          message: "Maximum average yearly abstraction is required."
+        });
+      }
+
+      if (!isFilled(detail?.abstractionMethod)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["waterAbstractionDetails", index, "abstractionMethod"],
+          message: "Method of water abstraction is required."
+        });
+      }
+    });
+  }
+
+  const hasRecreationActivity = selectedActivities.includes("recreation_activities");
+  if (hasRecreationActivity) {
+    if (!String(data.recreationProjectDescription ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["recreationProjectDescription"],
+        message: "Recreational activities details are required."
+      });
+    }
+
+    if (!String(data.recreationConcessionAreaM2 ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["recreationConcessionAreaM2"],
+        message: "Concession area (m²) is required for recreational activities."
+      });
+    }
   }
 });
 
@@ -497,6 +560,7 @@ function computeModificationChanges(
     'permitLengthYears',
     'intendedActivities',
     'concessionArea',
+    'recreationConcessionAreaM2',
     'ownsAllLand',
     'hasLandAccess',
     'waterSupplyPopulation',
@@ -560,6 +624,7 @@ const FIELD_LABELS: Record<string, string> = {
   permitLengthYears: 'Permit Duration',
   intendedActivities: 'Intended Activities',
   concessionArea: 'Concession Area',
+  recreationConcessionAreaM2: 'Recreation Concession Area (m²)',
   ownsAllLand: 'Owns All Land',
   hasLandAccess: 'Has Land Access',
   waterSupplyPopulation: 'Population Served',
@@ -608,6 +673,7 @@ export function ApplicationForm({
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
+  const hasMountedRef = useRef(false);
   const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
@@ -684,6 +750,14 @@ export function ApplicationForm({
     !isStaffView && !isModification && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
   const shouldShowStaffPaymentTab = isStaffView && !isModification;
   const shouldShowPaymentTab = shouldShowApplicantPaymentTab || shouldShowStaffPaymentTab;
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab]);
 
   const tabLabels: Record<string, string> = {
     "applicant-info": "Applicant",
@@ -835,8 +909,8 @@ export function ApplicationForm({
       waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: undefined, abstractionMethod: "" }],
       intendedActivities: [],
       intendedActivityOther: "",
-      ownsAllLand: false,
-      hasLandAccess: false,
+      ownsAllLand: null,
+      hasLandAccess: null,
       certificationAgreement: false,
       waterSupplyPopulation: 0,
       waterSupplyPerCapitaDemand: 0,
@@ -871,6 +945,7 @@ export function ApplicationForm({
       infrastructureAlterationPlans: "",
       recreationType: "",
       recreationProjectDescription: "",
+      recreationConcessionAreaM2: "",
       irrigationCropType: "",
       irrigationGrowingSeasonFrom: "",
       irrigationGrowingSeasonTo: "",
@@ -922,6 +997,8 @@ export function ApplicationForm({
     // Skip validation resolver in read-only mode - not needed and can cause initialization issues
     resolver: readOnly ? undefined : zodResolver(applicationFormSchema),
     defaultValues: getDefaultValues,
+    // Keep conditional activity fields in form state when their UI unmounts between tabs.
+    shouldUnregister: false,
     // Validate when the user leaves a field (click outside / tab away), and re-validate to clear errors.
     mode: "onBlur",
     reValidateMode: "onChange"
@@ -1140,6 +1217,24 @@ export function ApplicationForm({
     return true;
   };
 
+  const isFilled = (value: unknown): boolean => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (typeof value === "number") return Number.isFinite(value);
+    return true;
+  };
+
+  const hasCompleteWaterAbstractionDetails = (details: any[]): boolean => {
+    if (!Array.isArray(details) || details.length === 0) return false;
+    return details.every((detail) => {
+      return (
+        isFilled(detail?.flowRate) &&
+        isFilled(detail?.maxAverageYearly) &&
+        isFilled(detail?.abstractionMethod)
+      );
+    });
+  };
+
   // Tab validation functions
   const validateApplicantTab = async () => {
     const fields = [
@@ -1182,9 +1277,38 @@ export function ApplicationForm({
 
     const intended = form.getValues('intendedActivities') || [];
     const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
-    const nonAbstractionActivities = ['fish_farming_lakes', 'construction_of_dam', 'recreation_activities', 'construction_of_infrastructures'];
+    const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities', 'construction_of_infrastructures'];
     const requiresConcessionPolygons = intended.some((a: string) => concessionActivities.includes(a));
     const requiresAbstractionDetails = intended.some((a: string) => a && !nonAbstractionActivities.includes(a));
+    const requiresRecreationDetails = intended.includes('recreation_activities');
+
+    if (requiresRecreationDetails) {
+      const recreationProjectDescription = String(form.getValues('recreationProjectDescription') ?? '').trim();
+      const recreationConcessionAreaM2 = String(form.getValues('recreationConcessionAreaM2') ?? '').trim();
+
+      if (!recreationProjectDescription) {
+        form.setError('recreationProjectDescription', {
+          type: 'manual',
+          message: 'Recreational activities details are required.'
+        });
+      } else {
+        form.clearErrors('recreationProjectDescription');
+      }
+
+      if (!recreationConcessionAreaM2) {
+        form.setError('recreationConcessionAreaM2', {
+          type: 'manual',
+          message: 'Concession area (m²) is required for recreational activities.'
+        });
+      } else {
+        form.clearErrors('recreationConcessionAreaM2');
+      }
+
+      if (!recreationProjectDescription || !recreationConcessionAreaM2) {
+        setValidationError("Please fill in Recreational Activities Details and Concession area (m²) before proceeding.");
+        return false;
+      }
+    }
     
     // For abstraction activities, LAT/LONG and water abstraction details are required
     if (requiresAbstractionDetails) {
@@ -1203,10 +1327,35 @@ export function ApplicationForm({
       const abstractionErrors = await form.trigger('waterAbstractionDetails' as any);
       if (!abstractionErrors) {
         const details = form.getValues('waterAbstractionDetails') || [];
-        if (!details || details.length === 0) {
-          setValidationError("Water abstraction details are required for abstraction activities.");
+        if (!hasCompleteWaterAbstractionDetails(details)) {
+          details.forEach((detail: any, index: number) => {
+            if (!isFilled(detail?.flowRate)) {
+              form.setError(`waterAbstractionDetails.${index}.flowRate` as any, {
+                type: "manual",
+                message: "Flow rate is required."
+              });
+            }
+            if (!isFilled(detail?.maxAverageYearly)) {
+              form.setError(`waterAbstractionDetails.${index}.maxAverageYearly` as any, {
+                type: "manual",
+                message: "Maximum average yearly abstraction is required."
+              });
+            }
+            if (!isFilled(detail?.abstractionMethod)) {
+              form.setError(`waterAbstractionDetails.${index}.abstractionMethod` as any, {
+                type: "manual",
+                message: "Method of water abstraction is required."
+              });
+            }
+          });
+          setValidationError("Complete all required Water Abstraction Details before proceeding.");
           return false;
         }
+        details.forEach((_: any, index: number) => {
+          form.clearErrors(`waterAbstractionDetails.${index}.flowRate` as any);
+          form.clearErrors(`waterAbstractionDetails.${index}.maxAverageYearly` as any);
+          form.clearErrors(`waterAbstractionDetails.${index}.abstractionMethod` as any);
+        });
       }
     }
     
@@ -1256,9 +1405,18 @@ export function ApplicationForm({
     
     const ownsAllLand = form.getValues('ownsAllLand');
     const hasLandAccess = form.getValues('hasLandAccess');
+
+    if (ownsAllLand === undefined || ownsAllLand === null) {
+      form.setError('ownsAllLand' as any, {
+        type: 'manual',
+        message: 'Please indicate whether you own all required land.'
+      });
+      setValidationError("Please indicate whether you own all required land before proceeding.");
+      return false;
+    }
     
     // Check land ownership document if user owns all land
-    if (ownsAllLand) {
+    if (ownsAllLand === true) {
       const hasLandOwnershipDoc = Boolean(files.landOwnershipDoc || uploadedFileUrls.landOwnershipDoc);
       if (!hasLandOwnershipDoc) {
         form.setError('landOwnershipDoc' as any, {
@@ -1272,8 +1430,8 @@ export function ApplicationForm({
     }
     
     // When user doesn't own all land: must answer Q17 (hasLandAccess)
-    if (!ownsAllLand) {
-      if (hasLandAccess === undefined) {
+    if (ownsAllLand === false) {
+      if (hasLandAccess === undefined || hasLandAccess === null) {
         form.setError('hasLandAccess' as any, {
           type: 'manual',
           message: 'Please indicate whether you have access to the land.'
@@ -1441,6 +1599,8 @@ export function ApplicationForm({
         // Use form.watch() to ensure reactive updates when fields change
         const intendedActivities = form.watch('intendedActivities') || form.getValues('intendedActivities') || [];
         const waterAbstractionDetails = form.watch('waterAbstractionDetails') || form.getValues('waterAbstractionDetails') || [];
+        const recreationProjectDescription = String(form.watch('recreationProjectDescription') || form.getValues('recreationProjectDescription') || '').trim();
+        const recreationConcessionAreaM2 = String(form.watch('recreationConcessionAreaM2') || form.getValues('recreationConcessionAreaM2') || '').trim();
         const hasRequiredDocs = checkRequiredDocuments();
         
         // Must have at least one activity selected
@@ -1449,7 +1609,7 @@ export function ApplicationForm({
         }
         
         const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
-        const nonAbstractionActivities = ['fish_farming_lakes', 'construction_of_dam', 'recreation_activities', 'construction_of_infrastructures'];
+        const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities', 'construction_of_infrastructures'];
         const isConcessionActivity = intendedActivities.some((a: string) => concessionActivities.includes(a));
         const isAbstractionActivity = intendedActivities.some((a: string) => a && !nonAbstractionActivities.includes(a));
         
@@ -1465,12 +1625,14 @@ export function ApplicationForm({
                 poly.every((coord: any) => coord.latitude?.toString().trim() !== '' && coord.longitude?.toString().trim() !== '')
               );
             });
-          return !hasRequiredDocs || !hasValidPolygons;
+          const hasRecreationActivity = intendedActivities.includes('recreation_activities');
+          const hasRecreationDetails = !hasRecreationActivity || (recreationProjectDescription !== '' && recreationConcessionAreaM2 !== '');
+          return !hasRequiredDocs || !hasValidPolygons || !hasRecreationDetails;
         }
         
         // For abstraction activities, water abstraction details and LAT/LONG are required
         if (isAbstractionActivity) {
-          const hasAbstractionDetails = waterAbstractionDetails.length > 0;
+          const hasAbstractionDetails = hasCompleteWaterAbstractionDetails(waterAbstractionDetails);
           const lat = String(form.watch('waterSourceLatitude') ?? form.getValues('waterSourceLatitude') ?? '').trim();
           const lng = String(form.watch('waterSourceLongitude') ?? form.getValues('waterSourceLongitude') ?? '').trim();
           const hasLatLng = lat !== '' && lng !== '';
@@ -1485,14 +1647,14 @@ export function ApplicationForm({
         const hasLandAccess = form.watch('hasLandAccess') ?? form.getValues('hasLandAccess');
         const hasCertified = Boolean(form.watch('certificationAgreement') ?? form.getValues('certificationAgreement'));
         
-        if (ownsAllLand === undefined) return true;
+        if (ownsAllLand === undefined || ownsAllLand === null) return true;
         if (!hasCertified) return true;
         
         // Cannot proceed without land access when user doesn't own all land
-        if (!ownsAllLand && hasLandAccess === false) return true;
-        if (!ownsAllLand && hasLandAccess === undefined) return true;
+        if (ownsAllLand === false && hasLandAccess === false) return true;
+        if (ownsAllLand === false && (hasLandAccess === undefined || hasLandAccess === null)) return true;
         
-        if (ownsAllLand) {
+        if (ownsAllLand === true) {
           const hasLandOwnershipDoc = Boolean(files.landOwnershipDoc || uploadedFileUrls.landOwnershipDoc);
           if (!hasLandOwnershipDoc) return true;
         } else {
@@ -1640,6 +1802,7 @@ export function ApplicationForm({
         infrastructureAlterationPlans: "",
         recreationType: "",
         recreationProjectDescription: "",
+        recreationConcessionAreaM2: "",
         irrigationCropType: "",
         irrigationGrowingSeasonFrom: "",
         irrigationGrowingSeasonTo: "",
@@ -3275,13 +3438,8 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Abstraction Point (LAT, LONG) - for abstraction activities (including fish_farming_ponds) */}
-                  {(() => {
-                    const selected = watchedIntendedActivities || [];
-                    const nonAbstractionActivities = ["fish_farming_lakes", "construction_of_dam", "recreation_activities", "construction_of_infrastructures"];
-                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && !nonAbstractionActivities.includes(a));
-                    return hasAbstractionActivity ? (
-                      <div className="space-y-4">
+                  {/* Water Abstraction Point (LAT, LONG) */}
+                  <div className="space-y-4">
                         <Label className="text-base font-medium">
                           14. Water Abstraction Point * (LAT, LONG)
                         </Label>
@@ -3413,8 +3571,6 @@ export function ApplicationForm({
                           </p>
                         </div>
                       </div>
-                    ) : null;
-                  })()}
 
                   {/* Other activity specification */}
                   {watchedIntendedActivities?.includes("other") && (
@@ -4918,7 +5074,7 @@ export function ApplicationForm({
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project</td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Recreational Activities Details <span className="text-red-500">*</span></td>
                                   <td className="border border-gray-300 dark:border-gray-600 p-2">
                                     <FormField
                                       control={form.control}
@@ -4931,6 +5087,31 @@ export function ApplicationForm({
                                             className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
                                             disabled={readOnly}
                                             readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Concession area (m²) <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="recreationConcessionAreaM2"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <Input
+                                            {...field}
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            placeholder="Enter concession area in m²"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
                                           />
                                         </FormControl>
                                       )}
@@ -4981,7 +5162,7 @@ export function ApplicationForm({
                   {/* 15. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const nonAbstractionActivities = ["fish_farming_lakes", "construction_of_dam", "recreation_activities", "construction_of_infrastructures"];
+                    const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "construction_of_infrastructures", "other"];
                     const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && !nonAbstractionActivities.includes(a));
                     return hasAbstractionActivity ? (
                       <div className="space-y-4">
@@ -5095,9 +5276,9 @@ export function ApplicationForm({
                           16. Do you own all the land required for this water use? *
                         </FormLabel>
                         <FormControl>
-                          <Select 
-                            onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")} 
-                            value={field.value ? "yes" : "no"}
+                          <Select
+                            onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")}
+                            value={field.value === null || field.value === undefined ? undefined : (field.value ? "yes" : "no")}
                             disabled={readOnly}
                           >
                             <SelectTrigger className={`bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
@@ -5115,7 +5296,7 @@ export function ApplicationForm({
                   />
 
                   {/* Land ownership document - shown when user owns all land */}
-                  {watchedOwnsAllLand && (
+                  {watchedOwnsAllLand === true && (
                     <FormField
                       control={form.control}
                       name={"landOwnershipDoc" as any}
@@ -5215,7 +5396,7 @@ export function ApplicationForm({
                   )}
 
                   {/* 17. If no, do you have access to the land? */}
-                  {!watchedOwnsAllLand && (
+                  {watchedOwnsAllLand === false && (
                     <>
                       <FormField
                         control={form.control}
@@ -5226,9 +5407,9 @@ export function ApplicationForm({
                               17. If no, do you have access to the land?
                             </FormLabel>
                             <FormControl>
-                              <Select 
-                                onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")} 
-                                value={field.value ? "yes" : "no"}
+                              <Select
+                                onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")}
+                                value={field.value === null || field.value === undefined ? undefined : (field.value ? "yes" : "no")}
                                 disabled={readOnly}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 focus:border-amber-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>

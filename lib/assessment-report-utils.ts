@@ -96,11 +96,21 @@ export function determineReportType(
 ): ReportType {
   // Check intended_activities first (new format)
   if (activities && Array.isArray(activities) && activities.length > 0) {
-    const primaryActivity = activities[0];
-    if (primaryActivity === 'fish_farming_lakes') {
-      return 'concession';
+    const cleaned = activities
+      .map((a) => (typeof a === "string" ? a.trim() : ""))
+      .filter((a) => a.length > 0);
+    const nonAbstractionActivities = new Set([
+      "fish_farming_lakes",
+      "recreation_activities",
+      "construction_of_infrastructures",
+      "other",
+    ]);
+    const hasFishLake = cleaned.includes("fish_farming_lakes");
+    const hasAbstractionActivity = cleaned.some((a) => !nonAbstractionActivities.has(a));
+    if (hasFishLake && !hasAbstractionActivity) {
+      return "concession";
     }
-    return 'abstraction';
+    return "abstraction";
   }
   
   // Fallback to water_purpose (legacy format)

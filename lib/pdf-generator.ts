@@ -464,19 +464,19 @@ function resolveApplicantIdNumber(application: Application): string {
   return "N/A";
 }
 
-function resolveOrganizationOfficeAddress(application: Application): string {
+function resolveWaterSourceLocationAddress(application: Application): string {
   const notes = getInternalNotes(application);
   const sector =
-    typeof notes?.officeSector === "string" && notes.officeSector.trim()
-      ? notes.officeSector.trim()
+    typeof notes?.waterSourceSector === "string" && notes.waterSourceSector.trim()
+      ? notes.waterSourceSector.trim()
       : application.sector || "";
   const district =
-    typeof notes?.officeDistrict === "string" && notes.officeDistrict.trim()
-      ? notes.officeDistrict.trim()
+    typeof notes?.waterSourceDistrict === "string" && notes.waterSourceDistrict.trim()
+      ? notes.waterSourceDistrict.trim()
       : application.district || "";
   const provinceRaw =
-    typeof notes?.officeProvince === "string" && notes.officeProvince.trim()
-      ? notes.officeProvince.trim()
+    typeof notes?.waterSourceProvince === "string" && notes.waterSourceProvince.trim()
+      ? notes.waterSourceProvince.trim()
       : application.province || "";
 
   const provinceLabel =
@@ -984,7 +984,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const maxWidth = 170;
 
   const orgName = resolveApplicantName(application);
-  const officeAddress = resolveOrganizationOfficeAddress(application);
+  const waterSourceLocationAddress = resolveWaterSourceLocationAddress(application);
   const rep = resolveOrganizationRepresentative(application);
   const waterSourceName = resolveWaterSourceName(application);
   const loc = resolveWaterSourceAdminLocation(application);
@@ -1001,7 +1001,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     "Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,";
 
   const para2 =
-    `"${orgName}", with its registered office address as follows: ${officeAddress}; ` +
+    `"${orgName}", with its water source location as follows: ${waterSourceLocationAddress}; ` +
     `represented by ${rep.name}, is authorized to abstract water from ${waterSourceName} ` +
     `located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village ` +
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
@@ -1220,7 +1220,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   const maxWidth = 170;
 
   const orgName = resolveApplicantName(application);
-  const officeAddress = resolveOrganizationOfficeAddress(application);
+  const waterSourceLocationAddress = resolveWaterSourceLocationAddress(application);
   const rep = resolveOrganizationRepresentative(application);
   const activitiesText = formatActivitiesForPermit(application);
   const areaHa = resolveConcessionAreaHectares(application);
@@ -1237,7 +1237,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
 
   // Note: User preference earlier was to show representative name (no position).
   const para2 =
-    `“${orgName}”, with its registered office address as follows: ${officeAddress}; represented by ${rep.name}; ` +
+    `“${orgName}”, with its water source location as follows: ${waterSourceLocationAddress}; represented by ${rep.name}; ` +
     `is authorized to carry out ${activitiesText} on the surface area of ${areaStr} in ${lakeName}, ` +
     `on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${provinceStr}, ` +
     `as shown on the attached map. This permit applies to activities conducted solely within the water body.`;

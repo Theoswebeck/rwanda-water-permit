@@ -1,26 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { query } from "@/lib/db/postgres";
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-function normalizePermitNumber(raw: string): string | null {
-  const decoded = (() => {
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return null;
-    }
-  })();
-  if (!decoded) return null;
-  const trimmed = decoded.trim();
-  if (trimmed.length < 3 || trimmed.length > 64) return null;
-  return trimmed;
-}
+import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 
 function isPermitVariant(v: string | undefined | null): v is PermitVariant {
   return (
@@ -44,39 +30,14 @@ export default async function PublicContractTermsPage({
   searchParams?: Promise<{ variant?: string }>;
 }) {
   const { permitNumber: permitNumberParam } = await params;
-  const permitNumber = normalizePermitNumber(permitNumberParam);
-  if (!permitNumber) notFound();
+  const { inputPermitNumber, permit } = await findPublicPermitByNumber(permitNumberParam, {
+    includeRegistryFallback: false,
+  });
+  if (!inputPermitNumber) notFound();
+  const permitNumber = inputPermitNumber;
 
   const sp = (await searchParams) ?? {};
   const variantOverride = isPermitVariant(sp.variant) ? (sp.variant as PermitVariant) : null;
-
-  const permitRes = await query(
-    `
-    select
-      p.permit_number,
-      p.issued_date::text as issued_date,
-      row_to_json(a) as application,
-      row_to_json(u) as applicant
-    from public.permits p
-    left join public.applications a on a.id = p.application_id
-    left join public.users u on u.id = a.applicant_id
-    where p.permit_number = $1
-    limit 1
-    `,
-    [permitNumber]
-  );
-  const row = permitRes.rows[0] as (Record<string, unknown> & { application?: Record<string, unknown> | null; applicant?: Record<string, unknown> | null }) | undefined;
-  const permit = row
-    ? {
-        ...row,
-        application: row.application
-          ? {
-              ...row.application,
-              applicant: row.applicant || null,
-            }
-          : null,
-      }
-    : null;
   const error = !permit;
 
   const application = (permit as Record<string, unknown> | null)?.application ?? null;
