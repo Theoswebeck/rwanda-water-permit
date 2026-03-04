@@ -2,7 +2,7 @@ import { qrToSvgString } from "@/lib/qr/qr-svg";
 import { QrCodeEcc } from "@/lib/qr/qrcodegen";
 
 // Always use production URL for QR codes - they will be printed and scanned externally
-const PRODUCTION_URL = "https://rwanda-water-permit-production.up.railway.app";
+const PRODUCTION_URL = "https://rwandawaterpermit.com";
 
 export type PermitPreviewData = {
   permitNumber: string;

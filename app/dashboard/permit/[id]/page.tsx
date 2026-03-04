@@ -13,6 +13,43 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
 import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  individual: "Individual",
+  company: "Company",
+  cooperative: "Cooperative",
+  organization: "Organization",
+  institution: "Institution",
+};
+
+function toDisplayLabel(value: string | null | undefined): string {
+  if (!value) return "N/A";
+  return value
+    .replaceAll("_", " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function firstNonEmptyString(values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
 
 export default function PermitDetailPage() {
   const params = useParams();
@@ -62,13 +99,21 @@ export default function PermitDetailPage() {
                 sector,
                 cell,
                 village,
+              internal_notes,
+              land_ownership_status,
                 environmental_assessment,
+              intended_activities,
+              water_purpose,
+              water_body_name,
                 applicant:users!applicant_id(
                   first_name,
                   last_name,
                   company_name,
                   email,
                   phone,
+                mobile_phone,
+                landline_phone,
+                company_phone,
                   account_type
                 )
               )
@@ -79,25 +124,60 @@ export default function PermitDetailPage() {
 
         if (error) throw error;
 
-        const app = (data as any)?.application;
+        const rawPermit = data as any;
+        const app = rawPermit?.application;
         const applicant = app?.applicant;
-        const applicationId = (data as any)?.application_id;
-        const modificationCount = (data as any)?.modification_count ?? 0;
-        const lastModifiedAt = (data as any)?.last_modified_at ?? null;
+        const applicationId = rawPermit?.application_id;
+        const modificationCount = rawPermit?.modification_count ?? 0;
+        const lastModifiedAt = rawPermit?.last_modified_at ?? null;
         
         // Store application data for PDF generation
         setApplicationData(app);
 
-        const applicantName =
-          applicant?.account_type === "individual"
-            ? `${applicant?.first_name ?? ""} ${applicant?.last_name ?? ""}`.trim() || "N/A"
-            : applicant?.company_name ?? "N/A";
+        const notes = parseJsonObject(app?.internal_notes);
+        const waterSourceLocationParts = [
+          firstNonEmptyString([notes?.waterSourceVillage, app?.village]),
+          firstNonEmptyString([notes?.waterSourceCell, app?.cell]),
+          firstNonEmptyString([notes?.waterSourceSector, app?.sector]),
+          firstNonEmptyString([notes?.waterSourceDistrict, app?.district]),
+          firstNonEmptyString([notes?.waterSourceProvince, app?.province]),
+        ].filter(Boolean) as string[];
+        const waterSourceLocation = waterSourceLocationParts.length ? waterSourceLocationParts.join(", ") : "N/A";
 
-        const locationParts = [app?.village, app?.cell, app?.sector, app?.district, app?.province].filter(Boolean);
-        const location = locationParts.length ? locationParts.join(", ") : "N/A";
+        const applicantName = (() => {
+          if (!applicant) return "N/A";
+          if (applicant?.account_type === "individual") {
+            return `${applicant?.first_name ?? ""} ${applicant?.last_name ?? ""}`.trim() || "N/A";
+          }
+          return firstNonEmptyString([
+            applicant?.company_name,
+            `${applicant?.first_name ?? ""} ${applicant?.last_name ?? ""}`.trim(),
+          ]) || "N/A";
+        })();
+
+        const applicantTypeLabel = (() => {
+          const key = typeof applicant?.account_type === "string" ? applicant.account_type : "";
+          if (ACCOUNT_TYPE_LABELS[key]) return ACCOUNT_TYPE_LABELS[key];
+          return key ? toDisplayLabel(key) : "N/A";
+        })();
+
+        const applicantContactPhone =
+          firstNonEmptyString([
+            applicant?.phone,
+            applicant?.mobile_phone,
+            applicant?.landline_phone,
+            applicant?.company_phone,
+          ]) || "N/A";
+
+        const intendedActivities = Array.isArray(app?.intended_activities)
+          ? (app.intended_activities as unknown[]).map(String).filter(Boolean)
+          : [];
+        const primaryActivityCode =
+          firstNonEmptyString([intendedActivities[0], app?.water_purpose, rawPermit?.purpose]) || "";
+        const waterActivity = primaryActivityCode ? getActivityLabel(primaryActivityCode) : "N/A";
 
         const conditions = (() => {
-          const c = (data as any)?.conditions;
+          const c = rawPermit?.conditions;
           if (!c) return [];
           if (Array.isArray(c)) return c;
           if (typeof c === "object" && Array.isArray((c as any).conditions)) return (c as any).conditions;
@@ -131,8 +211,9 @@ export default function PermitDetailPage() {
           if (inspectionsError) {
             console.warn("⚠️ Failed to fetch inspections:", inspectionsError);
           } else {
-            console.log("✅ Found inspections:", inspections?.length || 0);
-            inspectionsData = (inspections || []).map((insp: any) => ({
+            const inspectionRows = Array.isArray(inspections) ? inspections : [];
+            console.log("✅ Found inspections:", inspectionRows.length);
+            inspectionsData = inspectionRows.map((insp: any) => ({
               id: insp.id,
               date: insp.completed_date 
                 ? new Date(insp.completed_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
@@ -154,30 +235,33 @@ export default function PermitDetailPage() {
         }
 
         setPermit({
-          id: data.id,
-          title: app?.project_title || `${data.purpose} Water Permit`,
-          issueDate: data.issued_date,
-          expiryDate: data.expiry_date,
-          status: data.status,
-          type: data.purpose,
-          location,
-          permitNumber: data.permit_number,
-          waterSource: data.water_source,
-          purpose: data.purpose,
-          waterAllowance: `${data.water_allowance} ${data.allowance_unit}`,
-          issuingAuthority: data.issuing_authority,
-          permitPdfPath: (data as any).permit_pdf_url ?? null,
+          id: rawPermit.id,
+          title: app?.project_title || `${toDisplayLabel(rawPermit.purpose)} Water Permit`,
+          issueDate: rawPermit.issued_date,
+          expiryDate: rawPermit.expiry_date,
+          status: rawPermit.status,
+          waterActivity,
+          location: waterSourceLocation,
+          permitNumber: rawPermit.permit_number,
+          waterSource: firstNonEmptyString([app?.water_body_name, rawPermit.water_source]) || "N/A",
+          purpose: rawPermit.purpose,
+          waterAllowance:
+            typeof rawPermit.water_allowance === "number"
+              ? `${rawPermit.water_allowance.toFixed(2)} ${rawPermit.allowance_unit || ""}`.trim()
+              : "N/A",
+          issuingAuthority: rawPermit.issuing_authority,
+          permitPdfPath: rawPermit.permit_pdf_url ?? null,
           isModified: modificationCount > 0,
           modifiedCount: modificationCount,
           lastModifiedAt,
           applicationId,
           applicationDetails: {
             applicantName,
-            applicantType: applicant?.account_type === "individual" ? "Individual" : "Organization",
+            applicantType: applicantTypeLabel,
             contactEmail: applicant?.email ?? "N/A",
-            contactPhone: applicant?.phone ?? "N/A",
-            landOwnership: "N/A",
-            environmentalAssessment: app?.environmental_assessment ?? "N/A",
+            contactPhone: applicantContactPhone,
+            landOwnership: toDisplayLabel(app?.land_ownership_status),
+            environmentalAssessment: toDisplayLabel(app?.environmental_assessment),
           },
           conditions,
           inspections: inspectionsData,
@@ -197,7 +281,7 @@ export default function PermitDetailPage() {
             console.warn("⚠️ Failed to fetch permit change events:", eventsError);
             setChangeEvents([]);
           } else {
-            setChangeEvents(events || []);
+            setChangeEvents(Array.isArray(events) ? events : []);
           }
         } finally {
           setEventsLoading(false);
@@ -346,6 +430,7 @@ export default function PermitDetailPage() {
       case "expired":
         return <Badge variant="outline" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Expired</Badge>;
       case "expiring-soon":
+      case "expiring_soon":
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 flex items-center gap-1">
             <AlertCircle className="h-3 w-3" /> Expires Soon
@@ -415,7 +500,7 @@ export default function PermitDetailPage() {
           </CardContent>
         </Card>
       );
-    } else if (permit.status === "expiring-soon") {
+    } else if (permit.status === "expiring-soon" || permit.status === "expiring_soon") {
       return (
         <Card className="bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800">
           <CardContent className="pt-6">
@@ -567,19 +652,15 @@ export default function PermitDetailPage() {
                   <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     <div>
                       <dt className="text-sm font-medium text-muted-foreground">Water Source</dt>
-                      <dd className="mt-1">{permit.waterSource}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-sm font-medium text-muted-foreground">Purpose</dt>
-                      <dd className="mt-1">{permit.purpose}</dd>
+                      <dd className="mt-1">{toDisplayLabel(permit.waterSource)}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-muted-foreground">Water Allowance</dt>
                       <dd className="mt-1">{permit.waterAllowance}</dd>
                     </div>
                     <div>
-                      <dt className="text-sm font-medium text-muted-foreground">Type</dt>
-                      <dd className="mt-1">{permit.type}</dd>
+                      <dt className="text-sm font-medium text-muted-foreground">Water Activity</dt>
+                      <dd className="mt-1">{permit.waterActivity}</dd>
                     </div>
                     <div>
                       <dt className="text-sm font-medium text-muted-foreground">Location</dt>
@@ -762,7 +843,7 @@ export default function PermitDetailPage() {
                       <span className={`font-medium ${
                         permit.status === "expired" 
                           ? "text-red-600" 
-                          : permit.status === "expiring-soon" 
+                          : permit.status === "expiring-soon" || permit.status === "expiring_soon"
                             ? "text-amber-600" 
                             : ""
                       }`}>{formatDate(permit.expiryDate)}</span>
@@ -824,7 +905,7 @@ export default function PermitDetailPage() {
                   <p className="text-sm text-muted-foreground mb-4">
                     If you have any questions about your permit, please contact our support team.
                   </p>
-                  <a href={`https://rwanda-water-permit-production.up.railway.app/contact?permit=${permit?.permitNumber || params.id}&category=permit`} target="_blank" rel="noopener noreferrer">
+                  <a href={`https://rwandawaterpermit.com/contact?permit=${permit?.permitNumber || params.id}&category=permit`} target="_blank" rel="noopener noreferrer">
                     <Button className="w-full">Contact Support</Button>
                   </a>
                 </CardContent>

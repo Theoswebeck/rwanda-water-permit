@@ -87,10 +87,11 @@ function toNumberOrUndefined(v: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function templateFromPermit(purpose?: string): InspectionTemplate {
-  const p = (purpose || "").toLowerCase();
+function templateFromPermit(intendedActivities?: unknown, purpose?: string): InspectionTemplate {
+  const activities = Array.isArray(intendedActivities) ? intendedActivities.map(String) : [];
+  const primary = (activities[0] || purpose || "").toLowerCase();
   // Only fish farming in lakes is a concession; ponds is abstraction (single point)
-  if (p === "fish_farming_lakes" || p.includes("aquaculture")) return "concession";
+  if (primary === "fish_farming_lakes" || primary.includes("aquaculture")) return "concession";
   return "authorization";
 }
 
@@ -198,7 +199,7 @@ export default function PermitInspectionUnifiedPage() {
         }
 
         setInspectionData(data);
-        const tpl = templateFromPermit(data?.permit?.purpose);
+        const tpl = templateFromPermit(data?.application?.intended_activities, data?.permit?.purpose);
         setTemplate(tpl);
 
         // Find latest inspection for this application

@@ -1,10 +1,8 @@
 import Image from "next/image";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 
@@ -16,10 +14,6 @@ function isPermitVariant(v: string | undefined | null): v is PermitVariant {
     v === "concession_organization" ||
     v === "fallback_generic"
   );
-}
-
-function formatVariantLabel(v: PermitVariant): string {
-  return v.replaceAll("_", " ");
 }
 
 export default async function PublicContractTermsPage({
@@ -47,15 +41,22 @@ export default async function PublicContractTermsPage({
     variantOverride ?? inferredVariant ?? "abstraction_individual";
 
   const terms = contractTermsByVariant[variant] ?? null;
+  const languageMarkerIndex =
+    terms?.sections.findIndex((section) => section.title.includes("(Kinyarwanda version)")) ?? -1;
+  const sectionsBeforeLanguageMarker =
+    languageMarkerIndex >= 0 ? terms?.sections.slice(0, languageMarkerIndex) ?? [] : terms?.sections ?? [];
+  const displaySections = sectionsBeforeLanguageMarker.filter(
+    (section) => !section.title.toLowerCase().includes("signatures") && !section.title.toLowerCase().includes("imikono")
+  );
 
   const placeholderCtx = application
     ? buildContractPlaceholderContext(application, application.application_number)
     : null;
 
-  const filledSections = terms?.sections?.map((section) => ({
+  const filledSections = displaySections.map((section) => ({
     title: section.title,
     paragraphs: section.paragraphs.map((p) => (placeholderCtx ? fillContractText(p, placeholderCtx) : p)),
-  })) ?? [];
+  }));
 
   const importantNotice = terms?.importantNotice
     ? {
@@ -85,8 +86,8 @@ export default async function PublicContractTermsPage({
                     />
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">Rwanda Water Resources Board</div>
-                    <div className="text-xs text-slate-500">Hosted Terms & Conditions (Contract)</div>
+                    <div className="text-base font-bold text-slate-900">Rwanda Water Resources Board</div>
+                    <div className="text-sm text-slate-500">Terms & Conditions Contract</div>
                   </div>
                 </div>
 
@@ -101,23 +102,7 @@ export default async function PublicContractTermsPage({
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-6">
                 <div>
                   <h1 className="text-xl font-semibold tracking-tight text-slate-900">Terms & Conditions</h1>
-                  <p className="mt-1 text-sm text-slate-600">
-                    This is the hosted terms page intended for QR codes printed on downloaded contracts.
-                  </p>
                 </div>
-                <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200">
-                  Variant: {formatVariantLabel(variant)}
-                </Badge>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
-                <Link className="underline text-slate-700" href={`/permit/view/${encodeURIComponent(permitNumber)}`}>
-                  Verify permit
-                </Link>
-                <span className="text-slate-300">|</span>
-                <Link className="underline text-slate-700" href="/">
-                  Back to portal
-                </Link>
               </div>
             </div>
 
@@ -132,24 +117,6 @@ export default async function PublicContractTermsPage({
                       We couldn’t load the exact application context for this permit (it may not exist or may not be publicly
                       accessible). You can still view the standard Terms & Conditions template below.
                     </p>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      {(
-                        [
-                          "abstraction_individual",
-                          "abstraction_organization",
-                          "concession_individual",
-                          "concession_organization",
-                        ] as PermitVariant[]
-                      ).map((v) => (
-                        <Link
-                          key={v}
-                          className="rounded-md border bg-white px-3 py-1 text-xs underline"
-                          href={`/contract/terms/${encodeURIComponent(permitNumber)}?variant=${encodeURIComponent(v)}`}
-                        >
-                          {formatVariantLabel(v)}
-                        </Link>
-                      ))}
-                    </div>
                   </CardContent>
                 </Card>
               ) : null}
@@ -197,10 +164,6 @@ export default async function PublicContractTermsPage({
                 </Card>
               )}
 
-              <div className="mt-10 border-t pt-6 text-xs text-slate-500">
-                If you reached this page by scanning a QR code on a contract PDF, confirm the permit number above matches the
-                printed document.
-              </div>
             </div>
           </div>
         </div>

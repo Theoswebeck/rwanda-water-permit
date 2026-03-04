@@ -264,7 +264,7 @@ type Application = {
 
 // Production URL for QR codes - ALWAYS use production URL since QR codes are printed
 // and scanned externally by phones that cannot access localhost
-const PRODUCTION_URL = "https://rwanda-water-permit-production.up.railway.app";
+const PRODUCTION_URL = "https://rwandawaterpermit.com";
 
 /**
  * Build the permit verification URL for QR codes.
@@ -853,12 +853,7 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   doc.setTextColor(0, 0, 0);
   doc.setFont("times", "bold");
   doc.setFontSize(12);
-  doc.text(
-    `WATER USE PERMIT N° ${titlePermitNo} (for Individual Applicant )`,
-    105,
-    48,
-    { align: "center" }
-  );
+  doc.text(`WATER USE PERMIT N° ${titlePermitNo}`, 105, 48, { align: "center" });
 
   doc.setFont("times", "normal");
   doc.setFontSize(11);

@@ -1,4 +1,4 @@
-const DEFAULT_PORTAL_URL = 'https://rwanda-water-permit-production.up.railway.app/'
+const DEFAULT_PORTAL_URL = 'https://rwandawaterpermit.com/'
 
 function normalizeBaseUrl(raw: string): string {
   const trimmed = raw.trim()

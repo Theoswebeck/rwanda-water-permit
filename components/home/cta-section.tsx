@@ -96,7 +96,7 @@ export function CTASection() {
               transition={{ duration: 0.6, delay: 0.8 }}
               className="text-center mt-10 text-white/80 text-sm"
             >
-              Need assistance? <Link href="https://rwanda-water-permit-production.up.railway.app/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-white">Contact our support</Link>
+              Need assistance? <Link href="https://rwandawaterpermit.com/contact" target="_blank" rel="noopener noreferrer" className="underline hover:text-white">Contact our support</Link>
             </motion.div>
           </div>
         </motion.div>

@@ -52,6 +52,8 @@ export function TermsConditionsModal({
   const [showFeedback, setShowFeedback] = useState(false);
   const [rating, setRating] = useState<number>(0);
   const [feedback, setFeedback] = useState<string>("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [termsVariant, setTermsVariant] = useState<PermitVariant | null>(null);
   const [isLoadingTerms, setIsLoadingTerms] = useState(false);
   const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
@@ -76,6 +78,8 @@ export function TermsConditionsModal({
     setShowFeedback(false);
     setRating(0);
     setFeedback("");
+    setIsSubmittingFeedback(false);
+    setFeedbackError(null);
     setIssuedPermit(null);
     setIsGeneratingPermitPdf(false);
     setPermitPdfError(null);
@@ -394,6 +398,14 @@ export function TermsConditionsModal({
     setIsProcessing(true);
     try {
       console.log('🚀 Starting terms acceptance process...');
+      const acceptedAt = new Date();
+      const acceptedAtIso = acceptedAt.toISOString();
+      const acceptedDateOnly = acceptedAtIso.split('T')[0];
+      const computeExpiryDateOnly = (durationYears: number) => {
+        const expiry = new Date(acceptedAt);
+        expiry.setFullYear(expiry.getFullYear() + durationYears);
+        return expiry.toISOString().split('T')[0];
+      };
 
       // First, get the full application data
       const { data: applicationData, error: fetchError } = await supabase
@@ -567,9 +579,9 @@ export function TermsConditionsModal({
         });
 
         // Compute updated expiry date based on resolved duration or keep existing
-        const newIssuedDate = new Date().toISOString().split('T')[0];
+        const newIssuedDate = acceptedDateOnly;
         const newExpiryDate = resolvedDurationYears
-          ? new Date(Date.now() + resolvedDurationYears * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          ? computeExpiryDateOnly(resolvedDurationYears)
           : currentPermit.expiry_date; // Keep existing if no duration change
 
         // Build the update payload — only override values that exist on the modification application
@@ -629,7 +641,7 @@ export function TermsConditionsModal({
             ...(currentPermit.conditions?.modification_history || []),
             {
               modification_application_id: applicationId,
-              modified_at: new Date().toISOString(),
+              modified_at: acceptedAtIso,
               changes: applicationData.modification_changes || {},
             },
           ],
@@ -673,8 +685,8 @@ export function TermsConditionsModal({
         console.log('🔄 Processing RENEWAL - updating existing permit:', renewedFromPermitId);
         console.log('📊 Using assessor-approved duration for renewal:', resolvedDurationYearsGlobal, 'years');
         
-        const newIssuedDate = new Date().toISOString().split('T')[0];
-        const newExpiryDate = new Date(Date.now() + resolvedDurationYearsGlobal * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const newIssuedDate = acceptedDateOnly;
+        const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
         
         // Use maybeSingle() instead of single() to avoid PGRST116 when RLS blocks the row
         const { data: updatedPermit, error: updateError } = await supabase
@@ -708,8 +720,8 @@ export function TermsConditionsModal({
         console.log('🔁 Processing TRANSFER - creating new permit from original permit:', transferOriginalPermitId);
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
-        const newIssuedDate = new Date().toISOString().split('T')[0];
-        const newExpiryDate = new Date(Date.now() + resolvedDurationYearsGlobal * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const newIssuedDate = acceptedDateOnly;
+        const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
 
         const permitData_insert = {
           application_id: applicationId,
@@ -771,8 +783,8 @@ export function TermsConditionsModal({
         console.log('📝 Creating NEW permit in database...');
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
-        const newIssuedDate = new Date().toISOString().split('T')[0];
-        const newExpiryDate = new Date(Date.now() + resolvedDurationYearsGlobal * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const newIssuedDate = acceptedDateOnly;
+        const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
 
         const permitData_insert = {
           application_id: applicationId,
@@ -848,8 +860,8 @@ export function TermsConditionsModal({
         .update({
           status: 'approved',
           terms_status: 'accepted',
-          terms_accepted_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          terms_accepted_at: acceptedAtIso,
+          updated_at: acceptedAtIso,
         })
         .eq('id', applicationId);
 
@@ -939,19 +951,56 @@ export function TermsConditionsModal({
     }
   };
 
+  const handleSubmitFeedback = async () => {
+    const trimmedFeedback = feedback.trim();
+    if (isSubmittingFeedback || !trimmedFeedback) return;
+
+    setIsSubmittingFeedback(true);
+    setFeedbackError(null);
+    try {
+      const authResponse = await supabase.auth.getUser();
+      const user = (authResponse.data as any)?.user as { id?: string } | undefined;
+      if (!user?.id) {
+        throw new Error("Please sign in again to submit feedback.");
+      }
+
+      const payload: Record<string, unknown> = {
+        application_id: applicationId,
+        user_id: user.id,
+        feedback_text: trimmedFeedback,
+      };
+      if (rating > 0) {
+        payload.rating = rating;
+      }
+
+      const { error } = await (supabase as any)
+        .from("application_feedback")
+        .insert(payload);
+      if (error) throw error;
+
+      onTermsAccepted();
+      onClose();
+    } catch (error) {
+      console.error("❌ Error submitting feedback:", error);
+      setFeedbackError(error instanceof Error ? error.message : "Failed to submit feedback. Please try again.");
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
         if (open) return;
-        // If the user closes the modal after completing acceptance, make sure the parent refreshes.
-        if (showFeedback) onTermsAccepted();
+        // Keep feedback step on screen until explicit feedback submission.
+        if (showFeedback) return;
         onClose();
       }}
     >
       <DialogContent
         className="w-[98vw] max-w-[98vw] sm:max-w-[98vw] md:max-w-[96vw] lg:max-w-[94vw] xl:max-w-[90rem] h-[96vh] max-h-[96vh] p-0 overflow-hidden"
-        showCloseButton={true}
+        showCloseButton={!showFeedback}
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="px-5 pt-4">
@@ -1099,7 +1148,7 @@ export function TermsConditionsModal({
                     ✅ Permit issued successfully{issuedPermit?.permitNumber ? ` (${issuedPermit.permitNumber})` : ""}.
                   </p>
                   <p className="text-sm text-green-700 mt-1">
-                    Download your PDFs below. Feedback is optional.
+                    Download your PDFs below, then share your feedback to continue.
                   </p>
                 </div>
 
@@ -1143,10 +1192,15 @@ export function TermsConditionsModal({
                   </div>
                 ) : null}
 
-                <h3 className="text-xl font-semibold">How was your experience using the water permit system? (optional)</h3>
+                <h3 className="text-xl font-semibold">How was your experience using the water permit system?</h3>
                 <div className="flex items-center gap-2">
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <button key={s} onClick={() => setRating(s)} aria-label={`Rate ${s} stars`}>
+                    <button
+                      key={s}
+                      onClick={() => setRating(s)}
+                      aria-label={`Rate ${s} stars`}
+                      disabled={isSubmittingFeedback}
+                    >
                       <Star
                         className={`h-6 w-6 ${
                           rating >= s ? "text-yellow-500 fill-yellow-500" : "text-gray-300"
@@ -1161,25 +1215,26 @@ export function TermsConditionsModal({
                   placeholder="Share any feedback to help us improve..."
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
+                  disabled={isSubmittingFeedback}
                 />
+                {feedbackError ? (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+                    ❌ {feedbackError}
+                  </div>
+                ) : null}
                 <div className="flex justify-end gap-2">
                   <Button
-                    variant="outline"
-                    onClick={() => {
-                      onTermsAccepted();
-                      onClose();
-                    }}
+                    onClick={handleSubmitFeedback}
+                    disabled={isSubmittingFeedback || !feedback.trim()}
                   >
-                    Skip
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      /* TODO: send feedback to supabase */
-                      onTermsAccepted();
-                      onClose();
-                    }}
-                  >
-                    Submit Feedback
+                    {isSubmittingFeedback ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Feedback"
+                    )}
                   </Button>
                 </div>
               </div>

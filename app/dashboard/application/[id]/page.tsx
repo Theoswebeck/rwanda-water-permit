@@ -1009,7 +1009,7 @@ export default function ApplicationDetailPage() {
       </div>
 
       {/* Terms & Conditions Modal */}
-      {application && application.status === 'approved_pending_permit' && (
+      {application && (application.status === 'approved_pending_permit' || termsModalOpen) && (
         <TermsConditionsModal
           isOpen={termsModalOpen}
           onClose={() => setTermsModalOpen(false)}

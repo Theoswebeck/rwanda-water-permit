@@ -14,10 +14,47 @@ import { generateDigitalWaterPermitBlob, generateTermsConditionsPdfBlob } from "
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { selectPermitVariant } from "@/lib/permit-variant";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 type StaffPermitResponse =
   | { success: true; permit: any }
   | { success: false; message: string };
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  individual: "Individual",
+  company: "Company",
+  cooperative: "Cooperative",
+  organization: "Organization",
+  institution: "Institution",
+};
+
+function toDisplayLabel(value: string | null | undefined): string {
+  if (!value) return "N/A";
+  return value
+    .replaceAll("_", " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function firstNonEmptyString(values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
 
 export default function StaffPermitDetailPage() {
   const params = useParams();
@@ -65,6 +102,49 @@ export default function StaffPermitDetailPage() {
     if (status === "suspended") return <Badge className="bg-amber-600 text-white">Suspended</Badge>;
     if (status === "expired") return <Badge className="bg-slate-600 text-white">Expired</Badge>;
     return <Badge variant="outline">{permit?.status || "Unknown"}</Badge>;
+  }, [permit]);
+
+  const derived = useMemo(() => {
+    const app = permit?.application;
+    const applicant = app?.applicant;
+    const notes = parseJsonObject(app?.internal_notes);
+    const intendedActivities = Array.isArray(app?.intended_activities)
+      ? (app.intended_activities as unknown[]).map(String).filter(Boolean)
+      : [];
+    const primaryActivityCode = firstNonEmptyString([intendedActivities[0], app?.water_purpose, permit?.purpose]);
+    const waterActivity = primaryActivityCode ? getActivityLabel(primaryActivityCode) : "N/A";
+    const waterSourceLocation = [
+      firstNonEmptyString([notes?.waterSourceVillage, app?.village]),
+      firstNonEmptyString([notes?.waterSourceCell, app?.cell]),
+      firstNonEmptyString([notes?.waterSourceSector, app?.sector]),
+      firstNonEmptyString([notes?.waterSourceDistrict, app?.district]),
+      firstNonEmptyString([notes?.waterSourceProvince, app?.province]),
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    const applicantName =
+      applicant?.account_type === "individual"
+        ? `${applicant?.first_name ?? ""} ${applicant?.last_name ?? ""}`.trim() || "N/A"
+        : firstNonEmptyString([
+            applicant?.company_name,
+            `${applicant?.first_name ?? ""} ${applicant?.last_name ?? ""}`.trim(),
+          ]) || "N/A";
+    const accountTypeKey = typeof applicant?.account_type === "string" ? applicant.account_type : "";
+    const applicantType = ACCOUNT_TYPE_LABELS[accountTypeKey] || toDisplayLabel(accountTypeKey) || "N/A";
+    const contactPhone =
+      firstNonEmptyString([applicant?.phone, applicant?.mobile_phone, applicant?.landline_phone, applicant?.company_phone]) ||
+      "N/A";
+    const waterSourceName = firstNonEmptyString([app?.water_body_name, permit?.water_source]) || "N/A";
+
+    return {
+      waterActivity,
+      waterSourceLocation: waterSourceLocation || "N/A",
+      applicantName,
+      applicantType,
+      contactPhone,
+      waterSourceName,
+    };
   }, [permit]);
 
   const openBlobInNewTab = async (blob: Blob) => {
@@ -283,11 +363,27 @@ export default function StaffPermitDetailPage() {
                   </div>
                   <div>
                     <div className="text-muted-foreground">Water source</div>
-                    <div className="font-medium">{permit.water_source || "—"}</div>
+                    <div className="font-medium">{toDisplayLabel(derived.waterSourceName)}</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground">Purpose</div>
-                    <div className="font-medium">{permit.purpose || "—"}</div>
+                    <div className="text-muted-foreground">Water activity</div>
+                    <div className="font-medium">{derived.waterActivity}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Water source location</div>
+                    <div className="font-medium">{derived.waterSourceLocation}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Applicant</div>
+                    <div className="font-medium">{derived.applicantName}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Applicant type</div>
+                    <div className="font-medium">{derived.applicantType}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Contact phone</div>
+                    <div className="font-medium">{derived.contactPhone}</div>
                   </div>
                 </div>
 

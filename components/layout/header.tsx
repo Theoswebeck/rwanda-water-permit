@@ -14,7 +14,7 @@ const navItems = [
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
   { label: "Water Use Dashboard", href: "/water-use-dashboard" },
   { label: "Resources", href: "/resources" },
-  { label: "Contact", href: "https://rwanda-water-permit-production.up.railway.app/contact" },
+  { label: "Contact", href: "https://rwandawaterpermit.com/contact" },
 ];
 
 export function Header() {
@@ -174,6 +174,12 @@ export function Header() {
                   </AvatarFallback>
                 </Avatar>
               </Link>
+            ) : isAuthenticated ? (
+              <Link href="/dashboard">
+                <Button variant="outline" className="rounded-full px-6">
+                  DASHBOARD
+                </Button>
+              </Link>
             ) : (
               <Link href="/apply">
                 <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
@@ -290,6 +296,12 @@ export function Header() {
                     ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
                       /* Hide button on inspection, review, and admin pages */
                       null
+                    ) : isAuthenticated ? (
+                      <Link href="/dashboard" onClick={() => setIsOpen(false)}>
+                        <Button variant="outline" className="w-full rounded-full mt-4">
+                          DASHBOARD
+                        </Button>
+                      </Link>
                     ) : (
                       <Link href="/apply" onClick={() => setIsOpen(false)}>
                         <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">

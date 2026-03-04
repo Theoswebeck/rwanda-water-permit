@@ -7,6 +7,7 @@
 import { supabase } from './supabase';
 import type { Application, Permit, User } from '@/types/database';
 import { geometryToCoordinatePolygons } from '@/lib/geoUtils';
+import { getActivityLabel } from '@/lib/assessment-report-utils';
 
 export interface PermitInspectionData {
   application: Application & {
@@ -202,6 +203,26 @@ function pickFirstDefined<T>(...values: Array<T | undefined | null>): T | undefi
   return values.find(v => v !== undefined && v !== null) as T | undefined;
 }
 
+function pickFirstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function normalizeIntendedActivities(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      // ignore non-JSON strings
+    }
+  }
+  return [];
+}
+
 function getPrimaryLatLngFromGeometry(geometry: any): { lat: number; lng: number } | null {
   try {
     const polygons = geometryToCoordinatePolygons(geometry);
@@ -289,22 +310,28 @@ function prepareInspectionData(
   const locked = extractLockedFieldsFromNotes(internal);
   
   // Section 1: Permit Holder Identification
-  const permitHolderName = applicant?.company_name || 
-    `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim();
+  const permitHolderName = pickFirstNonEmptyString(
+    applicant?.account_type === 'individual' ? `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() : undefined,
+    applicant?.company_name,
+    `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim(),
+    'N/A'
+  ) || 'N/A';
   
   const permitHolderId = applicant?.id_number || 'N/A';
   
   const residence = applicant?.address || 'N/A';
   
   // Representative - for companies, might be a contact person
-  const representative = applicant?.account_type === 'business' 
+  const representative = applicant?.account_type && applicant?.account_type !== 'individual'
     ? `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() || 'N/A'
     : 'N/A';
   
-  const contacts = `Tel: ${applicant?.phone || 'N/A'}, Email: ${applicant?.email || 'N/A'}`;
+  const contacts = `Tel: ${pickFirstNonEmptyString(applicant?.phone, (applicant as any)?.mobile_phone, (applicant as any)?.company_phone) || 'N/A'}, Email: ${applicant?.email || 'N/A'}`;
   
   // Section 2: Activity Details
-  const activityType = application.water_purpose?.replace(/_/g, ' ')?.toUpperCase() || 'N/A';
+  const intendedActivities = normalizeIntendedActivities(application.intended_activities);
+  const primaryActivity = pickFirstNonEmptyString(intendedActivities[0], application.water_purpose) || 'other';
+  const activityType = getActivityLabel(primaryActivity);
   const activityStartingDate = permit?.issued_date;
   
   // Section 3: Permit Particulars
@@ -313,21 +340,22 @@ function prepareInspectionData(
   const expirationDate = permit?.expiry_date;
   
   // Section 4: Water Source
-  const waterSourceName = application.water_source?.replace(/_/g, ' ')?.toUpperCase() || 'N/A';
+  const waterSourceName = pickFirstNonEmptyString(application.water_body_name, application.water_source?.replace(/_/g, ' '), 'N/A') || 'N/A';
   const primary = getPrimaryLatLngFromGeometry(application.coordinates);
   const coordinates = primary ? `Lat: ${primary.lat}, Lng: ${primary.lng}` : 'N/A';
   
   const waterSourceLocation = [
-    application.village,
-    application.cell,
-    application.sector,
-    application.district
+    pickFirstNonEmptyString(internal?.waterSourceVillage, application.village),
+    pickFirstNonEmptyString(internal?.waterSourceCell, application.cell),
+    pickFirstNonEmptyString(internal?.waterSourceSector, application.sector),
+    pickFirstNonEmptyString(internal?.waterSourceDistrict, application.district),
+    pickFirstNonEmptyString(internal?.waterSourceProvince, application.province),
   ].filter(Boolean).join(', ');
   
   // Section 5: Allowed Water Abstraction
   const allowedQuantity = permit?.water_allowance;
   const allowedUnit = permit?.allowance_unit;
-  const authorizedMethod = application.abstraction_method || 'As per technical drawings';
+  const authorizedMethod = application.water_taking_method || application.abstraction_method || 'As per technical drawings';
   
   // Section 8: Payment Information
   const completedPayments = paymentHistory.filter(p => p.status === 'completed' || p.status === 'success');
@@ -354,10 +382,10 @@ function prepareInspectionData(
     coordinates,
     catchmentLevel1: locked.catchmentLevel1,
     catchmentLevel2: locked.catchmentLevel2,
-    district: application.district,
-    sector: application.sector,
-    cell: application.cell,
-    village: application.village,
+    district: pickFirstNonEmptyString(internal?.waterSourceDistrict, application.district) || application.district,
+    sector: pickFirstNonEmptyString(internal?.waterSourceSector, application.sector) || application.sector,
+    cell: pickFirstNonEmptyString(internal?.waterSourceCell, application.cell) || application.cell,
+    village: pickFirstNonEmptyString(internal?.waterSourceVillage, application.village) || application.village,
     allowedQuantity,
     allowedUnit,
     authorizedMethod,
