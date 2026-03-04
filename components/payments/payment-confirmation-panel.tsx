@@ -490,6 +490,15 @@ export function PaymentConfirmationPanel({
       transition={{ duration: 0.35, ease: "easeOut" }}
       className="space-y-5"
     >
+      {viewerRole === "applicant" && (
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold tracking-tight">Your Payment Details</h3>
+          <p className="text-sm text-muted-foreground">
+            Invoice and transaction status for this application.
+          </p>
+        </div>
+      )}
+
       {/* Inconsistency warning */}
       {isInconsistentSubmitted && (
         <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/20">
