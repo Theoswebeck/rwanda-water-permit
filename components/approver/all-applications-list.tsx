@@ -5,20 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   ChevronDown,
-  CheckCircle2,
-  XCircle,
-  RotateCcw,
   Eye, 
   Search, 
   Filter,
   FileText,
-  MapPin,
   Loader2,
   AlertTriangle
 } from "lucide-react";
@@ -26,12 +20,11 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
-import { calculateDaysRemainingTo90DayDeadline, formatDate } from "@/lib/utils";
+import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
@@ -61,15 +54,6 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   
-  // Decision dialog state
-  const [selectedApplication, setSelectedApplication] = useState<ApplicationWithApplicant | null>(null);
-  const [isDecisionDialogOpen, setIsDecisionDialogOpen] = useState(false);
-  const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_assessment">("approve");
-  const [decisionReason, setDecisionReason] = useState("");
-  const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
-  const [conditions, setConditions] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
   useEffect(() => {
@@ -198,107 +182,25 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
     }
   };
 
-  const getWaterSourceLocation = (app: ApplicationWithApplicant) => {
-    let waterSourceLocation = "";
-    if (typeof app.internal_notes === "string" && app.internal_notes.trim().length > 0) {
-      try {
-        const parsed = JSON.parse(app.internal_notes) as Record<string, unknown>;
-        const sourceParts = [
-          parsed.waterSourceVillage,
-          parsed.waterSourceCell,
-          parsed.waterSourceSector,
-          parsed.waterSourceDistrict,
-          parsed.waterSourceProvince,
-        ]
-          .map((part) => (typeof part === "string" ? part.trim() : ""))
-          .filter((part) => part.length > 0);
-        if (sourceParts.length > 0) {
-          waterSourceLocation = sourceParts.join(", ");
-        }
-      } catch {
-        // Ignore invalid internal_notes JSON and rely on fallback fields.
-      }
+  const getApplicationWaterActivityLabel = (app: ApplicationWithApplicant) => {
+    const activities = Array.isArray((app as any).intended_activities)
+      ? ((app as any).intended_activities as unknown[])
+          .filter((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+      : [];
+
+    if (activities.length > 0) {
+      return activities[0]
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
     }
 
-    if (waterSourceLocation) return waterSourceLocation;
-    const fallbackParts = [app.village, app.cell, app.sector, app.district, app.province]
-      .map((part) => (typeof part === "string" ? part.trim() : ""))
-      .filter((part) => part.length > 0);
-    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A";
-  };
-
-  const getWaterPurposeLabel = (purpose: string | undefined | null) => {
-    const labels: Record<string, string> = {
-      'domestic': 'Domestic Use',
-      'industrial': 'Industrial Use',
-      'agricultural': 'Agricultural Use',
-      'irrigation': 'Irrigation',
-      'livestock': 'Livestock',
-      'aquaculture': 'Aquaculture',
-      'recreation': 'Recreation',
-      'electricity_generation': 'Electricity Generation',
-      'mining': 'Mining',
-      'municipal_supply': 'Municipal Supply',
-      'other': 'Other'
-    };
-    return labels[purpose || ''] || purpose || 'Unknown';
-  };
-
-  const handleFinalDecision = async (applicationId: string, decision: "approve" | "reject" | "return_to_assessment") => {
-    try {
-      setSubmitting(true);
-      setError(null);
-      console.log(`🔄 Processing ${decision} decision for application ${applicationId}`);
-
-      const resp = await fetch('/api/approver/final-decision', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          applicationId,
-          decision,
-          reason: decisionReason,
-          conditions,
-        }),
-      });
-
-      const result = await resp.json();
-      if (!resp.ok || !result?.success) {
-        throw new Error(result?.message || 'Failed to process decision');
-      }
-      
-      // Show success message
-      const actionText = decision === 'approve' ? 'approved' : decision === 'reject' ? 'rejected' : 'returned to verification';
-      const notificationSuffix = decision === 'return_to_assessment' ? '' : ' SMS and email notifications sent.';
-      setSuccessMessage(`Application ${actionText} successfully!${notificationSuffix}`);
-      
-      // Refresh applications list
-      await fetchApplications();
-      
-      // Close dialog and reset form
-      setIsDecisionDialogOpen(false);
-      setDecisionReason("");
-      setDecisionReasonPreset("");
-      setConditions("");
-      setSelectedApplication(null);
-      
-      // Clear success message after 5 seconds
-      setTimeout(() => setSuccessMessage(null), 5000);
-    } catch (err: unknown) {
-      console.error('❌ Failed to process decision:', err);
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(`Failed to process ${decision}: ${msg}`);
-    } finally {
-      setSubmitting(false);
+    if (typeof app.water_purpose === "string" && app.water_purpose.trim().length > 0) {
+      return app.water_purpose
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
     }
-  };
 
-  const openDecisionDialog = (application: ApplicationWithApplicant, decision: "approve" | "reject" | "return_to_assessment") => {
-    setSelectedApplication(application);
-    setDecisionType(decision);
-    setDecisionReason("");
-    setDecisionReasonPreset("");
-    setConditions("");
-    setIsDecisionDialogOpen(true);
+    return "N/A";
   };
 
   const filteredApplications = applications.filter(app => {
@@ -340,15 +242,6 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
 
   return (
     <div className="space-y-6">
-      {successMessage && (
-        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
-            {successMessage}
-          </div>
-        </div>
-      )}
-      
       <div className="flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
@@ -458,7 +351,6 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                   <TableHead>Applicant</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Location of Water Source</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -472,7 +364,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                       <div className="space-y-1">
                         <div className="font-medium">{application.application_number}</div>
                         <div className="text-sm text-muted-foreground">
-                          {getWaterPurposeLabel(application.water_purpose)}
+                          Activity Type: {getApplicationWaterActivityLabel(application)}
                         </div>
                       </div>
                     </TableCell>
@@ -484,12 +376,6 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(application.status)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <div className="text-sm flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {getWaterSourceLocation(application)}
-                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end">
@@ -507,32 +393,6 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                                 View Details
                               </Link>
                             </DropdownMenuItem>
-                            {application.status === 'pending_final_approval' && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem 
-                                  onClick={() => openDecisionDialog(application, 'approve')}
-                                  className="flex items-center gap-2 cursor-pointer text-green-600 focus:text-green-600"
-                                >
-                                  <CheckCircle2 className="h-4 w-4" />
-                                  Approve
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => openDecisionDialog(application, 'reject')}
-                                  className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600"
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                  Reject
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => openDecisionDialog(application, 'return_to_assessment')}
-                                  className="flex items-center gap-2 cursor-pointer text-orange-600 focus:text-orange-600"
-                                >
-                                  <RotateCcw className="h-4 w-4" />
-                                  Return to Verification
-                                </DropdownMenuItem>
-                              </>
-                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -552,118 +412,6 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
         </CardContent>
       </Card>
 
-      {/* Decision Dialog */}
-      <Dialog open={isDecisionDialogOpen} onOpenChange={setIsDecisionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {decisionType === "approve" 
-                ? "Approve Application" 
-                : decisionType === "reject" 
-                  ? "Reject Application" 
-                  : "Return Application to Verification"}
-            </DialogTitle>
-            <DialogDescription>
-              {decisionType === "approve" 
-                ? "You are about to approve this water permit application. This decision is final."
-                : decisionType === "reject"
-                  ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the verification stage. Please provide specific instructions for the verifier."
-              }
-            </DialogDescription>
-          </DialogHeader>
-          {selectedApplication && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm bg-muted/50 p-4 rounded-lg">
-                <div>
-                  <span className="font-medium text-muted-foreground">Application ID:</span>
-                  <p className="mt-1 font-medium">{selectedApplication.application_number || selectedApplication.id}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-muted-foreground">Applicant:</span>
-                  <p className="mt-1 font-medium">{getApplicantName(selectedApplication)}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-muted-foreground">Type:</span>
-                  <p className="mt-1 font-medium">{getWaterPurposeLabel(selectedApplication.water_purpose)}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-muted-foreground">Location of Water Source:</span>
-                  <p className="mt-1 font-medium">{getWaterSourceLocation(selectedApplication)}</p>
-                </div>
-              </div>
-              
-              {decisionType === "approve" ? (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Approval Conditions (Optional)</label>
-                  <Textarea
-                    placeholder="Add any conditions or requirements for the approval (one per line)..."
-                    value={conditions}
-                    onChange={(e) => setConditions(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Verification Instructions (Required)"}
-                  </label>
-                  <div className="space-y-2">
-                    <Select value={decisionReasonPreset} onValueChange={(v) => { setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a reason" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="incomplete_documentation">Incomplete documentation</SelectItem>
-                        <SelectItem value="non_compliance_requirements">Non-compliance with requirements</SelectItem>
-                        <SelectItem value="inconsistent_information">Inconsistent information provided</SelectItem>
-                        <SelectItem value="requires_further_review">Requires further technical assessment</SelectItem>
-                        <SelectItem value="other">Other...</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Textarea
-                      placeholder={decisionReasonPreset === 'other' || decisionReasonPreset === '' ? "Type reason/instructions..." : "Add details (optional)"}
-                      value={decisionReason}
-                      onChange={(e) => setDecisionReason(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter className="gap-2 pt-6">
-            <Button variant="outline" onClick={() => setIsDecisionDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
-              disabled={submitting || ((decisionType === "reject" || decisionType === "return_to_assessment") && !decisionReason.trim())}
-              variant={
-                decisionType === "approve" 
-                  ? "default" 
-                  : decisionType === "reject" 
-                    ? "destructive" 
-                    : "outline"
-              }
-              className={decisionType === "approve" ? "bg-green-600 hover:bg-green-700" : ""}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                decisionType === "approve" 
-                  ? "Approve Application" 
-                  : decisionType === "reject" 
-                    ? "Reject Application"
-                    : "Return to Verification"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 } 

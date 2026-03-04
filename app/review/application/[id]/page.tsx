@@ -54,6 +54,13 @@ type UIBanner = {
 
 const BANNER_STORAGE_KEY = "waterpermit:uiBanner";
 
+function toDateInputValue(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().split("T")[0];
+}
+
 function persistBanner(banner: UIBanner) {
   try {
     sessionStorage.setItem(BANNER_STORAGE_KEY, JSON.stringify({ ...banner, ts: Date.now() }));
@@ -469,7 +476,10 @@ export default function ReviewApplicationPage() {
         if (existingAssessment) {
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
-          setInspectionDate(existingAssessment.inspection_date || "");
+          setInspectionDate(
+            existingAssessment.inspection_date ||
+            toDateInputValue(existingAssessment.created_at)
+          );
           setRecommendation({
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,
             explanationText: existingAssessment.explanation_text || ""

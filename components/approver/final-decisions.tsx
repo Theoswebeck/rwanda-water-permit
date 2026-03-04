@@ -14,7 +14,6 @@ import {
   CheckCircle2, 
   XCircle, 
   Eye, 
-  MapPin, 
   AlertTriangle, 
   Search, 
   Loader2 
@@ -40,6 +39,7 @@ type RawPendingApprovalApplication = {
   project_title?: string | null
   sla_status?: string | null
   due_date?: string | null
+  completeness_confirmed_at?: string | null
   is_modification?: boolean | null
   internal_notes?: string | null
   applicant?: {
@@ -79,6 +79,7 @@ interface FinalReviewApplication {
   due_date?: string;
   deadline_90_days_remaining?: number | null;
   is_modification?: boolean;
+  is_renewal?: boolean;
 }
 
 export function FinalDecisions() {
@@ -192,21 +193,11 @@ export function FinalDecisions() {
     return <Badge variant="outline" className={riskColors[risk]}>{risk.toUpperCase()}</Badge>;
   };
 
-  const getWaterPurposeLabel = (purpose: string) => {
-    const labels: Record<string, string> = {
-      'domestic': 'Domestic Use',
-      'industrial': 'Industrial Use',
-      'agricultural': 'Agricultural Use',
-      'irrigation': 'Irrigation',
-      'livestock': 'Livestock',
-      'aquaculture': 'Aquaculture',
-      'recreation': 'Recreation',
-      'electricity_generation': 'Electricity Generation',
-      'mining': 'Mining',
-      'municipal_supply': 'Municipal Supply',
-      'other': 'Other'
-    };
-    return labels[purpose] || purpose || 'Unknown';
+  const getActivityTypeLabel = (value: string | undefined | null) => {
+    if (!value) return "N/A";
+    return value
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
   const getStatusBadge = (status: string) => {
@@ -428,7 +419,6 @@ export function FinalDecisions() {
                   <TableHead>Applicant</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Location of Water Source</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -447,7 +437,7 @@ export function FinalDecisions() {
                       <div>
                         <div className="font-medium">{application.application_number || application.id}</div>
                         <div className="text-sm text-muted-foreground">
-                          {getWaterPurposeLabel(application.waterPurpose)}
+                          Activity Type: {getActivityTypeLabel(application.waterPurpose)}
                         </div>
                       </div>
                     </TableCell>
@@ -459,12 +449,6 @@ export function FinalDecisions() {
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(application.status)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <div className="text-sm text-muted-foreground flex items-center">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {application.location}
-                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex gap-2 justify-end">

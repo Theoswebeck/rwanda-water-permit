@@ -25,6 +25,7 @@ import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 interface VerificationApplication extends Application {
   applicant_name?: string;
@@ -181,14 +182,21 @@ export default function VerificationDashboard() {
     return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 whitespace-nowrap">New</Badge>;
   };
 
-  const getWaterPurposeLabel = (purpose: string) => {
-    const labels: Record<string, string> = {
-      domestic: "Domestic Use", industrial: "Industrial Use", agricultural: "Agricultural Use",
-      irrigation: "Irrigation", livestock: "Livestock", aquaculture: "Aquaculture",
-      recreation: "Recreation", electricity_generation: "Electricity Generation",
-      mining: "Mining", municipal_supply: "Municipal Supply", other: "Other",
-    };
-    return labels[purpose] || purpose;
+  const getApplicationWaterActivityLabel = (app: VerificationApplication) => {
+    const activities = Array.isArray((app as any).intended_activities)
+      ? ((app as any).intended_activities as unknown[])
+          .filter((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+      : [];
+
+    if (activities.length > 0) {
+      return getActivityLabel(activities[0]);
+    }
+
+    if (typeof app.water_purpose === "string" && app.water_purpose.trim().length > 0) {
+      return getActivityLabel(app.water_purpose);
+    }
+
+    return "N/A";
   };
 
   const ApplicationTable = ({ apps, emptyMessage }: { apps: VerificationApplication[]; emptyMessage: string }) => {
@@ -240,7 +248,9 @@ export default function VerificationDashboard() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || "")}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                          Activity Type: {getApplicationWaterActivityLabel(app)}
+                        </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="text-xs text-slate-700 dark:text-slate-300 truncate">
@@ -252,18 +262,20 @@ export default function VerificationDashboard() {
                         <div className="flex justify-center">{getVerificationStatusBadge(app.status)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        <Link href={`/verification/application/${app.application_number}`}>
-                          <Button
-                            size="sm"
-                            className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                          >
-                            <Eye className="h-3 w-3" />
-                            <span className="hidden sm:inline">
-                              {app.status === "pending_verification" || app.status === "returned_to_verification" ? "Verify" : "View"}
-                            </span>
-                            <span className="sm:hidden">Go</span>
-                          </Button>
-                        </Link>
+                        <div className="flex justify-end">
+                          <Link href={`/verification/application/${app.application_number}`}>
+                            <Button
+                              size="sm"
+                              className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span className="hidden sm:inline">
+                                {app.status === "pending_verification" || app.status === "returned_to_verification" ? "Verify" : "View"}
+                              </span>
+                              <span className="sm:hidden">Go</span>
+                            </Button>
+                          </Link>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

@@ -3,9 +3,7 @@
 import type { WorkflowDates } from "@/lib/workflow-dates";
 
 /**
- * Compact staff table cell that shows the core timeline points:
- * - Submitted timestamp
- * - Last activity timestamp
+ * Compact staff table cell that shows only submission timestamp.
  */
 
 interface WorkflowDatesCellProps {
@@ -36,39 +34,16 @@ export function WorkflowDatesCell({ dates }: WorkflowDatesCellProps) {
   }
 
   const submittedAt = dates.appliedAt ?? null;
-  const latestActivitySource = [
-    dates.approvedAt,
-    dates.verifiedAt,
-    dates.reviewedAt,
-    dates.assessedAt,
-    dates.assignedAt,
-    dates.appliedAt,
-  ]
-    .map((iso) => (iso ? new Date(iso) : null))
-    .filter((d): d is Date => d !== null && Number.isFinite(d.getTime()))
-    .sort((a, b) => b.getTime() - a.getTime())[0];
-
-  // Avoid rendering duplicate timestamps when submission is also latest activity.
-  const rows = Array.from(
-    new Set(
-      [
-        fmtTimestamp(submittedAt),
-        fmtTimestamp(latestActivitySource?.toISOString() ?? null),
-      ].filter((value): value is string => value !== null)
-    )
-  );
-
-  if (rows.length === 0) {
+  const value = fmtTimestamp(submittedAt);
+  if (!value) {
     return <span className="text-xs text-muted-foreground">--</span>;
   }
 
   return (
-    <div className="space-y-0.5 min-w-0">
-      {rows.map((value, idx) => (
-        <div key={`${value}-${idx}`} className="text-[11px] leading-tight text-slate-700 dark:text-slate-300 tabular-nums">
-          {value}
-        </div>
-      ))}
+    <div className="min-w-0">
+      <div className="text-[11px] leading-tight text-slate-700 dark:text-slate-300 tabular-nums">
+        {value}
+      </div>
     </div>
   );
 }
