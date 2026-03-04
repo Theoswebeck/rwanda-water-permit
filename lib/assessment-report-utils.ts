@@ -391,30 +391,18 @@ export function prefillAssessmentReportFromApplication(
     if (abstractionDetail) {
       abstractionData.abstractionMethod = typeof abstractionDetail.abstractionMethod === "string" ? abstractionDetail.abstractionMethod : "";
 
-      // Q15: flowRate is entered in m³/s in the application form
-      const flowM3s = typeof abstractionDetail.flowRate === "number"
-        ? abstractionDetail.flowRate
-        : (typeof abstractionDetail.flowRate === "string" ? Number(abstractionDetail.flowRate) : NaN);
+      // Keep Section 4 values exactly as submitted in the application.
+      // Do not derive or convert values here.
+      if (typeof abstractionDetail.flowRate === "number") {
+        abstractionData.flowRateLps = String(abstractionDetail.flowRate);
+      } else if (typeof abstractionDetail.flowRate === "string") {
+        abstractionData.flowRateLps = abstractionDetail.flowRate;
+      }
 
-      if (!Number.isNaN(flowM3s) && Number.isFinite(flowM3s) && flowM3s > 0) {
-        // Section 4 needs L/sec and m³/day equivalents
-        abstractionData.flowRateLps = String((flowM3s * 1000).toFixed(2));
-        abstractionData.flowRateM3Day = String((flowM3s * 86400).toFixed(2));
-        // Water balance uses m³/day (D)
-        abstractionData.waterDemandD = String((flowM3s * 86400).toFixed(2));
-      } else {
-        // Fallback: maxAverageYearly is m³/year
-        const yearly = typeof abstractionDetail.maxAverageYearly === "number"
-          ? abstractionDetail.maxAverageYearly
-          : (typeof abstractionDetail.maxAverageYearly === "string" ? Number(abstractionDetail.maxAverageYearly) : NaN);
-        if (!Number.isNaN(yearly) && Number.isFinite(yearly) && yearly > 0) {
-          const dailyM3 = yearly / 365;
-          abstractionData.flowRateM3Day = String(dailyM3.toFixed(2));
-          abstractionData.waterDemandD = String(dailyM3.toFixed(2));
-          // Approximate L/sec from m³/day
-          const m3sApprox = dailyM3 / 86400;
-          abstractionData.flowRateLps = String((m3sApprox * 1000).toFixed(2));
-        }
+      if (typeof abstractionDetail.maxAverageYearly === "number") {
+        abstractionData.flowRateM3Day = String(abstractionDetail.maxAverageYearly);
+      } else if (typeof abstractionDetail.maxAverageYearly === "string") {
+        abstractionData.flowRateM3Day = abstractionDetail.maxAverageYearly;
       }
     }
   }
@@ -519,6 +507,8 @@ export function mergeAssessmentReportData(
     "sourceLocation",
     "catchmentLevel1",
     "catchmentLevel2",
+    "flowRateLps",
+    "flowRateM3Day",
   ];
   for (const k of enforcedPrefilledKeys) {
     if (prefilled[k] !== undefined) {

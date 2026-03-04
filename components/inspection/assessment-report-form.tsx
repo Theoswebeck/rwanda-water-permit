@@ -283,34 +283,23 @@ export function AssessmentReportForm({
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label>Quantity (l/s, m³/s, m³/day, etc)</Label>
+                  <Label>Quantity (m³/year)</Label>
                   <Input
                     value={localData.flowRateM3Day || ''}
-                    onChange={(e) => updateField('flowRateM3Day', e.target.value)}
-                    placeholder="m³/day"
-                    disabled={readOnly}
-                    className={readOnlyClass}
+                    placeholder="m³/year"
+                    readOnly
+                    disabled
+                    className={prefilledClass}
                   />
                 </div>
                 <div>
-                  <Label>Flow rate (L/sec)</Label>
+                  <Label>Flow rate (m³/s)</Label>
                   <Input
                     value={localData.flowRateLps || ''}
-                    onChange={(e) => {
-                      const flowRateLps = e.target.value;
-                      setLocalData((prev) => {
-                        const updated = {
-                          ...prev,
-                          flowRateLps,
-                          flowRateM3Day: toDerivedM3Day(flowRateLps),
-                        };
-                        onReportDataChange(updated);
-                        return updated;
-                      });
-                    }}
-                    placeholder="L/sec"
-                    disabled={readOnly}
-                    className={readOnlyClass}
+                    placeholder="m³/s"
+                    readOnly
+                    disabled
+                    className={prefilledClass}
                   />
                 </div>
                 <div>

@@ -49,6 +49,7 @@ interface PaymentConfirmationPanelProps {
   applicantName?: string;
   applicantEmail?: string;
   applicantPhone?: string;
+  viewerRole?: "staff" | "applicant";
 }
 
 interface StatusConfig {
@@ -265,6 +266,7 @@ export function PaymentConfirmationPanel({
   applicantName,
   applicantEmail,
   applicantPhone,
+  viewerRole = "staff",
 }: PaymentConfirmationPanelProps) {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState<boolean>(Boolean(applicationId));
@@ -441,9 +443,10 @@ export function PaymentConfirmationPanel({
   // ------ Payment found — render details ------
   const cfg = getStatusConfig(payment.status);
   const StatusIcon = cfg.icon;
+  const isStaffViewer = viewerRole === "staff";
 
   const isInconsistentSubmitted =
-    applicationStatus === "submitted" && payment.status !== "completed";
+    isStaffViewer && applicationStatus === "submitted" && payment.status !== "completed";
 
   // Extract extra details from gateway_response if available
   const gw = payment.gateway_response as Record<string, any> | undefined;
@@ -543,11 +546,17 @@ export function PaymentConfirmationPanel({
                 : payment.status === "processing"
                 ? "Payment is currently being processed by IremboPay."
                 : payment.status === "pending"
-                ? "Payment has been initiated but not yet completed by the applicant."
+                ? isStaffViewer
+                  ? "Payment has been initiated but not yet completed by the applicant."
+                  : "Your payment has been initiated but is not yet completed."
                 : payment.status === "failed"
-                ? "Payment attempt failed. The applicant may need to retry."
+                ? isStaffViewer
+                  ? "Payment attempt failed. The applicant may need to retry."
+                  : "Your payment attempt failed. Please retry from the payment flow if needed."
                 : payment.status === "cancelled"
-                ? "Payment was cancelled by the applicant."
+                ? isStaffViewer
+                  ? "Payment was cancelled by the applicant."
+                  : "Your payment was cancelled."
                 : "Payment status requires manual review."}
             </p>
           </div>
@@ -561,19 +570,23 @@ export function PaymentConfirmationPanel({
           </div>
         </div>
 
-        {/* Verification indicator for staff */}
+        {/* Verification indicator */}
         {payment.status === "completed" ? (
           <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-100/60 dark:bg-emerald-900/20 px-3 py-2 border border-emerald-200/60 dark:border-emerald-800/40">
             <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <p className="text-xs text-emerald-700 dark:text-emerald-400 font-medium">
-              Payment collection confirmed — safe to proceed with application assessment.
+              {isStaffViewer
+                ? "Payment collection confirmed — safe to proceed with application assessment."
+                : "Your payment was confirmed successfully."}
             </p>
           </div>
         ) : payment.status === "failed" || payment.status === "cancelled" ? (
           <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-100/60 dark:bg-red-900/20 px-3 py-2 border border-red-200/60 dark:border-red-800/40">
             <ShieldAlert className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
             <p className="text-xs text-red-700 dark:text-red-400 font-medium">
-              Payment was not collected. Verify with applicant before proceeding.
+              {isStaffViewer
+                ? "Payment was not collected. Verify with applicant before proceeding."
+                : "Payment was not collected successfully."}
             </p>
           </div>
         ) : null}
@@ -611,7 +624,7 @@ export function PaymentConfirmationPanel({
               mono
               copyable
             />
-            {paymentAccountId && (
+            {isStaffViewer && paymentAccountId && (
               <DetailRow
                 icon={Banknote}
                 label="Payment Account"
@@ -708,7 +721,7 @@ export function PaymentConfirmationPanel({
       </div>
 
       {/* ============ Gateway Raw Response (collapsible) ============ */}
-      {gw && Object.keys(gw).length > 0 && (
+      {isStaffViewer && gw && Object.keys(gw).length > 0 && (
         <Card className="shadow-sm">
           <CardHeader className="pb-0 pt-3 px-5">
             <button
@@ -753,7 +766,7 @@ export function PaymentConfirmationPanel({
       {/* Refresh */}
       <div className="flex justify-end">
         <div className="flex items-center gap-2">
-          {(payment.status === "pending" || payment.status === "processing") && (
+          {isStaffViewer && (payment.status === "pending" || payment.status === "processing") && (
             <Button variant="outline" size="sm" onClick={verifyWithIremboPay} disabled={isVerifying}>
               <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isVerifying ? "animate-spin" : ""}`} />
               {isVerifying ? "Verifying…" : "Verify with IremboPay"}

@@ -65,6 +65,7 @@ import { contractTermsByVariant } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -818,14 +819,21 @@ export default function ReviewerDashboard() {
     return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">New Application</Badge>;
   };
 
-  const getWaterPurposeLabel = (purpose: string) => {
-    const labels: Record<string, string> = {
-      domestic: "Domestic Use", industrial: "Industrial Use", agricultural: "Agricultural Use",
-      irrigation: "Irrigation", livestock: "Livestock", aquaculture: "Aquaculture",
-      recreation: "Recreation", electricity_generation: "Electricity Generation",
-      mining: "Mining", municipal_supply: "Municipal Supply", other: "Other",
-    };
-    return labels[purpose] || purpose;
+  const getApplicationWaterActivityLabel = (app: ReviewApplication) => {
+    const activities = Array.isArray((app as any).intended_activities)
+      ? ((app as any).intended_activities as unknown[])
+          .filter((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+      : [];
+
+    if (activities.length > 0) {
+      return getActivityLabel(activities[0]);
+    }
+
+    if (typeof app.water_purpose === "string" && app.water_purpose.trim().length > 0) {
+      return getActivityLabel(app.water_purpose);
+    }
+
+    return "N/A";
   };
 
   const ApplicationTable = ({ applications, emptyMessage }: { applications: ReviewApplication[]; emptyMessage: string }) => {
@@ -877,7 +885,9 @@ export default function ReviewerDashboard() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">{app.application_number}</div>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">{getWaterPurposeLabel(app.water_purpose || '')}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                          Water Activity: {getApplicationWaterActivityLabel(app)}
+                        </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3">
                         <div className="text-xs text-slate-700 dark:text-slate-300 truncate">
@@ -889,10 +899,11 @@ export default function ReviewerDashboard() {
                         <div className="flex justify-center">{getReviewStatusBadge(app.status)}</div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
+                        <div className="flex items-center justify-end">
                         {app.status === "approved" ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button variant="outline" size="sm" className="h-8 min-w-[72px] justify-center px-2">
                                 <span className="sr-only">Open menu</span>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
@@ -946,7 +957,7 @@ export default function ReviewerDashboard() {
                         ) : canAssignOrReassignFromReviewDashboard(app.status) && !isFinalizedStatus(app.status) ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <Button variant="outline" size="sm" className="h-8 min-w-[72px] justify-center px-2">
                                 <span className="sr-only">Open menu</span>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
@@ -980,6 +991,7 @@ export default function ReviewerDashboard() {
                             </Button>
                           </Link>
                         )}
+                        </div>
                       </TableCell>
               </TableRow>
                   ))

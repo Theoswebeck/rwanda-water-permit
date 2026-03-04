@@ -48,10 +48,15 @@ export function WorkflowDatesCell({ dates }: WorkflowDatesCellProps) {
     .filter((d): d is Date => d !== null && Number.isFinite(d.getTime()))
     .sort((a, b) => b.getTime() - a.getTime())[0];
 
-  const rows = [
-    fmtTimestamp(submittedAt),
-    fmtTimestamp(latestActivitySource?.toISOString() ?? null),
-  ].filter((value): value is string => value !== null);
+  // Avoid rendering duplicate timestamps when submission is also latest activity.
+  const rows = Array.from(
+    new Set(
+      [
+        fmtTimestamp(submittedAt),
+        fmtTimestamp(latestActivitySource?.toISOString() ?? null),
+      ].filter((value): value is string => value !== null)
+    )
+  );
 
   if (rows.length === 0) {
     return <span className="text-xs text-muted-foreground">--</span>;

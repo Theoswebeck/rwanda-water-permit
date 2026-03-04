@@ -433,7 +433,7 @@ export default function AssessmentApplicationPage() {
     if (reportTypeForAssessment === "abstraction") {
       if (!hasText(assessmentReportData.sourceFlowLps)) missing.push("Section 3: Flow of the water source (L/sec)");
       if (!hasText(assessmentReportData.sourceFlowM3Day)) missing.push("Section 3: Flow of the water source (m3/day)");
-      if (!hasText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted (m3/day)");
+      if (!hasText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted (m3/year)");
       if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
       if (!hasText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q)");
       if (!hasText(assessmentReportData.waterDemandD)) missing.push("Section 5: Water demand (D)");

@@ -744,12 +744,23 @@ export function ApplicationForm({
   );
 
   // Payment is never required for permit modifications, and should never appear in the UI for them.
-  // For applicants: show the payment widget during draft/pending_payment
+  // For applicants:
+  // - editable mode: show payment widget during draft/pending_payment
+  // - read-only mode: show payment confirmation details for the saved application
   // For staff: show the payment confirmation panel (read-only) for non-modification apps
-  const shouldShowApplicantPaymentTab =
-    !isStaffView && !isModification && (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
+  const shouldShowApplicantPaymentWidgetTab =
+    !readOnly &&
+    !isStaffView &&
+    !isModification &&
+    (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
+  const shouldShowApplicantPaymentDetailsTab =
+    readOnly &&
+    !isStaffView &&
+    !isModification &&
+    Boolean((currentApplication as any)?.id ?? (initialData as any)?.id);
   const shouldShowStaffPaymentTab = isStaffView && !isModification;
-  const shouldShowPaymentTab = shouldShowApplicantPaymentTab || shouldShowStaffPaymentTab;
+  const shouldShowPaymentTab =
+    shouldShowApplicantPaymentWidgetTab || shouldShowApplicantPaymentDetailsTab || shouldShowStaffPaymentTab;
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -2052,8 +2063,6 @@ export function ApplicationForm({
           <div className="text-sm font-medium text-slate-700 dark:text-slate-200">{req.annexTitle}</div>
         ) : null}
 
-        <DocumentRequirementsInfo documents={req.attachments.map((a) => a.label)} />
-
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {req.attachments.map((a) => (
             <DocumentUploadField key={a.fieldName} fieldName={a.fieldName} label={a.label} required={a.required} />
@@ -2363,21 +2372,6 @@ export function ApplicationForm({
     );
   };
 
-  // Document Requirements Info Component
-  const DocumentRequirementsInfo = ({ documents }: { documents: string[] }) => (
-    <Alert className="mb-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20">
-      <AlertCircle className="h-4 w-4 text-blue-600" />
-      <AlertDescription className="text-blue-800 dark:text-blue-200">
-        <span className="font-medium">Required documents for this section:</span>
-        <ul className="mt-1 ml-4 space-y-1">
-          {documents.map((doc, index) => (
-            <li key={index} className="text-sm list-disc">{doc}</li>
-          ))}
-        </ul>
-      </AlertDescription>
-    </Alert>
-  );
-
   // Manual save only - no auto-save functionality
   const [validationError, setValidationError] = useState<string | null>(null);
   const [, forceUpdate] = useState({});
@@ -2392,7 +2386,7 @@ export function ApplicationForm({
       // Hard rule: for payment-required applications (new/renewal/transfer), the application must NOT be
       // submitted via form submit. Users should complete payment first (the payment flow will submit).
       // This also closes the "press Enter to submit" loophole.
-      if (!isStaffView && shouldShowApplicantPaymentTab) {
+      if (!isStaffView && shouldShowApplicantPaymentWidgetTab) {
         setValidationError("Payment is required before submission. Please continue to the Payment tab to complete payment.");
         setActiveTab("payment");
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2569,7 +2563,7 @@ export function ApplicationForm({
                     <Globe className="h-4 w-4" />
                     <span className="hidden sm:inline">Land</span>
                   </TabsTrigger>
-                  {/* Only show payment tab for draft or pending_payment status AND not for staff views (review/assessment/approver) */}
+                  {/* Show payment tab for editable applicant payment flow, and read-only payment details for applicant/staff views. */}
                   {shouldShowPaymentTab && (
                     <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
                       <CreditCard className="h-4 w-4" />
@@ -3036,14 +3030,14 @@ export function ApplicationForm({
                     </p>
                   </div>
 
-                  {/* 7. Source of Water */}
+                  {/* 10. Source of Water */}
                   <FormField
                     control={form.control}
                     name="waterSourceType"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          7. Source of Water *
+                          10. Source of Water *
                         </FormLabel>
                         <FormControl>
                           <Select onValueChange={field.onChange} value={field.value || undefined} {...getSelectProps()}>
@@ -3082,14 +3076,14 @@ export function ApplicationForm({
                     />
                   )}
 
-                  {/* 8. Name of the source of water */}
+                  {/* 11. Name of the source of water */}
                   <FormField
                     control={form.control}
                     name="nameSourceWater"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          8. Name of the source of water *
+                          11. Name of the source of water *
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" })} />
@@ -3099,14 +3093,14 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* 9. Tributary to (main river/lake) */}
+                  {/* 12. Tributary to (main river/lake) */}
                   <FormField
                     control={form.control}
                     name="tributaryToMain"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          9. Tributary to (main river/lake)
+                          12. Tributary to (main river/lake)
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter main river/lake (if applicable)" })} />
@@ -3116,10 +3110,10 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* 10. Location of water source */}
+                  {/* 13. Location of water source */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">
-                      10. Location of water source * (Province, District, Sector, Cell, Village)
+                      13. Location of water source * (Province, District, Sector, Cell, Village)
                     </Label>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3314,7 +3308,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          12. Reliability of water source *
+                          14. Reliability of water source *
                         </FormLabel>
                         <FormControl>
                           <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
@@ -3340,7 +3334,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          13. Requested Permit Duration (Years) *
+                          15. Requested Permit Duration (Years) *
                         </FormLabel>
                         <FormControl>
                           <Select 
@@ -3387,14 +3381,14 @@ export function ApplicationForm({
                     </p>
                   </div>
 
-                  {/* 13. Activity Type - Single Selection */}
+                  {/* 7. Activity Type - Single Selection */}
                   <FormField
                     control={form.control}
                     name="intendedActivities"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          13. Intended Activity * (Select one activity)
+                          7. Intended Activity * (Select one activity)
                         </FormLabel>
                         <FormControl>
                           <RadioGroup
@@ -3441,7 +3435,7 @@ export function ApplicationForm({
                   {/* Water Abstraction Point (LAT, LONG) */}
                   <div className="space-y-4">
                         <Label className="text-base font-medium">
-                          14. Water Abstraction Point * (LAT, LONG)
+                          8. Water Abstraction Point * (LAT, LONG)
                         </Label>
 
                         <Tabs defaultValue="manual" className="w-full">
@@ -4706,63 +4700,6 @@ export function ApplicationForm({
                           <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
                             Construction of Dam Details
                           </h4>
-
-                          <div className="mb-6 space-y-4">
-                            <Label className="text-base font-medium">Construction Point (Location)</Label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <FormField
-                                control={form.control}
-                                name="waterSourceLatitude"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Latitude *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...field}
-                                        type="text"
-                                        value={(field.value ?? "").toString()}
-                                        placeholder="e.g., -1.9441"
-                                        disabled={readOnly}
-                                        onChange={(e) => {
-                                          if (readOnly) return;
-                                          field.onChange(e.target.value);
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              <FormField
-                                control={form.control}
-                                name="waterSourceLongitude"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Longitude *</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        {...field}
-                                        type="text"
-                                        value={(field.value ?? "").toString()}
-                                        placeholder="e.g., 29.8739"
-                                        disabled={readOnly}
-                                        onChange={(e) => {
-                                          if (readOnly) return;
-                                          field.onChange(e.target.value);
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                            </div>
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <p className="text-sm text-blue-800">
-                                <strong>Note:</strong> Provide the coordinates of the dam construction point.
-                              </p>
-                            </div>
-                          </div>
                           
                           <div className="overflow-x-auto">
                             <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-6">
@@ -4929,11 +4866,6 @@ export function ApplicationForm({
                                   </FormItem>
                                 )}
                               />
-                            </div>
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                              <p className="text-sm text-blue-800">
-                                <strong>Note:</strong> Provide the coordinates of the construction or installation site.
-                              </p>
                             </div>
                           </div>
                           
@@ -5159,7 +5091,7 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* 15. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
+                  {/* 9. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
                     const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "construction_of_infrastructures", "other"];
@@ -5167,7 +5099,7 @@ export function ApplicationForm({
                     return hasAbstractionActivity ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
-                          15. Water Abstraction Details *
+                          9. Water Abstraction Details *
                         </Label>
                         
                         <div className="space-y-4">
@@ -5251,7 +5183,7 @@ export function ApplicationForm({
                     ) : null;
                   })()}
 
-                  {/* 15. Fish farming specific fields are shown above in respective sections */}
+                  {/* 9. Fish farming specific fields are shown above in respective sections */}
                 </TabsContent>
 
                 {/* OWNERSHIP OF ADJOINING LAND */}
@@ -5578,7 +5510,7 @@ export function ApplicationForm({
                 {/* PAYMENT TAB - For applicants: payment widget; For staff: payment confirmation panel */}
                 {shouldShowPaymentTab && (
                   <TabsContent value="payment" className="pt-6 space-y-6">
-                    {shouldShowStaffPaymentTab ? (
+                    {shouldShowStaffPaymentTab || shouldShowApplicantPaymentDetailsTab ? (
                       <PaymentConfirmationPanel
                         applicationId={(currentApplication as any)?.id ?? (initialData as any)?.id ?? ""}
                         applicationStatus={(currentApplication as any)?.status}
@@ -5586,6 +5518,7 @@ export function ApplicationForm({
                         applicantName={(userData as any)?.name}
                         applicantEmail={(userData as any)?.email}
                         applicantPhone={(userData as any)?.phone}
+                        viewerRole={shouldShowStaffPaymentTab ? "staff" : "applicant"}
                       />
                     ) : (
                       <PaymentTab

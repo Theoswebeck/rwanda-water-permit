@@ -480,34 +480,6 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
         )}
       </div>
 
-      {/* Application Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Application Summary</CardTitle>
-          <CardDescription>Water Permit Application Details</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Application Number</p>
-              <p className="text-sm font-medium">{application?.application_number || 'Pending'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Application Type</p>
-              <p className="text-sm font-medium">{application?.application_type || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Application Fee</p>
-              <p className="text-lg font-bold text-primary">{formatAmount(applicationFee)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Location</p>
-              <p className="text-sm">{application?.district}, {application?.province}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Error Alert */}
       {error && (
         <Alert variant="destructive">
