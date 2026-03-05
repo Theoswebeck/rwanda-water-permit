@@ -46,8 +46,8 @@ interface ApplicationsListProps {
   applications: Application[];
   loading?: boolean;
   onDeleteApplications?: (applicationIds: string[]) => Promise<void>;
-  statusFilter?: "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
-  onStatusFilterChange?: (status: "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired") => void;
+  statusFilter?: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
+  onStatusFilterChange?: (status: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired") => void;
 }
 
 export function ApplicationsList({
@@ -64,7 +64,7 @@ export function ApplicationsList({
   const effectiveStatusFilter = controlledStatusFilter ?? statusFilter;
 
   const handleStatusFilterChange = (
-    value: "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired"
+    value: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired"
   ) => {
     if (controlledStatusFilter === undefined) {
       setStatusFilter(value);
@@ -407,6 +407,7 @@ export function ApplicationsList({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
               <SelectItem value="revision_required">Returned for Review</SelectItem>

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Permit, Application } from "@/types/database";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -226,6 +227,62 @@ export function PermitSelectForRenewal({
     return `${applicant.first_name || ''} ${applicant.last_name || ''}`.trim() || 'Unknown';
   };
 
+  const parseInternalNotes = (permit: PermitWithApplication) => {
+    try {
+      const rawNotes = permit.application?.internal_notes;
+      if (!rawNotes) return null;
+      return typeof rawNotes === "string" ? JSON.parse(rawNotes) : rawNotes;
+    } catch {
+      return null;
+    }
+  };
+
+  const getWaterSourceLocationLabel = (permit: PermitWithApplication) => {
+    const notes = parseInternalNotes(permit);
+    const sourceParts = [
+      notes?.waterSourceVillage,
+      notes?.waterSourceCell,
+      notes?.waterSourceSector,
+      notes?.waterSourceDistrict,
+      notes?.waterSourceProvince,
+    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+    if (sourceParts.length > 0) {
+      return sourceParts.join(", ");
+    }
+
+    // Fallback to application-level location if source location details are unavailable.
+    const fallbackParts = [
+      permit.application?.village,
+      permit.application?.cell,
+      permit.application?.sector,
+      permit.application?.district,
+      permit.application?.province,
+    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+  };
+
+  const getIntendedActivityLabel = (permit: PermitWithApplication) => {
+    const activities = permit.application?.intended_activities;
+    if (Array.isArray(activities) && activities.length > 0) {
+      const primary = activities.find(
+        (activity): activity is string => typeof activity === "string" && activity.trim().length > 0
+      );
+      if (primary) return getActivityLabel(primary);
+    }
+
+    if (permit.application?.water_purpose) {
+      return getActivityLabel(permit.application.water_purpose);
+    }
+
+    if (permit.purpose) {
+      return getActivityLabel(permit.purpose);
+    }
+
+    return "Unknown activity";
+  };
+
   const handleSelectPermit = () => {
     const permit = permits.find(p => p.id === selectedPermitId);
     if (permit) {
@@ -370,11 +427,11 @@ export function PermitSelectForRenewal({
                           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <MapPin className="h-3.5 w-3.5" />
-                              {permit.application?.district}, {permit.application?.province}
+                              {getWaterSourceLocationLabel(permit)}
                             </span>
                             <span className="flex items-center gap-1">
                               <Droplet className="h-3.5 w-3.5" />
-                              {permit.purpose?.replace(/_/g, ' ')}
+                              {getIntendedActivityLabel(permit)}
                             </span>
                           </div>
 

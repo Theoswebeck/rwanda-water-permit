@@ -74,6 +74,13 @@ function resolveConditions(raw: unknown): string[] {
   return [];
 }
 
+function getCanonicalIssueDate(permit: Record<string, unknown>, application: Record<string, unknown> | null): string | undefined {
+  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
+  if (acceptedAt) return acceptedAt;
+  const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
+  return issuedDate || undefined;
+}
+
 export async function GET(req: NextRequest, context: { params: Promise<{ permitNumber: string }> }) {
   try {
     const { permitNumber } = await context.params;
@@ -95,6 +102,35 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
     const permitNumberValue = String(permit.permit_number || result.inputPermitNumber);
 
     const existingPdfPath = typeof permit.permit_pdf_url === "string" ? permit.permit_pdf_url : "";
+    const application = (permit.application || null) as Record<string, unknown> | null;
+    if (application) {
+      // Always prefer the shared on-demand generator so public verification
+      // returns the same canonical PDF layout/content as other permit views.
+      const conditions = resolveConditions(permit.conditions);
+      const applicationForPdf = application as Parameters<typeof generateDigitalWaterPermitBlob>[0];
+      const issueDate = getCanonicalIssueDate(permit, application);
+      const pdfBlob = await generateDigitalWaterPermitBlob(
+        applicationForPdf,
+        permitNumberValue,
+        conditions,
+        5,
+        Boolean(permit.is_modification),
+        {
+          issuedDate: issueDate,
+          expiryDate: (permit.expiry_date as string | undefined) || undefined,
+        }
+      );
+
+      const bytes = Buffer.from(await pdfBlob.arrayBuffer());
+      return new NextResponse(bytes, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="permit-${permitNumberValue}.pdf"`,
+          "Cache-Control": "public, max-age=300, s-maxage=300",
+        },
+      });
+    }
+
     if (existingPdfPath) {
       const stored = await tryReadStoredPdf(existingPdfPath, req);
       if (stored) {
@@ -108,33 +144,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
       }
     }
 
-    const application = (permit.application || null) as Record<string, unknown> | null;
-    if (!application) {
-      return jsonError("Permit exists but cannot be rendered without application context.", 422);
-    }
-
-    const conditions = resolveConditions(permit.conditions);
-    const applicationForPdf = application as Parameters<typeof generateDigitalWaterPermitBlob>[0];
-    const pdfBlob = await generateDigitalWaterPermitBlob(
-      applicationForPdf,
-      permitNumberValue,
-      conditions,
-      5,
-      Boolean(permit.is_modification),
-      {
-        issuedDate: (permit.issued_date as string | undefined) || undefined,
-        expiryDate: (permit.expiry_date as string | undefined) || undefined,
-      }
-    );
-
-    const bytes = Buffer.from(await pdfBlob.arrayBuffer());
-    return new NextResponse(bytes, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="permit-${permitNumberValue}.pdf"`,
-        "Cache-Control": "public, max-age=300, s-maxage=300",
-      },
-    });
+    return jsonError("Permit exists but cannot be rendered without application context.", 422);
   } catch (error) {
     console.error("public permit pdf error:", error);
     return jsonError("Failed to generate permit PDF.", 500);

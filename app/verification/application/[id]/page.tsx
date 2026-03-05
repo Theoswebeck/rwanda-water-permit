@@ -73,6 +73,13 @@ const PermitTransferForm = dynamic(
   }
 );
 
+function toDateInputValue(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().split("T")[0];
+}
+
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
   documents?: Document[];
@@ -161,6 +168,7 @@ export default function VerificationApplicationPage() {
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [inspectionDate, setInspectionDate] = useState("");
+  const [assessmentSubmittedDate, setAssessmentSubmittedDate] = useState("");
 
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
   const [recommendation, setRecommendation] = useState<RecommendationData>({ recommendation: null, explanationText: "" });
@@ -347,6 +355,13 @@ export default function VerificationApplicationPage() {
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
           setInspectionDate(existingAssessment.inspection_date || "");
+          setAssessmentSubmittedDate(
+            toDateInputValue(
+              existingAssessment.forwarded_at ||
+              existingAssessment.updated_at ||
+              existingAssessment.created_at
+            )
+          );
           setRecommendation({
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,
             explanationText: existingAssessment.explanation_text || "",
@@ -417,6 +432,7 @@ export default function VerificationApplicationPage() {
             setRecommendedVolumeM3(assessorVolume);
           }
         } else {
+          setAssessmentSubmittedDate("");
           // Still set report type for rendering
           setReportType(determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null));
         }
@@ -856,6 +872,7 @@ export default function VerificationApplicationPage() {
                   summary={fieldReportSummary}
                   inspectorName={inspectorName}
                   inspectionDate={inspectionDate}
+                  assessmentSubmittedDate={assessmentSubmittedDate}
                   onFilesChange={() => {}}
                   onSummaryChange={() => {}}
                   onInspectorNameChange={() => {}}
@@ -882,6 +899,7 @@ export default function VerificationApplicationPage() {
                         reportType={reportType}
                         readOnly={true}
                         inspectionDate={inspectionDate}
+                        assessmentSubmittedDate={assessmentSubmittedDate}
                         recommendation={recommendation}
                         onRecommendationChange={() => {}}
                       />

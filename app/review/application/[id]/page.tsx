@@ -226,6 +226,7 @@ export default function ReviewApplicationPage() {
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [inspectionDate, setInspectionDate] = useState("");
+  const [assessmentSubmittedDate, setAssessmentSubmittedDate] = useState("");
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
   const [recommendation, setRecommendation] = useState<RecommendationData>({ recommendation: null, explanationText: "" });
   const [reportType, setReportType] = useState<ReportType>("abstraction");
@@ -480,6 +481,13 @@ export default function ReviewApplicationPage() {
             existingAssessment.inspection_date ||
             toDateInputValue(existingAssessment.created_at)
           );
+          setAssessmentSubmittedDate(
+            toDateInputValue(
+              existingAssessment.forwarded_at ||
+              existingAssessment.updated_at ||
+              existingAssessment.created_at
+            )
+          );
           setRecommendation({
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,
             explanationText: existingAssessment.explanation_text || ""
@@ -514,6 +522,7 @@ export default function ReviewApplicationPage() {
             setFieldReportFiles(files);
           }
         } else {
+          setAssessmentSubmittedDate("");
           console.log('⚠️ No existing assessment found for application');
         }
 
@@ -1283,6 +1292,7 @@ export default function ReviewApplicationPage() {
                 summary={fieldReportSummary}
                 inspectorName={inspectorName}
                 inspectionDate={inspectionDate}
+                assessmentSubmittedDate={assessmentSubmittedDate}
                 onFilesChange={() => {}}
                 onSummaryChange={() => {}}
                 onInspectorNameChange={() => {}}
@@ -1309,6 +1319,7 @@ export default function ReviewApplicationPage() {
                       reportType={reportType}
                       readOnly={true}
                       inspectionDate={inspectionDate}
+                      assessmentSubmittedDate={assessmentSubmittedDate}
                       recommendation={recommendation}
                       onRecommendationChange={() => {}}
                     />

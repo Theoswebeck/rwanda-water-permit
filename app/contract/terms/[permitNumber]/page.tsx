@@ -35,6 +35,9 @@ export default async function PublicContractTermsPage({
   const error = !permit;
 
   const application = (permit as Record<string, unknown> | null)?.application ?? null;
+  const termsStatusRaw = typeof application?.terms_status === "string" ? application.terms_status : "";
+  const termsStatus = termsStatusRaw.trim().toLowerCase();
+  const isTermsRejected = termsStatus === "rejected";
 
   const inferredVariant: PermitVariant | null = application ? selectPermitVariant(application) : null;
   const variant: PermitVariant =
@@ -55,16 +58,19 @@ export default async function PublicContractTermsPage({
 
   const filledSections = displaySections.map((section) => ({
     title: section.title,
-    paragraphs: section.paragraphs.map((p) => (placeholderCtx ? fillContractText(p, placeholderCtx) : p)),
+    paragraphs: section.paragraphs.map((p) => {
+      const filled = placeholderCtx ? fillContractText(p, placeholderCtx) : p;
+      if (!isTermsRejected || !placeholderCtx || placeholderCtx.contractNumber === "N/A") return filled;
+      return filled.replaceAll(placeholderCtx.contractNumber, "[Hidden until terms are accepted]");
+    }),
   }));
 
   const importantNotice = terms?.importantNotice
     ? {
         title: terms.importantNotice.title,
-        // This page is intended to be accessed from the QR code on the downloaded contract,
-        // so we use the post-acceptance wording.
-        body:
-          "You have already acknowledged that these terms, you acknowledge that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
+        body: isTermsRejected
+          ? "You have rejected these terms and conditions. The permit number remains hidden until terms are accepted."
+          : "You have already acknowledged these terms. You confirm that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",
       }
     : null;
 
@@ -91,12 +97,14 @@ export default async function PublicContractTermsPage({
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <div className="text-xs text-slate-500">Permit number</div>
-                  <div className="mt-1 rounded-lg border bg-slate-50 px-3 py-2 font-mono text-sm">
-                    {permitNumber}
+                {!isTermsRejected ? (
+                  <div className="text-right">
+                    <div className="text-xs text-slate-500">Permit number</div>
+                    <div className="mt-1 rounded-lg border bg-slate-50 px-3 py-2 font-mono text-sm">
+                      {permitNumber}
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
 
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-6">
@@ -125,7 +133,6 @@ export default async function PublicContractTermsPage({
                 <div className="space-y-6">
                   <div>
                     <div className="text-sm font-semibold text-slate-900">{terms.heading}</div>
-                    {terms.subheading ? <div className="mt-1 text-sm text-slate-600">{terms.subheading}</div> : null}
                     {application?.project_title ? (
                       <div className="mt-3 text-sm text-slate-600">
                         Project: <span className="font-medium text-slate-900">{application.project_title}</span>

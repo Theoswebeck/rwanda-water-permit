@@ -65,8 +65,8 @@ type ApplicantDashboardApplication = Application & {
   display_status?: DbApplicationStatus;
 };
 
-type DashboardStatusPanelFilter = "all" | "in_progress" | "approved" | "expired";
-type ApplicantListStatusFilter = "all" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
+type DashboardStatusPanelFilter = "all" | "draft" | "approved" | "rejected" | "expired";
+type ApplicantListStatusFilter = "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
 
 function mapApplicantDisplayStatus(status: DbApplicationStatus): DbApplicationStatus {
   // Applicant-visible statuses:
@@ -202,7 +202,7 @@ function DashboardContent() {
       return {
         id: dbPermit.id,
         title: `${dbPermit.purpose} Water Permit`, // Create a title from purpose
-        issueDate: dbPermit.issued_date,
+        issueDate: (dbPermit.application as { terms_accepted_at?: string | null } | undefined)?.terms_accepted_at || dbPermit.issued_date,
         expiryDate: dbPermit.expiry_date,
         status: displayStatus,
         type: dbPermit.purpose, // Use purpose as type
@@ -279,15 +279,22 @@ function DashboardContent() {
       setApplicationsStatusFilter("all");
       return;
     }
+    if (panel === "draft") {
+      setApplicationsStatusFilter("draft");
+      return;
+    }
     if (panel === "approved") {
       setApplicationsStatusFilter("approved");
+      return;
+    }
+    if (panel === "rejected") {
+      setApplicationsStatusFilter("rejected");
       return;
     }
     if (panel === "expired") {
       setApplicationsStatusFilter("expired");
       return;
     }
-    setApplicationsStatusFilter("under_review");
   }, []);
 
   const handleApplicationsStatusFilterChange = useCallback((status: ApplicantListStatusFilter) => {
@@ -300,17 +307,16 @@ function DashboardContent() {
       setActiveApplicationStatusPanel("approved");
       return;
     }
-    if (status === "expired") {
-      setActiveApplicationStatusPanel("expired");
+    if (status === "draft") {
+      setActiveApplicationStatusPanel("draft");
       return;
     }
-    if (
-      status === "submitted" ||
-      status === "under_review" ||
-      status === "revision_required" ||
-      status === "pending_payment"
-    ) {
-      setActiveApplicationStatusPanel("in_progress");
+    if (status === "rejected") {
+      setActiveApplicationStatusPanel("rejected");
+      return;
+    }
+    if (status === "expired") {
+      setActiveApplicationStatusPanel("expired");
       return;
     }
     setActiveApplicationStatusPanel("all");

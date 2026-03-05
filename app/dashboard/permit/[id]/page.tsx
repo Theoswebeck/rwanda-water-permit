@@ -94,6 +94,7 @@ export default function PermitDetailPage() {
                 sector,
                 cell,
                 village,
+              terms_accepted_at,
               internal_notes,
               land_ownership_status,
                 environmental_assessment,

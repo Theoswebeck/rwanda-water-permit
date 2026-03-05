@@ -17,8 +17,8 @@ interface ApplicationStatusProps {
   applications: Application[];
   loading?: boolean;
   onRefresh?: () => void;
-  activeFilter?: "all" | "in_progress" | "approved" | "expired";
-  onFilterChange?: (filter: "all" | "in_progress" | "approved" | "expired") => void;
+  activeFilter?: "all" | "draft" | "approved" | "rejected" | "expired";
+  onFilterChange?: (filter: "all" | "draft" | "approved" | "rejected" | "expired") => void;
 }
 
 export function ApplicationStatus({
@@ -38,8 +38,9 @@ export function ApplicationStatus({
   // Calculate statistics from applications
   const stats = {
     total: applications.length,
-    inProgress: applications.filter(app => ['submitted', 'under_review', 'revision_required', 'pending_payment'].includes(getDisplayStatus(app))).length,
+    draft: applications.filter(app => getDisplayStatus(app) === "draft").length,
     approved: applications.filter(app => ['approved', 'approved_pending_permit'].includes(getDisplayStatus(app))).length,
+    rejected: applications.filter(app => getDisplayStatus(app) === "rejected").length,
     expired: applications.filter(app => getDisplayStatus(app) === 'expired').length,
   };
 
@@ -70,14 +71,14 @@ export function ApplicationStatus({
       bgColor: "bg-blue-50",
     },
     {
-      key: "in_progress" as const,
-      title: "In Progress",
-      value: stats.inProgress,
-      description: "Applications under review",
-      detail: "Awaiting processing",
-      change: stats.inProgress > 0 ? `${Math.round((stats.inProgress / stats.total) * 100)}%` : "0%",
+      key: "draft" as const,
+      title: "Draft",
+      value: stats.draft,
+      description: "Saved draft applications",
+      detail: "Not yet submitted",
+      change: stats.draft > 0 ? `${Math.round((stats.draft / stats.total) * 100)}%` : "0%",
       changeLabel: "Of total applications",
-      trend: stats.inProgress > stats.total * 0.7 ? "down" : "up",
+      trend: stats.draft > 0 ? "neutral" : "up",
       icon: Clock,
       color: "text-amber-600",
       bgColor: "bg-amber-50",
@@ -94,6 +95,19 @@ export function ApplicationStatus({
       icon: CheckCircle,
       color: "text-green-600",
       bgColor: "bg-green-50",
+    },
+    {
+      key: "rejected" as const,
+      title: "Rejected",
+      value: stats.rejected,
+      description: "Rejected applications",
+      detail: "Not approved",
+      change: stats.rejected > 0 ? `${Math.round((stats.rejected / stats.total) * 100)}%` : "0%",
+      changeLabel: "Of total applications",
+      trend: stats.rejected > 0 ? "down" : "neutral",
+      icon: AlertCircle,
+      color: "text-red-600",
+      bgColor: "bg-red-50",
     },
     {
       key: "expired" as const,

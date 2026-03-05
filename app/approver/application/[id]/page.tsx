@@ -47,6 +47,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+function toDateInputValue(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().split("T")[0];
+}
+
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new"),
@@ -228,6 +235,7 @@ export default function ApproverApplicationPage() {
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [inspectionDate, setInspectionDate] = useState("");
+  const [assessmentSubmittedDate, setAssessmentSubmittedDate] = useState("");
   
   // Recommendation State
   const [recommendation, setRecommendation] = useState<RecommendationData>({
@@ -290,6 +298,13 @@ export default function ApproverApplicationPage() {
           setFieldReportSummary(existingAssessment.field_report_summary || "");
           setInspectorName(existingAssessment.inspector_name || "");
           setInspectionDate(existingAssessment.inspection_date || "");
+          setAssessmentSubmittedDate(
+            toDateInputValue(
+              existingAssessment.forwarded_at ||
+              existingAssessment.updated_at ||
+              existingAssessment.created_at
+            )
+          );
           
           setRecommendation({
             recommendation: existingAssessment.recommendation as "yes" | "no" | null,
@@ -326,6 +341,7 @@ export default function ApproverApplicationPage() {
             setFieldReportFiles(files);
           }
         } else {
+          setAssessmentSubmittedDate("");
           console.log('⚠️ No existing assessment found for application');
         }
 
@@ -934,6 +950,7 @@ export default function ApproverApplicationPage() {
                     summary={fieldReportSummary}
                     inspectorName={inspectorName}
                     inspectionDate={inspectionDate}
+                    assessmentSubmittedDate={assessmentSubmittedDate}
                     onFilesChange={() => {}}
                     onSummaryChange={() => {}}
                     onInspectorNameChange={() => {}}
@@ -960,6 +977,7 @@ export default function ApproverApplicationPage() {
                           reportType={rt}
                           readOnly={true}
                           inspectionDate={inspectionDate}
+                          assessmentSubmittedDate={assessmentSubmittedDate}
                           recommendation={recommendation}
                           onRecommendationChange={() => {}}
                         />

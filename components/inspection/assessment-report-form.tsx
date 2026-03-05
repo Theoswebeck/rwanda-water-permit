@@ -18,6 +18,7 @@ interface AssessmentReportFormProps {
   readOnly?: boolean;
   applicationActivities?: string[] | null;
   inspectionDate?: string;
+  assessmentSubmittedDate?: string;
   // Recommendation props
   recommendation?: { recommendation: "yes" | "no" | null; explanationText: string };
   onRecommendationChange?: (recommendation: { recommendation: "yes" | "no" | null; explanationText: string }) => void;
@@ -30,6 +31,7 @@ export function AssessmentReportForm({
   readOnly = false,
   applicationActivities,
   inspectionDate,
+  assessmentSubmittedDate,
   recommendation,
   onRecommendationChange
 }: AssessmentReportFormProps) {
@@ -40,14 +42,15 @@ export function AssessmentReportForm({
   }, [reportData]);
 
   useEffect(() => {
-    if (!inspectionDate) return;
+    const targetDate = assessmentSubmittedDate || inspectionDate;
+    if (!targetDate) return;
     setLocalData((prev) => {
-      if (prev.reportDate === inspectionDate) return prev;
-      const updated = { ...prev, reportDate: inspectionDate };
+      if (prev.reportDate === targetDate) return prev;
+      const updated = { ...prev, reportDate: targetDate };
       onReportDataChange(updated);
       return updated;
     });
-  }, [inspectionDate, onReportDataChange]);
+  }, [assessmentSubmittedDate, inspectionDate, onReportDataChange]);
 
   const updateField = <K extends keyof AssessmentReportData>(field: K, value: AssessmentReportData[K]) => {
     setLocalData((prev) => {

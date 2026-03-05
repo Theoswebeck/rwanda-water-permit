@@ -16,6 +16,14 @@ function formatDate(dateString: string): string {
   });
 }
 
+function getCanonicalIssueDate(permit: Record<string, unknown>): string | null {
+  const application = permit.application as Record<string, unknown> | null;
+  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
+  if (acceptedAt) return acceptedAt;
+  const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
+  return issuedDate || null;
+}
+
 function statusBadgeVariant(status: PermitStatus): { label: string; className: string } {
   switch (status) {
     case "active":
@@ -133,6 +141,7 @@ export default async function PublicPermitViewPage({
 
     return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
   })();
+  const issueDate = getCanonicalIssueDate(permit as Record<string, unknown>);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -192,7 +201,7 @@ export default async function PublicPermitViewPage({
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500">Issue date</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{formatDate(permit.issued_date)}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{issueDate ? formatDate(issueDate) : "N/A"}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500">Expiry date</div>

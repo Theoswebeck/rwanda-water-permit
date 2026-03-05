@@ -62,6 +62,13 @@ import {
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
+function toDateInputValue(value?: string | null): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().split("T")[0];
+}
+
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new"),
@@ -370,6 +377,7 @@ export default function AssessmentApplicationPage() {
   const [fieldReportSummary, setFieldReportSummary] = useState("");
   const [inspectorName, setInspectorName] = useState("");
   const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [assessmentSubmittedDate, setAssessmentSubmittedDate] = useState("");
   
   // Verification Checklist State
   const [checklist, setChecklist] = useState<VerificationChecklist>({
@@ -580,6 +588,7 @@ export default function AssessmentApplicationPage() {
           }
         }
 
+        setAssessmentSubmittedDate("");
         if (existingAssessment) {
           setAssessmentId(existingAssessment.id);
           // document_verifications may contain metadata under "__meta"
@@ -608,6 +617,13 @@ export default function AssessmentApplicationPage() {
           if (existingAssessment.inspection_date) {
             setInspectionDate(existingAssessment.inspection_date);
           }
+          setAssessmentSubmittedDate(
+            toDateInputValue(
+              existingAssessment.forwarded_at ||
+              existingAssessment.updated_at ||
+              existingAssessment.created_at
+            )
+          );
           
           // Restore checklist
           setChecklist({
@@ -1232,6 +1248,7 @@ export default function AssessmentApplicationPage() {
         inspection_date: inspectionDate,
         assessment_report_data: assessmentReportData,
         status: status,
+        ...(status === "forwarded_to_approver" ? { forwarded_at: new Date().toISOString() } : {}),
         updated_at: new Date().toISOString()
       };
 
@@ -1734,6 +1751,7 @@ export default function AssessmentApplicationPage() {
                       summary={fieldReportSummary}
                       inspectorName={inspectorName}
                       inspectionDate={inspectionDate}
+                      assessmentSubmittedDate={assessmentSubmittedDate}
                       onFilesChange={setFieldReportFiles}
                       onSummaryChange={setFieldReportSummary}
                       onInspectorNameChange={setInspectorName}
@@ -1767,6 +1785,7 @@ export default function AssessmentApplicationPage() {
                             reportType={rt}
                             readOnly={isReadOnly}
                             inspectionDate={inspectionDate}
+                            assessmentSubmittedDate={assessmentSubmittedDate}
                             recommendation={recommendation}
                             onRecommendationChange={setRecommendation}
                           />

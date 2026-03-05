@@ -49,6 +49,7 @@ interface FieldReportUploadProps {
   summary: string;
   inspectorName: string;
   inspectionDate: string;
+  assessmentSubmittedDate?: string;
   onFilesChange: (files: FieldReportFile[]) => void;
   onSummaryChange: (summary: string) => void;
   onInspectorNameChange: (name: string) => void;
@@ -97,6 +98,7 @@ export function FieldReportUpload({
   summary,
   inspectorName,
   inspectionDate,
+  assessmentSubmittedDate,
   onFilesChange,
   onSummaryChange,
   onInspectorNameChange,
@@ -117,6 +119,8 @@ export function FieldReportUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isSummaryMissing = !summary.trim();
   const isFilesMissing = existingFiles.length === 0;
+  const displayedAssessmentDate =
+    readOnly && assessmentSubmittedDate ? assessmentSubmittedDate : inspectionDate;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -250,7 +254,7 @@ export function FieldReportUpload({
               <Input
                 id="inspection-date"
                 type="date"
-                value={inspectionDate}
+                value={displayedAssessmentDate}
                 onChange={(e) => onInspectionDateChange(e.target.value)}
                 disabled={readOnly}
                 className="mt-1"

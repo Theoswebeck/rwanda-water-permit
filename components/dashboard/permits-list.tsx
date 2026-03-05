@@ -154,6 +154,10 @@ export function PermitsList({ permits }: PermitsListProps) {
       if (!application) {
         throw new Error("No application data found for this permit");
       }
+      const canonicalIssueDate =
+        (typeof application.terms_accepted_at === "string" && application.terms_accepted_at.trim()) ||
+        (typeof permitData.issued_date === "string" && permitData.issued_date.trim()) ||
+        permit.issueDate;
 
       // Parse conditions
       let conditions: string[] = [];
@@ -184,7 +188,7 @@ export function PermitsList({ permits }: PermitsListProps) {
         5, // Default validity years
         isModified,
         {
-          issuedDate: (permitData as any).issued_date ?? permit.issueDate,
+          issuedDate: canonicalIssueDate,
           expiryDate: (permitData as any).expiry_date ?? permit.expiryDate,
         }
       );
