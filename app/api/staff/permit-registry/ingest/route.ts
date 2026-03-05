@@ -32,13 +32,48 @@ function parseCSVLine(line: string): string[] {
   return fields;
 }
 
-function parseDDMMYYYY(raw: string | undefined): string | null {
+function isValidDateParts(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const dt = new Date(Date.UTC(year, month - 1, day));
+  return (
+    dt.getUTCFullYear() === year &&
+    dt.getUTCMonth() === month - 1 &&
+    dt.getUTCDate() === day
+  );
+}
+
+function toISODate(year: number, month: number, day: number): string | null {
+  if (!isValidDateParts(year, month, day)) return null;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function parseDate(raw: string | undefined): string | null {
   if (!raw) return null;
   const cleaned = raw.trim();
-  const match = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!match) return null;
-  const [, dd, mm, yyyy] = match;
-  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  if (!cleaned) return null;
+
+  const isoMatch = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    return toISODate(year, month, day);
+  }
+
+  const slashMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!slashMatch) return null;
+
+  const first = Number(slashMatch[1]);
+  const second = Number(slashMatch[2]);
+  const year = Number(slashMatch[3]);
+
+  // Accept both DD/MM/YYYY and MM/DD/YYYY to prevent imports from failing.
+  if (first > 12 && second <= 12) return toISODate(year, second, first);
+  if (second > 12 && first <= 12) return toISODate(year, first, second);
+
+  // Ambiguous dates default to DD/MM/YYYY (legacy dataset expectation).
+  return toISODate(year, second, first);
 }
 
 function parseCoordinate(raw: string | undefined): number | null {
@@ -97,9 +132,9 @@ export async function POST(req: NextRequest) {
         location: fields[8]?.trim() || null,
         latitude: parseCoordinate(fields[9]),
         longitude: parseCoordinate(fields[10]),
-        issuance_date: parseDDMMYYYY(fields[11]),
+        issuance_date: parseDate(fields[11]),
         duration: fields[12]?.trim() || null,
-        expiration_date: parseDDMMYYYY(fields[13]),
+        expiration_date: parseDate(fields[13]),
         status: fields[14]?.trim()?.toUpperCase() || "OPERATIONAL",
         contact: fields[15]?.trim() || null,
       };

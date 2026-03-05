@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { Fragment, useState, useMemo, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import dynamic from "next/dynamic";
 import {
   Card,
   CardContent,
@@ -49,6 +50,11 @@ import {
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
 
+const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
+const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
+const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
+const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
+
 type SortField =
   | "serial_number"
   | "permit_holder"
@@ -63,12 +69,14 @@ interface PermitRegistryListProps {
 }
 
 export function PermitRegistryList({ showCard = true }: PermitRegistryListProps) {
+  const PAGE_SIZE = 50;
   const [searchTerm, setSearchTerm] = useState("");
   const [regimeFilter, setRegimeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<SortField>("serial_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
@@ -148,6 +156,23 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     },
     [sortField]
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
+
+  const paginatedEntries = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredAndSorted.slice(start, start + PAGE_SIZE);
+  }, [filteredAndSorted, currentPage, PAGE_SIZE]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, regimeFilter, statusFilter, sortField, sortDir]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
@@ -387,6 +412,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                 of {entries.length} permit{entries.length !== 1 ? "s" : ""}
               </>
             )}
+            <span className="ml-2 text-xs">(50 rows per page)</span>
           </p>
           <label className="cursor-pointer">
             <input
@@ -507,13 +533,13 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       {!isLoading && !error && filteredAndSorted.length > 0 && (
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
+            <div>
+              <Table className="table-fixed">
                 <TableHeader>
                   <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
                     <TableHead className="w-[44px]" />
                     <TableHead
-                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[52px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("serial_number")}
                     >
                       <span className="flex items-center">
@@ -522,7 +548,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[28%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("permit_holder")}
                     >
                       <span className="flex items-center">
@@ -531,7 +557,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[24%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("permit_number")}
                     >
                       <span className="flex items-center">
@@ -539,17 +565,14 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                         <SortIcon field="permit_number" />
                       </span>
                     </TableHead>
-                    <TableHead className="whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                    <TableHead className="w-[12%] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
                       Regime
                     </TableHead>
-                    <TableHead className="whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                    <TableHead className="hidden xl:table-cell text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
                       Water Source
                     </TableHead>
-                    <TableHead className="whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider hidden xl:table-cell">
-                      Activity
-                    </TableHead>
                     <TableHead
-                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="hidden lg:table-cell cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("issuance_date")}
                     >
                       <span className="flex items-center">
@@ -558,7 +581,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="hidden lg:table-cell cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("expiration_date")}
                     >
                       <span className="flex items-center">
@@ -567,7 +590,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="cursor-pointer select-none whitespace-nowrap text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[12%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("status")}
                     >
                       <span className="flex items-center">
@@ -578,150 +601,159 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAndSorted.map((entry) => {
+                  {paginatedEntries.map((entry) => {
                     const isExpanded = expandedRow === entry.id;
                     return (
-                      <motion.tr
-                        key={entry.id}
-                        layout
-                        className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-blue-50/40 dark:hover:bg-slate-800/40 transition-colors duration-150 cursor-pointer"
-                        onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
-                      >
-                        <TableCell className="p-2 sm:p-3 w-[44px]">
-                          <div className="flex items-center justify-center">
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3 text-muted-foreground text-sm tabular-nums">
-                          {entry.serial_number ?? "-"}
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3">
-                          <span className="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                            {entry.permit_holder}
-                          </span>
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3">
-                          <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                            {entry.permit_number}
-                          </code>
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3">
-                          {getRegimeBadge(entry.regime)}
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3">
-                          <div className="flex items-center gap-1.5">
-                            <Droplets className="h-3 w-3 text-blue-500/70 shrink-0" />
-                            <span className="text-sm text-slate-700 dark:text-slate-300 max-w-[140px] truncate">
-                              {entry.water_source || "N/A"}
+                      <Fragment key={entry.id}>
+                        <TableRow
+                          className="group border-b border-slate-100 dark:border-slate-800/60 hover:bg-blue-50/40 dark:hover:bg-slate-800/40 transition-colors duration-150 cursor-pointer"
+                          onClick={() => setExpandedRow(isExpanded ? null : entry.id)}
+                        >
+                          <TableCell className="p-2 sm:p-3 w-[44px]">
+                            <div className="flex items-center justify-center">
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3 text-muted-foreground text-sm tabular-nums">
+                            {entry.serial_number ?? "-"}
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3">
+                            <span className="font-medium text-slate-900 dark:text-slate-100 text-sm block truncate">
+                              {entry.permit_holder}
                             </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3 hidden xl:table-cell">
-                          <span className="text-sm text-slate-600 dark:text-slate-400 max-w-[160px] truncate block">
-                            {entry.authorized_activity || "N/A"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                          {formatDate(entry.issuance_date)}
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                          {formatDate(entry.expiration_date)}
-                        </TableCell>
-                        <TableCell className="p-2 sm:p-3">
-                          {getStatusBadge(entry.status)}
-                        </TableCell>
-                      </motion.tr>
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3">
+                            <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 block truncate">
+                              {entry.permit_number}
+                            </code>
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3">
+                            {getRegimeBadge(entry.regime)}
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3 hidden xl:table-cell">
+                            <div className="flex items-center gap-1.5">
+                              <Droplets className="h-3 w-3 text-blue-500/70 shrink-0" />
+                              <span className="text-sm text-slate-700 dark:text-slate-300 max-w-[140px] truncate">
+                                {entry.water_source || "N/A"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3 hidden lg:table-cell whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
+                            {formatDate(entry.issuance_date)}
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3 hidden lg:table-cell whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
+                            {formatDate(entry.expiration_date)}
+                          </TableCell>
+                          <TableCell className="p-2 sm:p-3">
+                            {getStatusBadge(entry.status)}
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow className="bg-slate-50/50 dark:bg-slate-900/50">
+                            <TableCell colSpan={9} className="px-6 py-5">
+                              <div className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
+                                  <DetailField
+                                    icon={<FileText className="h-3.5 w-3.5" />}
+                                    label="Permit Number"
+                                    value={entry.permit_number}
+                                  />
+                                  <DetailField
+                                    icon={<Shield className="h-3.5 w-3.5" />}
+                                    label="Regime of Water Use"
+                                    value={entry.regime}
+                                  />
+                                  <DetailField
+                                    icon={<Droplets className="h-3.5 w-3.5" />}
+                                    label="Water Source"
+                                    value={entry.water_source}
+                                  />
+                                  <DetailField
+                                    icon={<Activity className="h-3.5 w-3.5" />}
+                                    label="Volume / Area"
+                                    value={entry.volume_or_area}
+                                  />
+                                  <DetailField
+                                    label="Method of Water Taking"
+                                    value={entry.method_of_water_taking}
+                                  />
+                                  <DetailField
+                                    label="Authorized Activity"
+                                    value={entry.authorized_activity}
+                                  />
+                                  <DetailField
+                                    icon={<MapPin className="h-3.5 w-3.5" />}
+                                    label="Location"
+                                    value={entry.location}
+                                    wide
+                                  />
+                                  {(entry.latitude || entry.longitude) && (
+                                    <DetailField
+                                      label="Coordinates"
+                                      value={`${entry.latitude ?? "N/A"}, ${entry.longitude ?? "N/A"}`}
+                                    />
+                                  )}
+                                  <DetailField
+                                    icon={<Calendar className="h-3.5 w-3.5" />}
+                                    label="Issuance Date"
+                                    value={formatDate(entry.issuance_date)}
+                                  />
+                                  <DetailField
+                                    label="Duration"
+                                    value={entry.duration}
+                                  />
+                                  <DetailField
+                                    icon={<Calendar className="h-3.5 w-3.5" />}
+                                    label="Expiration Date"
+                                    value={formatDate(entry.expiration_date)}
+                                  />
+                                  {entry.contact && entry.contact.trim() !== "Email:                                 Tel:" && (
+                                    <DetailField
+                                      label="Contact"
+                                      value={entry.contact}
+                                    />
+                                  )}
+                                </div>
+                                <PermitLocationMap entry={entry} />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </TableBody>
               </Table>
             </div>
-
-            {/* Expanded Detail Panels (rendered outside table for correct layout) */}
-            <AnimatePresence>
-              {filteredAndSorted.map((entry) => {
-                if (expandedRow !== entry.id) return null;
-                return (
-                  <motion.div
-                    key={`detail-${entry.id}`}
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden border-b border-slate-200 dark:border-slate-800"
+            {filteredAndSorted.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 px-4 py-3">
+                <p className="text-xs text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
                   >
-                    <div className="px-6 py-5 bg-slate-50/50 dark:bg-slate-900/50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
-                        <DetailField
-                          icon={<FileText className="h-3.5 w-3.5" />}
-                          label="Permit Number"
-                          value={entry.permit_number}
-                        />
-                        <DetailField
-                          icon={<Shield className="h-3.5 w-3.5" />}
-                          label="Regime of Water Use"
-                          value={entry.regime}
-                        />
-                        <DetailField
-                          icon={<Droplets className="h-3.5 w-3.5" />}
-                          label="Water Source"
-                          value={entry.water_source}
-                        />
-                        <DetailField
-                          icon={<Activity className="h-3.5 w-3.5" />}
-                          label="Volume / Area"
-                          value={entry.volume_or_area}
-                        />
-                        <DetailField
-                          label="Method of Water Taking"
-                          value={entry.method_of_water_taking}
-                        />
-                        <DetailField
-                          label="Authorized Activity"
-                          value={entry.authorized_activity}
-                        />
-                        <DetailField
-                          icon={<MapPin className="h-3.5 w-3.5" />}
-                          label="Location"
-                          value={entry.location}
-                          wide
-                        />
-                        {(entry.latitude || entry.longitude) && (
-                          <DetailField
-                            label="Coordinates"
-                            value={`${entry.latitude ?? "N/A"}, ${entry.longitude ?? "N/A"}`}
-                          />
-                        )}
-                        <DetailField
-                          icon={<Calendar className="h-3.5 w-3.5" />}
-                          label="Issuance Date"
-                          value={formatDate(entry.issuance_date)}
-                        />
-                        <DetailField
-                          label="Duration"
-                          value={entry.duration}
-                        />
-                        <DetailField
-                          icon={<Calendar className="h-3.5 w-3.5" />}
-                          label="Expiration Date"
-                          value={formatDate(entry.expiration_date)}
-                        />
-                        {entry.contact && entry.contact.trim() !== "Email:                                 Tel:" && (
-                          <DetailField
-                            label="Contact"
-                            value={entry.contact}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -772,6 +804,59 @@ function DetailField({
       <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
         {value || "N/A"}
       </p>
+    </div>
+  );
+}
+
+function PermitLocationMap({ entry }: { entry: PermitRegistryEntry }) {
+  if (typeof entry.latitude !== "number" || typeof entry.longitude !== "number") {
+    return (
+      <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-3">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Permit map location</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          Coordinates are not available for this permit.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Permit map location</p>
+      <div className="h-[260px] w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+        <MapContainer
+          center={[entry.latitude, entry.longitude]}
+          zoom={13}
+          style={{ height: "100%", width: "100%" }}
+          className="z-0"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <CircleMarker
+            center={[entry.latitude, entry.longitude]}
+            radius={8}
+            pathOptions={{
+              fillColor: "#2563eb",
+              color: "#ffffff",
+              weight: 2,
+              opacity: 0.95,
+              fillOpacity: 0.8,
+            }}
+          >
+            <Popup>
+              <div className="min-w-[220px] space-y-1">
+                <p className="font-semibold">{entry.permit_holder}</p>
+                <p className="text-xs text-muted-foreground">{entry.permit_number}</p>
+                <p className="text-xs text-muted-foreground">
+                  {entry.latitude.toFixed(6)}, {entry.longitude.toFixed(6)}
+                </p>
+              </div>
+            </Popup>
+          </CircleMarker>
+        </MapContainer>
+      </div>
     </div>
   );
 }
