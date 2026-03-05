@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
-import { buildApplicationUpdateParts } from '@/lib/db/application-payload'
+import { buildApplicationUpdateParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
@@ -130,32 +130,51 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     const payload = toSafeApplicationPayload(body)
     payload.updated_at = new Date().toISOString()
-    const keys = Object.keys(payload)
-    if (!keys.length) {
-      return NextResponse.json({ success: false, message: 'No update fields provided' }, { status: 400 })
+    const updatePayload: Record<string, unknown> = { ...payload }
+    const droppedColumns: string[] = []
+
+    while (true) {
+      const keys = Object.keys(updatePayload)
+      if (!keys.length) {
+        return NextResponse.json({ success: false, message: 'No update fields provided' }, { status: 400 })
+      }
+
+      const { sets, values } = buildApplicationUpdateParts(updatePayload)
+      values.push(id, userId)
+
+      try {
+        const updated = await query(
+          `
+          update public.applications
+          set ${sets.join(', ')}
+          where id = $${keys.length + 1} and applicant_id = $${keys.length + 2}
+          returning *
+          `,
+          values
+        )
+
+        if (!updated.rowCount) {
+          return NextResponse.json(
+            { success: false, message: 'Application not found or cannot be updated' },
+            { status: 404 }
+          )
+        }
+
+        if (droppedColumns.length > 0) {
+          console.warn('⚠️ dashboard applications PATCH ignored unknown columns:', droppedColumns)
+        }
+
+        return NextResponse.json({ success: true, application: updated.rows[0] || null })
+      } catch (updateErr) {
+        const missingColumn = getMissingApplicationColumnFromError(updateErr)
+        if (!missingColumn || !(missingColumn in updatePayload)) {
+          throw updateErr
+        }
+
+        droppedColumns.push(missingColumn)
+        delete updatePayload[missingColumn]
+      }
     }
-
-    const { sets, values } = buildApplicationUpdateParts(payload)
-    values.push(id, userId)
-
-    const updated = await query(
-      `
-      update public.applications
-      set ${sets.join(', ')}
-      where id = $${keys.length + 1} and applicant_id = $${keys.length + 2}
-      returning *
-      `,
-      values
-    )
-
-    if (!updated.rowCount) {
-      return NextResponse.json(
-        { success: false, message: 'Application not found or cannot be updated' },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json({ success: true, application: updated.rows[0] || null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Server error'
     if (message.includes('Invalid session') || message.includes('JWT')) {

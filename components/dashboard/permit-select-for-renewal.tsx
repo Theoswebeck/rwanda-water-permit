@@ -46,6 +46,18 @@ export interface PermitWithApplication extends Permit {
   };
 }
 
+type HolderProfile = {
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+};
+
+type ApplicantProfile = {
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+};
+
 interface PermitSelectForRenewalProps {
   userId?: string;
   onPermitSelect: (permit: PermitWithApplication) => void;
@@ -62,6 +74,7 @@ export function PermitSelectForRenewal({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
+  const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
 
   useEffect(() => {
     fetchPermits();
@@ -75,9 +88,18 @@ export function PermitSelectForRenewal({
       if (!userId) {
         console.warn('No userId provided - cannot fetch user permits');
         setPermits([]);
+        setHolderProfile(null);
         setLoading(false);
         return;
       }
+
+      const { data: profileData } = await supabase
+        .from('users')
+        .select('first_name,last_name,company_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      setHolderProfile((profileData as HolderProfile | null) || null);
 
       // First, get the user's application IDs
       const { data: userApplications, error: appsError } = await supabase
@@ -153,6 +175,15 @@ export function PermitSelectForRenewal({
     }
   };
 
+  const resolveHolderName = (applicant?: ApplicantProfile) => {
+    const companyName = applicant?.company_name?.trim() || holderProfile?.company_name?.trim();
+    if (companyName) return companyName;
+
+    const personName = `${applicant?.first_name || holderProfile?.first_name || ''} ${applicant?.last_name || holderProfile?.last_name || ''}`
+      .trim();
+    return personName || 'Unknown';
+  };
+
   const filteredPermits = permits.filter(permit => {
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
@@ -160,8 +191,7 @@ export function PermitSelectForRenewal({
       permit.permit_number?.toLowerCase().includes(search) ||
       permit.application?.project_title?.toLowerCase().includes(search) ||
       permit.application?.district?.toLowerCase().includes(search) ||
-      permit.application?.applicant?.company_name?.toLowerCase().includes(search) ||
-      `${permit.application?.applicant?.first_name || ''} ${permit.application?.applicant?.last_name || ''}`.toLowerCase().includes(search)
+      resolveHolderName(permit.application?.applicant).toLowerCase().includes(search)
     );
   });
 
@@ -221,10 +251,7 @@ export function PermitSelectForRenewal({
   };
 
   const getPermitHolderName = (permit: PermitWithApplication) => {
-    const applicant = permit.application?.applicant;
-    if (!applicant) return 'Unknown';
-    if (applicant.company_name) return applicant.company_name;
-    return `${applicant.first_name || ''} ${applicant.last_name || ''}`.trim() || 'Unknown';
+    return resolveHolderName(permit.application?.applicant);
   };
 
   const parseInternalNotes = (permit: PermitWithApplication) => {

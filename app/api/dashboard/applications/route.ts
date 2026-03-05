@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
-import { buildApplicationInsertParts } from '@/lib/db/application-payload'
+import { buildApplicationInsertParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 function parseCsvList(value: string | null): string[] {
@@ -101,21 +101,44 @@ export async function POST(req: NextRequest) {
     payload.applicant_id = userId
     payload.updated_at = new Date().toISOString()
 
-    const { columns, placeholders, values } = buildApplicationInsertParts(payload)
-    if (!columns.length) {
-      return NextResponse.json({ success: false, message: 'No application data provided' }, { status: 400 })
+    const insertPayload: Record<string, unknown> = { ...payload }
+    const droppedColumns: string[] = []
+
+    // Backward compatibility: tolerate missing DB columns when app code is newer than schema.
+    while (true) {
+      const { columns, placeholders, values } = buildApplicationInsertParts(insertPayload)
+      if (!columns.length) {
+        return NextResponse.json(
+          { success: false, message: 'No valid application data provided for insert' },
+          { status: 400 }
+        )
+      }
+
+      try {
+        const created = await query(
+          `
+          insert into public.applications (${columns.join(', ')})
+          values (${placeholders.join(', ')})
+          returning *
+          `,
+          values
+        )
+
+        if (droppedColumns.length > 0) {
+          console.warn('⚠️ dashboard applications POST ignored unknown columns:', droppedColumns)
+        }
+
+        return NextResponse.json({ success: true, application: created.rows[0] || null })
+      } catch (insertErr) {
+        const missingColumn = getMissingApplicationColumnFromError(insertErr)
+        if (!missingColumn || !(missingColumn in insertPayload)) {
+          throw insertErr
+        }
+
+        droppedColumns.push(missingColumn)
+        delete insertPayload[missingColumn]
+      }
     }
-
-    const created = await query(
-      `
-      insert into public.applications (${columns.join(', ')})
-      values (${placeholders.join(', ')})
-      returning *
-      `,
-      values
-    )
-
-    return NextResponse.json({ success: true, application: created.rows[0] || null })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Server error'
     if (message.includes('Invalid session') || message.includes('JWT')) {

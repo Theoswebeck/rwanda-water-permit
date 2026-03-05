@@ -28,6 +28,7 @@ type PermitRow = Record<string, unknown> & {
   app_max_yearly_volume_m3?: number | null
   app_concession_area?: number | null
   app_terms_accepted_at?: string | null
+  app_internal_notes?: unknown
 }
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest) {
         a.max_yearly_volume_m3 as app_max_yearly_volume_m3,
         a.concession_area as app_concession_area
         ,a.terms_accepted_at::text as app_terms_accepted_at
+        ,a.internal_notes as app_internal_notes
       from public.permits p
       join public.applications a on a.id = p.application_id
       where a.applicant_id = $1
@@ -92,6 +94,7 @@ export async function GET(req: NextRequest) {
               max_yearly_volume_m3: row.app_max_yearly_volume_m3 || undefined,
               concession_area: row.app_concession_area || undefined,
               terms_accepted_at: row.app_terms_accepted_at || null,
+              internal_notes: row.app_internal_notes ?? null,
             }
           : null,
       }

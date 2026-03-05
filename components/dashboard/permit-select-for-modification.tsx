@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Permit, Application } from "@/types/database";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -43,6 +44,18 @@ export interface PermitWithApplication extends Permit {
   };
 }
 
+type HolderProfile = {
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+};
+
+type ApplicantProfile = {
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+};
+
 interface PermitSelectForModificationProps {
   userId?: string;
   onPermitSelect: (permit: PermitWithApplication) => void;
@@ -59,6 +72,7 @@ export function PermitSelectForModification({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
+  const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
 
   useEffect(() => {
     fetchPermits();
@@ -72,9 +86,18 @@ export function PermitSelectForModification({
       if (!userId) {
         console.warn('No userId provided - cannot fetch user permits');
         setPermits([]);
+        setHolderProfile(null);
         setLoading(false);
         return;
       }
+
+      const { data: profileData } = await supabase
+        .from('users')
+        .select('first_name,last_name,company_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      setHolderProfile((profileData as HolderProfile | null) || null);
 
       // First, get the user's application IDs
       const { data: userApplications, error: appsError } = await supabase
@@ -108,6 +131,7 @@ export function PermitSelectForModification({
             district,
             sector,
             cell,
+            village,
             water_source,
             water_purpose,
             internal_notes,
@@ -142,6 +166,15 @@ export function PermitSelectForModification({
     }
   };
 
+  const resolveHolderName = (applicant?: ApplicantProfile) => {
+    const companyName = applicant?.company_name?.trim() || holderProfile?.company_name?.trim();
+    if (companyName) return companyName;
+
+    const personName = `${applicant?.first_name || holderProfile?.first_name || ''} ${applicant?.last_name || holderProfile?.last_name || ''}`
+      .trim();
+    return personName || 'Unknown';
+  };
+
   const filteredPermits = permits.filter(permit => {
     if (!searchQuery) return true;
     const search = searchQuery.toLowerCase();
@@ -149,8 +182,7 @@ export function PermitSelectForModification({
       permit.permit_number?.toLowerCase().includes(search) ||
       permit.application?.project_title?.toLowerCase().includes(search) ||
       permit.application?.district?.toLowerCase().includes(search) ||
-      permit.application?.applicant?.company_name?.toLowerCase().includes(search) ||
-      `${permit.application?.applicant?.first_name || ''} ${permit.application?.applicant?.last_name || ''}`.toLowerCase().includes(search)
+      resolveHolderName(permit.application?.applicant).toLowerCase().includes(search)
     );
   });
 
@@ -175,10 +207,62 @@ export function PermitSelectForModification({
   };
 
   const getPermitHolderName = (permit: PermitWithApplication) => {
-    const applicant = permit.application?.applicant;
-    if (!applicant) return 'Unknown';
-    if (applicant.company_name) return applicant.company_name;
-    return `${applicant.first_name || ''} ${applicant.last_name || ''}`.trim() || 'Unknown';
+    return resolveHolderName(permit.application?.applicant);
+  };
+
+  const parseInternalNotes = (permit: PermitWithApplication) => {
+    try {
+      const rawNotes = permit.application?.internal_notes;
+      if (!rawNotes) return null;
+      return typeof rawNotes === "string" ? JSON.parse(rawNotes) : rawNotes;
+    } catch {
+      return null;
+    }
+  };
+
+  const getWaterSourceLocationLabel = (permit: PermitWithApplication) => {
+    const notes = parseInternalNotes(permit);
+    const sourceParts = [
+      notes?.waterSourceVillage,
+      notes?.waterSourceCell,
+      notes?.waterSourceSector,
+      notes?.waterSourceDistrict,
+      notes?.waterSourceProvince,
+    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+    if (sourceParts.length > 0) {
+      return sourceParts.join(", ");
+    }
+
+    const fallbackParts = [
+      permit.application?.village,
+      permit.application?.cell,
+      permit.application?.sector,
+      permit.application?.district,
+      permit.application?.province,
+    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+  };
+
+  const getIntendedActivityLabel = (permit: PermitWithApplication) => {
+    const activities = permit.application?.intended_activities;
+    if (Array.isArray(activities) && activities.length > 0) {
+      const primary = activities.find(
+        (activity): activity is string => typeof activity === "string" && activity.trim().length > 0
+      );
+      if (primary) return getActivityLabel(primary);
+    }
+
+    if (permit.application?.water_purpose) {
+      return getActivityLabel(permit.application.water_purpose);
+    }
+
+    if (permit.purpose) {
+      return getActivityLabel(permit.purpose);
+    }
+
+    return "Unknown activity";
   };
 
   const handleSelectPermit = () => {
@@ -304,11 +388,11 @@ export function PermitSelectForModification({
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <MapPin className="h-3.5 w-3.5" />
-                            {permit.application?.district}, {permit.application?.province}
+                            {getWaterSourceLocationLabel(permit)}
                           </span>
                           <span className="flex items-center gap-1">
                             <Droplet className="h-3.5 w-3.5" />
-                            {permit.purpose?.replace(/_/g, ' ')}
+                            {getIntendedActivityLabel(permit)}
                           </span>
                         </div>
 

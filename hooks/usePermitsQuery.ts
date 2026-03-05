@@ -34,6 +34,7 @@ export interface PermitWithApplication extends Permit {
     sector: string
     cell: string
     village?: string
+    internal_notes?: unknown
     water_body_name?: string
     max_daily_volume_m3?: number
     max_yearly_volume_m3?: number

@@ -24,6 +24,7 @@ import {
   Loader2
 } from "lucide-react";
 import type { PermitWithApplication } from "@/hooks/usePermitsQuery";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 interface PermitSelectModalProps {
   open: boolean;
@@ -53,7 +54,7 @@ export function PermitSelectModal({
     );
   }, [permits, searchTerm]);
 
-  const getStatusBadge = (permit: Permit) => {
+  const getStatusBadge = (permit: PermitWithApplication) => {
     const now = new Date();
     const expiryDate = new Date(permit.expiry_date);
     const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
@@ -66,22 +67,55 @@ export function PermitSelectModal({
     return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Active</Badge>;
   };
 
-  const getPurposeLabel = (purpose: string) => {
-    const labels: Record<string, string> = {
-      'domestic': 'Domestic Use',
-      'irrigation': 'Irrigation',
-      'industrial': 'Industrial',
-      'livestock': 'Livestock',
-      'aquaculture': 'Aquaculture',
-      'fish_farming_lakes': 'Fish Farming (Lakes)',
-      'fish_farming_ponds': 'Fish Farming (Ponds)',
-      'recreation': 'Recreation',
-      'electricity_generation': 'Electricity Generation',
-      'mining': 'Mining',
-      'municipal_supply': 'Municipal Supply',
-      'other': 'Other',
-    };
-    return labels[purpose] || purpose;
+  const parseInternalNotes = (permit: PermitWithApplication) => {
+    try {
+      const raw = permit.application?.internal_notes;
+      if (!raw) return null;
+      return typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch {
+      return null;
+    }
+  };
+
+  const getWaterSourceLocationLabel = (permit: PermitWithApplication) => {
+    const notes = parseInternalNotes(permit);
+    const waterSourceParts = [
+      notes?.waterSourceVillage,
+      notes?.waterSourceCell,
+      notes?.waterSourceSector,
+      notes?.waterSourceDistrict,
+      notes?.waterSourceProvince,
+    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+    if (waterSourceParts.length > 0) {
+      return waterSourceParts.join(", ");
+    }
+
+    const fallbackParts = [
+      permit.application?.village,
+      permit.application?.cell,
+      permit.application?.sector,
+      permit.application?.district,
+      permit.application?.province,
+    ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
+
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+  };
+
+  const getIntendedActivityLabel = (permit: PermitWithApplication) => {
+    const activities = permit.application?.intended_activities;
+    if (Array.isArray(activities) && activities.length > 0) {
+      const primary = activities.find(
+        (activity): activity is string => typeof activity === "string" && activity.trim().length > 0
+      );
+      if (primary) return getActivityLabel(primary);
+    }
+
+    if (permit.purpose) {
+      return getActivityLabel(permit.purpose);
+    }
+
+    return "Unknown activity";
   };
 
   const handleSelectPermit = (permit: PermitWithApplication) => {
@@ -171,7 +205,7 @@ export function PermitSelectModal({
                       {/* Purpose */}
                       <div className="flex items-center gap-2 text-sm text-slate-600 mb-1">
                         <Droplets className="h-4 w-4 shrink-0" />
-                        <span>{getPurposeLabel(permit.purpose)}</span>
+                        <span>{getIntendedActivityLabel(permit)}</span>
                       </div>
 
                       {/* Location */}
@@ -179,7 +213,7 @@ export function PermitSelectModal({
                         <div className="flex items-center gap-2 text-sm text-slate-600 mb-1">
                           <MapPin className="h-4 w-4 shrink-0" />
                           <span className="truncate">
-                            {permit.application.district}, {permit.application.sector}
+                            {getWaterSourceLocationLabel(permit)}
                           </span>
                         </div>
                       )}

@@ -6,6 +6,11 @@ const APPLICATION_JSONB_COLUMNS = new Set<string>([
   'modification_changes',
 ])
 
+const APPLICATION_MISSING_COLUMN_PATTERNS = [
+  /column "([^"]+)" of relation "applications" does not exist/i,
+  /column "([^"]+)" does not exist/i,
+]
+
 function toDbValue(column: string, value: unknown): unknown {
   if (!APPLICATION_JSONB_COLUMNS.has(column)) return value
   return JSON.stringify(value ?? null)
@@ -44,4 +49,18 @@ export function buildApplicationUpdateParts(payload: Record<string, unknown>): {
   })
 
   return { sets, values }
+}
+
+export function getMissingApplicationColumnFromError(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null
+  const message = 'message' in err && typeof err.message === 'string' ? err.message : ''
+  if (!message) return null
+
+  for (const pattern of APPLICATION_MISSING_COLUMN_PATTERNS) {
+    const match = message.match(pattern)
+    const column = match?.[1]
+    if (column) return column
+  }
+
+  return null
 }
