@@ -58,11 +58,15 @@ async function main() {
   const functionsSql = stripHeader(await read("09-functions.sql"));
   const triggersSql = stripHeader(await read("10-triggers.sql"));
 
-  // Add self-hosted auth field.
-  tables = tables.replace(
-    "email character varying(255) not null,",
-    "email character varying(255) not null,\n  password_hash text not null,"
-  );
+  // Add self-hosted auth field specifically to public.users.
+  const usersEmailAnchor = /(create table if not exists public\.users \([\s\S]*?email character varying\(255\) not null,)/i;
+  if (!usersEmailAnchor.test(tables)) {
+    throw new Error("Could not locate public.users email column anchor in 04-tables.sql");
+  }
+  tables = tables.replace(usersEmailAnchor, "$1\n  password_hash text not null,");
+  if (!/create table if not exists public\.users \([\s\S]*?password_hash text not null,/i.test(tables)) {
+    throw new Error("Failed to inject password_hash into public.users table");
+  }
 
   // Sequence ownership can reference tables that do not exist yet in this ordered file.
   // Drop OWNED BY lines to keep first-run ordering safe.

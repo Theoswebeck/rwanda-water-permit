@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileCheck, Loader2, Shield } from "lucide-react";
-import { downloadFromDocumentsBucket, uploadPermitPdf, uploadTermsPdf } from "@/lib/supabase-storage";
-import { generateDigitalWaterPermitBlob, generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
+import { downloadFromDocumentsBucket, uploadTermsPdf } from "@/lib/supabase-storage";
+import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { selectPermitVariant } from "@/lib/permit-variant";
@@ -154,56 +154,15 @@ export default function StaffPermitDetailPage() {
   };
 
   const handleOpenPermitPdf = async () => {
-    if (!permit?.id) return;
+    if (!permit?.permit_number) return;
     if (busy) return;
     setBusy("permit_pdf");
     try {
-      const existing = permit?.permit_pdf_url;
-      if (existing) {
-        const blob = await downloadFromDocumentsBucket(existing);
-        if (blob) {
-          await openBlobInNewTab(blob);
-          return;
-        }
-      }
-
-      // Generate on-demand + persist
-      const applicationData = permit?.application;
-      if (!applicationData) throw new Error("Application data not found for this permit");
-
-      const conditionsForPdf: string[] = (() => {
-        const c = permit?.conditions?.conditions;
-        if (Array.isArray(c)) return c;
-        return [
-          "Comply with all environmental regulations",
-          "Submit quarterly usage reports",
-          "Allow inspections as required",
-        ];
-      })();
-
-      const pdfBlob = await generateDigitalWaterPermitBlob(
-        applicationData,
-        permit.permit_number,
-        conditionsForPdf,
-        5,
-        permit.is_modification === true,
-        { issuedDate: permit.issued_date, expiryDate: permit.expiry_date }
-      );
-
-      const upload = await uploadPermitPdf({
-        permitId: permit.id,
-        permitNumber: permit.permit_number,
-        pdfBlob,
-      });
-
-      if (upload?.path) {
-        await fetch(`/api/staff/permits/${encodeURIComponent(permit.id)}`, { method: "GET" }).catch(() => null);
-      }
-
-      await openBlobInNewTab(pdfBlob);
+      const verificationUrl = `https://rwandawaterpermit.com/permit/view/${encodeURIComponent(permit.permit_number)}`;
+      window.open(verificationUrl, "_blank", "noopener,noreferrer");
     } catch (e) {
-      console.error("❌ Failed to open/generate permit PDF:", e);
-      alert("Failed to open permit PDF. Please try again.");
+      console.error("❌ Failed to open permit page:", e);
+      alert("Failed to open permit page. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -392,7 +351,7 @@ export default function StaffPermitDetailPage() {
                 <div className="flex flex-wrap gap-3">
                   <Button onClick={handleOpenPermitPdf} disabled={!!busy} className="gap-2">
                     {busy === "permit_pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                    {busy === "permit_pdf" ? "Generating Permit PDF…" : "Open Permit PDF"}
+                    {busy === "permit_pdf" ? "Opening Permit Page…" : "Open Permit Page"}
                   </Button>
                   <Button onClick={handleOpenTermsPdf} disabled={!!busy} variant="outline" className="gap-2">
                     {busy === "terms_pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}

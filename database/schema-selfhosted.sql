@@ -478,7 +478,6 @@ create table if not exists public.merchants (
   id uuid not null,
   name character varying(255) not null,
   email character varying(255) not null,
-  password_hash text not null,
   phone character varying(20),
   api_key text not null,
   public_key text,
@@ -796,6 +795,7 @@ create table if not exists public.user_preferences (
 create table if not exists public.users (
   id uuid not null,
   email character varying(255) not null,
+  password_hash text not null,
   phone character varying(20),
   role user_role not null,
   status user_status not null,

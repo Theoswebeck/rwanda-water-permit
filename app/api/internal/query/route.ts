@@ -144,6 +144,10 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
           'last_name', u.last_name,
           'company_name', u.company_name,
           'email', u.email,
+          'phone', u.phone,
+          'mobile_phone', u.mobile_phone,
+          'landline_phone', u.landline_phone,
+          'company_phone', u.company_phone,
           'account_type', u.account_type
         ) as applicant
       from public.permits p

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
-import { buildPortalLink } from '@/lib/notifications/portal-url'
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -158,7 +157,7 @@ export async function POST(req: NextRequest) {
     // Send invite email via Resend
     const resendKey = process.env.RESEND_API_KEY
     const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
-    const loginUrl = buildPortalLink('/login')
+    const loginUrl = 'https://rwandawaterpermit.com/'
     const isDev = process.env.NODE_ENV !== 'production'
 
     let emailSent = false

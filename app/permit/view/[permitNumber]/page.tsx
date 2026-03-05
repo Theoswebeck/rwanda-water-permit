@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import type { PermitStatus } from "@/types/database";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { PermitPublicActions } from "@/components/public/permit-public-actions";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -92,47 +93,86 @@ export default async function PublicPermitViewPage({
     }
     const app = permit.application;
     if (!app) return "N/A";
-    const parts = [app.village, app.cell, app.sector, app.district, app.province].filter(Boolean);
+
+    const notes = (() => {
+      const rawNotes = app.internal_notes;
+      if (!rawNotes) return null;
+      if (typeof rawNotes === "object") return rawNotes as Record<string, unknown>;
+      if (typeof rawNotes !== "string") return null;
+      try {
+        const parsed = JSON.parse(rawNotes);
+        return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+      } catch {
+        return null;
+      }
+    })();
+
+    const parts = [
+      notes?.waterSourceVillage ?? app.village,
+      notes?.waterSourceCell ?? app.cell,
+      notes?.waterSourceSector ?? app.sector,
+      notes?.waterSourceDistrict ?? app.district,
+      notes?.waterSourceProvince ?? app.province,
+    ].filter(Boolean);
     return parts.length ? parts.join(", ") : "N/A";
   })();
 
   const badge = statusBadgeVariant(permit.status as PermitStatus);
+  const intendedWaterActivity = (() => {
+    const app = permit.application as Record<string, unknown> | null;
+    const intendedActivities = Array.isArray(app?.intended_activities)
+      ? app.intended_activities
+          .filter((activity): activity is string => typeof activity === "string")
+          .map((activity) => activity.trim())
+          .filter((activity) => activity.length > 0)
+      : [];
+
+    const appWaterPurpose = typeof app?.water_purpose === "string" ? app.water_purpose.trim() : "";
+    const permitPurpose = typeof permit.purpose === "string" ? permit.purpose.trim() : "";
+    const primaryActivity = intendedActivities[0] || appWaterPurpose || permitPurpose;
+
+    return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-4xl">
           <div className="rounded-xl border bg-white shadow-sm">
-            <div className="px-8 pt-8">
+            <div className="px-8 pt-10">
               <div className="flex items-start justify-between gap-6">
-                <div className="flex items-center gap-3">
-                  <div className="relative h-10 w-10 overflow-hidden rounded-full border bg-white">
+                <div className="flex items-center gap-5">
+                  <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 bg-white shadow-sm">
                     <Image
                       src="/assets/rwanda_water_board_Logo.png"
                       alt="Rwanda Water Resources Board"
                       fill
-                      sizes="40px"
-                      className="object-contain p-1"
+                      sizes="80px"
+                      className="object-contain p-2"
                     />
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-900">Rwanda Water Resources Board</div>
-                    <div className="text-xs text-slate-500">Permit verification</div>
+                    <div className="text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
+                      Rwanda Water Resources Board
+                    </div>
+                    <div className="mt-1 text-lg font-medium text-slate-600 md:text-2xl">Permit verification</div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-xs text-slate-500">Permit number</div>
-                  <div className="mt-1 rounded-lg border bg-slate-50 px-3 py-2 font-mono text-sm">
+                  <div className="text-sm font-medium text-slate-500">Permit number</div>
+                  <div className="mt-2 rounded-lg border bg-slate-50 px-4 py-2 font-mono text-base">
                     {permit.permit_number}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-6">
+              <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-8">
                 <div>
-                  <h1 className="text-xl font-semibold tracking-tight text-slate-900">Water Permit Certificate</h1>
-                  <p className="mt-1 text-sm text-slate-600">This page is a read-only verification view.</p>
+                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                    Water Permit Certificate
+                  </h1>
+                  <p className="mt-2 text-base text-slate-600">This page is a read-only verification view.</p>
                 </div>
                 <Badge variant="outline" className={badge.className}>
                   {badge.label}
@@ -163,8 +203,8 @@ export default async function PublicPermitViewPage({
                   <div className="mt-1 text-sm font-medium text-slate-900">{permit.water_source}</div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Purpose</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.purpose}</div>
+                  <div className="text-xs text-slate-500">Intended water activity</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{intendedWaterActivity}</div>
                 </div>
                 <div className="rounded-xl border p-4 md:col-span-2">
                   <div className="text-xs text-slate-500">Authorized volume</div>

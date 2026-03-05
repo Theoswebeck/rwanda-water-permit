@@ -2,17 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Calendar, Download, FileCheck, Clock, AlertCircle, MapPin, RefreshCw } from "lucide-react";
+import { ArrowLeft, Calendar, Download, FileCheck, Clock, AlertCircle, MapPin } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
-import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
@@ -53,12 +51,9 @@ function firstNonEmptyString(values: unknown[]): string | null {
 
 export default function PermitDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [permit, setPermit] = useState<any>(null);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [applicationData, setApplicationData] = useState<any>(null);
   const [changeEvents, setChangeEvents] = useState<any[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   
@@ -126,14 +121,11 @@ export default function PermitDetailPage() {
 
         const rawPermit = data as any;
         const app = rawPermit?.application;
-        const applicant = app?.applicant;
+        const applicant = rawPermit?.applicant ?? app?.applicant;
         const applicationId = rawPermit?.application_id;
         const modificationCount = rawPermit?.modification_count ?? 0;
         const lastModifiedAt = rawPermit?.last_modified_at ?? null;
         
-        // Store application data for PDF generation
-        setApplicationData(app);
-
         const notes = parseJsonObject(app?.internal_notes);
         const waterSourceLocationParts = [
           firstNonEmptyString([notes?.waterSourceVillage, app?.village]),
@@ -234,10 +226,12 @@ export default function PermitDetailPage() {
           }
         }
 
+        const issueDate = app?.terms_accepted_at || rawPermit.issued_date;
+
         setPermit({
           id: rawPermit.id,
           title: app?.project_title || `${toDisplayLabel(rawPermit.purpose)} Water Permit`,
-          issueDate: rawPermit.issued_date,
+          issueDate: issueDate,
           expiryDate: rawPermit.expiry_date,
           status: rawPermit.status,
           waterActivity,
@@ -300,125 +294,16 @@ export default function PermitDetailPage() {
   // Handle permit download
   const handleDownloadPermit = async () => {
     if (!permit) return;
-    
+
     try {
       setIsDownloading(true);
-      
-      // If the permit has been modified, always regenerate so the "MODIFIED PERMIT" badge shows.
-      // For non-modified permits, try the stored PDF first.
-      if (!permit.isModified && permit.permitPdfPath) {
-        console.log("📥 Attempting to download PDF from:", permit.permitPdfPath);
-        const blob = await downloadFromDocumentsBucket(permit.permitPdfPath);
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `permit-${permit.permitNumber}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 60_000);
-          return;
-        }
-        console.warn("⚠️ PDF not found in storage, will try to regenerate...");
-      }
-      
-      // PDF doesn't exist, couldn't be downloaded, or permit is modified - regenerate
-      console.log("📄 Generating PDF for permit:", permit.permitNumber,
-        permit.isModified ? "(modified — regenerating with badge)" : "");
-      await handleGeneratePdf();
-      
+      const verificationUrl = `https://rwandawaterpermit.com/permit/view/${encodeURIComponent(String(permit.permitNumber ?? ""))}`;
+      window.open(verificationUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-      console.error('Error downloading PDF:', error);
-      alert('Failed to download PDF. Please try again later.');
+      console.error("❌ Failed to open permit page:", error);
+      alert("Failed to open permit page. Please try again later.");
     } finally {
       setIsDownloading(false);
-    }
-  };
-  
-  // Handle PDF generation
-  const handleGeneratePdf = async () => {
-    if (!permit || !applicationData) {
-      alert("Unable to generate PDF - application data not available.");
-      return;
-    }
-    
-    try {
-      setIsGeneratingPdf(true);
-      console.log("📄 Generating PDF for permit:", permit.permitNumber);
-      
-      // Fetch full application data for PDF generation
-      const { data: fullApp, error: appError } = await supabase
-        .from("applications")
-        .select(`
-          *,
-          applicant:users!applicant_id(*)
-        `)
-        .eq("id", permit.applicationId)
-        .single();
-        
-      if (appError || !fullApp) {
-        throw new Error("Failed to fetch application data for PDF generation");
-      }
-      
-      // Generate PDF blob (with "MODIFIED PERMIT" badge when applicable)
-      const pdfBlob = await generateDigitalWaterPermitBlob(
-        fullApp as any,
-        permit.permitNumber,
-        permit.conditions || [],
-        5, // Default validity years
-        permit.isModified === true,
-        {
-          issuedDate: permit.issueDate,
-          expiryDate: permit.expiryDate,
-        }
-      );
-      
-      // Upload to storage
-      const upload = await uploadPermitPdf({
-        permitId: permit.id,
-        permitNumber: permit.permitNumber,
-        pdfBlob,
-      });
-      
-      if (upload?.path) {
-        console.log("✅ PDF uploaded:", upload.path);
-        
-        // Update permit record with PDF path
-        const { error: updateError } = await supabase
-          .from("permits")
-          .update({
-            permit_pdf_url: upload.path,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", permit.id);
-          
-        if (updateError) {
-          console.warn("⚠️ Failed to update permit_pdf_url:", updateError);
-        } else {
-          console.log("✅ permit_pdf_url saved on permit record");
-          // Update local state
-          setPermit((prev: any) => ({ ...prev, permitPdfPath: upload.path }));
-        }
-      }
-      
-      // Download the generated PDF
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `permit-${permit.permitNumber}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      
-      console.log("✅ PDF generated and downloaded successfully");
-      
-    } catch (error) {
-      console.error("❌ Failed to generate PDF:", error);
-      alert("Failed to generate PDF. Please try again later.");
-    } finally {
-      setIsGeneratingPdf(false);
     }
   };
   
@@ -493,7 +378,7 @@ export default function PermitDetailPage() {
                   disabled={isDownloading}
                 >
                   <Download className="h-4 w-4 mr-2" />
-                  {isDownloading ? "Generating PDF..." : "Download Permit"}
+                  {isDownloading ? "Opening Permit Page..." : "View Permit Page"}
                 </Button>
               </div>
             </div>
@@ -524,7 +409,7 @@ export default function PermitDetailPage() {
                     disabled={isDownloading}
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    {isDownloading ? "Generating PDF..." : "Download Permit"}
+                    {isDownloading ? "Opening Permit Page..." : "View Permit Page"}
                   </Button>
                   <Button size="sm" variant="default">
                     Apply for Renewal
@@ -560,7 +445,7 @@ export default function PermitDetailPage() {
                     disabled={isDownloading}
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    {isDownloading ? "Generating PDF..." : "Download Expired Permit"}
+                    {isDownloading ? "Opening Permit Page..." : "View Permit Page"}
                   </Button>
                   <Button size="sm" variant="default">
                     {permit.renewalStatus === "Pending" ? "Check Renewal Status" : "Apply for Renewal"}
@@ -890,7 +775,7 @@ export default function PermitDetailPage() {
                     disabled={isDownloading}
                   >
                     <Download className="h-4 w-4" />
-                    {isDownloading ? "Generating PDF..." : "Download Permit"}
+                    {isDownloading ? "Opening Permit Page..." : "View Permit Page"}
                   </Button>
                   
                 </CardContent>

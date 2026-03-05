@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileCheck,
-  AlertTriangle,
   Loader2,
   MapPin,
 } from "lucide-react";
@@ -36,7 +35,6 @@ export default function ApproverDashboard() {
   const isTopTab = (v: string): v is "approval" | "inspections" | "water-reports" | "permit-registry" =>
     v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry";
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports" | "permit-registry">("approval");
   const [activeChipId, setActiveChipId] = useState(APPROVER_CHIPS[0].id);
   const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
@@ -48,12 +46,16 @@ export default function ApproverDashboard() {
       try {
         setLoading(true);
         const res = await fetch('/api/staff/applications/summary', { credentials: 'include' });
-        if (!res.ok) throw new Error(`Failed to load applications (${res.status})`);
+        if (!res.ok) {
+          console.warn(`⚠️ Failed to load applications summary (${res.status}), continuing without chip counts.`);
+          setAllApplications([]);
+          return;
+        }
         const json = (await res.json()) as { applications?: Application[] };
         setAllApplications(json.applications || []);
       } catch (err) {
-        console.error("Failed to fetch approver applications:", err);
-        setError("Failed to load dashboard");
+        console.warn("⚠️ Failed to fetch approver applications summary, continuing without chip counts:", err);
+        setAllApplications([]);
       } finally {
         setLoading(false);
       }
@@ -73,18 +75,6 @@ export default function ApproverDashboard() {
       <div className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto px-6 py-8">
-        <div className="text-center py-12">
-          <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="scroll-m-20 text-2xl font-semibold tracking-tight mb-2">Error Loading Dashboard</h2>
-          <p className="text-muted-foreground">{error}</p>
         </div>
       </div>
     );

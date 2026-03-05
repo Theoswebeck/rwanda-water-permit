@@ -60,7 +60,7 @@ import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
-import { downloadFromDocumentsBucket, uploadPermitPdf, uploadTermsPdf } from "@/lib/supabase-storage";
+import { downloadFromDocumentsBucket, uploadTermsPdf } from "@/lib/supabase-storage";
 import { contractTermsByVariant } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { selectPermitVariant } from "@/lib/permit-variant";
@@ -334,123 +334,18 @@ export default function ReviewerDashboard() {
 
   const openPermitPdf = async (app: ReviewApplication) => {
     const permit = permitByApplicationId[app.id];
-    if (!permit?.id) {
+    if (!permit?.id || !permit?.permit_number) {
       alert("No linked permit found for this approved application.");
       return;
     }
     if (busyAction) return;
     setBusyAction({ appId: app.id, kind: "permit_pdf" });
-
-    // If we already have a stored PDF path/URL, open it.
-    if (permit.permit_pdf_url) {
-      const blob = await downloadFromDocumentsBucket(permit.permit_pdf_url);
-      if (!blob) {
-        alert("Failed to open permit PDF. Please try again.");
-        setBusyAction(null);
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setBusyAction(null);
-      return;
-    }
-
-    // Otherwise, generate & persist a PDF on-demand, then open it.
     try {
-      const { data: permitRow, error: permitError } = await supabase
-        .from("permits")
-        .select(
-          `
-          id,
-          permit_number,
-          issued_date,
-          expiry_date,
-          conditions,
-          is_modification,
-          application_id,
-          application:applications!application_id(
-            *,
-            applicant:users!applicant_id(*)
-          )
-        `
-        )
-        .eq("id", permit.id)
-        .single();
-
-      if (permitError || !permitRow) throw permitError ?? new Error("Permit not found");
-      const applicationData = (permitRow as any).application;
-      if (!applicationData) throw new Error("Application data not found for this permit");
-
-      const conditionsForPdf: string[] = (() => {
-        const c = (permitRow as any)?.conditions?.conditions;
-        if (Array.isArray(c)) return c;
-        return [
-          "Comply with all environmental regulations",
-          "Submit quarterly usage reports",
-          "Allow inspections as required",
-        ];
-      })();
-
-      const issuedDate = (permitRow as any).issued_date ?? null;
-      const expiryDate = (permitRow as any).expiry_date ?? null;
-      const durationYears = (() => {
-        try {
-          if (!issuedDate || !expiryDate) return 5;
-          const di = new Date(issuedDate).getTime();
-          const de = new Date(expiryDate).getTime();
-          if (!Number.isFinite(di) || !Number.isFinite(de) || de <= di) return 5;
-          const years = (de - di) / (365.25 * 24 * 60 * 60 * 1000);
-          const rounded = Math.round(years);
-          return rounded >= 1 && rounded <= 15 ? rounded : 5;
-        } catch {
-          return 5;
-        }
-      })();
-
-      const { generateDigitalWaterPermitBlob } = await import("@/lib/pdf-generator");
-      const pdfBlob = await generateDigitalWaterPermitBlob(
-        applicationData,
-        (permitRow as any).permit_number,
-        conditionsForPdf,
-        durationYears,
-        (permitRow as any).is_modification === true,
-        {
-          issuedDate,
-          expiryDate,
-        }
-      );
-
-      const upload = await uploadPermitPdf({
-        permitId: (permitRow as any).id,
-        permitNumber: (permitRow as any).permit_number,
-        pdfBlob,
-      });
-
-      if (upload?.path) {
-        // Persist via staff API (service role) to avoid RLS issues.
-        await fetch(`/api/staff/permits/${encodeURIComponent(String((permitRow as any).id))}/pdf`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: upload.path }),
-        }).catch(() => null);
-
-        setPermitByApplicationId((prev) => ({
-          ...prev,
-          [app.id]: {
-            id: String((permitRow as any).id),
-            permit_number: String((permitRow as any).permit_number),
-            permit_pdf_url: upload.path,
-          },
-        }));
-      }
-
-      const url = URL.createObjectURL(pdfBlob);
-      window.open(url, "_blank");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      const verificationUrl = `https://rwandawaterpermit.com/permit/view/${encodeURIComponent(permit.permit_number)}`;
+      window.open(verificationUrl, "_blank", "noopener,noreferrer");
     } catch (e) {
-      console.error("❌ Failed to generate/open permit PDF:", e);
-      alert("Failed to generate permit PDF. Please try again.");
+      console.error("❌ Failed to open permit page:", e);
+      alert("Failed to open permit page. Please try again.");
     } finally {
       setBusyAction(null);
     }
@@ -930,11 +825,11 @@ export default function ReviewerDashboard() {
                                 {busyAction?.appId === app.id && busyAction.kind === "permit_pdf" ? (
                                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                 ) : (
-                                  <Download className="h-4 w-4 mr-2" />
+                                  <Eye className="h-4 w-4 mr-2" />
                                 )}
                                 {busyAction?.appId === app.id && busyAction.kind === "permit_pdf"
-                                  ? "Generating Permit PDF…"
-                                  : "View Permit PDF"}
+                                  ? "Opening Permit Page…"
+                                  : "View Permit Page"}
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={async () => {
@@ -1049,7 +944,7 @@ export default function ReviewerDashboard() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                    {busyAction.kind === "permit_pdf" ? "Preparing Permit PDF" : "Preparing Terms PDF"}
+                    {busyAction.kind === "permit_pdf" ? "Opening Permit Page" : "Preparing Terms PDF"}
                   </div>
                   <div className="mt-1 text-sm text-slate-600 dark:text-slate-400">
                     This can take a few seconds. Please keep this tab open.
