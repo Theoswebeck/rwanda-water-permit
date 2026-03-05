@@ -408,7 +408,7 @@ export function ActivePermitsInspectionTab() {
                                 <DropdownMenuSeparator />
 
                                 <DropdownMenuItem asChild>
-                                  <Link href={`/dashboard/permit/${p.id}`} className="flex items-center gap-2">
+                                  <Link href={`/permit/view/${encodeURIComponent(String(p.permit_number || ""))}`} className="flex items-center gap-2">
                                     <Eye className="h-4 w-4" />
                                     View permit
                                   </Link>

@@ -323,8 +323,8 @@ export default function ApplicationDetailPage() {
         }
       }
 
-      if (issuedPermit?.id) {
-        window.open(`/dashboard/permit/${issuedPermit.id}`, "_blank");
+      if (issuedPermit?.permitNumber) {
+        window.open(`/permit/view/${encodeURIComponent(issuedPermit.permitNumber)}`, "_blank");
         return;
       }
 

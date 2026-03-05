@@ -9,7 +9,21 @@ import { PermitPublicActions } from "@/components/public/permit-public-actions";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-US", {
+  const raw = dateString.trim();
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))));
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "N/A";
+  return parsed.toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -18,10 +32,10 @@ function formatDate(dateString: string): string {
 
 function getCanonicalIssueDate(permit: Record<string, unknown>): string | null {
   const application = permit.application as Record<string, unknown> | null;
-  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
-  if (acceptedAt) return acceptedAt;
   const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
-  return issuedDate || null;
+  if (issuedDate) return issuedDate;
+  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
+  return acceptedAt || null;
 }
 
 function statusBadgeVariant(status: PermitStatus): { label: string; className: string } {

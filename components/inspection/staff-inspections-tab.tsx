@@ -291,9 +291,9 @@ export function StaffInspectionsTab() {
                                 </Link>
                               </DropdownMenuItem>
                             ) : null}
-                            {permit?.id ? (
+                            {permit?.permit_number ? (
                               <DropdownMenuItem asChild>
-                                <Link href={`/dashboard/permit/${permit.id}`} className="flex items-center gap-2">
+                                <Link href={`/permit/view/${encodeURIComponent(permit.permit_number)}`} className="flex items-center gap-2">
                                   <Eye className="h-4 w-4" />
                                   View permit
                                 </Link>

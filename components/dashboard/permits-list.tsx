@@ -25,13 +25,20 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Eye, AlertCircle, Search, Loader2, List } from "lucide-react";
+import { Eye, AlertCircle, Search, Loader2, List, FileText } from "lucide-react";
 import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
 import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
 
@@ -401,38 +408,60 @@ export function PermitsList({ permits }: PermitsListProps) {
                         )}
                         <span className="sr-only">Applications</span>
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-600 hover:text-gray-900"
-                        disabled={busyPermitId === permit.id || generatingPdf === permit.id}
-                        onClick={async () => {
-                          try {
-                            setBusyPermitId(permit.id);
-                            setBusyAction("view");
-                            
-                            const blob = await getPermitPdfBlob(permit);
-                            if (!blob) throw new Error("Failed to get permit PDF");
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-gray-600 hover:text-gray-900"
+                            disabled={busyPermitId === permit.id || generatingPdf === permit.id}
+                          >
+                            {generatingPdf === permit.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                            <span className="sr-only">View options</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52">
+                          <DropdownMenuLabel>View</DropdownMenuLabel>
+                          <DropdownMenuItem
+                            onSelect={async () => {
+                              try {
+                                setBusyPermitId(permit.id);
+                                setBusyAction("view");
 
-                            const url = URL.createObjectURL(blob);
-                            window.open(url, "_blank");
-                            setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                          } catch (e) {
-                            console.error("❌ Failed to open permit PDF:", e);
-                            alert("Failed to open permit PDF. Please try again.");
-                          } finally {
-                            setBusyPermitId(null);
-                            setBusyAction(null);
-                          }
-                        }}
-                      >
-                        {generatingPdf === permit.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">View</span>
-                      </Button>
+                                const blob = await getPermitPdfBlob(permit);
+                                if (!blob) throw new Error("Failed to get permit PDF");
+
+                                const url = URL.createObjectURL(blob);
+                                window.open(url, "_blank");
+                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                              } catch (e) {
+                                console.error("❌ Failed to open permit PDF:", e);
+                                alert("Failed to open permit PDF. Please try again.");
+                              } finally {
+                                setBusyPermitId(null);
+                                setBusyAction(null);
+                              }
+                            }}
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View permit PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link
+                              href={`https://rwandawaterpermit.com/contract/terms/${encodeURIComponent(permit.permitNumber)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <FileText className="mr-2 h-4 w-4" />
+                              View terms
+                            </Link>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                     {(busyPermitId === permit.id || generatingPdf === permit.id) ? (
                       <div className="mt-1 text-xs text-muted-foreground">

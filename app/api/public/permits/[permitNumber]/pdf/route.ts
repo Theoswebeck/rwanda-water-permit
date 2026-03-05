@@ -75,10 +75,10 @@ function resolveConditions(raw: unknown): string[] {
 }
 
 function getCanonicalIssueDate(permit: Record<string, unknown>, application: Record<string, unknown> | null): string | undefined {
-  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
-  if (acceptedAt) return acceptedAt;
   const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
-  return issuedDate || undefined;
+  if (issuedDate) return issuedDate;
+  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
+  return acceptedAt || undefined;
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ permitNumber: string }> }) {

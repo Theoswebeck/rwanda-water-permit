@@ -192,8 +192,8 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
               </Button>
             </Link>
           ) : null}
-          {permit?.id ? (
-            <Link href={`/dashboard/permit/${permit.id}`}>
+          {permit?.permit_number ? (
+            <Link href={`/permit/view/${encodeURIComponent(permit.permit_number)}`}>
               <Button variant="outline" className="gap-2">
                 <Eye className="h-4 w-4" />
                 Permit
@@ -333,7 +333,7 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
                     </div>
                   </div>
                   <Separator />
-                  <Link href={`/dashboard/permit/${permit.id}`}>
+                  <Link href={`/permit/view/${encodeURIComponent(permit.permit_number)}`}>
                     <Button variant="default">Open full permit</Button>
                   </Link>
                 </>
