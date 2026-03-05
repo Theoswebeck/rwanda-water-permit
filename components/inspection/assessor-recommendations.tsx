@@ -14,9 +14,11 @@ import {
 import { ClipboardCheck, CheckCircle, Loader2 } from "lucide-react";
 
 interface AssessorRecommendationsProps {
-  // Requested values (from applicant - read-only)
+  // Requested values (from applicant submission shown in workflow - read-only)
   requestedDurationYears?: number | null;
   requestedVolumeM3?: number | null;
+  originalBaselineDurationYears?: number | null;
+  originalBaselineVolumeM3?: number | null;
   
   // Assessor recommended values (editable)
   recommendedDurationYears?: number | null;
@@ -35,6 +37,8 @@ interface AssessorRecommendationsProps {
 export function AssessorRecommendations({
   requestedDurationYears,
   requestedVolumeM3,
+  originalBaselineDurationYears,
+  originalBaselineVolumeM3,
   recommendedDurationYears,
   recommendedVolumeM3,
   onDurationChange,
@@ -67,6 +71,9 @@ export function AssessorRecommendations({
     }
   };
 
+  const showBaselineRows =
+    originalBaselineDurationYears != null || originalBaselineVolumeM3 != null;
+
   return (
     <Card className="border-amber-200 bg-amber-50/30">
       <CardHeader className="pb-3">
@@ -95,7 +102,7 @@ export function AssessorRecommendations({
             </div>
           </div>
 
-          {/* Row 1: Permit Duration */}
+          {/* Row 1: Current requested permit duration */}
           <div className="grid grid-cols-3 border-b">
             <div className="px-4 py-4 flex items-center">
               <Label className="text-sm font-medium">
@@ -144,8 +151,8 @@ export function AssessorRecommendations({
             </div>
           </div>
 
-          {/* Row 2: Water Output Volume */}
-          <div className="grid grid-cols-3">
+          {/* Row 2: Current requested water output volume */}
+          <div className={`grid grid-cols-3${showBaselineRows ? " border-b" : ""}`}>
             <div className="px-4 py-4 flex items-center">
               <Label className="text-sm font-medium">
                 Water Output Volume
@@ -192,11 +199,48 @@ export function AssessorRecommendations({
               )}
             </div>
           </div>
+
+          {/* Optional baseline row for audit visibility */}
+          {showBaselineRows && (
+            <>
+              <div className="grid grid-cols-3 border-b">
+                <div className="px-4 py-4 flex items-center">
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Original Baseline - Permit Duration
+                  </Label>
+                </div>
+                <div className="px-4 py-4 flex items-center justify-center border-l bg-muted/10">
+                  <span className="text-sm text-muted-foreground">
+                    {formatDuration(originalBaselineDurationYears)}
+                  </span>
+                </div>
+                <div className="px-4 py-4 flex items-center justify-center border-l">
+                  <span className="text-xs text-muted-foreground">Reference only</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-3">
+                <div className="px-4 py-4 flex items-center">
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Original Baseline - Water Output Volume
+                  </Label>
+                </div>
+                <div className="px-4 py-4 flex items-center justify-center border-l bg-muted/10">
+                  <span className="text-sm text-muted-foreground">
+                    {formatVolume(originalBaselineVolumeM3)}
+                  </span>
+                </div>
+                <div className="px-4 py-4 flex items-center justify-center border-l">
+                  <span className="text-xs text-muted-foreground">Reference only</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Info text */}
         <p className="text-xs text-muted-foreground mt-3">
-          <strong>Note:</strong> The "Requested" column shows values from the applicant's original submission (read-only).
+          <strong>Note:</strong> The "Requested" column shows values from the applicant's current submission (read-only).
+          {showBaselineRows ? " Original baseline rows are shown for reference." : ""}
           The "Assessor Recommended" values will be used when generating the permit and terms & conditions.
         </p>
       </CardContent>

@@ -403,6 +403,8 @@ export default function AssessmentApplicationPage() {
   // Original requested values (from applicant submission - read-only)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
+  const [originalBaselineDurationYears, setOriginalBaselineDurationYears] = useState<number | undefined>(undefined);
+  const [originalBaselineVolumeM3, setOriginalBaselineVolumeM3] = useState<number | undefined>(undefined);
 
   // Assessment Report State (template-backed)
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
@@ -756,59 +758,68 @@ export default function AssessmentApplicationPage() {
         const hasAssessmentForThisApp = !!existingAssessment;
         const assessorAdjustments = hasAssessmentForThisApp ? (formData._assessorAdjustments || {}) : {};
         
-        // ORIGINAL REQUESTED VALUES (from applicant's submission - NEVER modified)
-        // These come from the original form data, not from database fields that can be updated
-        // If _originalRequestedValues exists, use it (preserved from first submission)
-        // Otherwise, extract from formData (first time viewing after submission)
+        // REQUESTED VALUES for assessor comparison (always current submission values)
         let originalRequestedValues = formData._originalRequestedValues || {};
         
-        // Original requested duration - from permitLengthYears in form data (not proposed_duration_years which can be updated)
-        const originalDuration = originalRequestedValues.permitLengthYears 
-          || formData.permitLengthYears;
-        if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
-          setRequestedDurationYears(originalDuration);
+        const currentRequestedDuration = formData.permitLengthYears;
+        if (typeof currentRequestedDuration === 'number' && currentRequestedDuration >= 1 && currentRequestedDuration <= 15) {
+          setRequestedDurationYears(currentRequestedDuration);
         }
         
-        // Original requested volume - from waterAbstractionDetails in form data
-        const originalVolume = originalRequestedValues.volumeM3
-          || formData.waterAbstractionDetails?.[0]?.maxAverageYearly 
-          || appData.max_yearly_volume_m3 
+        const currentRequestedVolume =
+          formData.waterAbstractionDetails?.[0]?.maxAverageYearly
+          || appData.max_yearly_volume_m3
           || appData.estimated_usage_volume;
-        if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
-          setRequestedVolumeM3(originalVolume);
+        if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume)) {
+          setRequestedVolumeM3(currentRequestedVolume);
+        }
+
+        // Original baseline values for historical reference rows
+        const baselineDuration = originalRequestedValues.permitLengthYears;
+        if (typeof baselineDuration === 'number' && baselineDuration >= 1 && baselineDuration <= 15) {
+          setOriginalBaselineDurationYears(baselineDuration);
+        } else {
+          setOriginalBaselineDurationYears(undefined);
+        }
+
+        const baselineVolume = originalRequestedValues.volumeM3;
+        if (typeof baselineVolume === 'number' && Number.isFinite(baselineVolume)) {
+          setOriginalBaselineVolumeM3(baselineVolume);
+        } else {
+          setOriginalBaselineVolumeM3(undefined);
         }
         
         // ASSESSOR RECOMMENDED VALUES (can be modified by assessor — only pre-fill when assessment exists)
         if (hasAssessmentForThisApp) {
           // Assessor permit length: use adjustment if available, otherwise default to original
           const assessorDuration = assessorAdjustments.permitLengthYears 
-            || (typeof originalDuration === 'number' ? originalDuration : undefined);
+            || (typeof currentRequestedDuration === 'number' ? currentRequestedDuration : undefined);
           if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
             setAssessorPermitLength(assessorDuration);
           }
           
           // Assessor recommended volume: use adjustment if available, otherwise default to original
           const assessorVolume = assessorAdjustments.recommendedVolumeM3 
-            || (typeof originalVolume === 'number' ? originalVolume : undefined);
+            || (typeof currentRequestedVolume === 'number' ? currentRequestedVolume : undefined);
           if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
             setAssessorRecommendedVolume(assessorVolume);
           }
         } else {
           console.log('⚠️ No assessment filed yet for this application — assessor recommended values start fresh');
           // Default to requested values for new assessment (assessor can then adjust)
-          if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
-            setAssessorPermitLength(originalDuration);
+          if (typeof currentRequestedDuration === 'number' && currentRequestedDuration >= 1 && currentRequestedDuration <= 15) {
+            setAssessorPermitLength(currentRequestedDuration);
           }
-          if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
-            setAssessorRecommendedVolume(originalVolume);
+          if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume)) {
+            setAssessorRecommendedVolume(currentRequestedVolume);
           }
         }
         
         // Store original values if not already stored (first time assessor views this)
-        if (!formData._originalRequestedValues && (originalDuration || originalVolume)) {
+        if (!formData._originalRequestedValues && (currentRequestedDuration || currentRequestedVolume)) {
           const originals = {
-            permitLengthYears: originalDuration,
-            volumeM3: originalVolume,
+            permitLengthYears: currentRequestedDuration,
+            volumeM3: currentRequestedVolume,
             storedAt: new Date().toISOString()
           };
           // We'll save this when assessor makes any adjustment
@@ -1769,6 +1780,8 @@ export default function AssessmentApplicationPage() {
                           <AssessorRecommendations
                             requestedDurationYears={requestedDurationYears}
                             requestedVolumeM3={requestedVolumeM3}
+                            originalBaselineDurationYears={originalBaselineDurationYears}
+                            originalBaselineVolumeM3={originalBaselineVolumeM3}
                             recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : assessorPermitLength}
                             recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : assessorRecommendedVolume}
                             onDurationChange={(application as any).is_renewal ? undefined : savePermitLengthAdjustment}

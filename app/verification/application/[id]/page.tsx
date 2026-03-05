@@ -177,6 +177,8 @@ export default function VerificationApplicationPage() {
   // Assessor Recommendations State (read-only for verifiers)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
+  const [originalBaselineDurationYears, setOriginalBaselineDurationYears] = useState<number | undefined>(undefined);
+  const [originalBaselineVolumeM3, setOriginalBaselineVolumeM3] = useState<number | undefined>(undefined);
   const [recommendedDurationYears, setRecommendedDurationYears] = useState<number | undefined>(undefined);
   const [recommendedVolumeM3, setRecommendedVolumeM3] = useState<number | undefined>(undefined);
 
@@ -406,28 +408,41 @@ export default function VerificationApplicationPage() {
           const assessorAdjustments = formData._assessorAdjustments || {};
           const originalRequestedValues = formData._originalRequestedValues || {};
           
-          // ORIGINAL REQUESTED VALUES (from applicant's submission - preserved and NEVER modified)
-          const originalDuration = originalRequestedValues.permitLengthYears 
-            || formData.permitLengthYears;
-          if (typeof originalDuration === 'number' && originalDuration >= 1 && originalDuration <= 15) {
-            setRequestedDurationYears(originalDuration);
+          // REQUESTED VALUES for assessor comparison (always current submission values)
+          const currentRequestedDuration = formData.permitLengthYears;
+          if (typeof currentRequestedDuration === 'number' && currentRequestedDuration >= 1 && currentRequestedDuration <= 15) {
+            setRequestedDurationYears(currentRequestedDuration);
           }
-          const originalVolume = originalRequestedValues.volumeM3
-            || formData.waterAbstractionDetails?.[0]?.maxAverageYearly 
-            || appData.max_yearly_volume_m3 
+          const currentRequestedVolume =
+            formData.waterAbstractionDetails?.[0]?.maxAverageYearly
+            || appData.max_yearly_volume_m3
             || appData.estimated_usage_volume;
-          if (typeof originalVolume === 'number' && Number.isFinite(originalVolume)) {
-            setRequestedVolumeM3(originalVolume);
+          if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume)) {
+            setRequestedVolumeM3(currentRequestedVolume);
+          }
+
+          // Original baseline values for historical reference rows
+          const baselineDuration = originalRequestedValues.permitLengthYears;
+          if (typeof baselineDuration === 'number' && baselineDuration >= 1 && baselineDuration <= 15) {
+            setOriginalBaselineDurationYears(baselineDuration);
+          } else {
+            setOriginalBaselineDurationYears(undefined);
+          }
+          const baselineVolume = originalRequestedValues.volumeM3;
+          if (typeof baselineVolume === 'number' && Number.isFinite(baselineVolume)) {
+            setOriginalBaselineVolumeM3(baselineVolume);
+          } else {
+            setOriginalBaselineVolumeM3(undefined);
           }
           
           // ASSESSOR RECOMMENDED VALUES (from assessor adjustments)
           const assessorDuration = assessorAdjustments.permitLengthYears 
-            || (typeof originalDuration === 'number' ? originalDuration : undefined);
+            || (typeof currentRequestedDuration === 'number' ? currentRequestedDuration : undefined);
           if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
             setRecommendedDurationYears(assessorDuration);
           }
           const assessorVolume = assessorAdjustments.recommendedVolumeM3 
-            || (typeof originalVolume === 'number' ? originalVolume : undefined);
+            || (typeof currentRequestedVolume === 'number' ? currentRequestedVolume : undefined);
           if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
             setRecommendedVolumeM3(assessorVolume);
           }
@@ -887,6 +902,8 @@ export default function VerificationApplicationPage() {
                       <AssessorRecommendations
                         requestedDurationYears={requestedDurationYears}
                         requestedVolumeM3={requestedVolumeM3}
+                        originalBaselineDurationYears={originalBaselineDurationYears}
+                        originalBaselineVolumeM3={originalBaselineVolumeM3}
                         recommendedDurationYears={recommendedDurationYears}
                         recommendedVolumeM3={recommendedVolumeM3}
                         readOnly={true}
