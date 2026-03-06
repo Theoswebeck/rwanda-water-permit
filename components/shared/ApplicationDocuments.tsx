@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { DocumentViewer } from "@/components/documents/document-viewer";
 import { useDocuments } from "@/hooks/useDocuments";
+import { getDocumentUrl } from "@/lib/supabase-storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -266,7 +266,12 @@ export function ApplicationDocuments({
                         size="sm" 
                         variant="outline" 
                         className="gap-2"
-                        onClick={() => doc.file_path && window.open(doc.file_path, '_blank')}
+                        onClick={() => {
+                          const url = getDocumentUrl(doc.file_path);
+                          if (url) {
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          }
+                        }}
                         title="View document"
                       >
                         <FileText className="h-4 w-4" />
@@ -280,10 +285,12 @@ export function ApplicationDocuments({
                         variant="outline" 
                         className="gap-2"
                         onClick={() => {
-                          if (doc.file_path) {
+                          const url = getDocumentUrl(doc.file_path);
+                          if (url) {
                             const link = document.createElement('a');
-                            link.href = doc.file_path;
+                            link.href = url;
                             link.download = doc.name;
+                            link.target = "_blank";
                             link.click();
                           }
                         }}

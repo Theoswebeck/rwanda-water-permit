@@ -59,6 +59,20 @@ const PermitRenewalForm = dynamic(
   }
 );
 
+// Lazy load the PermitTransferForm component for transfer applications
+const PermitTransferForm = dynamic(
+  () => import("@/components/dashboard/permit-transfer-form").then(mod => ({ default: mod.PermitTransferForm })),
+  {
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+        <span className="ml-3 text-sm text-muted-foreground">Loading transfer details...</span>
+      </div>
+    ),
+    ssr: false
+  }
+);
+
 interface ApplicationWithRelations extends Application {
   applicant?: UserType;
   documents?: Document[];
@@ -281,6 +295,10 @@ export default function ApplicationDetailPage() {
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
   const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
+  const [transferPermit, setTransferPermit] = useState<PermitWithApplication | null>(null);
+  const [loadingTransferPermit, setLoadingTransferPermit] = useState(false);
+  const [transferFormData, setTransferFormData] = useState<any>(null);
+  const [isTransferApp, setIsTransferApp] = useState(false);
   const [issuedPermit, setIssuedPermit] = useState<IssuedPermitMeta | null>(null);
   const [isDownloadingPermit, setIsDownloadingPermit] = useState(false);
   const [isDownloadingTerms, setIsDownloadingTerms] = useState(false);
@@ -384,6 +402,77 @@ export default function ApplicationDetailPage() {
           setApplication(appWithRelations);
           console.log('✅ Application details loaded:', appWithRelations);
 
+          const parsedNotes = (() => {
+            try {
+              return (appWithRelations as any).internal_notes ? JSON.parse((appWithRelations as any).internal_notes) : null;
+            } catch {
+              return null;
+            }
+          })();
+          const transferDetected =
+            appWithRelations.application_type === "transfer" ||
+            parsedNotes?.isTransfer === true;
+          setIsTransferApp(transferDetected);
+
+          if (transferDetected) {
+            setTransferFormData(parsedNotes?.transferFormData || null);
+            const originalPermitId = parsedNotes?.originalPermitId;
+            const originalPermitNumber = parsedNotes?.originalPermitNumber;
+
+            if (originalPermitId || originalPermitNumber) {
+              setLoadingTransferPermit(true);
+              try {
+                let permitQuery = supabase
+                  .from("permits")
+                  .select(`
+                    *,
+                    application:applications!application_id (
+                      id,
+                      project_title,
+                      province,
+                      district,
+                      sector,
+                      cell,
+                      water_source,
+                      water_purpose,
+                      applicant:users!applicant_id (
+                        id,
+                        email,
+                        phone,
+                        first_name,
+                        last_name,
+                        company_name,
+                        company_address,
+                        company_phone,
+                        account_type
+                      )
+                    )
+                  `);
+
+                if (originalPermitId) {
+                  permitQuery = permitQuery.eq("id", originalPermitId);
+                } else if (originalPermitNumber) {
+                  permitQuery = permitQuery.eq("permit_number", originalPermitNumber);
+                }
+
+                const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
+                if (permitError) throw permitError;
+                setTransferPermit((permitData as PermitWithApplication) || null);
+              } catch (permitErr) {
+                console.error("Error fetching original permit for transfer:", permitErr);
+                setTransferPermit(null);
+              } finally {
+                setLoadingTransferPermit(false);
+              }
+            } else {
+              setTransferPermit(null);
+            }
+          } else {
+            setTransferFormData(null);
+            setTransferPermit(null);
+            setLoadingTransferPermit(false);
+          }
+
           const { data: permitRows, error: permitLookupError } = await supabase
             .from("permits")
             .select("id, permit_number, permit_pdf_url, created_at")
@@ -430,11 +519,6 @@ export default function ApplicationDetailPage() {
           processDocsIntoMap(documents);
 
           // 2. For modifications: also load documents from the original application
-          const parsedNotes = (() => {
-            try {
-              return (appWithRelations as any).internal_notes ? JSON.parse((appWithRelations as any).internal_notes) : null;
-            } catch { return null; }
-          })();
           const isModification = (appWithRelations as any).is_modification === true || parsedNotes?.isModification === true;
           if (isModification) {
             const originalAppId = (appWithRelations as any).modified_from_application_id || parsedNotes?.originalApplicationId;
@@ -832,7 +916,7 @@ export default function ApplicationDetailPage() {
 
           {/* Transfer terms gate (transferor cannot accept terms) */}
           {application.status === 'approved_pending_permit' &&
-            (application as any).application_type === 'transfer' &&
+            isTransferApp &&
             transferTermsBlocked && (
               <Alert className="border-amber-200 bg-amber-50">
                 <AlertTriangle className="h-4 w-4 text-amber-700" />
@@ -976,7 +1060,34 @@ export default function ApplicationDetailPage() {
           
           {/* Application Form in Read-only Mode */}
           {/* For renewal applications, show the renewal form */}
-          {(application as any).is_renewal && renewalPermit ? (
+          {isTransferApp ? (
+            loadingTransferPermit ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                <span className="ml-3 text-sm text-muted-foreground">Loading transfer details...</span>
+              </div>
+            ) : transferPermit ? (
+              <PermitTransferForm
+                permit={transferPermit}
+                userData={userData}
+                onSubmit={async () => {}}
+                onSaveAsDraft={async () => {}}
+                isLoading={false}
+                initialData={transferFormData || undefined}
+                initialDocuments={initialDocuments}
+                mode="view"
+                readOnly={true}
+                currentApplication={application}
+              />
+            ) : (
+              <Alert className="border-amber-200 bg-amber-50">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription>
+                  Original permit details could not be loaded for this transfer.
+                </AlertDescription>
+              </Alert>
+            )
+          ) : (application as any).is_renewal && renewalPermit ? (
             <PermitRenewalForm 
               permit={renewalPermit}
               userData={userData}

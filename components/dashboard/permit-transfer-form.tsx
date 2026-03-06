@@ -73,9 +73,25 @@ const transferFormSchema = z.object({
   effectiveDate: z.string().min(1, "Effective date is required"),
   expirationDate: z.string().min(1, "Expiration date is required"),
   facilityProjectName: z.string().min(1, "Facility/Project name is required"),
-  permitLocationSector: z.string().min(1, "Sector is required"),
-  permitLocationDistrict: z.string().min(1, "District is required"),
   permitLocationProvince: z.string().min(1, "Province is required"),
+  permitLocationDistrict: z.string().min(1, "District is required"),
+  permitLocationSector: z.string().min(1, "Sector is required"),
+  permitLocationCell: z.string().optional(),
+  permitLocationVillage: z.string().optional(),
+
+  // Water source & purpose
+  waterSourceType: z.string().optional(),
+  waterSourceName: z.string().optional(),
+  waterPurpose: z.string().optional(),
+  waterAllowance: z.string().optional(),
+  allowanceUnit: z.string().optional(),
+
+  // Abstraction & coordinates
+  abstractionMethod: z.string().optional(),
+  flowRate: z.string().optional(),
+  flowRateUnit: z.string().optional(),
+  waterSourceLatitude: z.string().optional(),
+  waterSourceLongitude: z.string().optional(),
 
   // PART 2: PERMIT HOLDER/TRANSFEROR (current owner - pre-filled)
   transferorName: z.string().min(1, "Transferor name is required"),
@@ -200,6 +216,17 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const getDefaultValues = useMemo((): Partial<TransferFormValues> => {
     const today = new Date().toISOString().split('T')[0];
     
+    const internalNotes = (() => {
+      try {
+        return permit.application?.internal_notes
+          ? JSON.parse(permit.application.internal_notes as unknown as string)
+          : {};
+      } catch { return {}; }
+    })();
+    const savedAbstraction = Array.isArray(internalNotes?.waterAbstractionDetails)
+      ? internalNotes.waterAbstractionDetails[0]
+      : null;
+
     const defaults: Partial<TransferFormValues> = {
       // Part 1: Permit Particulars (from permit)
       permitNumber: permit.permit_number || '',
@@ -209,6 +236,24 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       permitLocationProvince: permit.application?.province || '',
       permitLocationDistrict: permit.application?.district || '',
       permitLocationSector: permit.application?.sector || '',
+      permitLocationCell: permit.application?.cell || '',
+      permitLocationVillage: permit.application?.village || '',
+
+      // Water source & purpose (from permit)
+      waterSourceType: permit.water_source || '',
+      waterSourceName: permit.application?.water_body_name || '',
+      waterPurpose: permit.purpose || '',
+      waterAllowance: permit.water_allowance ? String(permit.water_allowance) : '',
+      allowanceUnit: permit.allowance_unit || 'm³/year',
+
+      // Abstraction & coordinates (from application / internal_notes)
+      abstractionMethod: permit.application?.water_taking_method || savedAbstraction?.abstractionMethod || '',
+      flowRate: permit.application?.flow_rate_m3_per_second
+        ? String(permit.application.flow_rate_m3_per_second)
+        : savedAbstraction?.flowRate || '',
+      flowRateUnit: savedAbstraction?.flowRateUnit || 'm³/s',
+      waterSourceLatitude: internalNotes?.waterSourceLatitude || '',
+      waterSourceLongitude: internalNotes?.waterSourceLongitude || '',
 
       // Part 2: Transferor (current owner = logged-in user who owns the permit)
       transferorName: userData.name || '',
@@ -432,8 +477,26 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
   // Tab validation functions
   const validatePermitInfoTab = async () => {
-    const fields = ['permitNumber', 'effectiveDate', 'expirationDate', 'facilityProjectName', 'permitLocationProvince', 'permitLocationDistrict', 'permitLocationSector'];
-    return await form.trigger(fields as any);
+    const fields = [
+      'permitNumber', 'effectiveDate', 'expirationDate', 'facilityProjectName',
+      'permitLocationProvince', 'permitLocationDistrict', 'permitLocationSector',
+    ];
+    const valid = await form.trigger(fields as any);
+    if (!valid) return false;
+
+    if (isManualPermit) {
+      const wsType = form.getValues('waterSourceType');
+      const wPurpose = form.getValues('waterPurpose');
+      if (!wsType) {
+        setValidationError("Water source type is required for manual permits.");
+        return false;
+      }
+      if (!wPurpose) {
+        setValidationError("Water use / purpose is required for manual permits.");
+        return false;
+      }
+    }
+    return true;
   };
 
   const validateTransferorTab = async () => {
@@ -581,6 +644,16 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
   const handleFormSubmit = async (values: TransferFormValues) => {
     try {
+      // Applicants must complete payment first. This blocks accidental native form submits
+      // (e.g. Enter key or any button rendered without type="button").
+      if (!isStaffView) {
+        setValidationError("Payment is required before submission. Please continue to the Payment tab to complete payment.");
+        setActiveTab("payment");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        setTimeout(() => setValidationError(null), 7000);
+        return;
+      }
+
       const submissionData = { ...values, ...files };
       await onSubmit(submissionData, 'submitted');
     } catch (error) {
@@ -767,7 +840,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Location</h4>
+                    <h4 className="font-medium">Permit Location</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <FormField
                         control={form.control}
@@ -805,6 +878,298 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             <FormLabel>Sector</FormLabel>
                             <FormControl>
                               <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="permitLocationCell"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Cell</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ""} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="permitLocationVillage"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Village</FormLabel>
+                            <FormControl>
+                              <Input {...field} value={field.value || ""} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Water Source & Purpose */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Water Source &amp; Purpose</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="waterSourceType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Water Source Type</FormLabel>
+                            {isManualPermit && !readOnly ? (
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select water source type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="lake">Lake</SelectItem>
+                                  <SelectItem value="dam">Dam</SelectItem>
+                                  <SelectItem value="spring">Spring</SelectItem>
+                                  <SelectItem value="borehole">Borehole</SelectItem>
+                                  <SelectItem value="stream_river">Stream/River</SelectItem>
+                                  <SelectItem value="river">River</SelectItem>
+                                  <SelectItem value="surface_water">Surface Water</SelectItem>
+                                  <SelectItem value="groundwater">Groundwater</SelectItem>
+                                  <SelectItem value="swamp">Swamp</SelectItem>
+                                  <SelectItem value="reservoir">Reservoir</SelectItem>
+                                  <SelectItem value="wetland">Wetland</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="waterSourceName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Water Source Name</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ""}
+                                placeholder="e.g., Lake Kivu, Nyabarongo River"
+                                disabled={readOnly || !isManualPermit}
+                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="waterPurpose"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Water Use / Purpose</FormLabel>
+                            {isManualPermit && !readOnly ? (
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select water purpose" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="domestic">Domestic Use</SelectItem>
+                                  <SelectItem value="irrigation">Irrigation</SelectItem>
+                                  <SelectItem value="industrial">Industrial</SelectItem>
+                                  <SelectItem value="livestock">Livestock</SelectItem>
+                                  <SelectItem value="fish_farming_lakes">Fish Farming (Lakes)</SelectItem>
+                                  <SelectItem value="fish_farming_ponds">Fish Farming (Ponds)</SelectItem>
+                                  <SelectItem value="recreation">Recreation</SelectItem>
+                                  <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
+                                  <SelectItem value="mining">Mining</SelectItem>
+                                  <SelectItem value="municipal_supply">Municipal Supply</SelectItem>
+                                  <SelectItem value="other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Abstraction & Volume */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Abstraction &amp; Volume</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="waterAllowance"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Water Allowance</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ""}
+                                type="number"
+                                step="0.01"
+                                placeholder="Permitted volume"
+                                disabled={readOnly || !isManualPermit}
+                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="allowanceUnit"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Allowance Unit</FormLabel>
+                            {isManualPermit && !readOnly ? (
+                              <Select onValueChange={field.onChange} value={field.value || "m³/year"}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Unit" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="m³/year">m³/year</SelectItem>
+                                  <SelectItem value="m³/day">m³/day</SelectItem>
+                                  <SelectItem value="m³/month">m³/month</SelectItem>
+                                  <SelectItem value="l/s">l/s</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="abstractionMethod"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Method of Abstraction</FormLabel>
+                            {isManualPermit && !readOnly ? (
+                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select method" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="Pumping">Pumping</SelectItem>
+                                  <SelectItem value="Gravity">Gravity</SelectItem>
+                                  <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
+                                  <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
+                                  <SelectItem value="Borehole">Borehole</SelectItem>
+                                  <SelectItem value="Spring Capture">Spring Capture</SelectItem>
+                                  <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="flowRate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Flow Rate (m³/s)</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ""}
+                                type="number"
+                                step="0.001"
+                                placeholder="Enter flow rate"
+                                disabled={readOnly || !isManualPermit}
+                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Coordinates */}
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Water Source Coordinates</h4>
+                    <p className="text-xs text-muted-foreground">
+                      For single-point abstraction, enter latitude and longitude of the water intake point.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="waterSourceLatitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Latitude</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ""}
+                                placeholder="e.g., -1.9403"
+                                disabled={readOnly || !isManualPermit}
+                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="waterSourceLongitude"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Longitude</FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                value={field.value || ""}
+                                placeholder="e.g., 29.8739"
+                                disabled={readOnly || !isManualPermit}
+                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1605,22 +1970,18 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
                       <PaymentTab
                         application={currentApplication ?? undefined}
-                        formData={
-                          !currentApplication?.id
-                            ? {
-                                ...form.getValues(),
-                                ...files,
-                                // Customer info for payment - use transferor (the one paying)
-                                emailAddress: form.getValues("transferorEmail"),
-                                telephoneContact: form.getValues("transferorPhone"),
-                                fullNameApplicant: form.getValues("transferorName"),
-                                // Transfer-specific metadata
-                                isTransfer: true,
-                                permitId: permit.id,
-                                permitNumber: form.getValues("permitNumber"),
-                              }
-                            : undefined
-                        }
+                        formData={{
+                          ...form.getValues(),
+                          ...files,
+                          // Customer info for payment - use transferor (the one paying)
+                          emailAddress: form.getValues("transferorEmail"),
+                          telephoneContact: form.getValues("transferorPhone"),
+                          fullNameApplicant: form.getValues("transferorName"),
+                          // Transfer-specific metadata
+                          isTransfer: true,
+                          permitId: permit.id,
+                          permitNumber: form.getValues("permitNumber"),
+                        }}
                         isSavingApplication={isLoading}
                         saveError={paymentPrepError}
                         onRetrySave={() => {

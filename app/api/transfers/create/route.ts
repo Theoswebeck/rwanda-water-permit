@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PindoClient } from '@/lib/pindo-client'
-import { sendResendEmail } from '@/lib/notifications/resend-email'
-import { getPortalUrl } from '@/lib/notifications/portal-url'
 import { query } from '@/lib/db/postgres'
 import { getAuthenticatedUserId, isMissingTransferRequestsTable, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
@@ -106,44 +103,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Failed to create transfer request' }, { status: 500 })
     }
     if (!tr) return NextResponse.json({ success: false, message: 'Failed to create transfer request' }, { status: 500 })
-
-    // Notify transferee (may not have an account yet).
-    const portalUrl = getPortalUrl()
-    const appNumber = app.application_number || app.id
-    const title = 'Permit Transfer Requested'
-    const subject = `Permit transfer requested — ${appNumber}`
-    const text = [
-      `A water permit transfer has been requested for you.`,
-      ``,
-      `Reference: ${appNumber}`,
-      `Project: ${app.project_title || '(not specified)'}`,
-      ``,
-      `Next steps:`,
-      `- If you do not have an account, please sign up using this same email and phone number.`,
-      `- Once Rwanda Water Resources Board approves the transfer application, you will be able to log in, approve the transfer request, and accept the Terms and Conditions to receive the permit.`,
-      ``,
-      `Portal: ${portalUrl}`,
-    ].join('\n')
-
-    try {
-      await sendResendEmail({ to: transfereeEmail, subject, title, text })
-    } catch (e) {
-      console.warn('⚠️ Transfer request email failed (non-blocking):', e)
-    }
-
-    try {
-      const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
-      const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-      const sms = `RWB: A permit transfer was requested for you (Ref ${appNumber}). Sign up/login with this email+phone. You can approve + accept terms once RWB approves it. Portal: ${portalUrl}`
-      if (pindo.isValidRwandanPhone(transfereePhoneKey)) {
-        await pindo.sendSMS(transfereePhoneKey, sms, senderName)
-      } else {
-        // still attempt send (formatting is handled in client); skip if clearly invalid
-        console.warn('⚠️ Invalid transferee phone format; skipping SMS send.')
-      }
-    } catch (e) {
-      console.warn('⚠️ Transfer request SMS failed (non-blocking):', e)
-    }
 
     return NextResponse.json({ success: true, transferRequest: tr })
   } catch (err) {

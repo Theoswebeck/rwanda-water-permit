@@ -54,8 +54,9 @@ import { PermitSelectForModification } from "@/components/dashboard/permit-selec
 import { PermitSelectForRenewal, type PermitWithApplication as RenewalPermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ArrowLeft, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, AlertCircle, Loader2, FileSearch } from "lucide-react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApplications } from "@/hooks/useApplications";
@@ -949,6 +950,27 @@ function NewApplicationContent() {
     setApplicationMode(null);
   }, [createManualSelectedPermit]);
 
+  const buildTransferCustomerSnapshot = useCallback((formData: any) => {
+    const profileLike = userProfile as unknown as Record<string, unknown> | null | undefined;
+    const profilePhone =
+      (typeof profileLike?.phone === 'string' && profileLike.phone.trim()) ||
+      (typeof profileLike?.mobile_phone === 'string' && profileLike.mobile_phone.trim()) ||
+      (typeof profileLike?.company_phone === 'string' && profileLike.company_phone.trim()) ||
+      (typeof profileLike?.landline_phone === 'string' && profileLike.landline_phone.trim()) ||
+      '';
+
+    const profileName =
+      `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() ||
+      userProfile?.company_name ||
+      '';
+
+    return {
+      email: String(formData?.transferorEmail || userProfile?.email || '').trim(),
+      phone: String(formData?.transferorPhone || profilePhone || '').trim(),
+      name: String(formData?.transferorName || profileName || '').trim(),
+    };
+  }, [userProfile]);
+
   // Handle transfer form submission
   const handleTransferSubmit = useCallback(async (formData: any, status: 'submitted') => {
     try {
@@ -967,24 +989,30 @@ function NewApplicationContent() {
           normalizedPermitNumber: selectedPermit?.permit_number || "",
           lookupStatus: "found" as const,
         };
+      const customerSnapshot = buildTransferCustomerSnapshot(formData);
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
-        status: 'submitted',
+        status: 'pending_payment',
         application_type: 'transfer',
-        water_source: selectedPermit?.water_source || 'other',
-        water_purpose: selectedPermit?.purpose || 'other',
-        province: selectedPermit?.application?.province || 'Kigali',
-        district: selectedPermit?.application?.district || '',
-        sector: selectedPermit?.application?.sector || '',
-        cell: selectedPermit?.application?.cell || '',
-        project_title: `Transfer: ${selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
-        project_description: `Permit transfer request for permit ${selectedPermit?.permit_number}`,
+        water_source: formData.waterSourceType || selectedPermit?.water_source || 'other',
+        water_purpose: formData.waterPurpose || selectedPermit?.purpose || 'other',
+        province: formData.permitLocationProvince || selectedPermit?.application?.province || 'Kigali',
+        district: formData.permitLocationDistrict || selectedPermit?.application?.district || '',
+        sector: formData.permitLocationSector || selectedPermit?.application?.sector || '',
+        cell: formData.permitLocationCell || selectedPermit?.application?.cell || '',
+        village: formData.permitLocationVillage || selectedPermit?.application?.village || '',
+        water_body_name: formData.waterSourceName || selectedPermit?.application?.water_body_name || '',
+        project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
+        project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
           originalPermitNumber: selectedPermit?.permit_number,
           transferFormData: formData,
+          customerSnapshot,
+          waterSourceLatitude: formData.waterSourceLatitude || '',
+          waterSourceLongitude: formData.waterSourceLongitude || '',
           ...(permitReference ? { permitReference } : {}),
         }),
       };
@@ -1035,7 +1063,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermit, userProfile?.id, createApplication]);
+  }, [selectedPermit, userProfile?.id, createApplication, buildTransferCustomerSnapshot]);
 
   // Handle transfer draft save
   const handleTransferSaveAsDraft = useCallback(async (formData: any, status: 'draft') => {
@@ -1052,24 +1080,30 @@ function NewApplicationContent() {
           normalizedPermitNumber: selectedPermit?.permit_number || "",
           lookupStatus: "found" as const,
         };
+      const customerSnapshot = buildTransferCustomerSnapshot(formData);
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
         application_type: 'transfer',
-        water_source: selectedPermit?.water_source || 'other',
-        water_purpose: selectedPermit?.purpose || 'other',
-        province: selectedPermit?.application?.province || 'Kigali',
-        district: selectedPermit?.application?.district || '',
-        sector: selectedPermit?.application?.sector || '',
-        cell: selectedPermit?.application?.cell || '',
-        project_title: `Transfer: ${selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
-        project_description: `Permit transfer request for permit ${selectedPermit?.permit_number}`,
+        water_source: formData.waterSourceType || selectedPermit?.water_source || 'other',
+        water_purpose: formData.waterPurpose || selectedPermit?.purpose || 'other',
+        province: formData.permitLocationProvince || selectedPermit?.application?.province || 'Kigali',
+        district: formData.permitLocationDistrict || selectedPermit?.application?.district || '',
+        sector: formData.permitLocationSector || selectedPermit?.application?.sector || '',
+        cell: formData.permitLocationCell || selectedPermit?.application?.cell || '',
+        village: formData.permitLocationVillage || selectedPermit?.application?.village || '',
+        water_body_name: formData.waterSourceName || selectedPermit?.application?.water_body_name || '',
+        project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
+        project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
           originalPermitNumber: selectedPermit?.permit_number,
           transferFormData: formData,
+          customerSnapshot,
+          waterSourceLatitude: formData.waterSourceLatitude || '',
+          waterSourceLongitude: formData.waterSourceLongitude || '',
           ...(permitReference ? { permitReference } : {}),
         }),
       };
@@ -1108,13 +1142,22 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermit, userProfile?.id, createApplication, updateApplication, currentTransferApplication]);
+  }, [selectedPermit, userProfile?.id, createApplication, updateApplication, currentTransferApplication, buildTransferCustomerSnapshot]);
 
   // User data for transfer form
   const transferUserData = useMemo(() => ({
     email: userProfile?.email || "",
     name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || userProfile?.company_name || "",
-    phone: userProfile?.phone || userProfile?.company_phone || "",
+    phone:
+      (
+        (
+          (userProfile as unknown as Record<string, unknown> | null | undefined)?.phone ||
+          (userProfile as unknown as Record<string, unknown> | null | undefined)?.mobile_phone ||
+          (userProfile as unknown as Record<string, unknown> | null | undefined)?.company_phone ||
+          (userProfile as unknown as Record<string, unknown> | null | undefined)?.landline_phone ||
+          ""
+        ) as string
+      ).trim(),
     address: userProfile?.company_address || "",
     account_type: userProfile?.account_type || 'individual',
   }), [userProfile]);
@@ -1354,6 +1397,58 @@ function NewApplicationContent() {
       
       console.log('📋 Renewal form data received:', formData);
 
+      const report = formData?.waterUseReport;
+      const requiredReportSections = [
+        'section3',
+        'section3_quarterly',
+        'section4',
+        'section5_monitoring',
+        'section6_employment',
+        'section6_ohs',
+        'section7',
+        'section8',
+        'section9_declaration',
+      ];
+      const hasAllReportSections = requiredReportSections.every((sectionKey) => {
+        const value = report?.[sectionKey];
+        return value !== null && value !== undefined;
+      });
+      const hasValidDeclaration =
+        Boolean(report?.section9_declaration?.declarantName) &&
+        Boolean(report?.section9_declaration?.declarationDate) &&
+        report?.section9_declaration?.agreed === true;
+
+      if (!hasAllReportSections || !hasValidDeclaration) {
+        throw new Error('Complete and submit all Water Use Report sections before submitting renewal.');
+      }
+
+      const hasLegacyIdentityProof = Boolean(
+        (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile,
+      );
+      let hasRenewalLetter = Boolean(formData?.renewalLetter) || hasLegacyIdentityProof;
+
+      if (!hasRenewalLetter && currentRenewalApplication?.id) {
+        const { data: existingLetter, error: existingLetterError } = await supabase
+          .from('documents')
+          .select('id')
+          .eq('application_id', currentRenewalApplication.id)
+          .eq('type', 'renewal_request_letter')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingLetterError) {
+          console.error('❌ Failed to verify existing renewal letter document:', existingLetterError);
+        }
+
+        const existingLetterRecord = existingLetter as { id?: string } | null;
+        hasRenewalLetter = Boolean(existingLetterRecord?.id);
+      }
+
+      if (!hasRenewalLetter) {
+        throw new Error('Upload the required renewal request letter before submitting renewal.');
+      }
+
       // 🔒 Normalize water_purpose: DB may have migrated 'aquaculture' → 'fish_farming_lakes'.
       const rawPurpose: string = selectedPermitForRenewal?.purpose || 'other';
       const normalizedPurpose = rawPurpose === 'aquaculture' ? 'fish_farming_lakes' : rawPurpose;
@@ -1370,18 +1465,22 @@ function NewApplicationContent() {
           lookupStatus: "found" as const,
         };
       
-      // Core columns guaranteed to exist in the base applications schema.
+      // Prefer permit details entered by user (manual permits) over permit object
+      const pd = formData.permitDetails;
+
       const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
         status: 'submitted',
         submitted_at: new Date().toISOString(),
         application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
-        water_source: selectedPermitForRenewal?.water_source || 'other',
-        water_purpose: normalizedPurpose,
-        province: selectedPermitForRenewal?.application?.province || 'Kigali',
-        district: selectedPermitForRenewal?.application?.district || '',
-        sector: selectedPermitForRenewal?.application?.sector || '',
-        cell: selectedPermitForRenewal?.application?.cell || '',
+        water_source: pd?.waterSourceType || selectedPermitForRenewal?.water_source || 'other',
+        water_purpose: pd?.waterPurpose || normalizedPurpose,
+        province: pd?.province || selectedPermitForRenewal?.application?.province || 'Kigali',
+        district: pd?.district || selectedPermitForRenewal?.application?.district || '',
+        sector: pd?.sector || selectedPermitForRenewal?.application?.sector || '',
+        cell: pd?.cell || selectedPermitForRenewal?.application?.cell || '',
+        village: pd?.village || selectedPermitForRenewal?.application?.village || '',
+        water_body_name: pd?.waterSourceName || selectedPermitForRenewal?.application?.water_body_name || '',
         project_title: `Renewal: ${selectedPermitForRenewal?.application?.project_title || selectedPermitForRenewal?.permit_number}`,
         project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
         sla_status: 'on_time',
@@ -1392,6 +1491,7 @@ function NewApplicationContent() {
           originalApplicationId: selectedPermitForRenewal?.application_id,
           waterUseReport: formData.waterUseReport,
           renewalFormData: safeFormData,
+          permitDetails: pd || null,
           ...(permitReference ? { permitReference } : {}),
         }),
       };
@@ -1401,8 +1501,23 @@ function NewApplicationContent() {
       if (selectedPermitForRenewal?.id) {
         optionalColumns.renewed_from_permit_id = selectedPermitForRenewal.id;
       }
-      if (selectedPermitForRenewal?.application?.intended_activities) {
-        optionalColumns.intended_activities = selectedPermitForRenewal.application.intended_activities;
+      const activities = pd?.intendedActivity
+        ? [pd.intendedActivity]
+        : selectedPermitForRenewal?.application?.intended_activities;
+      if (activities) {
+        optionalColumns.intended_activities = activities;
+      }
+      if (pd?.abstractionMethod) {
+        optionalColumns.water_taking_method = pd.abstractionMethod;
+      }
+      if (pd?.flowRate != null) {
+        optionalColumns.flow_rate_m3_per_second = pd.flowRate;
+      }
+      if (pd?.maxDailyVolume != null) {
+        optionalColumns.max_daily_volume_m3 = pd.maxDailyVolume;
+      }
+      if (pd?.maxYearlyVolume != null) {
+        optionalColumns.max_yearly_volume_m3 = pd.maxYearlyVolume;
       }
 
       const renewalApplicationData = { ...corePayload, ...optionalColumns };
@@ -1506,20 +1621,21 @@ function NewApplicationContent() {
           lookupStatus: "found" as const,
         };
       
-      // Core columns that exist in the base applications schema and are safe to
-      // send in every environment.  Migration-dependent columns (is_renewal,
-      // renewed_from_permit_id, intended_activities) are added separately and
-      // stripped on retry if the DB rejects them.
+      // Prefer permit details entered by user (manual permits) over permit object
+      const pd = formData.permitDetails;
+
       const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
         status: 'draft',
         application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
-        water_source: selectedPermitForRenewal?.water_source || 'other',
-        water_purpose: normalizedWaterPurpose,
-        province: selectedPermitForRenewal?.application?.province || 'Kigali',
-        district: selectedPermitForRenewal?.application?.district || '',
-        sector: selectedPermitForRenewal?.application?.sector || '',
-        cell: selectedPermitForRenewal?.application?.cell || '',
+        water_source: pd?.waterSourceType || selectedPermitForRenewal?.water_source || 'other',
+        water_purpose: pd?.waterPurpose || normalizedWaterPurpose,
+        province: pd?.province || selectedPermitForRenewal?.application?.province || 'Kigali',
+        district: pd?.district || selectedPermitForRenewal?.application?.district || '',
+        sector: pd?.sector || selectedPermitForRenewal?.application?.sector || '',
+        cell: pd?.cell || selectedPermitForRenewal?.application?.cell || '',
+        village: pd?.village || selectedPermitForRenewal?.application?.village || '',
+        water_body_name: pd?.waterSourceName || selectedPermitForRenewal?.application?.water_body_name || '',
         project_title: `Renewal: ${selectedPermitForRenewal?.application?.project_title || selectedPermitForRenewal?.permit_number}`,
         project_description: `Permit renewal request for permit ${selectedPermitForRenewal?.permit_number}`,
         sla_status: 'on_time',
@@ -1530,6 +1646,7 @@ function NewApplicationContent() {
           originalApplicationId: selectedPermitForRenewal?.application_id,
           waterUseReport: formData.waterUseReport,
           renewalFormData: safeFormDataForNotes,
+          permitDetails: pd || null,
           ...(permitReference ? { permitReference } : {}),
         }),
       };
@@ -1540,8 +1657,23 @@ function NewApplicationContent() {
         optionalColumns.renewed_from_permit_id = selectedPermitForRenewal.id;
       }
       optionalColumns.is_renewal = true;
-      if (selectedPermitForRenewal?.application?.intended_activities) {
-        optionalColumns.intended_activities = selectedPermitForRenewal.application.intended_activities;
+      const draftActivities = pd?.intendedActivity
+        ? [pd.intendedActivity]
+        : selectedPermitForRenewal?.application?.intended_activities;
+      if (draftActivities) {
+        optionalColumns.intended_activities = draftActivities;
+      }
+      if (pd?.abstractionMethod) {
+        optionalColumns.water_taking_method = pd.abstractionMethod;
+      }
+      if (pd?.flowRate != null) {
+        optionalColumns.flow_rate_m3_per_second = pd.flowRate;
+      }
+      if (pd?.maxDailyVolume != null) {
+        optionalColumns.max_daily_volume_m3 = pd.maxDailyVolume;
+      }
+      if (pd?.maxYearlyVolume != null) {
+        optionalColumns.max_yearly_volume_m3 = pd.maxYearlyVolume;
       }
 
       const renewalApplicationData: Record<string, unknown> = { ...corePayload, ...optionalColumns };
@@ -2178,15 +2310,37 @@ function NewApplicationContent() {
 
     // Modification mode - fill form step
     if (applicationMode === 'modification' && modificationStep === 'fill-form' && selectedPermitForModification) {
+      const isManualModificationPermit = selectedPermitForModification?.id?.startsWith("manual-");
+      const modPermitRef = (selectedPermitForModification as any)?.permitReference as import("@/lib/permit/permit-reference").PermitReference | undefined;
       return (
         <>
           <div>
             <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
               Modify Permit: {selectedPermitForModification.permit_number}
             </h1>
-            <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
-              Update the details of your existing permit. Modified fields will be tracked and reviewed. The permit number remains unchanged.
-            </p>
+
+            {isManualModificationPermit && (
+              <Alert className="mt-4 border-indigo-200 bg-indigo-50">
+                <FileSearch className="h-4 w-4 text-indigo-700" />
+                <AlertDescription className="text-indigo-800">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge className={modPermitRef?.lookupStatus === "found" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}>
+                      {modPermitRef?.lookupStatus === "found" ? "Registry match found" : "Not found in registry"}
+                    </Badge>
+                    <span>Manual entry &mdash; this permit is not linked in the system.</span>
+                  </div>
+                  <p className="mt-1 text-sm">
+                    Fill in all permit details below. Staff will verify against registry records during review.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {!isManualModificationPermit && (
+              <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
+                Update the details of your existing permit. Modified fields will be tracked and reviewed. The permit number remains unchanged.
+              </p>
+            )}
             <div className="mt-2">
               <Button
                 variant="outline"

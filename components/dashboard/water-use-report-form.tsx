@@ -62,6 +62,12 @@ interface WaterUseReportFormProps {
   isReadOnly?: boolean;
 }
 
+type ValidationIssue = {
+  sectionId: string;
+  label: string;
+  message?: string;
+};
+
 // Helper to format date
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -204,10 +210,425 @@ export function WaterUseReportForm({
 
   // Form state - organized by sections
   const [formData, setFormData] = useState(() => buildInitialFormData());
+  const tabOrder = useMemo(() => [
+    "section1",
+    "section2",
+    "section3",
+    "section4",
+    "section5",
+    "section6",
+    "section7",
+    "section8",
+    "section9",
+  ], []);
+  const sectionLabelById = useMemo(
+    () =>
+      ({
+        section1: "Section 1: General Info",
+        section2: "Section 2: Permitted Use",
+        section3: "Section 3: Actual Use",
+        section4: "Section 4: Efficiency",
+        section5: "Section 5: Environmental",
+        section6: "Section 6: Social/Gender",
+        section7: "Section 7: Compliance",
+        section8: "Section 8: Future Plans",
+        section9: "Section 9: Declaration",
+      }) as Record<string, string>,
+    [],
+  );
 
   useEffect(() => {
     setFormData(buildInitialFormData());
   }, [buildInitialFormData]);
+
+  const isBlank = useCallback((value: unknown) => {
+    if (value === null || value === undefined) return true;
+    if (typeof value === "string") return value.trim().length === 0;
+    return false;
+  }, []);
+
+  const parseNumeric = useCallback((value: unknown) => {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }, []);
+
+  const hasMoreThanTwoDecimals = useCallback((value: string) => {
+    if (!value || !value.includes(".")) return false;
+    const decimals = value.split(".")[1];
+    return decimals.length > 2;
+  }, []);
+
+  const addRequiredIssue = useCallback(
+    (issues: ValidationIssue[], sectionId: string, label: string, value: unknown) => {
+      if (isBlank(value)) {
+        issues.push({ sectionId, label, message: "is required" });
+      }
+    },
+    [isBlank],
+  );
+
+  const addNumericIssue = useCallback(
+    (
+      issues: ValidationIssue[],
+      sectionId: string,
+      label: string,
+      value: unknown,
+      options?: { min?: number; max?: number; integer?: boolean; maxDecimals?: number },
+    ) => {
+      if (isBlank(value)) {
+        issues.push({ sectionId, label, message: "is required" });
+        return;
+      }
+      const numeric = parseNumeric(value);
+      if (numeric === null) {
+        issues.push({ sectionId, label, message: "must be a valid number" });
+        return;
+      }
+      if (options?.integer && !Number.isInteger(numeric)) {
+        issues.push({ sectionId, label, message: "must be a whole number" });
+      }
+      if (options?.min !== undefined && numeric < options.min) {
+        issues.push({ sectionId, label, message: `must be at least ${options.min}` });
+      }
+      if (options?.max !== undefined && numeric > options.max) {
+        issues.push({ sectionId, label, message: `must be at most ${options.max}` });
+      }
+      if (
+        options?.maxDecimals !== undefined &&
+        typeof value === "string" &&
+        value.includes(".") &&
+        value.split(".")[1]?.length > options.maxDecimals
+      ) {
+        issues.push({
+          sectionId,
+          label,
+          message: `must have at most ${options.maxDecimals} decimal places`,
+        });
+      }
+    },
+    [isBlank, parseNumeric],
+  );
+
+  const formatIssueText = useCallback((issue: ValidationIssue) => {
+    return `${issue.label}${issue.message ? ` ${issue.message}` : ""}`;
+  }, []);
+
+  const formatSectionIssues = useCallback(
+    (sectionId: string, issues: ValidationIssue[]) => {
+      const sectionLabel = sectionLabelById[sectionId] || sectionId;
+      return `Complete ${sectionLabel}: ${issues.map(formatIssueText).join("; ")}`;
+    },
+    [formatIssueText, sectionLabelById],
+  );
+
+  const formatFullValidationMessage = useCallback(
+    (issues: ValidationIssue[]) => {
+      const grouped = issues.reduce<Record<string, ValidationIssue[]>>((acc, issue) => {
+        if (!acc[issue.sectionId]) acc[issue.sectionId] = [];
+        acc[issue.sectionId].push(issue);
+        return acc;
+      }, {});
+
+      return Object.entries(grouped)
+        .map(([sectionId, sectionIssues]) => formatSectionIssues(sectionId, sectionIssues))
+        .join(" | ");
+    },
+    [formatSectionIssues],
+  );
+
+  const validateSection = useCallback(
+    (sectionId: string) => {
+      const issues: ValidationIssue[] = [];
+
+      if (sectionId === "section1" || sectionId === "section2") {
+        return issues;
+      }
+
+      if (sectionId === "section3") {
+        addRequiredIssue(issues, sectionId, "Operational Status", formData.section3.operationalStatus);
+        addRequiredIssue(issues, sectionId, "Water Use-Related Conflicts/Challenges", formData.section3.waterUseConflicts);
+        addRequiredIssue(issues, sectionId, "Payment of Water Fees", formData.section3.paymentStatus);
+
+        if (template === "concession") {
+          addNumericIssue(
+            issues,
+            sectionId,
+            "Total Surface Area Occupied (Ha)",
+            formData.section3.totalSurfaceAreaOccupied,
+            { min: 0, maxDecimals: 2 },
+          );
+          if (formData.section3.changesduringYear) {
+            addRequiredIssue(issues, sectionId, "Changes Description", formData.section3.changesDescription);
+          }
+        }
+
+        if (template === "abstraction") {
+          (["q1", "q2", "q3", "q4"] as const).forEach((quarter, index) => {
+            const prefix = `Q${index + 1}`;
+            const quarterlyData = (formData.section3_quarterly as any)[quarter] || {};
+            addNumericIssue(issues, sectionId, `${prefix} Volume Used (m³)`, quarterlyData.volume, {
+              min: 0,
+              maxDecimals: 2,
+            });
+            addNumericIssue(issues, sectionId, `${prefix} Avg Daily Use (m³/day)`, quarterlyData.avgDaily, {
+              min: 0,
+              maxDecimals: 2,
+            });
+            addRequiredIssue(issues, sectionId, `${prefix} Measurement Method`, quarterlyData.method);
+          });
+        }
+
+        if (template === "concession" && permit.purpose?.includes("fish")) {
+          (["q1_fish", "q2_fish", "q3_fish", "q4_fish"] as const).forEach((quarter, index) => {
+            const prefix = `Q${index + 1} Fish`;
+            const fishData = (formData.section3_quarterly as any)[quarter] || {};
+            addNumericIssue(issues, sectionId, `${prefix} Number of Cages`, fishData.cages, {
+              min: 0,
+              integer: true,
+            });
+            addNumericIssue(issues, sectionId, `${prefix} Capacity`, fishData.capacity, {
+              min: 0,
+              integer: true,
+            });
+            addNumericIssue(issues, sectionId, `${prefix} Used Surface (Ha)`, fishData.surface, {
+              min: 0,
+              maxDecimals: 2,
+            });
+          });
+        }
+      }
+
+      if (sectionId === "section4") {
+        if (template === "abstraction") {
+          addRequiredIssue(issues, sectionId, "Water Efficiency Measures Implemented", formData.section4.efficiencyMeasures);
+          addRequiredIssue(issues, sectionId, "Recycling / Reuse Practices", formData.section4.recyclingPractices);
+          addNumericIssue(issues, sectionId, "Estimated Water Saved (m³/year)", formData.section4.estimatedWaterSaved, {
+            min: 0,
+            maxDecimals: 2,
+          });
+          addRequiredIssue(issues, sectionId, "Identified Losses", formData.section4.identifiedLosses);
+        } else {
+          addRequiredIssue(issues, sectionId, "Production Output Measures", formData.section4.productionOutputMeasures);
+          addRequiredIssue(issues, sectionId, "Ecological Impact Measures", formData.section4.ecologicalImpactMeasures);
+          addRequiredIssue(issues, sectionId, "Spatial Occupation Measures", formData.section4.spatialOccupationMeasures);
+        }
+
+        addNumericIssue(issues, sectionId, "Reduction Compared to Previous Year (%)", formData.section4.reductionPercentage, {
+          min: 0,
+          max: 100,
+          maxDecimals: 2,
+        });
+      }
+
+      if (sectionId === "section5") {
+        if (template === "concession") {
+          if (!Array.isArray(formData.section5_monitoring.infrastructureNature) || formData.section5_monitoring.infrastructureNature.length === 0) {
+            issues.push({
+              sectionId,
+              label: "Infrastructure/Equipment Nature",
+              message: "is required",
+            });
+          }
+          addRequiredIssue(issues, sectionId, "Pollution Prevention & Control Practices", formData.section5_monitoring.pollutionPrevention);
+        }
+
+        const requiredMonitoringFields = [
+          { key: "waterTemperature", label: "Water Temperature" },
+          { key: "dissolvedOxygen", label: "Dissolved Oxygen" },
+          { key: "turbidity", label: "Turbidity" },
+        ];
+        if (template === "concession") {
+          requiredMonitoringFields.push(
+            { key: "ph", label: "pH" },
+            { key: "nutrients", label: "Nutrients (P & N)" },
+            { key: "bod", label: "BOD" },
+          );
+        }
+
+        requiredMonitoringFields.forEach(({ key, label }) => {
+          const param = (formData.section5_monitoring as any)[key] || {};
+          addNumericIssue(issues, sectionId, `${label} Min`, param.min, { maxDecimals: 2 });
+          addNumericIssue(issues, sectionId, `${label} Max`, param.max, { maxDecimals: 2 });
+
+          const minValue = parseNumeric(param.min);
+          const maxValue = parseNumeric(param.max);
+          if (minValue !== null && maxValue !== null && minValue > maxValue) {
+            issues.push({
+              sectionId,
+              label: `${label} Min/Max`,
+              message: "must have Min less than or equal to Max",
+            });
+          }
+        });
+
+        if (formData.section5_incidents.hasIncidents) {
+          addRequiredIssue(issues, sectionId, "Date of Incident", formData.section5_incidents.incidentDate);
+          addRequiredIssue(issues, sectionId, "Date Reported to Authority", formData.section5_incidents.dateReportedToAuthority);
+          addRequiredIssue(issues, sectionId, "Incident Description", formData.section5_incidents.incidentDescription);
+          addRequiredIssue(issues, sectionId, "Corrective Actions Taken", formData.section5_incidents.correctiveActions);
+        }
+      }
+
+      if (sectionId === "section6") {
+        addNumericIssue(issues, sectionId, "Permanent Employees (Male)", formData.section6_employment.permanentMale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Permanent Employees (Female)", formData.section6_employment.permanentFemale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Temporary Employees (Male)", formData.section6_employment.temporaryMale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Temporary Employees (Female)", formData.section6_employment.temporaryFemale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Technical Staff (Male)", formData.section6_employment.technicalMale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Technical Staff (Female)", formData.section6_employment.technicalFemale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Unskilled Staff (Male)", formData.section6_employment.unskilledMale, {
+          min: 0,
+          integer: true,
+        });
+        addNumericIssue(issues, sectionId, "Unskilled Staff (Female)", formData.section6_employment.unskilledFemale, {
+          min: 0,
+          integer: true,
+        });
+
+        if (template === "concession") {
+          addNumericIssue(issues, sectionId, "Local Community Members Engaged", formData.section6_employment.communityEngaged, {
+            min: 0,
+            integer: true,
+          });
+          addRequiredIssue(issues, sectionId, "Women in Consultations", formData.section6_employment.womenInConsultations);
+          addRequiredIssue(issues, sectionId, "Community Benefits", formData.section6_employment.communityBenefits);
+          addRequiredIssue(issues, sectionId, "Gender-Specific Support Measures", formData.section6_employment.genderSupportMeasures);
+        }
+
+        addRequiredIssue(
+          issues,
+          sectionId,
+          "Gender-inclusive safety remarks",
+          formData.section6_ohs.genderInclusiveSafetyRemarks,
+        );
+        addRequiredIssue(
+          issues,
+          sectionId,
+          "Separate sanitation remarks",
+          formData.section6_ohs.separateSanitationRemarks,
+        );
+        addRequiredIssue(
+          issues,
+          sectionId,
+          "Gender grievance remarks",
+          formData.section6_ohs.genderGrievanceRemarks,
+        );
+      }
+
+      if (sectionId === "section7") {
+        addRequiredIssue(issues, sectionId, "Permit limits remarks", formData.section7.permitLimitsRemarks);
+        if (template === "concession") {
+          addRequiredIssue(issues, sectionId, "Zoning compliance remarks", formData.section7.zoningRemarks);
+        }
+        addRequiredIssue(issues, sectionId, "Environmental approval remarks", formData.section7.environmentalApprovalRemarks);
+        addRequiredIssue(issues, sectionId, "Monitoring reports remarks", formData.section7.monitoringReportsRemarks);
+        addRequiredIssue(issues, sectionId, "Water fees remarks", formData.section7.waterFeesRemarks);
+      }
+
+      if (sectionId === "section8") {
+        addRequiredIssue(issues, sectionId, "Planned Changes in Water Use", formData.section8.plannedChanges);
+        addNumericIssue(
+          issues,
+          sectionId,
+          "Expected Increase/Decrease (%)",
+          formData.section8.expectedChangePercentage,
+          { min: 0, max: 100, maxDecimals: 2 },
+        );
+        addRequiredIssue(issues, sectionId, "Planned Infrastructure Upgrades", formData.section8.plannedInfrastructureUpgrades);
+        addRequiredIssue(issues, sectionId, "Environmental Improvement Measures", formData.section8.environmentalImprovements);
+        addRequiredIssue(issues, sectionId, "Gender Inclusion Actions", formData.section8.genderInclusionActions);
+      }
+
+      if (sectionId === "section9") {
+        addRequiredIssue(issues, sectionId, "Full Name", formData.section9_declaration.declarantName);
+        addRequiredIssue(issues, sectionId, "Declaration Date", formData.section9_declaration.declarationDate);
+        if (!formData.section9_declaration.agreed) {
+          issues.push({
+            sectionId,
+            label: "Declaration agreement",
+            message: "must be accepted",
+          });
+        }
+      }
+
+      return issues;
+    },
+    [addNumericIssue, addRequiredIssue, formData, parseNumeric, permit.purpose, template],
+  );
+
+  const validateAllSections = useCallback(() => {
+    const validationOrder = tabOrder.filter((tabId) => tabId !== "section1" && tabId !== "section2");
+    return validationOrder.flatMap((sectionId) => validateSection(sectionId));
+  }, [tabOrder, validateSection]);
+
+  const attemptTabChange = useCallback(
+    (targetTabId: string) => {
+      if (isReadOnly) {
+        setActiveTab(targetTabId);
+        return;
+      }
+
+      const currentIndex = tabOrder.indexOf(activeTab);
+      const targetIndex = tabOrder.indexOf(targetTabId);
+      if (currentIndex === -1 || targetIndex === -1) return;
+      if (targetIndex <= currentIndex) {
+        setValidationError(null);
+        setActiveTab(targetTabId);
+        return;
+      }
+      if (targetIndex !== currentIndex + 1) {
+        setValidationError(`Complete ${sectionLabelById[activeTab]} before moving to the next section.`);
+        return;
+      }
+
+      const currentIssues = validateSection(activeTab);
+      if (currentIssues.length > 0) {
+        setValidationError(formatSectionIssues(activeTab, currentIssues));
+        return;
+      }
+
+      setValidationError(null);
+      setActiveTab(targetTabId);
+    },
+    [activeTab, formatSectionIssues, isReadOnly, sectionLabelById, tabOrder, validateSection],
+  );
+
+  const handleNextSection = useCallback(() => {
+    const currentIndex = tabOrder.indexOf(activeTab);
+    if (currentIndex < 0 || currentIndex >= tabOrder.length - 1) return;
+    attemptTabChange(tabOrder[currentIndex + 1]);
+  }, [activeTab, attemptTabChange, tabOrder]);
+
+  const handlePreviousSection = useCallback(() => {
+    const currentIndex = tabOrder.indexOf(activeTab);
+    if (currentIndex <= 0) return;
+    setValidationError(null);
+    setActiveTab(tabOrder[currentIndex - 1]);
+  }, [activeTab, tabOrder]);
 
   // Update form data helper
   const updateFormData = useCallback((section: string, field: string, value: any) => {
@@ -299,11 +720,6 @@ export function WaterUseReportForm({
     setDraftSavedMessage(null);
     const reduction = Number(formData.section4.reductionPercentage || 0);
     const expectedChange = Number(formData.section8.expectedChangePercentage || 0);
-    const hasMoreThanTwoDecimals = (value: string) => {
-      if (!value || !value.includes('.')) return false;
-      return value.split('.')[1].length > 2;
-    };
-
     if (
       reduction > 100 ||
       reduction < 0 ||
@@ -331,12 +747,18 @@ export function WaterUseReportForm({
   // Handle submit
   const handleSubmitForm = async () => {
     setValidationError(null);
+    const allIssues = validateAllSections();
+    if (allIssues.length > 0) {
+      const firstInvalidSection = allIssues[0]?.sectionId;
+      if (firstInvalidSection) {
+        setActiveTab(firstInvalidSection);
+      }
+      setValidationError(formatFullValidationMessage(allIssues));
+      return;
+    }
+
     const reduction = Number(formData.section4.reductionPercentage || 0);
     const expectedChange = Number(formData.section8.expectedChangePercentage || 0);
-    const hasMoreThanTwoDecimals = (value: string) => {
-      if (!value || !value.includes('.')) return false;
-      return value.split('.')[1].length > 2;
-    };
 
     if (
       reduction > 100 ||
@@ -382,7 +804,7 @@ export function WaterUseReportForm({
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={attemptTabChange} className="w-full">
           {/* Water Use Report Section Tabs - Made prominent */}
           <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
             <p className="text-sm font-medium text-slate-700 mb-3">📋 Report Sections (click to navigate):</p>
@@ -1764,6 +2186,23 @@ export function WaterUseReportForm({
           </Card>
         </TabsContent>
       </Tabs>
+
+      {!isReadOnly && (
+        <div className="flex justify-between items-center pt-4 border-t mt-6">
+          <Button
+            variant="outline"
+            onClick={handlePreviousSection}
+            disabled={activeTab === tabOrder[0]}
+          >
+            Previous Section
+          </Button>
+          {activeTab !== tabOrder[tabOrder.length - 1] && (
+            <Button onClick={handleNextSection}>
+              Next Section
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Action Buttons */}
       {!isReadOnly && (

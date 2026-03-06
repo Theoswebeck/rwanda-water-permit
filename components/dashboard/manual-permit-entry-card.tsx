@@ -2,13 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, CheckCircle2, FileSearch, Loader2 } from "lucide-react";
 import type { ManualPermitSelectionPayload, PermitReference, PermitRegistrySnapshot } from "@/lib/permit/permit-reference";
 
@@ -35,21 +32,14 @@ interface LookupResponse {
 interface ManualPermitEntryCardProps {
   title: string;
   description: string;
-  entryMode?: "renewal" | "modification" | "transfer";
   onContinue: (payload: ManualPermitSelectionPayload) => void;
 }
 
-export function ManualPermitEntryCard({ title, description, entryMode = "renewal", onContinue }: ManualPermitEntryCardProps) {
+export function ManualPermitEntryCard({ title, description, onContinue }: ManualPermitEntryCardProps) {
   const [permitNumber, setPermitNumber] = useState("");
-  const [manualHolderName, setManualHolderName] = useState("");
-  const [manualLocation, setManualLocation] = useState("");
-  const [manualActivity, setManualActivity] = useState("");
-  const [manualHolderType, setManualHolderType] = useState<"individual" | "company_org">("individual");
-  const [identityProofFile, setIdentityProofFile] = useState<File | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<LookupResponse | null>(null);
-  const isModificationEntry = entryMode === "modification";
 
   const handleLookup = async () => {
     const trimmed = permitNumber.trim();
@@ -74,14 +64,8 @@ export function ManualPermitEntryCard({ title, description, entryMode = "renewal
   };
 
   const canContinue = useMemo(() => {
-    return (
-      permitNumber.trim().length > 0 &&
-      manualHolderName.trim().length > 1 &&
-      (isModificationEntry || manualLocation.trim().length > 1) &&
-      (isModificationEntry || manualActivity.trim().length > 1) &&
-      Boolean(identityProofFile)
-    );
-  }, [identityProofFile, isModificationEntry, manualActivity, manualHolderName, manualLocation, permitNumber]);
+    return permitNumber.trim().length > 0;
+  }, [permitNumber]);
 
   const registrySnapshot = useMemo<PermitRegistrySnapshot | null>(() => {
     if (!lookupResult?.permit) return null;
@@ -102,7 +86,6 @@ export function ManualPermitEntryCard({ title, description, entryMode = "renewal
   }, [lookupResult, permitNumber]);
 
   const handleContinue = () => {
-    if (!identityProofFile) return;
     const normalized = lookupResult?.normalizedPermitNumber || permitNumber.trim();
     const permitReference: PermitReference = {
       source: "registry_unlinked",
@@ -110,14 +93,10 @@ export function ManualPermitEntryCard({ title, description, entryMode = "renewal
       normalizedPermitNumber: normalized,
       lookupStatus: lookupResult?.found ? "found" : "not_found",
       registrySnapshot,
-      manualHolderName: manualHolderName.trim(),
-      manualLocation: isModificationEntry ? undefined : manualLocation.trim(),
-      manualActivity: isModificationEntry ? undefined : manualActivity.trim(),
-      manualHolderType,
     };
     onContinue({
       permitReference,
-      identityProofFile,
+      identityProofFile: null,
     });
   };
 
@@ -170,70 +149,9 @@ export function ManualPermitEntryCard({ title, description, entryMode = "renewal
           </Alert>
         )}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Holder Type</Label>
-            <Select value={manualHolderType} onValueChange={(value: "individual" | "company_org") => setManualHolderType(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="individual">Individual</SelectItem>
-                <SelectItem value="company_org">Company / Organization</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>{manualHolderType === "individual" ? "Holder Full Name" : "Company / Organization Name"}</Label>
-            <Input value={manualHolderName} onChange={(event) => setManualHolderName(event.target.value)} />
-          </div>
-        </div>
-
-        {!isModificationEntry && (
-          <div className="space-y-2">
-            <Label>Permit Location (manual)</Label>
-            <Input
-              value={manualLocation}
-              onChange={(event) => setManualLocation(event.target.value)}
-              placeholder="Province, district, sector, cell, village"
-            />
-          </div>
-        )}
-
-        {!isModificationEntry && (
-          <div className="space-y-2">
-            <Label>Permit Activity / Water Use (manual)</Label>
-            <Textarea
-              value={manualActivity}
-              onChange={(event) => setManualActivity(event.target.value)}
-              placeholder="Describe the authorized activity from the old permit."
-            />
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label>
-            {manualHolderType === "individual"
-              ? "Upload ID Document (required)"
-              : "Upload Registration Certificate PDF (required)"}
-          </Label>
-          <Input
-            type="file"
-            accept={manualHolderType === "individual" ? ".pdf,.jpg,.jpeg,.png" : ".pdf"}
-            onChange={(event) => setIdentityProofFile(event.target.files?.[0] || null)}
-          />
-          {identityProofFile && (
-            <Badge variant="outline">{identityProofFile.name}</Badge>
-          )}
-        </div>
-
         <div className="flex justify-end">
           <Button type="button" onClick={handleContinue} disabled={!canContinue}>
-            {entryMode === "transfer"
-              ? "Continue with Transfer"
-              : entryMode === "modification"
-                ? "Continue with Modification"
-                : "Continue with Renewal"}
+            Continue
           </Button>
         </div>
       </CardContent>
@@ -242,4 +160,3 @@ export function ManualPermitEntryCard({ title, description, entryMode = "renewal
 }
 
 export default ManualPermitEntryCard;
-

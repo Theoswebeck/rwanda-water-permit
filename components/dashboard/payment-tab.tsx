@@ -61,6 +61,32 @@ type CompletedApplication = {
   [key: string]: unknown
 }
 
+type CustomerSnapshot = {
+  email?: string
+  phone?: string
+  name?: string
+}
+
+function pickFirstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+}
+
+function parseInternalNotes(internalNotes: string | undefined): Record<string, unknown> | null {
+  if (!internalNotes || typeof internalNotes !== 'string') return null;
+  try {
+    const parsed = JSON.parse(internalNotes);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 interface PaymentTabProps {
   application?: Application; // Optional - may not exist yet
   formData?: DraftFormData; // Unsaved form data for new applications
@@ -156,17 +182,37 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       };
 
       if (application) {
-        // application.applicant is populated via Supabase join (users!applications_applicant_id_fkey)
+        // application.applicant may be missing in some transfer draft responses.
+        // Fall back to current form values when available so payment can still proceed.
         const applicant = application.applicant;
-        const email = (applicant?.email || '').trim();
-        const phone = (applicant?.phone || applicant?.mobile_phone || applicant?.company_phone || '').trim();
-        const name =
-          `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() ||
-          (applicant?.company_name || '').trim();
+        const internalNotes = parseInternalNotes(application.internal_notes);
+        const transferFormData = internalNotes?.transferFormData as Record<string, unknown> | undefined;
+        const customerSnapshot = internalNotes?.customerSnapshot as CustomerSnapshot | undefined;
+        const email = pickFirstNonEmptyString(
+          applicant?.email,
+          formData?.emailAddress,
+          transferFormData?.transferorEmail,
+          customerSnapshot?.email
+        );
+        const phone = pickFirstNonEmptyString(
+          applicant?.phone,
+          applicant?.mobile_phone,
+          applicant?.company_phone,
+          formData?.telephoneContact,
+          transferFormData?.transferorPhone,
+          customerSnapshot?.phone
+        );
+        const name = pickFirstNonEmptyString(
+          `${applicant?.first_name || ''} ${applicant?.last_name || ''}`,
+          applicant?.company_name,
+          formData?.fullNameApplicant,
+          transferFormData?.transferorName,
+          customerSnapshot?.name
+        );
 
         if (!email || !phone || !name) {
           setCustomerValidationError(
-            "Missing applicant contact details. Please update the applicant profile (name, email, phone) before initiating payment."
+            "Missing payer contact details. Please update your profile or transferor details (name, email, phone) before initiating payment."
           );
           return;
         }
@@ -201,7 +247,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
 
       if (result.success && result.payment) {
         console.log('✅ Payment initialized successfully');
-        setShowWidget(true); // always open modal so demo can "attempt to pay"
+        setShowWidget(true);
       } else {
         console.error('❌ Payment initialization failed:', result.error);
       }
@@ -323,16 +369,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     }).format(amount);
   };
 
-  // Check if payment is already completed
-  // IMPORTANT: If there's no application yet (undefined/null), payment is NOT completed
-  // Only consider payment completed if we have an application with a status beyond draft/pending_payment
-  const isPaymentCompleted = payment?.status === 'completed' || (
-    application?.id && 
-    application?.status && 
-    application.status !== 'draft' && 
-    application.status !== 'pending_payment' && 
-    application.status !== 'revision_required'
-  );
+  // Payment should be considered complete only when payment confirmation is explicit.
+  const isPaymentCompleted = paymentCompleted || payment?.status === 'completed';
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
 
@@ -473,7 +511,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           </p>
         </div>
         {onBack && (
-          <Button variant="ghost" onClick={onBack}>
+          <Button type="button" variant="ghost" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
@@ -534,6 +572,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
               </Alert>
 
               <Button
+                type="button"
                 onClick={() => router.push('/dashboard?tab=applications')}
                 className="w-full"
               >
@@ -597,6 +636,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
               </div>
 
               <Button
+                type="button"
                 onClick={handleInitiatePayment}
                 disabled={isInitializing}
                 size="lg"

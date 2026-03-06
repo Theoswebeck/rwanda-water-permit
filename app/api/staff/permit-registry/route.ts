@@ -111,9 +111,9 @@ export async function GET(req: NextRequest) {
       merged as (
         select
           coalesce(
-            max(u.id) filter (where u.source_kind = 'registry'),
-            max(u.id) filter (where u.source_kind = 'permit')
-          ) as id,
+            max(u.id::text) filter (where u.source_kind = 'registry'),
+            max(u.id::text) filter (where u.source_kind = 'permit')
+          )::uuid as id,
           max(u.serial_number) filter (where u.source_kind = 'registry') as serial_number,
           coalesce(
             max(u.permit_holder) filter (where u.source_kind = 'registry'),

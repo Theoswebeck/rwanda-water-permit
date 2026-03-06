@@ -443,9 +443,23 @@ export async function POST(request: NextRequest) {
 
     // Map IremboPay response fields to our database fields
     const iremboData = iremboResponse.data as Record<string, unknown>;
-    const paymentRef = iremboData.invoiceNumber || iremboData.payment_ref;
-    const paymentUrl = iremboData.paymentLinkUrl || iremboData.payment_url;
-    const requestId = iremboData.transactionId || iremboData.request_id;
+    const paymentRefRaw = iremboData.invoiceNumber || iremboData.payment_ref;
+    const paymentUrlRaw = iremboData.paymentLinkUrl || iremboData.payment_url;
+    const requestIdRaw = iremboData.transactionId || iremboData.request_id;
+    const paymentRef = typeof paymentRefRaw === 'string' ? paymentRefRaw.trim() : '';
+    const paymentUrl = typeof paymentUrlRaw === 'string' ? paymentUrlRaw.trim() : '';
+    const requestId = typeof requestIdRaw === 'string' ? requestIdRaw.trim() : '';
+
+    if (!paymentRef) {
+      console.error('❌ [PAYMENT INITIATE] Missing invoice/payment reference in gateway response:', iremboData);
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Payment gateway response is missing a payment reference. Please retry payment initiation.',
+        },
+        { status: 502 }
+      );
+    }
 
     console.log('✅ [PAYMENT INITIATE] IremboPay payment initiated:', paymentRef);
     console.log('🔗 [PAYMENT INITIATE] Payment URL:', paymentUrl);
@@ -595,7 +609,7 @@ export async function POST(request: NextRequest) {
       `,
       [
         paymentRecord.id,
-        paymentRef || null,
+        paymentRef,
         requestId || null,
         paymentAmount,
         paymentCurrency,

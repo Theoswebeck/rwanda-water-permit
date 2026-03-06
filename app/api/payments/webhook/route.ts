@@ -33,25 +33,22 @@ export async function POST(request: NextRequest) {
     // =============================================
 
     const iremboPayClient = getIremboPayClient();
+    const webhookSecretConfigured = Boolean(process.env.IREMBOPAY_WEBHOOK_SECRET?.trim());
     const isValidSignature = iremboPayClient.validateWebhookSignature(rawBody, signature);
 
-    // Note: Webhook signature validation is optional
-    // To enable strict validation, set IREMBOPAY_WEBHOOK_SECRET and uncomment the check below
-    if (!isValidSignature) {
-      console.warn('⚠️ [WEBHOOK] Signature validation skipped or failed - processing anyway');
+    if (webhookSecretConfigured && !isValidSignature) {
+      console.error('❌ [WEBHOOK] Invalid signature while webhook secret is configured');
+      return NextResponse.json(
+        { success: false, error: 'Invalid webhook signature' },
+        { status: 401 }
+      );
     }
-    
-    // Uncomment below to enforce signature validation in production:
-    // if (!isValidSignature && process.env.NODE_ENV === 'production') {
-    //   console.error('❌ [WEBHOOK] Invalid signature');
-    //   // Persist a failed signature attempt in public.webhook_logs, then reject.
-    //   return NextResponse.json(
-    //     { success: false, error: 'Invalid signature' },
-    //     { status: 401 }
-    //   );
-    // }
 
-    console.log('✅ [WEBHOOK] Signature validated');
+    if (!webhookSecretConfigured) {
+      console.warn('⚠️ [WEBHOOK] IREMBOPAY_WEBHOOK_SECRET is not configured; signature validation cannot be enforced');
+    } else {
+      console.log('✅ [WEBHOOK] Signature validated');
+    }
 
     // =============================================
     // 3. PARSE WEBHOOK PAYLOAD
@@ -239,6 +236,9 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ [WEBHOOK] Transaction log created');
 
+    const paymentId = typeof payment.id === 'string' ? payment.id : String(payment.id ?? '');
+    const applicationId = typeof payment.application_id === 'string' ? payment.application_id : '';
+
     // =============================================
     // 8. UPDATE APPLICATION STATUS
     // =============================================
@@ -246,7 +246,7 @@ export async function POST(request: NextRequest) {
     if (internalStatus === 'completed') {
       const newApplicationStatus = getApplicationStatusFromPayment(internalStatus);
       
-      const appUpdateRes = payment.application_id
+      const appUpdateRes = applicationId
         ? await query(
             `
             update public.applications
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
             where id = $1
             returning id
             `,
-            [payment.application_id, newApplicationStatus, now]
+            [applicationId, newApplicationStatus, now]
           )
         : { rowCount: 0 };
       const appUpdateError = !appUpdateRes.rowCount ? new Error('application not updated') : null;
@@ -263,9 +263,9 @@ export async function POST(request: NextRequest) {
         console.error('⚠️  [WEBHOOK] Failed to update application status:', appUpdateError);
       } else {
         console.log('✅ [WEBHOOK] Application status updated to:', newApplicationStatus);
-        if (newApplicationStatus === 'submitted' && payment.application_id) {
+        if (newApplicationStatus === 'submitted' && applicationId) {
           try {
-            const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+            const notifyResult = await notifyOnApplicationSubmitted(applicationId);
             if (!notifyResult.ok) {
               console.warn('⚠️ [WEBHOOK] Submission notifications failed (non-blocking):', notifyResult.message);
             }
@@ -280,7 +280,7 @@ export async function POST(request: NextRequest) {
       // =============================================
 
       try {
-        const applicationRes = payment.application_id
+        const applicationRes = applicationId
           ? await query(
               `
               select *
@@ -288,15 +288,15 @@ export async function POST(request: NextRequest) {
               where id = $1
               limit 1
               `,
-              [payment.application_id]
+              [applicationId]
             )
           : { rows: [] as Record<string, unknown>[] };
         const application = applicationRes.rows[0];
 
         const receiptData = {
           receipt_number: generateReceiptNumber(),
-          payment_id: payment.id,
-          application_id: payment.application_id,
+          payment_id: paymentId,
+          application_id: applicationId || null,
           application_number: application?.application_number || 'N/A',
           amount: payment.amount,
           currency: payment.currency,
@@ -322,8 +322,8 @@ export async function POST(request: NextRequest) {
           ) values ($1,$2,$3,$4::jsonb,$5,now(),now())
           `,
           [
-            payment.id,
-            payment.application_id,
+            paymentId,
+            applicationId || null,
             receiptData.receipt_number,
             JSON.stringify(receiptData),
             now,
@@ -345,7 +345,7 @@ export async function POST(request: NextRequest) {
       // Race-safety: only revert if the application is still in the payment stage.
       const newStatus = 'draft';
 
-      if (payment.application_id) {
+      if (applicationId) {
         const revertRes = await query(
           `
           update public.applications
@@ -354,7 +354,7 @@ export async function POST(request: NextRequest) {
             and status in ('pending_payment', 'draft')
           returning id, status
           `,
-          [payment.application_id, newStatus]
+          [applicationId, newStatus]
         );
         const updatedApp = revertRes.rows[0];
         const revertError = null;
@@ -393,7 +393,7 @@ export async function POST(request: NextRequest) {
       )
       `,
       [
-        payment.id,
+        paymentId,
         payload.event,
         payload.data.transaction_id || null,
         JSON.stringify(payload),
@@ -415,8 +415,8 @@ export async function POST(request: NextRequest) {
 
     const result: WebhookProcessingResult = {
       success: true,
-      payment_id: payment.id,
-      message: `Webhook processed successfully for payment ${payment.id}`,
+      payment_id: paymentId || undefined,
+      message: `Webhook processed successfully for payment ${paymentId}`,
     };
 
     console.log('✅ [WEBHOOK] Processing completed successfully');

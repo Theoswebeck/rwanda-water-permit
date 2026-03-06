@@ -49,6 +49,7 @@ import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
+import { getPermitReferenceFromApplication } from "@/lib/permit/permit-reference";
 import { VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import type { VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
@@ -123,6 +124,8 @@ type DocReviewMeta = {
   eligibilityConfirmedAt?: string;
   completenessConfirmed: boolean;
   completenessConfirmedAt?: string;
+  registryPermitAcknowledged?: boolean;
+  registryPermitAcknowledgedAt?: string;
 };
 
 // Transform Application data back to form format for viewing
@@ -410,6 +413,9 @@ export default function AssessmentApplicationPage() {
   // Assessment Report State (template-backed)
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
 
+  // Registry permit verification state
+  const [registryPermitAcknowledged, setRegistryPermitAcknowledged] = useState(false);
+
   // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
   const actionInFlightRef = useRef(false);
   // Autosave control (prevents losing Field Report inputs on refresh)
@@ -426,6 +432,10 @@ export default function AssessmentApplicationPage() {
     application?.status === "pending_assessment" ||
     application?.status === "under_review";
   const isReadOnly = application ? !isEditableAssessment : true;
+
+  const permitRef = application ? getPermitReferenceFromApplication(application) : null;
+  const isUnlinkedPermit = permitRef?.source === "registry_unlinked";
+
   const defaultTabValue = "application_details";
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
   const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
@@ -612,7 +622,12 @@ export default function AssessmentApplicationPage() {
               eligibilityConfirmedAt: typeof meta.eligibilityConfirmedAt === "string" ? meta.eligibilityConfirmedAt : undefined,
               completenessConfirmed: !!meta.completenessConfirmed,
               completenessConfirmedAt: typeof meta.completenessConfirmedAt === "string" ? meta.completenessConfirmedAt : undefined,
+              registryPermitAcknowledged: !!meta.registryPermitAcknowledged,
+              registryPermitAcknowledgedAt: typeof meta.registryPermitAcknowledgedAt === "string" ? meta.registryPermitAcknowledgedAt : undefined,
             });
+            if (meta.registryPermitAcknowledged) {
+              setRegistryPermitAcknowledged(true);
+            }
           }
           
           // Restore field report data
@@ -1219,6 +1234,17 @@ export default function AssessmentApplicationPage() {
     }
   };
 
+  const handleRegistryPermitAcknowledge = async () => {
+    setRegistryPermitAcknowledged(true);
+    const updatedMeta: DocReviewMeta = {
+      ...docReviewMeta,
+      registryPermitAcknowledged: true,
+      registryPermitAcknowledgedAt: new Date().toISOString(),
+    };
+    setDocReviewMeta(updatedMeta);
+    await saveAssessment("draft", { docReviewMeta: updatedMeta });
+  };
+
   const saveAssessment = async (
     status: 'draft' | 'submitted' | 'forwarded_to_approver' | 'returned_for_revision' = 'draft',
     overrides?: {
@@ -1633,7 +1659,13 @@ export default function AssessmentApplicationPage() {
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
-              {application && <RegistryPermitComparisonCard application={application} />}
+              {application && (
+                <RegistryPermitComparisonCard
+                  application={application}
+                  onAcknowledge={isEditableAssessment ? handleRegistryPermitAcknowledge : undefined}
+                  acknowledged={registryPermitAcknowledged}
+                />
+              )}
               {/* Show Transfer Form for transfer applications */}
               {isTransferApp ? (
                 loadingTransferPermit ? (
@@ -1754,7 +1786,32 @@ export default function AssessmentApplicationPage() {
             {/* Assessment Report Tab - Hidden for transfer applications */}
             {!isTransferApp && (
               <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
-                {(() => {
+                {isUnlinkedPermit && !registryPermitAcknowledged ? (
+                  <Card className="border-amber-200 bg-amber-50/60">
+                    <CardContent className="pt-6 space-y-4">
+                      <Alert className="border-amber-300 bg-amber-100">
+                        <AlertTriangle className="h-5 w-5 text-amber-700" />
+                        <AlertDescription className="text-amber-900">
+                          <p className="font-semibold mb-1">Assessment Blocked</p>
+                          <p>
+                            This application references a manually-entered permit that is not linked in the system.
+                            Please review the permit details in the <strong>Application Details</strong> tab and
+                            acknowledge verification before proceeding with the assessment report.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab("application_details")}
+                        className="gap-2"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Go to Application Details
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                (() => {
                   const intended = (application as any)?.intended_activities as string[] | null | undefined;
                   const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
                   return (
@@ -1825,8 +1882,10 @@ export default function AssessmentApplicationPage() {
                       }
                     />
                   );
-                })()}
+                })()
+                )}
               </TabsContent>
+
             )}
 
             {/* Internal Notes Tab */}

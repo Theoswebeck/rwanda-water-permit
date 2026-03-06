@@ -2,13 +2,16 @@
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Application, Document } from "@/types/database";
 import { getPermitReferenceFromApplication } from "@/lib/permit/permit-reference";
-import { AlertTriangle, CheckCircle2, FileSearch } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileSearch, ShieldCheck } from "lucide-react";
 
 interface RegistryPermitComparisonCardProps {
   application: Application & { documents?: Document[]; applicant?: any };
+  onAcknowledge?: () => void;
+  acknowledged?: boolean;
 }
 
 type CompareStatus = "match" | "partial" | "mismatch" | "not_available";
@@ -33,7 +36,7 @@ function StatusBadge({ status }: { status: CompareStatus }) {
   return <Badge variant="outline">N/A</Badge>;
 }
 
-export function RegistryPermitComparisonCard({ application }: RegistryPermitComparisonCardProps) {
+export function RegistryPermitComparisonCard({ application, onAcknowledge, acknowledged }: RegistryPermitComparisonCardProps) {
   const permitReference = getPermitReferenceFromApplication(application);
   if (!permitReference || permitReference.source !== "registry_unlinked") return null;
 
@@ -113,10 +116,38 @@ export function RegistryPermitComparisonCard({ application }: RegistryPermitComp
             Identity verification document uploaded by applicant.
           </div>
         )}
+
+        {onAcknowledge && !acknowledged && (
+          <div className="border-t pt-4 mt-2">
+            <Alert className="border-amber-200 bg-amber-50 mb-3">
+              <AlertTriangle className="h-4 w-4 text-amber-700" />
+              <AlertDescription className="text-amber-800">
+                This permit was manually entered by the applicant and is not linked in the system.
+                You must verify the permit details against registry records before proceeding with the assessment report.
+              </AlertDescription>
+            </Alert>
+            <Button
+              type="button"
+              onClick={onAcknowledge}
+              className="bg-indigo-600 hover:bg-indigo-700 gap-2"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              I have verified this permit against registry records
+            </Button>
+          </div>
+        )}
+
+        {onAcknowledge && acknowledged && (
+          <div className="border-t pt-4 mt-2">
+            <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-md p-3">
+              <ShieldCheck className="h-5 w-5" />
+              <span className="font-medium">Permit verification acknowledged by assessor.</span>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
 export default RegistryPermitComparisonCard;
-

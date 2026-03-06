@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getIremboPayClient } from '@/lib/irembopay-client';
 import { getApplicationStatusFromPayment, mapIremboPayStatus } from '@/lib/payment-utils';
 import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
-import type { PaymentStatusResponse } from '@/types/payment';
+import type { Payment, PaymentStatusResponse, PaymentTransaction } from '@/types/payment';
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
 import { query } from '@/lib/db/postgres';
 
@@ -32,6 +32,26 @@ function normalizeGatewayPaymentMethod(rawMethod: unknown): string | null {
   if (normalized.includes('cash')) return 'cash';
 
   return null;
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function hasCompletionEvidence(
+  statusData: {
+    paidAt?: string;
+    transactionId?: string;
+    invoiceNumber?: string;
+    paymentReference?: string;
+  },
+  expectedInvoiceRef: string
+): boolean {
+  const paidAt = cleanString(statusData.paidAt);
+  const transactionId = cleanString(statusData.transactionId);
+  const invoiceRef = cleanString(statusData.invoiceNumber || statusData.paymentReference);
+  const referenceMatches = expectedInvoiceRef ? invoiceRef === expectedInvoiceRef : true;
+  return (Boolean(paidAt) || Boolean(transactionId)) && referenceMatches;
 }
 
 // Demo mode removed - using real payment flow only
@@ -123,11 +143,14 @@ export async function GET(
     }
 
     const payment = paymentRow as Record<string, unknown>;
+    const applicationId = cleanString(payment.application_id);
+    const iremboPaymentRef = cleanString(payment.irembo_payment_ref);
+    const linkedApplication = (payment.applications as Record<string, unknown> | null | undefined) || null;
 
     console.log('✅ [PAYMENT STATUS] Payment found:', {
       id: payment.id,
       status: payment.status,
-      application: payment.applications?.application_number,
+      application: linkedApplication?.application_number,
     });
 
     // =============================================
@@ -153,27 +176,35 @@ export async function GET(
     // Only verify with IremboPay if payment is still pending/processing
     if (
       (payment.status === 'pending' || payment.status === 'processing') &&
-      payment.irembo_payment_ref
+      iremboPaymentRef
     ) {
       try {
         console.log('🌐 [PAYMENT STATUS] Verifying with IremboPay API...');
         
         const iremboPayClient = getIremboPayClient();
         const iremboStatus = await iremboPayClient.getPaymentStatus(
-          payment.irembo_payment_ref
+          iremboPaymentRef
         );
 
         if (iremboStatus.success && iremboStatus.data) {
           // Map IremboPay status to our internal status
           const iremboPaymentStatus = iremboStatus.data.paymentStatus; // IremboPay uses 'paymentStatus' field
           const mappedStatus = mapIremboPayStatus(iremboPaymentStatus);
+          const completionVerified =
+            mappedStatus !== 'completed' ||
+            hasCompletionEvidence(iremboStatus.data, iremboPaymentRef);
+          const effectiveStatus =
+            mappedStatus === 'completed' && !completionVerified ? 'processing' : mappedStatus;
           
-          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus);
+          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus, '→ Effective:', effectiveStatus);
+          if (mappedStatus === 'completed' && !completionVerified) {
+            console.warn('⚠️ [PAYMENT STATUS] Gateway reported completed without strong proof; keeping payment in processing state');
+          }
 
           // Real payment flow only - no auto-completion
 
           // Update local status if different
-          if (mappedStatus !== payment.status) {
+          if (effectiveStatus !== payment.status) {
             console.log('🔄 [PAYMENT STATUS] Updating local status from IremboPay');
             
             const gatewayResponse = (payment.gateway_response as Record<string, unknown> | null | undefined) || {};
@@ -181,7 +212,7 @@ export async function GET(
               normalizeGatewayPaymentMethod(iremboStatus.data.paymentMethod) ||
               normalizeGatewayPaymentMethod(payment.payment_method);
             const updateData: Record<string, unknown> = {
-              status: mappedStatus,
+              status: effectiveStatus,
               irembo_transaction_id: iremboStatus.data.transactionId || payment.irembo_transaction_id,
               payment_method: normalizedPaymentMethod,
               gateway_response: {
@@ -192,9 +223,9 @@ export async function GET(
             };
 
             // Set appropriate timestamp
-            if (mappedStatus === 'completed') {
+            if (effectiveStatus === 'completed') {
               updateData.completed_at = iremboStatus.data.paidAt || new Date().toISOString();
-            } else if (mappedStatus === 'failed') {
+            } else if (effectiveStatus === 'failed') {
               updateData.failed_at = new Date().toISOString();
             }
 
@@ -213,7 +244,7 @@ export async function GET(
               `,
               [
                 paymentId,
-                mappedStatus,
+                effectiveStatus,
                 updateData.irembo_transaction_id || null,
                 updateData.payment_method || null,
                 JSON.stringify(updateData.gateway_response || {}),
@@ -223,15 +254,15 @@ export async function GET(
             );
 
             // Update the payment object with new status
-            payment.status = mappedStatus;
+            payment.status = effectiveStatus;
             payment.irembo_transaction_id = iremboStatus.data.transactionId || payment.irembo_transaction_id;
 
-            console.log('✅ [PAYMENT STATUS] Local status updated to:', mappedStatus);
+            console.log('✅ [PAYMENT STATUS] Local status updated to:', effectiveStatus);
 
             // =============================================
             // UPDATE APPLICATION STATUS IF PAYMENT COMPLETED
             // =============================================
-            if (mappedStatus === 'completed' && payment.application_id) {
+            if (effectiveStatus === 'completed' && applicationId) {
               const newApplicationStatus = getApplicationStatusFromPayment('completed');
               const now = new Date().toISOString();
               
@@ -245,9 +276,10 @@ export async function GET(
                 update public.applications
                 set status = $2, submitted_at = $3, updated_at = now()
                 where id = $1
+                  and status in ('pending_payment', 'draft')
                 returning id, status
                 `,
-                [payment.application_id, newApplicationStatus, now]
+                [applicationId, newApplicationStatus, now]
               );
               const appUpdateError = !appUpdateRes.rowCount ? new Error('application not updated') : null;
 
@@ -262,7 +294,7 @@ export async function GET(
                   where id = $1
                   limit 1
                   `,
-                  [payment.application_id]
+                  [applicationId]
                 );
                 console.log('   Application check:', checkApp.rows[0] || null);
               } else {
@@ -273,7 +305,7 @@ export async function GET(
                 }
                 if (newApplicationStatus === 'submitted') {
                   try {
-                    const notifyResult = await notifyOnApplicationSubmitted(payment.application_id);
+                    const notifyResult = await notifyOnApplicationSubmitted(applicationId);
                     console.log('📣 [PAYMENT STATUS] Submission notification result:', notifyResult);
                     if (!notifyResult.ok) {
                       console.warn('⚠️ [PAYMENT STATUS] Submission notifications failed (non-blocking):', notifyResult.message);
@@ -283,9 +315,9 @@ export async function GET(
                   }
                 }
               }
-            } else if (mappedStatus === 'completed' && !payment.application_id) {
+            } else if (effectiveStatus === 'completed' && !applicationId) {
               console.warn('⚠️  [PAYMENT STATUS] Payment completed but no application_id linked!');
-            } else if ((mappedStatus === 'failed' || mappedStatus === 'cancelled') && payment.application_id) {
+            } else if ((effectiveStatus === 'failed' || effectiveStatus === 'cancelled') && applicationId) {
               // ✅ Requirement: if payment fails, application should still be draft.
               // Race-safety: only revert if app is still pending payment (avoid clobbering submitted).
               const revertRes = await query(
@@ -296,7 +328,7 @@ export async function GET(
                   and status in ('pending_payment', 'draft')
                 returning id, status
                 `,
-                [payment.application_id]
+                [applicationId]
               );
               const updatedApp = revertRes.rows[0] || null;
               const revertError = null;
@@ -326,8 +358,8 @@ export async function GET(
 
     const response: PaymentStatusResponse = {
       success: true,
-      payment: payment,
-      transaction: (latestTransaction as Record<string, unknown> | null) || undefined,
+      payment: payment as unknown as Payment,
+      transaction: (latestTransaction as PaymentTransaction | null) || undefined,
     };
 
     console.log('✅ [PAYMENT STATUS] Returning status:', payment.status);

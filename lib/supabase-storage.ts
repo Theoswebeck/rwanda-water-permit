@@ -16,17 +16,23 @@ export const getDocumentUrl = (filePath: string | null | undefined): string | nu
   if (!filePath) return null;
   
   try {
-    // Check if it's already a full URL
-    if (filePath.startsWith('http')) {
+    // Keep already-proxied URLs untouched.
+    if (filePath.startsWith('/api/files/view?')) {
       return filePath;
     }
-    
-    if (filePath.startsWith('/')) return filePath;
-    if (filePath.startsWith('uploads/')) return `/${filePath}`;
-    return `/${filePath}`;
+
+    // Keep in-memory object URLs untouched.
+    if (filePath.startsWith('blob:')) {
+      return filePath;
+    }
+
+    // Route all persisted document paths through the authenticated file proxy.
+    // This avoids deployment-specific static /uploads serving issues and keeps
+    // document access rules consistent for applicants and staff.
+    return `/api/files/view?path=${encodeURIComponent(filePath)}`;
   } catch (error) {
     console.error('Error generating document URL:', error);
-    return filePath;
+    return null;
   }
 };
 
