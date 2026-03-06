@@ -427,6 +427,32 @@ export function TermsConditionsModal({
       }
       console.log('✅ Application data loaded:', applicationData.application_number);
 
+      // Defense-in-depth: transfer terms can only be accepted by the approved transferee.
+      const authResponse = await supabase.auth.getUser();
+      const currentUser = (authResponse.data as any)?.user as { id?: string } | undefined;
+      if (!currentUser?.id) {
+        throw new Error('Authentication required to accept terms.');
+      }
+
+      let transferNotes: Record<string, any> | null = null;
+      try {
+        transferNotes = applicationData.internal_notes ? JSON.parse(applicationData.internal_notes) : null;
+      } catch {
+        transferNotes = null;
+      }
+      const isTransferByType = (applicationData as any).application_type === 'transfer';
+      const isTransferByNotes = transferNotes?.isTransfer === true;
+      if (isTransferByType || isTransferByNotes) {
+        const approval = transferNotes?.transferApproval;
+        const transfereeAllowed =
+          approval?.transfereeApproved === true &&
+          typeof approval?.transfereeUserId === 'string' &&
+          approval.transfereeUserId === currentUser.id;
+        if (!transfereeAllowed) {
+          throw new Error('Only the approved transferee can accept transfer terms.');
+        }
+      }
+
       // Enforce expiration: if more than 6 months since submission and permit not yet issued, block issuance.
       // (Permit issuance happens in THIS handler, so there should not be a permit yet.)
       const expiration = getApplicationExpiration({
@@ -1037,6 +1063,41 @@ export function TermsConditionsModal({
   const handleRejectTerms = async () => {
     setIsProcessing(true);
     try {
+      // Defense-in-depth: transfer terms can only be rejected by the approved transferee.
+      const authResponse = await supabase.auth.getUser();
+      const currentUser = (authResponse.data as any)?.user as { id?: string } | undefined;
+      if (!currentUser?.id) {
+        throw new Error('Authentication required to reject terms.');
+      }
+
+      const { data: applicationData, error: appError } = await supabase
+        .from('applications')
+        .select('application_type, internal_notes')
+        .eq('id', applicationId)
+        .single() as { data: any; error: any };
+      if (appError || !applicationData) {
+        throw appError || new Error('Application not found');
+      }
+
+      let transferNotes: Record<string, any> | null = null;
+      try {
+        transferNotes = applicationData.internal_notes ? JSON.parse(applicationData.internal_notes) : null;
+      } catch {
+        transferNotes = null;
+      }
+      const isTransferByType = applicationData.application_type === 'transfer';
+      const isTransferByNotes = transferNotes?.isTransfer === true;
+      if (isTransferByType || isTransferByNotes) {
+        const approval = transferNotes?.transferApproval;
+        const transfereeAllowed =
+          approval?.transfereeApproved === true &&
+          typeof approval?.transfereeUserId === 'string' &&
+          approval.transfereeUserId === currentUser.id;
+        if (!transfereeAllowed) {
+          throw new Error('Only the approved transferee can reject transfer terms.');
+        }
+      }
+
       // Update application with terms rejection — move to rejected status
       const { error: updateError } = await (supabase as any)
         .from('applications')

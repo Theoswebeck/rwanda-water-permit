@@ -453,7 +453,7 @@ function DashboardContent() {
                         Incoming Transfer Requests
                       </CardTitle>
                       <CardDescription>
-                        Transfers sent to you (matched by your email and phone). You can approve only when the request is in the Pending Terms Acceptance stage.
+                        Transfers sent to you (matched by your email and phone). You can approve only when the request is in the Approved - Pending Terms stage.
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -477,7 +477,7 @@ function DashboardContent() {
                               <div className="min-w-0">
                                 <div className="text-sm font-medium truncate">{title}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  Ref: {appNumber} • Stage: Pending Terms Acceptance
+                                  Ref: {appNumber} • Stage: Approved - Pending Terms
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -492,7 +492,7 @@ function DashboardContent() {
                                       Approving…
                                     </>
                                   ) : (
-                                    'Approve & Continue'
+                                    'Approve Transfer & Continue'
                                   )}
                                 </Button>
                               </div>

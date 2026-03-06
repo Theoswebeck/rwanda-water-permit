@@ -41,6 +41,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Application } from "@/types/database";
 import { ALL_WATER_ACTIVITY_CODES, getActivityLabel } from "@/lib/assessment-report-utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 type DashboardListApplication = Application & {
   display_status?: string;
@@ -63,6 +64,7 @@ export function ApplicationsList({
   onStatusFilterChange,
 }: ApplicationsListProps) {
   const router = useRouter();
+  const { userProfile } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activityFilter, setActivityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -244,7 +246,7 @@ export function ApplicationsList({
         };
       case "approved_pending_permit":
         return {
-          label: "Approved (Pending Signature)",
+          label: "Approved - Pending Terms",
           icon: <FileText className="h-4 w-4" />,
           className: "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium"
         };
@@ -335,6 +337,19 @@ export function ApplicationsList({
     if (app.renewed_from_permit_id) return app.renewed_from_permit_id;
     const notes = parseNotes(app);
     return notes?.originalPermitId ?? undefined;
+  };
+
+  const isTransferTermsActor = (app: Application): boolean => {
+    const notes = parseNotes(app);
+    const isTransfer = app.application_type === "transfer" || notes?.isTransfer === true;
+    if (!isTransfer) return true;
+
+    const approval = notes?.transferApproval;
+    return (
+      approval?.transfereeApproved === true &&
+      typeof approval?.transfereeUserId === "string" &&
+      approval.transfereeUserId === userProfile?.id
+    );
   };
 
   const getLocationDisplay = (app: DashboardListApplication): string => {
@@ -451,7 +466,7 @@ export function ApplicationsList({
               <SelectItem value="submitted">Submitted</SelectItem>
               <SelectItem value="under_review">Under Review</SelectItem>
               <SelectItem value="revision_required">Returned for Review</SelectItem>
-              <SelectItem value="approved_pending_permit">Approved (Pending Signature)</SelectItem>
+              <SelectItem value="approved_pending_permit">Approved - Pending Terms</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="pending_payment">Pending Payment</SelectItem>
@@ -551,10 +566,10 @@ export function ApplicationsList({
                     <Button
                       size="sm"
                       className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
-                      title="Accept Terms & Conditions"
+                      title={isTransferTermsActor(application) ? "Accept Terms & Conditions" : "View transfer status"}
                     >
                       <FileText className="h-4 w-4 mr-1" />
-                      Accept Terms
+                      {isTransferTermsActor(application) ? "Accept Terms" : "View Status"}
                     </Button>
                   </Link>
                 )}
@@ -689,10 +704,10 @@ export function ApplicationsList({
                           <Button 
                             size="sm" 
                             className="bg-green-600 hover:bg-green-700 text-white h-8 px-3"
-                            title="Accept Terms & Conditions"
+                            title={isTransferTermsActor(application) ? "Accept Terms & Conditions" : "View transfer status"}
                           >
                             <FileText className="h-4 w-4 mr-1" />
-                            Accept Terms
+                            {isTransferTermsActor(application) ? "Accept Terms" : "View Status"}
                           </Button>
                         </Link>
                       )}

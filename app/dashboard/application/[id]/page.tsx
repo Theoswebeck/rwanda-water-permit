@@ -680,7 +680,7 @@ export default function ApplicationDetailPage() {
       case "approved":
         return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved</Badge>;
       case "approved_pending_permit":
-        return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Pending Terms Acceptance</Badge>;
+        return <Badge variant="outline" className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Approved - Pending Terms</Badge>;
       case "rejected":
         return <Badge variant="outline" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">Rejected</Badge>;
       case "pending_payment":

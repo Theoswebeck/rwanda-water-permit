@@ -12,6 +12,16 @@ function parseCsvList(value: string | null): string[] {
     .filter(Boolean)
 }
 
+function isMissingTransferRequestsTable(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  const message = String((err as { message?: unknown } | null)?.message || '')
+  return (
+    code === '42P01' ||
+    message.includes('relation "public.transfer_requests" does not exist') ||
+    message.includes('relation "transfer_requests" does not exist')
+  )
+}
+
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
@@ -43,7 +53,20 @@ export async function GET(req: NextRequest) {
     const types = parseCsvList(req.nextUrl.searchParams.get('type'))
     const provinces = parseCsvList(req.nextUrl.searchParams.get('province'))
 
-    const conditions: string[] = ['a.applicant_id = $1']
+    const conditions: string[] = [
+      `(
+        a.applicant_id = $1
+        or (
+          a.application_type = 'transfer'
+          and exists (
+            select 1
+            from public.transfer_requests tr
+            where tr.application_id = a.id
+              and tr.transferor_user_id = $1
+          )
+        )
+      )`,
+    ]
     const params: unknown[] = [userId]
     let idx = 2
 
@@ -63,22 +86,60 @@ export async function GET(req: NextRequest) {
       idx += 1
     }
 
-    const result = await query(
-      `
-      select
-        a.*,
-        coalesce(last_status_action.last_action_at, a.created_at) as last_action_at
-      from public.applications a
-      left join lateral (
-        select max(wh.created_at) as last_action_at
-        from public.workflow_history wh
-        where wh.application_id = a.id
-      ) as last_status_action on true
-      where ${conditions.join(' and ')}
-      order by a.created_at desc
-      `,
-      params
-    )
+    let result
+    try {
+      result = await query(
+        `
+        select
+          a.*,
+          coalesce(last_status_action.last_action_at, a.created_at) as last_action_at
+        from public.applications a
+        left join lateral (
+          select max(wh.created_at) as last_action_at
+          from public.workflow_history wh
+          where wh.application_id = a.id
+        ) as last_status_action on true
+        where ${conditions.join(' and ')}
+        order by a.created_at desc
+        `,
+        params
+      )
+    } catch (listErr) {
+      if (!isMissingTransferRequestsTable(listErr)) {
+        throw listErr
+      }
+
+      // Backward compatibility if transfer_requests table is not deployed yet.
+      const fallbackConditions: string[] = ['a.applicant_id = $1']
+      let fallbackIdx = 2
+      if (statuses.length > 0) {
+        fallbackConditions.push(`a.status = any($${fallbackIdx}::text[])`)
+        fallbackIdx += 1
+      }
+      if (types.length > 0) {
+        fallbackConditions.push(`a.application_type = any($${fallbackIdx}::text[])`)
+        fallbackIdx += 1
+      }
+      if (provinces.length > 0) {
+        fallbackConditions.push(`a.province = any($${fallbackIdx}::text[])`)
+      }
+      result = await query(
+        `
+        select
+          a.*,
+          coalesce(last_status_action.last_action_at, a.created_at) as last_action_at
+        from public.applications a
+        left join lateral (
+          select max(wh.created_at) as last_action_at
+          from public.workflow_history wh
+          where wh.application_id = a.id
+        ) as last_status_action on true
+        where ${fallbackConditions.join(' and ')}
+        order by a.created_at desc
+        `,
+        params
+      )
+    }
 
     return NextResponse.json({ success: true, applications: result.rows })
   } catch (err) {

@@ -11,6 +11,16 @@ async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> 
   return claims?.sub || null
 }
 
+function isMissingTransferRequestsTable(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code
+  const message = String((err as { message?: unknown } | null)?.message || '')
+  return (
+    code === '42P01' ||
+    message.includes('relation "public.transfer_requests" does not exist') ||
+    message.includes('relation "transfer_requests" does not exist')
+  )
+}
+
 function toSafeApplicationPayload(input: Record<string, unknown>): Record<string, unknown> {
   const blocked = new Set(['id', 'applicant_id', 'created_at'])
   const out: Record<string, unknown> = {}
@@ -32,15 +42,45 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     const { id } = await context.params
-    const appRes = await query(
-      `
-      select *
-      from public.applications
-      where id = $1 and applicant_id = $2
-      limit 1
-      `,
-      [id, userId]
-    )
+    let appRes
+    try {
+      appRes = await query(
+        `
+        select *
+        from public.applications a
+        where
+          a.id = $1
+          and (
+            a.applicant_id = $2
+            or (
+              a.application_type = 'transfer'
+              and exists (
+                select 1
+                from public.transfer_requests tr
+                where tr.application_id = a.id
+                  and tr.transferor_user_id = $2
+              )
+            )
+          )
+        limit 1
+        `,
+        [id, userId]
+      )
+    } catch (appErr) {
+      if (!isMissingTransferRequestsTable(appErr)) {
+        throw appErr
+      }
+
+      appRes = await query(
+        `
+        select *
+        from public.applications
+        where id = $1 and applicant_id = $2
+        limit 1
+        `,
+        [id, userId]
+      )
+    }
     const application = appRes.rows[0]
     if (!application) {
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })

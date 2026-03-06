@@ -237,17 +237,21 @@ export async function POST(req: NextRequest) {
             const transfereeEmail = String(transferRequest.transferee_email || '').trim().toLowerCase()
             const transfereePhone = String(transferRequest.transferee_phone || '').trim()
             const portalUrl = getPortalUrl()
-            const subject = `Permit transfer ready for your approval — ${applicationNumber}`
-            const title = 'Permit Transfer Ready for Approval'
+            const subject = `Permit transfer approved - action required — ${applicationNumber}`
+            const title = 'Permit Transfer Approved - Action Required'
             const text = [
-              `A water permit transfer request is now ready for your action.`,
+              `Dear Permit Transferee,`,
+              ``,
+              `A water permit transfer application has now been approved by Rwanda Water Resources Board and is waiting for your action.`,
               ``,
               `Reference: ${applicationNumber}`,
               ``,
               `Next steps:`,
-              `- Log in (or sign up) using this same email and phone number.`,
-              `- Approve the incoming transfer request from your dashboard.`,
-              `- Open the application and accept the Terms and Conditions to issue the permit in your name.`,
+              `- Log in (or sign up) using this same email address and phone number.`,
+              `- On your dashboard, open the transfer application with status: "Approved - Pending Terms".`,
+              `- Review details and accept the Terms and Conditions to complete permit transfer into your name.`,
+              ``,
+              `Important: Only the transferee can accept these terms.`,
               ``,
               `Portal: ${portalUrl}`,
             ].join('\n')
@@ -262,7 +266,7 @@ export async function POST(req: NextRequest) {
             if (smsPhone) {
               const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
               const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-              const sms = `RWB: Transfer request ${applicationNumber} is ready. Login/signup with the same email+phone, approve transfer, then accept terms. Portal: ${portalUrl}`
+              const sms = `RWB: Transfer ${applicationNumber} approved. Login with same email+phone, open status Approved - Pending Terms, then accept terms to complete transfer. Portal: ${portalUrl}`
               if (pindo.isValidRwandanPhone(smsPhone)) {
                 await pindo.sendSMS(smsPhone, sms, senderName)
               } else {

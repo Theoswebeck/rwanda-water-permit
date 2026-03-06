@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
     }
 
     const includeApplication = req.nextUrl.searchParams.get('includeApplication') !== 'false'
+    const includeRevoked = req.nextUrl.searchParams.get('includeRevoked') === 'true'
 
     const result = await query<PermitRow>(
       `
@@ -69,9 +70,10 @@ export async function GET(req: NextRequest) {
       from public.permits p
       join public.applications a on a.id = p.application_id
       where a.applicant_id = $1
+        and ($2::boolean or p.status <> 'revoked')
       order by p.issued_date desc
       `,
-      [userId]
+      [userId, includeRevoked]
     )
 
     const permits = result.rows.map((row) => {
