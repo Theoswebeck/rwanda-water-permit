@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildApplicationUpdateParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
+import { sanitizeApplicationEnumPayload } from '@/lib/db/application-enum-sanitizer'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
@@ -128,7 +129,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ success: false, message: 'Invalid request body' }, { status: 400 })
     }
 
-    const payload = toSafeApplicationPayload(body)
+    const safePayload = toSafeApplicationPayload(body)
+    const payload = sanitizeApplicationEnumPayload(safePayload)
     payload.updated_at = new Date().toISOString()
     const updatePayload: Record<string, unknown> = { ...payload }
     const droppedColumns: string[] = []

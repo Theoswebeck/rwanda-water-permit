@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildApplicationInsertParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
+import { sanitizeApplicationEnumPayload } from '@/lib/db/application-enum-sanitizer'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 function parseCsvList(value: string | null): string[] {
@@ -104,7 +105,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Invalid request body' }, { status: 400 })
     }
 
-    const payload = toSafeApplicationPayload(body)
+    const safePayload = toSafeApplicationPayload(body)
+    const payload = sanitizeApplicationEnumPayload(safePayload)
     payload.applicant_id = userId
     payload.updated_at = new Date().toISOString()
 
