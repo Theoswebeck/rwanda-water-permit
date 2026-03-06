@@ -277,6 +277,7 @@ export default function ReviewApplicationPage() {
             documents(*),
             reviews:reviews!application_id(*)
           `)
+          .neq('status', 'draft')
           .eq('application_number', applicationNumber)
           .single();
 

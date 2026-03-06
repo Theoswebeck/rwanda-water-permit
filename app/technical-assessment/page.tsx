@@ -128,6 +128,7 @@ function TechnicalAssessmentContent() {
             *,
             applicant:users!applicant_id(*)
           `)
+          .neq('status', 'draft')
           .eq('id', applicationId)
           .single();
 

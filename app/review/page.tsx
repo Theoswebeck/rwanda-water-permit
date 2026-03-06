@@ -165,6 +165,7 @@ export default function ReviewerDashboard() {
              applicant:users!applicant_id(first_name, last_name, company_name),
              assigned_assessor:users!assigned_assessor_id(first_name, last_name, email)
            `)
+           .neq('status', 'draft')
            .order('submitted_at', { ascending: false, nullsFirst: false })
            .order('created_at', { ascending: false });
 

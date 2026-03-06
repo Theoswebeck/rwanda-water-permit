@@ -354,6 +354,7 @@ export default function InspectorApplicationView() {
             documents(*),
             reviews:reviews!application_id(*)
           `)
+          .neq('status', 'draft')
           .eq('application_number', applicationNumber)
           .single();
 

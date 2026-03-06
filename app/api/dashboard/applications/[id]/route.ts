@@ -23,11 +23,25 @@ function isMissingTransferRequestsTable(err: unknown): boolean {
 
 function toSafeApplicationPayload(input: Record<string, unknown>): Record<string, unknown> {
   const blocked = new Set(['id', 'applicant_id', 'created_at'])
+  const optionalUuidColumns = new Set([
+    'modified_from_application_id',
+    'renewed_from_permit_id',
+  ])
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   const out: Record<string, unknown> = {}
 
   for (const [key, value] of Object.entries(input)) {
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(key)) continue
     if (blocked.has(key)) continue
+    if (optionalUuidColumns.has(key)) {
+      if (typeof value !== 'string') {
+        out[key] = null
+        continue
+      }
+      const normalized = value.trim()
+      out[key] = uuidPattern.test(normalized) ? normalized : null
+      continue
+    }
     out[key] = value
   }
 

@@ -383,6 +383,14 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
 
 // Inner component that uses useSearchParams
 function NewApplicationContent() {
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const toUuidOrNull = (value: unknown): string | null => {
+    if (typeof value !== "string") return null;
+    const normalized = value.trim();
+    return UUID_PATTERN.test(normalized) ? normalized : null;
+  };
+
   type SelectedPermitRuntimeMeta = {
     permitReference?: PermitReference;
     legacyIdentityProofFile?: File | null;
@@ -1529,8 +1537,9 @@ function NewApplicationContent() {
 
       // Migration-dependent columns — added optimistically.
       const optionalColumns: Record<string, unknown> = { is_renewal: true };
-      if (selectedPermitForRenewal?.id) {
-        optionalColumns.renewed_from_permit_id = selectedPermitForRenewal.id;
+      const renewedFromPermitId = toUuidOrNull(selectedPermitForRenewal?.id);
+      if (renewedFromPermitId) {
+        optionalColumns.renewed_from_permit_id = renewedFromPermitId;
       }
       const activities = pd?.intendedActivity
         ? [pd.intendedActivity]
@@ -1684,8 +1693,9 @@ function NewApplicationContent() {
 
       // Migration-dependent columns — added optimistically, stripped on retry.
       const optionalColumns: Record<string, unknown> = {};
-      if (selectedPermitForRenewal?.id) {
-        optionalColumns.renewed_from_permit_id = selectedPermitForRenewal.id;
+      const renewedFromPermitId = toUuidOrNull(selectedPermitForRenewal?.id);
+      if (renewedFromPermitId) {
+        optionalColumns.renewed_from_permit_id = renewedFromPermitId;
       }
       optionalColumns.is_renewal = true;
       const draftActivities = pd?.intendedActivity
@@ -1880,7 +1890,7 @@ function NewApplicationContent() {
         project_description: formData.projectDescription || `Permit modification request for permit ${selectedPermitForModification?.permit_number}`,
         sla_status: 'on_time',
         is_modification: true,
-        modified_from_application_id: selectedPermitForModification?.application_id,
+        modified_from_application_id: toUuidOrNull(selectedPermitForModification?.application_id) || undefined,
         modification_changes: formData.modificationChanges || {},
         modification_reason: formData.modificationReason || undefined,
         // Save key permit-affecting fields at the application level (not just in internal_notes)
@@ -2028,7 +2038,7 @@ function NewApplicationContent() {
         project_description: formData.projectDescription || `Permit modification request for permit ${selectedPermitForModification?.permit_number}`,
         sla_status: 'on_time',
         is_modification: true,
-        modified_from_application_id: selectedPermitForModification?.application_id,
+        modified_from_application_id: toUuidOrNull(selectedPermitForModification?.application_id) || undefined,
         modification_changes: formData.modificationChanges || {},
         modification_reason: formData.modificationReason || undefined,
         // Save key permit-affecting fields at the application level (not just in internal_notes)

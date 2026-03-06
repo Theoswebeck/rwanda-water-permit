@@ -276,6 +276,7 @@ export default function AssessmentPage() {
             applicant:users!applicant_id(*),
             documents(*)
           `)
+          .neq('status', 'draft')
           .eq('application_number', applicationNumber)
           .single();
 

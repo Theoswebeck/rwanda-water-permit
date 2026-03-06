@@ -6091,13 +6091,13 @@ export function ApplicationForm({
                               alert('Please try saving your application again before proceeding to payment.');
                             }
                           }}
-                          disabled={isLoading || !canSubmit}
-                          className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}
+                          disabled={isLoading || isNextButtonDisabled()}
+                          className={(isLoading || isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
                         >
                           <CreditCard className="h-4 w-4 mr-2" />
                           {isLoading ? 'Saving…' : 'Continue to Payment'}
-                          {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
-                            <span className="ml-2 text-xs">(Fix polygon validation first)</span>
+                          {isNextButtonDisabled() && (
+                            <span className="ml-2 text-xs">(Complete required fields above)</span>
                           )}
                         </Button>
                       ) : (
@@ -6116,12 +6116,12 @@ export function ApplicationForm({
                             // silently reject empty optional polygon defaults.
                             await handleFormSubmit(form.getValues());
                           }}
-                          disabled={isLoading || !canSubmit}
-                          className={(isLoading || !canSubmit) ? "opacity-50 cursor-not-allowed" : ""}
+                          disabled={isLoading || isNextButtonDisabled()}
+                          className={(isLoading || isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
                         >
                           Submit {isModification ? 'Modification Request' : 'Application'}
-                          {!canSubmit && coordinateValidation && !coordinateValidation.isValid && (
-                            <span className="ml-2 text-xs">(Fix polygon validation first)</span>
+                          {isNextButtonDisabled() && (
+                            <span className="ml-2 text-xs">(Complete required fields above)</span>
                           )}
                         </Button>
                       )

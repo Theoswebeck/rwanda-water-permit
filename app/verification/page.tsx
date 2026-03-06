@@ -68,6 +68,7 @@ export default function VerificationDashboard() {
             *,
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
+          .neq("status", "draft")
           .order("submitted_at", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
 
