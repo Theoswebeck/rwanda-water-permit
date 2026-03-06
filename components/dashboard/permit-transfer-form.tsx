@@ -210,6 +210,38 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const [selectedTransfereeSector, setSelectedTransfereeSector] = useState("");
   const [selectedTransfereeCell, setSelectedTransfereeCell] = useState("");
   const [selectedTransfereeVillage, setSelectedTransfereeVillage] = useState("");
+  const [selectedPermitProvince, setSelectedPermitProvince] = useState("");
+  const [selectedPermitDistrict, setSelectedPermitDistrict] = useState("");
+  const [selectedPermitSector, setSelectedPermitSector] = useState("");
+  const [selectedPermitCell, setSelectedPermitCell] = useState("");
+  const [selectedPermitVillage, setSelectedPermitVillage] = useState("");
+
+  const transferorProfileDefaults = useMemo(() => {
+    const profileRecord = userProfile as Record<string, unknown> | null;
+    const profileName =
+      `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() ||
+      userProfile?.company_name ||
+      userData.name ||
+      '';
+    const profilePhone =
+      (typeof profileRecord?.phone === 'string' && profileRecord.phone.trim()) ||
+      (typeof profileRecord?.mobile_phone === 'string' && profileRecord.mobile_phone.trim()) ||
+      (typeof profileRecord?.company_phone === 'string' && profileRecord.company_phone.trim()) ||
+      (typeof profileRecord?.landline_phone === 'string' && profileRecord.landline_phone.trim()) ||
+      userData.phone ||
+      '';
+
+    return {
+      transferorName: profileName,
+      transferorEmail: userProfile?.email || userData.email || '',
+      transferorPhone: profilePhone,
+      transferorAddressProvince: userProfile?.province || permit.application?.province || '',
+      transferorAddressDistrict: userProfile?.district || permit.application?.district || '',
+      transferorAddressSector: userProfile?.sector || permit.application?.sector || '',
+      transferorAddressCell: userProfile?.cell || permit.application?.cell || '',
+      transferorAddressVillage: userProfile?.village || permit.application?.village || '',
+    };
+  }, [userProfile, userData, permit.application]);
 
   // Get default form values pre-filled from permit
   // IMPORTANT: The logged-in user is the TRANSFEROR (current owner transferring their permit)
@@ -292,14 +324,14 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       waterSourceLongitude: internalNotes?.waterSourceLongitude || '',
 
       // Part 2: Transferor (current owner = logged-in user who owns the permit)
-      transferorName: userData.name || '',
-      transferorEmail: userData.email || '',
-      transferorPhone: userData.phone || '',
-      transferorAddressProvince: permit.application?.province || '',
-      transferorAddressDistrict: permit.application?.district || '',
-      transferorAddressSector: permit.application?.sector || '',
-      transferorAddressCell: permit.application?.cell || '',
-      transferorAddressVillage: permit.application?.village || '',
+      transferorName: transferorProfileDefaults.transferorName,
+      transferorEmail: transferorProfileDefaults.transferorEmail,
+      transferorPhone: transferorProfileDefaults.transferorPhone,
+      transferorAddressProvince: transferorProfileDefaults.transferorAddressProvince,
+      transferorAddressDistrict: transferorProfileDefaults.transferorAddressDistrict,
+      transferorAddressSector: transferorProfileDefaults.transferorAddressSector,
+      transferorAddressCell: transferorProfileDefaults.transferorAddressCell,
+      transferorAddressVillage: transferorProfileDefaults.transferorAddressVillage,
       transferorCertification: false,
       transferorSignatureDate: today,
 
@@ -317,7 +349,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     };
 
     return { ...defaults, ...initialData };
-  }, [permit, userData, initialData]);
+  }, [permit, transferorProfileDefaults, initialData]);
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferFormSchema),
@@ -326,12 +358,42 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     reValidateMode: "onChange"
   });
 
+  // Keep transferor fields aligned with the authenticated profile (user may open this page before profile bootstrap finishes).
+  useEffect(() => {
+    const updates: Partial<TransferFormValues> = {
+      transferorName: transferorProfileDefaults.transferorName,
+      transferorEmail: transferorProfileDefaults.transferorEmail,
+      transferorPhone: transferorProfileDefaults.transferorPhone,
+      transferorAddressProvince: transferorProfileDefaults.transferorAddressProvince,
+      transferorAddressDistrict: transferorProfileDefaults.transferorAddressDistrict,
+      transferorAddressSector: transferorProfileDefaults.transferorAddressSector,
+      transferorAddressCell: transferorProfileDefaults.transferorAddressCell,
+      transferorAddressVillage: transferorProfileDefaults.transferorAddressVillage,
+    };
+
+    (Object.keys(updates) as Array<keyof typeof updates>).forEach((field) => {
+      const nextValue = updates[field] ?? '';
+      if ((form.getValues(field as keyof TransferFormValues) || '') !== nextValue) {
+        form.setValue(field as keyof TransferFormValues, nextValue as never, {
+          shouldDirty: false,
+          shouldTouch: false,
+          shouldValidate: false,
+        });
+      }
+    });
+  }, [form, transferorProfileDefaults]);
+
   // Get form values for cascading dropdowns
   const transfereeProvince = form.watch('transfereeAddressProvince');
   const transfereeDistrict = form.watch('transfereeAddressDistrict');
   const transfereeSector = form.watch('transfereeAddressSector');
   const transfereeCell = form.watch('transfereeAddressCell');
   const transfereeVillage = form.watch('transfereeAddressVillage');
+  const permitLocationProvince = form.watch('permitLocationProvince');
+  const permitLocationDistrict = form.watch('permitLocationDistrict');
+  const permitLocationSector = form.watch('permitLocationSector');
+  const permitLocationCell = form.watch('permitLocationCell');
+  const permitLocationVillage = form.watch('permitLocationVillage');
 
   // Update dropdown states when form values change
   useEffect(() => {
@@ -350,7 +412,43 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     if (transfereeVillage !== selectedTransfereeVillage) {
       setSelectedTransfereeVillage(transfereeVillage || "");
     }
-  }, [transfereeProvince, transfereeDistrict, transfereeSector, transfereeCell, transfereeVillage]);
+    if (permitLocationProvince !== selectedPermitProvince) {
+      setSelectedPermitProvince(permitLocationProvince || "");
+    }
+    if (permitLocationDistrict !== selectedPermitDistrict) {
+      setSelectedPermitDistrict(permitLocationDistrict || "");
+    }
+    if (permitLocationSector !== selectedPermitSector) {
+      setSelectedPermitSector(permitLocationSector || "");
+    }
+    if (permitLocationCell !== selectedPermitCell) {
+      setSelectedPermitCell(permitLocationCell || "");
+    }
+    if (permitLocationVillage !== selectedPermitVillage) {
+      setSelectedPermitVillage(permitLocationVillage || "");
+    }
+  }, [
+    transfereeProvince,
+    transfereeDistrict,
+    transfereeSector,
+    transfereeCell,
+    transfereeVillage,
+    permitLocationProvince,
+    permitLocationDistrict,
+    permitLocationSector,
+    permitLocationCell,
+    permitLocationVillage,
+    selectedTransfereeProvince,
+    selectedTransfereeDistrict,
+    selectedTransfereeSector,
+    selectedTransfereeCell,
+    selectedTransfereeVillage,
+    selectedPermitProvince,
+    selectedPermitDistrict,
+    selectedPermitSector,
+    selectedPermitCell,
+    selectedPermitVillage,
+  ]);
 
   // Helper functions for dropdown options
   const getTransfereeDistrictOptions = () => {
@@ -371,6 +469,26 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const getTransfereeVillageOptions = () => {
     if (!selectedTransfereeProvince || !selectedTransfereeDistrict || !selectedTransfereeSector || !selectedTransfereeCell) return [];
     return getFormattedVillageOptions(selectedTransfereeProvince, selectedTransfereeDistrict, selectedTransfereeSector, selectedTransfereeCell);
+  };
+
+  const getPermitDistrictOptions = () => {
+    if (!selectedPermitProvince) return [];
+    return getFormattedDistrictOptions(selectedPermitProvince);
+  };
+
+  const getPermitSectorOptions = () => {
+    if (!selectedPermitProvince || !selectedPermitDistrict) return [];
+    return getFormattedSectorOptions(selectedPermitProvince, selectedPermitDistrict);
+  };
+
+  const getPermitCellOptions = () => {
+    if (!selectedPermitProvince || !selectedPermitDistrict || !selectedPermitSector) return [];
+    return getFormattedCellOptions(selectedPermitProvince, selectedPermitDistrict, selectedPermitSector);
+  };
+
+  const getPermitVillageOptions = () => {
+    if (!selectedPermitProvince || !selectedPermitDistrict || !selectedPermitSector || !selectedPermitCell) return [];
+    return getFormattedVillageOptions(selectedPermitProvince, selectedPermitDistrict, selectedPermitSector, selectedPermitCell);
   };
 
   // Load initial documents
@@ -884,9 +1002,41 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Province / City of Kigali</FormLabel>
-                            <FormControl>
-                              <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            {isManualPermit && !readOnly ? (
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedPermitProvince(value);
+                                  form.setValue("permitLocationDistrict", "");
+                                  form.setValue("permitLocationSector", "");
+                                  form.setValue("permitLocationCell", "");
+                                  form.setValue("permitLocationVillage", "");
+                                  setSelectedPermitDistrict("");
+                                  setSelectedPermitSector("");
+                                  setSelectedPermitCell("");
+                                  setSelectedPermitVillage("");
+                                }}
+                                value={field.value || ""}
+                                disabled={readOnly}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select province" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {getFormattedProvinceOptions().map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -898,9 +1048,39 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>District</FormLabel>
-                            <FormControl>
-                              <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            {isManualPermit && !readOnly ? (
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedPermitDistrict(value);
+                                  form.setValue("permitLocationSector", "");
+                                  form.setValue("permitLocationCell", "");
+                                  form.setValue("permitLocationVillage", "");
+                                  setSelectedPermitSector("");
+                                  setSelectedPermitCell("");
+                                  setSelectedPermitVillage("");
+                                }}
+                                value={field.value || ""}
+                                disabled={!selectedPermitProvince || readOnly}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={selectedPermitProvince ? "Select district" : "Select province first"} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {getPermitDistrictOptions().map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -912,9 +1092,37 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Sector</FormLabel>
-                            <FormControl>
-                              <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            {isManualPermit && !readOnly ? (
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedPermitSector(value);
+                                  form.setValue("permitLocationCell", "");
+                                  form.setValue("permitLocationVillage", "");
+                                  setSelectedPermitCell("");
+                                  setSelectedPermitVillage("");
+                                }}
+                                value={field.value || ""}
+                                disabled={!selectedPermitDistrict || readOnly}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={selectedPermitDistrict ? "Select sector" : "Select district first"} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {getPermitSectorOptions().map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -926,9 +1134,35 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Cell</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            {isManualPermit && !readOnly ? (
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedPermitCell(value);
+                                  form.setValue("permitLocationVillage", "");
+                                  setSelectedPermitVillage("");
+                                }}
+                                value={field.value || ""}
+                                disabled={!selectedPermitSector || readOnly}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={selectedPermitSector ? "Select cell" : "Select sector first"} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {getPermitCellOptions().map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -940,9 +1174,33 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Village</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            {isManualPermit && !readOnly ? (
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  setSelectedPermitVillage(value);
+                                }}
+                                value={field.value || ""}
+                                disabled={!selectedPermitCell || readOnly}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder={selectedPermitCell ? "Select village (optional)" : "Select cell first"} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {getPermitVillageOptions().map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      {option.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <FormControl>
+                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              </FormControl>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}

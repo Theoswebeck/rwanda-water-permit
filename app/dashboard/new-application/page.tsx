@@ -990,12 +990,18 @@ function NewApplicationContent() {
           lookupStatus: "found" as const,
         };
       const customerSnapshot = buildTransferCustomerSnapshot(formData);
+      const normalizedWaterSource = formatWaterSourceForDB(
+        formData.waterSourceType || selectedPermit?.water_source || 'other'
+      );
+      const normalizedWaterPurpose = formatWaterPurposeForDB(
+        formData.waterPurpose || selectedPermit?.purpose || 'other'
+      );
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'pending_payment',
         application_type: 'transfer',
-        water_source: formData.waterSourceType || selectedPermit?.water_source || 'other',
-        water_purpose: formData.waterPurpose || selectedPermit?.purpose || 'other',
+        water_source: normalizedWaterSource,
+        water_purpose: normalizedWaterPurpose,
         province: formData.permitLocationProvince || selectedPermit?.application?.province || 'Kigali',
         district: formData.permitLocationDistrict || selectedPermit?.application?.district || '',
         sector: formData.permitLocationSector || selectedPermit?.application?.sector || '',
@@ -1081,12 +1087,18 @@ function NewApplicationContent() {
           lookupStatus: "found" as const,
         };
       const customerSnapshot = buildTransferCustomerSnapshot(formData);
+      const normalizedWaterSource = formatWaterSourceForDB(
+        formData.waterSourceType || selectedPermit?.water_source || 'other'
+      );
+      const normalizedWaterPurpose = formatWaterPurposeForDB(
+        formData.waterPurpose || selectedPermit?.purpose || 'other'
+      );
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
         application_type: 'transfer',
-        water_source: formData.waterSourceType || selectedPermit?.water_source || 'other',
-        water_purpose: formData.waterPurpose || selectedPermit?.purpose || 'other',
+        water_source: normalizedWaterSource,
+        water_purpose: normalizedWaterPurpose,
         province: formData.permitLocationProvince || selectedPermit?.application?.province || 'Kigali',
         district: formData.permitLocationDistrict || selectedPermit?.application?.district || '',
         sector: formData.permitLocationSector || selectedPermit?.application?.sector || '',
