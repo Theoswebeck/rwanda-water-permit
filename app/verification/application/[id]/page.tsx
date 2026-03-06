@@ -31,6 +31,7 @@ import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { ArrowLeft, Loader2, XCircle, ClipboardCheck, Check, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
+import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new"),
@@ -755,6 +756,7 @@ export default function VerificationApplicationPage() {
               </TabsList>
 
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
+              {application && <RegistryPermitComparisonCard application={application} />}
               {/* Show Transfer Form for transfer applications */}
               {isTransferApp ? (
                 loadingTransferPermit ? (

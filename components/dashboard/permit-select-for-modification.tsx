@@ -27,6 +27,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { Permit, Application } from "@/types/database";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { ManualPermitEntryCard } from "@/components/dashboard/manual-permit-entry-card";
+import type { ManualPermitSelectionPayload } from "@/lib/permit/permit-reference";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -59,12 +61,14 @@ type ApplicantProfile = {
 interface PermitSelectForModificationProps {
   userId?: string;
   onPermitSelect: (permit: PermitWithApplication) => void;
+  onManualPermitSelect?: (payload: ManualPermitSelectionPayload) => void;
   onCancel: () => void;
 }
 
 export function PermitSelectForModification({ 
   userId, 
   onPermitSelect,
+  onManualPermitSelect,
   onCancel 
 }: PermitSelectForModificationProps) {
   const [permits, setPermits] = useState<PermitWithApplication[]>([]);
@@ -412,6 +416,14 @@ export function PermitSelectForModification({
                 </Card>
               ))}
             </div>
+          )}
+
+          {onManualPermitSelect && (
+            <ManualPermitEntryCard
+              title="Permit Not Listed?"
+              description="If your permit exists in registry but is not linked to your profile, add the old permit number and details manually."
+              onContinue={onManualPermitSelect}
+            />
           )}
 
           {/* Actions */}

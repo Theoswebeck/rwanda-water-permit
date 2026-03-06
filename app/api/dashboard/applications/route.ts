@@ -42,32 +42,39 @@ export async function GET(req: NextRequest) {
     const types = parseCsvList(req.nextUrl.searchParams.get('type'))
     const provinces = parseCsvList(req.nextUrl.searchParams.get('province'))
 
-    const conditions: string[] = ['applicant_id = $1']
+    const conditions: string[] = ['a.applicant_id = $1']
     const params: unknown[] = [userId]
     let idx = 2
 
     if (statuses.length > 0) {
-      conditions.push(`status = any($${idx}::text[])`)
+      conditions.push(`a.status = any($${idx}::text[])`)
       params.push(statuses)
       idx += 1
     }
     if (types.length > 0) {
-      conditions.push(`application_type = any($${idx}::text[])`)
+      conditions.push(`a.application_type = any($${idx}::text[])`)
       params.push(types)
       idx += 1
     }
     if (provinces.length > 0) {
-      conditions.push(`province = any($${idx}::text[])`)
+      conditions.push(`a.province = any($${idx}::text[])`)
       params.push(provinces)
       idx += 1
     }
 
     const result = await query(
       `
-      select *
-      from public.applications
+      select
+        a.*,
+        coalesce(last_status_action.last_action_at, a.created_at) as last_action_at
+      from public.applications a
+      left join lateral (
+        select max(wh.created_at) as last_action_at
+        from public.workflow_history wh
+        where wh.application_id = a.id
+      ) as last_status_action on true
       where ${conditions.join(' and ')}
-      order by created_at desc
+      order by a.created_at desc
       `,
       params
     )

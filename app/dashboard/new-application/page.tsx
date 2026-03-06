@@ -67,6 +67,7 @@ import type { Application, Document } from "@/types/database";
 import { mapFormDataToApplication, formatProvinceForDB, formatWaterSourceForDB, formatWaterPurposeForDB, formatApplicationTypeForDB } from "@/lib/application-utils";
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import type { ManualPermitSelectionPayload, PermitReference } from "@/lib/permit/permit-reference";
 
 // Helper function to create storage bucket if it doesn't exist
 async function ensureStorageBucket() {
@@ -189,7 +190,9 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       certifiedLetter: 'certified_letter',
       notifiedAgreement: 'signed_transfer_form',
       registrationCertificate: 'registration_certificate',
-      existingPermitCopy: 'existing_permit_copy'
+      existingPermitCopy: 'existing_permit_copy',
+      // Unlinked-permit identity proof
+      legacyPermitIdentityProof: 'identification_doc',
     };
 
     const requiredFieldNames = (() => {
@@ -379,6 +382,45 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
 
 // Inner component that uses useSearchParams
 function NewApplicationContent() {
+  type SelectedPermitRuntimeMeta = {
+    permitReference?: PermitReference;
+    legacyIdentityProofFile?: File | null;
+  };
+
+  const createManualSelectedPermit = useCallback((payload: ManualPermitSelectionPayload) => {
+    const nowIso = new Date().toISOString();
+    const normalized = payload.permitReference.normalizedPermitNumber || payload.permitReference.inputPermitNumber;
+    return {
+      id: `manual-${normalized}`,
+      application_id: "",
+      permit_number: payload.permitReference.inputPermitNumber,
+      status: "active",
+      water_source: "other",
+      purpose: "other",
+      water_allowance: 0,
+      allowance_unit: "m³/year",
+      issuing_authority: "Rwanda Water Resources Board",
+      issued_date: nowIso,
+      expiry_date: nowIso,
+      is_renewal: false,
+      is_transfer: false,
+      is_modification: false,
+      created_at: nowIso,
+      updated_at: nowIso,
+      application: {
+        id: "",
+        project_title: payload.permitReference.manualActivity || "Manual Permit Baseline",
+        province: "",
+        district: "",
+        sector: "",
+        cell: "",
+        village: "",
+      },
+      permitReference: payload.permitReference,
+      legacyIdentityProofFile: payload.identityProofFile,
+    };
+  }, []);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -424,7 +466,7 @@ function NewApplicationContent() {
   // Load existing renewal application if applicationId and permitId are provided
   useEffect(() => {
     const loadRenewalDraft = async () => {
-      if (!renewalApplicationId || !renewalPermitId || applicationMode !== 'renewal') {
+      if (!renewalApplicationId || applicationMode !== 'renewal') {
         setLoadingRenewalDraft(false);
         return;
       }
@@ -433,10 +475,15 @@ function NewApplicationContent() {
         setLoadingRenewalDraft(true);
         setError(null);
         
-        // Load the application and permit data in parallel
-        const [application, permitResult] = await Promise.all([
-          getApplication(renewalApplicationId),
-          supabase
+        const application = await getApplication(renewalApplicationId);
+        if (!application) {
+          setError('Failed to load renewal application data');
+          return;
+        }
+
+        // Linked-system renewal: load permit row normally.
+        if (renewalPermitId && !renewalPermitId.startsWith("manual-")) {
+          const permitResult = await supabase
             .from('permits')
             .select(`
               *,
@@ -472,16 +519,40 @@ function NewApplicationContent() {
               )
             `)
             .eq('id', renewalPermitId)
-            .single()
-        ]);
-        
-        if (application && permitResult.data) {
-          setCurrentRenewalApplication(application);
-          setSelectedPermitForRenewal(permitResult.data as RenewalPermitWithApplication);
-          setRenewalStep('fill-form');
-        } else {
-          setError('Failed to load renewal application data');
+            .single();
+
+          if (permitResult.data) {
+            setCurrentRenewalApplication(application);
+            setSelectedPermitForRenewal(permitResult.data as RenewalPermitWithApplication);
+            setRenewalStep('fill-form');
+            return;
+          }
         }
+
+        // Manual/unlinked renewal: rebuild pseudo permit from saved permitReference.
+        let permitReference: PermitReference | undefined;
+        try {
+          const notes = application.internal_notes ? JSON.parse(application.internal_notes) : {};
+          if (notes && typeof notes === "object" && notes.permitReference) {
+            permitReference = notes.permitReference as PermitReference;
+          }
+        } catch {
+          permitReference = undefined;
+        }
+
+        if (permitReference) {
+          setCurrentRenewalApplication(application);
+          setSelectedPermitForRenewal(
+            createManualSelectedPermit({
+              permitReference,
+              identityProofFile: null,
+            }) as unknown as RenewalPermitWithApplication
+          );
+          setRenewalStep('fill-form');
+          return;
+        }
+
+        setError('Failed to load renewal application data');
       } catch (err) {
         console.error('Error loading renewal draft:', err);
         setError(err instanceof Error ? err.message : 'Failed to load renewal draft');
@@ -491,7 +562,7 @@ function NewApplicationContent() {
     };
     
     loadRenewalDraft();
-  }, [renewalApplicationId, renewalPermitId, applicationMode, getApplication]);
+  }, [renewalApplicationId, renewalPermitId, applicationMode, getApplication, createManualSelectedPermit]);
   
   // Load existing draft if draftId is provided - OPTIMIZED
   useEffect(() => {
@@ -863,14 +934,20 @@ function NewApplicationContent() {
   const handlePermitSelect = useCallback((permit: PermitWithApplication) => {
     setSelectedPermit(permit);
     setTransferStep('fill-form');
-  }, []);
+  }, [createManualSelectedPermit]);
+
+  const handleManualTransferPermitSelect = useCallback((payload: ManualPermitSelectionPayload) => {
+    setCurrentTransferApplication(null);
+    setSelectedPermit(createManualSelectedPermit(payload) as unknown as PermitWithApplication);
+    setTransferStep('fill-form');
+  }, [createManualSelectedPermit]);
 
   // Handle transfer cancellation
   const handleTransferCancel = useCallback(() => {
     setSelectedPermit(null);
     setTransferStep('select-permit');
     setApplicationMode(null);
-  }, []);
+  }, [createManualSelectedPermit]);
 
   // Handle transfer form submission
   const handleTransferSubmit = useCallback(async (formData: any, status: 'submitted') => {
@@ -882,6 +959,14 @@ function NewApplicationContent() {
       
       // Create a transfer application in the applications table
       // Uses 'transfer' type to follow same status flow but skip field reports
+      const permitReference =
+        (selectedPermit as any as SelectedPermitRuntimeMeta | null)?.permitReference ||
+        {
+          source: "linked_system" as const,
+          inputPermitNumber: selectedPermit?.permit_number || "",
+          normalizedPermitNumber: selectedPermit?.permit_number || "",
+          lookupStatus: "found" as const,
+        };
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'submitted',
@@ -900,6 +985,7 @@ function NewApplicationContent() {
           originalPermitId: selectedPermit?.id,
           originalPermitNumber: selectedPermit?.permit_number,
           transferFormData: formData,
+          ...(permitReference ? { permitReference } : {}),
         }),
       };
       
@@ -933,7 +1019,10 @@ function NewApplicationContent() {
         
         // Upload documents
         await ensureStorageBucket();
-        const uploadedDocs = await uploadApplicationDocuments(newApplication.id, formData, userProfile?.id);
+        const uploadedDocs = await uploadApplicationDocuments(newApplication.id, {
+          ...formData,
+          legacyPermitIdentityProof: (selectedPermit as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
+        }, userProfile?.id);
         console.log(`📎 ${uploadedDocs.length} documents uploaded`);
         
         setSubmitSuccess(true);
@@ -955,6 +1044,14 @@ function NewApplicationContent() {
       setError(null);
       
       // Uses 'transfer' type to follow same status flow but skip field reports
+      const permitReference =
+        (selectedPermit as any as SelectedPermitRuntimeMeta | null)?.permitReference ||
+        {
+          source: "linked_system" as const,
+          inputPermitNumber: selectedPermit?.permit_number || "",
+          normalizedPermitNumber: selectedPermit?.permit_number || "",
+          lookupStatus: "found" as const,
+        };
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
@@ -973,6 +1070,7 @@ function NewApplicationContent() {
           originalPermitId: selectedPermit?.id,
           originalPermitNumber: selectedPermit?.permit_number,
           transferFormData: formData,
+          ...(permitReference ? { permitReference } : {}),
         }),
       };
 
@@ -991,7 +1089,10 @@ function NewApplicationContent() {
       }
       
       await ensureStorageBucket();
-      await uploadApplicationDocuments(result.id, formData, userProfile?.id);
+      await uploadApplicationDocuments(result.id, {
+        ...formData,
+        legacyPermitIdentityProof: (selectedPermit as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
+      }, userProfile?.id);
       
       // Track the current transfer application for payment tab
       setCurrentTransferApplication(result);
@@ -1156,6 +1257,37 @@ function NewApplicationContent() {
     setModificationStep('fill-form');
   }, [getApplication, getDocuments]);
 
+  const handleManualModificationPermitSelect = useCallback((payload: ManualPermitSelectionPayload) => {
+    const manualPermit = createManualSelectedPermit(payload) as unknown as PermitWithApplication;
+    setCurrentModificationApplication(null);
+    setSelectedPermitForModification(manualPermit);
+    setOriginalApplicationData({
+      fullNameApplicant: payload.permitReference.manualHolderName || "",
+      waterSourceProvince: "",
+      waterSourceDistrict: "",
+      waterSourceSector: "",
+      waterSourceCell: "",
+      waterSourceVillage: "",
+      intendedActivities: [],
+      permitLengthYears: undefined,
+      waterAbstractionDetails: [{ maxAverageYearly: undefined }],
+    });
+    setInitialFormData({
+      fullNameApplicant: payload.permitReference.manualHolderName || "",
+      waterSourceProvince: "",
+      waterSourceDistrict: "",
+      waterSourceSector: "",
+      waterSourceCell: "",
+      waterSourceVillage: "",
+      intendedActivities: [],
+      permitLengthYears: undefined,
+      waterAbstractionDetails: [{ maxAverageYearly: undefined }],
+      modificationReason: "",
+    });
+    setInitialDocuments({});
+    setModificationStep('fill-form');
+  }, [createManualSelectedPermit]);
+
   // Handle modification cancellation
   const handleModificationCancel = useCallback(() => {
     setSelectedPermitForModification(null);
@@ -1172,6 +1304,12 @@ function NewApplicationContent() {
     setSelectedPermitForRenewal(permit);
     setRenewalStep('fill-form');
   }, []);
+
+  const handleManualRenewalPermitSelect = useCallback((payload: ManualPermitSelectionPayload) => {
+    setCurrentRenewalApplication(null);
+    setSelectedPermitForRenewal(createManualSelectedPermit(payload) as unknown as RenewalPermitWithApplication);
+    setRenewalStep('fill-form');
+  }, [createManualSelectedPermit]);
 
   // Handle renewal cancellation
   const handleRenewalCancel = useCallback(() => {
@@ -1195,6 +1333,14 @@ function NewApplicationContent() {
       // Strip File objects from internal_notes payload
       const safeFormData = { ...formData };
       delete safeFormData.renewalLetter;
+      const permitReference =
+        (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.permitReference ||
+        {
+          source: "linked_system" as const,
+          inputPermitNumber: selectedPermitForRenewal?.permit_number || "",
+          normalizedPermitNumber: selectedPermitForRenewal?.permit_number || "",
+          lookupStatus: "found" as const,
+        };
       
       // Core columns guaranteed to exist in the base applications schema.
       const corePayload: Record<string, unknown> = {
@@ -1218,6 +1364,7 @@ function NewApplicationContent() {
           originalApplicationId: selectedPermitForRenewal?.application_id,
           waterUseReport: formData.waterUseReport,
           renewalFormData: safeFormData,
+          ...(permitReference ? { permitReference } : {}),
         }),
       };
 
@@ -1280,9 +1427,10 @@ function NewApplicationContent() {
         
         // Upload renewal letter document
         await ensureStorageBucket();
-        if (formData.renewalLetter) {
+        if (formData.renewalLetter || (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile) {
           const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, {
             renewalRequestLetter: formData.renewalLetter,
+            legacyPermitIdentityProof: (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
           }, userProfile?.id);
           console.log(`📎 ${uploadedDocs.length} documents uploaded`);
         }
@@ -1300,10 +1448,10 @@ function NewApplicationContent() {
   }, [selectedPermitForRenewal, userProfile?.id, updateApplication, currentRenewalApplication]);
 
   // Handle renewal draft save
-  const handleRenewalSaveAsDraft = useCallback(async (formData: any, status: string) => {
+  const handleRenewalSaveAsDraft = useCallback(async (formData: any, _status: string): Promise<void> => {
     console.log('📋 handleRenewalSaveAsDraft ENTERED', {
       hasFormData: !!formData,
-      status,
+      status: _status,
       hasSelectedPermit: !!selectedPermitForRenewal,
       permitId: selectedPermitForRenewal?.id,
       userId: userProfile?.id,
@@ -1321,6 +1469,14 @@ function NewApplicationContent() {
       // to keep the JSON payload clean and small.
       const safeFormDataForNotes = { ...formData };
       delete safeFormDataForNotes.renewalLetter; // File objects serialize to {}
+      const permitReference =
+        (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.permitReference ||
+        {
+          source: "linked_system" as const,
+          inputPermitNumber: selectedPermitForRenewal?.permit_number || "",
+          normalizedPermitNumber: selectedPermitForRenewal?.permit_number || "",
+          lookupStatus: "found" as const,
+        };
       
       // Core columns that exist in the base applications schema and are safe to
       // send in every environment.  Migration-dependent columns (is_renewal,
@@ -1346,6 +1502,7 @@ function NewApplicationContent() {
           originalApplicationId: selectedPermitForRenewal?.application_id,
           waterUseReport: formData.waterUseReport,
           renewalFormData: safeFormDataForNotes,
+          ...(permitReference ? { permitReference } : {}),
         }),
       };
 
@@ -1443,9 +1600,10 @@ function NewApplicationContent() {
       }
       
       await ensureStorageBucket();
-      if (formData.renewalLetter) {
+      if (formData.renewalLetter || (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile) {
         await uploadApplicationDocuments(result.id, {
           renewalRequestLetter: formData.renewalLetter,
+          legacyPermitIdentityProof: (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
         }, userProfile?.id);
       }
       
@@ -1456,8 +1614,10 @@ function NewApplicationContent() {
       // and subsequent saves update the same row instead of creating duplicates.
       try {
         const permitId = selectedPermitForRenewal?.id;
-        if (permitId && result.id) {
-          const newUrl = `/dashboard/new-application?mode=renewal&applicationId=${result.id}&permitId=${permitId}`;
+        const permitReference = (selectedPermitForRenewal as any as SelectedPermitRuntimeMeta | null)?.permitReference;
+        if (result.id) {
+          const permitIdQuery = permitReference?.source === "registry_unlinked" ? "" : (permitId ? `&permitId=${permitId}` : "");
+          const newUrl = `/dashboard/new-application?mode=renewal&applicationId=${result.id}${permitIdQuery}`;
           window.history.replaceState(
             { ...window.history.state, as: newUrl, url: newUrl },
             '',
@@ -1474,7 +1634,7 @@ function NewApplicationContent() {
       // Ensure applicant dashboard list refetches.
       queryClient.invalidateQueries({ queryKey: applicationKeys.lists() });
       
-      return result;
+      return;
     } catch (error) {
       console.error('❌ Error saving renewal draft:', error);
       setError(error instanceof Error ? error.message : 'Failed to save draft');
@@ -1506,6 +1666,14 @@ function NewApplicationContent() {
       // Build modification application data
       // Use the actual application type based on intended activities, not 'modification'
       const primaryActivity = formData.intendedActivities?.[0];
+      const permitReference =
+        (selectedPermitForModification as any as SelectedPermitRuntimeMeta | null)?.permitReference ||
+        {
+          source: "linked_system" as const,
+          inputPermitNumber: selectedPermitForModification?.permit_number || "",
+          normalizedPermitNumber: selectedPermitForModification?.permit_number || "",
+          lookupStatus: "found" as const,
+        };
       const modificationApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'submitted',
@@ -1536,6 +1704,7 @@ function NewApplicationContent() {
           originalPermitId: selectedPermitForModification?.id,
           originalPermitNumber: selectedPermitForModification?.permit_number,
           originalApplicationId: selectedPermitForModification?.application_id,
+          ...(permitReference ? { permitReference } : {}),
         }),
         intended_activities: formData.intendedActivities,
       };
@@ -1565,7 +1734,10 @@ function NewApplicationContent() {
         
         // Upload documents (new File objects)
         await ensureStorageBucket();
-        const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, formData, userProfile?.id);
+        const uploadedDocs = await uploadApplicationDocuments(resultApplication.id, {
+          ...formData,
+          legacyPermitIdentityProof: (selectedPermitForModification as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
+        }, userProfile?.id);
         console.log(`📎 ${uploadedDocs.length} new documents uploaded`);
 
         // Copy over documents from the original application that weren't re-uploaded.
@@ -1643,6 +1815,14 @@ function NewApplicationContent() {
       
       // Use the actual application type based on intended activities, not 'modification'
       const primaryActivity = formData.intendedActivities?.[0];
+      const permitReference =
+        (selectedPermitForModification as any as SelectedPermitRuntimeMeta | null)?.permitReference ||
+        {
+          source: "linked_system" as const,
+          inputPermitNumber: selectedPermitForModification?.permit_number || "",
+          normalizedPermitNumber: selectedPermitForModification?.permit_number || "",
+          lookupStatus: "found" as const,
+        };
       const modificationApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
@@ -1671,6 +1851,7 @@ function NewApplicationContent() {
           originalPermitId: selectedPermitForModification?.id,
           originalPermitNumber: selectedPermitForModification?.permit_number,
           originalApplicationId: selectedPermitForModification?.application_id,
+          ...(permitReference ? { permitReference } : {}),
         }),
         intended_activities: formData.intendedActivities,
       };
@@ -1689,7 +1870,10 @@ function NewApplicationContent() {
       
       if (result) {
         await ensureStorageBucket();
-        const uploadedDocs = await uploadApplicationDocuments(result.id, formData, userProfile?.id);
+        const uploadedDocs = await uploadApplicationDocuments(result.id, {
+          ...formData,
+          legacyPermitIdentityProof: (selectedPermitForModification as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
+        }, userProfile?.id);
 
         // Copy over documents from the original application that weren't re-uploaded
         const originalAppId = selectedPermitForModification?.application_id;
@@ -1899,6 +2083,7 @@ function NewApplicationContent() {
           <PermitSelectForTransfer 
             userId={userProfile?.id}
             onPermitSelect={handlePermitSelect}
+            onManualPermitSelect={handleManualTransferPermitSelect}
             onCancel={handleTransferCancel}
           />
         </>
@@ -1956,6 +2141,7 @@ function NewApplicationContent() {
           <PermitSelectForModification 
             userId={userProfile?.id}
             onPermitSelect={handleModificationPermitSelect}
+            onManualPermitSelect={handleManualModificationPermitSelect}
             onCancel={handleModificationCancel}
           />
         </>
@@ -2027,6 +2213,7 @@ function NewApplicationContent() {
           <PermitSelectForRenewal 
             userId={userProfile?.id}
             onPermitSelect={handleRenewalPermitSelect}
+            onManualPermitSelect={handleManualRenewalPermitSelect}
             onCancel={handleRenewalCancel}
           />
         </>

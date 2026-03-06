@@ -42,8 +42,13 @@ import { useRouter } from "next/navigation";
 import type { Application } from "@/types/database";
 import { ALL_WATER_ACTIVITY_CODES, getActivityLabel } from "@/lib/assessment-report-utils";
 
+type DashboardListApplication = Application & {
+  display_status?: string;
+  last_action_at?: string | null;
+};
+
 interface ApplicationsListProps {
-  applications: Application[];
+  applications: DashboardListApplication[];
   loading?: boolean;
   onDeleteApplications?: (applicationIds: string[]) => Promise<void>;
   statusFilter?: "all" | "draft" | "submitted" | "under_review" | "revision_required" | "approved_pending_permit" | "approved" | "rejected" | "pending_payment" | "expired";
@@ -77,13 +82,13 @@ export function ApplicationsList({
   const [isDeleting, setIsDeleting] = useState(false);
   const pageSize = 10;
 
-  const getDisplayStatus = (app: Application): string => {
+  const getDisplayStatus = (app: DashboardListApplication): string => {
     // UI-only status mapping from parent (e.g., applicant dashboard).
     // We must keep raw `app.status` for behavior (edit, accept terms, delete rules).
     // Critical: when the raw status is approved_pending_permit, always show it (do not map to under_review).
     if (app.status === "approved_pending_permit") return "approved_pending_permit";
 
-    const fromParent = (app as Application & { display_status?: string }).display_status;
+    const fromParent = app.display_status;
     if (fromParent) return fromParent;
 
     // Fallback: ensure internal statuses never leak to applicants even if parent forgets to attach `display_status`.
@@ -287,13 +292,19 @@ export function ApplicationsList({
     );
   };
 
-  // Format date to be more readable
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatTimestamp = (dateString: string) => {
+    return new Date(dateString).toLocaleString("en-US", {
       year: "numeric",
       month: "short",
       day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
+  };
+
+  const getLastActionTimestamp = (application: DashboardListApplication) => {
+    const lastAction = typeof application.last_action_at === "string" ? application.last_action_at : "";
+    return lastAction.trim().length > 0 ? lastAction : application.created_at;
   };
 
   /** Parse internal_notes JSON safely */
@@ -479,7 +490,7 @@ export function ApplicationsList({
                   <p className="text-sm font-medium text-gray-900 break-words">
                     {application.application_number || `RWB-${application.id.slice(-6)}`}
                   </p>
-                  <p className="text-xs text-gray-500">{formatDate(application.created_at)}</p>
+                  <p className="text-xs text-gray-500">{formatTimestamp(getLastActionTimestamp(application))}</p>
                 </div>
                 <div className="shrink-0">{getStatusBadge(getDisplayStatus(application))}</div>
               </div>
@@ -576,7 +587,7 @@ export function ApplicationsList({
                   aria-label="Select all applications"
                 />
               </TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Date</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-6 py-4">Last Action</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Type</TableHead>
               <TableHead className="font-semibold text-gray-700 px-6 py-4">Status</TableHead>
@@ -604,7 +615,7 @@ export function ApplicationsList({
                   </TableCell>
                   <TableCell className="font-medium text-gray-900 px-6 py-4">
                     <div className="text-sm">
-                      {formatDate(application.created_at)}
+                      {formatTimestamp(getLastActionTimestamp(application))}
                     </div>
                   </TableCell>
                   <TableCell className="text-gray-600 px-6 py-4">

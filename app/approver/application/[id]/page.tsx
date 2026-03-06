@@ -32,6 +32,7 @@ import { enrichModificationChanges } from "@/lib/application-utils";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
+import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { AssessmentReportForm } from "@/components/inspection/assessment-report-form";
@@ -836,6 +837,7 @@ export default function ApproverApplicationPage() {
         </TabsList>
 
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
+              {application && <RegistryPermitComparisonCard application={application} />}
               {/* Show Transfer Form for transfer applications */}
               {isTransferApp ? (
                 loadingTransferPermit ? (

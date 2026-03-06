@@ -145,6 +145,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
         originalPermitId: formData?.permitId || formData?.renewed_from_permit_id,
         originalPermitNumber: formData?.permitNumber,
         originalApplicationId: formData?.originalApplicationId,
+        permitReference: formData?.permitReference || null,
         waterUseReport: formData?.waterUseReport ?? null,
         renewalFormData: formData ?? {},
       }),
@@ -480,7 +481,8 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
         activities: formData.intendedActivities?.join(', ') || 'Not specified',
         waterSource: formData.waterSourceType || 'Not specified',
         contact: formData.emailAddress || 'Not provided'
-      }
+      },
+      permitReference: formData.permitReference || null,
     }),
     
     // Modification tracking fields (only set if this is a modification request)

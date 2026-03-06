@@ -178,6 +178,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
+  const isManualPermit = permit.id?.startsWith("manual-");
 
   const fileInputRefs = {
     certifiedLetter: useRef<HTMLInputElement>(null),
@@ -701,7 +702,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   <Alert className="border-blue-200 bg-blue-50">
                     <AlertCircle className="h-4 w-4 text-blue-600" />
                     <AlertDescription className="text-blue-800">
-                      These details are pre-filled from the selected permit and cannot be modified.
+                      {isManualPermit
+                        ? "This permit was entered manually. Complete all permit particulars carefully before submission."
+                        : "These details are pre-filled from the selected permit and cannot be modified."}
                     </AlertDescription>
                   </Alert>
 
@@ -713,7 +716,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Permit Number</FormLabel>
                           <FormControl>
-                            <Input {...field} disabled className="bg-gray-100" />
+                            <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -727,7 +730,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Name of Facility/Project</FormLabel>
                           <FormControl>
-                            <Input {...field} disabled className="bg-gray-100" />
+                            <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -741,7 +744,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Effective Date</FormLabel>
                           <FormControl>
-                            <Input {...field} type="date" disabled className="bg-gray-100" />
+                            <Input {...field} type="date" disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -755,7 +758,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Expiration Date</FormLabel>
                           <FormControl>
-                            <Input {...field} type="date" disabled className="bg-gray-100" />
+                            <Input {...field} type="date" disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -773,7 +776,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Province / City of Kigali</FormLabel>
                             <FormControl>
-                              <Input {...field} disabled className="bg-gray-100" />
+                              <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -787,7 +790,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>District</FormLabel>
                             <FormControl>
-                              <Input {...field} disabled className="bg-gray-100" />
+                              <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -801,7 +804,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Sector</FormLabel>
                             <FormControl>
-                              <Input {...field} disabled className="bg-gray-100" />
+                              <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>

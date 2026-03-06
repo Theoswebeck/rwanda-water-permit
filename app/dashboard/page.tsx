@@ -63,6 +63,8 @@ type ApplicantDashboardApplication = Application & {
    * Raw `status` is preserved for behavior (edit, accept terms, etc).
    */
   display_status?: DbApplicationStatus;
+  /** Last recorded status-action timestamp (falls back to created_at from API). */
+  last_action_at?: string | null;
 };
 
 type DashboardStatusPanelFilter = "all" | "draft" | "approved" | "rejected" | "expired";

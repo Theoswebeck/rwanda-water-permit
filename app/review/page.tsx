@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +39,6 @@ import {
   Eye,
   FileCheck,
   Loader2,
-  MapPin,
   MoreHorizontal,
   Search,
   Send,
@@ -50,7 +48,6 @@ import {
 import Link from "next/link";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
-import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
@@ -118,7 +115,6 @@ export default function ReviewerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [startingReview, setStartingReview] = useState<string | null>(null);
   const [activeChipId, setActiveChipId] = useState(REVIEWER_CHIPS[0].id);
-  const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
   const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
   const [busyAction, setBusyAction] = useState<{ appId: string; kind: "permit_pdf" | "terms_pdf" } | null>(null);
@@ -1007,17 +1003,8 @@ export default function ReviewerDashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs value={activeInnerTab} onValueChange={setActiveInnerTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="all_applications">Applications</TabsTrigger>
-                    <TabsTrigger value="map" className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4" />
-                      Concession Map
-                    </TabsTrigger>
-                  </TabsList>
-
-                    <TabsContent value="all_applications" className="space-y-4 mt-4">
-                      <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+                <div className="space-y-4">
+                  <div className="flex flex-col md:flex-row gap-4 p-4 bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-900 dark:to-gray-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
                       <Input
@@ -1042,14 +1029,9 @@ export default function ReviewerDashboard() {
                   </div>
                   <ApplicationTable 
                     applications={reviewApplications}
-                        emptyMessage={activeChipLabel}
+                    emptyMessage={activeChipLabel}
                   />
-            </TabsContent>
-
-                    <TabsContent value="map" className="space-y-4 mt-4">
-              <WaterConcessionMap />
-                  </TabsContent>
-                </Tabs>
+                </div>
               </CardContent>
             </Card>
           ) : topTab === "inspections" ? (

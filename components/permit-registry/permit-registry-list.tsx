@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ import {
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
+import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
@@ -70,6 +72,7 @@ interface PermitRegistryListProps {
 
 export function PermitRegistryList({ showCard = true }: PermitRegistryListProps) {
   const PAGE_SIZE = 50;
+  const [activeRegistryTab, setActiveRegistryTab] = useState<"permits" | "map">("permits");
   const [searchTerm, setSearchTerm] = useState("");
   const [regimeFilter, setRegimeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -292,7 +295,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     setStatusFilter("all");
   };
 
-  const content = (
+  const permitsContent = (
     <div className="space-y-6">
       {/* Summary Stats */}
       {!isLoading && !error && entries.length > 0 && (
@@ -533,8 +536,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       {!isLoading && !error && filteredAndSorted.length > 0 && (
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
           <CardContent className="p-0">
-            <div>
-              <Table className="table-fixed">
+            <div className="overflow-x-auto">
+              <Table className="table-fixed min-w-[1120px]">
                 <TableHeader>
                   <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
                     <TableHead className="w-[44px]" />
@@ -548,7 +551,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="w-[28%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[250px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("permit_holder")}
                     >
                       <span className="flex items-center">
@@ -557,7 +560,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="w-[24%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[170px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                       onClick={() => toggleSort("permit_number")}
                     >
                       <span className="flex items-center">
@@ -565,14 +568,14 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                         <SortIcon field="permit_number" />
                       </span>
                     </TableHead>
-                    <TableHead className="w-[12%] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                    <TableHead className="w-[120px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                       Regime
                     </TableHead>
-                    <TableHead className="hidden xl:table-cell text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider">
+                    <TableHead className="hidden xl:table-cell w-[150px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                       Water Source
                     </TableHead>
                     <TableHead
-                      className="hidden lg:table-cell cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="hidden lg:table-cell w-[120px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                       onClick={() => toggleSort("issuance_date")}
                     >
                       <span className="flex items-center">
@@ -581,7 +584,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="hidden lg:table-cell cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="hidden lg:table-cell w-[120px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                       onClick={() => toggleSort("expiration_date")}
                     >
                       <span className="flex items-center">
@@ -590,7 +593,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="w-[12%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[130px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                       onClick={() => toggleSort("status")}
                     >
                       <span className="flex items-center">
@@ -621,17 +624,17 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                           <TableCell className="p-2 sm:p-3 text-muted-foreground text-sm tabular-nums">
                             {entry.serial_number ?? "-"}
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3">
+                          <TableCell className="p-2 sm:p-3 max-w-[250px]">
                             <span className="font-medium text-slate-900 dark:text-slate-100 text-sm block truncate">
                               {entry.permit_holder}
                             </span>
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3">
-                            <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 block truncate">
+                          <TableCell className="p-2 sm:p-3 max-w-[170px]">
+                            <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 block truncate whitespace-nowrap">
                               {entry.permit_number}
                             </code>
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3">
+                          <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                             {getRegimeBadge(entry.regime)}
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 hidden xl:table-cell">
@@ -648,7 +651,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                           <TableCell className="p-2 sm:p-3 hidden lg:table-cell whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                             {formatDate(entry.expiration_date)}
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3">
+                          <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                             {getStatusBadge(entry.status)}
                           </TableCell>
                         </TableRow>
@@ -758,6 +761,30 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         </Card>
       )}
     </div>
+  );
+
+  const content = (
+    <Tabs
+      value={activeRegistryTab}
+      onValueChange={(value) => setActiveRegistryTab(value as "permits" | "map")}
+      className="w-full"
+    >
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="permits">Permits</TabsTrigger>
+        <TabsTrigger value="map" className="flex items-center gap-2">
+          <MapPin className="h-4 w-4" />
+          Concession Map
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="permits" className="mt-4">
+        {permitsContent}
+      </TabsContent>
+
+      <TabsContent value="map" className="mt-4">
+        <WaterConcessionMap />
+      </TabsContent>
+    </Tabs>
   );
 
   if (!showCard) {

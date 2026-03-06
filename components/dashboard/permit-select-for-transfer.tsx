@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Permit, Application } from "@/types/database";
+import { ManualPermitEntryCard } from "@/components/dashboard/manual-permit-entry-card";
+import type { ManualPermitSelectionPayload } from "@/lib/permit/permit-reference";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -46,12 +48,14 @@ export interface PermitWithApplication extends Permit {
 interface PermitSelectForTransferProps {
   userId?: string;
   onPermitSelect: (permit: PermitWithApplication) => void;
+  onManualPermitSelect?: (payload: ManualPermitSelectionPayload) => void;
   onCancel: () => void;
 }
 
 export function PermitSelectForTransfer({ 
   userId, 
   onPermitSelect,
+  onManualPermitSelect,
   onCancel 
 }: PermitSelectForTransferProps) {
   const [permits, setPermits] = useState<PermitWithApplication[]>([]);
@@ -313,6 +317,14 @@ export function PermitSelectForTransfer({
                 </Card>
               ))}
             </div>
+          )}
+
+          {onManualPermitSelect && (
+            <ManualPermitEntryCard
+              title="Permit Not Listed?"
+              description="If your old permit is not linked to your account, enter it manually. We will capture baseline details for staff verification."
+              onContinue={onManualPermitSelect}
+            />
           )}
 
           {/* Actions */}

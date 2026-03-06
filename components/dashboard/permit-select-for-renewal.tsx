@@ -29,6 +29,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import type { Permit, Application } from "@/types/database";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { ManualPermitEntryCard } from "@/components/dashboard/manual-permit-entry-card";
+import type { ManualPermitSelectionPayload } from "@/lib/permit/permit-reference";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -61,12 +63,14 @@ type ApplicantProfile = {
 interface PermitSelectForRenewalProps {
   userId?: string;
   onPermitSelect: (permit: PermitWithApplication) => void;
+  onManualPermitSelect?: (payload: ManualPermitSelectionPayload) => void;
   onCancel: () => void;
 }
 
 export function PermitSelectForRenewal({ 
   userId, 
   onPermitSelect,
+  onManualPermitSelect,
   onCancel 
 }: PermitSelectForRenewalProps) {
   const [permits, setPermits] = useState<PermitWithApplication[]>([]);
@@ -486,6 +490,14 @@ export function PermitSelectForRenewal({
                 );
               })}
             </div>
+          )}
+
+          {onManualPermitSelect && (
+            <ManualPermitEntryCard
+              title="Permit Not Listed?"
+              description="If your permit is only in registry, enter the old permit number and your baseline details to continue with renewal."
+              onContinue={onManualPermitSelect}
+            />
           )}
 
           {/* Actions */}
