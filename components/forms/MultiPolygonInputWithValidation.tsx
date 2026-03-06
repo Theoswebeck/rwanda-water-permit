@@ -61,66 +61,39 @@ export function MultiPolygonInputWithValidation({
   showValidation = true,
 }: MultiPolygonInputWithValidationProps) {
   const [activeTab, setActiveTab] = useState<"manual" | "map">("manual");
-  const [activePolygonIndex, setActivePolygonIndex] = useState(0);
   const [isValidating, setIsValidating] = useState(false);
   const [validation, setValidation] = useState<ValidationResponse | null>(null);
 
   const safePolygons = useMemo(() => {
     const base = Array.isArray(polygons) ? polygons : [];
-    return base.length > 0 ? base : [defaultPolygon()];
+    const single = base.length > 0 ? base[0] : defaultPolygon();
+    return [single];
   }, [polygons]);
 
-  const activePolygon = safePolygons[activePolygonIndex] || defaultPolygon();
+  const activePolygon = safePolygons[0] || defaultPolygon();
 
   const setPolys = (next: CoordinatePoint[][]) => {
-    onPolygonsChange(next.length > 0 ? next : [defaultPolygon()]);
-  };
-
-  const addPolygon = () => {
-    if (disabled) return;
-    const next = [...safePolygons, defaultPolygon()];
-    setPolys(next);
-    setActivePolygonIndex(next.length - 1);
-    setValidation(null);
-    onValidationChange?.(null);
-  };
-
-  const deletePolygon = (index: number) => {
-    if (disabled) return;
-    if (safePolygons.length <= 1) return;
-
-    const next = safePolygons.filter((_, i) => i !== index);
-    setPolys(next);
-    setActivePolygonIndex(Math.max(0, Math.min(activePolygonIndex, next.length - 1)));
-    setValidation(null);
-    onValidationChange?.(null);
+    const single = next.length > 0 ? next[0] : defaultPolygon();
+    onPolygonsChange([single]);
   };
 
   const updatePoint = (pointIndex: number, field: "latitude" | "longitude", value: string) => {
     if (disabled) return;
-    const next = safePolygons.map((poly, i) => {
-      if (i !== activePolygonIndex) return poly;
-      const updated = [...poly];
-      updated[pointIndex] = { ...updated[pointIndex], [field]: value };
-      return updated;
-    });
-    setPolys(next);
+    const updated = [...activePolygon];
+    updated[pointIndex] = { ...updated[pointIndex], [field]: value };
+    setPolys([updated]);
   };
 
   const addPoint = () => {
     if (disabled) return;
-    const next = safePolygons.map((poly, i) => (i === activePolygonIndex ? [...poly, emptyPoint()] : poly));
-    setPolys(next);
+    setPolys([[...activePolygon, emptyPoint()]]);
   };
 
   const deletePoint = (pointIndex: number) => {
     if (disabled) return;
-    const next = safePolygons.map((poly, i) => {
-      if (i !== activePolygonIndex) return poly;
-      if (poly.length <= 3) return poly; // keep minimum 3
-      return poly.filter((_, idx) => idx !== pointIndex);
-    });
-    setPolys(next);
+    if (activePolygon.length <= 3) return;
+    const next = activePolygon.filter((_, idx) => idx !== pointIndex);
+    setPolys([next]);
   };
 
   const performValidation = async () => {
@@ -164,7 +137,7 @@ export function MultiPolygonInputWithValidation({
       const completePolys = totals.filter((n) => n >= 3).length;
       return (
         <Badge variant="outline">
-          {completePolys}/{safePolygons.length} polygon(s) have ≥3 points
+          {completePolys >= 1 ? "Polygon has" : "Needs"} ≥3 points
         </Badge>
       );
     }
@@ -188,53 +161,17 @@ export function MultiPolygonInputWithValidation({
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Water Activity Area (Multiple Polygons)
+            Water Activity Area
           </CardTitle>
           {showValidation && getBadge()}
         </div>
         <div className="text-sm text-muted-foreground">
-          Add one or more polygons. Each polygon needs at least <strong>3 points</strong> (more points = better accuracy).
-          The system validates polygons are within Rwanda and not duplicated in another application.
+          Define the polygon with at least <strong>3 points</strong> (more points = better accuracy).
+          The system validates the polygon is within Rwanda and not duplicated in another application.
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Polygon selector */}
-        <div className="flex flex-wrap items-center gap-2">
-          {safePolygons.map((_, idx) => (
-            <Button
-              key={`poly-tab-${idx}`}
-              type="button"
-              variant={idx === activePolygonIndex ? "default" : "outline"}
-              size="sm"
-              onClick={() => setActivePolygonIndex(idx)}
-              disabled={disabled}
-            >
-              Polygon {idx + 1}
-            </Button>
-          ))}
-
-          {!disabled && (
-            <Button type="button" variant="outline" size="sm" onClick={addPolygon} className="ml-auto">
-              <Plus className="h-4 w-4 mr-1" />
-              Add polygon
-            </Button>
-          )}
-
-          {!disabled && safePolygons.length > 1 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => deletePolygon(activePolygonIndex)}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Remove polygon
-            </Button>
-          )}
-        </div>
-
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "manual" | "map")}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="manual" className="flex items-center gap-2">
@@ -326,7 +263,7 @@ export function MultiPolygonInputWithValidation({
           </TabsContent>
 
           <TabsContent value="map" className="space-y-3">
-            <MultiPolygonMap polygons={safePolygons} activePolygonIndex={activePolygonIndex} height="400px" />
+            <MultiPolygonMap polygons={safePolygons} activePolygonIndex={0} height="400px" />
             <Alert>
               <Info className="h-4 w-4" />
               <AlertDescription>
@@ -357,7 +294,7 @@ export function MultiPolygonInputWithValidation({
           <Alert>
             <CheckCircle className="h-4 w-4" />
             <AlertDescription>
-              ✅ <strong>All polygons are valid!</strong>
+              ✅ <strong>Polygon is valid!</strong>
             </AlertDescription>
           </Alert>
         )}

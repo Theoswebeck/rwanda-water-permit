@@ -9,7 +9,7 @@ VALUES (
   'application-documents',
   'application-documents', 
   true,
-  10485760, -- 10MB limit
+  26214400, -- 25MB limit (feasibility studies can be up to 25MB)
   ARRAY['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
 )
 ON CONFLICT (id) DO NOTHING;

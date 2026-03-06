@@ -82,6 +82,7 @@ export const getApplicationsForInspection = async () => {
           phone
         )
       `)
+      .neq('status', 'draft')
       .order('created_at', { ascending: false })
     
     if (error) {

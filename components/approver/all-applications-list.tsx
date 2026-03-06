@@ -71,6 +71,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
           *,
           applicant:users!applicant_id(first_name, last_name, company_name, account_type)
         `)
+        .neq('status', 'draft')
         // Always show latest submissions first (fallback to created_at when submitted_at is null).
         .order('submitted_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });

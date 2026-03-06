@@ -90,7 +90,7 @@ async function ensureStorageBucket() {
       const { error: createError } = await supabase.storage.createBucket(bucketName, {
         public: true,
         allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-        fileSizeLimit: 10485760 // 10MB
+        fileSizeLimit: 26214400 // 25MB (feasibility studies can be up to 25MB)
       });
       
       if (createError) {

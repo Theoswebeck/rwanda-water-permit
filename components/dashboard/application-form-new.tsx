@@ -373,6 +373,19 @@ const applicationFormSchema = z.object({
     message: "You must certify the information is accurate"
   }),
 }).superRefine((data, ctx) => {
+  // Representative name is required for Company, Cooperative, Organization, Institution
+  const companyTypes = ["company", "cooperative", "organization", "institution"];
+  if (companyTypes.includes(data.categoryApplicant ?? "")) {
+    const repName = String(data.nameRepresentative ?? "").trim();
+    if (repName === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["nameRepresentative"],
+        message: "Name of the Representative is required for Company, Cooperative, Organization, or Institution.",
+      });
+    }
+  }
+
   const isFilled = (value: unknown): boolean => {
     if (value === null || value === undefined) return false;
     if (typeof value === "string") return value.trim() !== "";
@@ -1483,6 +1496,12 @@ export function ApplicationForm({
           !requireTextField('waterSourceLatitude', form.getValues('waterSourceLatitude'), 'Latitude is required for construction/installation sites.') ||
           !requireTextField('waterSourceLongitude', form.getValues('waterSourceLongitude'), 'Longitude is required for construction/installation sites.');
         break;
+      case 'coffee_washing':
+        hasMissingActivityFields =
+          !requireNumberField('coffeeWashingQuantityPerDay', form.getValues('coffeeWashingQuantityPerDay'), 'Coffee washing daily abstraction must be a number greater than 0.') ||
+          !requireNumberField('coffeeWashingQuantityPerMonth', form.getValues('coffeeWashingQuantityPerMonth'), 'Coffee washing monthly abstraction must be a number greater than 0.') ||
+          !requireNumberField('coffeeWashingCapacityTonsPerYear', form.getValues('coffeeWashingCapacityTonsPerYear'), 'Coffee washing capacity (tons/year) must be a number greater than 0.');
+        break;
       default:
         break;
     }
@@ -1818,6 +1837,97 @@ export function ApplicationForm({
           return true; // Disable Next button
         }
         
+        const selectedActivity = intendedActivities[0];
+        const hasText = (v: unknown) => String(v ?? '').trim() !== '';
+        const isPositiveNumber = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 0;
+        
+        // Activity-specific required field checks - Next button stays disabled until all are filled
+        let hasActivityFields = true;
+        switch (selectedActivity) {
+          case 'other':
+            hasActivityFields = hasText(form.watch('intendedActivityOther') ?? form.getValues('intendedActivityOther'));
+            break;
+          case 'irrigation':
+            hasActivityFields =
+              hasText(form.watch('irrigationCropType') ?? form.getValues('irrigationCropType')) &&
+              hasText(form.watch('irrigationGrowingSeasonFrom') ?? form.getValues('irrigationGrowingSeasonFrom')) &&
+              hasText(form.watch('irrigationGrowingSeasonTo') ?? form.getValues('irrigationGrowingSeasonTo')) &&
+              hasText(form.watch('irrigationProductionSystem') ?? form.getValues('irrigationProductionSystem')) &&
+              hasText(form.watch('irrigationMethod') ?? form.getValues('irrigationMethod')) &&
+              isPositiveNumber(form.watch('irrigationTotalArea') ?? form.getValues('irrigationTotalArea')) &&
+              isPositiveNumber(form.watch('irrigationWaterDemand') ?? form.getValues('irrigationWaterDemand'));
+            break;
+          case 'water_supply':
+            hasActivityFields =
+              isPositiveNumber(form.watch('waterSupplyPopulation') ?? form.getValues('waterSupplyPopulation')) &&
+              isPositiveNumber(form.watch('waterSupplyPerCapitaDemand') ?? form.getValues('waterSupplyPerCapitaDemand')) &&
+              isPositiveNumber(form.watch('waterSupplyTotalDailyDemand') ?? form.getValues('waterSupplyTotalDailyDemand')) &&
+              isPositiveNumber(form.watch('waterSupplyDailyAbstraction') ?? form.getValues('waterSupplyDailyAbstraction')) &&
+              isPositiveNumber(form.watch('waterSupplyStorageCapacity') ?? form.getValues('waterSupplyStorageCapacity'));
+            break;
+          case 'mining':
+            hasActivityFields =
+              isPositiveNumber(form.watch('miningQuantityPerDay') ?? form.getValues('miningQuantityPerDay')) &&
+              isPositiveNumber(form.watch('miningQuantityPerMonth') ?? form.getValues('miningQuantityPerMonth')) &&
+              hasText(form.watch('miningMineralsType') ?? form.getValues('miningMineralsType')) &&
+              isPositiveNumber(form.watch('miningProductionCapacityTonsPerYear') ?? form.getValues('miningProductionCapacityTonsPerYear'));
+            break;
+          case 'fish_farming_lakes':
+            hasActivityFields =
+              isPositiveNumber(form.watch('fishLakeNumberOfCages') ?? form.getValues('fishLakeNumberOfCages')) &&
+              isPositiveNumber(form.watch('fishLakeCageCapacity') ?? form.getValues('fishLakeCageCapacity')) &&
+              isPositiveNumber(form.watch('fishLakeAreaHectares') ?? form.getValues('fishLakeAreaHectares'));
+            break;
+          case 'fish_farming_ponds':
+            hasActivityFields =
+              isPositiveNumber(form.watch('fishPondsSurfaceAreaM2') ?? form.getValues('fishPondsSurfaceAreaM2')) &&
+              isPositiveNumber(form.watch('fishPondsCapacityM3') ?? form.getValues('fishPondsCapacityM3')) &&
+              hasText(form.watch('fishPondsRefillFrequency') ?? form.getValues('fishPondsRefillFrequency')) &&
+              isPositiveNumber(form.watch('fishPondsDiscardWaterQuantityM3PerDay') ?? form.getValues('fishPondsDiscardWaterQuantityM3PerDay'));
+            break;
+          case 'industry': {
+            const firstIndustry = form.watch('industryDetails')?.[0] ?? form.getValues('industryDetails')?.[0];
+            hasActivityFields =
+              hasText(firstIndustry?.industryType) &&
+              isPositiveNumber(firstIndustry?.dailyQuantity) &&
+              isPositiveNumber(firstIndustry?.monthlyQuantity);
+            break;
+          }
+          case 'electricity_generation':
+            hasActivityFields =
+              isPositiveNumber(form.watch('hydropowerQuantityPerYear') ?? form.getValues('hydropowerQuantityPerYear')) &&
+              isPositiveNumber(form.watch('hydropowerIntakeToPowerhouseDistanceM') ?? form.getValues('hydropowerIntakeToPowerhouseDistanceM')) &&
+              hasText(form.watch('hydropowerHasDownstreamUsers') ?? form.getValues('hydropowerHasDownstreamUsers')) &&
+              isPositiveNumber(form.watch('hydropowerPlantCapacityMw') ?? form.getValues('hydropowerPlantCapacityMw'));
+            break;
+          case 'construction_of_dam':
+            hasActivityFields =
+              hasText(form.watch('constructionDamPurpose') ?? form.getValues('constructionDamPurpose')) &&
+              hasText(form.watch('constructionDamDescription') ?? form.getValues('constructionDamDescription')) &&
+              hasText(form.watch('constructionDamExpectedDuration') ?? form.getValues('constructionDamExpectedDuration')) &&
+              hasText(form.watch('constructionDamAlterationPlans') ?? form.getValues('constructionDamAlterationPlans'));
+            break;
+          case 'construction_of_infrastructures':
+            hasActivityFields =
+              hasText(form.watch('infrastructurePurpose') ?? form.getValues('infrastructurePurpose')) &&
+              hasText(form.watch('infrastructureDescription') ?? form.getValues('infrastructureDescription')) &&
+              hasText(form.watch('infrastructureExpectedDuration') ?? form.getValues('infrastructureExpectedDuration')) &&
+              hasText(form.watch('infrastructureAlterationPlans') ?? form.getValues('infrastructureAlterationPlans')) &&
+              hasText(form.watch('waterSourceLatitude') ?? form.getValues('waterSourceLatitude')) &&
+              hasText(form.watch('waterSourceLongitude') ?? form.getValues('waterSourceLongitude'));
+            break;
+          case 'coffee_washing':
+            hasActivityFields =
+              isPositiveNumber(form.watch('coffeeWashingQuantityPerDay') ?? form.getValues('coffeeWashingQuantityPerDay')) &&
+              isPositiveNumber(form.watch('coffeeWashingQuantityPerMonth') ?? form.getValues('coffeeWashingQuantityPerMonth')) &&
+              isPositiveNumber(form.watch('coffeeWashingCapacityTonsPerYear') ?? form.getValues('coffeeWashingCapacityTonsPerYear'));
+            break;
+          default:
+            break;
+        }
+        
+        if (!hasActivityFields) return true;
+        
         const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
         const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities', 'construction_of_infrastructures'];
         const isConcessionActivity = intendedActivities.some((a: string) => concessionActivities.includes(a));
@@ -2111,14 +2221,25 @@ export function ApplicationForm({
   // Rwanda Administrative Divisions Data
   // Old administrative data removed - now using comprehensive Rwanda data
 
+  const FEASIBILITY_STUDY_MAX_MB = 25;
+  const DEFAULT_MAX_MB = 10;
+  const isFeasibilityStudyField = (name: string) =>
+    name === 'feasibilityStudy' || name.endsWith('FeasibilityStudy');
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, fieldName: string) => {
     console.log(`📎 File change detected for field: ${fieldName}`);
     const file = event.target.files?.[0];
     if (file) {
       console.log(`📎 File selected: ${file.name} (${file.size} bytes) for field: ${fieldName}`);
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
+      const maxBytes = isFeasibilityStudyField(fieldName)
+        ? FEASIBILITY_STUDY_MAX_MB * 1024 * 1024
+        : DEFAULT_MAX_MB * 1024 * 1024;
+      if (file.size > maxBytes) {
+        alert(
+          isFeasibilityStudyField(fieldName)
+            ? `File size must be less than ${FEASIBILITY_STUDY_MAX_MB}MB`
+            : 'File size must be less than 10MB'
+        );
         return;
       }
       
@@ -2189,7 +2310,7 @@ export function ApplicationForm({
                 </Button>
               </div>
               <p className="text-xs text-gray-500">
-                PDF, JPG, PNG, DOC (max 10MB)
+                PDF, JPG, PNG, DOC (max {isFeasibilityStudyField(fieldName) ? '25MB' : '10MB'})
               </p>
             </div>
           )}
@@ -2869,7 +2990,7 @@ export function ApplicationForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-base font-medium">
-                            3. Name of the Representative
+                            3. Name of the Representative *
                             <span className="text-sm font-normal text-muted-foreground block">
                               (for Company, Cooperative, Organization, Institution)
                             </span>
@@ -3637,7 +3758,8 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Abstraction Point (LAT, LONG) */}
+                  {/* Water Abstraction Point (LAT, LONG) - hidden for concession activities (fish farming in lakes, recreational activities) */}
+                  {!(watchedIntendedActivities?.includes("fish_farming_lakes") || watchedIntendedActivities?.includes("recreation_activities")) && (
                   <div className="space-y-4">
                         <Label className="text-base font-medium">
                           8. Water Abstraction Point * (LAT, LONG)
@@ -3770,6 +3892,7 @@ export function ApplicationForm({
                           </p>
                         </div>
                       </div>
+                  )}
 
                   {/* Other activity specification */}
                   {watchedIntendedActivities?.includes("other") && (
@@ -3802,50 +3925,41 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* Water Concession Area (Multiple Polygons) - for concession activities (fish farming in lakes, recreational activities) */}
+                  {/* Water Concession Area - for concession activities (fish farming in lakes, recreational activities) */}
                   {watchedIntendedActivities && watchedIntendedActivities.length > 0 && 
                    (watchedIntendedActivities.includes("fish_farming_lakes") || watchedIntendedActivities.includes("recreation_activities")) && (
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name="waterSourcePolygons"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormControl>
-                              <MultiPolygonInputWithValidation
-                                polygons={
-                                  field.value?.length
-                                    ? field.value
-                                    : [
-                                        [
-                                          { latitude: "", longitude: "" },
-                                          { latitude: "", longitude: "" },
-                                          { latitude: "", longitude: "" }
-                                        ]
+                    <FormField
+                      control={form.control}
+                      name="waterSourcePolygons"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <MultiPolygonInputWithValidation
+                              polygons={
+                                field.value?.length
+                                  ? field.value
+                                  : [
+                                      [
+                                        { latitude: "", longitude: "" },
+                                        { latitude: "", longitude: "" },
+                                        { latitude: "", longitude: "" }
                                       ]
-                                }
-                                onPolygonsChange={(polygons) => field.onChange(polygons)}
-                                onValidationChange={(validation) => {
-                                  setCoordinateValidation(validation);
-                                  setCanSubmit(true);
-                                }}
-                                applicationId={currentApplication?.id}
-                                disabled={Boolean(readOnly)}
-                                showValidation={true}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                        <p className="text-sm text-yellow-800">
-                          <strong>Note:</strong> This concession area is required for fish farming in lakes and recreational activities. Each polygon needs at least 4 points.
-                          If you have multiple separate areas, add multiple polygons.
-                        </p>
-                      </div>
-                    </div>
+                                    ]
+                              }
+                              onPolygonsChange={(polygons) => field.onChange(polygons)}
+                              onValidationChange={(validation) => {
+                                setCoordinateValidation(validation);
+                                setCanSubmit(true);
+                              }}
+                              applicationId={currentApplication?.id}
+                              disabled={Boolean(readOnly)}
+                              showValidation={true}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   )}
 
                   {/* Activity-specific sections */}
@@ -3878,14 +3992,17 @@ export function ApplicationForm({
                                       control={form.control}
                                       name="irrigationCropType"
                                       render={({ field }) => (
-                                        <FormControl>
-                                          <Input 
-                                            {...field}
-                                            placeholder="Type of crops" 
-                                            className="border-0 bg-transparent"
-                                            disabled={readOnly}
-                                          />
-                                        </FormControl>
+                                        <FormItem>
+                                          <FormControl>
+                                            <Input 
+                                              {...field}
+                                              placeholder="Type of crops" 
+                                              className="border-0 bg-transparent"
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                       )}
                                     />
                                   </td>
@@ -3895,12 +4012,13 @@ export function ApplicationForm({
                                         control={form.control}
                                         name="irrigationGrowingSeasonFrom"
                                         render={({ field }) => (
-                                          <FormControl>
-                                            <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
-                                              <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
-                                                <SelectValue placeholder="From" />
-                                              </SelectTrigger>
-                                              <SelectContent>
+                                          <FormItem>
+                                            <FormControl>
+                                              <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                                <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
+                                                  <SelectValue placeholder="From" />
+                                                </SelectTrigger>
+                                                <SelectContent>
                                                 <SelectItem value="january">January</SelectItem>
                                                 <SelectItem value="february">February</SelectItem>
                                                 <SelectItem value="march">March</SelectItem>
@@ -3916,6 +4034,8 @@ export function ApplicationForm({
                                               </SelectContent>
                                             </Select>
                                           </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                         )}
                                       />
                                       <span className="self-center text-xs">-</span>
@@ -3923,11 +4043,12 @@ export function ApplicationForm({
                                         control={form.control}
                                         name="irrigationGrowingSeasonTo"
                                         render={({ field }) => (
-                                          <FormControl>
-                                            <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
-                                              <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
-                                                <SelectValue placeholder="To" />
-                                              </SelectTrigger>
+                                          <FormItem>
+                                            <FormControl>
+                                              <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                                <SelectTrigger className="border-0 bg-transparent h-8 text-xs">
+                                                  <SelectValue placeholder="To" />
+                                                </SelectTrigger>
                                               <SelectContent>
                                                 <SelectItem value="january">January</SelectItem>
                                                 <SelectItem value="february">February</SelectItem>
@@ -3944,6 +4065,8 @@ export function ApplicationForm({
                                               </SelectContent>
                                             </Select>
                                           </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                         )}
                                       />
                                     </div>
@@ -3953,18 +4076,21 @@ export function ApplicationForm({
                                       control={form.control}
                                       name="irrigationProductionSystem"
                                       render={({ field }) => (
-                                        <FormControl>
-                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
-                                            <SelectTrigger className="border-0 bg-transparent h-8">
-                                              <SelectValue placeholder="Select system" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="outdoor">Outdoor</SelectItem>
-                                              <SelectItem value="greenhouse">Green House</SelectItem>
-                                              <SelectItem value="hydroponics">Hydroponics</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </FormControl>
+                                        <FormItem>
+                                          <FormControl>
+                                            <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                              <SelectTrigger className="border-0 bg-transparent h-8">
+                                                <SelectValue placeholder="Select system" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="outdoor">Outdoor</SelectItem>
+                                                <SelectItem value="greenhouse">Green House</SelectItem>
+                                                <SelectItem value="hydroponics">Hydroponics</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                       )}
                                     />
                                   </td>
@@ -3973,18 +4099,21 @@ export function ApplicationForm({
                                       control={form.control}
                                       name="irrigationMethod"
                                       render={({ field }) => (
-                                        <FormControl>
-                                          <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
-                                            <SelectTrigger className="border-0 bg-transparent h-8">
-                                              <SelectValue placeholder="Select method" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="surface">Surface</SelectItem>
-                                              <SelectItem value="sprinkler">Sprinkler</SelectItem>
-                                              <SelectItem value="drip">Drip</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                        </FormControl>
+                                        <FormItem>
+                                          <FormControl>
+                                            <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
+                                              <SelectTrigger className="border-0 bg-transparent h-8">
+                                                <SelectValue placeholder="Select method" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="surface">Surface</SelectItem>
+                                                <SelectItem value="sprinkler">Sprinkler</SelectItem>
+                                                <SelectItem value="drip">Drip</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                       )}
                                     />
                                   </td>
@@ -3993,18 +4122,21 @@ export function ApplicationForm({
                                       control={form.control}
                                       name="irrigationTotalArea"
                                       render={({ field }) => (
-                                        <FormControl>
-                                          <Input 
-                                            type="number"
-                                            step="0.01"
-                                            {...field}
-                                            value={field.value || ""}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                            placeholder="Area in ha" 
-                                            className="border-0 bg-transparent"
-                                            disabled={readOnly}
-                                          />
-                                        </FormControl>
+                                        <FormItem>
+                                          <FormControl>
+                                            <Input 
+                                              type="number"
+                                              step="0.01"
+                                              {...field}
+                                              value={field.value || ""}
+                                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                              placeholder="Area in ha" 
+                                              className="border-0 bg-transparent"
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                       )}
                                     />
                                   </td>
@@ -4013,18 +4145,21 @@ export function ApplicationForm({
                                       control={form.control}
                                       name="irrigationWaterDemand"
                                       render={({ field }) => (
-                                        <FormControl>
-                                          <Input 
-                                            type="number"
-                                            step="0.01"
-                                            {...field}
-                                            value={field.value || ""}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                            placeholder="Water demand (m³)" 
-                                            className="border-0 bg-transparent"
-                                            disabled={readOnly}
-                                          />
-                                        </FormControl>
+                                        <FormItem>
+                                          <FormControl>
+                                            <Input 
+                                              type="number"
+                                              step="0.01"
+                                              {...field}
+                                              value={field.value || ""}
+                                              onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                              placeholder="Water demand (m³)" 
+                                              className="border-0 bg-transparent"
+                                              disabled={readOnly}
+                                            />
+                                          </FormControl>
+                                          <FormMessage />
+                                        </FormItem>
                                       )}
                                     />
                                   </td>
@@ -4750,18 +4885,21 @@ export function ApplicationForm({
                                           control={form.control}
                                           name="industryDetails.0.dailyQuantity"
                                           render={({ field }) => (
-                                            <FormControl>
-                                              <Input
-                                                {...field}
-                                                type="number"
-                                                step="0.01"
-                                                placeholder="Daily (m³)"
-                                                className="border-0 bg-transparent"
-                                                value={field.value ?? ""}
-                                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                                disabled={readOnly}
-                                              />
-                                            </FormControl>
+                                            <FormItem>
+                                              <FormControl>
+                                                <Input
+                                                  {...field}
+                                                  type="number"
+                                                  step="0.01"
+                                                  placeholder="Daily (m³)"
+                                                  className="border-0 bg-transparent"
+                                                  value={field.value ?? ""}
+                                                  onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                                  disabled={readOnly}
+                                                />
+                                              </FormControl>
+                                              <FormMessage />
+                                            </FormItem>
                                           )}
                                         />
                                       </td>
@@ -4770,18 +4908,21 @@ export function ApplicationForm({
                                           control={form.control}
                                           name="industryDetails.0.monthlyQuantity"
                                           render={({ field }) => (
-                                            <FormControl>
-                                              <Input
-                                                {...field}
-                                                type="number"
-                                                step="0.01"
-                                                placeholder="Monthly (m³)"
-                                                className="border-0 bg-transparent"
-                                                value={field.value ?? ""}
-                                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                                disabled={readOnly}
-                                              />
-                                            </FormControl>
+                                            <FormItem>
+                                              <FormControl>
+                                                <Input
+                                                  {...field}
+                                                  type="number"
+                                                  step="0.01"
+                                                  placeholder="Monthly (m³)"
+                                                  className="border-0 bg-transparent"
+                                                  value={field.value ?? ""}
+                                                  onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                                  disabled={readOnly}
+                                                />
+                                              </FormControl>
+                                              <FormMessage />
+                                            </FormItem>
                                           )}
                                         />
                                       </td>
