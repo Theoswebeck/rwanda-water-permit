@@ -22,6 +22,8 @@ import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/sess
 export async function POST(request: NextRequest) {
   try {
     console.log('💳 [PAYMENT INITIATE] Request received');
+    const paymentDebugId = `pay-init-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    console.log('🧾 [PAYMENT INITIATE] Debug ID:', paymentDebugId);
 
     const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 
@@ -70,9 +72,12 @@ export async function POST(request: NextRequest) {
     // Real payment mode only - demo mode removed
 
     console.log('📋 [PAYMENT INITIATE] Request data:', {
+      paymentDebugId,
       application_id,
       amount,
       currency,
+      purpose,
+      water_use_report_id,
       user_id: userId,
       has_application_data: !!application_data
     });
@@ -408,6 +413,27 @@ export async function POST(request: NextRequest) {
       ? `Annual Water Use Report Fee - ${water_use_report_id}`
       : `Water Permit Application Fee - ${application?.application_number || application_id}`;
 
+    const gatewayContext = {
+      paymentDebugId,
+      endpoint: `${process.env.IREMBOPAY_API_URL || 'https://api.irembopay.com'}/payments/invoices`,
+      sandboxFlag: process.env.IREMBOPAY_SANDBOX,
+      keyType:
+        process.env.IREMBOPAY_SECRET_KEY?.startsWith('sk_live')
+          ? 'live'
+          : process.env.IREMBOPAY_SECRET_KEY?.startsWith('sk_sandbox')
+            ? 'sandbox'
+            : 'unknown',
+      productCode,
+      paymentAccountId,
+      amount: paymentAmount,
+      currency: paymentCurrency,
+      purpose,
+      hasApplication: !!application,
+      applicationId: applicationIdToUse || null,
+      waterUseReportId: water_use_report_id || null,
+    };
+    console.log('🧭 [PAYMENT INITIATE] Gateway request context:', gatewayContext);
+
     const iremboPayRequest = {
       paymentItems: [
         {
@@ -429,13 +455,31 @@ export async function POST(request: NextRequest) {
 
     console.log('🌐 [PAYMENT INITIATE] Calling IremboPay API...');
     const iremboResponse = await iremboPayClient.initiatePayment(iremboPayRequest);
+    console.log('📨 [PAYMENT INITIATE] IremboPay raw response summary:', {
+      paymentDebugId,
+      success: iremboResponse.success,
+      message: iremboResponse.message,
+      hasData: !!iremboResponse.data,
+      errorCode: iremboResponse.error?.code,
+      errorMessage: iremboResponse.error?.message,
+    });
 
     if (!iremboResponse.success || !iremboResponse.data) {
       console.error('❌ [PAYMENT INITIATE] IremboPay initiation failed:', iremboResponse.error);
+      const gatewayMessage = iremboResponse.error?.message || 'Failed to initiate payment with IremboPay';
+      const needsConfigHint = /something went wrong|unauthorized|invalid key/i.test(gatewayMessage);
+      console.error('🚨 [PAYMENT INITIATE] Failure diagnostic:', {
+        paymentDebugId,
+        gatewayContext,
+        responseMessage: iremboResponse.message,
+        responseError: iremboResponse.error || null,
+      });
       return NextResponse.json(
         {
           success: false,
-          error: iremboResponse.error?.message || 'Failed to initiate payment with IremboPay',
+          error: needsConfigHint
+            ? `${gatewayMessage} (payment gateway configuration was auto-checked and retried once; please confirm Irembo key/environment/account/product settings).`
+            : gatewayMessage,
         },
         { status: 500 }
       );
@@ -463,6 +507,14 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ [PAYMENT INITIATE] IremboPay payment initiated:', paymentRef);
     console.log('🔗 [PAYMENT INITIATE] Payment URL:', paymentUrl);
+    console.log('✅ [PAYMENT INITIATE] Success diagnostic:', {
+      paymentDebugId,
+      paymentRef,
+      requestId,
+      hasPaymentUrl: !!paymentUrl,
+      purpose,
+      applicationId: applicationIdToUse || null,
+    });
 
     // =============================================
     // 5. CREATE PAYMENT RECORD IN DATABASE

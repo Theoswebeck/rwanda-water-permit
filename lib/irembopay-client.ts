@@ -76,6 +76,12 @@ const maskSecret = (secret: string) => {
   return `${secret.slice(0, 6)}…${secret.slice(-4)}`;
 };
 
+const getKeyType = (key: string): 'live' | 'sandbox' | 'unknown' => {
+  if (key.startsWith('sk_live')) return 'live';
+  if (key.startsWith('sk_sandbox')) return 'sandbox';
+  return 'unknown';
+};
+
 const warnEnvKeyMismatch = (opts: { isSandbox: boolean; apiKey: string }) => {
   const { isSandbox, apiKey } = opts;
   if (isSandbox && apiKey.startsWith('sk_live')) {
@@ -166,8 +172,6 @@ export class IremboPayClient {
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
     body?: any
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -184,23 +188,209 @@ export class IremboPayClient {
       options.body = JSON.stringify(body);
     }
 
-    try {
+    const parseResponse = async (response: Response): Promise<Record<string, unknown>> => {
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        return (await response.json()) as Record<string, unknown>;
+      }
+
+      const text = await response.text();
+      return text ? ({ message: text } as Record<string, unknown>) : {};
+    };
+
+    const buildError = (data: Record<string, unknown>, status: number): Error => {
+      const nestedError = typeof data.error === 'object' && data.error !== null
+        ? (data.error as Record<string, unknown>)
+        : null;
+      const nestedMessage = nestedError && typeof nestedError.message === 'string'
+        ? nestedError.message
+        : null;
+      const directMessage = typeof data.message === 'string' ? data.message : null;
+      const fallbackMessage = `IremboPay API request failed (HTTP ${status})`;
+      return new Error(nestedMessage || directMessage || fallbackMessage);
+    };
+
+    const summarizeGatewayPayload = (data: Record<string, unknown>) => {
+      const errors = Array.isArray(data.errors) ? data.errors : [];
+      const normalizedErrors = errors
+        .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+        .map((item) => ({
+          code: typeof item.code === 'string' ? item.code : undefined,
+          field: typeof item.field === 'string' ? item.field : undefined,
+          detail: typeof item.detail === 'string' ? item.detail : undefined,
+        }));
+
+      const nestedError =
+        typeof data.error === 'object' && data.error !== null
+          ? (data.error as Record<string, unknown>)
+          : null;
+
+      return {
+        success: typeof data.success === 'boolean' ? data.success : undefined,
+        message: typeof data.message === 'string' ? data.message : undefined,
+        errorCode:
+          nestedError && typeof nestedError.code === 'string'
+            ? nestedError.code
+            : undefined,
+        errorMessage:
+          nestedError && typeof nestedError.message === 'string'
+            ? nestedError.message
+            : undefined,
+        errors: normalizedErrors,
+      };
+    };
+
+    const shouldRetryAgainstAlternateEnvironment = (
+      status: number,
+      data: Record<string, unknown>,
+      currentBaseUrl: string
+    ): boolean => {
+      if (!(status >= 400 && status < 500) && status !== 500) return false;
+
+      const message = String(
+        (typeof data.message === 'string' && data.message) ||
+          (
+            typeof data.error === 'object' &&
+            data.error !== null &&
+            typeof (data.error as Record<string, unknown>).message === 'string'
+              ? (data.error as Record<string, unknown>).message
+              : ''
+          )
+      ).toLowerCase();
+      const code = String(
+        typeof data.error === 'object' &&
+          data.error !== null &&
+          typeof (data.error as Record<string, unknown>).code === 'string'
+          ? (data.error as Record<string, unknown>).code
+          : ''
+      ).toLowerCase();
+
+      const keyLooksLive = this.apiKey.startsWith('sk_live');
+      const keyLooksSandbox = this.apiKey.startsWith('sk_sandbox');
+      const urlLooksSandbox = currentBaseUrl.includes('sandbox');
+      const urlLooksProduction = !urlLooksSandbox;
+
+      const hasKeyEnvMismatch =
+        (keyLooksLive && urlLooksSandbox) || (keyLooksSandbox && urlLooksProduction);
+      const likelyGatewayConfigError =
+        message.includes('something went wrong') ||
+        message.includes('unauthorized') ||
+        message.includes('invalid key') ||
+        code.includes('invalid_key') ||
+        code.includes('unauthorized');
+
+      return hasKeyEnvMismatch && likelyGatewayConfigError;
+    };
+
+    const performRequest = async (baseUrl: string) => {
+      const url = `${baseUrl}${endpoint}`;
+      const requestDebugId = `ip-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       console.log(`🌐 IremboPay API Request: ${method} ${url}`);
       console.log('📋 API Key Being Used:', maskSecret(this.apiKey));
+      console.log('🧭 IremboPay request context:', {
+        requestDebugId,
+        endpoint,
+        method,
+        baseUrl,
+        isSandbox: baseUrl.includes('sandbox'),
+        keyType: getKeyType(this.apiKey),
+      });
       if (body) {
         console.log('📦 Request Body:', JSON.stringify(body, null, 2));
       }
-      
-      const response = await fetch(url, options);
-      const data = await response.json();
 
-      if (!response.ok) {
-        console.error('❌ IremboPay API Error:', data);
-        throw new Error(data.error?.message || data.message || 'IremboPay API request failed');
+      const response = await fetch(url, options);
+      const data = await parseResponse(response);
+      const requestId =
+        response.headers.get('x-request-id') ||
+        response.headers.get('request-id') ||
+        response.headers.get('x-correlation-id');
+      return { url, response, data, requestDebugId, requestId };
+    };
+
+    try {
+      const primaryAttempt = await performRequest(this.baseUrl);
+
+      if (!primaryAttempt.response.ok) {
+        console.error('❌ IremboPay primary attempt failed:', {
+          requestDebugId: primaryAttempt.requestDebugId,
+          status: primaryAttempt.response.status,
+          statusText: primaryAttempt.response.statusText,
+          endpoint,
+          method,
+          baseUrl: this.baseUrl,
+          requestId: primaryAttempt.requestId || null,
+          responseSummary: summarizeGatewayPayload(primaryAttempt.data),
+        });
+
+        // Self-heal common environment mismatch (live key vs sandbox URL or inverse).
+        if (
+          shouldRetryAgainstAlternateEnvironment(
+            primaryAttempt.response.status,
+            primaryAttempt.data,
+            this.baseUrl
+          )
+        ) {
+          const alternateBaseUrl = this.baseUrl.includes('sandbox')
+            ? IREMBOPAY_CONFIG.production.apiUrl
+            : IREMBOPAY_CONFIG.sandbox.apiUrl;
+
+          console.warn(
+            `⚠️ IremboPay request failed on ${this.baseUrl}. Retrying once on ${alternateBaseUrl} due to key/environment mismatch.`
+          );
+
+          const retryAttempt = await performRequest(alternateBaseUrl);
+          if (retryAttempt.response.ok) {
+            this.baseUrl = alternateBaseUrl;
+            this.isSandbox = alternateBaseUrl.includes('sandbox');
+            console.log('✅ IremboPay API Response (retry):', {
+              requestDebugId: retryAttempt.requestDebugId,
+              status: retryAttempt.response.status,
+              endpoint,
+              method,
+              baseUrl: alternateBaseUrl,
+              requestId: retryAttempt.requestId || null,
+              responseSummary: summarizeGatewayPayload(retryAttempt.data),
+            });
+            return retryAttempt.data as T;
+          }
+
+          console.error('❌ IremboPay API Error (retry failed):', {
+            requestDebugId: retryAttempt.requestDebugId,
+            status: retryAttempt.response.status,
+            statusText: retryAttempt.response.statusText,
+            endpoint,
+            method,
+            baseUrl: alternateBaseUrl,
+            requestId: retryAttempt.requestId || null,
+            responseSummary: summarizeGatewayPayload(retryAttempt.data),
+          });
+          throw buildError(retryAttempt.data, retryAttempt.response.status);
+        }
+
+        console.error('❌ IremboPay API Error (no retry):', {
+          requestDebugId: primaryAttempt.requestDebugId,
+          status: primaryAttempt.response.status,
+          statusText: primaryAttempt.response.statusText,
+          endpoint,
+          method,
+          baseUrl: this.baseUrl,
+          requestId: primaryAttempt.requestId || null,
+          responseSummary: summarizeGatewayPayload(primaryAttempt.data),
+        });
+        throw buildError(primaryAttempt.data, primaryAttempt.response.status);
       }
 
-      console.log('✅ IremboPay API Response:', data);
-      return data as T;
+      console.log('✅ IremboPay API Response:', {
+        requestDebugId: primaryAttempt.requestDebugId,
+        status: primaryAttempt.response.status,
+        endpoint,
+        method,
+        baseUrl: this.baseUrl,
+        requestId: primaryAttempt.requestId || null,
+        responseSummary: summarizeGatewayPayload(primaryAttempt.data),
+      });
+      return primaryAttempt.data as T;
     } catch (error) {
       console.error('❌ IremboPay API Request Failed:', error);
       throw error;
