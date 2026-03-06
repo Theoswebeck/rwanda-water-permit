@@ -1259,10 +1259,21 @@ function NewApplicationContent() {
 
   const handleManualModificationPermitSelect = useCallback((payload: ManualPermitSelectionPayload) => {
     const manualPermit = createManualSelectedPermit(payload) as unknown as PermitWithApplication;
+    const applicantCategory = payload.permitReference.manualHolderType === "company_org" ? "company" : "individual";
+    const registryPurpose = payload.permitReference.registrySnapshot?.purpose || "";
+    const registrySource = payload.permitReference.registrySnapshot?.water_source || "";
     setCurrentModificationApplication(null);
     setSelectedPermitForModification(manualPermit);
     setOriginalApplicationData({
       fullNameApplicant: payload.permitReference.manualHolderName || "",
+      categoryApplicant: applicantCategory,
+      officeProvince: "",
+      officeDistrict: "",
+      officeSector: "",
+      officeCell: "",
+      officeVillage: "",
+      waterSourceType: "",
+      nameSourceWater: "",
       waterSourceProvince: "",
       waterSourceDistrict: "",
       waterSourceSector: "",
@@ -1271,17 +1282,34 @@ function NewApplicationContent() {
       intendedActivities: [],
       permitLengthYears: undefined,
       waterAbstractionDetails: [{ maxAverageYearly: undefined }],
+      permitReference: payload.permitReference,
     });
     setInitialFormData({
       fullNameApplicant: payload.permitReference.manualHolderName || "",
+      categoryApplicant: applicantCategory,
+      officeProvince: "",
+      officeDistrict: "",
+      officeSector: "",
+      officeCell: "",
+      officeVillage: "",
+      waterSourceType: "",
+      nameSourceWater: "",
+      tributaryToMain: "",
+      intendedActivityOther: "",
       waterSourceProvince: "",
       waterSourceDistrict: "",
       waterSourceSector: "",
       waterSourceCell: "",
       waterSourceVillage: "",
+      waterSourceLatitude: "",
+      waterSourceLongitude: "",
       intendedActivities: [],
       permitLengthYears: undefined,
       waterAbstractionDetails: [{ maxAverageYearly: undefined }],
+      permitReference: payload.permitReference,
+      // Optional helper context for applicant (still requires final explicit selections)
+      _registryHintPurpose: registryPurpose,
+      _registryHintWaterSource: registrySource,
       modificationReason: "",
     });
     setInitialDocuments({});

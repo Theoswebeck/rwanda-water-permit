@@ -337,6 +337,35 @@ export function ApplicationsList({
     return notes?.originalPermitId ?? undefined;
   };
 
+  const getLocationDisplay = (app: DashboardListApplication): string => {
+    const notes = parseNotes(app);
+    const waterSourceDistrict =
+      typeof notes?.waterSourceDistrict === "string" ? notes.waterSourceDistrict.trim() : "";
+    const waterSourceProvince =
+      typeof notes?.waterSourceProvince === "string" ? notes.waterSourceProvince.trim() : "";
+    const waterSourceSector =
+      typeof notes?.waterSourceSector === "string" ? notes.waterSourceSector.trim() : "";
+    const waterSourceCell =
+      typeof notes?.waterSourceCell === "string" ? notes.waterSourceCell.trim() : "";
+
+    const waterSourceParts = [waterSourceDistrict, waterSourceProvince].filter(Boolean);
+    if (waterSourceParts.length > 0) {
+      return waterSourceParts.join(", ");
+    }
+
+    const hasAnyWaterSourceLocationField = Boolean(
+      waterSourceDistrict || waterSourceProvince || waterSourceSector || waterSourceCell
+    );
+
+    // For in-progress drafts, avoid displaying office location as the source location.
+    if (app.status === "draft" && !hasAnyWaterSourceLocationField) {
+      return "N/A";
+    }
+
+    const fallbackParts = [app.district?.trim(), app.province?.trim()].filter(Boolean);
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "N/A";
+  };
+
   const formatApplicationType = (type: string, app?: Application) => {
     const notes = parseNotes(app);
 
@@ -497,7 +526,7 @@ export function ApplicationsList({
               <div className="space-y-1 text-sm text-gray-600">
                 <p className="break-words">{formatApplicationType(application.application_type, application)}</p>
                 <p className="break-words">
-                  {application.district}, {application.province}
+                  {getLocationDisplay(application)}
                 </p>
               </div>
               <div className="mt-4 flex items-center justify-end gap-2">
@@ -633,7 +662,7 @@ export function ApplicationsList({
                   </TableCell>
                   <TableCell className="text-gray-600 px-6 py-4">
                     <div className="text-sm">
-                      {application.district}, {application.province}
+                      {getLocationDisplay(application)}
                     </div>
                   </TableCell>
                   <TableCell className="text-right px-6 py-4" data-row-click-ignore="true">

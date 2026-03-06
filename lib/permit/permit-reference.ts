@@ -5,6 +5,7 @@ export type PermitLookupStatus = "found" | "not_found";
 
 export interface PermitRegistrySnapshot {
   source: "permit_registry";
+  registry_id?: string | null;
   permit_number: string;
   status?: string | null;
   water_source?: string | null;

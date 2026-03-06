@@ -86,6 +86,7 @@ export async function findPublicPermitByNumber(
   const registryRes = await query(
     `
     select
+      pr.id as registry_id,
       pr.permit_number,
       coalesce(pr.status, 'active')::text as status,
       pr.water_source::text as water_source,

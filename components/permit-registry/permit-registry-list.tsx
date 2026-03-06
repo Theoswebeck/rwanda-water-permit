@@ -70,6 +70,28 @@ interface PermitRegistryListProps {
   showCard?: boolean;
 }
 
+interface PermitRegistryComparisonValues {
+  permit_holder: string | null;
+  regime: string | null;
+  water_source: string | null;
+  volume_or_area: string | null;
+  method_of_water_taking: string | null;
+  authorized_activity: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  issuance_date: string | null;
+  duration: string | null;
+  expiration_date: string | null;
+  status: string | null;
+  contact: string | null;
+}
+
+type PermitRegistryEntryWithComparison = PermitRegistryEntry & {
+  registry_values?: PermitRegistryComparisonValues | null;
+  permit_values?: PermitRegistryComparisonValues | null;
+};
+
 export function PermitRegistryList({ showCard = true }: PermitRegistryListProps) {
   const PAGE_SIZE = 50;
   const [activeRegistryTab, setActiveRegistryTab] = useState<"permits" | "map">("permits");
@@ -88,65 +110,42 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     errors?: string[];
   } | null>(null);
 
-  const { data: entries = [], isLoading, error, refetch } = usePermitRegistryQuery();
+  const offset = (currentPage - 1) * PAGE_SIZE;
+  const { data, isLoading, error, refetch } = usePermitRegistryQuery({
+    q: searchTerm,
+    regime: regimeFilter,
+    status: statusFilter,
+    sort_by: sortField,
+    sort_dir: sortDir,
+    limit: PAGE_SIZE,
+    offset,
+  });
+  const entries = data?.items || [];
+  const total = data?.total || 0;
 
   const availableRegimes = useMemo(() => {
-    const regimes = new Set(entries.map((e) => e.regime).filter(Boolean) as string[]);
+    const regimes = new Set<string>(["Concession", "Authorization"]);
+    for (const entry of entries) {
+      if (entry.regime) regimes.add(entry.regime);
+    }
     return Array.from(regimes).sort();
   }, [entries]);
 
   const availableStatuses = useMemo(() => {
-    const statuses = new Set(entries.map((e) => e.status).filter(Boolean) as string[]);
+    const statuses = new Set<string>(["OPERATIONAL", "EXPIRED", "SUSPENDED", "REVOKED", "EXPIRING_SOON"]);
+    for (const entry of entries) {
+      if (entry.status) statuses.add(entry.status);
+    }
     return Array.from(statuses).sort();
   }, [entries]);
 
   const stats = useMemo(() => {
-    const total = entries.length;
+    const pageTotal = entries.length;
     const operational = entries.filter((e) => e.status?.toUpperCase() === "OPERATIONAL").length;
     const expired = entries.filter((e) => e.status?.toUpperCase() === "EXPIRED").length;
     const regimeSet = new Set(entries.map((e) => e.regime).filter(Boolean));
-    return { total, operational, expired, regimeTypes: regimeSet.size };
+    return { total: pageTotal, operational, expired, regimeTypes: regimeSet.size };
   }, [entries]);
-
-  const filteredAndSorted = useMemo(() => {
-    const q = searchTerm.toLowerCase().trim();
-    let result = entries.filter((entry) => {
-      if (regimeFilter !== "all" && entry.regime !== regimeFilter) return false;
-      if (statusFilter !== "all" && entry.status !== statusFilter) return false;
-      if (q) {
-        const haystack = [
-          entry.permit_holder,
-          entry.permit_number,
-          entry.location,
-          entry.water_source,
-          entry.authorized_activity,
-          entry.regime,
-          entry.method_of_water_taking,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      return true;
-    });
-
-    result.sort((a, b) => {
-      let cmp = 0;
-      const valA = a[sortField];
-      const valB = b[sortField];
-
-      if (valA == null && valB == null) cmp = 0;
-      else if (valA == null) cmp = 1;
-      else if (valB == null) cmp = -1;
-      else if (typeof valA === "number" && typeof valB === "number") cmp = valA - valB;
-      else cmp = String(valA).localeCompare(String(valB));
-
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-
-    return result;
-  }, [entries, searchTerm, regimeFilter, statusFilter, sortField, sortDir]);
 
   const toggleSort = useCallback(
     (field: SortField) => {
@@ -160,12 +159,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     [sortField]
   );
 
-  const totalPages = Math.max(1, Math.ceil(filteredAndSorted.length / PAGE_SIZE));
-
-  const paginatedEntries = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredAndSorted.slice(start, start + PAGE_SIZE);
-  }, [filteredAndSorted, currentPage, PAGE_SIZE]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
     setCurrentPage(1);
@@ -403,16 +397,16 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
 
         <div className="flex items-center justify-between pt-1">
           <p className="text-sm text-muted-foreground">
-            {filteredAndSorted.length === entries.length ? (
+            {total === entries.length ? (
               <>
                 Showing all{" "}
-                <span className="font-semibold text-foreground">{entries.length}</span>{" "}
-                permit{entries.length !== 1 ? "s" : ""}
+                <span className="font-semibold text-foreground">{entries.length}</span> permit
+                {entries.length !== 1 ? "s" : ""}
               </>
             ) : (
               <>
-                <span className="font-semibold text-foreground">{filteredAndSorted.length}</span>{" "}
-                of {entries.length} permit{entries.length !== 1 ? "s" : ""}
+                <span className="font-semibold text-foreground">{entries.length}</span> of {total} permit
+                {total !== 1 ? "s" : ""}
               </>
             )}
             <span className="ml-2 text-xs">(50 rows per page)</span>
@@ -514,18 +508,18 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       )}
 
       {/* Empty State */}
-      {!isLoading && !error && filteredAndSorted.length === 0 && (
+      {!isLoading && !error && entries.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="h-16 w-16 rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center mb-4">
             <BookOpen className="h-8 w-8 text-muted-foreground/50" />
           </div>
           <p className="font-medium text-foreground">
-            {entries.length === 0
+            {total === 0
               ? "No permits in the registry yet"
               : "No permits match your filters"}
           </p>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-            {entries.length === 0
+            {total === 0
               ? "Import a CSV file to populate the water permit registry"
               : "Try broadening your search or adjusting the filters"}
           </p>
@@ -533,7 +527,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       )}
 
       {/* Registry Table */}
-      {!isLoading && !error && filteredAndSorted.length > 0 && (
+      {!isLoading && !error && entries.length > 0 && (
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -604,7 +598,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedEntries.map((entry) => {
+                  {entries.map((entry) => {
                     const isExpanded = expandedRow === entry.id;
                     return (
                       <Fragment key={entry.id}>
@@ -721,6 +715,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                     />
                                   )}
                                 </div>
+                                <SourceComparison entry={entry} />
                                 <PermitLocationMap entry={entry} />
                               </div>
                             </TableCell>
@@ -732,7 +727,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                 </TableBody>
               </Table>
             </div>
-            {filteredAndSorted.length > PAGE_SIZE && (
+            {total > PAGE_SIZE && (
               <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 px-4 py-3">
                 <p className="text-xs text-muted-foreground">
                   Page {currentPage} of {totalPages}
@@ -831,6 +826,51 @@ function DetailField({
       <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
         {value || "N/A"}
       </p>
+    </div>
+  );
+}
+
+function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
+  const comparisonEntry = entry as PermitRegistryEntryWithComparison;
+  if (!comparisonEntry.registry_values && !comparisonEntry.permit_values) return null;
+
+  const formatCoord = (lat: number | null, lng: number | null) => {
+    if (typeof lat === "number" && typeof lng === "number") {
+      return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+    return "N/A";
+  };
+
+  const renderColumn = (title: string, values: PermitRegistryComparisonValues | null | undefined) => (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-white/70 dark:bg-slate-900/40">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{title}</p>
+      {!values ? (
+        <p className="text-sm text-muted-foreground">No data</p>
+      ) : (
+        <div className="space-y-1.5 text-sm">
+          <p><span className="text-muted-foreground">Holder:</span> {values.permit_holder || "N/A"}</p>
+          <p><span className="text-muted-foreground">Regime:</span> {values.regime || "N/A"}</p>
+          <p><span className="text-muted-foreground">Status:</span> {values.status || "N/A"}</p>
+          <p><span className="text-muted-foreground">Water Source:</span> {values.water_source || "N/A"}</p>
+          <p><span className="text-muted-foreground">Activity:</span> {values.authorized_activity || "N/A"}</p>
+          <p><span className="text-muted-foreground">Location:</span> {values.location || "N/A"}</p>
+          <p><span className="text-muted-foreground">Coordinates:</span> {formatCoord(values.latitude, values.longitude)}</p>
+          <p><span className="text-muted-foreground">Issued:</span> {values.issuance_date ? new Date(values.issuance_date).toLocaleDateString() : "N/A"}</p>
+          <p><span className="text-muted-foreground">Expires:</span> {values.expiration_date ? new Date(values.expiration_date).toLocaleDateString() : "N/A"}</p>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Registry vs Permit Table
+      </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {renderColumn("Permit Registry", comparisonEntry.registry_values)}
+        {renderColumn("Permit Table", comparisonEntry.permit_values)}
+      </div>
     </div>
   );
 }

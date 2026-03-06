@@ -22,6 +22,7 @@ import {
   Star
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
 import { uploadPermitPdf, uploadTermsPdf } from "@/lib/supabase-storage";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
@@ -538,16 +539,19 @@ export function TermsConditionsModal({
 
       let permitData: any;
 
-      if (isModificationApplication && modificationOriginalPermitId) {
+      if (isModificationApplication) {
         // MODIFICATION: Update existing permit with the newly approved values
-        console.log('🔧 Processing MODIFICATION - updating existing permit:', modificationOriginalPermitId);
+        const permitRef = parsedNotes?.permitReference as { normalizedPermitNumber?: string; registrySnapshot?: { registry_id?: string; permit_number?: string } } | undefined;
+        const isRegistryOnly = !modificationOriginalPermitId ||
+          (typeof modificationOriginalPermitId === 'string' && modificationOriginalPermitId.startsWith('manual-'));
+
+        console.log('🔧 Processing MODIFICATION —', isRegistryOnly ? 'registry-only permit' : 'linked permit', modificationOriginalPermitId);
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
         // Use the already-resolved duration (from assessor adjustments)
         const resolvedDurationYears: number | null = resolvedDurationYearsGlobal !== 5
           ? resolvedDurationYearsGlobal
           : (() => {
-              // If we got the default, check if assessor actually set it or it's truly the fallback
               if (typeof assessorAdjustments?.permitLengthYears === 'number') return assessorAdjustments.permitLengthYears;
               if (typeof applicationData.proposed_duration_years === 'number' &&
                   Number.isFinite(applicationData.proposed_duration_years) &&
@@ -558,127 +562,233 @@ export function TermsConditionsModal({
               return null;
             })();
 
-        // Fetch the current permit to preserve values that weren't modified
-        const { data: currentPermit, error: fetchPermitErr } = await supabase
-          .from('permits')
-          .select('*')
-          .eq('id', modificationOriginalPermitId)
-          .single() as { data: any; error: any };
-
-        if (fetchPermitErr || !currentPermit) {
-          console.error('❌ Error fetching original permit for modification:', fetchPermitErr);
-          throw fetchPermitErr || new Error('Original permit not found for modification');
-        }
-
-        console.log('📋 Original permit values:', {
-          permit_number: currentPermit.permit_number,
-          water_source: currentPermit.water_source,
-          purpose: currentPermit.purpose,
-          water_allowance: currentPermit.water_allowance,
-          expiry_date: currentPermit.expiry_date,
-        });
-
-        // Compute updated expiry date based on resolved duration or keep existing
         const newIssuedDate = acceptedDateOnly;
         const newExpiryDate = resolvedDurationYears
           ? computeExpiryDateOnly(resolvedDurationYears)
-          : currentPermit.expiry_date; // Keep existing if no duration change
+          : null;
 
-        // Build the update payload — only override values that exist on the modification application
-        const permitUpdatePayload: Record<string, unknown> = {
-          status: 'active',
-          is_modification: true,
-          updated_at: new Date().toISOString(),
-        };
+        if (!isRegistryOnly) {
+          // ── LINKED-PERMIT MODIFICATION (existing row in `permits` table) ──
 
-        // Update water source if provided on the modification application
-        if (applicationData.water_source) {
-          permitUpdatePayload.water_source = applicationData.water_source;
-        }
-        // Update purpose if provided
-        if (applicationData.water_purpose) {
-          permitUpdatePayload.purpose = applicationData.water_purpose;
-        }
-        // Update water allowance (volume) — prefer assessor-recommended volume over raw application value
-        if (resolvedVolumeM3 > 0) {
-          permitUpdatePayload.water_allowance = resolvedVolumeM3;
-        } else if (applicationData.estimated_usage_volume != null && applicationData.estimated_usage_volume > 0) {
-          permitUpdatePayload.water_allowance = applicationData.estimated_usage_volume;
-        }
-        // Update allowance unit if provided
-        if (applicationData.usage_unit) {
-          permitUpdatePayload.allowance_unit = applicationData.usage_unit;
-        }
-        // Update dates — always update issued_date; expiry_date only if duration changed
-        permitUpdatePayload.issued_date = newIssuedDate;
-        if (resolvedDurationYears) {
-          permitUpdatePayload.expiry_date = newExpiryDate;
-        }
+          const { data: currentPermit, error: fetchPermitErr } = await supabase
+            .from('permits')
+            .select('*')
+            .eq('id', modificationOriginalPermitId)
+            .single() as { data: any; error: any };
 
-        // Update conditions with new location/project data from modification
-        permitUpdatePayload.conditions = {
-          conditions: [
-            'Comply with all environmental regulations',
-            'Submit quarterly usage reports',
-            'Allow inspections as required',
-            ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : []),
-          ],
-          location: {
-            province: applicationData.province || currentPermit.conditions?.location?.province,
-            district: applicationData.district || currentPermit.conditions?.location?.district,
-            sector: applicationData.sector || currentPermit.conditions?.location?.sector,
-            cell: applicationData.cell || currentPermit.conditions?.location?.cell,
-            village: applicationData.village || currentPermit.conditions?.location?.village,
-            coordinates: applicationData.coordinates || currentPermit.conditions?.location?.coordinates,
-            description: applicationData.location_description || currentPermit.conditions?.location?.description,
-          },
-          project: {
-            title: applicationData.project_title || currentPermit.conditions?.project?.title,
-            description: applicationData.project_description || currentPermit.conditions?.project?.description,
-            value: applicationData.project_value || currentPermit.conditions?.project?.value,
-          },
-          modification_history: [
-            ...(currentPermit.conditions?.modification_history || []),
-            {
-              modification_application_id: applicationId,
-              modified_at: acceptedAtIso,
-              changes: applicationData.modification_changes || {},
+          if (fetchPermitErr || !currentPermit) {
+            console.error('❌ Error fetching original permit for modification:', fetchPermitErr);
+            throw fetchPermitErr || new Error('Original permit not found for modification');
+          }
+
+          console.log('📋 Original permit values:', {
+            permit_number: currentPermit.permit_number,
+            water_source: currentPermit.water_source,
+            purpose: currentPermit.purpose,
+            water_allowance: currentPermit.water_allowance,
+            expiry_date: currentPermit.expiry_date,
+          });
+
+          const permitUpdatePayload: Record<string, unknown> = {
+            status: 'active',
+            is_modification: true,
+            updated_at: new Date().toISOString(),
+          };
+
+          if (applicationData.water_source) {
+            permitUpdatePayload.water_source = applicationData.water_source;
+          }
+          if (applicationData.water_purpose) {
+            permitUpdatePayload.purpose = applicationData.water_purpose;
+          }
+          if (resolvedVolumeM3 > 0) {
+            permitUpdatePayload.water_allowance = resolvedVolumeM3;
+          } else if (applicationData.estimated_usage_volume != null && applicationData.estimated_usage_volume > 0) {
+            permitUpdatePayload.water_allowance = applicationData.estimated_usage_volume;
+          }
+          if (applicationData.usage_unit) {
+            permitUpdatePayload.allowance_unit = applicationData.usage_unit;
+          }
+          permitUpdatePayload.issued_date = newIssuedDate;
+          if (resolvedDurationYears) {
+            permitUpdatePayload.expiry_date = newExpiryDate;
+          }
+
+          permitUpdatePayload.conditions = {
+            conditions: [
+              'Comply with all environmental regulations',
+              'Submit quarterly usage reports',
+              'Allow inspections as required',
+              ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : []),
+            ],
+            location: {
+              province: applicationData.province || currentPermit.conditions?.location?.province,
+              district: applicationData.district || currentPermit.conditions?.location?.district,
+              sector: applicationData.sector || currentPermit.conditions?.location?.sector,
+              cell: applicationData.cell || currentPermit.conditions?.location?.cell,
+              village: applicationData.village || currentPermit.conditions?.location?.village,
+              coordinates: applicationData.coordinates || currentPermit.conditions?.location?.coordinates,
+              description: applicationData.location_description || currentPermit.conditions?.location?.description,
             },
-          ],
-        };
+            project: {
+              title: applicationData.project_title || currentPermit.conditions?.project?.title,
+              description: applicationData.project_description || currentPermit.conditions?.project?.description,
+              value: applicationData.project_value || currentPermit.conditions?.project?.value,
+            },
+            modification_history: [
+              ...(currentPermit.conditions?.modification_history || []),
+              {
+                modification_application_id: applicationId,
+                modified_at: acceptedAtIso,
+                changes: applicationData.modification_changes || {},
+              },
+            ],
+          };
 
-        console.log('📝 Updating permit with modification values:', {
-          water_source: permitUpdatePayload.water_source,
-          purpose: permitUpdatePayload.purpose,
-          water_allowance: permitUpdatePayload.water_allowance,
-          expiry_date: permitUpdatePayload.expiry_date,
-          resolvedDurationYears,
-        });
+          console.log('📝 Updating permit with modification values:', {
+            water_source: permitUpdatePayload.water_source,
+            purpose: permitUpdatePayload.purpose,
+            water_allowance: permitUpdatePayload.water_allowance,
+            expiry_date: permitUpdatePayload.expiry_date,
+            resolvedDurationYears,
+          });
 
-        // Use maybeSingle() instead of single() to avoid PGRST116 when RLS blocks the row
-        const { data: updatedPermit, error: updateError } = await supabase
-          .from('permits')
-          .update(permitUpdatePayload)
-          .eq('id', modificationOriginalPermitId)
-          .select()
-          .maybeSingle() as { data: any; error: any };
+          const { data: updatedPermit, error: updateError } = await supabase
+            .from('permits')
+            .update(permitUpdatePayload)
+            .eq('id', modificationOriginalPermitId)
+            .select()
+            .maybeSingle() as { data: any; error: any };
 
-        if (updateError) {
-          console.error('❌ Error updating permit for modification:', updateError);
-          throw new Error(
-            updateError.code === 'PGRST116'
-              ? 'Permission denied: unable to update the permit. Please contact support.'
-              : `Failed to update permit: ${updateError.message}`
-          );
+          if (updateError) {
+            console.error('❌ Error updating permit for modification:', updateError);
+            throw new Error(
+              updateError.code === 'PGRST116'
+                ? 'Permission denied: unable to update the permit. Please contact support.'
+                : `Failed to update permit: ${updateError.message}`
+            );
+          }
+          if (!updatedPermit) {
+            console.error('❌ Permit update returned no data — the row may not exist or RLS policy blocked the update. Permit ID:', modificationOriginalPermitId);
+            throw new Error('Unable to update the permit. The original permit may not exist or you lack permission. Please contact support.');
+          }
+
+          permitData = updatedPermit;
+          console.log('✅ Permit modified successfully:', permitData.permit_number,
+            '| Updated values applied from modification application');
+
+          // Forward-sync to permit_registry if a matching row exists
+          const permitNumForSync = currentPermit.permit_number || permitRef?.normalizedPermitNumber;
+          if (permitNumForSync) {
+            const locationParts = [applicationData.province, applicationData.district, applicationData.sector, applicationData.cell, applicationData.village].filter(Boolean);
+            const syncResult = await syncPermitToRegistry(supabase, permitNumForSync, {
+              status: 'active',
+              water_source: (permitUpdatePayload.water_source as string) || undefined,
+              authorized_activity: (permitUpdatePayload.purpose as string) || undefined,
+              volume_or_area: permitUpdatePayload.water_allowance != null ? String(permitUpdatePayload.water_allowance) : undefined,
+              issuance_date: newIssuedDate,
+              expiration_date: newExpiryDate || undefined,
+              location: locationParts.length > 0 ? locationParts.join(', ') : undefined,
+            });
+            if (syncResult.synced) {
+              console.log('✅ Forward-synced modification to permit_registry');
+            } else if (syncResult.error) {
+              console.warn('⚠️ Forward-sync to permit_registry failed (non-blocking):', syncResult.error);
+            }
+          }
+
+        } else {
+          // ── REGISTRY-ONLY MODIFICATION (permit exists only in permit_registry, not in permits) ──
+
+          const registryPermitNumber = permitRef?.normalizedPermitNumber
+            || permitRef?.registrySnapshot?.permit_number
+            || (parsedNotes?.originalPermitNumber as string | undefined)
+            || null;
+
+          if (!registryPermitNumber) {
+            throw new Error('Cannot process modification: no permit number found for registry-only permit.');
+          }
+
+          console.log('📝 Registry-only modification for permit:', registryPermitNumber);
+
+          // 1. Update the permit_registry row with approved values
+          const locationParts = [applicationData.province, applicationData.district, applicationData.sector, applicationData.cell, applicationData.village].filter(Boolean);
+          const registrySyncResult = await syncPermitToRegistry(supabase, registryPermitNumber, {
+            status: 'active',
+            water_source: applicationData.water_source || undefined,
+            authorized_activity: applicationData.water_purpose || undefined,
+            volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : (applicationData.estimated_usage_volume ? String(applicationData.estimated_usage_volume) : undefined),
+            issuance_date: newIssuedDate,
+            expiration_date: newExpiryDate || undefined,
+            location: locationParts.length > 0 ? locationParts.join(', ') : undefined,
+          });
+
+          if (registrySyncResult.synced) {
+            console.log('✅ Updated permit_registry row for', registryPermitNumber);
+          } else {
+            console.warn('⚠️ permit_registry update returned no match (non-blocking):', registrySyncResult.error || 'no matching row');
+          }
+
+          // 2. Create a new permits row to "promote" this registry permit into the system
+          const permitInsertPayload = {
+            application_id: applicationId,
+            permit_number: registryPermitNumber,
+            status: 'active',
+            water_source: applicationData.water_source || 'other',
+            purpose: applicationData.water_purpose || 'other',
+            water_allowance: resolvedVolumeM3 > 0 ? resolvedVolumeM3 : (applicationData.estimated_usage_volume || 0),
+            allowance_unit: applicationData.usage_unit || 'm³/year',
+            issuing_authority: 'Rwanda Water Resources Board',
+            issued_date: newIssuedDate,
+            expiry_date: newExpiryDate || computeExpiryDateOnly(resolvedDurationYearsGlobal),
+            is_modification: true,
+            conditions: {
+              conditions: [
+                'Comply with all environmental regulations',
+                'Submit quarterly usage reports',
+                'Allow inspections as required',
+                ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : []),
+              ],
+              location: {
+                province: applicationData.province,
+                district: applicationData.district,
+                sector: applicationData.sector,
+                cell: applicationData.cell,
+                village: applicationData.village,
+                coordinates: applicationData.coordinates,
+                description: applicationData.location_description,
+              },
+              project: {
+                title: applicationData.project_title,
+                description: applicationData.project_description,
+                value: applicationData.project_value,
+              },
+              modification_history: [
+                {
+                  modification_application_id: applicationId,
+                  modified_at: acceptedAtIso,
+                  changes: applicationData.modification_changes || {},
+                  promoted_from: 'permit_registry',
+                },
+              ],
+            },
+          };
+
+          const { data: newPermit, error: permitError } = await supabase
+            .from('permits')
+            .insert(permitInsertPayload as any)
+            .select()
+            .single() as { data: any; error: any };
+
+          if (permitError) {
+            console.error('❌ Error creating permit from registry-only modification:', permitError);
+            throw new Error(`Failed to create permit for registry modification: ${permitError.message}`);
+          }
+
+          permitData = newPermit;
+          console.log('✅ Registry-only permit promoted to permits table:', permitData.permit_number,
+            '| Linked to application:', applicationId);
         }
-        if (!updatedPermit) {
-          console.error('❌ Permit update returned no data — the row may not exist or RLS policy blocked the update. Permit ID:', modificationOriginalPermitId);
-          throw new Error('Unable to update the permit. The original permit may not exist or you lack permission. Please contact support.');
-        }
-
-        permitData = updatedPermit;
-        console.log('✅ Permit modified successfully:', permitData.permit_number,
-          '| Updated values applied from modification application');
 
       } else if (isRenewalApplication && renewedFromPermitId) {
         // RENEWAL: Update existing permit dates instead of creating new permit

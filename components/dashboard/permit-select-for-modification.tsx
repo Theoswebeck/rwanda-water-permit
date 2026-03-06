@@ -421,7 +421,8 @@ export function PermitSelectForModification({
           {onManualPermitSelect && (
             <ManualPermitEntryCard
               title="Permit Not Listed?"
-              description="If your permit exists in registry but is not linked to your profile, add the old permit number and details manually."
+              description="If your permit exists in registry but is not linked to your profile, add the old permit number and identity proof. You will complete full permit/location/activity details in the modification form."
+              entryMode="modification"
               onContinue={onManualPermitSelect}
             />
           )}

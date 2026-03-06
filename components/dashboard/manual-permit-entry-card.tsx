@@ -35,10 +35,11 @@ interface LookupResponse {
 interface ManualPermitEntryCardProps {
   title: string;
   description: string;
+  entryMode?: "renewal" | "modification" | "transfer";
   onContinue: (payload: ManualPermitSelectionPayload) => void;
 }
 
-export function ManualPermitEntryCard({ title, description, onContinue }: ManualPermitEntryCardProps) {
+export function ManualPermitEntryCard({ title, description, entryMode = "renewal", onContinue }: ManualPermitEntryCardProps) {
   const [permitNumber, setPermitNumber] = useState("");
   const [manualHolderName, setManualHolderName] = useState("");
   const [manualLocation, setManualLocation] = useState("");
@@ -48,6 +49,7 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [lookupResult, setLookupResult] = useState<LookupResponse | null>(null);
+  const isModificationEntry = entryMode === "modification";
 
   const handleLookup = async () => {
     const trimmed = permitNumber.trim();
@@ -75,17 +77,18 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
     return (
       permitNumber.trim().length > 0 &&
       manualHolderName.trim().length > 1 &&
-      manualLocation.trim().length > 1 &&
-      manualActivity.trim().length > 1 &&
+      (isModificationEntry || manualLocation.trim().length > 1) &&
+      (isModificationEntry || manualActivity.trim().length > 1) &&
       Boolean(identityProofFile)
     );
-  }, [identityProofFile, manualActivity, manualHolderName, manualLocation, permitNumber]);
+  }, [identityProofFile, isModificationEntry, manualActivity, manualHolderName, manualLocation, permitNumber]);
 
   const registrySnapshot = useMemo<PermitRegistrySnapshot | null>(() => {
     if (!lookupResult?.permit) return null;
     if (lookupResult.permit.source !== "permit_registry") return null;
     return {
       source: "permit_registry",
+      registry_id: (lookupResult.permit.registry_id as string | undefined) || null,
       permit_number: String(lookupResult.permit.permit_number || permitNumber),
       status: lookupResult.permit.status || null,
       water_source: lookupResult.permit.water_source || null,
@@ -108,8 +111,8 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
       lookupStatus: lookupResult?.found ? "found" : "not_found",
       registrySnapshot,
       manualHolderName: manualHolderName.trim(),
-      manualLocation: manualLocation.trim(),
-      manualActivity: manualActivity.trim(),
+      manualLocation: isModificationEntry ? undefined : manualLocation.trim(),
+      manualActivity: isModificationEntry ? undefined : manualActivity.trim(),
       manualHolderType,
     };
     onContinue({
@@ -186,23 +189,27 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>Permit Location (manual)</Label>
-          <Input
-            value={manualLocation}
-            onChange={(event) => setManualLocation(event.target.value)}
-            placeholder="Province, district, sector, cell, village"
-          />
-        </div>
+        {!isModificationEntry && (
+          <div className="space-y-2">
+            <Label>Permit Location (manual)</Label>
+            <Input
+              value={manualLocation}
+              onChange={(event) => setManualLocation(event.target.value)}
+              placeholder="Province, district, sector, cell, village"
+            />
+          </div>
+        )}
 
-        <div className="space-y-2">
-          <Label>Permit Activity / Water Use (manual)</Label>
-          <Textarea
-            value={manualActivity}
-            onChange={(event) => setManualActivity(event.target.value)}
-            placeholder="Describe the authorized activity from the old permit."
-          />
-        </div>
+        {!isModificationEntry && (
+          <div className="space-y-2">
+            <Label>Permit Activity / Water Use (manual)</Label>
+            <Textarea
+              value={manualActivity}
+              onChange={(event) => setManualActivity(event.target.value)}
+              placeholder="Describe the authorized activity from the old permit."
+            />
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label>
@@ -222,7 +229,11 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
 
         <div className="flex justify-end">
           <Button type="button" onClick={handleContinue} disabled={!canContinue}>
-            Continue with Manual Permit Details
+            {entryMode === "transfer"
+              ? "Continue with Transfer"
+              : entryMode === "modification"
+                ? "Continue with Modification"
+                : "Continue with Renewal"}
           </Button>
         </div>
       </CardContent>
