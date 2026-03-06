@@ -107,6 +107,13 @@ const AbstractionPointMap = dynamic(
   }
 );
 
+const optionalNumberField = z.preprocess((value) => {
+  if (value === "" || value === null || value === undefined) return undefined;
+  if (typeof value === "number") return Number.isFinite(value) ? value : value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+}, z.number().optional()) as z.ZodType<number | undefined>;
+
 // Form schema based on the exact structure from NEW_WATER_PERMIT_APPLICATION_FORM.md
 const applicationFormSchema = z.object({
   // SECTION 1: IDENTIFICATION AND ADDRESS OF THE APPLICANT
@@ -172,14 +179,14 @@ const applicationFormSchema = z.object({
   
   // Water Abstraction - optional, required only for abstraction activities
   waterAbstractionDetails: z.array(z.object({
-    flowRate: z.string().optional(),
+    flowRate: optionalNumberField,
     flowRateUnit: z.string().optional(),
-    maxAverageYearly: z.number().optional(),
+    maxAverageYearly: optionalNumberField,
     abstractionMethod: z.string().optional(),
   })).optional(),
   
   // Water Concession (for Aquaculture)
-  concessionArea: z.number().optional(),
+  concessionArea: optionalNumberField,
   concessionAreaUnit: z.string().optional(),
   permitPeriod: z.string().optional(),
   
@@ -190,11 +197,11 @@ const applicationFormSchema = z.object({
   // SECTION 5: PAYMENT INFORMATION (removed per RWB request)
   
   // Water Supply Details (structured fields)
-  waterSupplyPopulation: z.number().optional(),
-  waterSupplyPerCapitaDemand: z.number().optional(),
-  waterSupplyTotalDailyDemand: z.number().optional(),
-  waterSupplyDailyAbstraction: z.number().optional(),
-  waterSupplyStorageCapacity: z.number().optional(),
+  waterSupplyPopulation: optionalNumberField,
+  waterSupplyPerCapitaDemand: optionalNumberField,
+  waterSupplyTotalDailyDemand: optionalNumberField,
+  waterSupplyDailyAbstraction: optionalNumberField,
+  waterSupplyStorageCapacity: optionalNumberField,
 
   // ANNEXES
   annexA_irrigationDetails: z.string().optional(),
@@ -205,8 +212,8 @@ const applicationFormSchema = z.object({
   // Industry table data (structured)
   industryDetails: z.array(z.object({
     industryType: z.string(),
-    dailyQuantity: z.number().optional(),
-    monthlyQuantity: z.number().optional(),
+    dailyQuantity: optionalNumberField,
+    monthlyQuantity: optionalNumberField,
   })).optional(),
   annexF_electricityDetails: z.string().optional(),
   annexG_miningDetails: z.string().optional(),
@@ -215,30 +222,30 @@ const applicationFormSchema = z.object({
   annexJ_recreationDetails: z.string().optional(),
   annexK_otherDetails: z.string().optional(),
   // ANNEX G (Mining) structured fields
-  miningQuantityPerDay: z.string().optional(),
-  miningQuantityPerMonth: z.string().optional(),
+  miningQuantityPerDay: optionalNumberField,
+  miningQuantityPerMonth: optionalNumberField,
   miningMineralsType: z.string().optional(),
-  miningProductionCapacityTonsPerYear: z.number().optional(),
+  miningProductionCapacityTonsPerYear: optionalNumberField,
 
   // Fish farming (replacing Aquaculture)
-  fishLakeAreaHectares: z.number().optional(),
-  fishLakeNumberOfCages: z.number().optional(),
-  fishLakeCageCapacity: z.number().optional(),
-  fishPondsSurfaceAreaM2: z.number().optional(),
-  fishPondsCapacityM3: z.number().optional(),
+  fishLakeAreaHectares: optionalNumberField,
+  fishLakeNumberOfCages: optionalNumberField,
+  fishLakeCageCapacity: optionalNumberField,
+  fishPondsSurfaceAreaM2: optionalNumberField,
+  fishPondsCapacityM3: optionalNumberField,
   fishPondsRefillFrequency: z.string().optional(),
-  fishPondsDiscardWaterQuantityM3PerDay: z.number().optional(),
+  fishPondsDiscardWaterQuantityM3PerDay: optionalNumberField,
   
   // Coffee washing specific fields
-  coffeeWashingQuantityPerDay: z.number().optional(),
-  coffeeWashingQuantityPerMonth: z.number().optional(),
-  coffeeWashingCapacityTonsPerYear: z.number().optional(),
+  coffeeWashingQuantityPerDay: optionalNumberField,
+  coffeeWashingQuantityPerMonth: optionalNumberField,
+  coffeeWashingCapacityTonsPerYear: optionalNumberField,
   
   // Hydropower/Electricity specific fields
-  hydropowerQuantityPerYear: z.number().optional(),
-  hydropowerIntakeToPowerhouseDistanceM: z.number().optional(),
+  hydropowerQuantityPerYear: optionalNumberField,
+  hydropowerIntakeToPowerhouseDistanceM: optionalNumberField,
   hydropowerHasDownstreamUsers: z.enum(["yes", "no"]).optional(),
-  hydropowerPlantCapacityMw: z.number().optional(),
+  hydropowerPlantCapacityMw: optionalNumberField,
   
   // Construction of dam fields
   constructionDamPurpose: z.string().optional(),
@@ -255,7 +262,7 @@ const applicationFormSchema = z.object({
   // Recreation fields
   recreationType: z.string().optional(),
   recreationProjectDescription: z.string().optional(),
-  recreationConcessionAreaM2: z.string().optional(),
+  recreationConcessionAreaM2: optionalNumberField,
   
   // Irrigation specific fields
   irrigationCropType: z.string().optional(),
@@ -263,10 +270,10 @@ const applicationFormSchema = z.object({
   irrigationGrowingSeasonTo: z.string().optional(),
   irrigationProductionSystem: z.string().optional(),
   irrigationMethod: z.string().optional(),
-  irrigationTotalArea: z.number().optional(),
-  irrigationWaterDemand: z.number().optional(),
+  irrigationTotalArea: optionalNumberField,
+  irrigationWaterDemand: optionalNumberField,
   irrigationStorageFacilities: z.string().optional(),
-  irrigationStorageCapacity: z.number().optional(),
+  irrigationStorageCapacity: optionalNumberField,
   
   // Core application documents
   identificationDoc: z.any().optional(),
@@ -371,6 +378,18 @@ const applicationFormSchema = z.object({
     if (typeof value === "string") return value.trim() !== "";
     if (typeof value === "number") return Number.isFinite(value);
     return true;
+  };
+  const isValidNumber = (value: unknown): value is number =>
+    typeof value === "number" && Number.isFinite(value);
+  const requireText = (value: unknown, path: (string | number)[], message: string) => {
+    if (String(value ?? "").trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+    }
+  };
+  const requireNumber = (value: unknown, path: (string | number)[], message: string, min = 0) => {
+    if (!isValidNumber(value) || value <= min) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+    }
   };
 
   // Conditional validation based on activity type
@@ -511,13 +530,90 @@ const applicationFormSchema = z.object({
       });
     }
 
-    if (!String(data.recreationConcessionAreaM2 ?? "").trim()) {
+    if (!isValidNumber(data.recreationConcessionAreaM2) || data.recreationConcessionAreaM2 <= 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["recreationConcessionAreaM2"],
-        message: "Concession area (m²) is required for recreational activities."
+        message: "Concession area (m²) must be a number greater than 0 for recreational activities."
       });
     }
+  }
+
+  const selectedActivity = selectedActivities[0];
+  switch (selectedActivity) {
+    case "other":
+      requireText(data.intendedActivityOther, ["intendedActivityOther"], "Please specify the 'Other' intended activity.");
+      break;
+    case "irrigation":
+      requireText(data.irrigationCropType, ["irrigationCropType"], "Crop type is required for irrigation.");
+      requireText(data.irrigationGrowingSeasonFrom, ["irrigationGrowingSeasonFrom"], "Growing season start month is required.");
+      requireText(data.irrigationGrowingSeasonTo, ["irrigationGrowingSeasonTo"], "Growing season end month is required.");
+      requireText(data.irrigationProductionSystem, ["irrigationProductionSystem"], "Production system is required for irrigation.");
+      requireText(data.irrigationMethod, ["irrigationMethod"], "Irrigation method is required.");
+      requireNumber(data.irrigationTotalArea, ["irrigationTotalArea"], "Total irrigated area must be a number greater than 0.");
+      requireNumber(data.irrigationWaterDemand, ["irrigationWaterDemand"], "Irrigation water demand must be a number greater than 0.");
+      break;
+    case "water_supply":
+      requireNumber(data.waterSupplyPopulation, ["waterSupplyPopulation"], "Population to be served must be a number greater than 0.");
+      requireNumber(data.waterSupplyPerCapitaDemand, ["waterSupplyPerCapitaDemand"], "Per-capita demand must be a number greater than 0.");
+      requireNumber(data.waterSupplyTotalDailyDemand, ["waterSupplyTotalDailyDemand"], "Total daily demand must be a number greater than 0.");
+      requireNumber(data.waterSupplyDailyAbstraction, ["waterSupplyDailyAbstraction"], "Daily abstraction must be a number greater than 0.");
+      requireNumber(data.waterSupplyStorageCapacity, ["waterSupplyStorageCapacity"], "Storage capacity must be a number greater than 0.");
+      break;
+    case "mining":
+      requireNumber(data.miningQuantityPerDay, ["miningQuantityPerDay"], "Mining daily abstraction must be a number greater than 0.");
+      requireNumber(data.miningQuantityPerMonth, ["miningQuantityPerMonth"], "Mining monthly abstraction must be a number greater than 0.");
+      requireText(data.miningMineralsType, ["miningMineralsType"], "Type of minerals is required for mining.");
+      requireNumber(
+        data.miningProductionCapacityTonsPerYear,
+        ["miningProductionCapacityTonsPerYear"],
+        "Mining production capacity (tons/year) must be a number greater than 0."
+      );
+      break;
+    case "fish_farming_lakes":
+      requireNumber(data.fishLakeNumberOfCages, ["fishLakeNumberOfCages"], "Number of cages must be a number greater than 0.");
+      requireNumber(data.fishLakeCageCapacity, ["fishLakeCageCapacity"], "Cage capacity must be a number greater than 0.");
+      requireNumber(data.fishLakeAreaHectares, ["fishLakeAreaHectares"], "Concession area must be a number greater than 0.");
+      break;
+    case "fish_farming_ponds":
+      requireNumber(data.fishPondsSurfaceAreaM2, ["fishPondsSurfaceAreaM2"], "Pond surface area must be a number greater than 0.");
+      requireNumber(data.fishPondsCapacityM3, ["fishPondsCapacityM3"], "Pond capacity must be a number greater than 0.");
+      requireText(data.fishPondsRefillFrequency, ["fishPondsRefillFrequency"], "Refill frequency is required.");
+      requireNumber(
+        data.fishPondsDiscardWaterQuantityM3PerDay,
+        ["fishPondsDiscardWaterQuantityM3PerDay"],
+        "Amount of water used must be a number greater than 0."
+      );
+      break;
+    case "industry":
+      requireText(data.industryDetails?.[0]?.industryType, ["industryDetails", 0, "industryType"], "Type of industry is required.");
+      requireNumber(data.industryDetails?.[0]?.dailyQuantity, ["industryDetails", 0, "dailyQuantity"], "Industry daily abstraction must be a number greater than 0.");
+      requireNumber(data.industryDetails?.[0]?.monthlyQuantity, ["industryDetails", 0, "monthlyQuantity"], "Industry monthly abstraction must be a number greater than 0.");
+      break;
+    case "electricity_generation":
+      requireNumber(data.hydropowerQuantityPerYear, ["hydropowerQuantityPerYear"], "Hydropower abstraction quantity must be a number greater than 0.");
+      requireNumber(
+        data.hydropowerIntakeToPowerhouseDistanceM,
+        ["hydropowerIntakeToPowerhouseDistanceM"],
+        "Distance from intake to powerhouse must be a number greater than 0."
+      );
+      requireText(data.hydropowerHasDownstreamUsers, ["hydropowerHasDownstreamUsers"], "Please specify if there are downstream users.");
+      requireNumber(data.hydropowerPlantCapacityMw, ["hydropowerPlantCapacityMw"], "Power plant capacity must be a number greater than 0.");
+      break;
+    case "construction_of_dam":
+      requireText(data.constructionDamPurpose, ["constructionDamPurpose"], "Purpose of construction is required.");
+      requireText(data.constructionDamDescription, ["constructionDamDescription"], "Construction project description is required.");
+      requireText(data.constructionDamExpectedDuration, ["constructionDamExpectedDuration"], "Expected construction duration is required.");
+      requireText(data.constructionDamAlterationPlans, ["constructionDamAlterationPlans"], "Construction alteration plans are required.");
+      break;
+    case "construction_of_infrastructures":
+      requireText(data.infrastructurePurpose, ["infrastructurePurpose"], "Purpose of construction/installation is required.");
+      requireText(data.infrastructureDescription, ["infrastructureDescription"], "Project description is required.");
+      requireText(data.infrastructureExpectedDuration, ["infrastructureExpectedDuration"], "Expected duration is required.");
+      requireText(data.infrastructureAlterationPlans, ["infrastructureAlterationPlans"], "Alteration plans are required.");
+      requireText(data.waterSourceLatitude, ["waterSourceLatitude"], "Latitude is required for construction/installation sites.");
+      requireText(data.waterSourceLongitude, ["waterSourceLongitude"], "Longitude is required for construction/installation sites.");
+      break;
   }
 });
 
@@ -917,7 +1013,7 @@ export function ApplicationForm({
       waterSourceLongitude: "",
       waterReliability: "water_always_available",
       permitLengthYears: undefined,
-      waterAbstractionDetails: [{ flowRate: "", flowRateUnit: "m3_per_second", maxAverageYearly: undefined, abstractionMethod: "" }],
+      waterAbstractionDetails: [{ flowRate: undefined, flowRateUnit: "m3_per_second", maxAverageYearly: undefined, abstractionMethod: "" }],
       intendedActivities: [],
       intendedActivityOther: "",
       ownsAllLand: null,
@@ -928,8 +1024,8 @@ export function ApplicationForm({
       waterSupplyTotalDailyDemand: 0,
       waterSupplyDailyAbstraction: 0,
       waterSupplyStorageCapacity: 0,
-      miningQuantityPerDay: "",
-      miningQuantityPerMonth: "",
+      miningQuantityPerDay: undefined,
+      miningQuantityPerMonth: undefined,
       miningMineralsType: "",
       miningProductionCapacityTonsPerYear: undefined,
       fishLakeAreaHectares: undefined,
@@ -956,7 +1052,7 @@ export function ApplicationForm({
       infrastructureAlterationPlans: "",
       recreationType: "",
       recreationProjectDescription: "",
-      recreationConcessionAreaM2: "",
+      recreationConcessionAreaM2: undefined,
       irrigationCropType: "",
       irrigationGrowingSeasonFrom: "",
       irrigationGrowingSeasonTo: "",
@@ -1287,15 +1383,118 @@ export function ApplicationForm({
     }
 
     const intended = form.getValues('intendedActivities') || [];
+    const selectedActivity = intended[0];
     const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
     const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities', 'construction_of_infrastructures'];
     const requiresConcessionPolygons = intended.some((a: string) => concessionActivities.includes(a));
     const requiresAbstractionDetails = intended.some((a: string) => a && !nonAbstractionActivities.includes(a));
     const requiresRecreationDetails = intended.includes('recreation_activities');
 
+    const hasText = (value: unknown) => String(value ?? '').trim() !== '';
+    const isPositiveNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
+    const requireTextField = (path: string, value: unknown, message: string): boolean => {
+      if (!hasText(value)) {
+        form.setError(path as any, { type: 'manual', message });
+        return false;
+      }
+      form.clearErrors(path as any);
+      return true;
+    };
+    const requireNumberField = (path: string, value: unknown, message: string): boolean => {
+      if (!isPositiveNumber(value)) {
+        form.setError(path as any, { type: 'manual', message });
+        return false;
+      }
+      form.clearErrors(path as any);
+      return true;
+    };
+
+    let hasMissingActivityFields = false;
+    switch (selectedActivity) {
+      case 'other':
+        hasMissingActivityFields = !requireTextField('intendedActivityOther', form.getValues('intendedActivityOther'), "Please specify the 'Other' intended activity.");
+        break;
+      case 'irrigation':
+        hasMissingActivityFields =
+          !requireTextField('irrigationCropType', form.getValues('irrigationCropType'), 'Crop type is required for irrigation.') ||
+          !requireTextField('irrigationGrowingSeasonFrom', form.getValues('irrigationGrowingSeasonFrom'), 'Growing season start month is required.') ||
+          !requireTextField('irrigationGrowingSeasonTo', form.getValues('irrigationGrowingSeasonTo'), 'Growing season end month is required.') ||
+          !requireTextField('irrigationProductionSystem', form.getValues('irrigationProductionSystem'), 'Production system is required for irrigation.') ||
+          !requireTextField('irrigationMethod', form.getValues('irrigationMethod'), 'Irrigation method is required.') ||
+          !requireNumberField('irrigationTotalArea', form.getValues('irrigationTotalArea'), 'Total irrigated area must be a number greater than 0.') ||
+          !requireNumberField('irrigationWaterDemand', form.getValues('irrigationWaterDemand'), 'Irrigation water demand must be a number greater than 0.');
+        break;
+      case 'water_supply':
+        hasMissingActivityFields =
+          !requireNumberField('waterSupplyPopulation', form.getValues('waterSupplyPopulation'), 'Population to be served must be a number greater than 0.') ||
+          !requireNumberField('waterSupplyPerCapitaDemand', form.getValues('waterSupplyPerCapitaDemand'), 'Per-capita demand must be a number greater than 0.') ||
+          !requireNumberField('waterSupplyTotalDailyDemand', form.getValues('waterSupplyTotalDailyDemand'), 'Total daily demand must be a number greater than 0.') ||
+          !requireNumberField('waterSupplyDailyAbstraction', form.getValues('waterSupplyDailyAbstraction'), 'Daily abstraction must be a number greater than 0.') ||
+          !requireNumberField('waterSupplyStorageCapacity', form.getValues('waterSupplyStorageCapacity'), 'Storage capacity must be a number greater than 0.');
+        break;
+      case 'mining':
+        hasMissingActivityFields =
+          !requireNumberField('miningQuantityPerDay', form.getValues('miningQuantityPerDay'), 'Mining daily abstraction must be a number greater than 0.') ||
+          !requireNumberField('miningQuantityPerMonth', form.getValues('miningQuantityPerMonth'), 'Mining monthly abstraction must be a number greater than 0.') ||
+          !requireTextField('miningMineralsType', form.getValues('miningMineralsType'), 'Type of minerals is required for mining.') ||
+          !requireNumberField('miningProductionCapacityTonsPerYear', form.getValues('miningProductionCapacityTonsPerYear'), 'Mining production capacity (tons/year) must be a number greater than 0.');
+        break;
+      case 'fish_farming_lakes':
+        hasMissingActivityFields =
+          !requireNumberField('fishLakeNumberOfCages', form.getValues('fishLakeNumberOfCages'), 'Number of cages must be a number greater than 0.') ||
+          !requireNumberField('fishLakeCageCapacity', form.getValues('fishLakeCageCapacity'), 'Cage capacity must be a number greater than 0.') ||
+          !requireNumberField('fishLakeAreaHectares', form.getValues('fishLakeAreaHectares'), 'Concession area must be a number greater than 0.');
+        break;
+      case 'fish_farming_ponds':
+        hasMissingActivityFields =
+          !requireNumberField('fishPondsSurfaceAreaM2', form.getValues('fishPondsSurfaceAreaM2'), 'Pond surface area must be a number greater than 0.') ||
+          !requireNumberField('fishPondsCapacityM3', form.getValues('fishPondsCapacityM3'), 'Pond capacity must be a number greater than 0.') ||
+          !requireTextField('fishPondsRefillFrequency', form.getValues('fishPondsRefillFrequency'), 'Refill frequency is required.') ||
+          !requireNumberField('fishPondsDiscardWaterQuantityM3PerDay', form.getValues('fishPondsDiscardWaterQuantityM3PerDay'), 'Amount of water used must be a number greater than 0.');
+        break;
+      case 'industry': {
+        const firstIndustry = form.getValues('industryDetails')?.[0];
+        hasMissingActivityFields =
+          !requireTextField('industryDetails.0.industryType', firstIndustry?.industryType, 'Type of industry is required.') ||
+          !requireNumberField('industryDetails.0.dailyQuantity', firstIndustry?.dailyQuantity, 'Industry daily abstraction must be a number greater than 0.') ||
+          !requireNumberField('industryDetails.0.monthlyQuantity', firstIndustry?.monthlyQuantity, 'Industry monthly abstraction must be a number greater than 0.');
+        break;
+      }
+      case 'electricity_generation':
+        hasMissingActivityFields =
+          !requireNumberField('hydropowerQuantityPerYear', form.getValues('hydropowerQuantityPerYear'), 'Hydropower abstraction quantity must be a number greater than 0.') ||
+          !requireNumberField('hydropowerIntakeToPowerhouseDistanceM', form.getValues('hydropowerIntakeToPowerhouseDistanceM'), 'Distance from intake to powerhouse must be a number greater than 0.') ||
+          !requireTextField('hydropowerHasDownstreamUsers', form.getValues('hydropowerHasDownstreamUsers'), 'Please specify if there are downstream users.') ||
+          !requireNumberField('hydropowerPlantCapacityMw', form.getValues('hydropowerPlantCapacityMw'), 'Power plant capacity must be a number greater than 0.');
+        break;
+      case 'construction_of_dam':
+        hasMissingActivityFields =
+          !requireTextField('constructionDamPurpose', form.getValues('constructionDamPurpose'), 'Purpose of construction is required.') ||
+          !requireTextField('constructionDamDescription', form.getValues('constructionDamDescription'), 'Construction project description is required.') ||
+          !requireTextField('constructionDamExpectedDuration', form.getValues('constructionDamExpectedDuration'), 'Expected construction duration is required.') ||
+          !requireTextField('constructionDamAlterationPlans', form.getValues('constructionDamAlterationPlans'), 'Construction alteration plans are required.');
+        break;
+      case 'construction_of_infrastructures':
+        hasMissingActivityFields =
+          !requireTextField('infrastructurePurpose', form.getValues('infrastructurePurpose'), 'Purpose of construction/installation is required.') ||
+          !requireTextField('infrastructureDescription', form.getValues('infrastructureDescription'), 'Project description is required.') ||
+          !requireTextField('infrastructureExpectedDuration', form.getValues('infrastructureExpectedDuration'), 'Expected duration is required.') ||
+          !requireTextField('infrastructureAlterationPlans', form.getValues('infrastructureAlterationPlans'), 'Alteration plans are required.') ||
+          !requireTextField('waterSourceLatitude', form.getValues('waterSourceLatitude'), 'Latitude is required for construction/installation sites.') ||
+          !requireTextField('waterSourceLongitude', form.getValues('waterSourceLongitude'), 'Longitude is required for construction/installation sites.');
+        break;
+      default:
+        break;
+    }
+
+    if (hasMissingActivityFields) {
+      setValidationError('Please complete all required fields for the selected activity before proceeding.');
+      return false;
+    }
+
     if (requiresRecreationDetails) {
       const recreationProjectDescription = String(form.getValues('recreationProjectDescription') ?? '').trim();
-      const recreationConcessionAreaM2 = String(form.getValues('recreationConcessionAreaM2') ?? '').trim();
+      const recreationConcessionAreaM2 = form.getValues('recreationConcessionAreaM2');
 
       if (!recreationProjectDescription) {
         form.setError('recreationProjectDescription', {
@@ -1306,16 +1505,16 @@ export function ApplicationForm({
         form.clearErrors('recreationProjectDescription');
       }
 
-      if (!recreationConcessionAreaM2) {
+      if (!(typeof recreationConcessionAreaM2 === 'number' && Number.isFinite(recreationConcessionAreaM2) && recreationConcessionAreaM2 > 0)) {
         form.setError('recreationConcessionAreaM2', {
           type: 'manual',
-          message: 'Concession area (m²) is required for recreational activities.'
+          message: 'Concession area (m²) must be a number greater than 0.'
         });
       } else {
         form.clearErrors('recreationConcessionAreaM2');
       }
 
-      if (!recreationProjectDescription || !recreationConcessionAreaM2) {
+      if (!recreationProjectDescription || !(typeof recreationConcessionAreaM2 === 'number' && Number.isFinite(recreationConcessionAreaM2) && recreationConcessionAreaM2 > 0)) {
         setValidationError("Please fill in Recreational Activities Details and Concession area (m²) before proceeding.");
         return false;
       }
@@ -1611,7 +1810,7 @@ export function ApplicationForm({
         const intendedActivities = form.watch('intendedActivities') || form.getValues('intendedActivities') || [];
         const waterAbstractionDetails = form.watch('waterAbstractionDetails') || form.getValues('waterAbstractionDetails') || [];
         const recreationProjectDescription = String(form.watch('recreationProjectDescription') || form.getValues('recreationProjectDescription') || '').trim();
-        const recreationConcessionAreaM2 = String(form.watch('recreationConcessionAreaM2') || form.getValues('recreationConcessionAreaM2') || '').trim();
+        const recreationConcessionAreaM2 = form.watch('recreationConcessionAreaM2') ?? form.getValues('recreationConcessionAreaM2');
         const hasRequiredDocs = checkRequiredDocuments();
         
         // Must have at least one activity selected
@@ -1637,7 +1836,12 @@ export function ApplicationForm({
               );
             });
           const hasRecreationActivity = intendedActivities.includes('recreation_activities');
-          const hasRecreationDetails = !hasRecreationActivity || (recreationProjectDescription !== '' && recreationConcessionAreaM2 !== '');
+          const hasRecreationDetails =
+            !hasRecreationActivity ||
+            (recreationProjectDescription !== '' &&
+              typeof recreationConcessionAreaM2 === 'number' &&
+              Number.isFinite(recreationConcessionAreaM2) &&
+              recreationConcessionAreaM2 > 0);
           return !hasRequiredDocs || !hasValidPolygons || !hasRecreationDetails;
         }
         
@@ -1761,7 +1965,7 @@ export function ApplicationForm({
         intendedActivities: ["water_supply"],
         intendedActivityOther: "",
         waterAbstractionDetails: [{
-          flowRate: "",
+          flowRate: undefined,
           flowRateUnit: "m³/s",
           maxAverageYearly: undefined,
           abstractionMethod: "pump"
@@ -1785,8 +1989,8 @@ export function ApplicationForm({
         annexI_navigationDetails: "",
         annexJ_recreationDetails: "",
         annexK_otherDetails: "",
-        miningQuantityPerDay: "",
-        miningQuantityPerMonth: "",
+        miningQuantityPerDay: undefined,
+        miningQuantityPerMonth: undefined,
         miningMineralsType: "",
         miningProductionCapacityTonsPerYear: undefined,
         fishLakeAreaHectares: undefined,
@@ -1813,7 +2017,7 @@ export function ApplicationForm({
         infrastructureAlterationPlans: "",
         recreationType: "",
         recreationProjectDescription: "",
-        recreationConcessionAreaM2: "",
+        recreationConcessionAreaM2: undefined,
         irrigationCropType: "",
         irrigationGrowingSeasonFrom: "",
         irrigationGrowingSeasonTo: "",
@@ -3414,6 +3618,7 @@ export function ApplicationForm({
                               { value: "irrigation", label: "Irrigation" },
                               { value: "livestock", label: "Livestock" },
                               { value: "mining", label: "Mining" },
+                              { value: "navigation", label: "Navigation" },
                               { value: "recreation_activities", label: "Recreational activities" },
                               { value: "water_supply", label: "Water supply" },
                               { value: "other", label: "Other (specify)" },
@@ -3908,7 +4113,7 @@ export function ApplicationForm({
                                               placeholder: "Enter population",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                           />
                                         </FormControl>
                                       )}
@@ -3931,7 +4136,7 @@ export function ApplicationForm({
                                               placeholder: "Enter per capita demand",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                           />
                                         </FormControl>
                                       )}
@@ -3954,7 +4159,7 @@ export function ApplicationForm({
                                               placeholder: "Total daily demand (m³)",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                           />
                                         </FormControl>
                                       )}
@@ -3977,7 +4182,7 @@ export function ApplicationForm({
                                               placeholder: "Daily abstraction (m³)",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                           />
                                         </FormControl>
                                       )}
@@ -4000,7 +4205,7 @@ export function ApplicationForm({
                                               placeholder: "Storage capacity (m³)",
                                               className: "border-0 bg-transparent"
                                             })}
-                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : 0)}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                           />
                                         </FormControl>
                                       )}
@@ -4035,7 +4240,20 @@ export function ApplicationForm({
                                 <FormItem>
                                   <FormLabel>Quantity of abstracted water (m³/day)</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="e.g., 120" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={field.value ?? ""}
+                                      onChange={(e) => {
+                                        if (readOnly) return;
+                                        const v = e.target.value;
+                                        field.onChange(v === "" ? undefined : Number(v));
+                                      }}
+                                      placeholder="e.g., 120"
+                                      disabled={readOnly}
+                                      readOnly={readOnly}
+                                      className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -4048,7 +4266,20 @@ export function ApplicationForm({
                                 <FormItem>
                                   <FormLabel>Quantity of abstracted water (m³/month)</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="e.g., 3500" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
+                                    <Input
+                                      type="number"
+                                      step="0.01"
+                                      value={field.value ?? ""}
+                                      onChange={(e) => {
+                                        if (readOnly) return;
+                                        const v = e.target.value;
+                                        field.onChange(v === "" ? undefined : Number(v));
+                                      }}
+                                      placeholder="e.g., 3500"
+                                      disabled={readOnly}
+                                      readOnly={readOnly}
+                                      className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}
+                                    />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -4975,6 +5206,21 @@ export function ApplicationForm({
                         </div>
                       )}
 
+                      {/* Navigation Details */}
+                      {watchedIntendedActivities?.includes("navigation") && (
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
+                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
+                            Navigation Details
+                          </h4>
+
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Upload navigation plans or any supporting documents related to the proposed navigation activity.
+                          </p>
+
+                          <AdditionalDocumentsSection category="navigation" activityType="navigation" />
+                        </div>
+                      )}
+
                       {/* Recreational Activities Details */}
                       {watchedIntendedActivities?.includes("recreation_activities") && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
@@ -5039,6 +5285,12 @@ export function ApplicationForm({
                                             type="number"
                                             min="0"
                                             step="0.01"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
                                             placeholder="Enter concession area in m²"
                                             className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
                                             disabled={readOnly}
@@ -5058,7 +5310,7 @@ export function ApplicationForm({
 
                           <AdditionalDocumentsSection 
                             category="recreation" 
-                            activityType="recreation" 
+                            activityType="recreation_activities" 
                           />
                         </div>
                       )}
@@ -5117,8 +5369,13 @@ export function ApplicationForm({
                                       <Input 
                                         type="number"
                                         step="0.001"
-                                        {...field} 
-                                        {...getInputProps({ value: field.value || "", placeholder: "Enter flow rate (m³/s)" })} 
+                                        {...field}
+                                        value={field.value ?? ""}
+                                        onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                                        placeholder="Enter flow rate (m³/s)"
+                                        disabled={readOnly}
+                                        readOnly={readOnly}
+                                        className={readOnly ? "bg-gray-50 border-gray-200 cursor-default opacity-60" : ""}
                                       />
                                     </FormControl>
                                     <FormMessage />
@@ -5137,7 +5394,7 @@ export function ApplicationForm({
                                         type="number"
                                         {...field}
                                         value={field.value || ""}
-                                        onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : "")}
+                                        onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : undefined)}
                                         placeholder="Yearly average"
                                         disabled={readOnly}
                                         readOnly={readOnly}

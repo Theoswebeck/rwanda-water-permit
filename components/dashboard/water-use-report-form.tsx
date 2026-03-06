@@ -247,22 +247,34 @@ export function WaterUseReportForm({
     return false;
   }, []);
 
+  const normalizeDecimalValue = useCallback((value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    const withDotSeparator = trimmed.replace(",", ".");
+    const cleaned = withDotSeparator.replace(/[^0-9.]/g, "");
+    const [whole = "", ...fractionParts] = cleaned.split(".");
+    const wholePart = whole || (fractionParts.length > 0 ? "0" : "");
+    if (fractionParts.length === 0) return wholePart;
+    return `${wholePart}.${fractionParts.join("")}`;
+  }, []);
+
   const parseNumeric = useCallback((value: unknown) => {
     if (typeof value === "number") {
       return Number.isFinite(value) ? value : null;
     }
     if (typeof value !== "string") return null;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
+    const normalized = normalizeDecimalValue(value);
+    if (!normalized) return null;
+    const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : null;
-  }, []);
+  }, [normalizeDecimalValue]);
 
   const hasMoreThanTwoDecimals = useCallback((value: string) => {
-    if (!value || !value.includes(".")) return false;
-    const decimals = value.split(".")[1];
+    const normalized = normalizeDecimalValue(value);
+    if (!normalized || !normalized.includes(".")) return false;
+    const decimals = normalized.split(".")[1];
     return decimals.length > 2;
-  }, []);
+  }, [normalizeDecimalValue]);
 
   const addRequiredIssue = useCallback(
     (issues: ValidationIssue[], sectionId: string, label: string, value: unknown) => {
@@ -299,12 +311,7 @@ export function WaterUseReportForm({
       if (options?.max !== undefined && numeric > options.max) {
         issues.push({ sectionId, label, message: `must be at most ${options.max}` });
       }
-      if (
-        options?.maxDecimals !== undefined &&
-        typeof value === "string" &&
-        value.includes(".") &&
-        value.split(".")[1]?.length > options.maxDecimals
-      ) {
+      if (options?.maxDecimals !== undefined && typeof value === "string" && hasMoreThanTwoDecimals(value)) {
         issues.push({
           sectionId,
           label,
@@ -312,7 +319,7 @@ export function WaterUseReportForm({
         });
       }
     },
-    [isBlank, parseNumeric],
+    [hasMoreThanTwoDecimals, isBlank, parseNumeric],
   );
 
   const formatIssueText = useCallback((issue: ValidationIssue) => {
@@ -673,10 +680,11 @@ export function WaterUseReportForm({
   const updateMonitoringMinMax = useCallback((parent: string, field: 'min' | 'max', value: string) => {
     setFormData(prev => {
       const existing = (prev as any).section5_monitoring?.[parent] || {};
-      const updatedParam = { ...existing, [field]: value };
-      const minVal = parseFloat(field === 'min' ? value : updatedParam.min);
-      const maxVal = parseFloat(field === 'max' ? value : updatedParam.max);
-      const avg = (!isNaN(minVal) && !isNaN(maxVal))
+      const normalizedValue = normalizeDecimalValue(value);
+      const updatedParam = { ...existing, [field]: normalizedValue };
+      const minVal = parseNumeric(field === 'min' ? normalizedValue : updatedParam.min);
+      const maxVal = parseNumeric(field === 'max' ? normalizedValue : updatedParam.max);
+      const avg = (minVal !== null && maxVal !== null)
         ? String(Math.round(((minVal + maxVal) / 2) * 100) / 100)
         : '';
       return {
@@ -687,7 +695,7 @@ export function WaterUseReportForm({
         },
       };
     });
-  }, []);
+  }, [normalizeDecimalValue, parseNumeric]);
 
   // Get water use type options based on template
   const waterUseOptions = useMemo(() => getWaterUseTypeOptions(template), [template]);
@@ -1434,8 +1442,8 @@ export function WaterUseReportForm({
                       <TableCell>°C</TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={formData.section5_monitoring.waterTemperature?.min || ''}
                           onChange={(e) => updateMonitoringMinMax('waterTemperature', 'min', e.target.value)}
                           disabled={isReadOnly}
@@ -1444,8 +1452,8 @@ export function WaterUseReportForm({
                       </TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={formData.section5_monitoring.waterTemperature?.max || ''}
                           onChange={(e) => updateMonitoringMinMax('waterTemperature', 'max', e.target.value)}
                           disabled={isReadOnly}
@@ -1469,8 +1477,8 @@ export function WaterUseReportForm({
                       <TableCell>mg/L</TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={formData.section5_monitoring.dissolvedOxygen?.min || ''}
                           onChange={(e) => updateMonitoringMinMax('dissolvedOxygen', 'min', e.target.value)}
                           disabled={isReadOnly}
@@ -1479,8 +1487,8 @@ export function WaterUseReportForm({
                       </TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.01"
+                          type="text"
+                          inputMode="decimal"
                           value={formData.section5_monitoring.dissolvedOxygen?.max || ''}
                           onChange={(e) => updateMonitoringMinMax('dissolvedOxygen', 'max', e.target.value)}
                           disabled={isReadOnly}
@@ -1504,8 +1512,8 @@ export function WaterUseReportForm({
                       <TableCell>NTU</TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={formData.section5_monitoring.turbidity?.min || ''}
                           onChange={(e) => updateMonitoringMinMax('turbidity', 'min', e.target.value)}
                           disabled={isReadOnly}
@@ -1514,8 +1522,8 @@ export function WaterUseReportForm({
                       </TableCell>
                       <TableCell>
                         <Input
-                          type="number"
-                          step="0.1"
+                          type="text"
+                          inputMode="decimal"
                           value={formData.section5_monitoring.turbidity?.max || ''}
                           onChange={(e) => updateMonitoringMinMax('turbidity', 'max', e.target.value)}
                           disabled={isReadOnly}
@@ -1541,8 +1549,8 @@ export function WaterUseReportForm({
                           <TableCell>-</TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.1"
+                              type="text"
+                              inputMode="decimal"
                               value={formData.section5_monitoring.ph?.min || ''}
                               onChange={(e) => updateMonitoringMinMax('ph', 'min', e.target.value)}
                               disabled={isReadOnly}
@@ -1551,8 +1559,8 @@ export function WaterUseReportForm({
                           </TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.1"
+                              type="text"
+                              inputMode="decimal"
                               value={formData.section5_monitoring.ph?.max || ''}
                               onChange={(e) => updateMonitoringMinMax('ph', 'max', e.target.value)}
                               disabled={isReadOnly}
@@ -1576,8 +1584,8 @@ export function WaterUseReportForm({
                           <TableCell>mg/L</TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={formData.section5_monitoring.nutrients?.min || ''}
                               onChange={(e) => updateMonitoringMinMax('nutrients', 'min', e.target.value)}
                               disabled={isReadOnly}
@@ -1586,8 +1594,8 @@ export function WaterUseReportForm({
                           </TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={formData.section5_monitoring.nutrients?.max || ''}
                               onChange={(e) => updateMonitoringMinMax('nutrients', 'max', e.target.value)}
                               disabled={isReadOnly}
@@ -1611,8 +1619,8 @@ export function WaterUseReportForm({
                           <TableCell>mg/L</TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={formData.section5_monitoring.bod?.min || ''}
                               onChange={(e) => updateMonitoringMinMax('bod', 'min', e.target.value)}
                               disabled={isReadOnly}
@@ -1621,8 +1629,8 @@ export function WaterUseReportForm({
                           </TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               value={formData.section5_monitoring.bod?.max || ''}
                               onChange={(e) => updateMonitoringMinMax('bod', 'max', e.target.value)}
                               disabled={isReadOnly}

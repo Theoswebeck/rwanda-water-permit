@@ -65,6 +65,7 @@ import {
 import { PaymentTab } from '@/components/dashboard/payment-tab';
 import { PaymentConfirmationPanel } from '@/components/payments/payment-confirmation-panel';
 import type { Permit, Application } from "@/types/database";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 // Transfer form schema
 const transferFormSchema = z.object({
@@ -226,6 +227,41 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     const savedAbstraction = Array.isArray(internalNotes?.waterAbstractionDetails)
       ? internalNotes.waterAbstractionDetails[0]
       : null;
+    const permitDetails = internalNotes?.permitDetails;
+    const waterSourceProvince =
+      internalNotes?.waterSourceProvince ||
+      permitDetails?.waterSourceProvince ||
+      permitDetails?.province ||
+      permit.application?.province ||
+      '';
+    const waterSourceDistrict =
+      internalNotes?.waterSourceDistrict ||
+      permitDetails?.waterSourceDistrict ||
+      permitDetails?.district ||
+      permit.application?.district ||
+      '';
+    const waterSourceSector =
+      internalNotes?.waterSourceSector ||
+      permitDetails?.waterSourceSector ||
+      permitDetails?.sector ||
+      permit.application?.sector ||
+      '';
+    const waterSourceCell =
+      internalNotes?.waterSourceCell ||
+      permitDetails?.waterSourceCell ||
+      permitDetails?.cell ||
+      permit.application?.cell ||
+      '';
+    const waterSourceVillage =
+      internalNotes?.waterSourceVillage ||
+      permitDetails?.waterSourceVillage ||
+      permitDetails?.village ||
+      permit.application?.village ||
+      '';
+    const primaryIntendedActivity = (
+      (Array.isArray(permit.application?.intended_activities) ? permit.application.intended_activities : [])
+      .find((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+    ) || '';
 
     const defaults: Partial<TransferFormValues> = {
       // Part 1: Permit Particulars (from permit)
@@ -233,16 +269,16 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       effectiveDate: permit.issued_date?.split('T')[0] || '',
       expirationDate: permit.expiry_date?.split('T')[0] || '',
       facilityProjectName: permit.application?.project_title || '',
-      permitLocationProvince: permit.application?.province || '',
-      permitLocationDistrict: permit.application?.district || '',
-      permitLocationSector: permit.application?.sector || '',
-      permitLocationCell: permit.application?.cell || '',
-      permitLocationVillage: permit.application?.village || '',
+      permitLocationProvince: waterSourceProvince,
+      permitLocationDistrict: waterSourceDistrict,
+      permitLocationSector: waterSourceSector,
+      permitLocationCell: waterSourceCell,
+      permitLocationVillage: waterSourceVillage,
 
       // Water source & purpose (from permit)
       waterSourceType: permit.water_source || '',
       waterSourceName: permit.application?.water_body_name || '',
-      waterPurpose: permit.purpose || '',
+      waterPurpose: primaryIntendedActivity || permit.application?.water_purpose || permit.purpose || '',
       waterAllowance: permit.water_allowance ? String(permit.water_allowance) : '',
       allowanceUnit: permit.allowance_unit || 'm³/year',
 
@@ -948,7 +984,12 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                               </Select>
                             ) : (
                               <FormControl>
-                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                                <Input
+                                  {...field}
+                                  value={field.value ? getActivityLabel(field.value) : ""}
+                                  disabled
+                                  className="bg-gray-100"
+                                />
                               </FormControl>
                             )}
                             <FormMessage />

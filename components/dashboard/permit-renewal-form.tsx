@@ -244,15 +244,59 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     // Priority 2: Fill from permit object (system permits)
     if (!isManualPermit) {
       const app = permit.application;
-      setPermitProvince(app?.province || "");
-      setPermitDistrict(app?.district || "");
-      setPermitSector(app?.sector || "");
-      setPermitCell(app?.cell || "");
-      setPermitVillage(app?.village || "");
+      let appNotes: any = null;
+      try {
+        appNotes = typeof app?.internal_notes === "string"
+          ? JSON.parse(app.internal_notes)
+          : app?.internal_notes;
+      } catch {
+        appNotes = null;
+      }
+      const permitDetails = appNotes?.permitDetails;
+      const sourceProvince =
+        appNotes?.waterSourceProvince ||
+        permitDetails?.waterSourceProvince ||
+        permitDetails?.province ||
+        app?.province ||
+        "";
+      const sourceDistrict =
+        appNotes?.waterSourceDistrict ||
+        permitDetails?.waterSourceDistrict ||
+        permitDetails?.district ||
+        app?.district ||
+        "";
+      const sourceSector =
+        appNotes?.waterSourceSector ||
+        permitDetails?.waterSourceSector ||
+        permitDetails?.sector ||
+        app?.sector ||
+        "";
+      const sourceCell =
+        appNotes?.waterSourceCell ||
+        permitDetails?.waterSourceCell ||
+        permitDetails?.cell ||
+        app?.cell ||
+        "";
+      const sourceVillage =
+        appNotes?.waterSourceVillage ||
+        permitDetails?.waterSourceVillage ||
+        permitDetails?.village ||
+        app?.village ||
+        "";
+      const primaryIntendedActivity = (
+        (Array.isArray(app?.intended_activities) ? app.intended_activities : [])
+          .find((activity): activity is string => typeof activity === "string" && activity.trim().length > 0)
+      ) || "";
+
+      setPermitProvince(sourceProvince);
+      setPermitDistrict(sourceDistrict);
+      setPermitSector(sourceSector);
+      setPermitCell(sourceCell);
+      setPermitVillage(sourceVillage);
       setWaterSourceType(permit.water_source || "");
       setWaterSourceName(app?.water_body_name || "");
-      setWaterPurpose(permit.purpose || "");
-      setIntendedActivity((app?.intended_activities as string[] | undefined)?.[0] || "");
+      setWaterPurpose(primaryIntendedActivity || app?.water_purpose || permit.purpose || "");
+      setIntendedActivity(primaryIntendedActivity);
       setWaterAllowance(permit.water_allowance?.toString() || "");
       setAllowanceUnit(permit.allowance_unit || "m³/year");
       setMaxDailyVolume(app?.max_daily_volume_m3?.toString() || "");
@@ -261,12 +305,6 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       setFlowRate(app?.flow_rate_m3_per_second?.toString() || "");
 
       // Try to get coordinates from internal_notes
-      let appNotes: any = null;
-      try {
-        appNotes = typeof app?.internal_notes === "string"
-          ? JSON.parse(app.internal_notes)
-          : app?.internal_notes;
-      } catch { /* ignore */ }
       setWaterSourceLatitude(appNotes?.waterSourceLatitude || "");
       setWaterSourceLongitude(appNotes?.waterSourceLongitude || "");
       setConcessionArea(app?.concession_area?.toString() || "");

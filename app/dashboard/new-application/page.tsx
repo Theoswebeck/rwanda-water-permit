@@ -1302,14 +1302,30 @@ function NewApplicationContent() {
 
   const handleManualModificationPermitSelect = useCallback((payload: ManualPermitSelectionPayload) => {
     const manualPermit = createManualSelectedPermit(payload) as unknown as PermitWithApplication;
-    const applicantCategory = payload.permitReference.manualHolderType === "company_org" ? "company" : "individual";
+    const profileName =
+      `${userProfile?.first_name || ""} ${userProfile?.last_name || ""}`.trim() ||
+      userProfile?.company_name ||
+      "";
+    const profilePhone = userProfile?.phone || userProfile?.company_phone || "";
+    const applicantCategory =
+      userProfile?.account_type === "company"
+        ? "company"
+        : userProfile?.account_type === "individual"
+          ? "individual"
+          : payload.permitReference.manualHolderType === "company_org"
+            ? "company"
+            : "individual";
+    const applicantName = profileName || payload.permitReference.manualHolderName || "";
     const registryPurpose = payload.permitReference.registrySnapshot?.purpose || "";
     const registrySource = payload.permitReference.registrySnapshot?.water_source || "";
     setCurrentModificationApplication(null);
     setSelectedPermitForModification(manualPermit);
     setOriginalApplicationData({
-      fullNameApplicant: payload.permitReference.manualHolderName || "",
+      fullNameApplicant: applicantName,
       categoryApplicant: applicantCategory,
+      telephoneContact: profilePhone,
+      telephoneContactOffice: userProfile?.company_phone || "",
+      emailAddress: userProfile?.email || "",
       officeProvince: "",
       officeDistrict: "",
       officeSector: "",
@@ -1328,8 +1344,11 @@ function NewApplicationContent() {
       permitReference: payload.permitReference,
     });
     setInitialFormData({
-      fullNameApplicant: payload.permitReference.manualHolderName || "",
+      fullNameApplicant: applicantName,
       categoryApplicant: applicantCategory,
+      telephoneContact: profilePhone,
+      telephoneContactOffice: userProfile?.company_phone || "",
+      emailAddress: userProfile?.email || "",
       officeProvince: "",
       officeDistrict: "",
       officeSector: "",
@@ -1357,7 +1376,7 @@ function NewApplicationContent() {
     });
     setInitialDocuments({});
     setModificationStep('fill-form');
-  }, [createManualSelectedPermit]);
+  }, [createManualSelectedPermit, userProfile]);
 
   // Handle modification cancellation
   const handleModificationCancel = useCallback(() => {

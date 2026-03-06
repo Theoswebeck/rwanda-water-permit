@@ -7,8 +7,16 @@ import { getPortalUrl } from '@/lib/notifications/portal-url'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 type Decision = 'approve' | 'reject' | 'return_to_assessment'
+const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 const clamp = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, max - 1)}…`)
+
+function normalizeRole(input: unknown): string {
+  const raw = String(input ?? '').trim().toLowerCase()
+  if (!raw) return ''
+  const aliases: Record<string, string> = { application: 'applicant' }
+  return aliases[raw] ?? raw
+}
 
 function formatTransferPhoneForSms(raw: string): string | null {
   const digits = String(raw || '').replace(/\D/g, '')
@@ -124,8 +132,12 @@ export async function POST(req: NextRequest) {
       `,
       [actorUserId]
     )
-    const actorRole = String(actorRoleRes.rows[0]?.role || '').toLowerCase()
-    if (!['approver', 'admin'].includes(actorRole)) {
+    const roleFromDb = normalizeRole(actorRoleRes.rows[0]?.role)
+    const roleFromClaims = normalizeRole(claims?.role)
+    const effectiveRole = roleFromDb || roleFromClaims
+    const actorEmail = String(claims?.email || '').trim().toLowerCase()
+    const isSuperuser = SUPERUSER_EMAILS.has(actorEmail)
+    if (!isSuperuser && !['approver', 'admin'].includes(effectiveRole)) {
       return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
     }
 

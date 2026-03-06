@@ -227,13 +227,28 @@ export async function GET(req: NextRequest) {
       )
     `;
 
-    const totalRes = await query<{ count: string }>(
+    const summaryRes = await query<{
+      total: string;
+      operational: string;
+      expired: string;
+      expiring_soon: string;
+      regime_types: string;
+    }>(
       `
       ${baseCte}
-      select count(*)::text as count
-      from merged
-      where 1 = 1
-      ${whereSql}
+      , filtered as (
+        select *
+        from merged
+        where 1 = 1
+        ${whereSql}
+      )
+      select
+        count(*)::text as total,
+        count(*) filter (where upper(coalesce(status, '')) = 'OPERATIONAL')::text as operational,
+        count(*) filter (where upper(coalesce(status, '')) = 'EXPIRED')::text as expired,
+        count(*) filter (where upper(coalesce(status, '')) = 'EXPIRING_SOON')::text as expiring_soon,
+        count(distinct nullif(trim(coalesce(regime, '')), ''))::text as regime_types
+      from filtered
       `,
       values
     );
@@ -277,12 +292,20 @@ export async function GET(req: NextRequest) {
       `,
       pageValues
     );
-    const count = Number(totalRes.rows[0]?.count || "0");
+    const summaryRow = summaryRes.rows[0];
+    const count = Number(summaryRow?.total || "0");
     const data = pageRes.rows;
 
     return NextResponse.json({
       items: data || [],
       total: count ?? 0,
+      summary: {
+        total: count ?? 0,
+        operational: Number(summaryRow?.operational || "0"),
+        expired: Number(summaryRow?.expired || "0"),
+        expiringSoon: Number(summaryRow?.expiring_soon || "0"),
+        regimeTypes: Number(summaryRow?.regime_types || "0"),
+      },
       pagination: { limit, offset, returned: (data || []).length },
     });
   } catch (e) {

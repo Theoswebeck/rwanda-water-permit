@@ -140,12 +140,20 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   }, [entries]);
 
   const stats = useMemo(() => {
+    if (data?.summary) {
+      return {
+        total: data.summary.total,
+        operational: data.summary.operational,
+        expired: data.summary.expired,
+        regimeTypes: data.summary.regimeTypes,
+      };
+    }
     const pageTotal = entries.length;
     const operational = entries.filter((e) => e.status?.toUpperCase() === "OPERATIONAL").length;
     const expired = entries.filter((e) => e.status?.toUpperCase() === "EXPIRED").length;
     const regimeSet = new Set(entries.map((e) => e.regime).filter(Boolean));
     return { total: pageTotal, operational, expired, regimeTypes: regimeSet.size };
-  }, [entries]);
+  }, [data?.summary, entries]);
 
   const toggleSort = useCallback(
     (field: SortField) => {

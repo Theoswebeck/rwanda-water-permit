@@ -226,12 +226,23 @@ export function PermitSelectForModification({
 
   const getWaterSourceLocationLabel = (permit: PermitWithApplication) => {
     const notes = parseInternalNotes(permit);
+    const permitDetails = notes?.permitDetails;
     const sourceParts = [
       notes?.waterSourceVillage,
       notes?.waterSourceCell,
       notes?.waterSourceSector,
       notes?.waterSourceDistrict,
       notes?.waterSourceProvince,
+      permitDetails?.waterSourceVillage,
+      permitDetails?.waterSourceCell,
+      permitDetails?.waterSourceSector,
+      permitDetails?.waterSourceDistrict,
+      permitDetails?.waterSourceProvince,
+      permitDetails?.village,
+      permitDetails?.cell,
+      permitDetails?.sector,
+      permitDetails?.district,
+      permitDetails?.province,
     ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
 
     if (sourceParts.length > 0) {
@@ -250,8 +261,12 @@ export function PermitSelectForModification({
   };
 
   const getIntendedActivityLabel = (permit: PermitWithApplication) => {
-    const activities = permit.application?.intended_activities;
-    if (Array.isArray(activities) && activities.length > 0) {
+    const notes = parseInternalNotes(permit);
+    const activities = [
+      ...(Array.isArray(permit.application?.intended_activities) ? permit.application.intended_activities : []),
+      ...(Array.isArray(notes?.intendedActivities) ? notes.intendedActivities : []),
+    ];
+    if (activities.length > 0) {
       const primary = activities.find(
         (activity): activity is string => typeof activity === "string" && activity.trim().length > 0
       );

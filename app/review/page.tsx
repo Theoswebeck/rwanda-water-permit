@@ -566,7 +566,7 @@ export default function ReviewerDashboard() {
       if (previousAssessorId) {
         updateQuery = updateQuery.eq('assigned_assessor_id', previousAssessorId);
       } else {
-        updateQuery = updateQuery.is('assigned_assessor_id', null);
+        updateQuery = updateQuery.or('assigned_assessor_id.is.null');
       }
 
       const { data: updatedRows, error: updateError } = await updateQuery.select('id, assigned_assessor_id, status');

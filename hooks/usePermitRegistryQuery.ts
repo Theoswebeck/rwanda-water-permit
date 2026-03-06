@@ -19,6 +19,13 @@ export interface PermitRegistryQueryParams {
 export interface PermitRegistryQueryResult {
   items: PermitRegistryEntry[];
   total: number;
+  summary: {
+    total: number;
+    operational: number;
+    expired: number;
+    expiringSoon: number;
+    regimeTypes: number;
+  };
   pagination: { limit: number; offset: number; returned: number };
 }
 
@@ -45,6 +52,13 @@ export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enable
       return {
         items: json.items || [],
         total: Number(json.total || 0),
+        summary: {
+          total: Number(json.summary?.total || json.total || 0),
+          operational: Number(json.summary?.operational || 0),
+          expired: Number(json.summary?.expired || 0),
+          expiringSoon: Number(json.summary?.expiringSoon || 0),
+          regimeTypes: Number(json.summary?.regimeTypes || 0),
+        },
         pagination: json.pagination || { limit: params.limit ?? 50, offset: params.offset ?? 0, returned: 0 },
       };
     },
