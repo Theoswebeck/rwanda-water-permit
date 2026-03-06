@@ -9,6 +9,9 @@ export type ContractPlaceholderContext = {
   organizationName: string;
   representativeName: string;
   representativeTitle: string;
+  officeProvinceLabel: string;
+  officeDistrict: string;
+  officeSector: string;
   waterSourceName: string;
   provinceLabel: string;
   district: string;
@@ -21,6 +24,8 @@ export type ContractPlaceholderContext = {
   durationYearsLabel: string; // e.g. "5"
   concessionAreaLabel: string; // e.g. "12 Ha"
   activityLabel: string; // e.g. "Fish farming in lakes"
+  systemTypeEnglish: string; // e.g. "Gravity system" or "Pumping system"
+  systemTypeKinyarwanda: string; // e.g. "gravity" or "gupompa"
 };
 
 type ApplicationForContract = {
@@ -39,6 +44,7 @@ type ApplicationForContract = {
   max_yearly_volume_m3?: number | null;
   estimated_usage_volume?: number | null;
   usage_unit?: string | null;
+  water_taking_method?: string | null;
 
   proposed_duration_years?: number | null;
   concession_area?: number | null;
@@ -169,6 +175,28 @@ function resolveWaterSourceAdminLocation(application: ApplicationForContract): {
   return { province, district, sector, cell, village };
 }
 
+function resolveOfficeAdminLocation(application: ApplicationForContract): {
+  province: string;
+  district: string;
+  sector: string;
+} {
+  const notes = getInternalNotes(application);
+  const province =
+    typeof notes?.officeProvince === "string" && notes.officeProvince.trim()
+      ? notes.officeProvince.trim()
+      : (application.province ?? "").trim() || "N/A";
+  const district =
+    typeof notes?.officeDistrict === "string" && notes.officeDistrict.trim()
+      ? notes.officeDistrict.trim()
+      : (application.district ?? "").trim() || "N/A";
+  const sector =
+    typeof notes?.officeSector === "string" && notes.officeSector.trim()
+      ? notes.officeSector.trim()
+      : (application.sector ?? "").trim() || "N/A";
+
+  return { province, district, sector };
+}
+
 function resolveActivityLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
   const intended = Array.isArray((application as any).intended_activities)
@@ -218,6 +246,38 @@ function resolveLatLng(application: ApplicationForContract): { lat: string; lng:
   }
 
   return { lat: "N/A", lng: "N/A" };
+}
+
+function resolveSystemTypeLabels(application: ApplicationForContract): {
+  english: string;
+  kinyarwanda: string;
+} {
+  const notes = getInternalNotes(application);
+  const rawMethod =
+    (typeof application.water_taking_method === "string" ? application.water_taking_method : "") ||
+    (typeof notes?.waterAbstractionDetails?.[0]?.abstractionMethod === "string"
+      ? notes.waterAbstractionDetails[0].abstractionMethod
+      : "") ||
+    (typeof notes?.abstractionMethod === "string" ? notes.abstractionMethod : "");
+
+  const normalized = rawMethod.trim().toLowerCase();
+  if (normalized.includes("pump")) {
+    return {
+      english: "Pumping system",
+      kinyarwanda: "gupompa",
+    };
+  }
+  if (normalized.includes("grav")) {
+    return {
+      english: "Gravity system",
+      kinyarwanda: "gravity",
+    };
+  }
+
+  return {
+    english: "Gravity system",
+    kinyarwanda: "gravity",
+  };
 }
 
 function resolveVolumeLabel(application: ApplicationForContract): string {
@@ -286,7 +346,9 @@ export function buildContractPlaceholderContext(
   applicationNumber?: string
 ): ContractPlaceholderContext {
   const waterSourceLocation = resolveWaterSourceAdminLocation(application);
+  const officeLocation = resolveOfficeAdminLocation(application);
   const { lat, lng } = resolveLatLng(application);
+  const systemType = resolveSystemTypeLabels(application);
   const isIndividual = (application.applicant?.account_type ?? null) === "individual";
   const appNo = (applicationNumber ?? "").trim();
   const contractNumber = (() => {
@@ -307,6 +369,9 @@ export function buildContractPlaceholderContext(
     organizationName: resolveOrganizationName(application),
     representativeName: resolveRepresentativeName(application),
     representativeTitle: resolveRepresentativeTitle(application),
+    officeProvinceLabel: provinceLabelForContract(officeLocation.province),
+    officeDistrict: officeLocation.district,
+    officeSector: officeLocation.sector,
     waterSourceName: resolveWaterSourceName(application),
     provinceLabel: provinceLabelForContract(waterSourceLocation.province),
     district: waterSourceLocation.district,
@@ -319,16 +384,39 @@ export function buildContractPlaceholderContext(
     durationYearsLabel: resolveDurationYears(application),
     concessionAreaLabel: resolveConcessionAreaLabel(application),
     activityLabel: resolveActivityLabel(application),
+    systemTypeEnglish: systemType.english,
+    systemTypeKinyarwanda: systemType.kinyarwanda,
   };
 }
 
 export function fillContractText(raw: string, ctx: ContractPlaceholderContext): string {
   let s = raw;
-  s = s.replaceAll("registered office address as follows:", "water source location as follows:");
 
   // Application
   s = s.replaceAll("{{APPLICATION_NUMBER}}", ctx.applicationNumber);
   s = s.replaceAll("{{CONTRACT_NUMBER}}", ctx.contractNumber);
+  s = s.replaceAll("{{APPLICANT_NAME}}", ctx.applicantName);
+  s = s.replaceAll("{{APPLICANT_ID}}", ctx.applicantIdNumber);
+  s = s.replaceAll("{{ORGANIZATION_NAME}}", ctx.organizationName);
+  s = s.replaceAll("{{REPRESENTATIVE_NAME}}", ctx.representativeName);
+  s = s.replaceAll("{{REPRESENTATIVE_TITLE}}", ctx.representativeTitle);
+  s = s.replaceAll("{{OFFICE_PROVINCE_LABEL}}", ctx.officeProvinceLabel);
+  s = s.replaceAll("{{OFFICE_DISTRICT}}", ctx.officeDistrict);
+  s = s.replaceAll("{{OFFICE_SECTOR}}", ctx.officeSector);
+  s = s.replaceAll("{{WATER_SOURCE_NAME}}", ctx.waterSourceName);
+  s = s.replaceAll("{{PROVINCE_LABEL}}", ctx.provinceLabel);
+  s = s.replaceAll("{{DISTRICT}}", ctx.district);
+  s = s.replaceAll("{{SECTOR}}", ctx.sector);
+  s = s.replaceAll("{{CELL}}", ctx.cell);
+  s = s.replaceAll("{{VILLAGE}}", ctx.village);
+  s = s.replaceAll("{{LAT}}", ctx.lat);
+  s = s.replaceAll("{{LNG}}", ctx.lng);
+  s = s.replaceAll("{{VOLUME_LABEL}}", ctx.volumeLabel);
+  s = s.replaceAll("{{DURATION_YEARS}}", ctx.durationYearsLabel);
+  s = s.replaceAll("{{CONCESSION_AREA}}", ctx.concessionAreaLabel);
+  s = s.replaceAll("{{ACTIVITY_LABEL}}", ctx.activityLabel);
+  s = s.replaceAll("{{SYSTEM_TYPE_EN}}", ctx.systemTypeEnglish);
+  s = s.replaceAll("{{SYSTEM_TYPE_RW}}", ctx.systemTypeKinyarwanda);
 
   // Applicant
   s = s.replaceAll("NAME OF APPLICANT", ctx.applicantName);
@@ -359,6 +447,14 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("\"XXXXX (IZINA RY'USABA)\"", `"${ctx.applicantName}"`);
 
   // Organization + representative
+  s = s.replaceAll(
+    "“XXXXX (NAME OF ORGANIZATION)”, with its registered office address as follows: XXX Sector, XXX District, XXX Province; represented by XXXX (NAME OF REPRESENTATIVE) “TITLE OF REPRESENTATIVE”, and hereafter referred to as the (“Water User”) on the other hand;",
+    `“${ctx.organizationName}”, with its registered office address as follows: ${ctx.officeSector} Sector, ${ctx.officeDistrict} District, ${ctx.officeProvinceLabel}; represented by ${ctx.representativeName} “${ctx.representativeTitle}”, and hereafter referred to as the (“Water User”) on the other hand;`
+  );
+  s = s.replaceAll(
+    "“(IZINA RY’ IKIGO/KOPERATIVE/ IKOMPANYI N’IBINDI CYASABYE)”, ifite ibiro biherereye mu Umurenge wa XXXXX, Akarere ka XXXX, Intara y' XXXX; ihagarariwe na XXX (IZINA RY’UHAGARARIYE IKIGO “ICYO ASHINZWE”, muri aya masezerano witwa “Ukoresha amazi” ku rundi ruhande;",
+    `“${ctx.organizationName}”, ifite ibiro biherereye mu Umurenge wa ${ctx.officeSector}, Akarere ka ${ctx.officeDistrict}, Intara y' ${ctx.officeProvinceLabel}; ihagarariwe na ${ctx.representativeName} “${ctx.representativeTitle}”, muri aya masezerano witwa “Ukoresha amazi” ku rundi ruhande;`
+  );
   s = s.replaceAll("NAME OF APPLIED ORGANIZATION", ctx.organizationName);
   s = s.replaceAll("NAME OF ORGANIZATION", ctx.organizationName);
   s = s.replaceAll("IZINA RY’ IKIGO/KOPERATIVE/ IKOMPANYI N’IBINDI CYASABYE", ctx.organizationName);
@@ -417,6 +513,11 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
     `Latitide (Latitude): ${ctx.lat}°, Lonjitide (Longitude): ${ctx.lng}°`
   );
 
+  // Water abstraction method
+  s = s.replace(/by\s+Gravity\s+of\s+Pumping system/gi, `by ${ctx.systemTypeEnglish}`);
+  s = s.replace(/by\s+Gravity\s+or\s+pumping system/gi, `by ${ctx.systemTypeEnglish}`);
+  s = s.replace(/hakoreshejwe uburyo bwa\s+gravity cyangwa pumping/gi, `hakoreshejwe uburyo bwa ${ctx.systemTypeKinyarwanda}`);
+
   // Volume / flow rate
   s = s.replace(/flow rate of\s+XXX\s+m3\/year\s+OR\s+m3\/day/gi, `flow rate of ${ctx.volumeLabel}`);
   s = s.replace(/flow rate of\s+XXXX\s+m3\/day\s+OR\s+m3\/year/gi, `flow rate of ${ctx.volumeLabel}`);
@@ -467,11 +568,28 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
     s = s.replace(re, v);
   }
 
+  function stripXPrefixBeforeValue(value: string) {
+    const v = (value ?? "").trim();
+    if (!v || v === "N/A") return;
+    const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const re = new RegExp(`\\bX{1,}(?=${escaped}\\b)`, "g");
+    s = s.replace(re, "");
+  }
+
   stripXPrefixAroundValue(ctx.waterSourceName);
   stripXPrefixAroundValue(ctx.applicantName);
   stripXPrefixAroundValue(ctx.organizationName);
   stripXPrefixAroundValue(ctx.representativeName);
   stripXPrefixAroundValue(ctx.activityLabel);
+  stripXPrefixBeforeValue(ctx.waterSourceName);
+  stripXPrefixBeforeValue(ctx.applicantName);
+  stripXPrefixBeforeValue(ctx.organizationName);
+  stripXPrefixBeforeValue(ctx.representativeName);
+  stripXPrefixBeforeValue(ctx.provinceLabel);
+  stripXPrefixBeforeValue(ctx.district);
+  stripXPrefixBeforeValue(ctx.sector);
+  stripXPrefixBeforeValue(ctx.cell);
+  stripXPrefixBeforeValue(ctx.village);
 
   return s;
 }

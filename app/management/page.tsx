@@ -22,8 +22,10 @@ import {
   Filter,
   LayoutDashboard,
   Loader2,
+  MessageSquare,
   Search,
   ShieldAlert,
+  Star,
   Droplets,
 } from "lucide-react";
 import type { ProvinceType, WaterPurpose, WaterSourceType } from "@/types/database";
@@ -59,6 +61,13 @@ const DEFAULT_FILTERS: FiltersState = {
 
 function formatNumber(n: number) {
   return new Intl.NumberFormat().format(Math.round(n));
+}
+
+function formatDate(value?: string) {
+  if (!value) return "Unknown date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown date";
+  return date.toLocaleDateString();
 }
 
 function SectionButton({
@@ -162,8 +171,9 @@ export default function ManagementDashboardPage() {
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground space-y-2">
                     <div>✅ Application counts come from `applications`.</div>
-                    <div>✅ Permit counts come from `permits` (will be 0 until permits are issued/seeded).</div>
+                    <div>✅ Permit counts come from the consolidated permit dataset (`permits` + `permit_registry`).</div>
                     <div>✅ Compliance uses `inspections` (will be empty until table exists + data is recorded).</div>
+                    <div>✅ Service feedback comes from `portal_feedback`.</div>
                   </CardContent>
                 </Card>
               </aside>
@@ -426,6 +436,37 @@ export default function ManagementDashboardPage() {
                   </Card>
                 </div>
 
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <Card className="shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Feedback submissions</CardTitle>
+                      <CardDescription>Terms acceptance experience</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoading ? <Skeleton className="h-10 w-24" /> : <div className="text-4xl font-semibold">{formatNumber(data?.feedback.totalSubmissions ?? 0)}</div>}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Average feedback rating</CardTitle>
+                      <CardDescription>Across rated submissions</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoading ? (
+                        <Skeleton className="h-10 w-24" />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <div className="text-4xl font-semibold">
+                            {data?.feedback.averageRating ? data.feedback.averageRating.toFixed(1) : "N/A"}
+                          </div>
+                          {data?.feedback.averageRating ? <Star className="h-5 w-5 fill-yellow-500 text-yellow-500" /> : null}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
                 {/* Section content */}
                 {section === "portfolio" ? (
                   <div className="space-y-4">
@@ -511,6 +552,82 @@ export default function ManagementDashboardPage() {
                               <Badge variant={row.count > 0 ? "secondary" : "outline"}>{formatNumber(row.count)}</Badge>
                             </div>
                           ))}
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Card className="shadow-sm">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <MessageSquare className="h-4 w-4" />
+                            Recent applicant feedback
+                          </CardTitle>
+                          <CardDescription>Latest permit issuance feedback submitted by applicants</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {(data?.feedback.recent ?? []).length === 0 ? (
+                            <div className="text-sm text-muted-foreground">No feedback has been submitted for the current filters yet.</div>
+                          ) : (
+                            (data?.feedback.recent ?? []).map((entry) => (
+                              <div key={entry.id} className="rounded-lg border p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="font-medium truncate">
+                                      {entry.applicationNumber || entry.projectTitle || "Application feedback"}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {[entry.district, entry.sector].filter(Boolean).join(", ") || entry.province || "Location unavailable"}
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0 text-xs text-muted-foreground">{formatDate(entry.createdAt)}</div>
+                                </div>
+                                <div className="mt-2 flex items-center gap-1">
+                                  {entry.rating ? (
+                                    Array.from({ length: 5 }, (_, index) => (
+                                      <Star
+                                        key={`${entry.id}-${index + 1}`}
+                                        className={[
+                                          "h-4 w-4",
+                                          index < entry.rating ? "fill-yellow-500 text-yellow-500" : "text-gray-300",
+                                        ].join(" ")}
+                                      />
+                                    ))
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">No star rating</span>
+                                  )}
+                                </div>
+                                <p className="mt-2 text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                                  {entry.feedbackText || "No written comment provided."}
+                                </p>
+                              </div>
+                            ))
+                          )}
+                        </CardContent>
+                      </Card>
+
+                      <Card className="shadow-sm">
+                        <CardHeader>
+                          <CardTitle>Feedback rating breakdown</CardTitle>
+                          <CardDescription>Distribution of applicant satisfaction scores</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {(data?.feedback.ratingBreakdown ?? []).map((row) => {
+                            const totalFeedback = data?.feedback.totalSubmissions ?? 0;
+                            const percentage = totalFeedback > 0 ? (row.count / totalFeedback) * 100 : 0;
+                            return (
+                              <div key={row.rating} className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div className="font-medium">{row.rating} star</div>
+                                  <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                                </div>
+                                <div className="w-44 flex items-center gap-2">
+                                  <Progress value={percentage} className="h-2" />
+                                  <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </CardContent>
                       </Card>
                     </div>

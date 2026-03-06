@@ -102,6 +102,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [customerValidationError, setCustomerValidationError] = useState<string | null>(null);
+  const [gatewayError, setGatewayError] = useState<string | null>(null);
+  const [pauseAutoPolling, setPauseAutoPolling] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
@@ -117,7 +119,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   } = usePayment({
     applicationId: application?.id,
     autoFetch: !!application?.id, // Only auto-fetch if there is an application
-    pollInterval: 5000,
+    pollInterval: pauseAutoPolling ? undefined : 5000,
   });
 
   const applicationFee = getApplicationFee();
@@ -160,10 +162,19 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     const isPendingWithRef =
       (payment?.status === 'pending' || payment?.status === 'processing') && !!payment?.irembo_payment_ref;
 
-    if (isPendingWithRef && !showWidget && !awaitingGatewayConfirmation) {
+    if (isPendingWithRef && !showWidget && !awaitingGatewayConfirmation && !gatewayError) {
       setShowWidget(true);
     }
-  }, [payment?.status, payment?.irembo_payment_ref, showWidget, awaitingGatewayConfirmation]);
+  }, [payment?.status, payment?.irembo_payment_ref, showWidget, awaitingGatewayConfirmation, gatewayError]);
+
+  const getGatewayErrorMessage = (gatewayIssue?: any) => {
+    return (
+      gatewayIssue?.message ||
+      gatewayIssue?.detail ||
+      gatewayIssue?.errors?.[0]?.detail ||
+      'IremboPay returned an error while trying to start the payment.'
+    );
+  };
 
   /**
    * Handle payment initiation
@@ -173,6 +184,10 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       setIsInitializing(true);
       clearError();
       setCustomerValidationError(null);
+      setGatewayError(null);
+      setPauseAutoPolling(false);
+      setAwaitingGatewayConfirmation(false);
+      setShowWidget(false);
 
       console.log('🚀 Initiating payment...');
 
@@ -271,6 +286,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
     
     try {
+      setGatewayError(null);
+      setPauseAutoPolling(false);
       setAwaitingGatewayConfirmation(true);
       setShowWidget(false);
       setIsCompletingPayment(true);
@@ -324,6 +341,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     const isAlreadyPaid = error?.code === 'BAD_INVOICES_PAID';
     if (isAlreadyPaid) {
       console.log('ℹ️ [PAYMENT TAB] Invoice already paid - treating as completed and waiting for status confirmation');
+      setGatewayError(null);
+      setPauseAutoPolling(false);
       setAwaitingGatewayConfirmation(true);
       setShowWidget(false);
       if (payment?.id) {
@@ -333,20 +352,60 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     }
     
     console.log('❌ [PAYMENT TAB] Payment failed');
-    
-    if (payment?.id) {
-      checkStatus(payment.id);
-    }
+    setGatewayError(getGatewayErrorMessage(error));
+    setPauseAutoPolling(true);
+    setAwaitingGatewayConfirmation(false);
+    setShowWidget(false);
   };
 
   /**
    * Handle retry payment
    */
   const handleRetryPayment = () => {
+    setGatewayError(null);
+    setPauseAutoPolling(false);
     setShowWidget(false);
     setTimeout(() => {
       handleInitiatePayment();
     }, 500);
+  };
+
+  const handleManualStatusCheck = async () => {
+    if (!payment?.id) return;
+
+    try {
+      setIsCompletingPayment(true);
+      const latestPayment = await checkStatus(payment.id);
+
+      if (latestPayment?.status === 'completed') {
+        setGatewayError(null);
+        setPauseAutoPolling(false);
+        setCompletedApplication(latestPayment.application);
+        setPaymentCompleted(true);
+        return;
+      }
+
+      if (latestPayment?.status === 'failed' || latestPayment?.status === 'cancelled') {
+        setPauseAutoPolling(false);
+        setGatewayError(
+          'IremboPay still reports this payment as failed or cancelled. Please retry the payment.'
+        );
+        return;
+      }
+
+      setGatewayError(
+        'The gateway has not confirmed this payment yet. If you already approved it on your phone, wait a moment and check status again.'
+      );
+    } catch (statusError) {
+      console.error('❌ [PAYMENT TAB] Manual status check failed:', statusError);
+      setGatewayError(
+        statusError instanceof Error
+          ? statusError.message
+          : 'Unable to verify payment status right now. Please try again.'
+      );
+    } finally {
+      setIsCompletingPayment(false);
+    }
   };
 
   /**
@@ -524,6 +583,26 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {gatewayError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Gateway Error</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <div>{gatewayError}</div>
+            <div className="text-sm">
+              Automatic status polling has been paused so the application is not submitted after a widget error.
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={handleManualStatusCheck}>
+                Check payment status
+              </Button>
+              <Button type="button" onClick={handleRetryPayment}>
+                Retry payment
+              </Button>
+            </div>
+          </AlertDescription>
         </Alert>
       )}
 

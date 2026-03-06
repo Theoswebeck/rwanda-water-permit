@@ -384,7 +384,9 @@ export default function ReviewApplicationPage() {
                       phone,
                       first_name,
                       last_name,
+                      id_number,
                       company_name,
+                      company_tin,
                       company_address,
                       company_phone,
                       account_type
@@ -674,7 +676,9 @@ export default function ReviewApplicationPage() {
                 phone,
                 first_name,
                 last_name,
+                id_number,
                 company_name,
+                company_tin,
                 company_address,
                 company_phone,
                 account_type

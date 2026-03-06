@@ -59,8 +59,9 @@ const documentTypeLabels: Record<string, string> = {
   business_license: "Business License",
   land_access_doc: "Land Access Document",
   renewal_request_letter: "Renewal Request Letter",
-  certified_letter: "Certified Letter",
-  registration_certificate: "Registration Certificate",
+  certified_letter: "Permit Transfer Letter of Request",
+  signed_transfer_form: "Agreement between Transferor and Transferee, signed and notified by both parties",
+  registration_certificate: "New owner's registration certificate or ID",
   existing_permit_copy: "Copy of Existing Permit",
   other: "Other Documents",
   // Activity-specific document types
@@ -76,8 +77,9 @@ const documentTypeLabels: Record<string, string> = {
   generalRequirements: "Application letter addressed to RWB DG through District Mayor",
   landAccessDocuments: "Land Access Document",
   renewalRequestLetter: "Renewal Request Letter",
-  certifiedLetter: "Certified Letter",
-  registrationCertificate: "Registration Certificate",
+  certifiedLetter: "Permit Transfer Letter of Request",
+  notifiedAgreement: "Agreement between Transferor and Transferee, signed and notified by both parties",
+  registrationCertificate: "New owner's registration certificate or ID",
   existingPermitCopy: "Copy of Existing Permit",
 };
 

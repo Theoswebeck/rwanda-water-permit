@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
 import { isConcessionApplication, selectPermitVariant } from "@/lib/permit-variant";
+import { splitContractSectionsByLanguage } from "@/lib/contract-terms";
 
 // Rwanda Coat of Arms watermark path
 const WATERMARK_IMAGE_PATH = "/assets/png-transparent-rulindo-district-coat-of-arms-organization-agriculture-government-others-leaf-logo-agriculture.png";
@@ -55,6 +56,36 @@ function numberToEnglishWords(n: number): string {
   if (!tensWord) return String(n);
   if (ones === 0) return tensWord;
   return `${tensWord}-${small[ones]}`;
+}
+
+function numberToKinyarwandaWords(n: number): string {
+  if (!Number.isFinite(n)) return String(n);
+  const num = Math.abs(Math.trunc(n));
+
+  const small: Record<number, string> = {
+    0: "zero",
+    1: "umwe",
+    2: "ibiri",
+    3: "itatu",
+    4: "ine",
+    5: "itanu",
+    6: "itandatu",
+    7: "irindwi",
+    8: "umunani",
+    9: "icyenda",
+    10: "icumi",
+    11: "cumi n'umwe",
+    12: "cumi n'ibiri",
+    13: "cumi na gatatu",
+    14: "cumi na kane",
+    15: "cumi na gatanu",
+    16: "cumi na gatandatu",
+    17: "cumi n'irindwi",
+    18: "cumi n'umunani",
+    19: "cumi n'icyenda",
+    20: "makumyabiri",
+  };
+  return small[num] || String(n);
 }
 
 /**
@@ -393,6 +424,38 @@ function formatActivitiesForPermit(application: Application): string {
   return acts.map(getActivityLabel).join(", ");
 }
 
+function getActivityLabelKinyarwanda(activity: string): string {
+  const activityLabels: Record<string, string> = {
+    irrigation: "kuhira",
+    domestic: "gukoresha mu rugo",
+    industrial: "inganda",
+    livestock: "ubworozi",
+    fish_farming_ponds: "ubworozi bw'amafi",
+    fish_farming_lakes: "ubworozi bw'amafi",
+    aquaculture: "ubworozi bw'amafi",
+    electricity_generation: "kubyaza amashanyarazi amazi",
+    hydropower_source: "kubyaza amashanyarazi amazi",
+    mining: "ubucukuzi bw'amabuye y'agaciro",
+    recreation_activities: "imyidagaduro",
+    water_supply: "gutanga amazi",
+    municipal_supply: "gutanga amazi",
+    other: "ibindi",
+  };
+  return activityLabels[activity] || getActivityLabel(activity);
+}
+
+function formatActivitiesForPermitKinyarwanda(application: Application): string {
+  const acts = getIntendedActivities(application);
+  if (!acts.length) {
+    const purpose = typeof application.water_purpose === "string" ? application.water_purpose.trim() : "";
+    if (purpose) return getActivityLabelKinyarwanda(purpose);
+    const appType = typeof application.application_type === "string" ? application.application_type.trim() : "";
+    if (appType) return getActivityLabelKinyarwanda(appType);
+    return "N/A";
+  }
+  return acts.map(getActivityLabelKinyarwanda).join(", ");
+}
+
 function derivePermitTitleNumber(application: Application): string | null {
   const raw = typeof application.application_number === "string" ? application.application_number.trim() : "";
   if (!raw) return null;
@@ -455,6 +518,15 @@ function resolveApplicantName(application: Application): string {
     : application.applicant?.company_name || "N/A";
 }
 
+function resolveOrganizationNameForPermit(application: Application): string {
+  const notes = getInternalNotes(application);
+  const fromNotes = typeof notes?.fullNameApplicant === "string" ? notes.fullNameApplicant.trim() : "";
+  if (fromNotes) return fromNotes;
+  const fromApplicant = typeof application.applicant?.company_name === "string" ? application.applicant.company_name.trim() : "";
+  if (fromApplicant) return fromApplicant;
+  return resolveApplicantName(application);
+}
+
 function resolveApplicantIdNumber(application: Application): string {
   const notes = getInternalNotes(application);
   const fromNotes = typeof notes?.nationalIdNumber === "string" ? notes.nationalIdNumber.trim() : "";
@@ -491,10 +563,38 @@ function resolveWaterSourceLocationAddress(application: Application): string {
   return parts.length ? parts.join(", ") : "N/A";
 }
 
-function resolveOrganizationRepresentative(application: Application): { name: string } {
+function resolveOrganizationRegisteredOfficeAddress(application: Application): string {
+  const notes = getInternalNotes(application);
+  const sector = typeof notes?.officeSector === "string" ? notes.officeSector.trim() : "";
+  const district = typeof notes?.officeDistrict === "string" ? notes.officeDistrict.trim() : "";
+  const provinceRaw = typeof notes?.officeProvince === "string" ? notes.officeProvince.trim() : "";
+  const provinceLabel =
+    provinceRaw.toLowerCase() === "kigali" ? "City OF Kigali" : provinceRaw ? `${provinceRaw} Province` : "";
+  const parts = [
+    sector ? `${sector} Sector` : null,
+    district ? `${district} District` : null,
+    provinceLabel || null,
+  ].filter(Boolean) as string[];
+
+  if (parts.length) return parts.join(", ");
+
+  const fromApplicant =
+    typeof application.applicant?.company_address === "string" ? application.applicant.company_address.trim() : "";
+  return fromApplicant || "N/A";
+}
+
+function resolveOrganizationRepresentative(application: Application): { name: string; title: string } {
   const notes = getInternalNotes(application);
   const name = typeof notes?.nameRepresentative === "string" ? notes.nameRepresentative.trim() : "";
-  return { name: name || "N/A" };
+  const fallbackName =
+    `${application.applicant?.first_name ?? ""} ${application.applicant?.last_name ?? ""}`.trim() || "N/A";
+  const title =
+    typeof notes?.representativeTitle === "string"
+      ? notes.representativeTitle.trim()
+      : typeof notes?.representativePosition === "string"
+        ? notes.representativePosition.trim()
+        : "";
+  return { name: name || fallbackName, title: title || "Representative" };
 }
 
 function resolveConcessionAreaHectares(application: Application): number | null {
@@ -518,6 +618,16 @@ function resolveLakeNameForPermit(application: Application): string {
 function formatProvinceOrKigali(provinceRaw: string): string {
   if (!provinceRaw) return "N/A";
   return provinceRaw.toLowerCase() === "kigali" ? "CITY OF KIGALI" : `${provinceRaw} Province`;
+}
+
+function formatProvinceOrCityOfKigali(provinceRaw: string): string {
+  if (!provinceRaw) return "N/A";
+  return provinceRaw.toLowerCase() === "kigali" ? "City OF Kigali" : `${provinceRaw} Province`;
+}
+
+function formatIntaraOrUmujyiWaKigali(provinceRaw: string): string {
+  if (!provinceRaw) return "N/A";
+  return provinceRaw.toLowerCase() === "kigali" ? "Umujyi wa Kigali" : `Intara ya ${provinceRaw}`;
 }
 
 function resolveWaterSourceName(application: Application): string {
@@ -638,6 +748,14 @@ function resolveSystemType(application: Application): "GRAVITY SYSTEM" | "PUMPIN
   return "GRAVITY SYSTEM";
 }
 
+function resolveEnglishSystemTypeLabel(application: Application): "GRAVITY system" | "PUMPING system" {
+  return resolveSystemType(application) === "PUMPING SYSTEM" ? "PUMPING system" : "GRAVITY system";
+}
+
+function resolveKinyarwandaSystemTypeLabel(application: Application): "GUPOMPA" | "GUKORESHA" {
+  return resolveSystemType(application) === "PUMPING SYSTEM" ? "GUPOMPA" : "GUKORESHA";
+}
+
 /**
  * Resolve permit duration, prioritizing assessor recommended value over applicant's request.
  * Returns the number of years for the permit validity.
@@ -703,6 +821,37 @@ function resolveVolumes(application: Application): { yearly: number | null; dail
     (yearlyCandidate != null ? yearlyCandidate / 365 : null);
 
   return { yearly: yearlyCandidate, daily: dailyCandidate };
+}
+
+function resolveFlowRateLabel(application: Application): string {
+  const vols = resolveVolumes(application);
+  if (vols.yearly != null) return `${formatNumber(vols.yearly)} M3/year`;
+  if (vols.daily != null) return `${formatNumber(vols.daily)} M3/day`;
+  return "N/A";
+}
+
+function drawWrappedParagraph(
+  doc: jsPDF,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  opts?: { lineHeight?: number; paragraphSpacing?: number; pageBottomY?: number; newPageY?: number }
+): number {
+  const lineHeight = opts?.lineHeight ?? 6;
+  const paragraphSpacing = opts?.paragraphSpacing ?? 6;
+  const pageBottomY = opts?.pageBottomY ?? 250;
+  const newPageY = opts?.newPageY ?? 30;
+  const lines = doc.splitTextToSize(text, maxWidth) as string[];
+  const blockHeight = lines.length * lineHeight;
+
+  if (y + blockHeight > pageBottomY) {
+    doc.addPage();
+    y = newPageY;
+  }
+
+  doc.text(lines, x, y);
+  return y + blockHeight + paragraphSpacing;
 }
 
 async function qrPngDataUrl(text: string, px: number): Promise<string> {
@@ -946,6 +1095,24 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
 
+  const drawPermitPageHeader = (title: string) => {
+    try {
+      const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
+      doc.addImage(rwbLogoUrl, "PNG", 90, 10, 30, 30);
+    } catch {
+      doc.setFontSize(12);
+      doc.setTextColor(0, 75, 135);
+      doc.text("Rwanda Water Resources Board", 105, 22, { align: "center" });
+    }
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("times", "bold");
+    doc.setFontSize(12);
+    doc.text(title, 105, 48, { align: "center" });
+    doc.setFont("times", "normal");
+    doc.setFontSize(11);
+  };
+
   const issueDate = issuedDate ?? new Date();
   const resolvedExpiryDate =
     expiryDate ??
@@ -955,52 +1122,49 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
       return d;
     })();
 
-  // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
-  try {
-    const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
-    doc.addImage(rwbLogoUrl, "PNG", 90, 10, 30, 30);
-  } catch {
-    doc.setFontSize(12);
-    doc.setTextColor(0, 75, 135);
-    doc.text("Rwanda Water Resources Board", 105, 22, { align: "center" });
-  }
-
   const headerYear = issueDate.getFullYear();
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("times", "bold");
-  doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`, 105, 48, { align: "center" });
-
-  doc.setFont("times", "normal");
-  doc.setFontSize(11);
+  const permitTitleLine = resolvePermitTitleLine(application, permitNumber, headerYear);
+  drawPermitPageHeader(`WATER USE PERMIT N° ${permitTitleLine}`);
 
   let y = 62;
   const leftX = 20;
   const maxWidth = 170;
 
-  const orgName = resolveApplicantName(application);
-  const waterSourceLocationAddress = resolveWaterSourceLocationAddress(application);
+  const orgName = resolveOrganizationNameForPermit(application);
+  const officeAddress = resolveOrganizationRegisteredOfficeAddress(application);
   const rep = resolveOrganizationRepresentative(application);
   const waterSourceName = resolveWaterSourceName(application);
   const loc = resolveWaterSourceAdminLocation(application);
   const { lat, lng } = resolveLatLng(application);
-  const systemType = resolveSystemType(application); // GRAVITY/PUMPING
+  const englishSystemType = resolveEnglishSystemTypeLabel(application);
+  const kinyarwandaSystemType = resolveKinyarwandaSystemTypeLabel(application);
   const activitiesText = formatActivitiesForPermit(application);
-  const vols = resolveVolumes(application);
-  const yearlyStr = vols.yearly != null ? `${formatNumber(vols.yearly)} m³/year` : "N/A m³/year";
+  const activitiesTextRw = formatActivitiesForPermitKinyarwanda(application);
+  const flowRateLabel = resolveFlowRateLabel(application);
 
   const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
   const validityWord = numberToEnglishWords(validityNumber);
+  const validityWordRw = numberToKinyarwandaWords(validityNumber);
+  const provinceLabel = formatProvinceOrCityOfKigali(loc.province);
+  const officeProvinceLabelRw = (() => {
+    const notes = getInternalNotes(application);
+    const officeProvince = typeof notes?.officeProvince === "string" ? notes.officeProvince.trim() : "";
+    return formatIntaraOrUmujyiWaKigali(officeProvince);
+  })();
+  const notes = getInternalNotes(application);
+  const officeSector = typeof notes?.officeSector === "string" && notes.officeSector.trim() ? notes.officeSector.trim() : "N/A";
+  const officeDistrict = typeof notes?.officeDistrict === "string" && notes.officeDistrict.trim() ? notes.officeDistrict.trim() : "N/A";
+  const orgNameQuoted = `"${orgName}"`;
 
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,";
 
   const para2 =
-    `"${orgName}", with its water source location as follows: ${waterSourceLocationAddress}; ` +
-    `represented by ${rep.name}, is authorized to abstract water from ${waterSourceName} ` +
-    `located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village ` +
+    `${orgNameQuoted}, with its registered office address as follows: ${officeAddress}; ` +
+    `represented by ${rep.name} "${rep.title}", is authorized to abstract water from ${waterSourceName} ` +
+    `located in ${provinceLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village ` +
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
-    `by a ${systemType} with a flow rate of ${yearlyStr}. ` +
+    `by a ${englishSystemType} with a flow rate of ${flowRateLabel}. ` +
     `Water abstracted will be used for ${activitiesText}.`;
 
   const para3 =
@@ -1009,18 +1173,31 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.";
 
-  const paragraphs = [para1, para2, para3, para4];
-  for (const p of paragraphs) {
-    const lines = doc.splitTextToSize(p, maxWidth);
-    doc.text(lines, leftX, y);
-    y += lines.length * 6 + 6;
-  }
+  const paraRw1 =
+    "URUHUSHYA RWO GUKORESHA AMAZI N° " + permitTitleLine;
+  const paraRw2 =
+    "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,";
+  const paraRw3 =
+    `${orgNameQuoted} ifite ibiro biherereye mu Murenge wa ${officeSector}, Akarere ka ${officeDistrict}, ${officeProvinceLabelRw}; ` +
+    `ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${kinyarwandaSystemType} amazi angana na ${flowRateLabel}, ` +
+    `ava ku ${waterSourceName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+    `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
+    `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${activitiesTextRw}.`;
+  const paraRw4 =
+    `Uru ruhushya rufite agaciro mu gihe cy'imyaka ${validityNumber} (${validityWordRw}) kuva ${formatDateDMY(issueDate)} kugeza ${formatDateDMY(resolvedExpiryDate)}.`;
+  const paraRw5 =
+    "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.";
 
-  // Signature section (keep above QR footer area)
-  const footerCutoffY = 232;
-  if (y > footerCutoffY) {
+  y = drawWrappedParagraph(doc, para1, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, para2, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, para3, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, para4, leftX, y, maxWidth);
+
+  if (y > 236) {
     doc.addPage();
     y = 30;
+  } else {
+    y += 4;
   }
 
   doc.text("Signature: …………………..", leftX, y);
@@ -1030,10 +1207,34 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
   doc.setFont("times", "normal");
-  doc.text("Director General", leftX, y);
+  doc.text("Director General/", leftX, y);
 
   const rightX = 190;
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
+
+  doc.addPage();
+  drawPermitPageHeader(paraRw1);
+  y = 62;
+
+  y = drawWrappedParagraph(doc, paraRw2, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, paraRw3, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, paraRw4, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, paraRw5, leftX, y, maxWidth);
+
+  if (y > 236) {
+    doc.addPage();
+    y = 30;
+  }
+
+  doc.text("Umukono: …………………..", leftX, y);
+  y += 12;
+
+  doc.setFont("times", "bold");
+  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
+  y += 6;
+  doc.setFont("times", "normal");
+  doc.text("Umuyobozi Mukuru", leftX, y);
+  doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
@@ -2179,57 +2380,69 @@ export const generateTermsConditionsPdfBlob = async (opts: {
   const lineHeight = 5;
   const sectionSpacing = 8;
 
-  // Filter out Kinyarwanda sections for the English version (display English only)
-  const englishSections = termsSections.filter((section) => {
-    const t = section.title.trim().toLowerCase();
-    return !(
-      t.includes('kinyarwanda') ||
-      t.startsWith('amasezerano') ||
-      t.startsWith('igice') ||
-      t.startsWith('ingingo') ||
-      t.startsWith('imikono') ||
-      t.startsWith('ibisobanuro')
-    );
-  }).filter((section) => !isSignatureSectionTitle(section.title));
+  const { englishSections, kinyarwandaSections } = splitContractSectionsByLanguage(termsSections);
+  const sectionGroups = [
+    {
+      key: "en",
+      label: "English Version",
+      sections: englishSections.filter((section) => !isSignatureSectionTitle(section.title)),
+    },
+    {
+      key: "rw",
+      label: "Kinyarwanda Version",
+      sections: kinyarwandaSections.filter((section) => !isSignatureSectionTitle(section.title)),
+    },
+  ].filter((group) => group.sections.length > 0);
 
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
 
-  // Render each section
-  for (const section of englishSections) {
-    // Check if we need a new page
-    if (currentY > 260) {
+  // Render each language group separately to keep English and Kinyarwanda distinct.
+  for (const [groupIndex, group] of sectionGroups.entries()) {
+    if (groupIndex > 0) {
       doc.addPage();
       currentY = 20;
     }
 
-    // Section title
-    doc.setFont("times", "bold");
-    const titleLines = doc.splitTextToSize(section.title, maxWidth);
-    doc.text(titleLines, leftX, currentY);
-    currentY += titleLines.length * lineHeight + 2;
+    if (sectionGroups.length > 1) {
+      doc.setFont("times", "bold");
+      doc.setFontSize(11);
+      doc.text(group.label, leftX, currentY);
+      currentY += 8;
+      doc.setFontSize(10);
+    }
 
-    // Section paragraphs
-    doc.setFont("times", "normal");
-    for (const paragraph of section.paragraphs) {
-      if (!paragraph.trim()) {
-        currentY += lineHeight / 2;
-        continue;
-      }
-
-      // Check if we need a new page
-      if (currentY > 270) {
+    for (const section of group.sections) {
+      if (currentY > 260) {
         doc.addPage();
         currentY = 20;
       }
 
-      const renderedParagraph = normalizeSignatureDateLine(paragraph);
-      const lines = doc.splitTextToSize(renderedParagraph, maxWidth);
-      doc.text(lines, leftX, currentY);
-      currentY += lines.length * lineHeight + 2;
-    }
+      doc.setFont("times", "bold");
+      const titleLines = doc.splitTextToSize(section.title, maxWidth);
+      doc.text(titleLines, leftX, currentY);
+      currentY += titleLines.length * lineHeight + 2;
 
-    currentY += sectionSpacing;
+      doc.setFont("times", "normal");
+      for (const paragraph of section.paragraphs) {
+        if (!paragraph.trim()) {
+          currentY += lineHeight / 2;
+          continue;
+        }
+
+        if (currentY > 270) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        const renderedParagraph = normalizeSignatureDateLine(paragraph);
+        const lines = doc.splitTextToSize(renderedParagraph, maxWidth);
+        doc.text(lines, leftX, currentY);
+        currentY += lines.length * lineHeight + 2;
+      }
+
+      currentY += sectionSpacing;
+    }
   }
 
   // Important Notice

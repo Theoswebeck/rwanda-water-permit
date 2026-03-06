@@ -121,6 +121,7 @@ const applicationFormSchema = z.object({
   categoryApplicant: z.enum(["individual", "company", "cooperative", "organization", "institution", "ngo_association", "other"]),
   categoryApplicantOther: z.string().optional(),
   nameRepresentative: z.string().optional(),
+  representativePosition: z.string().optional(),
   
   // Office Address
   officeProvince: z.string().min(1, { message: "Province is required" }),
@@ -382,6 +383,15 @@ const applicationFormSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["nameRepresentative"],
         message: "Name of the Representative is required for Company, Cooperative, Organization, or Institution.",
+      });
+    }
+
+    const repPosition = String(data.representativePosition ?? "").trim();
+    if (repPosition === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["representativePosition"],
+        message: "Representative position/title is required for Company, Cooperative, Organization, or Institution.",
       });
     }
   }
@@ -646,6 +656,7 @@ function computeModificationChanges(
     'fullNameApplicant',
     'categoryApplicant',
     'nameRepresentative',
+    'representativePosition',
     'officeProvince',
     'officeDistrict',
     'officeSector',
@@ -710,6 +721,7 @@ const FIELD_LABELS: Record<string, string> = {
   fullNameApplicant: 'Full Name',
   categoryApplicant: 'Applicant Category',
   nameRepresentative: 'Representative Name',
+  representativePosition: 'Representative Position/Title',
   officeProvince: 'Office Province',
   officeDistrict: 'Office District',
   officeSector: 'Office Sector',
@@ -1002,6 +1014,7 @@ export function ApplicationForm({
       categoryApplicant: "individual",
       categoryApplicantOther: "",
       nameRepresentative: "",
+      representativePosition: "",
       officeProvince: "",
       officeDistrict: "",
       officeSector: "",
@@ -2984,24 +2997,45 @@ export function ApplicationForm({
 
                   {/* 3. Name of Representative */}
                   {["company", "cooperative", "organization", "institution"].includes(watchedCategoryApplicant) && (
-                    <FormField
-                      control={form.control}
-                      name="nameRepresentative"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-base font-medium">
-                            3. Name of the Representative *
-                            <span className="text-sm font-normal text-muted-foreground block">
-                              (for Company, Cooperative, Organization, Institution)
-                            </span>
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter representative name" })} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <FormField
+                        control={form.control}
+                        name="nameRepresentative"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-medium">
+                              3. Name of the Representative *
+                              <span className="text-sm font-normal text-muted-foreground block">
+                                (for Company, Cooperative, Organization, Institution)
+                              </span>
+                            </FormLabel>
+                            <FormControl>
+                              <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter representative name" })} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="representativePosition"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-base font-medium">
+                              3a. Representative Position / Title *
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                {...getInputProps({ value: field.value || "", placeholder: "Enter representative position or title" })}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   )}
 
                   {/* 4. Documents */}

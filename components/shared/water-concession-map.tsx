@@ -219,7 +219,7 @@ export function LegacyWaterConcessionMap() {
         <CardContent className="flex items-center justify-center h-full">
           <div className="flex flex-col items-center space-y-4">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-muted-foreground">Loading water concession map...</p>
+            <p className="text-muted-foreground">Loading consolidated map...</p>
           </div>
         </CardContent>
       </Card>

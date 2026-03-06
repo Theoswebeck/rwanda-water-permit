@@ -43,7 +43,6 @@ interface AssessmentApplication extends Application {
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const ASSESSOR_CHIPS: StatusChipDef[] = [
-  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
   { id: "pending_assessment", label: "Pending Assessment", statuses: ["pending_assessment"], priority: "primary" },
   { id: "under_assessment", label: "Under Assessment", statuses: ["under_review"], priority: "primary" },
   { id: "returned_to_applicant", label: "Returned to Applicant", statuses: ["revision_required"], priority: "primary" },
@@ -54,6 +53,7 @@ const ASSESSOR_CHIPS: StatusChipDef[] = [
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
 export default function AssessmentDashboard() {
@@ -66,7 +66,7 @@ export default function AssessmentDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports" | "permit-registry">("assessment");
-  const [activeChipId, setActiveChipId] = useState(ASSESSOR_CHIPS[0].id);
+  const [activeChipId, setActiveChipId] = useState("pending_assessment");
   const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
@@ -463,7 +463,7 @@ export default function AssessmentDashboard() {
                     <TabsTrigger value="all_applications">Applications</TabsTrigger>
                     <TabsTrigger value="map" className="flex items-center gap-2">
                       <MapPin className="h-4 w-4" />
-                      Concession Map
+                      Consolidated Map
                     </TabsTrigger>
                   </TabsList>
 

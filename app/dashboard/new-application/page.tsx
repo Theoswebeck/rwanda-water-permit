@@ -207,7 +207,6 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       if (isTransferForm) {
         req.add("certifiedLetter");
         req.add("registrationCertificate");
-        req.add("existingPermitCopy");
       }
       return req;
     })();

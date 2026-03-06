@@ -140,7 +140,7 @@ export function InspectionDashboard() {
               </TabsTrigger>
               <TabsTrigger value="map" className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
-                Concession Map
+                Consolidated Map
               </TabsTrigger>
             </TabsList>
             <TabsContent value="assessments" className="mt-6">

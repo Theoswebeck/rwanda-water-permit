@@ -23,12 +23,12 @@ import { ProtectedRoute } from "@/components/auth/protected-route";
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const APPROVER_CHIPS: StatusChipDef[] = [
-  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
   { id: "pending_approval", label: "Pending Approval", statuses: ["pending_final_approval"], priority: "primary" },
   { id: "returned_to_verifier", label: "Returned to Verifier", statuses: ["returned_to_verification"], priority: "secondary" },
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "secondary" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
 export default function ApproverDashboard() {
@@ -36,7 +36,7 @@ export default function ApproverDashboard() {
     v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry";
   const [loading, setLoading] = useState(true);
   const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports" | "permit-registry">("approval");
-  const [activeChipId, setActiveChipId] = useState(APPROVER_CHIPS[0].id);
+  const [activeChipId, setActiveChipId] = useState("pending_approval");
   const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
   // All applications for chip count computation
   const [allApplications, setAllApplications] = useState<Application[]>([]);
@@ -143,7 +143,7 @@ export default function ApproverDashboard() {
                   <TabsTrigger value="all_applications">Applications</TabsTrigger>
                   <TabsTrigger value="map" className="flex items-center gap-2">
                     <MapPin className="h-4 w-4" />
-                    Concession Map
+                    Consolidated Map
                   </TabsTrigger>
                 </TabsList>
 

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { query } from "@/lib/db/postgres";
+import {
+  consolidatePermitRecords,
+  createConsolidatedPermitFromPermit,
+  createConsolidatedPermitFromRegistry,
+  type ConsolidatedPermitRecord,
+  type PermitDashboardPermitRow,
+  type PermitDashboardRegistryRow,
+} from "@/lib/permit/consolidated-permit-records";
 
 const QuerySchema = z.object({
   // shared filters
@@ -67,6 +75,8 @@ function labelPurpose(purpose: string) {
     electricity_generation: "Hydropower",
     mining: "Mining",
     aquaculture: "Fish farming",
+    fish_farming_lakes: "Fish farming (lakes)",
+    fish_farming_ponds: "Fish farming (ponds)",
     recreation: "Recreation",
     municipal_supply: "Municipal supply",
     livestock: "Livestock",
@@ -78,11 +88,15 @@ function labelPurpose(purpose: string) {
 function labelWaterSource(source: string) {
   const map: Record<string, string> = {
     river: "Stream/River",
+    stream: "Stream/River",
     lake: "Lake",
     groundwater: "Groundwater",
     borehole: "Groundwater (Borehole)",
     surface_water: "Dam/Reservoir",
+    dam: "Dam/Reservoir",
+    reservoir: "Dam/Reservoir",
     spring: "Spring",
+    wetland: "Wetland",
     other: "Other",
   };
   return map[source] || source;
@@ -128,29 +142,11 @@ export async function GET(req: NextRequest) {
     const to = parseDate(toRaw);
     const today = new Date();
 
-    // Single query for all required public dashboard data.
-    // NOTE: We intentionally DO NOT expose raw volumes in the response.
-    const permitsRes = await query<{
-      id: string;
-      permit_number: string;
-      status: string;
-      water_source: string;
-      purpose: string;
-      water_allowance: string | number | null;
-      allowance_unit: string | null;
-      issued_date: string | null;
-      expiry_date: string | null;
-      created_at: string | null;
-      province: string | null;
-      district: string | null;
-      sector: string | null;
-      catchment_name_level_1: string | null;
-      catchment_name_level_2: string | null;
-      coordinates: { type?: string; coordinates?: [number, number] } | null;
-    }>(
+    const permitsRes = await query<PermitDashboardPermitRow>(
       `
       select
         p.id,
+        p.application_id,
         p.permit_number,
         p.status::text as status,
         p.water_source::text as water_source,
@@ -160,40 +156,88 @@ export async function GET(req: NextRequest) {
         p.issued_date::text as issued_date,
         p.expiry_date::text as expiry_date,
         p.created_at::text as created_at,
+        p.updated_at::text as updated_at,
         a.province::text as province,
         a.district,
         a.sector,
         a.catchment_name_level_1,
         a.catchment_name_level_2,
-        st_asgeojson(a.coordinates)::jsonb as coordinates
+        coalesce(a.project_title, '') as permit_holder,
+        concat_ws(', ', a.district, a.sector, a.province::text) as location,
+        case
+          when coalesce(p.coordinates, a.coordinates) is null then null
+          else st_y(st_centroid(coalesce(p.coordinates, a.coordinates)))
+        end as lat,
+        case
+          when coalesce(p.coordinates, a.coordinates) is null then null
+          else st_x(st_centroid(coalesce(p.coordinates, a.coordinates)))
+        end as lng
       from public.permits p
       left join public.applications a on a.id = p.application_id
       `
     );
 
+    const registryRes = await query<PermitDashboardRegistryRow>(
+      `
+      select
+        pr.id,
+        pr.permit_number,
+        pr.status,
+        pr.water_source,
+        pr.authorized_activity,
+        pr.volume_or_area,
+        pr.issuance_date::text as issuance_date,
+        pr.expiration_date::text as expiration_date,
+        pr.created_at::text as created_at,
+        pr.updated_at::text as updated_at,
+        pr.latitude,
+        pr.longitude,
+        pr.permit_holder,
+        pr.location
+      from public.permit_registry pr
+      `
+    );
+
+    const consolidated = consolidatePermitRecords(
+      [
+        ...permitsRes.rows.map(createConsolidatedPermitFromPermit),
+        ...registryRes.rows.map(createConsolidatedPermitFromRegistry),
+      ].filter((record): record is ConsolidatedPermitRecord => Boolean(record))
+    );
+
     const qLower = q?.toLowerCase().trim();
 
-    const filtered = permitsRes.rows.filter((p) => {
+    const filtered = consolidated.filter((p) => {
       if (!includeExpired) {
-        const exp = p.expiry_date ? new Date(p.expiry_date) : null;
+        const exp = p.expiryDate ? new Date(p.expiryDate) : null;
         if (exp && exp <= today) return false;
       }
       if (status && status !== "all" && String(p.status) !== status) return false;
-      if (water_source && water_source !== "all" && String(p.water_source) !== water_source) return false;
+      if (water_source && water_source !== "all" && String(p.waterSource) !== water_source) return false;
       if (purpose && purpose !== "all" && String(p.purpose) !== purpose) return false;
 
       if (province && province !== "all" && String(p.province) !== province) return false;
       if (district && district !== "all" && String(p.district ?? "").toLowerCase() !== district.toLowerCase()) return false;
       if (sector && sector !== "all" && String(p.sector ?? "").toLowerCase() !== sector.toLowerCase()) return false;
 
-      const issued = p.issued_date ? new Date(p.issued_date) : p.created_at ? new Date(p.created_at) : undefined;
+      const issued = p.issuedDate ? new Date(p.issuedDate) : p.createdAt ? new Date(p.createdAt) : undefined;
       if (issued) {
         if (from && issued < from) return false;
         if (to && issued > to) return false;
       }
 
       if (qLower) {
-        const hay = `${p.permit_number} ${p.district ?? ""} ${p.sector ?? ""} ${p.catchment_name_level_1 ?? ""} ${p.catchment_name_level_2 ?? ""}`.toLowerCase();
+        const hay = [
+          p.permitNumber,
+          p.district ?? "",
+          p.sector ?? "",
+          p.catchment1 ?? "",
+          p.catchment2 ?? "",
+          p.permitHolder ?? "",
+          p.locationSummary ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
         if (!hay.includes(qLower)) return false;
       }
 
@@ -213,14 +257,14 @@ export async function GET(req: NextRequest) {
       return acc;
     }, {});
     const waterSourceCounts = filtered.reduce((acc: Record<string, number>, p) => {
-      const k = String(p.water_source);
+      const k = String(p.waterSource);
       acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});
 
     const trendMap: Record<string, number> = {};
     for (const p of filtered) {
-      const issued = p.issued_date ? new Date(p.issued_date) : p.created_at ? new Date(p.created_at) : undefined;
+      const issued = p.issuedDate ? new Date(p.issuedDate) : p.createdAt ? new Date(p.createdAt) : undefined;
       if (!issued) continue;
       const k = monthKey(issued);
       trendMap[k] = (trendMap[k] || 0) + 1;
@@ -263,49 +307,46 @@ export async function GET(req: NextRequest) {
 
     // Map points (public-safe, no volumes)
     const points = filtered
-      .filter((p) => Boolean(p.coordinates))
+      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
       .map((p) => {
-        const coords = p.coordinates;
-        const lng = coords?.coordinates?.[0] ?? null;
-        const lat = coords?.coordinates?.[1] ?? null;
-        const m3Day = convertAllowanceToM3PerDay(Number(p.water_allowance || 0), p.allowance_unit);
+        const m3Day = convertAllowanceToM3PerDay(Number(p.waterAllowance || 0), p.allowanceUnit);
         const intensity = bucketFromM3PerDay(m3Day);
 
         return {
-          permitId: p.id,
-          permitNumber: p.permit_number,
+          permitId: p.permitId,
+          permitNumber: p.permitNumber,
           status: p.status,
-          waterSource: p.water_source,
+          waterSource: p.waterSource,
           useType: p.purpose,
           province: p.province ?? null,
           district: p.district ?? null,
           sector: p.sector ?? null,
-          catchment1: p.catchment_name_level_1 ?? null,
-          catchment2: p.catchment_name_level_2 ?? null,
-          lat,
-          lng,
+          catchment1: p.catchment1 ?? null,
+          catchment2: p.catchment2 ?? null,
+          lat: p.lat,
+          lng: p.lng,
           intensity,
-          issuedDate: p.issued_date,
-          expiryDate: p.expiry_date,
+          issuedDate: p.issuedDate,
+          expiryDate: p.expiryDate,
         };
       });
 
     // Registry (non-confidential fields only) – paginated view
     const registryItems = filtered.slice(offset, offset + limit).map((p) => {
       return {
-        permitId: p.id,
-        permitNumber: p.permit_number,
+        permitId: p.permitId,
+        permitNumber: p.permitNumber,
         status: p.status,
-        waterSource: p.water_source,
+        waterSource: p.waterSource,
         useType: p.purpose,
         province: p.province ?? null,
         district: p.district ?? null,
         sector: p.sector ?? null,
-        catchment1: p.catchment_name_level_1 ?? null,
-        catchment2: p.catchment_name_level_2 ?? null,
-        issuedDate: p.issued_date,
-        expiryDate: p.expiry_date,
-        duration: durationLabel(p.issued_date, p.expiry_date),
+        catchment1: p.catchment1 ?? null,
+        catchment2: p.catchment2 ?? null,
+        issuedDate: p.issuedDate,
+        expiryDate: p.expiryDate,
+        duration: durationLabel(p.issuedDate, p.expiryDate),
       };
     });
 

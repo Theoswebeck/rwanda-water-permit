@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { contractTermsByVariant } from "@/lib/contract-terms";
+import { contractTermsByVariant, splitContractSectionsByLanguage } from "@/lib/contract-terms";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,25 +44,42 @@ export default async function PublicContractTermsPage({
     variantOverride ?? inferredVariant ?? "abstraction_individual";
 
   const terms = contractTermsByVariant[variant] ?? null;
-  const languageMarkerIndex =
-    terms?.sections.findIndex((section) => section.title.includes("(Kinyarwanda version)")) ?? -1;
-  const sectionsBeforeLanguageMarker =
-    languageMarkerIndex >= 0 ? terms?.sections.slice(0, languageMarkerIndex) ?? [] : terms?.sections ?? [];
-  const displaySections = sectionsBeforeLanguageMarker.filter(
-    (section) => !section.title.toLowerCase().includes("signatures") && !section.title.toLowerCase().includes("imikono")
-  );
+  const isSignatureSection = (title: string) => {
+    const normalized = title.trim().toLowerCase();
+    return normalized.includes("signature") || normalized.includes("imikono");
+  };
+  const displaySectionGroups = terms
+    ? (() => {
+        const { englishSections, kinyarwandaSections } = splitContractSectionsByLanguage(terms.sections);
+        return [
+          {
+            key: "en",
+            label: "English Version",
+            sections: englishSections.filter((section) => !isSignatureSection(section.title)),
+          },
+          {
+            key: "rw",
+            label: "Kinyarwanda Version",
+            sections: kinyarwandaSections.filter((section) => !isSignatureSection(section.title)),
+          },
+        ].filter((group) => group.sections.length > 0);
+      })()
+    : [];
 
   const placeholderCtx = application
     ? buildContractPlaceholderContext(application, application.application_number)
     : null;
 
-  const filledSections = displaySections.map((section) => ({
-    title: section.title,
-    paragraphs: section.paragraphs.map((p) => {
-      const filled = placeholderCtx ? fillContractText(p, placeholderCtx) : p;
-      if (!isTermsRejected || !placeholderCtx || placeholderCtx.contractNumber === "N/A") return filled;
-      return filled.replaceAll(placeholderCtx.contractNumber, "[Hidden until terms are accepted]");
-    }),
+  const filledSectionGroups = displaySectionGroups.map((group) => ({
+    ...group,
+    sections: group.sections.map((section) => ({
+      title: section.title,
+      paragraphs: section.paragraphs.map((p) => {
+        const filled = placeholderCtx ? fillContractText(p, placeholderCtx) : p;
+        if (!isTermsRejected || !placeholderCtx || placeholderCtx.contractNumber === "N/A") return filled;
+        return filled.replaceAll(placeholderCtx.contractNumber, "[Hidden until terms are accepted]");
+      }),
+    })),
   }));
 
   const importantNotice = terms?.importantNotice
@@ -140,16 +157,26 @@ export default async function PublicContractTermsPage({
                     ) : null}
                   </div>
 
-                  {filledSections.map((section, idx) => (
-                    <div key={`${section.title}-${idx}`} className="space-y-2">
-                      <h2 className="text-sm font-semibold text-slate-900">{section.title}</h2>
-                      <div className="space-y-2 text-sm text-slate-700">
-                        {section.paragraphs.map((p, pIdx) => (
-                          <p key={pIdx} className="whitespace-pre-wrap leading-relaxed">
-                            {p}
-                          </p>
-                        ))}
-                      </div>
+                  {filledSectionGroups.map((group) => (
+                    <div key={group.key} className="space-y-4">
+                      {filledSectionGroups.length > 1 ? (
+                        <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900">
+                          {group.label}
+                        </div>
+                      ) : null}
+
+                      {group.sections.map((section, idx) => (
+                        <div key={`${group.key}-${section.title}-${idx}`} className="space-y-2">
+                          <h2 className="text-sm font-semibold text-slate-900">{section.title}</h2>
+                          <div className="space-y-2 text-sm text-slate-700">
+                            {section.paragraphs.map((p, pIdx) => (
+                              <p key={pIdx} className="whitespace-pre-wrap leading-relaxed">
+                                {p}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ))}
 

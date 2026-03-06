@@ -92,7 +92,6 @@ interface StaffMember {
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const REVIEWER_CHIPS: StatusChipDef[] = [
-  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
   { id: "new_submissions", label: "New Submissions", statuses: ["submitted"], priority: "primary" },
   { id: "with_assessors", label: "With Assessors", statuses: ["pending_assessment", "under_review"], priority: "secondary" },
   { id: "pending_review", label: "Pending Review", statuses: ["pending_review"], priority: "primary" },
@@ -103,6 +102,7 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
 export default function ReviewerDashboard() {
@@ -114,7 +114,7 @@ export default function ReviewerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingReview, setStartingReview] = useState<string | null>(null);
-  const [activeChipId, setActiveChipId] = useState(REVIEWER_CHIPS[0].id);
+  const [activeChipId, setActiveChipId] = useState("new_submissions");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
   const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
   const [busyAction, setBusyAction] = useState<{ appId: string; kind: "permit_pdf" | "terms_pdf" } | null>(null);

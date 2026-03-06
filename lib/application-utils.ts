@@ -333,6 +333,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       categoryApplicant: formData.categoryApplicant,
       categoryApplicantOther: formData.categoryApplicantOther,
       nameRepresentative: formData.nameRepresentative,
+      representativePosition: formData.representativePosition,
       
       // Office Address
       officeProvince: formData.officeProvince,

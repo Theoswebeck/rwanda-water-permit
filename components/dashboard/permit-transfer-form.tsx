@@ -132,7 +132,6 @@ const transferFormSchema = z.object({
   certifiedLetter: z.any().optional(),
   notifiedAgreement: z.any().optional(),
   registrationCertificate: z.any().optional(),
-  existingPermitCopy: z.any().optional(),
 });
 
 type TransferFormValues = z.infer<typeof transferFormSchema>;
@@ -201,7 +200,6 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     certifiedLetter: useRef<HTMLInputElement>(null),
     notifiedAgreement: useRef<HTMLInputElement>(null),
     registrationCertificate: useRef<HTMLInputElement>(null),
-    existingPermitCopy: useRef<HTMLInputElement>(null),
   };
 
   // State for cascading dropdowns - Transferee Address
@@ -299,7 +297,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       // Part 1: Permit Particulars (from permit)
       permitNumber: permit.permit_number || '',
       effectiveDate: permit.issued_date?.split('T')[0] || '',
-      expirationDate: permit.expiry_date?.split('T')[0] || '',
+      expirationDate: isManualPermit ? '' : (permit.expiry_date?.split('T')[0] || ''),
       facilityProjectName: permit.application?.project_title || '',
       permitLocationProvince: waterSourceProvince,
       permitLocationDistrict: waterSourceDistrict,
@@ -349,7 +347,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     };
 
     return { ...defaults, ...initialData };
-  }, [permit, transferorProfileDefaults, initialData]);
+  }, [permit, transferorProfileDefaults, initialData, isManualPermit]);
 
   const form = useForm<TransferFormValues>({
     resolver: zodResolver(transferFormSchema),
@@ -688,22 +686,17 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     const hasCertifiedLetter = files.certifiedLetter || uploadedFileUrls.certifiedLetter;
     const hasNotifiedAgreement = files.notifiedAgreement || uploadedFileUrls.notifiedAgreement;
     const hasRegistration = files.registrationCertificate || uploadedFileUrls.registrationCertificate;
-    const hasExistingPermit = files.existingPermitCopy || uploadedFileUrls.existingPermitCopy;
 
     if (!hasCertifiedLetter) {
-      setValidationError("Certified letter is required.");
+      setValidationError("Permit transfer letter of request is required.");
       return false;
     }
     if (!hasNotifiedAgreement) {
-      setValidationError("Notified agreement with the Transferee is required.");
+      setValidationError("Agreement between Transferor and Transferee is required.");
       return false;
     }
     if (!hasRegistration) {
-      setValidationError("Registration certificate is required.");
-      return false;
-    }
-    if (!hasExistingPermit) {
-      setValidationError("Copy of existing permit is required.");
+      setValidationError("New owner's registration certificate or ID is required.");
       return false;
     }
 
@@ -2131,11 +2124,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     <AlertTitle className="text-blue-900">Required Documents for Water Permit Transfer</AlertTitle>
                     <AlertDescription className="text-blue-800">
                       <ul className="mt-2 space-y-1 list-disc list-inside">
-                        <li>Application Letter (stating reasons for transfer and the names of the new holder)</li>
-                        <li>Notified Agreement between the Transferor and Transferee</li>
+                        <li>Permit Transfer Letter of Request</li>
+                        <li>Agreement between Transferor and Transferee, signed and notified by both parties</li>
                         <li>A well-filled and signed transfer form</li>
-                        <li>Registration Certificate of Transferee (New Owner)</li>
-                        <li>Copy of existing water use permit and its corresponding contract</li>
+                        <li>New owner's registration certificate or ID</li>
                       </ul>
                       <p className="mt-2 text-sm italic">Note: Transfer fee payment is handled in the next step via IremboPay.</p>
                     </AlertDescription>
@@ -2144,30 +2136,20 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <DocumentUploadField
                       fieldName="certifiedLetter"
-                      label="Certified Letter"
+                      label="Permit Transfer Letter of Request"
                       required
-                      description="A notarized transfer agreement"
                     />
 
                     <DocumentUploadField
                       fieldName="notifiedAgreement"
-                      label="Notified Agreement with Transferee"
+                      label="Agreement between Transferor and Transferee, signed and notified by both parties"
                       required
-                      description="Agreement between Transferor and Transferee, signed and notified by both parties"
                     />
 
                     <DocumentUploadField
                       fieldName="registrationCertificate"
-                      label="Registration Certificate of Transferee"
+                      label="New owner's registration certificate or ID"
                       required
-                      description="New owner's registration certificate or ID"
-                    />
-
-                    <DocumentUploadField
-                      fieldName="existingPermitCopy"
-                      label="Copy of Existing Permit and Contract"
-                      required
-                      description="The current water use permit and corresponding contract"
                     />
                   </div>
 

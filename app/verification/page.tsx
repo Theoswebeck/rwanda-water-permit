@@ -35,7 +35,6 @@ interface VerificationApplication extends Application {
 
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const VERIFIER_CHIPS: StatusChipDef[] = [
-  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
   { id: "pending_verification", label: "Pending Verification", statuses: ["pending_verification"], priority: "primary" },
   { id: "returned_to_reviewer", label: "Returned to Reviewer", statuses: ["returned_to_review"], priority: "secondary" },
   { id: "pending_approval", label: "Pending Approval", statuses: ["pending_final_approval"], priority: "secondary" },
@@ -43,6 +42,7 @@ const VERIFIER_CHIPS: StatusChipDef[] = [
   { id: "awaiting_terms", label: "Awaiting Terms", statuses: ["approved_pending_permit"], priority: "downstream" },
   { id: "issued", label: "Approved", statuses: ["approved"], priority: "downstream" },
   { id: "rejected", label: "Rejected", statuses: ["rejected"], priority: "downstream" },
+  { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
 export default function VerificationDashboard() {
@@ -52,7 +52,7 @@ export default function VerificationDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports" | "permit-registry">("verification");
-  const [activeChipId, setActiveChipId] = useState(VERIFIER_CHIPS[0].id);
+  const [activeChipId, setActiveChipId] = useState("pending_verification");
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
@@ -363,7 +363,7 @@ export default function VerificationDashboard() {
                       <TabsTrigger value="all_applications">Applications</TabsTrigger>
                       <TabsTrigger value="map" className="flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
-                        Concession Map
+                        Consolidated Map
                       </TabsTrigger>
                     </TabsList>
 

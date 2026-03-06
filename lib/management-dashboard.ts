@@ -1,7 +1,15 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
-import type { Application, Inspection, Permit, ProvinceType, WaterPurpose, WaterSourceType } from "@/types/database";
+import {
+  consolidatePermitRecords,
+  createConsolidatedPermitFromPermit,
+  createConsolidatedPermitFromRegistry,
+  type ConsolidatedPermitRecord,
+  type PermitDashboardPermitRow,
+  type PermitDashboardRegistryRow,
+} from "@/lib/permit/consolidated-permit-records";
+import type { Application, Inspection, Permit, ProvinceType } from "@/types/database";
 import type { ManagementDashboardFilters } from "@/hooks/useManagementDashboardQuery";
 
 type KeyCount = { key: string; label: string; count: number; percentage: number };
@@ -10,6 +18,14 @@ type KeyCountNoPct = { key: string; label: string; count: number };
 
 type AlertSeverity = "low" | "medium" | "high";
 type AlertType = "over_abstraction" | "expired_permit" | "non_reporting" | "other";
+type PortalFeedbackRow = {
+  id: string;
+  application_id: string | null;
+  rating: number | null;
+  feedback_text: string | null;
+  feedback_type: string | null;
+  created_at: string;
+};
 
 export type ManagementDashboardData = {
   portfolio: {
@@ -78,6 +94,26 @@ export type ManagementDashboardData = {
       subtitle: string;
     }>;
   };
+  feedback: {
+    totalSubmissions: number;
+    averageRating: number | null;
+    ratingBreakdown: Array<{
+      rating: number;
+      count: number;
+    }>;
+    recent: Array<{
+      id: string;
+      applicationId: string | null;
+      applicationNumber: string | null;
+      projectTitle: string | null;
+      province: string | null;
+      district: string | null;
+      sector: string | null;
+      rating: number | null;
+      feedbackText: string | null;
+      createdAt: string;
+    }>;
+  };
 };
 
 function parseDateMaybe(value?: string) {
@@ -96,11 +132,15 @@ function withinDateRange(date: Date | undefined, from: Date | undefined, to: Dat
 function labelWaterSource(source: string): string {
   const map: Record<string, string> = {
     river: "Stream/River",
+    stream: "Stream/River",
     lake: "Lake",
     groundwater: "Groundwater",
     borehole: "Groundwater (Borehole)",
     surface_water: "Dam/Reservoir",
+    dam: "Dam/Reservoir",
+    reservoir: "Dam/Reservoir",
     spring: "Spring",
+    wetland: "Wetland",
     other: "Other",
   };
   return map[source] || source;
@@ -114,6 +154,8 @@ function labelWaterPurpose(purpose: string): string {
     electricity_generation: "Hydropower",
     mining: "Mining",
     aquaculture: "Fish farming",
+    fish_farming_lakes: "Fish farming (lakes)",
+    fish_farming_ponds: "Fish farming (ponds)",
     recreation: "Recreation",
     municipal_supply: "Municipal supply",
     livestock: "Livestock",
@@ -160,11 +202,18 @@ function convertAllowanceToM3PerDay(value: number, unitRaw: string | null | unde
   return null;
 }
 
-function sumPermittedM3PerDay(permits: Permit[]) {
+function sumPermittedM3PerDay(permits: Array<{ waterAllowance: number | null; allowanceUnit: string | null }>) {
   return permits.reduce((sum, p) => {
-    const converted = convertAllowanceToM3PerDay(p.water_allowance, p.allowance_unit);
+    const converted = convertAllowanceToM3PerDay(p.waterAllowance ?? Number.NaN, p.allowanceUnit);
     return sum + (converted ?? 0);
   }, 0);
+}
+
+function permitAlertLocation(permit: ConsolidatedPermitRecord): string {
+  if (permit.district || permit.sector) {
+    return `${permit.district ?? "N/A"}, ${permit.sector ?? "N/A"}`;
+  }
+  return permit.locationSummary || permit.permitHolder || "N/A";
 }
 
 function uniqueLatestCompletedInspectionsByApplication(inspections: Inspection[]): Map<string, Inspection> {
@@ -223,7 +272,7 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
   const { data: applicationsRaw, error: appsError } = await supabase
     .from("applications")
     .select(
-      "id,status,province,district,sector,catchment_name_level_1,catchment_name_level_2,water_source,water_purpose,created_at,submitted_at"
+      "id,application_number,project_title,status,province,district,sector,catchment_name_level_1,catchment_name_level_2,water_source,water_purpose,created_at,submitted_at"
     )
     .order("created_at", { ascending: false });
 
@@ -268,20 +317,69 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
     if (!isMissingRelationError(permitsError, "permits")) {
       throw permitsError;
     }
-    // eslint-disable-next-line no-console
     console.warn("ℹ️ management-dashboard: permits table missing; permit metrics will be empty until created.");
   } else {
     permitsAll = (permitsRaw || []) as unknown as Permit[];
   }
 
-  const permits = permitsAll.filter((p) => {
-    if (!applicationIdSet.has(p.application_id)) return false;
-    // Date scoping: use issued_date when present
-    const issued = p.issued_date ? new Date(p.issued_date) : undefined;
-    if ((from || to) && issued && !withinDateRange(issued, from, to)) {
-      // NOTE: if issued_date exists and is out of range, exclude
-      return false;
+  let registryAll: PermitDashboardRegistryRow[] = [];
+  const { data: registryRaw, error: registryError } = await supabase
+    .from("permit_registry")
+    .select("id,permit_number,status,water_source,authorized_activity,volume_or_area,issuance_date,expiration_date,created_at,updated_at,latitude,longitude,permit_holder,location")
+    .order("created_at", { ascending: false });
+
+  if (registryError) {
+    if (!isMissingRelationError(registryError, "permit_registry")) {
+      throw registryError;
     }
+    console.warn("ℹ️ management-dashboard: permit_registry table missing; registry-backed permit metrics will be empty.");
+  } else {
+    registryAll = (registryRaw || []) as PermitDashboardRegistryRow[];
+  }
+
+  const permitDashboardRows: PermitDashboardPermitRow[] = permitsAll.map((permit) => {
+    const app = applicationById.get(permit.application_id);
+    return {
+      id: permit.id,
+      application_id: permit.application_id,
+      permit_number: permit.permit_number,
+      status: permit.status,
+      water_source: permit.water_source,
+      purpose: permit.purpose,
+      water_allowance: permit.water_allowance,
+      allowance_unit: permit.allowance_unit,
+      issued_date: permit.issued_date,
+      expiry_date: permit.expiry_date,
+      created_at: permit.created_at,
+      updated_at: permit.updated_at,
+      province: app?.province ?? null,
+      district: app?.district ?? null,
+      sector: app?.sector ?? null,
+      catchment_name_level_1: app?.catchment_name_level_1 ?? null,
+      catchment_name_level_2: app?.catchment_name_level_2 ?? null,
+      lat: null,
+      lng: null,
+      permit_holder: app?.project_title ?? null,
+      location: [app?.district, app?.sector, app?.province].filter(Boolean).join(", ") || null,
+    };
+  });
+
+  const permits = consolidatePermitRecords(
+    [
+      ...permitDashboardRows.map(createConsolidatedPermitFromPermit),
+      ...registryAll.map(createConsolidatedPermitFromRegistry),
+    ].filter((record): record is ConsolidatedPermitRecord => Boolean(record))
+  ).filter((permit) => {
+    if (filters.province !== "all" && permit.province !== filters.province) return false;
+    if (filters.district !== "all" && (permit.district || "").toLowerCase() !== String(filters.district).toLowerCase()) return false;
+    if (filters.sector !== "all" && (permit.sector || "").toLowerCase() !== String(filters.sector).toLowerCase()) return false;
+    if (filters.catchment1 !== "all" && (permit.catchment1 || "").toLowerCase() !== String(filters.catchment1).toLowerCase()) return false;
+    if (filters.catchment2 !== "all" && (permit.catchment2 || "").toLowerCase() !== String(filters.catchment2).toLowerCase()) return false;
+    if (filters.waterSource !== "all" && permit.waterSource !== filters.waterSource) return false;
+    if (filters.waterPurpose !== "all" && permit.purpose !== filters.waterPurpose) return false;
+
+    const permitDate = parseDateMaybe(permit.issuedDate || permit.createdAt || undefined);
+    if ((from || to) && permitDate && !withinDateRange(permitDate, from, to)) return false;
     return true;
   });
 
@@ -299,7 +397,6 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
     if (!isMissingRelationError(inspectionsError, "inspections")) {
       throw inspectionsError;
     }
-    // eslint-disable-next-line no-console
     console.warn("ℹ️ management-dashboard: inspections table missing; compliance metrics will be empty until created.");
   } else {
     inspectionsAll = (inspectionsRaw || []) as unknown as Inspection[];
@@ -309,6 +406,21 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
     if (!applicationIdSet.has(i.application_id)) return false;
     const date = i.completed_date ? new Date(i.completed_date) : new Date(i.created_at);
     if ((from || to) && !withinDateRange(date, from, to)) return false;
+    return true;
+  });
+
+  const { data: feedbackRaw, error: feedbackError } = await supabase
+    .from("portal_feedback")
+    .select("id,application_id,rating,feedback_text,feedback_type,created_at")
+    .eq("feedback_type", "terms_acceptance")
+    .order("created_at", { ascending: false });
+
+  if (feedbackError) throw feedbackError;
+
+  const feedbackEntries = ((feedbackRaw || []) as PortalFeedbackRow[]).filter((entry) => {
+    if (!entry.application_id || !applicationIdSet.has(entry.application_id)) return false;
+    const createdAt = parseDateMaybe(entry.created_at);
+    if ((from || to) && !withinDateRange(createdAt, from, to)) return false;
     return true;
   });
 
@@ -326,7 +438,7 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
 
   const totalPermits = permits.length;
   const newPermitsIssued = permits.filter((p) => {
-    const issued = p.issued_date ? new Date(p.issued_date) : undefined;
+    const issued = p.issuedDate ? new Date(p.issuedDate) : undefined;
     if (!issued) return false;
     if (from || to) return withinDateRange(issued, from, to);
 
@@ -343,7 +455,7 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
 
   const byWaterSourceMap = new Map<string, { key: string; label: string; count: number }>();
   for (const p of permits) {
-    const key = String(p.water_source);
+    const key = String(p.waterSource);
     const row = byWaterSourceMap.get(key) || { key, label: labelWaterSource(key), count: 0 };
     row.count += 1;
     byWaterSourceMap.set(key, row);
@@ -364,14 +476,11 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
   const bySectorMap = new Map<string, { key: string; label: string; count: number }>();
 
   for (const p of permits) {
-    const app = applicationById.get(p.application_id);
-    if (!app) continue;
-
-    const c1 = app.catchment_name_level_1 || "Unknown";
-    const c2 = app.catchment_name_level_2 || "Unknown";
-    const prov = labelProvince(app.province);
-    const dist = app.district || "Unknown";
-    const sect = app.sector || "Unknown";
+    const c1 = p.catchment1 || "Unknown";
+    const c2 = p.catchment2 || "Unknown";
+    const prov = labelProvince(p.province);
+    const dist = p.district || "Unknown";
+    const sect = p.sector || "Unknown";
 
     const r1 = byCatchment1Map.get(c1) || { key: c1, label: c1, count: 0 };
     r1.count += 1;
@@ -415,10 +524,8 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
 
   const permittedByCatchment: Record<string, number> = {};
   for (const p of permits) {
-    const app = applicationById.get(p.application_id);
-    if (!app) continue;
-    const c1 = app.catchment_name_level_1 || "Unknown";
-    const m3Day = convertAllowanceToM3PerDay(p.water_allowance, p.allowance_unit) ?? 0;
+    const c1 = p.catchment1 || "Unknown";
+    const m3Day = convertAllowanceToM3PerDay(p.waterAllowance ?? Number.NaN, p.allowanceUnit) ?? 0;
     permittedByCatchment[c1] = (permittedByCatchment[c1] || 0) + m3Day;
   }
   const maxCatchment = Math.max(0, ...Object.values(permittedByCatchment));
@@ -476,13 +583,12 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
   // Expired/expiring permits
   for (const p of permits) {
     if (p.status === "expired" || p.status === "expiring_soon") {
-      const app = applicationById.get(p.application_id);
       alerts.push({
-        id: `permit:${p.id}:${p.status}`,
+        id: `permit:${p.permitId}:${p.status}`,
         type: "expired_permit",
         severity: p.status === "expired" ? "high" : "medium",
         title: p.status === "expired" ? "Expired permit" : "Permit expiring soon",
-        subtitle: `${p.permit_number} • ${app?.district ?? "N/A"}, ${app?.sector ?? "N/A"}`,
+        subtitle: `${p.permitNumber} • ${permitAlertLocation(p)}`,
       });
     }
   }
@@ -511,6 +617,32 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
       });
     }
   }
+
+  const ratedFeedback = feedbackEntries.filter((entry) => typeof entry.rating === "number" && entry.rating >= 1 && entry.rating <= 5);
+  const averageRating = ratedFeedback.length > 0
+    ? ratedFeedback.reduce((sum, entry) => sum + Number(entry.rating || 0), 0) / ratedFeedback.length
+    : null;
+
+  const ratingBreakdown = [5, 4, 3, 2, 1].map((rating) => ({
+    rating,
+    count: feedbackEntries.filter((entry) => entry.rating === rating).length,
+  }));
+
+  const recentFeedback = feedbackEntries.slice(0, 8).map((entry) => {
+    const application = entry.application_id ? applicationById.get(entry.application_id) : undefined;
+    return {
+      id: entry.id,
+      applicationId: entry.application_id,
+      applicationNumber: application?.application_number || null,
+      projectTitle: application?.project_title || null,
+      province: application?.province || null,
+      district: application?.district || null,
+      sector: application?.sector || null,
+      rating: entry.rating,
+      feedbackText: entry.feedback_text,
+      createdAt: entry.created_at,
+    };
+  });
 
   return {
     portfolio: {
@@ -554,6 +686,12 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
       },
       parameters,
       alerts: alerts.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "high" ? -1 : 1)),
+    },
+    feedback: {
+      totalSubmissions: feedbackEntries.length,
+      averageRating,
+      ratingBreakdown,
+      recent: recentFeedback,
     },
   };
 }

@@ -15,6 +15,46 @@ export type ContractTerms = {
   };
 };
 
+export type ContractTermsLanguage = "en" | "rw";
+
+export function getContractSectionLanguage(title: string): ContractTermsLanguage {
+  const normalized = title.trim();
+  if (!normalized) return "en";
+
+  if (
+    normalized.toUpperCase().includes("KINYARWANDA") ||
+    normalized.startsWith("AMASEZERANO") ||
+    normalized.startsWith("IGICE") ||
+    normalized.startsWith("Ingingo") ||
+    normalized.startsWith("Ibisobanuro") ||
+    normalized.startsWith("Imikono")
+  ) {
+    return "rw";
+  }
+
+  return "en";
+}
+
+export function splitContractSectionsByLanguage(sections: ContractTermsSection[]): {
+  englishSections: ContractTermsSection[];
+  kinyarwandaSections: ContractTermsSection[];
+} {
+  return sections.reduce(
+    (acc, section) => {
+      if (getContractSectionLanguage(section.title) === "rw") {
+        acc.kinyarwandaSections.push(section);
+      } else {
+        acc.englishSections.push(section);
+      }
+      return acc;
+    },
+    {
+      englishSections: [] as ContractTermsSection[],
+      kinyarwandaSections: [] as ContractTermsSection[],
+    }
+  );
+}
+
 // NOTE: We'll progressively fill these with the real contract text per variant.
 export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null> = {
   abstraction_individual: {
@@ -326,7 +366,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     },
   },
   abstraction_organization: {
-    heading: "CONTRACT RELATING TO WATER USE PERMIT (Abstraction — Organization)",
+    heading: "CONTRACT RELATING TO WATER USE PERMIT",
     subheading: "The fields in this contract are auto-filled from your application details.",
     sections: [
       {
@@ -363,9 +403,9 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
       {
         title: "PART II: RIGHTS AND OBLIGATIONS OF THE WATER USER — Article 4: Right to abstract and use water",
         paragraphs: [
-          "1. The Water User is allowed to abstract water from (NAME OF WATER SOURCE); on its part located in the XXXX Province, XXXX District, XXX Sector, XXXX Cell, XXX Village at Latitude:  -2.105283°, Longitude: 30.034648°, by Gravity of Pumping system with a flow rate of XXXX  m3/day OR m3/year.",
+          "1. The Water User is allowed to abstract water from {{WATER_SOURCE_NAME}} on its part located in {{PROVINCE_LABEL}}, {{DISTRICT}} District, {{SECTOR}} Sector, {{CELL}} Cell, {{VILLAGE}} Village at Latitude: {{LAT}}°, Longitude: {{LNG}}°, by {{SYSTEM_TYPE_EN}} with a flow rate of {{VOLUME_LABEL}}.",
           "2. The water abstracted shall be used solely for XXXXX (NAME OF ACTIVITIES APPLIED FOR) in accordance with the Project Documentation which constitutes an integral part of this Contract.",
-          "3. The Water User understands and acknowledges that the water from XXXX (NAME OF ACTIVITIES APPLIED FOR)  is a multi-purpose water resource and may be subject to other plans as long as that will not affect the use to which water will be put.",
+          "3. The Water User understands and acknowledges that the water from {{WATER_SOURCE_NAME}} is a multi-purpose water resource and may be subject to other plans as long as that will not affect the use to which water will be put.",
           "4. The Director General makes no guarantee as to the availability, suitability, purity, portability, or fitness of the water to meet Water User’s activities.",
         ],
       },
@@ -521,9 +561,9 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
       {
         title: "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 4: Uburenganzira bwo gufata amazi no kuyakoresha",
         paragraphs: [
-          "1. Ukoresha amazi yemerewe gukoresha amazi angana na  m³ XXX ku munsi, ava mu XXXX (IZINA RY’ ISOKO Y’AMAZI) mu gice cyacyo giherereye mu Intara y' XXXX, Akarere ka XXXX, Umurenge wa XXX, Akagari ka XXXX, Umudugudu wa XXXkuri Latitide (Latitude): -2.105283°, Lonjitide (Longitude):  30.034648°.",
+          "1. Ukoresha amazi yemerewe gukoresha amazi ava mu {{WATER_SOURCE_NAME}} mu gice cyacyo giherereye mu Intara y' {{PROVINCE_LABEL}}, Akarere ka {{DISTRICT}}, Umurenge wa {{SECTOR}}, Akagari ka {{CELL}}, Umudugudu wa {{VILLAGE}} kuri Latitide (Latitude): {{LAT}}°, Lonjitide (Longitude): {{LNG}}°, hakoreshejwe uburyo bwa {{SYSTEM_TYPE_RW}} ku gipimo cya {{VOLUME_LABEL}}.",
           "2. Amazi yafashwe azakoreshwa gusa mu  XXXX (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
-          "3. Ukoresha amazi yemera ko amazi ava mu XXXX (IZINA RY’ ISOKO Y’AMAZI) akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
+          "3. Ukoresha amazi yemera ko amazi ava mu {{WATER_SOURCE_NAME}} akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "4. Umuyobozi Mukuru ntiyishingira ingano n’ ubuziranenge by’ amazi bikenewe n’ ukoresha amazi mu mirimo ye.",
         ],
       },

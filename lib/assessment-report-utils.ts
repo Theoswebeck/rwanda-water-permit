@@ -18,6 +18,15 @@ function getString(formData: FormDataLike | undefined, key: string): string | un
   return undefined;
 }
 
+function pickFirstString(...values: Array<string | undefined | null>): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
 function getStringArray(formData: FormDataLike | undefined, key: string): string[] | undefined {
   const v = formData?.[key];
   if (!Array.isArray(v)) return undefined;
@@ -233,12 +242,27 @@ export function prefillAssessmentReportFromApplication(
     'Not specified';
   
   const applicantFromJoin = (application as unknown as { applicant?: any }).applicant;
+  const applicantCategory = pickFirstString(
+    getString(formData, "categoryApplicant"),
+    typeof applicantFromJoin?.account_type === "string" ? applicantFromJoin.account_type : undefined
+  );
+  const isIndividualApplicant = applicantCategory === "individual";
   const applicantIdTin =
-    getString(formData, 'nationalIdNumber') ||
-    getString(formData, 'companyTin') ||
-    (typeof applicantFromJoin?.id_number === 'string' ? applicantFromJoin.id_number : undefined) ||
-    (typeof applicantFromJoin?.company_tin === 'string' ? applicantFromJoin.company_tin : undefined) ||
-    'Not provided';
+    (isIndividualApplicant
+      ? pickFirstString(
+          getString(formData, "nationalIdNumber"),
+          typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined,
+          typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined
+        )
+      : pickFirstString(
+          getString(formData, "registrationId"),
+          getString(formData, "companyRegistrationId"),
+          getString(formData, "companyTin"),
+          typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined,
+          typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined,
+          getString(formData, "nationalIdNumber")
+        )) ||
+    "Not provided";
   
   // Extract residence from office address
   const residence = formatLocationString(

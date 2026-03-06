@@ -200,7 +200,7 @@ export default function AdminDashboard() {
               </TabsTrigger>
               <TabsTrigger value="applications">Applications</TabsTrigger>
               <TabsTrigger value="water-reports">Water Use Reports</TabsTrigger>
-              <TabsTrigger value="map">Concession Map</TabsTrigger>
+              <TabsTrigger value="map">Consolidated Map</TabsTrigger>
               <TabsTrigger value="logs">Activity Logs</TabsTrigger>
               <TabsTrigger value="reports">Reports</TabsTrigger>
             </TabsList>
