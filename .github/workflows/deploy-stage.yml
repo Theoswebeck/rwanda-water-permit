@@ -19,7 +19,13 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.STAGE_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p ${{ secrets.STAGE_PORT }} ${{ secrets.STAGE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Test SSH connectivity
+        run: |
+          ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            -p ${{ secrets.STAGE_PORT }} \
+            ${{ secrets.STAGE_USER }}@${{ secrets.STAGE_HOST }} \
+            "echo 'SSH connection successful'"
 
       - name: Run remote deploy script
         run: |
