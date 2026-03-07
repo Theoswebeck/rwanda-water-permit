@@ -14,9 +14,25 @@ function parseDate(value?: string) {
 }
 
 function monthKey(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
+}
+
+function startOfMonthUtc(d: Date) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+}
+
+function addMonthsUtc(d: Date, months: number) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1));
+}
+
+function getPermitTimelineDate(permit: { issued_date: string | null; created_at: string | null }) {
+  const value = permit.issued_date ?? permit.created_at;
+  if (!value) return undefined;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 function labelPurpose(purpose: string) {
@@ -86,7 +102,7 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const filteredPermits = permits.rows.filter((p) => {
-      const issued = p.issued_date ? new Date(p.issued_date) : p.created_at ? new Date(p.created_at) : undefined;
+      const issued = getPermitTimelineDate(p);
       if (!issued) return true;
       if (from && issued < from) return false;
       if (to && issued > to) return false;
@@ -112,18 +128,22 @@ export async function GET(req: NextRequest) {
       return acc;
     }, {});
 
-    // Trend over time (permits issued per month)
+    // Trend over time (permits issued per month for the rolling last 12 months)
+    const currentMonthStart = startOfMonthUtc(now);
+    const trendStart = addMonthsUtc(currentMonthStart, -11);
+    const nextMonthStart = addMonthsUtc(currentMonthStart, 1);
     const trendMap: Record<string, number> = {};
     for (const p of filteredPermits) {
-      const issued = p.issued_date ? new Date(p.issued_date) : p.created_at ? new Date(p.created_at) : undefined;
+      const issued = getPermitTimelineDate(p);
       if (!issued) continue;
+      if (issued < trendStart || issued >= nextMonthStart) continue;
       const k = monthKey(issued);
       trendMap[k] = (trendMap[k] || 0) + 1;
     }
-    const trend = Object.entries(trendMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-24)
-      .map(([month, count]) => ({ month, permitsIssued: count }));
+    const trend = Array.from({ length: 12 }, (_, index) => {
+      const month = monthKey(addMonthsUtc(trendStart, index));
+      return { month, permitsIssued: trendMap[month] || 0 };
+    });
 
     const purposeTotal = Object.values(purposeCounts).reduce((s, n) => s + n, 0) || 1;
     const waterSourceTotal = Object.values(waterSourceCounts).reduce((s, n) => s + n, 0) || 1;

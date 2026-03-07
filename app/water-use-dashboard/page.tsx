@@ -231,7 +231,7 @@ export default function WaterUseDashboardPage() {
                 Rwanda Water Use Dashboard
               </h1>
               <p className="text-muted-foreground text-balance leading-relaxed">
-                National snapshot of water permits and public map of permitted abstraction locations. This dashboard intentionally avoids displaying sensitive volume values.
+                National snapshot of water permits and public map of permitted abstraction locations.
               </p>
 
               <div className="flex flex-wrap gap-2">
@@ -446,7 +446,7 @@ export default function WaterUseDashboardPage() {
             <Card className="shadow-sm bg-background/70 backdrop-blur rounded-2xl">
               <CardHeader>
                 <CardTitle>Trends over time</CardTitle>
-                <CardDescription>Permits issued per month</CardDescription>
+                <CardDescription>Permits issued in the last 12 months</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
                 {isLoading ? (
@@ -457,7 +457,6 @@ export default function WaterUseDashboardPage() {
                   </>
                 ) : (
                   (snapshot?.trend ?? [])
-                    .slice(-10)
                     .map((t, idx, arr) => {
                       const max = Math.max(...arr.map((x) => x.permitsIssued), 1);
                       const pct = (t.permitsIssued / max) * 100;

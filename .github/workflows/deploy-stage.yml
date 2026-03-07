@@ -1,0 +1,29 @@
+name: Deploy Stage
+
+on:
+  push:
+    branches:
+      - chore/stage-unstaged-2026-03-01
+
+concurrency:
+  group: deploy-stage
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGE_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.STAGE_PORT }} ${{ secrets.STAGE_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Run remote deploy script
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+            -p ${{ secrets.STAGE_PORT }} \
+            ${{ secrets.STAGE_USER }}@${{ secrets.STAGE_HOST }} \
+            "/opt/waterpermit/deploy.sh"
