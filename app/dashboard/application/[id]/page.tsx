@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -304,6 +304,8 @@ export default function ApplicationDetailPage() {
   const [isDownloadingTerms, setIsDownloadingTerms] = useState(false);
   const { getApplication, loading, refresh } = useApplications();
   const { getDocuments } = useDocuments();
+  const loadedTransferPermitKeyRef = useRef<string | null>(null);
+  const profileDependencyKey = `${userProfile?.id ?? ""}|${userProfile?.email ?? ""}|${userProfile?.phone ?? ""}|${userProfile?.company_phone ?? ""}`;
 
   const downloadBlobAsFile = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -418,59 +420,75 @@ export default function ApplicationDetailPage() {
             setTransferFormData(parsedNotes?.transferFormData || null);
             const originalPermitId = parsedNotes?.originalPermitId;
             const originalPermitNumber = parsedNotes?.originalPermitNumber;
+            const transferPermitKey = originalPermitId
+              ? `id:${originalPermitId}`
+              : originalPermitNumber
+                ? `number:${originalPermitNumber}`
+                : null;
 
-            if (originalPermitId || originalPermitNumber) {
-              setLoadingTransferPermit(true);
-              try {
-                let permitQuery = supabase
-                  .from("permits")
-                  .select(`
-                    *,
-                    application:applications!application_id (
-                      id,
-                      project_title,
-                      province,
-                      district,
-                      sector,
-                      cell,
-                      water_source,
-                      water_purpose,
-                      applicant:users!applicant_id (
-                        id,
-                        email,
-                        phone,
-                        first_name,
-                        last_name,
-                        company_name,
-                        company_address,
-                        company_phone,
-                        account_type
-                      )
-                    )
-                  `);
+            if (transferPermitKey) {
+              const hasCurrentPermitLoaded =
+                loadedTransferPermitKeyRef.current === transferPermitKey && !!transferPermit;
 
-                if (originalPermitId) {
-                  permitQuery = permitQuery.eq("id", originalPermitId);
-                } else if (originalPermitNumber) {
-                  permitQuery = permitQuery.eq("permit_number", originalPermitNumber);
-                }
-
-                const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
-                if (permitError) throw permitError;
-                setTransferPermit((permitData as PermitWithApplication) || null);
-              } catch (permitErr) {
-                console.error("Error fetching original permit for transfer:", permitErr);
-                setTransferPermit(null);
-              } finally {
+              if (hasCurrentPermitLoaded) {
                 setLoadingTransferPermit(false);
+              } else {
+                setLoadingTransferPermit(true);
+                try {
+                  let permitQuery = supabase
+                    .from("permits")
+                    .select(`
+                      *,
+                      application:applications!application_id (
+                        id,
+                        project_title,
+                        province,
+                        district,
+                        sector,
+                        cell,
+                        water_source,
+                        water_purpose,
+                        applicant:users!applicant_id (
+                          id,
+                          email,
+                          phone,
+                          first_name,
+                          last_name,
+                          company_name,
+                          company_address,
+                          company_phone,
+                          account_type
+                        )
+                      )
+                    `);
+
+                  if (originalPermitId) {
+                    permitQuery = permitQuery.eq("id", originalPermitId);
+                  } else if (originalPermitNumber) {
+                    permitQuery = permitQuery.eq("permit_number", originalPermitNumber);
+                  }
+
+                  const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
+                  if (permitError) throw permitError;
+                  setTransferPermit((permitData as PermitWithApplication) || null);
+                  loadedTransferPermitKeyRef.current = transferPermitKey;
+                } catch (permitErr) {
+                  console.error("Error fetching original permit for transfer:", permitErr);
+                  setTransferPermit(null);
+                  loadedTransferPermitKeyRef.current = null;
+                } finally {
+                  setLoadingTransferPermit(false);
+                }
               }
             } else {
               setTransferPermit(null);
+              loadedTransferPermitKeyRef.current = null;
             }
           } else {
             setTransferFormData(null);
             setTransferPermit(null);
             setLoadingTransferPermit(false);
+            loadedTransferPermitKeyRef.current = null;
           }
 
           const { data: permitRows, error: permitLookupError } = await supabase
@@ -572,7 +590,7 @@ export default function ApplicationDetailPage() {
     if (params.id) {
       fetchApplicationDetails();
     }
-  }, [params.id, getApplication, getDocuments, userProfile]);
+  }, [params.id, getApplication, getDocuments, profileDependencyKey]);
 
   // Load renewal permit data if this is a renewal application
   useEffect(() => {

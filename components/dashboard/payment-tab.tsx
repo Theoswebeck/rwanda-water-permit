@@ -350,12 +350,35 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       }
       return;
     }
-    
-    console.log('❌ [PAYMENT TAB] Payment failed');
-    setGatewayError(getGatewayErrorMessage(error));
-    setPauseAutoPolling(true);
-    setAwaitingGatewayConfirmation(false);
+
+    // Irembo sandbox can intermittently return callback errors while payment later succeeds.
+    // Verify status first before surfacing a hard failure to users.
+    console.log('⚠️ [PAYMENT TAB] Gateway returned an error callback; verifying status before marking as failed');
+    setGatewayError(null);
+    setPauseAutoPolling(false);
+    setAwaitingGatewayConfirmation(true);
     setShowWidget(false);
+
+    if (payment?.id) {
+      void checkStatus(payment.id)
+        .then((latestPayment) => {
+          if (latestPayment?.status === 'completed') {
+            setGatewayError(null);
+            setCompletedApplication(latestPayment.application);
+            setPaymentCompleted(true);
+            setAwaitingGatewayConfirmation(false);
+            return;
+          }
+
+          if (latestPayment?.status === 'failed' || latestPayment?.status === 'cancelled') {
+            setGatewayError(getGatewayErrorMessage(error));
+            setAwaitingGatewayConfirmation(false);
+          }
+        })
+        .catch((statusError) => {
+          console.error('❌ [PAYMENT TAB] Status verification after gateway error failed:', statusError);
+        });
+    }
   };
 
   /**

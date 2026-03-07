@@ -136,6 +136,13 @@ const transferFormSchema = z.object({
 
 type TransferFormValues = z.infer<typeof transferFormSchema>;
 
+const hasValue = (value?: string | null) => Boolean(value?.toString().trim());
+const hasValidEmail = (value?: string | null) => {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+};
+
 export interface PermitWithApplication extends Permit {
   application?: Application & {
     applicant?: {
@@ -392,6 +399,101 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const permitLocationSector = form.watch('permitLocationSector');
   const permitLocationCell = form.watch('permitLocationCell');
   const permitLocationVillage = form.watch('permitLocationVillage');
+  const permitNumber = form.watch('permitNumber');
+  const effectiveDate = form.watch('effectiveDate');
+  const expirationDate = form.watch('expirationDate');
+  const facilityProjectName = form.watch('facilityProjectName');
+  const waterSourceType = form.watch('waterSourceType');
+  const waterPurpose = form.watch('waterPurpose');
+  const transferorName = form.watch('transferorName');
+  const transferorCertification = form.watch('transferorCertification');
+  const transferorSignatureDate = form.watch('transferorSignatureDate');
+  const transfereeName = form.watch('transfereeName');
+  const transfereeEmail = form.watch('transfereeEmail');
+  const transfereePhone = form.watch('transfereePhone');
+  const transfereeCertification = form.watch('transfereeCertification');
+  const transfereeSignatureDate = form.watch('transfereeSignatureDate');
+
+  const isPermitInfoStepComplete = useMemo(() => {
+    const hasCoreFields =
+      hasValue(permitNumber) &&
+      hasValue(effectiveDate) &&
+      hasValue(expirationDate) &&
+      hasValue(facilityProjectName) &&
+      hasValue(permitLocationProvince) &&
+      hasValue(permitLocationDistrict) &&
+      hasValue(permitLocationSector);
+    const hasManualFields = !isManualPermit || (hasValue(waterSourceType) && hasValue(waterPurpose));
+    return hasCoreFields && hasManualFields;
+  }, [
+    permitNumber,
+    effectiveDate,
+    expirationDate,
+    facilityProjectName,
+    permitLocationProvince,
+    permitLocationDistrict,
+    permitLocationSector,
+    isManualPermit,
+    waterSourceType,
+    waterPurpose,
+  ]);
+
+  const isTransferorStepComplete = useMemo(() => (
+    hasValue(transferorName) &&
+    Boolean(transferorCertification) &&
+    hasValue(transferorSignatureDate)
+  ), [transferorName, transferorCertification, transferorSignatureDate]);
+
+  const isTransfereeStepComplete = useMemo(() => (
+    hasValue(transfereeName) &&
+    hasValidEmail(transfereeEmail) &&
+    (transfereePhone?.trim().length || 0) >= 10 &&
+    hasValue(transfereeProvince) &&
+    hasValue(transfereeDistrict) &&
+    hasValue(transfereeSector) &&
+    hasValue(transfereeCell) &&
+    Boolean(transfereeCertification) &&
+    hasValue(transfereeSignatureDate)
+  ), [
+    transfereeName,
+    transfereeEmail,
+    transfereePhone,
+    transfereeProvince,
+    transfereeDistrict,
+    transfereeSector,
+    transfereeCell,
+    transfereeCertification,
+    transfereeSignatureDate,
+  ]);
+
+  const isDocumentsStepComplete = useMemo(() => (
+    Boolean(files.certifiedLetter || uploadedFileUrls.certifiedLetter) &&
+    Boolean(files.notifiedAgreement || uploadedFileUrls.notifiedAgreement) &&
+    Boolean(files.registrationCertificate || uploadedFileUrls.registrationCertificate)
+  ), [files, uploadedFileUrls]);
+
+  const canAdvanceFromActiveTab = useMemo(() => {
+    if (readOnly) return true;
+    switch (activeTab) {
+      case "permit-info":
+        return isPermitInfoStepComplete;
+      case "transferor":
+        return isTransferorStepComplete;
+      case "transferee":
+        return isTransfereeStepComplete;
+      case "documents":
+        return isDocumentsStepComplete;
+      default:
+        return true;
+    }
+  }, [
+    readOnly,
+    activeTab,
+    isPermitInfoStepComplete,
+    isTransferorStepComplete,
+    isTransfereeStepComplete,
+    isDocumentsStepComplete,
+  ]);
 
   // Update dropdown states when form values change
   useEffect(() => {
@@ -1477,6 +1579,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       type="button"
                       onClick={handleNextTab}
                       className="bg-blue-600 hover:bg-blue-700"
+                      disabled={!canAdvanceFromActiveTab || isTabSwitching}
                     >
                       Next: Transferor Details
                     </Button>
@@ -1732,6 +1835,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       type="button"
                       onClick={handleNextTab}
                       className="bg-blue-600 hover:bg-blue-700"
+                      disabled={!canAdvanceFromActiveTab || isTabSwitching}
                     >
                       Next: Transferee Details
                     </Button>
@@ -2101,6 +2205,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       type="button"
                       onClick={handleNextTab}
                       className="bg-blue-600 hover:bg-blue-700"
+                      disabled={!canAdvanceFromActiveTab || isTabSwitching}
                     >
                       Next: Required Documents
                     </Button>
@@ -2126,7 +2231,6 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       <ul className="mt-2 space-y-1 list-disc list-inside">
                         <li>Permit Transfer Letter of Request</li>
                         <li>Agreement between Transferor and Transferee, signed and notified by both parties</li>
-                        <li>A well-filled and signed transfer form</li>
                         <li>New owner's registration certificate or ID</li>
                       </ul>
                       <p className="mt-2 text-sm italic">Note: Transfer fee payment is handled in the next step via IremboPay.</p>
@@ -2210,7 +2314,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             }
                           }}
                           className="bg-blue-600 hover:bg-blue-700"
-                          disabled={isLoading}
+                          disabled={isLoading || !isDocumentsStepComplete}
                         >
                           {isLoading ? (
                             <>

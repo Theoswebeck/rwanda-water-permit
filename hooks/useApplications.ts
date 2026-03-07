@@ -132,7 +132,7 @@ export function useApplications({
       console.error('Error fetching application:', err)
       return null
     }
-  }, [applications])
+  }, [])
 
   const getApplicationByNumber = useCallback(async (applicationNumber: string): Promise<Application | null> => {
     try {
