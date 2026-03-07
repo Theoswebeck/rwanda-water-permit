@@ -170,6 +170,16 @@ const formSchema = z.object({
   certificationAgreement: z.boolean().refine((value) => value === true, {
     message: "You must certify that the information provided is true and accurate.",
   }),
+}).superRefine((values, ctx) => {
+  const requiresRepresentative = values.categoryApplicant === "organization";
+
+  if (requiresRepresentative && !values.nameRepresentative?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["nameRepresentative"],
+      message: "Organization representative name is required",
+    });
+  }
 });
 
 // Draft schema - all fields optional for saving drafts
@@ -656,6 +666,7 @@ export function ApplicationForm({
   const getFieldLabel = (fieldName: string): string => {
     const fieldLabels: Record<string, string> = {
       fullName: "Full Name",
+      nameRepresentative: "Organization Representative Name",
       email: "Email Address",
       phone: "Phone Number",
       address: "Address",
@@ -779,7 +790,7 @@ export function ApplicationForm({
     
     if (errorFields.length > 0) {
       // Personal info fields
-      const personalFields = ['fullName', 'email', 'phone', 'address'];
+      const personalFields = ['fullName', 'nameRepresentative', 'email', 'phone', 'address'];
       // Permit details fields
       const detailsFields = ['permitType', 'applicantType', 'waterSource', 'purpose', 'waterUsage', 'waterUsageUnit', 'industryType', 'industryDetails', 'powerGenerationType', 'installedCapacity', 'turbineType', 'headHeight', 'miningType', 'miningMethod', 'mineralType', 'miningArea'];
       // Location fields  
@@ -852,6 +863,9 @@ export function ApplicationForm({
     const errors = [];
 
     if (!values.fullName || values.fullName.length < 2) errors.push("Full Name (minimum 2 characters)");
+    if (userData?.account_type === 'organization' && !values.nameRepresentative?.trim()) {
+      errors.push("Organization Representative Name");
+    }
     if (!values.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.push("Valid Email Address");
     if (!values.phone || values.phone.length < 10) errors.push("Phone Number (minimum 10 characters)");
     if (!values.address || values.address.length < 5) errors.push("Address (minimum 5 characters)");
@@ -1900,6 +1914,27 @@ export function ApplicationForm({
                         )}
                       />
                     </div>
+
+                  {userData?.account_type === 'organization' && (
+                    <div className="mb-8">
+                      <FormField
+                        control={form.control}
+                        name="nameRepresentative"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Organization Representative Name</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Enter representative's full name" />
+                            </FormControl>
+                            <FormDescription>
+                              Required for organization applications.
+                            </FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                     
                   {/* Enhanced Contact Information */}
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg space-y-6 mb-8">
