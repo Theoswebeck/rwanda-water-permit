@@ -262,55 +262,57 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const getStatusBadge = (status: string | null | undefined) => {
     const raw = (status || "").trim();
     const s = raw.toUpperCase();
-    const compactLabel =
-      s.includes("NON-OPERATIONAL") || s.includes("NON OPERATIONAL")
-        ? "Non-operational"
-        : s.startsWith("CHANGED TO")
-          ? "Changed"
-          : s.startsWith("TRANSFERRED")
-            ? "Transferred"
-            : s.startsWith("RENEWED")
-              ? "Renewed"
-              : s.startsWith("EXTENDED")
-                ? "Extended"
-                : raw || "Unknown";
+    const isNonOperational = s.includes("NON-OPERATIONAL") || s.includes("NON OPERATIONAL");
+    const isOperational = s.includes("OPERATIONAL") && !isNonOperational;
+    const isExpired = s.includes("EXPIRED");
+    const isSuspended = s.includes("SUSPENDED");
+    const isRevoked = s.includes("REVOKED");
+    const isRenewed = s.includes("RENEWED");
+    const isTransferred = s.includes("TRANSFERRED");
+    const isChanged = s.includes("CHANGED TO");
+    const isExtended = s.includes("EXTENDED");
 
-    switch (s) {
-      case "OPERATIONAL":
-        return (
-          <Badge className="max-w-full bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 text-xs font-medium px-2 py-0.5 rounded-full border shadow-none hover:bg-emerald-50">
-            Operational
-          </Badge>
-        );
-      case "EXPIRED":
-        return (
-          <Badge variant="outline" className="max-w-full bg-red-50 text-red-600 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
-            Expired
-          </Badge>
-        );
-      case "SUSPENDED":
-        return (
-          <Badge variant="outline" className="max-w-full bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">
-            Suspended
-          </Badge>
-        );
-      case "REVOKED":
-        return (
-          <Badge variant="outline" className="max-w-full bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
-            Revoked
-          </Badge>
-        );
-      default:
-        return (
-          <Badge
-            variant="outline"
-            title={raw || "Unknown"}
-            className="max-w-full bg-slate-50 text-slate-600 border-slate-200 text-xs font-medium px-2 py-0.5 rounded-full overflow-hidden"
-          >
-            <span className="truncate">{compactLabel}</span>
-          </Badge>
-        );
-    }
+    const compactLabel = isNonOperational
+      ? "Non-operational"
+      : isSuspended
+        ? "Suspended"
+        : isRevoked
+          ? "Revoked"
+          : isExpired
+            ? "Expired"
+            : isRenewed
+              ? "Renewed"
+              : isTransferred
+                ? "Transferred"
+                : isChanged
+                  ? "Changed"
+                  : isExtended
+                    ? "Extended"
+                    : isOperational
+                      ? "Operational"
+                      : raw.length > 22
+                        ? `${raw.slice(0, 22)}...`
+                        : raw || "Unknown";
+
+    const badgeToneClass = isOperational
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800"
+      : isExpired
+        ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800"
+        : isSuspended
+          ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800"
+          : isRevoked
+            ? "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800"
+            : "bg-slate-50 text-slate-600 border-slate-200";
+
+    return (
+      <Badge
+        variant="outline"
+        title={raw || "Unknown"}
+        className={`max-w-full overflow-hidden text-xs font-medium px-2 py-0.5 rounded-full ${badgeToneClass}`}
+      >
+        <span className="block min-w-0 max-w-full truncate">{compactLabel}</span>
+      </Badge>
+    );
   };
 
   const getRegimeBadge = (regime: string | null | undefined) => {
@@ -712,8 +714,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                            <div className="max-w-[150px] overflow-hidden">
+                          <TableCell className="p-2 sm:p-3 overflow-hidden">
+                            <div className="max-w-[155px] overflow-hidden">
                               {getStatusBadge(entry.status)}
                             </div>
                           </TableCell>
