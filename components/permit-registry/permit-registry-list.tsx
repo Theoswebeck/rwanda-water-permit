@@ -260,36 +260,54 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   };
 
   const getStatusBadge = (status: string | null | undefined) => {
-    const s = (status || "").toUpperCase();
+    const raw = (status || "").trim();
+    const s = raw.toUpperCase();
+    const compactLabel =
+      s.includes("NON-OPERATIONAL") || s.includes("NON OPERATIONAL")
+        ? "Non-operational"
+        : s.startsWith("CHANGED TO")
+          ? "Changed"
+          : s.startsWith("TRANSFERRED")
+            ? "Transferred"
+            : s.startsWith("RENEWED")
+              ? "Renewed"
+              : s.startsWith("EXTENDED")
+                ? "Extended"
+                : raw || "Unknown";
+
     switch (s) {
       case "OPERATIONAL":
         return (
-          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 text-xs font-medium px-2 py-0.5 rounded-full border shadow-none hover:bg-emerald-50">
+          <Badge className="max-w-full bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 text-xs font-medium px-2 py-0.5 rounded-full border shadow-none hover:bg-emerald-50">
             Operational
           </Badge>
         );
       case "EXPIRED":
         return (
-          <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
+          <Badge variant="outline" className="max-w-full bg-red-50 text-red-600 border-red-200 dark:bg-red-950/50 dark:text-red-400 dark:border-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
             Expired
           </Badge>
         );
       case "SUSPENDED":
         return (
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">
+          <Badge variant="outline" className="max-w-full bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 text-xs font-medium px-2 py-0.5 rounded-full">
             Suspended
           </Badge>
         );
       case "REVOKED":
         return (
-          <Badge variant="outline" className="bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
+          <Badge variant="outline" className="max-w-full bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-950/50 dark:text-gray-400 dark:border-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
             Revoked
           </Badge>
         );
       default:
         return (
-          <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 text-xs font-medium px-2 py-0.5 rounded-full">
-            {status || "Unknown"}
+          <Badge
+            variant="outline"
+            title={raw || "Unknown"}
+            className="max-w-full bg-slate-50 text-slate-600 border-slate-200 text-xs font-medium px-2 py-0.5 rounded-full overflow-hidden"
+          >
+            <span className="truncate">{compactLabel}</span>
           </Badge>
         );
     }
@@ -639,7 +657,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       Water Source
                     </TableHead>
                     <TableHead
-                      className="w-[130px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                      className="w-[170px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                       onClick={() => toggleSort("status")}
                     >
                       <span className="flex items-center">
@@ -695,7 +713,9 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             </div>
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                            {getStatusBadge(entry.status)}
+                            <div className="max-w-[150px] overflow-hidden">
+                              {getStatusBadge(entry.status)}
+                            </div>
                           </TableCell>
                           <TableCell
                             className="p-2 sm:p-3 text-right"
