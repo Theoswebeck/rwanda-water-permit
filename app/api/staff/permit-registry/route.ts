@@ -16,8 +16,6 @@ export async function GET(req: NextRequest) {
       "serial_number",
       "permit_holder",
       "permit_number",
-      "issuance_date",
-      "expiration_date",
       "status",
       "regime",
     ];
@@ -61,6 +59,10 @@ export async function GET(req: NextRequest) {
           pr.expiration_date,
           upper(coalesce(pr.status, 'OPERATIONAL')) as status,
           pr.contact,
+          pr.uploaded_doc_path,
+          pr.uploaded_doc_name,
+          pr.uploaded_doc_mime_type,
+          pr.uploaded_doc_uploaded_at,
           pr.created_at,
           pr.updated_at,
           'registry'::text as source_kind
@@ -101,6 +103,10 @@ export async function GET(req: NextRequest) {
             else 'OPERATIONAL'
           end as status,
           null::text as contact,
+          null::text as uploaded_doc_path,
+          null::text as uploaded_doc_name,
+          null::text as uploaded_doc_mime_type,
+          null::timestamptz as uploaded_doc_uploaded_at,
           p.created_at,
           p.updated_at,
           'permit'::text as source_kind
@@ -172,6 +178,10 @@ export async function GET(req: NextRequest) {
             max(u.contact) filter (where u.source_kind = 'registry'),
             max(u.contact) filter (where u.source_kind = 'permit')
           ) as contact,
+          max(u.uploaded_doc_path) filter (where u.source_kind = 'registry') as uploaded_doc_path,
+          max(u.uploaded_doc_name) filter (where u.source_kind = 'registry') as uploaded_doc_name,
+          max(u.uploaded_doc_mime_type) filter (where u.source_kind = 'registry') as uploaded_doc_mime_type,
+          max(u.uploaded_doc_uploaded_at) filter (where u.source_kind = 'registry') as uploaded_doc_uploaded_at,
           coalesce(
             max(u.created_at) filter (where u.source_kind = 'registry'),
             max(u.created_at) filter (where u.source_kind = 'permit')
@@ -280,6 +290,10 @@ export async function GET(req: NextRequest) {
         expiration_date,
         status,
         contact,
+        uploaded_doc_path,
+        uploaded_doc_name,
+        uploaded_doc_mime_type,
+        uploaded_doc_uploaded_at,
         created_at,
         updated_at,
         registry_values,

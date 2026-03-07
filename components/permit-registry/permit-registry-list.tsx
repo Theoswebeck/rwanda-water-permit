@@ -47,6 +47,7 @@ import {
   Shield,
   Activity,
   FileText,
+  ExternalLink,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
@@ -61,8 +62,6 @@ type SortField =
   | "serial_number"
   | "permit_holder"
   | "permit_number"
-  | "issuance_date"
-  | "expiration_date"
   | "status";
 type SortDir = "asc" | "desc";
 
@@ -109,6 +108,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     skipped: number;
     errors?: string[];
   } | null>(null);
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+  const [docUploadResult, setDocUploadResult] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
   const offset = (currentPage - 1) * PAGE_SIZE;
   const { data, isLoading, error, refetch } = usePermitRegistryQuery({
@@ -213,6 +214,38 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       });
     } finally {
       setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handlePermitDocUpload = async (entryId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingDocId(entryId);
+    setDocUploadResult(null);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+
+      const res = await fetch(`/api/staff/permit-registry/${entryId}/document`, {
+        method: "POST",
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Document upload failed");
+      setDocUploadResult({
+        kind: "success",
+        message: `Document uploaded for ${json?.document?.uploaded_doc_name || "permit"}.`,
+      });
+      refetch();
+    } catch (err) {
+      setDocUploadResult({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Unknown upload error",
+      });
+    } finally {
+      setUploadingDocId(null);
       e.target.value = "";
     }
   };
@@ -490,6 +523,35 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         )}
       </AnimatePresence>
 
+      {/* Document Upload Result Banner */}
+      <AnimatePresence>
+        {docUploadResult && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className={`p-4 rounded-xl border text-sm ${
+              docUploadResult.kind === "error"
+                ? "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300"
+                : "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p>{docUploadResult.message}</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDocUploadResult(null)}
+                className="h-6 w-6 p-0 shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
@@ -538,8 +600,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       {!isLoading && !error && entries.length > 0 && (
         <Card className="border-slate-200 dark:border-slate-800 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-xl overflow-hidden">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table className="table-fixed min-w-[1120px]">
+            <div>
+              <Table className="w-full table-fixed">
                 <TableHeader>
                   <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
                     <TableHead className="w-[44px]" />
@@ -553,7 +615,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="w-[250px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
+                      className="w-[32%] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
                       onClick={() => toggleSort("permit_holder")}
                     >
                       <span className="flex items-center">
@@ -562,7 +624,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                       </span>
                     </TableHead>
                     <TableHead
-                      className="w-[170px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
+                      className="w-[180px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
                       onClick={() => toggleSort("permit_number")}
                     >
                       <span className="flex items-center">
@@ -573,26 +635,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                     <TableHead className="w-[120px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                       Regime
                     </TableHead>
-                    <TableHead className="hidden xl:table-cell w-[150px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
+                    <TableHead className="hidden 2xl:table-cell w-[150px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap">
                       Water Source
-                    </TableHead>
-                    <TableHead
-                      className="hidden lg:table-cell w-[120px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
-                      onClick={() => toggleSort("issuance_date")}
-                    >
-                      <span className="flex items-center">
-                        Issued
-                        <SortIcon field="issuance_date" />
-                      </span>
-                    </TableHead>
-                    <TableHead
-                      className="hidden lg:table-cell w-[120px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
-                      onClick={() => toggleSort("expiration_date")}
-                    >
-                      <span className="flex items-center">
-                        Expires
-                        <SortIcon field="expiration_date" />
-                      </span>
                     </TableHead>
                     <TableHead
                       className="w-[130px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap"
@@ -602,6 +646,9 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                         Status
                         <SortIcon field="status" />
                       </span>
+                    </TableHead>
+                    <TableHead className="w-[130px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap text-right">
+                      Actions
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -626,7 +673,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                           <TableCell className="p-2 sm:p-3 text-muted-foreground text-sm tabular-nums">
                             {entry.serial_number ?? "-"}
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3 max-w-[250px]">
+                          <TableCell className="p-2 sm:p-3 max-w-[280px]">
                             <span className="font-medium text-slate-900 dark:text-slate-100 text-sm block truncate">
                               {entry.permit_holder}
                             </span>
@@ -639,7 +686,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                           <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                             {getRegimeBadge(entry.regime)}
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3 hidden xl:table-cell">
+                          <TableCell className="p-2 sm:p-3 hidden 2xl:table-cell">
                             <div className="flex items-center gap-1.5">
                               <Droplets className="h-3 w-3 text-blue-500/70 shrink-0" />
                               <span className="text-sm text-slate-700 dark:text-slate-300 max-w-[140px] truncate">
@@ -647,19 +694,43 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell className="p-2 sm:p-3 hidden lg:table-cell whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                            {formatDate(entry.issuance_date)}
-                          </TableCell>
-                          <TableCell className="p-2 sm:p-3 hidden lg:table-cell whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                            {formatDate(entry.expiration_date)}
-                          </TableCell>
                           <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                             {getStatusBadge(entry.status)}
+                          </TableCell>
+                          <TableCell
+                            className="p-2 sm:p-3 text-right"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <label className="inline-flex cursor-pointer" onClick={(event) => event.stopPropagation()}>
+                              <input
+                                type="file"
+                                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
+                                onChange={(event) => handlePermitDocUpload(entry.id, event)}
+                                className="hidden"
+                                disabled={uploadingDocId === entry.id}
+                              />
+                              <Button
+                                variant={entry.uploaded_doc_path ? "secondary" : "outline"}
+                                size="sm"
+                                asChild
+                                disabled={uploadingDocId === entry.id}
+                                className="h-8 rounded-md"
+                              >
+                                <span>
+                                  {uploadingDocId === entry.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                  ) : (
+                                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                                  )}
+                                  {entry.uploaded_doc_path ? "Replace" : "Upload"}
+                                </span>
+                              </Button>
+                            </label>
                           </TableCell>
                         </TableRow>
                         {isExpanded && (
                           <TableRow className="bg-slate-50/50 dark:bg-slate-900/50">
-                            <TableCell colSpan={9} className="px-6 py-5">
+                            <TableCell colSpan={8} className="px-6 py-5">
                               <div className="space-y-5">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4">
                                   <DetailField
@@ -724,6 +795,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                   )}
                                 </div>
                                 <SourceComparison entry={entry} />
+                                <UploadedDocSection entry={entry} />
                                 <PermitLocationMap entry={entry} />
                               </div>
                             </TableCell>
@@ -879,6 +951,29 @@ function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
         {renderColumn("Permit Registry", comparisonEntry.registry_values)}
         {renderColumn("Permit Table", comparisonEntry.permit_values)}
       </div>
+    </div>
+  );
+}
+
+function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-white/70 dark:bg-slate-900/40 space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Uploaded doc</p>
+      {entry.uploaded_doc_path ? (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-sm text-slate-800 dark:text-slate-200 break-all">
+            {entry.uploaded_doc_name || "Uploaded permit document"}
+          </p>
+          <Button variant="outline" size="sm" asChild className="w-fit">
+            <a href={entry.uploaded_doc_path} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+              Open document
+            </a>
+          </Button>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No document uploaded yet for this permit.</p>
+      )}
     </div>
   );
 }

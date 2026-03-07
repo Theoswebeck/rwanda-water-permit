@@ -406,6 +406,10 @@ export interface PermitRegistryEntry {
   expiration_date: string | null
   status: string | null
   contact: string | null
+  uploaded_doc_path: string | null
+  uploaded_doc_name: string | null
+  uploaded_doc_mime_type: string | null
+  uploaded_doc_uploaded_at: string | null
   created_at: string
   updated_at: string
 }
