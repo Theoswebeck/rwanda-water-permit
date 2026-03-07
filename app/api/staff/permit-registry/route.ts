@@ -38,6 +38,34 @@ export async function GET(req: NextRequest) {
       );
     }
     const whereSql = where.length ? `and ${where.join(" and ")}` : "";
+    const docColumnsRes = await query<{ present: string }>(
+      `
+      select count(*)::text as present
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'permit_registry'
+        and column_name in (
+          'uploaded_doc_path',
+          'uploaded_doc_name',
+          'uploaded_doc_mime_type',
+          'uploaded_doc_uploaded_at'
+        )
+      `
+    );
+    const hasUploadedDocColumns = Number(docColumnsRes.rows[0]?.present || "0") === 4;
+    const registryUploadedDocSelect = hasUploadedDocColumns
+      ? `
+          pr.uploaded_doc_path,
+          pr.uploaded_doc_name,
+          pr.uploaded_doc_mime_type,
+          pr.uploaded_doc_uploaded_at,
+        `
+      : `
+          null::text as uploaded_doc_path,
+          null::text as uploaded_doc_name,
+          null::text as uploaded_doc_mime_type,
+          null::timestamptz as uploaded_doc_uploaded_at,
+        `;
 
     const baseCte = `
       with unified as (
@@ -59,10 +87,7 @@ export async function GET(req: NextRequest) {
           pr.expiration_date,
           upper(coalesce(pr.status, 'OPERATIONAL')) as status,
           pr.contact,
-          pr.uploaded_doc_path,
-          pr.uploaded_doc_name,
-          pr.uploaded_doc_mime_type,
-          pr.uploaded_doc_uploaded_at,
+          ${registryUploadedDocSelect}
           pr.created_at,
           pr.updated_at,
           'registry'::text as source_kind

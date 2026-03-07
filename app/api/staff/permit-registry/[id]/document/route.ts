@@ -56,29 +56,47 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const relPath = `/${path.join(relDir, diskName).replaceAll(path.sep, "/")}`;
 
-    const result = await query<{
-      uploaded_doc_path: string | null;
-      uploaded_doc_name: string | null;
-      uploaded_doc_mime_type: string | null;
-      uploaded_doc_uploaded_at: string | null;
-    }>(
-      `
-      update public.permit_registry
-      set
-        uploaded_doc_path = $2,
-        uploaded_doc_name = $3,
-        uploaded_doc_mime_type = $4,
-        uploaded_doc_uploaded_at = now(),
-        updated_at = now()
-      where id = $1
-      returning
-        uploaded_doc_path,
-        uploaded_doc_name,
-        uploaded_doc_mime_type,
-        uploaded_doc_uploaded_at
-      `,
-      [id, relPath, file.name || diskName, mime]
-    );
+    let result;
+    try {
+      result = await query<{
+        uploaded_doc_path: string | null;
+        uploaded_doc_name: string | null;
+        uploaded_doc_mime_type: string | null;
+        uploaded_doc_uploaded_at: string | null;
+      }>(
+        `
+        update public.permit_registry
+        set
+          uploaded_doc_path = $2,
+          uploaded_doc_name = $3,
+          uploaded_doc_mime_type = $4,
+          uploaded_doc_uploaded_at = now(),
+          updated_at = now()
+        where id = $1
+        returning
+          uploaded_doc_path,
+          uploaded_doc_name,
+          uploaded_doc_mime_type,
+          uploaded_doc_uploaded_at
+        `,
+        [id, relPath, file.name || diskName, mime]
+      );
+    } catch (error) {
+      const pgCode =
+        typeof error === "object" && error !== null && "code" in error
+          ? String((error as { code?: unknown }).code || "")
+          : "";
+      if (pgCode === "42703") {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Database is missing permit registry upload columns. Run the latest migrations and retry.",
+          },
+          { status: 503 }
+        );
+      }
+      throw error;
+    }
 
     if (!result.rowCount) {
       return NextResponse.json({ success: false, message: "Permit registry row not found" }, { status: 404 });
