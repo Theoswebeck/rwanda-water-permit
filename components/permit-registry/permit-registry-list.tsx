@@ -987,7 +987,7 @@ function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
             {entry.uploaded_doc_name || "Uploaded permit document"}
           </p>
           <Button variant="outline" size="sm" asChild className="w-fit">
-            <a href={entry.uploaded_doc_path} target="_blank" rel="noopener noreferrer">
+            <a href={`/api/staff/permit-registry/${entry.id}/document`} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
               Open document
             </a>
