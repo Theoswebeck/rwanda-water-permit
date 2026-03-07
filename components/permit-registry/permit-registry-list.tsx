@@ -979,14 +979,26 @@ function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
 
 function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
   return (
-    <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3 bg-white/70 dark:bg-slate-900/40 space-y-2">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Uploaded doc</p>
+    <div className="rounded-xl border border-sky-200/70 dark:border-sky-900/70 p-4 bg-gradient-to-r from-sky-50/80 to-blue-50/70 dark:from-sky-950/30 dark:to-blue-950/20 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <div className="h-6 w-6 rounded-md bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center">
+          <FileText className="h-3.5 w-3.5 text-sky-700 dark:text-sky-300" />
+        </div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-sky-700/90 dark:text-sky-300">
+          Uploaded doc
+        </p>
+      </div>
       {entry.uploaded_doc_path ? (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-sm text-slate-800 dark:text-slate-200 break-all">
+          <p className="text-sm font-medium text-slate-800 dark:text-slate-100 break-all">
             {entry.uploaded_doc_name || "Uploaded permit document"}
           </p>
-          <Button variant="outline" size="sm" asChild className="w-fit">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="w-fit border-sky-300/80 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+          >
             <a href={`/api/staff/permit-registry/${entry.id}/document`} target="_blank" rel="noopener noreferrer">
               <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
               Open document
@@ -994,7 +1006,7 @@ function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
           </Button>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">No document uploaded yet for this permit.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">No document uploaded yet for this permit.</p>
       )}
     </div>
   );
