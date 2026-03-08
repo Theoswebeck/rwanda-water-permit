@@ -121,7 +121,9 @@ const transferFormSchema = z.object({
   transfereeAddressCell: z.string().min(1, "Cell is required"),
   transfereeAddressVillage: z.string().optional(),
   transfereeEmail: z.string().email("Valid email is required"),
-  transfereePhone: z.string().min(10, "Valid phone number is required"),
+  transfereePhone: z.string().refine((value) => value.replace(/\D/g, "").length >= 9, {
+    message: "Valid phone number is required",
+  }),
   transfereeCertification: z.boolean().refine(val => val === true, {
     message: "You must acknowledge full responsibility for the permit terms"
   }),
@@ -141,6 +143,10 @@ const hasValidEmail = (value?: string | null) => {
   if (!value) return false;
   const trimmed = value.trim();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+};
+const hasValidPhone = (value?: string | null) => {
+  if (!value) return false;
+  return value.replace(/\D/g, "").length >= 9;
 };
 const pickFirstString = (...values: unknown[]) => {
   for (const value of values) {
@@ -268,18 +274,23 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       profileRecord?.village_name,
       profileRecord?.current_village
     );
+    const permitAddressProvince = pickFirstString(permit.application?.province);
+    const permitAddressDistrict = pickFirstString(permit.application?.district);
+    const permitAddressSector = pickFirstString(permit.application?.sector);
+    const permitAddressCell = pickFirstString(permit.application?.cell);
+    const permitAddressVillage = pickFirstString(permit.application?.village);
 
     return {
       transferorName: profileName,
       transferorEmail: pickFirstString(userProfile?.email, userData.email),
       transferorPhone: profilePhone,
-      transferorAddressProvince: profileProvince,
-      transferorAddressDistrict: profileDistrict,
-      transferorAddressSector: profileSector,
-      transferorAddressCell: profileCell,
-      transferorAddressVillage: profileVillage,
+      transferorAddressProvince: pickFirstString(profileProvince, permitAddressProvince),
+      transferorAddressDistrict: pickFirstString(profileDistrict, permitAddressDistrict),
+      transferorAddressSector: pickFirstString(profileSector, permitAddressSector),
+      transferorAddressCell: pickFirstString(profileCell, permitAddressCell),
+      transferorAddressVillage: pickFirstString(profileVillage, permitAddressVillage),
     };
-  }, [userProfile, userData]);
+  }, [userProfile, userData, permit.application]);
 
   // Get default form values pre-filled from permit
   // IMPORTANT: The logged-in user is the TRANSFEROR (current owner transferring their permit)
@@ -482,7 +493,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const isTransfereeStepComplete = useMemo(() => (
     hasValue(transfereeName) &&
     hasValidEmail(transfereeEmail) &&
-    (transfereePhone?.trim().length || 0) >= 10 &&
+    hasValidPhone(transfereePhone) &&
     hasValue(transfereeProvince) &&
     hasValue(transfereeDistrict) &&
     hasValue(transfereeSector) &&
@@ -2149,7 +2160,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Telephone Number *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="+250788123456" disabled={readOnly} />
+                            <Input {...field} placeholder="0786123456 or 786123456" disabled={readOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
