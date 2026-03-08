@@ -75,6 +75,12 @@ export function buildPermitConflictIndex(
 }
 
 export function formatPermitConflictMessage(conflict: PermitConflictSummary): string {
-  const appRef = conflict.applicationNumber ? ` (${conflict.applicationNumber})` : ''
-  return `Blocked by ongoing ${conflict.kind} application${appRef} in status "${conflict.status}".`
+  const kindLabel: Record<Kind, string> = {
+    renewal: 'renewal',
+    modification: 'modification',
+    transfer: 'transfer',
+    application: 'application',
+  }
+  const appRef = conflict.applicationNumber ? ` (Ref: ${conflict.applicationNumber})` : ''
+  return `You already have a ${kindLabel[conflict.kind]} request for this permit in progress${appRef}. Please complete it first before starting another one.`
 }

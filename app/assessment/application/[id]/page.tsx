@@ -447,10 +447,6 @@ export default function AssessmentApplicationPage() {
     if (isReadOnly || isTransferApp) return [] as string[];
     const missing: string[] = [];
 
-    if (fieldReportFiles.length === 0) {
-      missing.push("Supporting documents");
-    }
-
     if (reportTypeForAssessment === "abstraction") {
       if (!hasText(assessmentReportData.sourceFlowLps)) missing.push("Section 3: Flow of the water source (L/sec)");
       if (!hasText(assessmentReportData.sourceFlowM3Day)) missing.push("Section 3: Flow of the water source (m3/day)");

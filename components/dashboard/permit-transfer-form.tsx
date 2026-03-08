@@ -142,6 +142,14 @@ const hasValidEmail = (value?: string | null) => {
   const trimmed = value.trim();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
 };
+const pickFirstString = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return "";
+};
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -223,30 +231,55 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
   const transferorProfileDefaults = useMemo(() => {
     const profileRecord = userProfile as Record<string, unknown> | null;
-    const profileName =
-      `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() ||
-      userProfile?.company_name ||
-      userData.name ||
-      '';
-    const profilePhone =
-      (typeof profileRecord?.phone === 'string' && profileRecord.phone.trim()) ||
-      (typeof profileRecord?.mobile_phone === 'string' && profileRecord.mobile_phone.trim()) ||
-      (typeof profileRecord?.company_phone === 'string' && profileRecord.company_phone.trim()) ||
-      (typeof profileRecord?.landline_phone === 'string' && profileRecord.landline_phone.trim()) ||
-      userData.phone ||
-      '';
+    const profileName = pickFirstString(
+      `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`,
+      userProfile?.company_name,
+      userData.name
+    );
+    const profilePhone = pickFirstString(
+      profileRecord?.phone,
+      profileRecord?.mobile_phone,
+      profileRecord?.company_phone,
+      profileRecord?.landline_phone,
+      userData.phone
+    );
+    const profileProvince = pickFirstString(
+      userProfile?.province,
+      profileRecord?.province_name,
+      profileRecord?.current_province
+    );
+    const profileDistrict = pickFirstString(
+      userProfile?.district,
+      profileRecord?.district_name,
+      profileRecord?.current_district
+    );
+    const profileSector = pickFirstString(
+      userProfile?.sector,
+      profileRecord?.sector_name,
+      profileRecord?.current_sector
+    );
+    const profileCell = pickFirstString(
+      userProfile?.cell,
+      profileRecord?.cell_name,
+      profileRecord?.current_cell
+    );
+    const profileVillage = pickFirstString(
+      userProfile?.village,
+      profileRecord?.village_name,
+      profileRecord?.current_village
+    );
 
     return {
       transferorName: profileName,
-      transferorEmail: userProfile?.email || userData.email || '',
+      transferorEmail: pickFirstString(userProfile?.email, userData.email),
       transferorPhone: profilePhone,
-      transferorAddressProvince: userProfile?.province || permit.application?.province || '',
-      transferorAddressDistrict: userProfile?.district || permit.application?.district || '',
-      transferorAddressSector: userProfile?.sector || permit.application?.sector || '',
-      transferorAddressCell: userProfile?.cell || permit.application?.cell || '',
-      transferorAddressVillage: userProfile?.village || permit.application?.village || '',
+      transferorAddressProvince: profileProvince,
+      transferorAddressDistrict: profileDistrict,
+      transferorAddressSector: profileSector,
+      transferorAddressCell: profileCell,
+      transferorAddressVillage: profileVillage,
     };
-  }, [userProfile, userData, permit.application]);
+  }, [userProfile, userData]);
 
   // Get default form values pre-filled from permit
   // IMPORTANT: The logged-in user is the TRANSFEROR (current owner transferring their permit)
@@ -363,7 +396,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     reValidateMode: "onChange"
   });
 
-  // Keep transferor fields aligned with the authenticated profile (user may open this page before profile bootstrap finishes).
+  // Prefill transferor fields from profile once available, without overriding user edits.
   useEffect(() => {
     const updates: Partial<TransferFormValues> = {
       transferorName: transferorProfileDefaults.transferorName,
@@ -378,7 +411,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
     (Object.keys(updates) as Array<keyof typeof updates>).forEach((field) => {
       const nextValue = updates[field] ?? '';
-      if ((form.getValues(field as keyof TransferFormValues) || '') !== nextValue) {
+      const currentValue = form.getValues(field as keyof TransferFormValues) || '';
+      const fieldState = form.getFieldState(field as keyof TransferFormValues);
+      if (!fieldState.isDirty && (!currentValue || currentValue.trim().length === 0) && nextValue) {
         form.setValue(field as keyof TransferFormValues, nextValue as never, {
           shouldDirty: false,
           shouldTouch: false,
@@ -1613,9 +1648,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Your Name *</FormLabel>
                           <FormControl>
-                            <Input {...field} disabled className="bg-gray-100" />
+                            <Input {...field} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                           </FormControl>
-                          <FormDescription>From your account profile</FormDescription>
+                          <FormDescription>Pre-filled from your account profile (editable)</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1629,7 +1664,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Representative Name</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1642,7 +1677,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Position</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1661,7 +1696,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Province / City of Kigali</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1674,7 +1709,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>District</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1687,7 +1722,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Sector</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1700,7 +1735,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Cell</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1713,7 +1748,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Village</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1730,7 +1765,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Email</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                            <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1743,7 +1778,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Telephone Number</FormLabel>
                           <FormControl>
-                            <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                            <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

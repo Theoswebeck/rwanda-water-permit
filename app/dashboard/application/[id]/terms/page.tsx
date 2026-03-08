@@ -874,26 +874,22 @@ export default function TermsConditionsPage() {
     setIsSubmittingFeedback(true);
     setFeedbackError(null);
     try {
-      const authResponse = await supabase.auth.getUser();
-      const user = (authResponse.data as any)?.user as { id?: string } | undefined;
-      if (!user?.id) {
-        throw new Error("Please sign in again to submit feedback.");
-      }
+      const response = await fetch("/api/feedback/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          applicationId,
+          feedbackText: trimmedFeedback,
+          rating: rating > 0 ? rating : undefined,
+        }),
+      });
 
-      const payload: Record<string, unknown> = {
-        application_id: applicationId,
-        user_id: user.id,
-        feedback_text: trimmedFeedback,
-        feedback_type: "terms_acceptance",
-      };
-      if (rating > 0) {
-        payload.rating = rating;
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "Failed to submit feedback. Please try again.");
       }
-
-      const { error } = await (supabase as any)
-        .from("portal_feedback")
-        .insert(payload);
-      if (error) throw error;
 
       navigateBack();
     } catch (error) {

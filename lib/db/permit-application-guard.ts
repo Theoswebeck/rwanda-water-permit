@@ -93,10 +93,9 @@ async function resolvePermitIdFromPayload(payload: Record<string, unknown>): Pro
 function buildConflictMessage(row: LinkedApplicationRow): string {
   const linkedKind = getPipelineKindFromRow(row)
   const linkedTypeLabel = linkedKind === 'application' ? 'application' : linkedKind
-  const statusLabel = row.status || 'in progress'
-  const appRef = row.application_number ? ` (${row.application_number})` : ''
+  const appRef = row.application_number ? ` (Ref: ${row.application_number})` : ''
 
-  return `This permit already has an ongoing ${linkedTypeLabel} application${appRef} in status "${statusLabel}". Only one ongoing renewal/modification/transfer is allowed per permit. Please finish the existing application first, or wait until it reaches approved/rejected/cancelled/expired.`
+  return `You already have a ${linkedTypeLabel} request for this permit in progress${appRef}. Only one ongoing request is allowed per permit. Please complete the existing request before starting a new one.`
 }
 
 export async function checkPermitPipelineConflict({
