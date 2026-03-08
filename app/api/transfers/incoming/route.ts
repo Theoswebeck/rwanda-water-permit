@@ -124,7 +124,13 @@ export async function GET(req: NextRequest) {
       .map((tr) => ({ ...tr, application: appById.get(tr.application_id) ?? null }))
       .filter((row) => {
         const app = row.application
-        return app && app.application_type === 'transfer' && app.status === 'approved_pending_permit'
+        if (!app || app.status !== 'approved_pending_permit') return false
+        if (app.application_type === 'transfer') return true
+        try {
+          const notes = typeof app.internal_notes === 'string' ? JSON.parse(app.internal_notes) : null
+          if (notes && notes.isTransfer === true) return true
+        } catch { /* invalid JSON, skip */ }
+        return false
       })
 
     return NextResponse.json({ success: true, transfers })

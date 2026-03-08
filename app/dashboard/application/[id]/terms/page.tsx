@@ -1,25 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  CheckCircle, 
-  AlertTriangle, 
-  FileCheck, 
-  Shield, 
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  CheckCircle,
+  AlertTriangle,
+  FileCheck,
+  Shield,
   Loader2,
-  Star
+  Star,
+  ArrowLeft,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
@@ -27,26 +25,15 @@ import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { contractTermsByVariant, splitContractSectionsByLanguage } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
+import { ProtectedRoute } from "@/components/auth/protected-route";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 
-interface TermsConditionsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  applicationId: string;
-  applicationNumber: string;
-  projectTitle: string;
-  onTermsAccepted: () => void;
-}
+export default function TermsConditionsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const applicationId = params.id as string;
 
-export function TermsConditionsModal({
-  isOpen,
-  onClose,
-  applicationId,
-  applicationNumber,
-  projectTitle,
-  onTermsAccepted
-}: TermsConditionsModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [hasReadTerms, setHasReadTerms] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [rating, setRating] = useState<number>(0);
@@ -54,7 +41,7 @@ export function TermsConditionsModal({
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [termsVariant, setTermsVariant] = useState<PermitVariant | null>(null);
-  const [isLoadingTerms, setIsLoadingTerms] = useState(false);
+  const [isLoadingTerms, setIsLoadingTerms] = useState(true);
   const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
   const [termsApplication, setTermsApplication] = useState<any | null>(null);
   const [issuedPermit, setIssuedPermit] = useState<{
@@ -64,28 +51,29 @@ export function TermsConditionsModal({
     isModification: boolean;
   } | null>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    // Reset local UI state when modal opens (and when switching applications).
-    setIsProcessing(false);
-    setHasReadTerms(false);
-    setAcceptedTerms(false);
-    setShowFeedback(false);
-    setRating(0);
-    setFeedback("");
-    setIsSubmittingFeedback(false);
-    setFeedbackError(null);
-    setIssuedPermit(null);
-  }, [isOpen, applicationId]);
+  const [applicationNumber, setApplicationNumber] = useState<string>("");
+  const [projectTitle, setProjectTitle] = useState<string>("");
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!applicationId) return;
 
     let cancelled = false;
-    async function loadVariant() {
+    async function loadData() {
       setIsLoadingTerms(true);
       setTermsLoadError(null);
       try {
+        const { data: headerData, error: headerError } = await supabase
+          .from("applications")
+          .select("application_number, project_title")
+          .eq("id", applicationId)
+          .single() as { data: any; error: any };
+
+        if (!cancelled && headerData) {
+          setApplicationNumber(headerData.application_number || "");
+          setProjectTitle(headerData.project_title || "");
+        }
+        if (headerError) console.warn("Could not load application header:", headerError);
+
         const { data, error } = await supabase
           .from("applications")
           .select(
@@ -133,11 +121,11 @@ export function TermsConditionsModal({
       }
     }
 
-    loadVariant();
+    loadData();
     return () => {
       cancelled = true;
     };
-  }, [isOpen, applicationId]);
+  }, [applicationId]);
 
   const resolvedTerms = useMemo(() => {
     if (!termsVariant) return null;
@@ -156,12 +144,12 @@ export function TermsConditionsModal({
     return [
       {
         key: "en",
-        label: "English Version",
+        label: "English",
         sections: englishSections.filter((section) => !isSignatureSection(section.title)),
       },
       {
         key: "rw",
-        label: "Kinyarwanda Version",
+        label: "Kinyarwanda",
         sections: kinyarwandaSections.filter((section) => !isSignatureSection(section.title)),
       },
     ].filter((group) => group.sections.length > 0);
@@ -175,6 +163,10 @@ export function TermsConditionsModal({
       return null;
     }
   }, [termsApplication, applicationNumber]);
+
+  const navigateBack = () => {
+    router.push(`/dashboard/application/${applicationId}`);
+  };
 
   const handleAcceptTerms = async () => {
     if (isProcessing) return;
@@ -241,7 +233,6 @@ export function TermsConditionsModal({
       }
 
       // Enforce expiration: if more than 6 months since submission and permit not yet issued, block issuance.
-      // (Permit issuance happens in THIS handler, so there should not be a permit yet.)
       const expiration = getApplicationExpiration({
         submitted_at: applicationData.submitted_at ?? null,
         hasPermit: false,
@@ -253,7 +244,6 @@ export function TermsConditionsModal({
           expires_at: expiration.expiresAt?.toISOString(),
         });
 
-        // Best-effort: mark the application as expired in DB.
         try {
           await (supabase as any)
             .from('applications')
@@ -266,16 +256,13 @@ export function TermsConditionsModal({
         throw new Error('This application has expired (6 months since submission). The permit can no longer be issued.');
       }
 
-      // Parse internal_notes once for reuse
       let parsedNotes: Record<string, any> | null = null;
       try {
         parsedNotes = applicationData.internal_notes ? JSON.parse(applicationData.internal_notes) : null;
       } catch { parsedNotes = null; }
 
-      // ── Resolve assessor-approved values (used for both new permits & modifications) ──
       const assessorAdjustments = parsedNotes?._assessorAdjustments;
 
-      // Duration: assessor adjustment > proposed_duration_years > form permitLengthYears > default 5
       const resolvedDurationYearsGlobal: number = (() => {
         if (typeof assessorAdjustments?.permitLengthYears === 'number' &&
             Number.isFinite(assessorAdjustments.permitLengthYears) &&
@@ -298,7 +285,6 @@ export function TermsConditionsModal({
         return 5;
       })();
 
-      // Volume: assessor adjustment > max_yearly > estimated_usage > form value > 0
       const resolvedVolumeM3: number = (() => {
         if (typeof assessorAdjustments?.recommendedVolumeM3 === 'number' &&
             Number.isFinite(assessorAdjustments.recommendedVolumeM3) &&
@@ -328,13 +314,11 @@ export function TermsConditionsModal({
         source: assessorAdjustments ? 'assessor adjustments' : 'application data',
       });
 
-      // Check if this is a renewal application
       const isRenewalApplication = applicationData.is_renewal === true || 
         (parsedNotes?.isRenewal === true);
       
       const renewedFromPermitId = applicationData.renewed_from_permit_id || parsedNotes?.originalPermitId || null;
 
-      // Check if this is a transfer application
       const isTransferApplication =
         (applicationData as any).application_type === 'transfer' ||
         parsedNotes?.isTransfer === true;
@@ -344,7 +328,6 @@ export function TermsConditionsModal({
         (parsedNotes?.originalPermitId as string | undefined) ||
         null;
 
-      // Check if this is a modification application
       const isModificationApplication = applicationData.is_modification === true ||
         (parsedNotes?.isModification === true);
       
@@ -353,7 +336,6 @@ export function TermsConditionsModal({
       let permitData: any;
 
       if (isModificationApplication) {
-        // MODIFICATION: Update existing permit with the newly approved values
         const permitRef = parsedNotes?.permitReference as { normalizedPermitNumber?: string; registrySnapshot?: { registry_id?: string; permit_number?: string } } | undefined;
         const isRegistryOnly = !modificationOriginalPermitId ||
           (typeof modificationOriginalPermitId === 'string' && modificationOriginalPermitId.startsWith('manual-'));
@@ -361,7 +343,6 @@ export function TermsConditionsModal({
         console.log('🔧 Processing MODIFICATION —', isRegistryOnly ? 'registry-only permit' : 'linked permit', modificationOriginalPermitId);
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
-        // Use the already-resolved duration (from assessor adjustments)
         const resolvedDurationYears: number | null = resolvedDurationYearsGlobal !== 5
           ? resolvedDurationYearsGlobal
           : (() => {
@@ -381,8 +362,6 @@ export function TermsConditionsModal({
           : null;
 
         if (!isRegistryOnly) {
-          // ── LINKED-PERMIT MODIFICATION (existing row in `permits` table) ──
-
           const { data: currentPermit, error: fetchPermitErr } = await supabase
             .from('permits')
             .select('*')
@@ -490,7 +469,6 @@ export function TermsConditionsModal({
           console.log('✅ Permit modified successfully:', permitData.permit_number,
             '| Updated values applied from modification application');
 
-          // Forward-sync to permit_registry if a matching row exists
           const permitNumForSync = currentPermit.permit_number || permitRef?.normalizedPermitNumber;
           if (permitNumForSync) {
             const locationParts = [applicationData.province, applicationData.district, applicationData.sector, applicationData.cell, applicationData.village].filter(Boolean);
@@ -511,8 +489,6 @@ export function TermsConditionsModal({
           }
 
         } else {
-          // ── REGISTRY-ONLY MODIFICATION (permit exists only in permit_registry, not in permits) ──
-
           const registryPermitNumber = permitRef?.normalizedPermitNumber
             || permitRef?.registrySnapshot?.permit_number
             || (parsedNotes?.originalPermitNumber as string | undefined)
@@ -524,7 +500,6 @@ export function TermsConditionsModal({
 
           console.log('📝 Registry-only modification for permit:', registryPermitNumber);
 
-          // 1. Update the permit_registry row with approved values
           const locationParts = [applicationData.province, applicationData.district, applicationData.sector, applicationData.cell, applicationData.village].filter(Boolean);
           const registrySyncResult = await syncPermitToRegistry(supabase, registryPermitNumber, {
             status: 'active',
@@ -542,7 +517,6 @@ export function TermsConditionsModal({
             console.warn('⚠️ permit_registry update returned no match (non-blocking):', registrySyncResult.error || 'no matching row');
           }
 
-          // 2. Create a new permits row to "promote" this registry permit into the system
           const permitInsertPayload = {
             application_id: applicationId,
             permit_number: registryPermitNumber,
@@ -604,14 +578,12 @@ export function TermsConditionsModal({
         }
 
       } else if (isRenewalApplication && renewedFromPermitId) {
-        // RENEWAL: Update existing permit dates instead of creating new permit
         console.log('🔄 Processing RENEWAL - updating existing permit:', renewedFromPermitId);
         console.log('📊 Using assessor-approved duration for renewal:', resolvedDurationYearsGlobal, 'years');
         
         const newIssuedDate = acceptedDateOnly;
         const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
         
-        // Use maybeSingle() instead of single() to avoid PGRST116 when RLS blocks the row
         const { data: updatedPermit, error: updateError } = await supabase
           .from('permits')
           .update({
@@ -639,7 +611,6 @@ export function TermsConditionsModal({
           '| New issued date:', newIssuedDate, 
           '| New expiry date:', newExpiryDate);
       } else if (isTransferApplication && transferOriginalPermitId) {
-        // TRANSFER: Create a new permit record for the transferee, linked to the original permit.
         console.log('🔁 Processing TRANSFER - creating new permit from original permit:', transferOriginalPermitId);
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
@@ -701,8 +672,6 @@ export function TermsConditionsModal({
         console.log('✅ Transfer permit created successfully:', permitData.permit_number);
 
       } else {
-        // NEW PERMIT: Create permit in database with comprehensive data
-        // Use assessor-approved terms (duration + volume) instead of hardcoded/raw values
         console.log('📝 Creating NEW permit in database...');
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
@@ -726,7 +695,6 @@ export function TermsConditionsModal({
               'Allow inspections as required',
               ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
             ],
-            // Include location and polygon data for permit enforcement
             location: {
               province: applicationData.province,
               district: applicationData.district,
@@ -736,7 +704,6 @@ export function TermsConditionsModal({
               coordinates: applicationData.coordinates,
               description: applicationData.location_description
             },
-            // Include project details
             project: {
               title: applicationData.project_title,
               description: applicationData.project_description,
@@ -765,8 +732,6 @@ export function TermsConditionsModal({
         console.log('✅ Permit created successfully:', permitData.permit_number);
       }
 
-      // Store issued permit info for the completion screen.
-      // (PDF generation is now optional/user-triggered to avoid blocking acceptance.)
       if (permitData?.id && permitData?.permit_number) {
         setIssuedPermit({
           permitId: permitData.id,
@@ -776,7 +741,6 @@ export function TermsConditionsModal({
         });
       }
 
-      // Finalize the workflow: once terms are accepted and permit is created, mark application as approved
       console.log('📋 Updating application status to approved...');
       const { error: updateError } = await (supabase as any)
         .from('applications')
@@ -790,12 +754,10 @@ export function TermsConditionsModal({
 
       if (updateError) {
         console.warn('⚠️ Warning: Failed to update application status:', updateError);
-        // Continue anyway - permit was created successfully
       } else {
         console.log('✅ Application status updated successfully');
       }
 
-      // If this was a transfer, revoke the original permit (server-side via service role).
       if (isTransferApplication && transferOriginalPermitId) {
         try {
           console.log('🧾 Revoking original permit after transfer issuance...');
@@ -822,11 +784,9 @@ export function TermsConditionsModal({
       console.log('📋 Permit issuance completed. PDFs can be downloaded from the completion screen.');
       
       setShowFeedback(true);
-      // Don't call onTermsAccepted() immediately - let user see feedback first
     } catch (error) {
       console.error('❌ Error accepting terms:', error);
       
-      // Provide more specific error messages
       let errorMessage = "❌ Failed to accept terms. Please try again.";
       if (error instanceof Error) {
         if (error.message.includes('expired')) {
@@ -850,7 +810,6 @@ export function TermsConditionsModal({
   const handleRejectTerms = async () => {
     setIsProcessing(true);
     try {
-      // Defense-in-depth: transfer terms can only be rejected by the approved transferee.
       const authResponse = await supabase.auth.getUser();
       const currentUser = (authResponse.data as any)?.user as { id?: string } | undefined;
       if (!currentUser?.id) {
@@ -885,7 +844,6 @@ export function TermsConditionsModal({
         }
       }
 
-      // Update application with terms rejection — move to rejected status
       const { error: updateError } = await (supabase as any)
         .from('applications')
         .update({
@@ -900,7 +858,7 @@ export function TermsConditionsModal({
       if (updateError) throw updateError;
 
       console.log("Terms rejected. Application moved to rejected status.");
-      onClose();
+      navigateBack();
     } catch (error) {
       console.error('Error rejecting terms:', error);
       console.log("❌ Failed to reject terms. Please try again.");
@@ -937,8 +895,7 @@ export function TermsConditionsModal({
         .insert(payload);
       if (error) throw error;
 
-      onTermsAccepted();
-      onClose();
+      navigateBack();
     } catch (error) {
       console.error("❌ Error submitting feedback:", error);
       setFeedbackError(error instanceof Error ? error.message : "Failed to submit feedback. Please try again.");
@@ -947,247 +904,278 @@ export function TermsConditionsModal({
     }
   };
 
-  return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (open) return;
-        // Keep feedback step on screen until explicit feedback submission.
-        if (showFeedback) return;
-        onClose();
-      }}
-    >
-      <DialogContent
-        className="w-[98vw] max-w-[98vw] sm:max-w-[98vw] md:max-w-[96vw] lg:max-w-[94vw] xl:max-w-[90rem] h-[96vh] max-h-[96vh] p-0 overflow-hidden"
-        showCloseButton={!showFeedback}
-      >
-        <div className="flex h-full min-h-0 flex-col">
-          <div className="px-5 pt-4">
-            <DialogHeader>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-green-100 rounded-full">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <DialogTitle className="text-2xl font-semibold text-green-800">
-                    Application Approved!
-                  </DialogTitle>
-                  <DialogDescription className="text-base text-gray-600 mt-1">
-                    Application #{applicationNumber} - {projectTitle}
-                  </DialogDescription>
-                </div>
-              </div>
+  const defaultTab = visibleLanguageGroups.length > 0 ? visibleLanguageGroups[0].key : "en";
 
-              <Card className="bg-green-50 border-green-200">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-green-700">
-                    <FileCheck className="h-5 w-5" />
-                    <span className="font-medium">Your water permit application has been approved!</span>
+  const renderTermsSections = (sections: typeof visibleLanguageGroups[number]["sections"]) => (
+    <div className="space-y-6 py-4">
+      {sections.map((section, idx) => (
+        <div key={`${section.title}-${idx}`}>
+          <h4 className="mb-3 text-base font-semibold text-foreground">{section.title}</h4>
+          <div className="space-y-2.5">
+            {section.paragraphs.map((p, pIdx) => (
+              <p key={pIdx} className="text-sm leading-relaxed text-muted-foreground">
+                {placeholderCtx ? fillContractText(p, placeholderCtx) : p}
+              </p>
+            ))}
+          </div>
+          {idx < sections.length - 1 && <Separator className="mt-6" />}
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <ProtectedRoute>
+      <DashboardLayout>
+        <div className="flex min-h-[calc(100vh-4rem)] flex-col">
+          {/* Header */}
+          <div className="border-b bg-background px-4 py-4 sm:px-6 lg:px-8">
+            <div className="mx-auto max-w-4xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {!showFeedback && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={navigateBack}
+                      className="h-9 w-9 shrink-0"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <div>
+                    <h1 className="text-lg font-semibold text-foreground sm:text-xl">
+                      Terms &amp; Conditions
+                    </h1>
+                    {applicationNumber && (
+                      <p className="text-sm text-muted-foreground">
+                        {projectTitle ? `${projectTitle} — ` : ""}#{applicationNumber}
+                      </p>
+                    )}
                   </div>
-                  <p className="text-sm text-green-600 mt-2">
-                    Please review and accept the terms and conditions below to receive your digital water permit.
-                  </p>
-                </CardContent>
-              </Card>
-            </DialogHeader>
+                </div>
+                <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
+                  <CheckCircle className="mr-1.5 h-3 w-3" />
+                  Approved
+                </Badge>
+              </div>
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
-            {!showFeedback ? (
-              <div className="space-y-6 pt-3">
-                <div>
-                  <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <Shield className="h-6 w-6 text-blue-600" />
-                    {resolvedTerms?.heading ?? "Terms and Conditions for Water Permit"}
-                  </h3>
-
-                  <Card className="border-blue-200">
-                    <CardContent className="max-h-[62vh] overflow-y-auto p-5 space-y-4">
-                {isLoadingTerms ? (
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-base">Loading contract terms…</span>
-                  </div>
-                ) : termsLoadError ? (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+              {!showFeedback ? (
+                <div className="space-y-6">
+                  {/* Approval banner */}
+                  <Card className="border-green-200 bg-green-50/50">
+                    <CardContent className="flex items-start gap-3 p-4">
+                      <FileCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
                       <div>
-                        <p className="text-base font-medium text-amber-800">Could not load terms</p>
-                        <p className="text-base text-amber-700 mt-1">{termsLoadError}</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : resolvedTerms ? (
-                  <>
-                    <div className="space-y-8 text-base">
-                      {visibleLanguageGroups.map((group, groupIdx) => (
-                        <div key={group.key} className="space-y-5">
-                          {visibleLanguageGroups.length > 1 ? (
-                            <div className="rounded-md bg-slate-50 px-4 py-3">
-                              <h4 className="text-lg font-semibold text-slate-900">{group.label}</h4>
-                            </div>
-                          ) : null}
-
-                          <div className="space-y-5">
-                            {group.sections.map((section, idx) => (
-                              <div key={`${group.key}-${section.title}-${idx}`}>
-                                <h5 className="mb-3 text-lg font-semibold text-gray-900">{section.title}</h5>
-                                <div className="space-y-3">
-                                  {section.paragraphs.map((p, pIdx) => (
-                                    <p key={pIdx} className="text-gray-700 leading-relaxed">
-                                      {placeholderCtx ? fillContractText(p, placeholderCtx) : p}
-                                    </p>
-                                  ))}
-                                </div>
-                                {idx < group.sections.length - 1 ? <Separator className="mt-6" /> : null}
-                              </div>
-                            ))}
-                          </div>
-
-                          {groupIdx < visibleLanguageGroups.length - 1 ? <Separator className="mt-2" /> : null}
-                        </div>
-                      ))}
-                    </div>
-
-                    {resolvedTerms.importantNotice ? (
-                      <div className="mt-8 p-6 bg-amber-50 border border-amber-200 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-base font-medium text-amber-800">
-                              {resolvedTerms.importantNotice.title}
-                            </p>
-                            <p className="text-base text-amber-700 mt-1">{resolvedTerms.importantNotice.body}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-base font-medium text-amber-800">Terms not available</p>
-                        <p className="text-base text-amber-700 mt-1">
-                          We don&apos;t have contract terms configured for this application type yet.
+                        <p className="text-sm font-medium text-green-800">
+                          Your water permit application has been approved!
+                        </p>
+                        <p className="mt-1 text-sm text-green-700/80">
+                          Please review and accept the terms and conditions below to receive your digital water permit.
                         </p>
                       </div>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                    </CardContent>
+                  </Card>
 
-          <div className="space-y-6">
-            <div className="flex items-center space-x-3">
-              <Checkbox 
-                id="read-terms" 
-                checked={hasReadTerms}
-                onCheckedChange={(checked) => setHasReadTerms(checked as boolean)}
-              />
-              <label 
-                htmlFor="read-terms" 
-                className="text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                I have read and understood the terms and conditions above
-              </label>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <Checkbox 
-                id="accept-terms" 
-                checked={acceptedTerms}
-                onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
-                disabled={!hasReadTerms}
-              />
-              <label 
-                htmlFor="accept-terms" 
-                className="text-base font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                I accept the terms and conditions and agree to comply with all requirements
-              </label>
-            </div>
-          </div>
-              </div>
-            ) : (
-              <div className="space-y-6 pt-4">
-                <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-                  <p className="text-base font-medium text-green-800">
-                    ✅ Permit issued successfully{issuedPermit?.permitNumber ? ` (${issuedPermit.permitNumber})` : ""}.
-                  </p>
-                  <p className="text-sm text-green-700 mt-1">
-                    Your permit has been issued. Please share your feedback to continue.
-                  </p>
+                  {/* Contract terms */}
+                  <Card>
+                    <CardContent className="p-0">
+                      <div className="flex items-center gap-2 border-b px-5 py-4">
+                        <Shield className="h-5 w-5 text-primary" />
+                        <h2 className="text-base font-semibold text-foreground">
+                          {resolvedTerms?.heading ?? "Terms and Conditions for Water Permit"}
+                        </h2>
+                      </div>
+
+                      <div className="px-5 pb-5">
+                        {isLoadingTerms ? (
+                          <div className="flex items-center gap-2 py-12 justify-center text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm">Loading contract terms...</span>
+                          </div>
+                        ) : termsLoadError ? (
+                          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                              <div>
+                                <p className="text-sm font-medium text-amber-800">Could not load terms</p>
+                                <p className="mt-1 text-sm text-amber-700">{termsLoadError}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : resolvedTerms ? (
+                          <>
+                            {visibleLanguageGroups.length > 1 ? (
+                              <Tabs defaultValue={defaultTab} className="mt-4">
+                                <TabsList>
+                                  {visibleLanguageGroups.map((group) => (
+                                    <TabsTrigger key={group.key} value={group.key}>
+                                      {group.label}
+                                    </TabsTrigger>
+                                  ))}
+                                </TabsList>
+                                {visibleLanguageGroups.map((group) => (
+                                  <TabsContent key={group.key} value={group.key}>
+                                    <ScrollArea className="h-[50vh]">
+                                      {renderTermsSections(group.sections)}
+                                    </ScrollArea>
+                                  </TabsContent>
+                                ))}
+                              </Tabs>
+                            ) : visibleLanguageGroups.length === 1 ? (
+                              <ScrollArea className="mt-4 h-[50vh]">
+                                {renderTermsSections(visibleLanguageGroups[0].sections)}
+                              </ScrollArea>
+                            ) : null}
+
+                            {resolvedTerms.importantNotice && (
+                              <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                                <div className="flex items-start gap-2">
+                                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                  <div>
+                                    <p className="text-sm font-medium text-amber-800">
+                                      {resolvedTerms.importantNotice.title}
+                                    </p>
+                                    <p className="mt-1 text-sm text-amber-700">
+                                      {resolvedTerms.importantNotice.body}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                              <div>
+                                <p className="text-sm font-medium text-amber-800">Terms not available</p>
+                                <p className="mt-1 text-sm text-amber-700">
+                                  We don&apos;t have contract terms configured for this application type yet.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Single acceptance checkbox */}
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="accept-terms"
+                          checked={acceptedTerms}
+                          onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
+                          className="mt-0.5"
+                        />
+                        <label
+                          htmlFor="accept-terms"
+                          className="text-sm font-medium leading-snug cursor-pointer select-none"
+                        >
+                          I have read, understood, and accept the terms and conditions above, and I agree to comply with all stated requirements
+                        </label>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
+              ) : (
+                /* Feedback step */
+                <div className="space-y-6">
+                  <Card className="border-green-200 bg-green-50/50">
+                    <CardContent className="p-4">
+                      <p className="text-sm font-medium text-green-800">
+                        Permit issued successfully{issuedPermit?.permitNumber ? ` (${issuedPermit.permitNumber})` : ""}.
+                      </p>
+                      <p className="mt-1 text-sm text-green-700/80">
+                        Your permit has been issued. Please share your feedback to continue.
+                      </p>
+                    </CardContent>
+                  </Card>
 
-                <h3 className="text-xl font-semibold">How was your experience using the water permit system?</h3>
-                <div className="flex items-center gap-2">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setRating(s)}
-                      aria-label={`Rate ${s} stars`}
-                      disabled={isSubmittingFeedback}
-                    >
-                      <Star
-                        className={`h-6 w-6 ${
-                          rating >= s ? "text-yellow-500 fill-yellow-500" : "text-gray-300"
-                        }`}
+                  <Card>
+                    <CardContent className="space-y-5 p-5">
+                      <h3 className="text-base font-semibold text-foreground">
+                        How was your experience using the water permit system?
+                      </h3>
+
+                      <div className="flex items-center gap-1.5">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => setRating(s)}
+                            aria-label={`Rate ${s} stars`}
+                            disabled={isSubmittingFeedback}
+                            className="rounded-md p-1 transition-colors hover:bg-muted"
+                          >
+                            <Star
+                              className={`h-6 w-6 ${
+                                rating >= s ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30"
+                              }`}
+                            />
+                          </button>
+                        ))}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {rating === 0 ? "Select a rating" : `${rating}/5`}
+                        </span>
+                      </div>
+
+                      <Textarea
+                        placeholder="Share any feedback to help us improve..."
+                        rows={4}
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                        disabled={isSubmittingFeedback}
                       />
-                    </button>
-                  ))}
+
+                      {feedbackError && (
+                        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                          {feedbackError}
+                        </div>
+                      )}
+
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={handleSubmitFeedback}
+                          disabled={isSubmittingFeedback || !feedback.trim()}
+                        >
+                          {isSubmittingFeedback ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Submitting...
+                            </>
+                          ) : (
+                            "Submit Feedback"
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  1 star = poor experience, 3 stars = average, 5 stars = excellent.
-                </p>
-                <textarea
-                  className="w-full border rounded-md p-3"
-                  rows={4}
-                  placeholder="Share any feedback to help us improve..."
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  disabled={isSubmittingFeedback}
-                />
-                {feedbackError ? (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
-                    ❌ {feedbackError}
-                  </div>
-                ) : null}
-                <div className="flex justify-end gap-2">
-                  <Button
-                    onClick={handleSubmitFeedback}
-                    disabled={isSubmittingFeedback || !feedback.trim()}
-                  >
-                    {isSubmittingFeedback ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      "Submit Feedback"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
+          {/* Sticky footer */}
           {!showFeedback && (
-            <div className="border-t bg-background px-6 py-4">
-              <DialogFooter className="gap-3">
+            <div className="sticky bottom-0 border-t bg-background px-4 py-4 sm:px-6 lg:px-8">
+              <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
                 <Button
                   variant="outline"
                   onClick={handleRejectTerms}
                   disabled={isProcessing}
-                  className="flex items-center gap-2 px-6 py-3"
                 >
                   {isProcessing ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <AlertTriangle className="h-5 w-5" />
+                    <AlertTriangle className="mr-2 h-4 w-4" />
                   )}
                   Reject Terms
                 </Button>
@@ -1195,20 +1183,20 @@ export function TermsConditionsModal({
                 <Button
                   onClick={handleAcceptTerms}
                   disabled={!acceptedTerms || isProcessing}
-                  className="bg-green-600 hover:bg-green-700 flex items-center gap-2 px-6 py-3"
+                  className="bg-green-600 hover:bg-green-700"
                 >
                   {isProcessing ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    <CheckCircle className="h-5 w-5" />
+                    <CheckCircle className="mr-2 h-4 w-4" />
                   )}
-                  Accept Terms & Issue Permit
+                  Accept Terms &amp; Issue Permit
                 </Button>
-              </DialogFooter>
+              </div>
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </DashboardLayout>
+    </ProtectedRoute>
   );
-} 
+}

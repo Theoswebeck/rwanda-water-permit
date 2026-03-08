@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { TermsConditionsModal } from "@/components/dashboard/terms-conditions-modal";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
@@ -286,10 +285,10 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
 
 export default function ApplicationDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const { userProfile } = useAuth();
   const [application, setApplication] = useState<ApplicationWithRelations | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [termsModalOpen, setTermsModalOpen] = useState(false);
   const [transferTermsBlocked, setTransferTermsBlocked] = useState(false);
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
@@ -554,7 +553,7 @@ export default function ApplicationDetailPage() {
           
           console.log('📄 Documents found:', documents.length, 'documents');
           
-          // Show Terms modal if status is approved_pending_permit.
+          // Redirect to Terms page if status is approved_pending_permit.
           // Special case: for transfer applications, only the transferee who approved the transfer request
           // can accept Terms & Conditions.
           if (appWithRelations.status === 'approved_pending_permit') {
@@ -564,7 +563,7 @@ export default function ApplicationDetailPage() {
 
             if (!isTransfer) {
               setTransferTermsBlocked(false);
-              setTermsModalOpen(true);
+              router.push(`/dashboard/application/${params.id}/terms`);
             } else {
               const approval = parsedNotes?.transferApproval;
               const transfereeApproved =
@@ -573,7 +572,9 @@ export default function ApplicationDetailPage() {
                 approval.transfereeUserId === userProfile?.id;
 
               setTransferTermsBlocked(!transfereeApproved);
-              setTermsModalOpen(!!transfereeApproved);
+              if (transfereeApproved) {
+                router.push(`/dashboard/application/${params.id}/terms`);
+              }
             }
           } else {
             setTransferTermsBlocked(false);
@@ -1137,21 +1138,6 @@ export default function ApplicationDetailPage() {
         </motion.div>
       </div>
 
-      {/* Terms & Conditions Modal */}
-      {application && (application.status === 'approved_pending_permit' || termsModalOpen) && (
-        <TermsConditionsModal
-          isOpen={termsModalOpen}
-          onClose={() => setTermsModalOpen(false)}
-          applicationId={application.id}
-          applicationNumber={application.application_number || ''}
-          projectTitle={application.project_title}
-          onTermsAccepted={() => {
-            refresh();
-            setTermsModalOpen(false);
-          }}
-        />
-      )}
-      
     </DashboardLayout>
     </ProtectedRoute>
   );

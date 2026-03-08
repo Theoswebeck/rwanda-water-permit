@@ -116,7 +116,14 @@ export async function POST(req: NextRequest) {
     if (!app) {
       return NextResponse.json({ success: false, message: 'Linked application not found' }, { status: 404 })
     }
-    if (app.application_type !== 'transfer') {
+    let appIsTransfer = app.application_type === 'transfer'
+    if (!appIsTransfer) {
+      try {
+        const notes = typeof app.internal_notes === 'string' ? JSON.parse(app.internal_notes) : null
+        if (notes && notes.isTransfer === true) appIsTransfer = true
+      } catch { /* invalid JSON */ }
+    }
+    if (!appIsTransfer) {
       return NextResponse.json({ success: false, message: 'Linked application is not a transfer application' }, { status: 400 })
     }
     if (app.status !== 'approved_pending_permit') {

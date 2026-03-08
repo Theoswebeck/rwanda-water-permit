@@ -181,20 +181,28 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
     let emailSent = Boolean(currentNotif?.email_sent)
 
     if (!emailSent && isNonEmptyString(transfereeEmail)) {
-      const emailRes = await sendResendEmail({ to: transfereeEmail, subject, title, text })
-      emailSent = Boolean(emailRes.delivered) || emailSent
+      try {
+        const emailRes = await sendResendEmail({ to: transfereeEmail, subject, title, text })
+        emailSent = Boolean(emailRes.delivered) || emailSent
+      } catch (emailErr) {
+        console.warn('⚠️ Transfer pending-terms email failed (will attempt SMS independently):', emailErr)
+      }
     }
 
     if (!smsSent) {
-      const smsPhone = formatTransferPhoneForSms(transfereePhoneRaw)
-      if (smsPhone) {
-        const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
-        const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-        const sms = `RWB: Transfer ${applicationNumber} approved. Login with same email+phone, open status Approved - Pending Terms, then accept terms to complete transfer. Portal: ${portalUrl}`
-        if (pindo.isValidRwandanPhone(smsPhone)) {
-          await pindo.sendSMS(smsPhone, sms, senderName)
-          smsSent = true
+      try {
+        const smsPhone = formatTransferPhoneForSms(transfereePhoneRaw)
+        if (smsPhone) {
+          const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
+          const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
+          const sms = `RWB: Transfer ${applicationNumber} approved. Login with same email+phone, open status Approved - Pending Terms, then accept terms to complete transfer. Portal: ${portalUrl}`
+          if (pindo.isValidRwandanPhone(smsPhone)) {
+            await pindo.sendSMS(smsPhone, sms, senderName)
+            smsSent = true
+          }
         }
+      } catch (smsErr) {
+        console.warn('⚠️ Transfer pending-terms SMS failed:', smsErr)
       }
     }
 

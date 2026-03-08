@@ -114,7 +114,7 @@ export default function ReviewerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [startingReview, setStartingReview] = useState<string | null>(null);
-  const [activeChipId, setActiveChipId] = useState("new_submissions");
+  const [activeChipIds, setActiveChipIds] = useState<string[]>(["new_submissions", "pending_review"]);
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
   const [permitByApplicationId, setPermitByApplicationId] = useState<Record<string, LinkedPermitLite>>({});
   const [busyAction, setBusyAction] = useState<{ appId: string; kind: "permit_pdf" | "terms_pdf" } | null>(null);
@@ -653,9 +653,12 @@ export default function ReviewerDashboard() {
 
   // Derive active statuses from chip selection
   const activeStatuses = useMemo(() => {
-    const chip = REVIEWER_CHIPS.find((c) => c.id === activeChipId);
-    return chip?.statuses ?? [];
-  }, [activeChipId]);
+    const statuses = activeChipIds.flatMap((chipId) => {
+      const chip = REVIEWER_CHIPS.find((c) => c.id === chipId);
+      return chip?.statuses ?? [];
+    });
+    return Array.from(new Set(statuses));
+  }, [activeChipIds]);
 
   const filterApplications = useCallback(
     (applications: ReviewApplication[]) => {
@@ -927,7 +930,10 @@ export default function ReviewerDashboard() {
     );
   }
 
-  const activeChipLabel = REVIEWER_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
+  const activeChipLabel = activeChipIds
+    .map((chipId) => REVIEWER_CHIPS.find((c) => c.id === chipId)?.label)
+    .filter((label): label is string => Boolean(label))
+    .join(" + ") || "All Applications";
 
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin', 'approver']} requireProfile={true}>
@@ -978,8 +984,8 @@ export default function ReviewerDashboard() {
             {/* Status Filter Chips */}
             <StatusFilterChips
               chips={REVIEWER_CHIPS}
-              activeChipId={activeChipId}
-              onChipChange={setActiveChipId}
+              activeChipIds={activeChipIds}
+              onChipIdsChange={setActiveChipIds}
               applications={reviewApplications}
           />
 

@@ -22,10 +22,14 @@ export interface StatusChipDef {
 export interface StatusFilterChipsProps {
   /** Chip definitions — order determines display order. */
   chips: StatusChipDef[];
-  /** The ID of the currently active chip (controlled). */
-  activeChipId: string;
-  /** Callback when a chip is clicked. */
-  onChipChange: (chipId: string) => void;
+  /** The ID of the currently active chip (single-select mode). */
+  activeChipId?: string;
+  /** The IDs of currently active chips (multi-select mode). */
+  activeChipIds?: string[];
+  /** Callback when a chip is clicked (single-select mode). */
+  onChipChange?: (chipId: string) => void;
+  /** Callback when chip IDs change (multi-select mode). */
+  onChipIdsChange?: (chipIds: string[]) => void;
   /** Full applications array (used to compute counts). Must have a `.status` field. */
   applications: Array<{ status: string }>;
   /** Optional className for the outer container. */
@@ -37,10 +41,19 @@ export interface StatusFilterChipsProps {
 export function StatusFilterChips({
   chips,
   activeChipId,
+  activeChipIds,
   onChipChange,
+  onChipIdsChange,
   applications,
   className,
 }: StatusFilterChipsProps) {
+  const isMultiSelect = Array.isArray(activeChipIds);
+  const activeIds = isMultiSelect
+    ? activeChipIds
+    : activeChipId
+      ? [activeChipId]
+      : [];
+
   // Compute counts per chip from the full applications list
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -64,14 +77,34 @@ export function StatusFilterChips({
     <div className={cn("w-full", className)}>
       <div className="flex flex-wrap items-center gap-2.5">
         {chips.map((chip) => {
-          const isActive = chip.id === activeChipId;
+          const isActive = activeIds.includes(chip.id);
           const count = counts[chip.id] ?? 0;
 
           return (
             <button
               key={chip.id}
               type="button"
-              onClick={() => onChipChange(chip.id)}
+              onClick={() => {
+                if (isMultiSelect) {
+                  if (!onChipIdsChange || !activeChipIds) {
+                    return;
+                  }
+
+                  if (isActive) {
+                    // Keep at least one filter active in multi-select mode.
+                    if (activeChipIds.length === 1) {
+                      return;
+                    }
+                    onChipIdsChange(activeChipIds.filter((id) => id !== chip.id));
+                    return;
+                  }
+
+                  onChipIdsChange([...activeChipIds, chip.id]);
+                  return;
+                }
+
+                onChipChange?.(chip.id);
+              }}
               className={cn(
                 "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-150 border select-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
