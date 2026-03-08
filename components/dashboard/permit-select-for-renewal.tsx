@@ -31,6 +31,12 @@ import type { Permit, Application } from "@/types/database";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { ManualPermitEntryCard } from "@/components/dashboard/manual-permit-entry-card";
 import type { ManualPermitSelectionPayload } from "@/lib/permit/permit-reference";
+import {
+  buildPermitConflictIndex,
+  formatPermitConflictMessage,
+  type PermitConflictSummary,
+  type PipelineApplicationLike,
+} from "@/lib/permit/permit-pipeline-client";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -79,6 +85,7 @@ export function PermitSelectForRenewal({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
+  const [permitConflicts, setPermitConflicts] = useState<Record<string, PermitConflictSummary>>({});
 
   useEffect(() => {
     fetchPermits();
@@ -92,6 +99,7 @@ export function PermitSelectForRenewal({
       if (!userId) {
         console.warn('No userId provided - cannot fetch user permits');
         setPermits([]);
+        setPermitConflicts({});
         setHolderProfile(null);
         setLoading(false);
         return;
@@ -108,7 +116,7 @@ export function PermitSelectForRenewal({
       // First, get the user's application IDs
       const { data: userApplications, error: appsError } = await supabase
         .from('applications')
-        .select('id')
+        .select('id,status,created_at,application_type,is_renewal,is_modification,renewed_from_permit_id,modified_from_application_id,internal_notes,application_number')
         .eq('applicant_id', userId);
 
       if (appsError) {
@@ -120,6 +128,7 @@ export function PermitSelectForRenewal({
       if (applicationIds.length === 0) {
         // User has no applications, so no permits
         setPermits([]);
+        setPermitConflicts({});
         setLoading(false);
         return;
       }
@@ -170,9 +179,14 @@ export function PermitSelectForRenewal({
         throw fetchError;
       }
 
-      setPermits(data || []);
+      const permitRows = (data || []) as PermitWithApplication[];
+      setPermits(permitRows);
+      setPermitConflicts(
+        buildPermitConflictIndex(permitRows, (userApplications || []) as PipelineApplicationLike[])
+      );
     } catch (err) {
       console.error('Error fetching permits:', err);
+      setPermitConflicts({});
       setError(err instanceof Error ? err.message : 'Failed to fetch permits');
     } finally {
       setLoading(false);
@@ -332,13 +346,23 @@ export function PermitSelectForRenewal({
   const handleSelectPermit = () => {
     const permit = permits.find(p => p.id === selectedPermitId);
     if (permit) {
+      const conflict = permitConflicts[permit.id];
+      if (conflict) {
+        setError(formatPermitConflictMessage(conflict));
+        return;
+      }
       onPermitSelect(permit);
     }
   };
 
   const getCardBorderClass = (permit: PermitWithApplication) => {
     const urgency = getExpiryUrgency(permit);
+    const isBlocked = Boolean(permitConflicts[permit.id]);
     const isSelected = selectedPermitId === permit.id;
+
+    if (isBlocked) {
+      return 'border-red-200 bg-red-50/30 hover:border-red-300';
+    }
     
     if (isSelected) {
       return 'border-green-500 ring-2 ring-green-200 bg-green-50/50';
@@ -355,6 +379,8 @@ export function PermitSelectForRenewal({
         return 'border-gray-200 hover:border-gray-300 hover:bg-gray-50';
     }
   };
+
+  const selectedPermitConflict = selectedPermitId ? permitConflicts[selectedPermitId] : undefined;
 
   return (
     <motion.div
@@ -436,12 +462,17 @@ export function PermitSelectForRenewal({
               {filteredPermits.map((permit) => {
                 const urgency = getExpiryUrgency(permit);
                 const daysUntilExpiry = getDaysUntilExpiry(permit.expiry_date);
+                const conflict = permitConflicts[permit.id];
+                const isBlocked = Boolean(conflict);
                 
                 return (
                   <Card
                     key={permit.id}
-                    className={`cursor-pointer transition-all ${getCardBorderClass(permit)}`}
-                    onClick={() => setSelectedPermitId(permit.id)}
+                    className={`transition-all ${isBlocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'} ${getCardBorderClass(permit)}`}
+                    onClick={() => {
+                      if (isBlocked) return;
+                      setSelectedPermitId(permit.id);
+                    }}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between">
@@ -458,6 +489,9 @@ export function PermitSelectForRenewal({
                               <CheckCircle className="h-5 w-5 text-green-600" />
                             )}
                           </div>
+                          {conflict && (
+                            <p className="text-xs text-red-700">{formatPermitConflictMessage(conflict)}</p>
+                          )}
 
                           <p className="font-medium text-gray-900">
                             {permit.application?.project_title || 'Untitled Project'}
@@ -522,7 +556,7 @@ export function PermitSelectForRenewal({
             </Button>
             <Button
               onClick={handleSelectPermit}
-              disabled={!selectedPermitId}
+              disabled={!selectedPermitId || Boolean(selectedPermitConflict)}
               className="bg-green-600 hover:bg-green-700 gap-2"
             >
               Continue with Renewal

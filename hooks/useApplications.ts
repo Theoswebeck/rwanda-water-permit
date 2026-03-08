@@ -69,9 +69,10 @@ export function useApplications({
       if (created) setApplications((prev) => [created, ...prev])
       return created
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create application')
+      const message = err instanceof Error ? err.message : 'Failed to create application'
+      setError(message)
       console.error('Error creating application:', err)
-      return null
+      throw new Error(message)
     }
   }, [])
 

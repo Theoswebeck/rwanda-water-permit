@@ -63,6 +63,11 @@ export async function GET(req: NextRequest) {
     const phoneKey = normalizeRwandaPhoneKey(rawPhone)
 
     if (!emailLower || !phoneKey) {
+      console.warn('⚠️ transfers/incoming: missing strict match identity fields', {
+        userId,
+        hasEmail: Boolean(emailLower),
+        hasPhoneKey: Boolean(phoneKey),
+      })
       return NextResponse.json({ success: true, transfers: [] })
     }
 

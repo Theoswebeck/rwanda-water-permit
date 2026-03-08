@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildApplicationInsertParts, getMissingApplicationColumnFromError } from '@/lib/db/application-payload'
 import { sanitizeApplicationEnumPayload } from '@/lib/db/application-enum-sanitizer'
+import { checkPermitPipelineConflict } from '@/lib/db/permit-application-guard'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 function parseCsvList(value: string | null): string[] {
@@ -184,6 +185,22 @@ export async function POST(req: NextRequest) {
     const payload = sanitizeApplicationEnumPayload(safePayload)
     payload.applicant_id = userId
     payload.updated_at = new Date().toISOString()
+
+    const pipelineCheck = await checkPermitPipelineConflict({
+      payload,
+      applicantId: userId,
+    })
+    if (pipelineCheck.hasConflict) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'PERMIT_PIPELINE_CONFLICT',
+          message: pipelineCheck.message,
+          conflict: pipelineCheck.conflictApplication,
+        },
+        { status: 409 }
+      )
+    }
 
     const insertPayload: Record<string, unknown> = { ...payload }
     const droppedColumns: string[] = []

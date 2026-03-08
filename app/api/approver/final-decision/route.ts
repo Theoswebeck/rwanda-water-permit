@@ -4,6 +4,7 @@ import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { sendResendEmail, renderAppEmailHtml } from '@/lib/notifications/resend-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
+import { notifyOnTransferPendingTerms } from '@/lib/notifications/transfer-pending-terms'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 type Decision = 'approve' | 'reject' | 'return_to_assessment'
@@ -16,26 +17,6 @@ function normalizeRole(input: unknown): string {
   if (!raw) return ''
   const aliases: Record<string, string> = { application: 'applicant' }
   return aliases[raw] ?? raw
-}
-
-function formatTransferPhoneForSms(raw: string): string | null {
-  const digits = String(raw || '').replace(/\D/g, '')
-  if (!digits) return null
-  // transfer_requests stores a phone key (typically last 9 digits, e.g. 781234567)
-  if (digits.length === 9) return `+250${digits}`
-  if (digits.length === 10 && digits.startsWith('07')) return `+25${digits}`
-  if (digits.length === 12 && digits.startsWith('250')) return `+${digits}`
-  return null
-}
-
-function isMissingTransferRequestsTable(err: unknown): boolean {
-  const code = (err as { code?: unknown } | null)?.code
-  const message = String((err as { message?: unknown } | null)?.message || '')
-  return (
-    code === '42P01' ||
-    message.includes('relation "public.transfer_requests" does not exist') ||
-    message.includes('relation "transfer_requests" does not exist')
-  )
 }
 
 function buildDecisionCopy(params: { decision: Decision; applicantName: string; applicationNumber: string; reason?: string }) {
@@ -213,76 +194,9 @@ export async function POST(req: NextRequest) {
         [applicationId, actorUserId, conditions.trim()]
       )
 
-      // For permit transfers, notify the transferee only after the application
-      // enters approved_pending_permit (pending terms acceptance).
-      if (application.application_type === 'transfer') {
-        try {
-          const trRes = await query<{
-            transferee_email: string
-            transferee_phone: string
-          }>(
-            `
-            select transferee_email, transferee_phone
-            from public.transfer_requests
-            where application_id = $1
-            order by updated_at desc
-            limit 1
-            `,
-            [applicationId]
-          )
-          const transferRequest = trRes.rows[0]
-          if (!transferRequest) {
-            console.warn('⚠️ Transfer application approved, but no transfer_request was found for transferee notification.')
-          } else {
-            const transfereeEmail = String(transferRequest.transferee_email || '').trim().toLowerCase()
-            const transfereePhone = String(transferRequest.transferee_phone || '').trim()
-            const portalUrl = getPortalUrl()
-            const subject = `Permit transfer approved - action required — ${applicationNumber}`
-            const title = 'Permit Transfer Approved - Action Required'
-            const text = [
-              `Dear Permit Transferee,`,
-              ``,
-              `A water permit transfer application has now been approved by Rwanda Water Resources Board and is waiting for your action.`,
-              ``,
-              `Reference: ${applicationNumber}`,
-              ``,
-              `Next steps:`,
-              `- Log in (or sign up) using this same email address and phone number.`,
-              `- On your dashboard, open the transfer application with status: "Approved - Pending Terms".`,
-              `- Review details and accept the Terms and Conditions to complete permit transfer into your name.`,
-              ``,
-              `Important: Only the transferee can accept these terms.`,
-              ``,
-              `Portal: ${portalUrl}`,
-            ].join('\n')
-
-            if (isNonEmptyString(transfereeEmail)) {
-              await sendResendEmail({ to: transfereeEmail, subject, title, text })
-            } else {
-              console.warn('⚠️ Missing transferee email; skipping transfer notification email send.')
-            }
-
-            const smsPhone = formatTransferPhoneForSms(transfereePhone)
-            if (smsPhone) {
-              const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
-              const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-              const sms = `RWB: Transfer ${applicationNumber} approved. Login with same email+phone, open status Approved - Pending Terms, then accept terms to complete transfer. Portal: ${portalUrl}`
-              if (pindo.isValidRwandanPhone(smsPhone)) {
-                await pindo.sendSMS(smsPhone, sms, senderName)
-              } else {
-                console.warn('⚠️ Invalid transferee phone format for SMS; skipping send.')
-              }
-            } else {
-              console.warn('⚠️ Missing/invalid transferee phone; skipping transfer notification SMS send.')
-            }
-          }
-        } catch (transferNotifyErr) {
-          if (isMissingTransferRequestsTable(transferNotifyErr)) {
-            console.warn('⚠️ transfer_requests table missing; skipping transferee stage notification.')
-          } else {
-            console.warn('⚠️ Failed to notify transferee at pending terms stage (non-blocking):', transferNotifyErr)
-          }
-        }
+      const transferNotifyResult = await notifyOnTransferPendingTerms(applicationId)
+      if (!transferNotifyResult.ok) {
+        console.warn('⚠️ Failed to notify transferee at pending terms stage (non-blocking):', transferNotifyResult.message)
       }
     } else if (decision === 'reject') {
       await query(

@@ -1569,31 +1569,7 @@ function NewApplicationContent() {
         resultApplication = await updateApplication(currentRenewalApplication.id, updateData as Partial<Application>);
         console.log('✅ Renewal application updated to submitted:', resultApplication?.id);
       } else {
-        // Create new renewal application — direct Supabase insert for error visibility.
-        const { data: newApp, error: insertError } = await supabase
-          .from('applications')
-          .insert([renewalApplicationData])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('❌ Supabase insert error for renewal submit:', insertError);
-          // Retry with core-only payload on unknown-column errors
-          if (insertError.code === '42703' || insertError.message?.includes('column')) {
-            console.warn('⚠️ Column error — retrying with core-only payload');
-            const { data: retryApp, error: retryError } = await supabase
-              .from('applications')
-              .insert([corePayload])
-              .select()
-              .single();
-            if (retryError) throw new Error(`Failed to submit renewal: ${retryError.message}`);
-            resultApplication = retryApp;
-          } else {
-            throw new Error(`Failed to submit renewal: ${insertError.message}`);
-          }
-        } else {
-          resultApplication = newApp;
-        }
+        resultApplication = await createApplication(renewalApplicationData as Partial<Application>);
         console.log('✅ Renewal application created:', resultApplication?.id);
       }
       
@@ -1627,7 +1603,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermitForRenewal, userProfile?.id, updateApplication, currentRenewalApplication]);
+  }, [selectedPermitForRenewal, userProfile?.id, createApplication, updateApplication, currentRenewalApplication]);
 
   // Handle renewal draft save
   const handleRenewalSaveAsDraft = useCallback(async (formData: any, _status: string): Promise<void> => {
@@ -1735,44 +1711,7 @@ function NewApplicationContent() {
         const { applicant_id, ...updateData } = renewalApplicationData;
         result = await updateApplication(currentRenewalApplication.id, updateData as Partial<Application>);
       } else {
-        // Create new renewal application — use direct Supabase insert for better
-        // error visibility (createApplication swallows the actual DB error).
-        const { data: newApp, error: insertError } = await supabase
-          .from('applications')
-          .insert([renewalApplicationData])
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('❌ Supabase insert error for renewal draft:', {
-            message: insertError.message,
-            code: insertError.code,
-            details: insertError.details,
-            hint: insertError.hint,
-          });
-
-          // If the error is about an unknown column (code 42703), fall back to
-          // core-only payload (no migration-dependent columns).
-          if (
-            insertError.code === '42703' || // undefined_column
-            insertError.message?.includes('column') 
-          ) {
-            console.warn('⚠️ Column error detected — retrying with core-only payload');
-            const { data: retryApp, error: retryError } = await supabase
-              .from('applications')
-              .insert([corePayload])
-              .select()
-              .single();
-            if (retryError) {
-              throw new Error(`Failed to save renewal draft: ${retryError.message}`);
-            }
-            result = retryApp;
-          } else {
-            throw new Error(`Failed to save renewal draft: ${insertError.message}`);
-          }
-        } else {
-          result = newApp;
-        }
+        result = await createApplication(renewalApplicationData as Partial<Application>);
       }
 
       if (!result) {
@@ -1842,7 +1781,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermitForRenewal, userProfile?.id, updateApplication, currentRenewalApplication]);
+  }, [selectedPermitForRenewal, userProfile?.id, createApplication, updateApplication, currentRenewalApplication]);
 
   // User data for renewal form
   const renewalUserData = useMemo(() => ({

@@ -17,6 +17,7 @@ import type { InitiatePaymentRequest, InitiatePaymentResponse } from '@/types/pa
 import { mapFormDataToApplication } from '@/lib/application-utils';
 import { buildApplicationInsertParts } from '@/lib/db/application-payload';
 import { query } from '@/lib/db/postgres';
+import { checkPermitPipelineConflict } from '@/lib/db/permit-application-guard';
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
 
 export async function POST(request: NextRequest) {
@@ -148,6 +149,21 @@ export async function POST(request: NextRequest) {
 
       console.log('📝 [PAYMENT INITIATE] Received application data, creating draft...');
       const mappedData = mapFormDataToApplication(application_data, 'draft', userId);
+      const pipelineCheck = await checkPermitPipelineConflict({
+        payload: mappedData as Record<string, unknown>,
+        applicantId: userId,
+      });
+      if (pipelineCheck.hasConflict) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'PERMIT_PIPELINE_CONFLICT',
+            error: pipelineCheck.message,
+            conflict: pipelineCheck.conflictApplication,
+          },
+          { status: 409 }
+        );
+      }
       
       const entries = Object.entries(mappedData).filter(([key]) => /^[a-zA-Z][a-zA-Z0-9_]*$/.test(key));
       if (!entries.length) {

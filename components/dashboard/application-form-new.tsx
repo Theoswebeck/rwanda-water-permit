@@ -5963,6 +5963,7 @@ export function ApplicationForm({
                         onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
                         isSavingApplication={isLoading}
                         saveError={paymentPrepError}
+                        autoRedirectOnCompletion={!readOnly && mode !== "view"}
                         onRetrySave={() => {
                           setPaymentPrepError(null);
                           // Compute modification changes if in modification mode

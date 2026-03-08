@@ -93,7 +93,6 @@ export function FinalDecisions() {
   const [decisionType, setDecisionType] = useState<"approve" | "reject" | "return_to_assessment">("approve");
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
-  const [conditions, setConditions] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -287,7 +286,6 @@ export function FinalDecisions() {
           applicationId,
           decision,
           reason: decisionReason,
-          conditions,
         }),
       });
 
@@ -307,7 +305,6 @@ export function FinalDecisions() {
       // Close dialog and reset form
       setIsDecisionDialogOpen(false);
       setDecisionReason("");
-      setConditions("");
       setSelectedApplication(null);
       
       // Clear success message after 5 seconds
@@ -324,6 +321,8 @@ export function FinalDecisions() {
   const openDecisionDialog = (application: FinalReviewApplication, decision: "approve" | "reject" | "return_to_assessment") => {
     setSelectedApplication(application);
     setDecisionType(decision);
+    setDecisionReason("");
+    setDecisionReasonPreset("");
     setIsDecisionDialogOpen(true);
   };
 
@@ -522,7 +521,7 @@ export function FinalDecisions() {
                 ? "You are about to approve this water permit application. This decision is final."
                 : decisionType === "reject"
                   ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the verification stage. Please provide specific instructions for the verifier."
+                  : "You are about to return this application to the verification stage."
               }
             </DialogDescription>
           </DialogHeader>
@@ -547,21 +546,9 @@ export function FinalDecisions() {
                 </div>
               </div>
               
-              {decisionType === "approve" ? (
+              {decisionType === "reject" ? (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Approval Conditions (Optional)</label>
-                  <Textarea
-                    placeholder="Add any conditions or requirements for the approval (one per line)..."
-                    value={conditions}
-                    onChange={(e) => setConditions(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Verification Instructions (Required)"}
-                  </label>
+                  <label className="text-sm font-medium">Rejection Reason (Required)</label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Select value={decisionReasonPreset} onValueChange={(v)=>{ setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>
                       <SelectTrigger>
@@ -576,7 +563,7 @@ export function FinalDecisions() {
                       </SelectContent>
                     </Select>
                     <Textarea
-                      placeholder={decisionReasonPreset === 'other' || decisionReasonPreset === '' ? "Type reason/instructions..." : "Add details (optional)"}
+                      placeholder={decisionReasonPreset === 'other' || decisionReasonPreset === '' ? "Type rejection reason..." : "Add details (optional)"}
                       value={decisionReason}
                       onChange={(e) => setDecisionReason(e.target.value)}
                       rows={3}
@@ -584,7 +571,7 @@ export function FinalDecisions() {
                   </div>
                   
                 </div>
-              )}
+              ) : null}
             </div>
           )}
           <DialogFooter className="gap-2 pt-6">
@@ -593,7 +580,7 @@ export function FinalDecisions() {
             </Button>
             <Button
               onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
-              disabled={submitting || ((decisionType === "reject" || decisionType === "return_to_assessment") && !decisionReason.trim())}
+              disabled={submitting || (decisionType === "reject" && !decisionReason.trim())}
               variant={
                 decisionType === "approve" 
                   ? "default" 

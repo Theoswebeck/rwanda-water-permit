@@ -258,7 +258,6 @@ export default function ApproverApplicationPage() {
   const [decisionType, setDecisionType] = useState<DecisionType>("approve");
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
-  const [conditions, setConditions] = useState("");
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [decisionSuccess, setDecisionSuccess] = useState<string | null>(null);
@@ -648,7 +647,6 @@ export default function ApproverApplicationPage() {
     setDecisionType(nextDecisionType);
     setDecisionReason("");
     setDecisionReasonPreset("");
-    setConditions("");
     setDecisionError(null);
     setIsDecisionDialogOpen(true);
   };
@@ -667,7 +665,6 @@ export default function ApproverApplicationPage() {
           applicationId: application.id,
           decision: decisionType,
           reason: decisionReason,
-          conditions,
         }),
       });
 
@@ -1045,7 +1042,7 @@ export default function ApproverApplicationPage() {
                 ? "You are about to approve this water permit application. This decision is final."
                 : decisionType === "reject"
                   ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the verification stage. Please provide specific instructions for the verifier."}
+                  : "You are about to return this application to the verification stage."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1068,21 +1065,9 @@ export default function ApproverApplicationPage() {
               </div>
             </div>
 
-            {decisionType === "approve" ? (
+            {decisionType === "reject" ? (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Approval Conditions (Optional)</label>
-                <Textarea
-                  placeholder="Add any conditions or requirements for the approval (one per line)..."
-                  value={conditions}
-                  onChange={(e) => setConditions(e.target.value)}
-                  rows={3}
-                />
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  {decisionType === "reject" ? "Rejection Reason (Required)" : "Verification Instructions (Required)"}
-                </label>
+                <label className="text-sm font-medium">Rejection Reason (Required)</label>
                 <div className="space-y-2">
                   <Select
                     value={decisionReasonPreset}
@@ -1103,14 +1088,14 @@ export default function ApproverApplicationPage() {
                     </SelectContent>
                   </Select>
                   <Textarea
-                    placeholder={decisionReasonPreset === "other" || decisionReasonPreset === "" ? "Type reason/instructions..." : "Add details (optional)"}
+                    placeholder={decisionReasonPreset === "other" || decisionReasonPreset === "" ? "Type rejection reason..." : "Add details (optional)"}
                     value={decisionReason}
                     onChange={(e) => setDecisionReason(e.target.value)}
                     rows={3}
                   />
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
           <DialogFooter className="gap-2 pt-6">
             <Button variant="outline" onClick={() => setIsDecisionDialogOpen(false)}>
@@ -1118,7 +1103,7 @@ export default function ApproverApplicationPage() {
             </Button>
             <Button
               onClick={handleFinalDecision}
-              disabled={submittingDecision || ((decisionType === "reject" || decisionType === "return_to_assessment") && !decisionReason.trim())}
+              disabled={submittingDecision || (decisionType === "reject" && !decisionReason.trim())}
               variant={
                 decisionType === "approve"
                   ? "default"

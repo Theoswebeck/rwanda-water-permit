@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db/postgres'
+import { query, withTransaction } from '@/lib/db/postgres'
 import { getAuthenticatedUserId, isMissingTransferRequestsTable, normalizeEmail, normalizeRwandaPhoneKey } from '../_utils'
 
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
@@ -84,6 +84,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (normalizeEmail(tr.transferee_email) !== emailLower || String(tr.transferee_phone) !== phoneKey) {
+      console.warn('⚠️ transfers/approve identity mismatch for transfer request', {
+        transferRequestId,
+        expectedEmail: normalizeEmail(tr.transferee_email),
+        providedEmail: emailLower,
+        expectedPhoneKey: String(tr.transferee_phone),
+        providedPhoneKey: phoneKey,
+      })
       return NextResponse.json({ success: false, message: 'Forbidden: this transfer request does not match your email/phone' }, { status: 403 })
     }
 
@@ -145,20 +152,43 @@ export async function POST(req: NextRequest) {
       return JSON.stringify({ ...parsed, transferApproval })
     })()
 
-    // Idempotent updates: mark transfer request approved + handoff application ownership to transferee.
+    // Atomic updates: mark transfer request approved + handoff application ownership to transferee.
     try {
-      await query(
-        `
-        update public.transfer_requests
-        set
-          status = 'approved',
-          approved_by_user_id = $2,
-          approved_at = $3,
-          updated_at = $3
-        where id = $1
-        `,
-        [String(tr.id), userId, now]
-      )
+      await withTransaction(async (tx) => {
+        const trUpdate = await tx.query(
+          `
+          update public.transfer_requests
+          set
+            status = 'approved',
+            approved_by_user_id = $2,
+            approved_at = $3,
+            updated_at = $3
+          where id = $1
+            and status = 'pending'
+          `,
+          [String(tr.id), userId, now]
+        )
+
+        if (trUpdate.rowCount !== 1) {
+          throw new Error('Transfer request is no longer pending')
+        }
+
+        const appUpdate = await tx.query(
+          `
+          update public.applications
+          set
+            applicant_id = $2,
+            internal_notes = $3::jsonb,
+            updated_at = $4
+          where id = $1
+          `,
+          [String(tr.application_id), userId, nextNotes, now]
+        )
+
+        if (appUpdate.rowCount !== 1) {
+          throw new Error('Failed to transfer application ownership')
+        }
+      })
     } catch (updTrErr) {
       if (isMissingTransferRequestsTable(updTrErr)) {
         return NextResponse.json(
@@ -172,18 +202,6 @@ export async function POST(req: NextRequest) {
       }
       throw updTrErr
     }
-
-    await query(
-      `
-      update public.applications
-      set
-        applicant_id = $2,
-        internal_notes = $3::jsonb,
-        updated_at = $4
-      where id = $1
-      `,
-      [String(tr.application_id), userId, nextNotes, now]
-    )
 
     return NextResponse.json({ success: true, applicationId: String(tr.application_id) })
   } catch (err) {

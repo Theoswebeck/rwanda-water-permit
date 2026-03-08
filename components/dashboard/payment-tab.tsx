@@ -95,9 +95,18 @@ interface PaymentTabProps {
   isSavingApplication?: boolean;
   saveError?: string | null;
   onRetrySave?: () => void;
+  autoRedirectOnCompletion?: boolean;
 }
 
-export function PaymentTab({ application, formData, onBack, isSavingApplication, saveError, onRetrySave }: PaymentTabProps) {
+export function PaymentTab({
+  application,
+  formData,
+  onBack,
+  isSavingApplication,
+  saveError,
+  onRetrySave,
+  autoRedirectOnCompletion = true,
+}: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -130,8 +139,6 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   useEffect(() => {
     if (payment && payment.status === 'completed' && !paymentCompleted && !isCompletingPayment) {
       console.log('✅ Payment completed detected via polling');
-      setCompletedApplication(payment.application);
-      setPaymentCompleted(true);
       setAwaitingGatewayConfirmation(false);
 
       // Close Irembo modal if it is open (helps demo flow)
@@ -140,13 +147,20 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       } catch {
         // ignore
       }
-      
-      // Auto-redirect to dashboard after 4 seconds
-      setTimeout(() => {
-        router.push('/dashboard?tab=applications');
-      }, 4000);
+
+      if (autoRedirectOnCompletion) {
+        setCompletedApplication(payment.application);
+        setPaymentCompleted(true);
+
+        // Auto-redirect to dashboard after 4 seconds
+        const redirectTimer = setTimeout(() => {
+          router.push('/dashboard?tab=applications');
+        }, 4000);
+
+        return () => clearTimeout(redirectTimer);
+      }
     }
-  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
+  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router, autoRedirectOnCompletion]);
 
   useEffect(() => {
     if (payment?.status === 'failed' || payment?.status === 'cancelled') {
@@ -309,10 +323,12 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           setAwaitingGatewayConfirmation(false);
           console.log('✅ [PAYMENT TAB] Application submitted:', finalPayment.application?.application_number);
 
-          // Auto-redirect to dashboard after 4 seconds
-          setTimeout(() => {
-            router.push('/dashboard?tab=applications');
-          }, 4000);
+          if (autoRedirectOnCompletion) {
+            // Auto-redirect to dashboard after 4 seconds
+            setTimeout(() => {
+              router.push('/dashboard?tab=applications');
+            }, 4000);
+          }
         } else {
           console.log('⏳ [PAYMENT TAB] Payment not yet completed, waiting for status update...');
           // The hook's polling will handle the rest
@@ -493,7 +509,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
 
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Redirecting to dashboard...</span>
+          <span>{autoRedirectOnCompletion ? 'Redirecting to dashboard...' : 'Payment confirmation complete.'}</span>
         </div>
       </motion.div>
     );

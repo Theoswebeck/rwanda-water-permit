@@ -1854,12 +1854,14 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     </p>
                   </div>
 
-                  <Alert className="border-green-200 bg-green-50 mb-4">
-                    <AlertCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
-                      Enter the details of the new owner who will take over this permit.
-                    </AlertDescription>
-                  </Alert>
+                  {!readOnly && mode !== "view" && (
+                    <Alert className="border-green-200 bg-green-50 mb-4">
+                      <AlertCircle className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-800">
+                        Enter the details of the new owner who will take over this permit.
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
@@ -2369,6 +2371,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         }}
                         isSavingApplication={isLoading}
                         saveError={paymentPrepError}
+                        autoRedirectOnCompletion={!readOnly && mode !== "view"}
                         onRetrySave={() => {
                           setPaymentPrepError(null);
                           const draftData = { ...form.getValues(), ...files };

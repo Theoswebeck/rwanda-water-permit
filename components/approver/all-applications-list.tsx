@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  ChevronDown,
   Eye, 
   Search, 
   Filter,
@@ -21,12 +20,6 @@ import { supabase } from "@/lib/supabase";
 import type { Application, ApplicationStatus } from "@/types/database";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 
@@ -380,22 +373,16 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="sm" className="gap-2 bg-gray-900 hover:bg-gray-800 text-white">
-                              Actions
-                              <ChevronDown className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/approver/application/${application.application_number}`} className="flex items-center gap-2 cursor-pointer">
-                                <Eye className="h-4 w-4" />
-                                View Details
-                              </Link>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button
+                          asChild
+                          size="sm"
+                          className="gap-2 bg-gray-900 hover:bg-gray-800 text-white"
+                        >
+                          <Link href={`/approver/application/${application.application_number}`}>
+                            <Eye className="h-4 w-4" />
+                            View Application
+                          </Link>
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

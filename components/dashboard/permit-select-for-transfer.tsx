@@ -29,6 +29,12 @@ import type { Permit, Application } from "@/types/database";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { ManualPermitEntryCard } from "@/components/dashboard/manual-permit-entry-card";
 import type { ManualPermitSelectionPayload } from "@/lib/permit/permit-reference";
+import {
+  buildPermitConflictIndex,
+  formatPermitConflictMessage,
+  type PermitConflictSummary,
+  type PipelineApplicationLike,
+} from "@/lib/permit/permit-pipeline-client";
 
 export interface PermitWithApplication extends Permit {
   application?: Application & {
@@ -77,6 +83,7 @@ export function PermitSelectForTransfer({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
+  const [permitConflicts, setPermitConflicts] = useState<Record<string, PermitConflictSummary>>({});
 
   useEffect(() => {
     fetchPermits();
@@ -90,6 +97,7 @@ export function PermitSelectForTransfer({
       if (!userId) {
         console.warn('No userId provided - cannot fetch user permits');
         setPermits([]);
+        setPermitConflicts({});
         setHolderProfile(null);
         setLoading(false);
         return;
@@ -106,7 +114,7 @@ export function PermitSelectForTransfer({
       // First, get the user's application IDs
       const { data: userApplications, error: appsError } = await supabase
         .from('applications')
-        .select('id')
+        .select('id,status,created_at,application_type,is_renewal,is_modification,renewed_from_permit_id,modified_from_application_id,internal_notes,application_number')
         .eq('applicant_id', userId);
 
       if (appsError) {
@@ -118,6 +126,7 @@ export function PermitSelectForTransfer({
       if (applicationIds.length === 0) {
         // User has no applications, so no permits
         setPermits([]);
+        setPermitConflicts({});
         setLoading(false);
         return;
       }
@@ -160,9 +169,14 @@ export function PermitSelectForTransfer({
         throw fetchError;
       }
 
-      setPermits(data || []);
+      const permitRows = (data || []) as PermitWithApplication[];
+      setPermits(permitRows);
+      setPermitConflicts(
+        buildPermitConflictIndex(permitRows, (userApplications || []) as PipelineApplicationLike[])
+      );
     } catch (err) {
       console.error('Error fetching permits:', err);
+      setPermitConflicts({});
       setError(err instanceof Error ? err.message : 'Failed to fetch permits');
     } finally {
       setLoading(false);
@@ -286,9 +300,16 @@ export function PermitSelectForTransfer({
   const handleSelectPermit = () => {
     const permit = permits.find(p => p.id === selectedPermitId);
     if (permit) {
+      const conflict = permitConflicts[permit.id];
+      if (conflict) {
+        setError(formatPermitConflictMessage(conflict));
+        return;
+      }
       onPermitSelect(permit);
     }
   };
+
+  const selectedPermitConflict = selectedPermitId ? permitConflicts[selectedPermitId] : undefined;
 
   return (
     <motion.div
@@ -356,15 +377,23 @@ export function PermitSelectForTransfer({
           {/* Permits List */}
           {!loading && filteredPermits.length > 0 && (
             <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {filteredPermits.map((permit) => (
+              {filteredPermits.map((permit) => {
+                const conflict = permitConflicts[permit.id];
+                const isBlocked = Boolean(conflict);
+                return (
                 <Card
                   key={permit.id}
-                  className={`cursor-pointer transition-all ${
-                    selectedPermitId === permit.id
-                      ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50/50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  className={`transition-all ${
+                    isBlocked
+                      ? 'border-red-200 bg-red-50/30 hover:border-red-300 cursor-not-allowed opacity-90'
+                      : selectedPermitId === permit.id
+                        ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50/50 cursor-pointer'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
                   }`}
-                  onClick={() => setSelectedPermitId(permit.id)}
+                  onClick={() => {
+                    if (isBlocked) return;
+                    setSelectedPermitId(permit.id);
+                  }}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
@@ -378,6 +407,9 @@ export function PermitSelectForTransfer({
                             <CheckCircle className="h-5 w-5 text-blue-600" />
                           )}
                         </div>
+                        {conflict && (
+                          <p className="text-xs text-red-700">{formatPermitConflictMessage(conflict)}</p>
+                        )}
 
                         <p className="font-medium text-gray-900">
                           {permit.application?.project_title || 'Untitled Project'}
@@ -415,7 +447,7 @@ export function PermitSelectForTransfer({
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+              )})}
             </div>
           )}
 
@@ -434,7 +466,7 @@ export function PermitSelectForTransfer({
             </Button>
             <Button
               onClick={handleSelectPermit}
-              disabled={!selectedPermitId}
+              disabled={!selectedPermitId || Boolean(selectedPermitConflict)}
               className="bg-blue-600 hover:bg-blue-700 gap-2"
             >
               Continue with Transfer
