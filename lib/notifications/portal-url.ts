@@ -16,9 +16,9 @@ export function getPortalUrl(): string {
   const envUrl = typeof process.env.NEXT_PUBLIC_APP_URL === 'string' ? process.env.NEXT_PUBLIC_APP_URL : ''
   const normalized = normalizeBaseUrl(envUrl)
 
-  // Guardrail: in production, never send emails pointing to localhost even if misconfigured.
+  // Guardrail: in production, never send notifications pointing to localhost or private IPs.
   const isProd = process.env.NODE_ENV === 'production'
-  if (isProd && /localhost|127\.0\.0\.1/i.test(normalized)) return DEFAULT_PORTAL_URL
+  if (isProd && /localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/i.test(normalized)) return DEFAULT_PORTAL_URL
 
   return normalized
 }

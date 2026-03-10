@@ -99,12 +99,14 @@ function extractTransfereeContactFromNotes(raw: unknown) {
   const transfereePhoneRaw = String(transferFormData.transfereePhone || '').trim()
   const transfereePhoneKey = transfereePhoneRaw.replace(/\D/g, '').slice(-9)
   const originalPermitId = String(notes.originalPermitId || '').trim()
+  const transfereeName = String(transferFormData.transfereeName || '').trim()
 
   return {
     transfereeEmail,
     transfereePhoneRaw,
     transfereePhoneKey,
     originalPermitId,
+    transfereeName,
   }
 }
 
@@ -290,23 +292,25 @@ export async function notifyOnTransferPendingTerms(
 
     const applicationNumber = app.application_number || app.id
     const portalUrl = getPortalUrl()
+    const supportEmail = process.env.SUPPORT_EMAIL || 'info@rwb.rw'
+    const transfereeName = notesContact.transfereeName || 'Permit Transferee'
     const subject = `Permit transfer approved - action required — ${applicationNumber}`
     const title = 'Permit Transfer Approved - Action Required'
     const text = [
-      `Dear Permit Transferee,`,
+      `Dear ${transfereeName},`,
       ``,
-      `A water permit transfer application has now been approved by Rwanda Water Resources Board and is waiting for your action.`,
+      `Your water permit transfer application ${applicationNumber} has been APPROVED by the Rwanda Water Resources Board.`,
       ``,
-      `Reference: ${applicationNumber}`,
+      `Please log in and accept the Terms and Conditions for the permit to be issued. Once issued, you will be able to download the permit from your dashboard.`,
       ``,
       `Next steps:`,
-      `- Log in (or sign up) using this same email address and phone number.`,
-      `- On your dashboard, open the transfer application with status: "Approved - Pending Terms".`,
-      `- Review details and accept the Terms and Conditions to complete permit transfer into your name.`,
+      `1. Log in (or sign up) at ${portalUrl} using the same email address and phone number associated with this transfer.`,
+      `2. On your dashboard, open the transfer application with status "Approved - Pending Terms".`,
+      `3. Review the details and accept the Terms and Conditions to complete the permit transfer into your name.`,
       ``,
       `Important: Only the transferee can accept these terms.`,
       ``,
-      `Portal: ${portalUrl}`,
+      `Support: ${supportEmail}`,
     ].join('\n')
 
     let notifId = existing?.id || null
@@ -370,7 +374,7 @@ export async function notifyOnTransferPendingTerms(
         if (smsPhone) {
           const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
           const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-          const sms = `RWB: Transfer ${applicationNumber} approved. Login with same email+phone, open status Approved - Pending Terms, then accept terms to complete transfer. Portal: ${portalUrl}`
+          const sms = `Rwanda Water Resources Board: Dear ${transfereeName}, your water permit application ${applicationNumber} has been APPROVED. Please log in and accept the Terms and Conditions for the permit to be issued. Once issued, you will be able to download the permit from your dashboard. Support: ${supportEmail}.`
           if (pindo.isValidRwandanPhone(smsPhone)) {
             logTransferNotification('log', traceId, applicationId, 'sending transferee SMS', {
               to: maskPhone(smsPhone),

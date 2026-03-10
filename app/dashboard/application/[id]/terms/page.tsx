@@ -79,6 +79,7 @@ export default function TermsConditionsPage() {
           .select(
             `
             id,
+            application_type,
             province,
             district,
             sector,
@@ -88,6 +89,7 @@ export default function TermsConditionsPage() {
             internal_notes,
             water_source,
             water_body_name,
+            water_taking_method,
             max_daily_volume_m3,
             max_yearly_volume_m3,
             estimated_usage_volume,
@@ -103,6 +105,110 @@ export default function TermsConditionsPage() {
 
         if (error) throw error;
         if (!data) throw new Error("Application not found");
+
+        // Populate the applicant identity from the logged-in user's profile
+        // via the project's own auth API (critical for transfers: name + NID).
+        try {
+          const meResp = await fetch("/api/auth/me", { method: "GET", headers: { "Content-Type": "application/json" }, cache: "no-store" });
+          const meJson = await meResp.json().catch(() => null);
+          const profile = meJson?.profile as Record<string, unknown> | undefined;
+          if (profile) {
+            const applicant = (data as any).applicant || {};
+            const loggedInNid = typeof profile.id_number === "string" ? (profile.id_number as string).trim() : "";
+            if (loggedInNid) applicant.id_number = loggedInNid;
+            if (profile.first_name) applicant.first_name = profile.first_name;
+            if (profile.last_name) applicant.last_name = profile.last_name;
+            if (profile.company_name) applicant.company_name = profile.company_name;
+            if (profile.account_type) applicant.account_type = profile.account_type;
+            (data as any).applicant = applicant;
+          }
+        } catch (profileErr) {
+          console.warn("⚠️ Could not load logged-in user profile for contract identity:", profileErr);
+        }
+
+        // For transfers: the contract should mirror the original permit's terms
+        // (flow rate, volume, duration, coordinates, etc.) — only the signatory changes.
+        let parsedNotes: Record<string, any> | null = null;
+        try {
+          parsedNotes = typeof (data as any).internal_notes === "string"
+            ? JSON.parse((data as any).internal_notes)
+            : null;
+        } catch { /* ignore */ }
+
+        const isTransfer =
+          (data as any).application_type === "transfer" ||
+          parsedNotes?.isTransfer === true;
+
+        if (isTransfer && parsedNotes?.originalPermitId) {
+          try {
+            const { data: originalPermit } = await supabase
+              .from("permits")
+              .select("application_id")
+              .eq("id", parsedNotes.originalPermitId)
+              .single() as { data: { application_id?: string | null } | null; error: any };
+
+            const origAppId = originalPermit?.application_id;
+            if (origAppId) {
+              const { data: origApp } = await supabase
+                .from("applications")
+                .select(`
+                  province, district, sector, cell, village,
+                  coordinates, internal_notes, water_source, water_body_name,
+                  max_daily_volume_m3, max_yearly_volume_m3,
+                  estimated_usage_volume, usage_unit, water_taking_method,
+                  proposed_duration_years, concession_area, intended_activities
+                `)
+                .eq("id", origAppId)
+                .single() as { data: Record<string, any> | null; error: any };
+
+              if (origApp) {
+                const technicalFields = [
+                  "province", "district", "sector", "cell", "village",
+                  "coordinates", "water_source", "water_body_name",
+                  "max_daily_volume_m3", "max_yearly_volume_m3",
+                  "estimated_usage_volume", "usage_unit", "water_taking_method",
+                  "proposed_duration_years", "concession_area", "intended_activities",
+                ] as const;
+                for (const field of technicalFields) {
+                  const origVal = origApp[field];
+                  const currVal = (data as any)[field];
+                  const currIsEmpty = currVal === null || currVal === undefined || currVal === "" || currVal === 0;
+                  if (currIsEmpty && origVal != null && origVal !== "") {
+                    (data as any)[field] = origVal;
+                  }
+                }
+                // Also merge internal_notes for technical details (flow rate, abstraction method, etc.)
+                // while preserving the transfer application's own notes.
+                if (origApp.internal_notes) {
+                  let origNotes: Record<string, any> | null = null;
+                  try {
+                    origNotes = typeof origApp.internal_notes === "string"
+                      ? JSON.parse(origApp.internal_notes)
+                      : origApp.internal_notes;
+                  } catch { /* ignore */ }
+                  if (origNotes && parsedNotes) {
+                    const technicalNoteKeys = [
+                      "waterAbstractionDetails", "abstractionMethod",
+                      "waterSourceLatitude", "waterSourceLongitude",
+                      "waterSourceProvince", "waterSourceDistrict",
+                      "waterSourceSector", "waterSourceCell", "waterSourceVillage",
+                      "intendedActivities", "officeProvince", "officeDistrict",
+                      "officeSector", "_assessorAdjustments",
+                    ];
+                    for (const key of technicalNoteKeys) {
+                      if (origNotes[key] != null && parsedNotes[key] == null) {
+                        parsedNotes[key] = origNotes[key];
+                      }
+                    }
+                    (data as any).internal_notes = JSON.stringify(parsedNotes);
+                  }
+                }
+              }
+            }
+          } catch (origErr) {
+            console.warn("⚠️ Could not load original application for transfer contract:", origErr);
+          }
+        }
 
         const variant = selectPermitVariant(data as any);
         if (!cancelled) {
