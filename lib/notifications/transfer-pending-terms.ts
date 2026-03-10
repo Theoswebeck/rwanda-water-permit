@@ -8,6 +8,11 @@ const NOTIFICATION_TYPE = 'info'
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
+type NotifyOnTransferPendingTermsOptions = {
+  traceId?: string
+  source?: string
+}
+
 type TransferNotifyResult =
   | { ok: true; status: 'sent' | 'skipped_already_sent' | 'skipped_not_transfer' | 'skipped_wrong_stage'; applicationId: string }
   | { ok: false; status: 'error'; applicationId: string; message: string; smsSent?: boolean; emailSent?: boolean }
@@ -23,6 +28,40 @@ type RetryTransferNotifyResult = {
 type TransferRequestRow = {
   transferee_email: string
   transferee_phone: string
+}
+
+type ParsedTransferNotes = {
+  isTransfer?: boolean
+  originalPermitId?: string
+  transferFormData?: {
+    transfereeEmail?: string
+    transfereePhone?: string
+  }
+}
+
+function maskEmail(email: string): string {
+  const [localPart, domainPart] = email.split('@')
+  if (!localPart || !domainPart) return '(invalid-email)'
+  if (localPart.length <= 2) return `${localPart[0] || '*'}***@${domainPart}`
+  return `${localPart.slice(0, 2)}***@${domainPart}`
+}
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return '(missing-phone)'
+  if (digits.length <= 4) return `***${digits}`
+  return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`
+}
+
+function logTransferNotification(
+  level: 'log' | 'warn' | 'error',
+  traceId: string,
+  applicationId: string,
+  step: string,
+  details?: Record<string, unknown>
+) {
+  const payload = details ? { applicationId, traceId, ...details } : { applicationId, traceId }
+  console[level](`📨 [transfer-pending-terms] ${step}`, payload)
 }
 
 function normalizeEmail(raw: unknown): string {
@@ -49,6 +88,26 @@ function parseNotes(raw: unknown): Record<string, unknown> {
   return {}
 }
 
+function parseTransferNotes(raw: unknown): ParsedTransferNotes {
+  return parseNotes(raw) as ParsedTransferNotes
+}
+
+function extractTransfereeContactFromNotes(raw: unknown) {
+  const notes = parseTransferNotes(raw)
+  const transferFormData = notes.transferFormData || {}
+  const transfereeEmail = normalizeEmail(transferFormData.transfereeEmail)
+  const transfereePhoneRaw = String(transferFormData.transfereePhone || '').trim()
+  const transfereePhoneKey = transfereePhoneRaw.replace(/\D/g, '').slice(-9)
+  const originalPermitId = String(notes.originalPermitId || '').trim()
+
+  return {
+    transfereeEmail,
+    transfereePhoneRaw,
+    transfereePhoneKey,
+    originalPermitId,
+  }
+}
+
 function isMissingTransferRequestsTable(err: unknown): boolean {
   const code = (err as { code?: unknown } | null)?.code
   const message = String((err as { message?: unknown } | null)?.message || '')
@@ -61,13 +120,22 @@ function isMissingTransferRequestsTable(err: unknown): boolean {
 
 function isTransferApplication(applicationType: unknown, internalNotesRaw: unknown): boolean {
   if (String(applicationType || '').trim().toLowerCase() === 'transfer') return true
-  const notes = parseNotes(internalNotesRaw)
+  const notes = parseTransferNotes(internalNotesRaw)
   return notes.isTransfer === true
 }
 
-export async function notifyOnTransferPendingTerms(applicationId: string): Promise<TransferNotifyResult> {
+export async function notifyOnTransferPendingTerms(
+  applicationId: string,
+  options: NotifyOnTransferPendingTermsOptions = {}
+): Promise<TransferNotifyResult> {
+  const traceId = options.traceId || crypto.randomUUID()
   try {
+    logTransferNotification('log', traceId, applicationId, 'starting notification flow', {
+      source: options.source || 'unknown',
+    })
+
     if (!isNonEmptyString(applicationId)) {
+      logTransferNotification('warn', traceId, applicationId, 'aborting because applicationId is invalid')
       return { ok: false, status: 'error', applicationId: String(applicationId), message: 'Invalid applicationId' }
     }
 
@@ -89,14 +157,25 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
     )
     const app = appRes.rows[0]
     if (!app) {
+      logTransferNotification('warn', traceId, applicationId, 'application not found')
       return { ok: false, status: 'error', applicationId, message: 'Application not found' }
     }
 
+    logTransferNotification('log', traceId, applicationId, 'loaded application', {
+      status: app.status,
+      applicationType: app.application_type,
+      applicantId: app.applicant_id,
+    })
+
     if (!isTransferApplication(app.application_type, app.internal_notes)) {
+      logTransferNotification('log', traceId, applicationId, 'skipping because application is not a transfer')
       return { ok: true, status: 'skipped_not_transfer', applicationId }
     }
 
     if (String(app.status) !== 'approved_pending_permit') {
+      logTransferNotification('log', traceId, applicationId, 'skipping because application is not at pending terms stage', {
+        currentStatus: app.status,
+      })
       return { ok: true, status: 'skipped_wrong_stage', applicationId }
     }
 
@@ -113,26 +192,102 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
     )
     const existing = existingRes.rows[0]
     if (existing && existing.sms_sent && existing.email_sent) {
+      logTransferNotification('log', traceId, applicationId, 'skipping because transferee notification already fully sent', {
+        notificationId: existing.id,
+      })
       return { ok: true, status: 'skipped_already_sent', applicationId }
     }
 
-    const transferRes = await query<TransferRequestRow>(
-      `
-      select transferee_email, transferee_phone
-      from public.transfer_requests
-      where application_id = $1
-      order by updated_at desc
-      limit 1
-      `,
-      [applicationId]
-    )
-    const transferRequest = transferRes.rows[0]
-    if (!transferRequest) {
-      return { ok: false, status: 'error', applicationId, message: 'Transfer request not found' }
+    const notesContact = extractTransfereeContactFromNotes(app.internal_notes)
+    let transferRequest: TransferRequestRow | undefined
+    let contactSource: 'transfer_requests' | 'application_notes' | 'transfer_requests_backfilled' = 'application_notes'
+
+    try {
+      const transferRes = await query<TransferRequestRow>(
+        `
+        select transferee_email, transferee_phone
+        from public.transfer_requests
+        where application_id = $1
+        order by updated_at desc
+        limit 1
+        `,
+        [applicationId]
+      )
+      transferRequest = transferRes.rows[0]
+      if (transferRequest) {
+        contactSource = 'transfer_requests'
+        logTransferNotification('log', traceId, applicationId, 'loaded transferee contact from transfer_requests', {
+          transfereeEmail: maskEmail(normalizeEmail(transferRequest.transferee_email)),
+          transfereePhone: maskPhone(String(transferRequest.transferee_phone || '')),
+        })
+      } else {
+        logTransferNotification('warn', traceId, applicationId, 'no transfer_requests row found, will fall back to application notes')
+      }
+
+      const hasTransferRequestContact =
+        isNonEmptyString(transferRequest?.transferee_email) && isNonEmptyString(transferRequest?.transferee_phone)
+      const canBackfillTransferRequest =
+        !hasTransferRequestContact &&
+        isNonEmptyString(notesContact.originalPermitId) &&
+        isNonEmptyString(notesContact.transfereeEmail) &&
+        isNonEmptyString(notesContact.transfereePhoneKey)
+
+      if (canBackfillTransferRequest) {
+        const upsertRes = await query<TransferRequestRow>(
+          `
+          insert into public.transfer_requests (
+            application_id,
+            original_permit_id,
+            transferor_user_id,
+            transferee_email,
+            transferee_phone,
+            status,
+            created_at,
+            updated_at
+          ) values ($1, $2, $3, $4, $5, 'pending', now(), now())
+          on conflict (application_id) do update set
+            original_permit_id = excluded.original_permit_id,
+            transferor_user_id = excluded.transferor_user_id,
+            transferee_email = excluded.transferee_email,
+            transferee_phone = excluded.transferee_phone,
+            updated_at = now()
+          returning transferee_email, transferee_phone
+          `,
+          [
+            applicationId,
+            notesContact.originalPermitId,
+            app.applicant_id,
+            notesContact.transfereeEmail,
+            notesContact.transfereePhoneKey,
+          ]
+        )
+        transferRequest = upsertRes.rows[0]
+        contactSource = 'transfer_requests_backfilled'
+        logTransferNotification('log', traceId, applicationId, 'backfilled transfer_requests from application notes', {
+          transfereeEmail: maskEmail(normalizeEmail(transferRequest?.transferee_email || '')),
+          transfereePhone: maskPhone(String(transferRequest?.transferee_phone || '')),
+        })
+      }
+    } catch (transferErr) {
+      if (isMissingTransferRequestsTable(transferErr)) {
+        logTransferNotification('warn', traceId, applicationId, 'transfer_requests table is missing, using application notes fallback')
+      }
+      if (!isMissingTransferRequestsTable(transferErr)) throw transferErr
     }
 
-    const transfereeEmail = normalizeEmail(transferRequest.transferee_email)
-    const transfereePhoneRaw = String(transferRequest.transferee_phone || '').trim()
+    const transfereeEmail = normalizeEmail(transferRequest?.transferee_email || notesContact.transfereeEmail)
+    const transfereePhoneRaw = String(transferRequest?.transferee_phone || notesContact.transfereePhoneRaw || '').trim()
+    if (!isNonEmptyString(transfereeEmail) && !isNonEmptyString(transfereePhoneRaw)) {
+      logTransferNotification('error', traceId, applicationId, 'transferee contact details could not be resolved')
+      return { ok: false, status: 'error', applicationId, message: 'Transferee contact details not found' }
+    }
+
+    logTransferNotification('log', traceId, applicationId, 'resolved transferee contact details', {
+      contactSource,
+      transfereeEmail: isNonEmptyString(transfereeEmail) ? maskEmail(transfereeEmail) : '(missing-email)',
+      transfereePhone: isNonEmptyString(transfereePhoneRaw) ? maskPhone(transfereePhoneRaw) : '(missing-phone)',
+    })
+
     const applicationNumber = app.application_number || app.id
     const portalUrl = getPortalUrl()
     const subject = `Permit transfer approved - action required — ${applicationNumber}`
@@ -156,6 +311,7 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
 
     let notifId = existing?.id || null
     if (!notifId) {
+      logTransferNotification('log', traceId, applicationId, 'creating notification state row')
       const lockRes = await query<{ id: string }>(
         `
         insert into public.notifications (
@@ -169,6 +325,7 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
     }
 
     if (!notifId) {
+      logTransferNotification('error', traceId, applicationId, 'failed to create notification state row')
       return { ok: false, status: 'error', applicationId, message: 'Failed to create notification state row' }
     }
 
@@ -179,14 +336,32 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
     const currentNotif = currentNotifRes.rows[0]
     let smsSent = Boolean(currentNotif?.sms_sent)
     let emailSent = Boolean(currentNotif?.email_sent)
+    logTransferNotification('log', traceId, applicationId, 'notification state ready', {
+      notificationId: notifId,
+      smsSent,
+      emailSent,
+    })
 
     if (!emailSent && isNonEmptyString(transfereeEmail)) {
       try {
+        logTransferNotification('log', traceId, applicationId, 'sending transferee email', {
+          to: maskEmail(transfereeEmail),
+        })
         const emailRes = await sendResendEmail({ to: transfereeEmail, subject, title, text })
         emailSent = Boolean(emailRes.delivered) || emailSent
+        logTransferNotification('log', traceId, applicationId, 'transferee email send completed', {
+          delivered: Boolean(emailRes.delivered),
+          skipped: Boolean(emailRes.skipped),
+        })
       } catch (emailErr) {
-        console.warn('⚠️ Transfer pending-terms email failed (will attempt SMS independently):', emailErr)
+        logTransferNotification('warn', traceId, applicationId, 'transferee email send failed; SMS will still be attempted', {
+          error: emailErr instanceof Error ? emailErr.message : String(emailErr),
+        })
       }
+    } else if (emailSent) {
+      logTransferNotification('log', traceId, applicationId, 'skipping transferee email because it was already sent')
+    } else {
+      logTransferNotification('warn', traceId, applicationId, 'skipping transferee email because email address is missing')
     }
 
     if (!smsSent) {
@@ -197,13 +372,30 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
           const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
           const sms = `RWB: Transfer ${applicationNumber} approved. Login with same email+phone, open status Approved - Pending Terms, then accept terms to complete transfer. Portal: ${portalUrl}`
           if (pindo.isValidRwandanPhone(smsPhone)) {
+            logTransferNotification('log', traceId, applicationId, 'sending transferee SMS', {
+              to: maskPhone(smsPhone),
+              senderName,
+            })
             await pindo.sendSMS(smsPhone, sms, senderName)
             smsSent = true
+            logTransferNotification('log', traceId, applicationId, 'transferee SMS sent successfully', {
+              to: maskPhone(smsPhone),
+            })
+          } else {
+            logTransferNotification('warn', traceId, applicationId, 'skipping transferee SMS because phone format is invalid', {
+              phone: maskPhone(smsPhone),
+            })
           }
+        } else {
+          logTransferNotification('warn', traceId, applicationId, 'skipping transferee SMS because phone could not be normalized')
         }
       } catch (smsErr) {
-        console.warn('⚠️ Transfer pending-terms SMS failed:', smsErr)
+        logTransferNotification('warn', traceId, applicationId, 'transferee SMS send failed', {
+          error: smsErr instanceof Error ? smsErr.message : String(smsErr),
+        })
       }
+    } else {
+      logTransferNotification('log', traceId, applicationId, 'skipping transferee SMS because it was already sent')
     }
 
     await query(
@@ -218,8 +410,21 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
       `,
       [notifId, text, smsSent, emailSent]
     )
+    logTransferNotification('log', traceId, applicationId, 'updated notification state row', {
+      notificationId: notifId,
+      smsSent,
+      emailSent,
+    })
 
-    if (smsSent && emailSent) return { ok: true, status: 'sent', applicationId }
+    if (smsSent && emailSent) {
+      logTransferNotification('log', traceId, applicationId, 'notification flow completed successfully')
+      return { ok: true, status: 'sent', applicationId }
+    }
+
+    logTransferNotification('warn', traceId, applicationId, 'notification flow completed with partial delivery', {
+      smsSent,
+      emailSent,
+    })
     return {
       ok: false,
       status: 'error',
@@ -231,8 +436,12 @@ export async function notifyOnTransferPendingTerms(applicationId: string): Promi
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     if (isMissingTransferRequestsTable(err)) {
+      logTransferNotification('error', traceId, applicationId, 'notification flow failed because transfer_requests table is missing')
       return { ok: false, status: 'error', applicationId, message: 'transfer_requests table missing' }
     }
+    logTransferNotification('error', traceId, applicationId, 'notification flow failed with unexpected error', {
+      error: message,
+    })
     return { ok: false, status: 'error', applicationId, message }
   }
 }
@@ -254,13 +463,7 @@ export async function retryTransferPendingTermsNotifications(limit: number = 25)
     where a.status = 'approved_pending_permit'
       and (
         a.application_type = 'transfer'
-        or coalesce(a.internal_notes ->> 'isTransfer', 'false') = 'true'
-      )
-      and exists (
-        select 1
-        from public.transfer_requests tr
-        where tr.application_id = a.id
-          and tr.status = 'pending'
+        or coalesce((a.internal_notes::jsonb) ->> 'isTransfer', 'false') = 'true'
       )
       and (
         not exists (
