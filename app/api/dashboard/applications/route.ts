@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       `(
         a.applicant_id = $1
         or (
-          a.application_type = 'transfer'
+          (a.application_type = 'transfer' or (a.internal_notes is not null and a.internal_notes::text like '%"isTransfer":true%'))
           and exists (
             select 1
             from public.transfer_requests tr

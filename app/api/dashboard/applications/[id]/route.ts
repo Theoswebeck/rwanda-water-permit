@@ -67,7 +67,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
           and (
             a.applicant_id = $2
             or (
-              a.application_type = 'transfer'
+              (a.application_type = 'transfer' or (a.internal_notes is not null and a.internal_notes::text like '%"isTransfer":true%'))
               and exists (
                 select 1
                 from public.transfer_requests tr

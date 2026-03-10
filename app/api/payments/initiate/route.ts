@@ -429,6 +429,11 @@ export async function POST(request: NextRequest) {
       ? `Annual Water Use Report Fee - ${water_use_report_id}`
       : `Water Permit Application Fee - ${application?.application_number || application_id}`;
 
+    const initiatedAt = new Date();
+    const initiatedAtIso = initiatedAt.toISOString();
+    const expiresAt = getPaymentExpiryTime(initiatedAt);
+    const expiresAtIso = expiresAt.toISOString();
+
     const gatewayContext = {
       paymentDebugId,
       endpoint: `${process.env.IREMBOPAY_API_URL || 'https://api.irembopay.com'}/payments/invoices`,
@@ -447,6 +452,7 @@ export async function POST(request: NextRequest) {
       hasApplication: !!application,
       applicationId: applicationIdToUse || null,
       waterUseReportId: water_use_report_id || null,
+      expiryAt: expiresAtIso,
     };
     console.log('🧭 [PAYMENT INITIATE] Gateway request context:', gatewayContext);
 
@@ -460,6 +466,7 @@ export async function POST(request: NextRequest) {
         }
       ],
       paymentAccountIdentifier: paymentAccountId,
+      expiryAt: expiresAtIso,
       description: itemDescription,
       customer: {
         email: customerEmail,
@@ -536,10 +543,6 @@ export async function POST(request: NextRequest) {
     // 5. CREATE PAYMENT RECORD IN DATABASE
     // =============================================
 
-    const initiatedAt = new Date();
-    const initiatedAtIso = initiatedAt.toISOString();
-    const expiresAt = getPaymentExpiryTime(initiatedAt);
-
     // Build payment record data - application_id may be null initially
     const paymentData: Record<string, unknown> = {
       applicant_id: userId,
@@ -559,7 +562,7 @@ export async function POST(request: NextRequest) {
       gateway_response: iremboResponse.data as Record<string, unknown>,
       gateway_metadata: {},
       initiated_at: initiatedAtIso,
-      expires_at: expiresAt.toISOString(),
+      expires_at: expiresAtIso,
       created_by: userId,
     };
 

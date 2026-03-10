@@ -237,7 +237,7 @@ export function FieldReportUpload({
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="inspector-name">Assessment Name *</Label>
+              <Label htmlFor="inspector-name">Assessor Name *</Label>
               <Input
                 id="inspector-name"
                 value={inspectorName}

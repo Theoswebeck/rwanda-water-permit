@@ -80,6 +80,7 @@ interface FinalReviewApplication {
   deadline_90_days_remaining?: number | null;
   is_modification?: boolean;
   is_renewal?: boolean;
+  internal_notes?: string | null;
 }
 
 export function FinalDecisions() {
@@ -171,6 +172,7 @@ export function FinalDecisions() {
           due_date: app.due_date || undefined,
           deadline_90_days_remaining: deadline90Remaining,
           is_modification: app.is_modification || false,
+          internal_notes: app.internal_notes || null,
         };
       });
 
@@ -258,7 +260,13 @@ export function FinalDecisions() {
   // Get application type badge (New, Modification, Transfer, Renewal)
   const getAppTypeBadge = (application: FinalReviewApplication) => {
     const isModification = application.applicationType === 'modification' || application.is_modification === true;
-    const isTransfer = application.applicationType === 'transfer';
+    let isTransfer = application.applicationType === 'transfer';
+    if (!isTransfer && typeof application.internal_notes === 'string') {
+      try {
+        const notes = JSON.parse(application.internal_notes);
+        if (notes?.isTransfer === true) isTransfer = true;
+      } catch { /* ignore */ }
+    }
     const isRenewal = application.applicationType === 'renewal' || application.is_renewal === true;
     
     if (isRenewal) {

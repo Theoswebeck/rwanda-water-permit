@@ -2261,7 +2261,16 @@ export function ApplicationForm({
         console.log(`📎 Updated files state:`, Object.keys(newFiles).filter(key => newFiles[key]));
         return newFiles;
       });
-      form.setValue(fieldName as any, file);
+      // Revalidate this field immediately so stale manual errors clear as soon as user selects a valid file.
+      form.setValue(fieldName as any, file, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      form.clearErrors(fieldName as any);
+      if (validationError && /(upload|document)/i.test(validationError)) {
+        setValidationError(null);
+      }
       console.log(`📎 Form value set for ${fieldName}`);
     } else {
       console.log(`📎 No file selected for field: ${fieldName}`);
@@ -2270,7 +2279,11 @@ export function ApplicationForm({
 
   const removeFile = (fieldName: string) => {
     setFiles(prev => ({ ...prev, [fieldName]: null }));
-    form.setValue(fieldName as any, null);
+    form.setValue(fieldName as any, null, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
     if (fileInputRefs[fieldName as keyof typeof fileInputRefs]?.current) {
       fileInputRefs[fieldName as keyof typeof fileInputRefs].current!.value = '';
     }
@@ -5772,7 +5785,19 @@ export function ApplicationForm({
                             </FormLabel>
                             <FormControl>
                               <Select
-                                onValueChange={readOnly ? undefined : (value) => field.onChange(value === "yes")}
+                                onValueChange={readOnly ? undefined : (value) => {
+                                  const hasAccess = value === "yes";
+                                  field.onChange(hasAccess);
+                                  form.clearErrors('hasLandAccess');
+                                  if (hasAccess) {
+                                    // If user now has access and adds docs, uploader will clear any remaining doc error.
+                                    if (validationError && /access to the land|land access/i.test(validationError)) {
+                                      setValidationError(null);
+                                    }
+                                  } else {
+                                    form.clearErrors('landAccessDocuments' as any);
+                                  }
+                                }}
                                 value={field.value === null || field.value === undefined ? undefined : (field.value ? "yes" : "no")}
                                 disabled={readOnly}
                               >

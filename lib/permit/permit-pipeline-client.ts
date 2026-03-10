@@ -27,15 +27,21 @@ export type PipelineApplicationLike = {
   application_number?: string | null
 }
 
+function isTransferApp(app: PipelineApplicationLike): boolean {
+  if (app.application_type === 'transfer') return true
+  const notes = parseNotesObject(app.internal_notes)
+  return notes.isTransfer === true
+}
+
 function getKind(app: PipelineApplicationLike): Kind {
-  if (app.application_type === 'transfer') return 'transfer'
+  if (isTransferApp(app)) return 'transfer'
   if (app.is_renewal) return 'renewal'
   if (app.is_modification) return 'modification'
   return 'application'
 }
 
 function transferMatchesPermit(app: PipelineApplicationLike, permitId: string): boolean {
-  if (app.application_type !== 'transfer') return false
+  if (!isTransferApp(app)) return false
   const notes = parseNotesObject(app.internal_notes)
   const transferPermitId = toTrimmedString(notes.originalPermitId)
   return transferPermitId === permitId

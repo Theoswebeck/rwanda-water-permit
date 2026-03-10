@@ -153,7 +153,13 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
   const getAppTypeBadge = (app: ApplicationWithApplicant) => {
     const appType = app.application_type as string;
     const isModification = appType === 'modification' || (app as any).is_modification === true;
-    const isTransfer = appType === 'transfer';
+    let isTransfer = appType === 'transfer';
+    if (!isTransfer && typeof app.internal_notes === 'string') {
+      try {
+        const notes = JSON.parse(app.internal_notes);
+        if (notes?.isTransfer === true) isTransfer = true;
+      } catch { /* ignore */ }
+    }
     const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
     
     if (isRenewal) {

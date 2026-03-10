@@ -13,6 +13,7 @@ type LinkedApplicationRow = {
   id: string
   status: string | null
   application_type: string | null
+  internal_notes: string | null
   is_renewal: boolean | null
   is_modification: boolean | null
   application_number: string | null
@@ -49,6 +50,8 @@ function isUuid(input: string | null): input is string {
 
 function getPipelineKindFromRow(row: LinkedApplicationRow): PipelineKind | 'application' {
   if (row.application_type === 'transfer') return 'transfer'
+  const notes = parseNotesObject(row.internal_notes)
+  if (notes.isTransfer === true) return 'transfer'
   if (row.is_renewal) return 'renewal'
   if (row.is_modification) return 'modification'
   return 'application'
@@ -136,6 +139,7 @@ export async function checkPermitPipelineConflict({
       a.id,
       a.status,
       a.application_type,
+      a.internal_notes::text as internal_notes,
       a.is_renewal,
       a.is_modification,
       a.application_number,
@@ -145,7 +149,7 @@ export async function checkPermitPipelineConflict({
       a.renewed_from_permit_id = $1
       or ($2::uuid is not null and a.modified_from_application_id = $2::uuid)
       or (
-        a.application_type = 'transfer'
+        (a.application_type = 'transfer' or (a.internal_notes is not null and a.internal_notes::text like '%"isTransfer":true%'))
         and a.internal_notes::text ilike $3
       )
     )

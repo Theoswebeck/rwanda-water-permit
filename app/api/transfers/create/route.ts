@@ -61,7 +61,14 @@ export async function POST(req: NextRequest) {
     if (app.applicant_id !== userId) {
       return NextResponse.json({ success: false, message: 'Forbidden: not your transfer application' }, { status: 403 })
     }
-    if (app.application_type !== 'transfer') {
+    let isTransferApp = app.application_type === 'transfer'
+    if (!isTransferApp) {
+      try {
+        const notes = typeof app.internal_notes === 'string' ? JSON.parse(app.internal_notes) : null
+        if (notes && notes.isTransfer === true) isTransferApp = true
+      } catch { /* invalid JSON */ }
+    }
+    if (!isTransferApp) {
       return NextResponse.json({ success: false, message: 'Not a transfer application' }, { status: 400 })
     }
 

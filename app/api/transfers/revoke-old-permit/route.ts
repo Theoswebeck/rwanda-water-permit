@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch application number for a clearer audit note.
-    const appRes = await query<{ id: string; application_number: string | null; application_type: string | null; status: string }>(
+    const appRes = await query<{ id: string; application_number: string | null; application_type: string | null; internal_notes: string | null; status: string }>(
       `
-      select id, application_number, application_type, status
+      select id, application_number, application_type, internal_notes::text as internal_notes, status
       from public.applications
       where id = $1
       limit 1
@@ -69,7 +69,14 @@ export async function POST(req: NextRequest) {
     if (!app) {
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
     }
-    if (app.application_type !== 'transfer') {
+    let isTransferApp = app.application_type === 'transfer'
+    if (!isTransferApp) {
+      try {
+        const notes = typeof app.internal_notes === 'string' ? JSON.parse(app.internal_notes) : null
+        if (notes && notes.isTransfer === true) isTransferApp = true
+      } catch { /* invalid JSON */ }
+    }
+    if (!isTransferApp) {
       return NextResponse.json({ success: false, message: 'Not a transfer application' }, { status: 400 })
     }
 

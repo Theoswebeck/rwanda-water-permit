@@ -81,7 +81,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         is_modification
       from public.applications
       where
-        application_type = 'transfer'
+        (application_type = 'transfer' or (internal_notes is not null and internal_notes::text like '%"isTransfer":true%'))
         and internal_notes::text ilike $1
       order by created_at desc
       `,
