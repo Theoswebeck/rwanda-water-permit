@@ -107,7 +107,7 @@ interface Inspection {
     size?: number
     uploadedAt?: string
   }>
-  application: {
+  application?: {
     id: string
     application_number: string
     project_title: string
@@ -118,7 +118,7 @@ interface Inspection {
     district: string
     sector: string
     cell: string
-    applicant: {
+    applicant?: {
       first_name: string
       last_name: string
       company_name?: string
@@ -204,7 +204,7 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
     const fetchInspection = async () => {
       try {
         setLoading(true)
-        const data = await getInspectionById(inspectionId)
+        const data = (await getInspectionById(inspectionId)) as Inspection | null
         console.log("📋 Fetched inspection data:", data)
         console.log("📊 Employment data:", data?.employment_gender_breakdown)
         console.log("🏥 OHS data:", data?.ohs_gender_sensitive)
@@ -264,11 +264,16 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
     return v.toLocaleString()
   }
 
-  const getApplicantName = (applicant: Inspection['application']['applicant']) => {
-    return applicant.company_name || `${applicant.first_name} ${applicant.last_name}`
+  const getApplicantName = (applicant: NonNullable<Inspection["application"]>["applicant"] | undefined) => {
+    if (!applicant) return "Unknown Applicant"
+    const company = applicant.company_name?.trim()
+    if (company) return company
+    const fullName = `${applicant.first_name || ""} ${applicant.last_name || ""}`.trim()
+    return fullName || "Unknown Applicant"
   }
 
-  const getLocationString = (application: Inspection['application']) => {
+  const getLocationString = (application: Inspection["application"] | undefined) => {
+    if (!application) return "N/A"
     return `${application.district}, ${application.sector}, ${application.cell}`
   }
 
@@ -341,7 +346,7 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
         <div>
           <h2 className="text-2xl font-bold">{inspection.inspection_number || `Inspection ${inspectionId.slice(0, 8)}...`}</h2>
           <p className="text-muted-foreground">
-            Application: {inspection.application.application_number}
+            Application: {inspection.application?.application_number || "N/A"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -355,9 +360,9 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ReadonlyField label="Assessment Name" value={`${inspection.inspector.first_name} ${inspection.inspector.last_name}`} />
           <ReadonlyField label="Assessment Date" value={formatDate(inspection.completed_date || inspection.scheduled_date)} />
-          <ReadonlyField label="Applicant" value={getApplicantName(inspection.application.applicant)} />
+          <ReadonlyField label="Applicant" value={getApplicantName(inspection.application?.applicant)} />
           <ReadonlyField label="Location" value={getLocationString(inspection.application)} />
-          <ReadonlyField label="Water Source" value={getWaterSourceLabel(inspection.application.water_source)} />
+          <ReadonlyField label="Water Source" value={getWaterSourceLabel(inspection.application?.water_source || "N/A")} />
           <ReadonlyField label="Status" value={inspection.status?.replace('_', ' ')} />
           <ReadonlyField label="Template" value={inspection.inspection_template?.replace('_', ' ') || "Authorization"} />
           {inspection.completed_date && (

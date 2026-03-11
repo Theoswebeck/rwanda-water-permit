@@ -4,9 +4,10 @@ import QRCode from 'qrcode';
 import { isConcessionApplication, selectPermitVariant } from "@/lib/permit-variant";
 import { splitContractSectionsByLanguage } from "@/lib/contract-terms";
 
-// Rwanda Coat of Arms watermark path
-const WATERMARK_IMAGE_PATH = "/assets/png-transparent-rulindo-district-coat-of-arms-organization-agriculture-government-others-leaf-logo-agriculture.png";
-const PERMIT_HEADER_LOGO_PATH = "/assets/rwanda_logo.png";
+// Large centered background watermark behind permit text.
+const WATERMARK_IMAGE_PATH = "/assets/rwanda_logo.png";
+// Official RWB logo at the top center.
+const PERMIT_HEADER_LOGO_PATH = "/assets/rwanda_water_board_Logo.png";
 // Closest built-in jsPDF serif to Palatino Linotype.
 const PERMIT_FONT_FAMILY = "times";
 
@@ -217,10 +218,9 @@ async function drawCenteredWatermark(doc: jsPDF): Promise<void> {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Watermark size - make it substantial and visible
-  // Using 100mm width for better visibility on A4 pages
-  const watermarkWidth = 100;
-  const watermarkHeight = 100; // Coat of arms is roughly square
+  // Watermark size - large and centered behind the permit body text.
+  const watermarkWidth = 130;
+  const watermarkHeight = 130;
 
   // Center the watermark
   const x = (pageWidth - watermarkWidth) / 2;
@@ -1057,7 +1057,7 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
 
   const headerYear = issueDate.getFullYear();
   const titlePermitNo = resolvePermitTitleLine(application, permitNumber, headerYear);
-  await drawPermitPageHeader(doc, `WATER USE PERMIT N° ${titlePermitNo} (for Individual Applicant)`);
+  await drawPermitPageHeader(doc, `WATER USE PERMIT N° ${titlePermitNo}`);
 
   let y = 62;
   const leftX = 20;
@@ -1158,7 +1158,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
 
   const headerYear = issueDate.getFullYear();
   const permitTitleLine = resolvePermitTitleLine(application, permitNumber, headerYear);
-  await drawPermitPageHeader(doc, `WATER USE PERMIT N° ${permitTitleLine} (for Organization Applicant)`);
+  await drawPermitPageHeader(doc, `WATER USE PERMIT N° ${permitTitleLine}`);
 
   let y = 62;
   const leftX = 20;
@@ -1313,7 +1313,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   const headerYear = issueDate.getFullYear();
   await drawPermitPageHeader(
     doc,
-    `WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)} (for Individual Applicant)`
+    `WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`
   );
 
   let y = 62;
@@ -1416,7 +1416,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   const headerYear = issueDate.getFullYear();
   await drawPermitPageHeader(
     doc,
-    `WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)} (for Organization Applicant)`
+    `WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`
   );
 
   let y = 62;
