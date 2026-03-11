@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -58,6 +58,7 @@ const DEFAULT_FILTERS: FiltersState = {
   waterSource: "all",
   waterPurpose: "all",
 };
+const FEEDBACK_PAGE_SIZE = 5;
 
 function formatNumber(n: number) {
   return new Intl.NumberFormat().format(Math.round(n));
@@ -109,9 +110,27 @@ function SectionButton({
 export default function ManagementDashboardPage() {
   const [section, setSection] = useState<SectionKey>("portfolio");
   const [filters, setFilters] = useState<FiltersState>(DEFAULT_FILTERS);
+  const [feedbackPage, setFeedbackPage] = useState(1);
 
   const queryFilters = useMemo(() => filters, [filters]);
   const { data, isLoading, error, refetch, isFetching } = useManagementDashboardQuery(queryFilters);
+
+  const feedbackEntries = data?.feedback.recent ?? [];
+  const feedbackPageCount = Math.max(1, Math.ceil(feedbackEntries.length / FEEDBACK_PAGE_SIZE));
+  const feedbackPageStartIndex = (feedbackPage - 1) * FEEDBACK_PAGE_SIZE;
+  const feedbackPageEndIndex = feedbackPageStartIndex + FEEDBACK_PAGE_SIZE;
+  const pagedFeedbackEntries = useMemo(
+    () => feedbackEntries.slice(feedbackPageStartIndex, feedbackPageEndIndex),
+    [feedbackEntries, feedbackPageEndIndex, feedbackPageStartIndex]
+  );
+
+  useEffect(() => {
+    setFeedbackPage(1);
+  }, [filters]);
+
+  useEffect(() => {
+    setFeedbackPage((previousPage) => Math.min(previousPage, feedbackPageCount));
+  }, [feedbackPageCount]);
 
   const districtOptions = useMemo(() => {
     if (filters.province === "all") return [];
@@ -566,10 +585,10 @@ export default function ManagementDashboardPage() {
                           <CardDescription>Latest permit issuance feedback submitted by applicants</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                          {(data?.feedback.recent ?? []).length === 0 ? (
+                          {feedbackEntries.length === 0 ? (
                             <div className="text-sm text-muted-foreground">No feedback has been submitted for the current filters yet.</div>
                           ) : (
-                            (data?.feedback.recent ?? []).map((entry) => (
+                            pagedFeedbackEntries.map((entry) => (
                               <div key={entry.id} className="rounded-lg border p-3">
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
@@ -603,6 +622,29 @@ export default function ManagementDashboardPage() {
                               </div>
                             ))
                           )}
+                          {feedbackEntries.length > FEEDBACK_PAGE_SIZE ? (
+                            <div className="flex items-center justify-between gap-2 border-t pt-3">
+                              <div className="text-xs text-muted-foreground">
+                                Showing {feedbackPageStartIndex + 1}-{Math.min(feedbackPageEndIndex, feedbackEntries.length)} of {feedbackEntries.length}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button variant="outline" size="sm" onClick={() => setFeedbackPage((page) => Math.max(1, page - 1))} disabled={feedbackPage <= 1}>
+                                  Previous
+                                </Button>
+                                <div className="text-xs text-muted-foreground">
+                                  Page {feedbackPage} of {feedbackPageCount}
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setFeedbackPage((page) => Math.min(feedbackPageCount, page + 1))}
+                                  disabled={feedbackPage >= feedbackPageCount}
+                                >
+                                  Next
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
                         </CardContent>
                       </Card>
 

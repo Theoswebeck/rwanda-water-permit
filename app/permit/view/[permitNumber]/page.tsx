@@ -7,6 +7,7 @@ import type { PermitStatus } from "@/types/database";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { PermitPublicActions } from "@/components/public/permit-public-actions";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { isConcessionApplication } from "@/lib/permit-variant";
 
 function formatDate(dateString: string): string {
   const raw = dateString.trim();
@@ -36,6 +37,27 @@ function getCanonicalIssueDate(permit: Record<string, unknown>): string | null {
   if (issuedDate) return issuedDate;
   const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
   return acceptedAt || null;
+}
+
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, "").trim());
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
+function parseInternalNotes(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "object") return value as Record<string, unknown>;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 function statusBadgeVariant(status: PermitStatus): { label: string; className: string } {
@@ -156,6 +178,48 @@ export default async function PublicPermitViewPage({
     return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
   })();
   const issueDate = getCanonicalIssueDate(permit as Record<string, unknown>);
+  const application = permit.application as Record<string, unknown> | null;
+  const normalizedPurpose = typeof permit.purpose === "string" ? permit.purpose.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
+  const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities"]);
+  const isConcessionPermit = (application ? isConcessionApplication(application) : false) || concessionPurposeHints.has(normalizedPurpose);
+  const internalNotes = parseInternalNotes(application?.internal_notes);
+
+  const abstractionValue = (() => {
+    const permitVolume = parsePositiveNumber(permit.water_allowance);
+    const assessorVolume = parsePositiveNumber(application?.assessor_recommended_volume_m3);
+    const yearlyVolume = parsePositiveNumber(application?.max_yearly_volume_m3);
+    const estimatedVolume = parsePositiveNumber(application?.estimated_usage_volume);
+    const abstractionFromNotes = parsePositiveNumber(
+      Array.isArray(internalNotes?.waterAbstractionDetails)
+        ? (internalNotes?.waterAbstractionDetails as Array<Record<string, unknown>>)[0]?.maxAverageYearly
+        : null
+    );
+    const volume = permitVolume ?? assessorVolume ?? yearlyVolume ?? estimatedVolume ?? abstractionFromNotes;
+    if (!volume) return "N/A";
+
+    const unitCandidate = [
+      typeof permit.allowance_unit === "string" ? permit.allowance_unit.trim() : "",
+      typeof application?.usage_unit === "string" ? application.usage_unit.trim() : "",
+    ].find((item) => item.length > 0);
+
+    return `${volume.toLocaleString()} ${unitCandidate || "m³/year"}`.trim();
+  })();
+
+  const concessionAreaValue = (() => {
+    const applicationArea = parsePositiveNumber(application?.concession_area);
+    if (applicationArea) return `${applicationArea.toLocaleString()} ha`;
+
+    const areaOrVolumeRaw = typeof permit.water_allowance === "string" ? permit.water_allowance.trim() : "";
+    const parsedArea = parsePositiveNumber(permit.water_allowance);
+    if (parsedArea) {
+      const unit = typeof permit.allowance_unit === "string" ? permit.allowance_unit.trim() : "";
+      return `${parsedArea.toLocaleString()}${unit ? ` ${unit}` : ""}`;
+    }
+    if (areaOrVolumeRaw && areaOrVolumeRaw !== "0" && areaOrVolumeRaw !== "0.0" && areaOrVolumeRaw !== "0.00") {
+      return areaOrVolumeRaw;
+    }
+    return "N/A";
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -230,9 +294,11 @@ export default async function PublicPermitViewPage({
                   <div className="mt-1 text-sm font-medium text-slate-900">{intendedWaterActivity}</div>
                 </div>
                 <div className="rounded-xl border p-4 md:col-span-2">
-                  <div className="text-xs text-slate-500">Authorized volume</div>
+                  <div className="text-xs text-slate-500">
+                    {isConcessionPermit ? "Surface concession area" : "Authorized volume"}
+                  </div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
-                    {permit.water_allowance || "N/A"} {permit.allowance_unit || ""}
+                    {isConcessionPermit ? concessionAreaValue : abstractionValue}
                   </div>
                 </div>
                 <div className="rounded-xl border p-4 md:col-span-2">

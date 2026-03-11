@@ -628,7 +628,7 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
     count: feedbackEntries.filter((entry) => entry.rating === rating).length,
   }));
 
-  const recentFeedback = feedbackEntries.slice(0, 8).map((entry) => {
+  const recentFeedback = feedbackEntries.map((entry) => {
     const application = entry.application_id ? applicationById.get(entry.application_id) : undefined;
     return {
       id: entry.id,
