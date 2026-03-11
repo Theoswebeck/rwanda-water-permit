@@ -2,8 +2,15 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
+import { LanguageSwitcher } from "@/components/shared/language-switcher";
+import {
+  getPreferredLanguage,
+  setPreferredLanguage,
+  subscribeToLanguageChanges,
+  type AppLanguage,
+} from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 // Updated footer links based on the new structure
 const usefulLinks = [
@@ -17,6 +24,15 @@ const usefulLinks = [
 ];
 
 export function Footer() {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
+
   return (
     <footer className="border-t border-border mt-20 bg-primary text-white">
       <div className="container mx-auto px-4 py-16">
@@ -34,10 +50,10 @@ export function Footer() {
                 <path d="M18 10L12 14V22L18 26L24 22V14L18 10Z" fill="hsl(var(--primary))" />
                 <path d="M18 18C19.1046 18 20 17.1046 20 16C20 14.8954 19.1046 14 18 14C16.8954 14 16 14.8954 16 16C16 17.1046 16.8954 18 18 18Z" fill="hsl(var(--accent))" />
               </svg>
-              <span className="font-semibold tracking-tight">RWANDA WATER RESOURCES BOARD</span>
+              <span className="font-semibold tracking-tight">{tx("RWANDA WATER RESOURCES BOARD")}</span>
             </div>
             <p className="text-white/80 text-sm mb-6">
-              Official portal of the Rwanda Water Resources Board for water concession permit applications and management. Our digital platform provides efficient, transparent, and accessible services for all water users in Rwanda.
+              {tx("Official portal of the Rwanda Water Resources Board for water concession permit applications and management. Our digital platform provides efficient, transparent, and accessible services for all water users in Rwanda.")}
             </p>
             <div className="flex gap-4 mb-4">
               <a href="#" aria-label="Rwanda Water Resources Board Facebook Page" className="bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
@@ -77,7 +93,7 @@ export function Footer() {
           >
             {/* Useful Links Section */}
             <div>
-              <h3 className="text-xl font-semibold mb-5">Useful links</h3>
+              <h3 className="text-xl font-semibold mb-5">{tx("Useful links")}</h3>
               <ul className="space-y-3">
                 {usefulLinks.map((link) => (
                   <li key={link.label} className="flex items-center">
@@ -86,7 +102,7 @@ export function Footer() {
                       href={link.href}
                       className="text-sm text-white hover:text-white/80 transition-colors"
                     >
-                      {link.label}
+                      {tx(link.label)}
                     </Link>
                   </li>
                 ))}
@@ -95,7 +111,7 @@ export function Footer() {
 
             {/* Contact Us Section */}
             <div>
-              <h3 className="text-xl font-semibold mb-5">Contact Us</h3>
+              <h3 className="text-xl font-semibold mb-5">{tx("Contact Us")}</h3>
               <ul className="space-y-4">
                 <li className="flex items-start">
                   <span className="mr-2 mt-1 text-white/90">
@@ -127,7 +143,7 @@ export function Footer() {
                       <path fillRule="evenodd" d="M1.885.511a1.745 1.745 0 0 1 2.61.163L6.29 2.98c.329.423.445.974.315 1.494l-.547 2.19a.678.678 0 0 0 .178.643l2.457 2.457a.678.678 0 0 0 .644.178l2.189-.547a1.745 1.745 0 0 1 1.494.315l2.306 1.794c.829.645.905 1.87.163 2.611l-1.034 1.034c-.74.74-1.846 1.065-2.877.702a18.634 18.634 0 0 1-7.01-4.42 18.634 18.634 0 0 1-4.42-7.009c-.362-1.03-.037-2.137.703-2.877L1.885.511z"/>
                     </svg>
                   </span>
-                  <span className="text-sm">Toll Free Line: 9977</span>
+                  <span className="text-sm">{tx("Toll Free Line: 9977")}</span>
                 </li>
               </ul>
             </div>
@@ -135,7 +151,10 @@ export function Footer() {
         </div>
         
         <div className="border-t border-white/20 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-white/70">
-          <p>© {new Date().getFullYear()} Rwanda Water Resources Board. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {tx("Rwanda Water Resources Board. All rights reserved.")}</p>
+          <div className="mt-4 md:mt-0">
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+          </div>
           {/* Privacy/Terms removed: routes are not part of public site */}
         </div>
       </div>

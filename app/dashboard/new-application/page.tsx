@@ -15,7 +15,9 @@ const ApplicationForm = dynamic(
     loading: () => (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-3 text-sm text-muted-foreground">Loading form...</span>
+        <span className="ml-3 text-sm text-muted-foreground">
+          {translateText("Loading form...", getPreferredLanguage())}
+        </span>
       </div>
     ),
     ssr: false
@@ -28,7 +30,9 @@ const PermitTransferForm = dynamic(
     loading: () => (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-        <span className="ml-3 text-sm text-muted-foreground">Loading transfer form...</span>
+        <span className="ml-3 text-sm text-muted-foreground">
+          {translateText("Loading transfer form...", getPreferredLanguage())}
+        </span>
       </div>
     ),
     ssr: false
@@ -41,7 +45,9 @@ const PermitRenewalForm = dynamic(
     loading: () => (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-        <span className="ml-3 text-sm text-muted-foreground">Loading renewal form...</span>
+        <span className="ml-3 text-sm text-muted-foreground">
+          {translateText("Loading renewal form...", getPreferredLanguage())}
+        </span>
       </div>
     ),
     ssr: false
@@ -69,6 +75,12 @@ import { mapFormDataToApplication, formatProvinceForDB, formatWaterSourceForDB, 
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import type { ManualPermitSelectionPayload, PermitReference } from "@/lib/permit/permit-reference";
+import {
+  getPreferredLanguage,
+  subscribeToLanguageChanges,
+  type AppLanguage,
+} from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 // Helper function to create storage bucket if it doesn't exist
 async function ensureStorageBucket() {
@@ -463,6 +475,13 @@ function NewApplicationContent() {
   const [initialFormData, setInitialFormData] = useState<any>(null);
   const [initialDocuments, setInitialDocuments] = useState<Record<string, { url: string; name: string }>>({});
   const loadedDraftIdRef = useRef<string | null>(null);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
   
   // Application type state (new application vs transfer vs modification vs renewal)
   const [applicationMode, setApplicationMode] = useState<ApplicationMode | null>(
@@ -2417,7 +2436,7 @@ function NewApplicationContent() {
                   onClick={() => setRenewalStep('select-permit')}
                   className="text-sm"
                 >
-                  ← Select a different permit
+                  {tx("← Select a different permit")}
                 </Button>
               </div>
             )}
@@ -2440,10 +2459,10 @@ function NewApplicationContent() {
       <>
         <div>
           <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-            New Water Permit Application
+            {tx("New Water Permit Application")}
           </h1>
           <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground mt-2">
-            Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.
+            {tx("Fill out all required information to apply for your water permit. All fields marked with an asterisk (*) are required.")}
           </p>
           <div className="mt-2">
             <Button
@@ -2452,7 +2471,7 @@ function NewApplicationContent() {
               onClick={() => setApplicationMode(null)}
               className="text-sm"
             >
-              ← Change application type
+              {tx("← Change application type")}
             </Button>
           </div>
         </div>
@@ -2479,7 +2498,7 @@ function NewApplicationContent() {
             <Link href="/dashboard">
               <Button variant="ghost" className="gap-1">
                 <ArrowLeft className="h-4 w-4" />
-                Back to Dashboard
+                {tx("Back to Dashboard")}
               </Button>
             </Link>
           </div>
@@ -2505,7 +2524,7 @@ function NewApplicationContent() {
               <Alert className="border-green-200 bg-green-50">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
-                  ✅ Draft saved.
+                  {tx("✅ Draft saved.")}
                 </AlertDescription>
               </Alert>
             )}

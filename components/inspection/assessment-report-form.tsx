@@ -96,6 +96,7 @@ export function AssessmentReportForm({
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
   const prefilledClass = `bg-muted/50${readOnly ? " cursor-not-allowed" : ""}`;
+  const isSurfaceSectionReadOnly = true;
 
   return (
     <div className="space-y-6">
@@ -439,8 +440,9 @@ export function AssessmentReportForm({
                   value={localData.surfaceAreaHa || ''}
                   onChange={(e) => updateField('surfaceAreaHa', e.target.value)}
                   placeholder="Hectares (Ha)"
-                  disabled={readOnly}
-                  className={readOnlyClass}
+                  readOnly={isSurfaceSectionReadOnly}
+                  disabled={isSurfaceSectionReadOnly}
+                  className={prefilledClass}
                 />
               </div>
               <div>
@@ -456,8 +458,9 @@ export function AssessmentReportForm({
                           value={beacon.latitude}
                           onChange={(e) => updateBeacon(index, 'latitude', e.target.value)}
                           placeholder="Latitude"
-                          disabled={readOnly}
-                          className={readOnlyClass}
+                          readOnly={isSurfaceSectionReadOnly}
+                          disabled={isSurfaceSectionReadOnly}
+                          className={prefilledClass}
                         />
                       </div>
                       <div className="col-span-5">
@@ -465,11 +468,12 @@ export function AssessmentReportForm({
                           value={beacon.longitude}
                           onChange={(e) => updateBeacon(index, 'longitude', e.target.value)}
                           placeholder="Longitude"
-                          disabled={readOnly}
-                          className={readOnlyClass}
+                          readOnly={isSurfaceSectionReadOnly}
+                          disabled={isSurfaceSectionReadOnly}
+                          className={prefilledClass}
                         />
                       </div>
-                      {!readOnly && (
+                      {!isSurfaceSectionReadOnly && !readOnly && (
                         <div className="col-span-1">
                           <Button
                             type="button"
@@ -484,7 +488,7 @@ export function AssessmentReportForm({
                       )}
                     </div>
                   ))}
-                  {!readOnly && (
+                  {!isSurfaceSectionReadOnly && !readOnly && (
                     <Button
                       type="button"
                       variant="outline"

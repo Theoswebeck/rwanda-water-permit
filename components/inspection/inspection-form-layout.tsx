@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { InspectionDocumentsUpload, type InspectionDocumentFile } from "@/components/inspection/inspection-documents-upload";
@@ -34,6 +35,7 @@ export interface InspectionLockedData {
   residence?: string;
 
   permitNumber?: string;
+  facilityProjectName?: string;
   issuanceDate?: string;
   expirationDate?: string;
 
@@ -41,8 +43,23 @@ export interface InspectionLockedData {
   operatorIdTin?: string;
   operatorResidence?: string;
 
+  permitLocationProvince?: string;
+  permitLocationDistrict?: string;
+  permitLocationSector?: string;
+  permitLocationCell?: string;
+  permitLocationVillage?: string;
+  waterSourceType?: string;
+  waterPurpose?: string;
   waterSourceName?: string;
   waterSourceLocation?: string;
+  waterSourceLatitude?: string;
+  waterSourceLongitude?: string;
+  waterAllowance?: number;
+  allowanceUnit?: string;
+  abstractionMethod?: string;
+  flowRate?: number;
+  activityType?: string;
+  activityStartingDate?: string;
   catchmentLevel1?: string;
   catchmentLevel2?: string;
 }
@@ -313,8 +330,44 @@ export function InspectionFormLayout({
             <SectionShell title="2. Permit Particulars">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <ReadonlyField label="Number" value={locked.permitNumber} />
+                <ReadonlyField label="Name of Facility/Project" value={locked.facilityProjectName} />
                 <ReadonlyField label="Issuance date" value={locked.issuanceDate || ""} />
                 <ReadonlyField label="Expiration date" value={locked.expirationDate || ""} />
+              </div>
+            </SectionShell>
+
+            <SectionShell title="2.1 Permit Location">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <ReadonlyField label="Province / City of Kigali" value={locked.permitLocationProvince} />
+                <ReadonlyField label="District" value={locked.permitLocationDistrict} />
+                <ReadonlyField label="Sector" value={locked.permitLocationSector} />
+                <ReadonlyField label="Cell" value={locked.permitLocationCell} />
+                <ReadonlyField label="Village" value={locked.permitLocationVillage} />
+              </div>
+            </SectionShell>
+
+            <SectionShell title="2.2 Water Source & Purpose">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <ReadonlyField label="Water Source Type" value={locked.waterSourceType} />
+                <ReadonlyField label="Water Source Name" value={locked.waterSourceName} />
+                <ReadonlyField label="Water Use / Purpose" value={locked.waterPurpose} />
+                <ReadonlyField label="Location" value={locked.waterSourceLocation} />
+              </div>
+            </SectionShell>
+
+            <SectionShell title="2.3 Abstraction & Volume">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <ReadonlyField label="Water Allowance" value={locked.waterAllowance !== undefined ? String(locked.waterAllowance) : undefined} />
+                <ReadonlyField label="Allowance Unit" value={locked.allowanceUnit} />
+                <ReadonlyField label="Method of Abstraction" value={locked.abstractionMethod} />
+                <ReadonlyField label="Flow Rate (m³/s)" value={locked.flowRate !== undefined ? String(locked.flowRate) : undefined} />
+              </div>
+            </SectionShell>
+
+            <SectionShell title="2.4 Water Source Coordinates">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <ReadonlyField label="Latitude" value={locked.waterSourceLatitude} />
+                <ReadonlyField label="Longitude" value={locked.waterSourceLongitude} />
               </div>
             </SectionShell>
 
@@ -340,14 +393,27 @@ export function InspectionFormLayout({
             {template === "authorization" ? (
               <SectionShell title="5–6. Water abstraction (Authorization)" description="As per the official RWB checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <NumberField label="Allowed quantity" value={form.allowed_quantity ?? null} disabled={!canEdit} onChange={(v) => setField("allowed_quantity", (v ?? undefined) as any)} />
-                  <TextField label="Allowed unit" value={form.allowed_unit ?? ""} disabled={!canEdit} onChange={(v) => setField("allowed_unit", v as any)} placeholder="m³/day, m³/year" />
-                  <TextField label="Authorized abstraction method" value={form.authorized_abstraction_method ?? ""} disabled={!canEdit} onChange={(v) => setField("authorized_abstraction_method", v as any)} />
+                  <ReadonlyField label="Allowed quantity" value={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} />
+                  <ReadonlyField label="Allowed unit" value={form.allowed_unit ?? ""} />
+                  <ReadonlyField label="Authorized abstraction method" value={form.authorized_abstraction_method ?? ""} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <NumberField label="Actual quantity" value={form.actual_quantity ?? null} disabled={!canEdit} onChange={(v) => setField("actual_quantity", (v ?? undefined) as any)} />
-                  <TextField label="Actual unit" value={form.actual_unit ?? ""} disabled={!canEdit} onChange={(v) => setField("actual_unit", v as any)} placeholder="m³/day" />
+                  <div className="space-y-2">
+                    <Label className="text-sm">Actual unit</Label>
+                    <Select value={form.actual_unit ?? ""} onValueChange={(v) => setField("actual_unit", v as any)} disabled={!canEdit}>
+                      <SelectTrigger className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
+                        <SelectValue placeholder="Select unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="m³/year">m³/year</SelectItem>
+                        <SelectItem value="m³/month">m³/month</SelectItem>
+                        <SelectItem value="m³/day">m³/day</SelectItem>
+                        <SelectItem value="l/s">l/s</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <TextField label="Actual method" value={form.actual_abstraction_method ?? ""} disabled={!canEdit} onChange={(v) => setField("actual_abstraction_method", v as any)} />
                 </div>
 
@@ -433,8 +499,8 @@ export function InspectionFormLayout({
 
             <SectionShell title="7. Activity in which water is used">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TextField label="Type of activity" value={form.activity_type ?? ""} disabled={!canEdit} onChange={(v) => setField("activity_type", v as any)} />
-                <TextField label="Starting date" value={form.activity_starting_date ?? ""} disabled={!canEdit} onChange={(v) => setField("activity_starting_date", v as any)} placeholder="YYYY-MM-DD" />
+                <ReadonlyField label="Type of activity" value={locked.activityType} />
+                <ReadonlyField label="Starting date" value={locked.activityStartingDate} />
               </div>
             </SectionShell>
 
@@ -546,10 +612,9 @@ export function InspectionFormLayout({
           </TabsContent>
 
           <TabsContent value="fees" className="pt-6 space-y-6">
-            <SectionShell title="10. Fees paid">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <SectionShell title="10. Pending fees">
+              <div className="grid grid-cols-1 gap-6">
                 <NumberField label="Amount" value={form.fees_payment_amount ?? null} disabled={!canEdit} onChange={(v) => setField("fees_payment_amount", (v ?? undefined) as any)} />
-                <TextField label="Proof" value={form.fees_payment_proof ?? ""} disabled={!canEdit} onChange={(v) => setField("fees_payment_proof", v as any)} placeholder="URL or reference" />
               </div>
             </SectionShell>
 

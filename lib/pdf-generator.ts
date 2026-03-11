@@ -6,6 +6,9 @@ import { splitContractSectionsByLanguage } from "@/lib/contract-terms";
 
 // Rwanda Coat of Arms watermark path
 const WATERMARK_IMAGE_PATH = "/assets/png-transparent-rulindo-district-coat-of-arms-organization-agriculture-government-others-leaf-logo-agriculture.png";
+const PERMIT_HEADER_LOGO_PATH = "/assets/rwanda_logo.png";
+// Closest built-in jsPDF serif to Palatino Linotype.
+const PERMIT_FONT_FAMILY = "times";
 
 // =============================================
 // Small formatting helpers
@@ -93,6 +96,71 @@ function numberToKinyarwandaWords(n: number): string {
  * This is cached for performance.
  */
 let cachedWatermarkDataUrl: string | null = null;
+let cachedPermitHeaderLogoDataUrl: string | null = null;
+
+async function loadPermitHeaderLogo(): Promise<string | null> {
+  if (cachedPermitHeaderLogoDataUrl) {
+    return cachedPermitHeaderLogoDataUrl;
+  }
+
+  try {
+    const logoUrl = `${window.location.origin}${PERMIT_HEADER_LOGO_PATH}`;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(null);
+            return;
+          }
+          ctx.drawImage(img, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+          cachedPermitHeaderLogoDataUrl = dataUrl;
+          resolve(dataUrl);
+        } catch {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = logoUrl;
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function drawPermitPageHeader(doc: jsPDF, title: string): Promise<void> {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const centerX = pageWidth / 2;
+  const logoDataUrl = await loadPermitHeaderLogo();
+
+  if (logoDataUrl) {
+    const logoW = 58;
+    const logoH = 24;
+    doc.addImage(logoDataUrl, "PNG", centerX - logoW / 2, 10, logoW, logoH);
+  } else {
+    doc.setFont(PERMIT_FONT_FAMILY, "bold");
+    doc.setFontSize(13);
+    doc.text("Rwanda Water Resources Board", centerX, 23, { align: "center" });
+  }
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFont(PERMIT_FONT_FAMILY, "bold");
+  doc.setFontSize(12);
+  doc.text(title, centerX, 46, { align: "center" });
+
+  const titleWidth = doc.getTextWidth(title);
+  doc.setLineWidth(0.25);
+  doc.line(centerX - titleWidth / 2, 47.5, centerX + titleWidth / 2, 47.5);
+
+  doc.setFont(PERMIT_FONT_FAMILY, "normal");
+  doc.setFontSize(11);
+}
 
 async function loadWatermarkImage(): Promise<string | null> {
   if (cachedWatermarkDataUrl) {
@@ -987,25 +1055,9 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
       return d;
     })();
 
-  // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
-  try {
-    const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
-    doc.addImage(rwbLogoUrl, "PNG", 90, 10, 30, 30);
-  } catch {
-    doc.setFontSize(12);
-    doc.setTextColor(0, 75, 135);
-    doc.text("Rwanda Water Resources Board", 105, 22, { align: "center" });
-  }
-
   const headerYear = issueDate.getFullYear();
   const titlePermitNo = resolvePermitTitleLine(application, permitNumber, headerYear);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("times", "bold");
-  doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${titlePermitNo}`, 105, 48, { align: "center" });
-
-  doc.setFont("times", "normal");
-  doc.setFontSize(11);
+  await drawPermitPageHeader(doc, `WATER USE PERMIT N° ${titlePermitNo} (for Individual Applicant)`);
 
   let y = 62;
   const leftX = 20;
@@ -1053,10 +1105,10 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   doc.text("Signature: …………………..", leftX, y);
   y += 12;
 
-  doc.setFont("times", "bold");
+  doc.setFont(PERMIT_FONT_FAMILY, "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
-  doc.setFont("times", "normal");
+  doc.setFont(PERMIT_FONT_FAMILY, "normal");
   doc.text("Director General", leftX, y);
 
   const rightX = 190;
@@ -1095,24 +1147,6 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
 
-  const drawPermitPageHeader = (title: string) => {
-    try {
-      const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
-      doc.addImage(rwbLogoUrl, "PNG", 90, 10, 30, 30);
-    } catch {
-      doc.setFontSize(12);
-      doc.setTextColor(0, 75, 135);
-      doc.text("Rwanda Water Resources Board", 105, 22, { align: "center" });
-    }
-
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("times", "bold");
-    doc.setFontSize(12);
-    doc.text(title, 105, 48, { align: "center" });
-    doc.setFont("times", "normal");
-    doc.setFontSize(11);
-  };
-
   const issueDate = issuedDate ?? new Date();
   const resolvedExpiryDate =
     expiryDate ??
@@ -1124,7 +1158,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
 
   const headerYear = issueDate.getFullYear();
   const permitTitleLine = resolvePermitTitleLine(application, permitNumber, headerYear);
-  drawPermitPageHeader(`WATER USE PERMIT N° ${permitTitleLine}`);
+  await drawPermitPageHeader(doc, `WATER USE PERMIT N° ${permitTitleLine} (for Organization Applicant)`);
 
   let y = 62;
   const leftX = 20;
@@ -1203,17 +1237,17 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text("Signature: …………………..", leftX, y);
   y += 12;
 
-  doc.setFont("times", "bold");
+  doc.setFont(PERMIT_FONT_FAMILY, "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
-  doc.setFont("times", "normal");
+  doc.setFont(PERMIT_FONT_FAMILY, "normal");
   doc.text("Director General/", leftX, y);
 
   const rightX = 190;
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   doc.addPage();
-  drawPermitPageHeader(paraRw1);
+  await drawPermitPageHeader(doc, paraRw1);
   y = 62;
 
   y = drawWrappedParagraph(doc, paraRw2, leftX, y, maxWidth);
@@ -1229,10 +1263,10 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text("Umukono: …………………..", leftX, y);
   y += 12;
 
-  doc.setFont("times", "bold");
+  doc.setFont(PERMIT_FONT_FAMILY, "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
-  doc.setFont("times", "normal");
+  doc.setFont(PERMIT_FONT_FAMILY, "normal");
   doc.text("Umuyobozi Mukuru", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
@@ -1276,24 +1310,11 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
       return d;
     })();
 
-  // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
-  try {
-    const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
-    doc.addImage(rwbLogoUrl, "PNG", 90, 10, 30, 30);
-  } catch {
-    doc.setFontSize(12);
-    doc.setTextColor(0, 75, 135);
-    doc.text("Rwanda Water Resources Board", 105, 22, { align: "center" });
-  }
-
   const headerYear = issueDate.getFullYear();
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("times", "bold");
-  doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`, 105, 48, { align: "center" });
-
-  doc.setFont("times", "normal");
-  doc.setFontSize(11);
+  await drawPermitPageHeader(
+    doc,
+    `WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)} (for Individual Applicant)`
+  );
 
   let y = 62;
   const leftX = 20;
@@ -1343,10 +1364,10 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   doc.text("Signature/Umukono: …………………..", leftX, y);
   y += 12;
 
-  doc.setFont("times", "bold");
+  doc.setFont(PERMIT_FONT_FAMILY, "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
-  doc.setFont("times", "normal");
+  doc.setFont(PERMIT_FONT_FAMILY, "normal");
   doc.text("Director General", leftX, y);
 
   const rightX = 190;
@@ -1392,24 +1413,11 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
       return d;
     })();
 
-  // Logo + minimal header styling (keep resilient: fallback to text if logo fails)
-  try {
-    const rwbLogoUrl = `${window.location.origin}/assets/rwanda_water_board_Logo.png`;
-    doc.addImage(rwbLogoUrl, "PNG", 90, 10, 30, 30);
-  } catch {
-  doc.setFontSize(12);
-  doc.setTextColor(0, 75, 135);
-    doc.text("Rwanda Water Resources Board", 105, 22, { align: "center" });
-  }
-
   const headerYear = issueDate.getFullYear();
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("times", "bold");
-  doc.setFontSize(12);
-  doc.text(`WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)}`, 105, 48, { align: "center" });
-
-  doc.setFont("times", "normal");
-  doc.setFontSize(11);
+  await drawPermitPageHeader(
+    doc,
+    `WATER USE PERMIT N° ${resolvePermitTitleLine(application, permitNumber, headerYear)} (for Organization Applicant)`
+  );
 
   let y = 62;
   const leftX = 20;
@@ -1461,10 +1469,10 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   doc.text("Signature: …………………..", leftX, y);
   y += 12;
 
-  doc.setFont("times", "bold");
+  doc.setFont(PERMIT_FONT_FAMILY, "bold");
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
-  doc.setFont("times", "normal");
+  doc.setFont(PERMIT_FONT_FAMILY, "normal");
   doc.text("Director General", leftX, y);
 
   const rightX = 190;

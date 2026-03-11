@@ -162,8 +162,8 @@ export function PermitsList({ permits }: PermitsListProps) {
         throw new Error("No application data found for this permit");
       }
       const canonicalIssueDate =
-        (typeof application.terms_accepted_at === "string" && application.terms_accepted_at.trim()) ||
         (typeof permitData.issued_date === "string" && permitData.issued_date.trim()) ||
+        (typeof application.terms_accepted_at === "string" && application.terms_accepted_at.trim()) ||
         permit.issueDate;
 
       // Parse conditions

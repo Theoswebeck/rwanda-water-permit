@@ -51,10 +51,8 @@ import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidati
 import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
 import { getAnnexRequirementForActivity, getAnnexRequirementsForSelection } from "@/lib/annex-requirements";
 import { ModificationBadge, ModificationChangesSummary } from "@/components/dashboard/modified-field-marker";
-import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import {
   getPreferredLanguage,
-  setPreferredLanguage,
   subscribeToLanguageChanges,
   type AppLanguage,
 } from "@/lib/i18n/language";
@@ -1078,7 +1076,6 @@ export function ApplicationForm({
           prev || tx(`Please complete all required fields in ${tabLabels[tab] || "this"} section before submitting.`)
         );
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        setTimeout(() => setValidationError(null), 5000);
         return false;
       }
     }
@@ -1931,7 +1928,6 @@ export function ApplicationForm({
           // IMPORTANT: preserve any more specific error set by the tab validator (e.g. polygon outside Rwanda),
           // and only fall back to the generic message if none was set.
           setValidationError((prev) => prev || `Please complete all required fields in ${tabLabels[tab] || 'this'} section before proceeding.`);
-          setTimeout(() => setValidationError(null), 5000);
           return;
         }
       }
@@ -2199,9 +2195,6 @@ export function ApplicationForm({
     if (isValid) {
       setValidationError(null);
       setActiveTab(tabs[currentIndex + 1]);
-    } else {
-      // Error message is set in individual validation functions
-      setTimeout(() => setValidationError(null), 5000); // Clear error after 5 seconds
     }
   };
 
@@ -2973,9 +2966,6 @@ export function ApplicationForm({
             {isStaffView && modificationChanges && Object.keys(modificationChanges).length > 0 && (
               <ModificationBadge changesCount={Object.keys(modificationChanges).length} />
             )}
-          </div>
-          <div className="flex items-center justify-end">
-            <LanguageSwitcher language={locale} onChange={setPreferredLanguage} compact />
           </div>
           <CardDescription>
             {readOnly 

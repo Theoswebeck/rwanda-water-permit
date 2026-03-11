@@ -234,6 +234,12 @@ export default function PermitInspectionUnifiedPage() {
           setForm(prev => ({
             ...prev,
             ...existing,
+            activity_type: (existing as any).activity_type ?? data?.prepopulatedData?.activityType ?? prev.activity_type,
+            activity_starting_date: (existing as any).activity_starting_date ?? data?.prepopulatedData?.activityStartingDate ?? prev.activity_starting_date,
+            allowed_quantity: (existing as any).allowed_quantity ?? data?.permit?.water_allowance ?? prev.allowed_quantity,
+            allowed_unit: (existing as any).allowed_unit ?? data?.permit?.allowance_unit ?? prev.allowed_unit,
+            authorized_abstraction_method:
+              (existing as any).authorized_abstraction_method ?? data?.prepopulatedData?.authorizedMethod ?? prev.authorized_abstraction_method,
             authorized_concession_boundaries: normalizeBoundaryRows((existing as any).authorized_concession_boundaries),
             actual_concession_boundaries: normalizeBoundaryRows((existing as any).actual_concession_boundaries),
             employment_gender_breakdown: ((existing as any).employment_gender_breakdown as any) || prev.employment_gender_breakdown,
@@ -309,14 +315,14 @@ export default function PermitInspectionUnifiedPage() {
       const payload: any = {
         ...base,
         // Shared
-        activity_type: form.activity_type ?? null,
-        activity_starting_date: form.activity_starting_date ?? null,
+        activity_type: locked?.activityType ?? form.activity_type ?? null,
+        activity_starting_date: locked?.activityStartingDate ?? form.activity_starting_date ?? null,
 
         wastewater_system_type: form.wastewater_system_type ?? null,
         wastewater_system_effectiveness: form.wastewater_system_effectiveness ?? null,
 
         fees_payment_amount: form.fees_payment_amount ?? null,
-        fees_payment_proof: form.fees_payment_proof ?? null,
+        fees_payment_proof: null,
 
         reports_submission_date: form.reports_submission_date ?? null,
         reports_reference_number: form.reports_reference_number ?? null,
@@ -337,9 +343,9 @@ export default function PermitInspectionUnifiedPage() {
 
       if (template === "authorization") {
         Object.assign(payload, {
-          allowed_quantity: form.allowed_quantity ?? null,
-          allowed_unit: form.allowed_unit ?? null,
-          authorized_abstraction_method: form.authorized_abstraction_method ?? null,
+          allowed_quantity: form.allowed_quantity ?? locked?.allowedQuantity ?? null,
+          allowed_unit: form.allowed_unit ?? locked?.allowedUnit ?? null,
+          authorized_abstraction_method: form.authorized_abstraction_method ?? locked?.authorizedMethod ?? null,
           actual_quantity: form.actual_quantity ?? null,
           actual_unit: form.actual_unit ?? null,
           actual_abstraction_method: form.actual_abstraction_method ?? null,
@@ -371,6 +377,10 @@ export default function PermitInspectionUnifiedPage() {
         // Example: column "inspection_documents" of relation "inspections" does not exist
         m = msg.match(/column ["']?([^"']+)["']? of relation ["']?([^"']+)["']? does not exist/i);
         if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
+
+        // PostgreSQL may emit: column "foo" does not exist
+        m = msg.match(/column ["']?([^"']+)["']? does not exist/i);
+        if (m) return m[1];
 
         // Fallback for older handling
         if (msg.toLowerCase().includes("inspection_documents") && msg.toLowerCase().includes("does not exist")) {
@@ -518,13 +528,29 @@ export default function PermitInspectionUnifiedPage() {
             permitHolderId: locked?.permitHolderId,
             residence: locked?.residence,
             permitNumber: locked?.permitNumber,
+            facilityProjectName: locked?.facilityProjectName,
             issuanceDate: locked?.issuanceDate,
             expirationDate: locked?.expirationDate,
             operatorName: locked?.operatorName,
             operatorIdTin: locked?.operatorIdTin,
             operatorResidence: locked?.operatorResidence,
+            permitLocationProvince: locked?.province,
+            permitLocationDistrict: locked?.district,
+            permitLocationSector: locked?.sector,
+            permitLocationCell: locked?.cell,
+            permitLocationVillage: locked?.village,
+            waterSourceType: locked?.waterSourceType,
+            waterPurpose: locked?.waterPurpose,
             waterSourceName: locked?.waterSourceName,
             waterSourceLocation: locked?.waterSourceLocation,
+            waterSourceLatitude: locked?.waterSourceLatitude,
+            waterSourceLongitude: locked?.waterSourceLongitude,
+            waterAllowance: locked?.allowedQuantity,
+            allowanceUnit: locked?.allowedUnit,
+            abstractionMethod: locked?.authorizedMethod,
+            flowRate: locked?.flowRate,
+            activityType: locked?.activityType,
+            activityStartingDate: locked?.activityStartingDate,
             catchmentLevel1: locked?.catchmentLevel1,
             catchmentLevel2: locked?.catchmentLevel2,
           }}

@@ -30,6 +30,12 @@ import { useIncomingTransfersQuery, type IncomingTransferRequest } from "@/hooks
 import { useAuth } from "@/contexts/AuthContext";
 import type { Permit as DatabasePermit } from "@/types/database";
 import type { Application, ApplicationStatus as DbApplicationStatus } from "@/types/database";
+import {
+  getPreferredLanguage,
+  subscribeToLanguageChanges,
+  type AppLanguage,
+} from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 const ApplicationsList = dynamic(
   () => import("@/components/dashboard/applications-list").then((mod) => mod.ApplicationsList),
@@ -38,7 +44,9 @@ const ApplicationsList = dynamic(
     loading: () => (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-        <span className="ml-3 text-sm text-muted-foreground">Loading applications…</span>
+        <span className="ml-3 text-sm text-muted-foreground">
+          {translateText("Loading applications…", getPreferredLanguage())}
+        </span>
       </div>
     ),
   }
@@ -51,7 +59,9 @@ const PermitsList = dynamic(
     loading: () => (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-        <span className="ml-3 text-sm text-muted-foreground">Loading permits…</span>
+        <span className="ml-3 text-sm text-muted-foreground">
+          {translateText("Loading permits…", getPreferredLanguage())}
+        </span>
       </div>
     ),
   }
@@ -110,6 +120,13 @@ function DashboardContent() {
   const [showPermitSelectModal, setShowPermitSelectModal] = useState(false);
   const [activeApplicationStatusPanel, setActiveApplicationStatusPanel] = useState<DashboardStatusPanelFilter>("all");
   const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<ApplicantListStatusFilter>("all");
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
   
   // Check for success parameters from URL
   useEffect(() => {
@@ -118,16 +135,16 @@ function DashboardContent() {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
     
     if (success === 'application-created') {
-      setSuccessMessage('Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.');
+      setSuccessMessage(tx('Application Created Successfully! Your water permit application has been saved as a draft. You can continue editing it or submit it for review.'));
       setShowSuccessAlert(true);
       // Auto-hide success message after 5 seconds
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     } else if (success === 'application-submitted') {
-      setSuccessMessage('✅ Application Submitted Successfully! Your water permit application has been submitted for review. You will be notified of any updates.');
+      setSuccessMessage(tx('✅ Application Submitted Successfully! Your water permit application has been submitted for review. You will be notified of any updates.'));
       setShowSuccessAlert(true);
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     } else if (success === 'application-resubmitted-to-assessor') {
-      setSuccessMessage('✅ Application Resubmitted Successfully! Your corrections have been submitted and sent back to the assigned assessor for review.');
+      setSuccessMessage(tx('✅ Application Resubmitted Successfully! Your corrections have been submitted and sent back to the assigned assessor for review.'));
       setShowSuccessAlert(true);
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     }
@@ -141,7 +158,7 @@ function DashboardContent() {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [searchParams]);
+  }, [searchParams, tx]);
   
   // ⚡ PERFORMANCE: Use React Query hooks - automatic caching, no manual refresh needed
   // ⚡ FIX: Only fetch when user.id is defined (prevents hanging when user is deleted)
@@ -203,7 +220,7 @@ function DashboardContent() {
 
       return {
         id: dbPermit.id,
-        title: `${dbPermit.purpose} Water Permit`, // Create a title from purpose
+        title: `${dbPermit.purpose} ${tx("Water Permit")}`, // Create a title from purpose
         issueDate: (dbPermit.application as { terms_accepted_at?: string | null } | undefined)?.terms_accepted_at || dbPermit.issued_date,
         expiryDate: dbPermit.expiry_date,
         status: displayStatus,
@@ -216,7 +233,7 @@ function DashboardContent() {
         pdfPath: dbPermit.permit_pdf_url ?? null,
       };
     });
-  }, [databasePermits]);
+  }, [databasePermits, tx]);
 
   // ⚡ PERFORMANCE: Bulk delete handler using React Query mutation
   const handleBulkDeleteApplications = useCallback(async (applicationIds: string[]) => {
@@ -337,17 +354,17 @@ function DashboardContent() {
             <div className="flex items-center justify-between space-y-2 mb-8">
               <div>
                 <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-                  Water Permit Dashboard
+                  {tx("Water Permit Dashboard")}
                 </h1>
                 <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-                  Manage your water permit applications and view your permits
+                  {tx("Manage your water permit applications and view your permits")}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button className="gap-2">
-                      Apply
+                      {tx("Apply")}
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -357,28 +374,28 @@ function DashboardContent() {
                       className="cursor-pointer"
                     >
                       <FilePlus className="mr-2 h-4 w-4" />
-                      New Water Permit
+                      {tx("New Water Permit")}
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => router.push("/dashboard/new-application?mode=renewal")}
                       className="cursor-pointer"
                     >
                       <RefreshCw className="mr-2 h-4 w-4" />
-                      Renew Existing Permit
+                      {tx("Renew Existing Permit")}
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => router.push("/dashboard/new-application?mode=modification")}
                       className="cursor-pointer"
                     >
                       <FileEdit className="mr-2 h-4 w-4" />
-                      Modify Existing Permit
+                      {tx("Modify Existing Permit")}
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => router.push("/dashboard/new-application?mode=transfer")}
                       className="cursor-pointer"
                     >
                       <ArrowLeftRight className="mr-2 h-4 w-4" />
-                      Transfer Existing Permit
+                      {tx("Transfer Existing Permit")}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -390,7 +407,7 @@ function DashboardContent() {
                   disabled={databasePermits.length === 0}
                 >
                   <ClipboardList className="h-4 w-4" />
-                  Water Use Reporting
+                  {tx("Water Use Reporting")}
                 </Button>
               </div>
             </div>
@@ -426,11 +443,11 @@ function DashboardContent() {
               <TabsList>
                 <TabsTrigger value="applications" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
-                  Applications ({applicantDashboardApplications.length})
+                  {tx("Applications")} ({applicantDashboardApplications.length})
                 </TabsTrigger>
                 <TabsTrigger value="permits" className="flex items-center gap-2">
                   <FileCheck className="h-4 w-4" />
-                  Permits ({permits.length})
+                  {tx("Permits")} ({permits.length})
                 </TabsTrigger>
               </TabsList>
               
@@ -450,10 +467,10 @@ function DashboardContent() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <ArrowLeftRight className="h-5 w-5" />
-                        Incoming Transfer Requests
+                        {tx("Incoming Transfer Requests")}
                       </CardTitle>
                       <CardDescription>
-                        Transfers sent to you (matched by your email and phone). You can approve only when the request is in the Approved - Pending Terms stage.
+                        {tx("Transfers sent to you (matched by your email and phone). You can approve only when the request is in the Approved - Pending Terms stage.")}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -468,7 +485,7 @@ function DashboardContent() {
                         {incomingTransfers.map((tr: IncomingTransferRequest) => {
                           const app = tr.application ?? null;
                           const appNumber = app?.application_number || tr.application_id;
-                          const title = app?.project_title || 'Transfer application';
+                          const title = app?.project_title || tx("Transfer application");
                           return (
                             <div
                               key={tr.id}
@@ -477,7 +494,7 @@ function DashboardContent() {
                               <div className="min-w-0">
                                 <div className="text-sm font-medium truncate">{title}</div>
                                 <div className="text-xs text-muted-foreground">
-                                  Ref: {appNumber} • Stage: Approved - Pending Terms
+                                  {tx("Ref:")} {appNumber} • {tx("Stage:")} {tx("Approved - Pending Terms")}
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
@@ -489,10 +506,10 @@ function DashboardContent() {
                                   {approvingTransferId === tr.id ? (
                                     <>
                                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                      Approving…
+                                      {tx("Approving…")}
                                     </>
                                   ) : (
-                                    'Approve Transfer & Continue'
+                                    tx("Approve Transfer & Continue")
                                   )}
                                 </Button>
                               </div>
@@ -510,10 +527,10 @@ function DashboardContent() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5" />
-                        Your Applications
+                        {tx("Your Applications")}
                       </CardTitle>
                       <CardDescription>
-                        View and manage your water permit applications
+                        {tx("View and manage your water permit applications")}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -545,10 +562,10 @@ function DashboardContent() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <FileCheck className="h-5 w-5" />
-                        Your Permits
+                        {tx("Your Permits")}
                       </CardTitle>
                       <CardDescription>
-                        View and manage your issued water permits
+                        {tx("View and manage your issued water permits")}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -578,13 +595,14 @@ function DashboardContent() {
 
 // Loading fallback
 function DashboardLoading() {
+  const language = getPreferredLanguage();
   return (
     <ProtectedRoute allowedRoles={['applicant']} requireProfile={true}>
       <DashboardLayout>
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            <span className="ml-3">Loading dashboard...</span>
+            <span className="ml-3">{translateText("Loading dashboard...", language)}</span>
           </div>
         </div>
       </DashboardLayout>

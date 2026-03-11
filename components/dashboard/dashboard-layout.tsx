@@ -1,17 +1,10 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
-import { LanguageSwitcher } from "@/components/shared/language-switcher";
-import {
-  getPreferredLanguage,
-  setPreferredLanguage,
-  subscribeToLanguageChanges,
-  type AppLanguage,
-} from "@/lib/i18n/language";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -20,12 +13,6 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter();
   const { userProfile, loading, isAuthenticated } = useAuth();
-  const [language, setLanguage] = useState<AppLanguage>("en");
-
-  useEffect(() => {
-    setLanguage(getPreferredLanguage());
-    return subscribeToLanguageChanges(setLanguage);
-  }, []);
 
   useEffect(() => {
     if (loading) return;
@@ -75,9 +62,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             transition={{ duration: 0.5 }}
             className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8"
           >
-            <div className="mb-4 flex justify-end">
-              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-            </div>
             {children}
           </motion.div>
         </main>

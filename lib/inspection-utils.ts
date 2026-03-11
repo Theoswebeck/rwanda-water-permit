@@ -46,15 +46,21 @@ export interface PrepopulatedInspectionData {
   
   // Section 3: Permit Particulars
   permitNumber: string;
+  facilityProjectName?: string;
   issuanceDate?: string;
   expirationDate?: string;
   
   // Section 4: Water Source
   waterSourceName: string;
+  waterSourceType?: string;
+  waterPurpose?: string;
   waterSourceLocation: string;
   coordinates?: string;
+  waterSourceLatitude?: string;
+  waterSourceLongitude?: string;
   catchmentLevel1?: string;
   catchmentLevel2?: string;
+  province?: string;
   district: string;
   sector: string;
   cell: string;
@@ -64,6 +70,7 @@ export interface PrepopulatedInspectionData {
   allowedQuantity?: number;
   allowedUnit?: string;
   authorizedMethod?: string;
+  flowRate?: number;
   
   // Section 8: Payment Information
   totalPaymentAmount?: number;
@@ -87,6 +94,7 @@ export async function fetchInspectionData(
         email,
         phone,
         company_name,
+        company_tin,
         account_type,
         address,
         id_number,
@@ -210,6 +218,22 @@ function pickFirstNonEmptyString(...values: unknown[]): string | undefined {
   return undefined;
 }
 
+function toDisplayLabel(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  return normalized
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+function toDateOnly(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  return value.includes("T") ? value.split("T")[0] : value;
+}
+
 function normalizeIntendedActivities(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   if (typeof value === "string" && value.trim()) {
@@ -317,9 +341,55 @@ function prepareInspectionData(
     'N/A'
   ) || 'N/A';
   
-  const permitHolderId = applicant?.id_number || 'N/A';
-  
-  const residence = applicant?.address || 'N/A';
+  const isOrganizationAccount = typeof applicant?.account_type === "string" && applicant.account_type !== "individual";
+  const permitHolderId = pickFirstNonEmptyString(
+    isOrganizationAccount ? applicant?.company_tin : undefined,
+    applicant?.id_number,
+    'N/A'
+  ) || 'N/A';
+
+  const permitDetails = internal?.permitDetails && typeof internal.permitDetails === "object"
+    ? internal.permitDetails
+    : null;
+  const locationProvince = pickFirstNonEmptyString(
+    internal?.waterSourceProvince,
+    permitDetails?.waterSourceProvince,
+    permitDetails?.province,
+    application.province
+  );
+  const locationDistrict = pickFirstNonEmptyString(
+    internal?.waterSourceDistrict,
+    permitDetails?.waterSourceDistrict,
+    permitDetails?.district,
+    application.district
+  );
+  const locationSector = pickFirstNonEmptyString(
+    internal?.waterSourceSector,
+    permitDetails?.waterSourceSector,
+    permitDetails?.sector,
+    application.sector
+  );
+  const locationCell = pickFirstNonEmptyString(
+    internal?.waterSourceCell,
+    permitDetails?.waterSourceCell,
+    permitDetails?.cell,
+    application.cell
+  );
+  const locationVillage = pickFirstNonEmptyString(
+    internal?.waterSourceVillage,
+    permitDetails?.waterSourceVillage,
+    permitDetails?.village,
+    application.village
+  );
+
+  // Residence should reflect the office location from permit location chain.
+  const residence = [
+    locationDistrict,
+    locationSector,
+    locationCell,
+    locationVillage,
+    locationProvince,
+  ].filter(Boolean).join(", ") || 'N/A';
   
   // Representative - for companies, might be a contact person
   const representative = applicant?.account_type && applicant?.account_type !== 'individual'
@@ -327,35 +397,64 @@ function prepareInspectionData(
     : 'N/A';
   
   const contacts = `Tel: ${pickFirstNonEmptyString(applicant?.phone, (applicant as any)?.mobile_phone, (applicant as any)?.company_phone) || 'N/A'}, Email: ${applicant?.email || 'N/A'}`;
+  const operatorName = pickFirstNonEmptyString(
+    permitHolderName !== "N/A" ? permitHolderName : undefined,
+    locked.operatorName
+  );
+  const operatorIdTin = pickFirstNonEmptyString(
+    permitHolderId !== "N/A" ? permitHolderId : undefined,
+    locked.operatorIdTin
+  );
+  const operatorResidence = pickFirstNonEmptyString(
+    residence !== "N/A" ? residence : undefined,
+    locked.operatorResidence
+  );
   
   // Section 2: Activity Details
   const intendedActivities = normalizeIntendedActivities(application.intended_activities);
   const primaryActivity = pickFirstNonEmptyString(intendedActivities[0], application.water_purpose) || 'other';
-  const activityType = getActivityLabel(primaryActivity);
-  const activityStartingDate = permit?.issued_date;
+  const activityType = pickFirstNonEmptyString(
+    toDisplayLabel(permit?.purpose),
+    getActivityLabel(primaryActivity)
+  ) || "N/A";
+  const activityStartingDate = toDateOnly(permit?.issued_date);
   
   // Section 3: Permit Particulars
   const permitNumber = permit?.permit_number || 'Not Issued';
-  const issuanceDate = permit?.issued_date;
-  const expirationDate = permit?.expiry_date;
+  const facilityProjectName = pickFirstNonEmptyString(application.project_title, (application as any)?.facility_project_name);
+  const issuanceDate = toDateOnly(permit?.issued_date);
+  const expirationDate = toDateOnly(permit?.expiry_date);
   
   // Section 4: Water Source
+  const waterSourceType = pickFirstNonEmptyString(
+    toDisplayLabel(permit?.water_source),
+    toDisplayLabel(application.water_source)
+  );
   const waterSourceName = pickFirstNonEmptyString(application.water_body_name, application.water_source?.replace(/_/g, ' '), 'N/A') || 'N/A';
+  const waterPurpose = pickFirstNonEmptyString(
+    getActivityLabel(primaryActivity),
+    toDisplayLabel(application.water_purpose),
+    toDisplayLabel(permit?.purpose)
+  );
   const primary = getPrimaryLatLngFromGeometry(application.coordinates);
   const coordinates = primary ? `Lat: ${primary.lat}, Lng: ${primary.lng}` : 'N/A';
+  const waterSourceLatitude = pickFirstNonEmptyString(internal?.waterSourceLatitude, primary?.lat !== undefined ? String(primary.lat) : undefined);
+  const waterSourceLongitude = pickFirstNonEmptyString(internal?.waterSourceLongitude, primary?.lng !== undefined ? String(primary.lng) : undefined);
   
   const waterSourceLocation = [
-    pickFirstNonEmptyString(internal?.waterSourceVillage, application.village),
-    pickFirstNonEmptyString(internal?.waterSourceCell, application.cell),
-    pickFirstNonEmptyString(internal?.waterSourceSector, application.sector),
-    pickFirstNonEmptyString(internal?.waterSourceDistrict, application.district),
-    pickFirstNonEmptyString(internal?.waterSourceProvince, application.province),
+    locationVillage,
+    locationCell,
+    locationSector,
+    locationDistrict,
+    locationProvince,
   ].filter(Boolean).join(', ');
   
   // Section 5: Allowed Water Abstraction
   const allowedQuantity = permit?.water_allowance;
   const allowedUnit = permit?.allowance_unit;
-  const authorizedMethod = application.water_taking_method || application.abstraction_method || 'As per technical drawings';
+  const savedAbstraction = Array.isArray(internal?.waterAbstractionDetails) ? internal.waterAbstractionDetails[0] : null;
+  const authorizedMethod = application.water_taking_method || application.abstraction_method || savedAbstraction?.abstractionMethod || 'As per technical drawings';
+  const flowRate = application.flow_rate_m3_per_second ?? undefined;
   
   // Section 8: Payment Information
   const completedPayments = paymentHistory.filter(p => p.status === 'completed' || p.status === 'success');
@@ -369,26 +468,33 @@ function prepareInspectionData(
     residence,
     representative,
     contacts,
-    operatorName: locked.operatorName,
-    operatorIdTin: locked.operatorIdTin,
-    operatorResidence: locked.operatorResidence,
+    operatorName,
+    operatorIdTin,
+    operatorResidence,
     activityType,
     activityStartingDate,
     permitNumber,
+    facilityProjectName,
     issuanceDate,
     expirationDate,
     waterSourceName,
+    waterSourceType,
+    waterPurpose,
     waterSourceLocation,
     coordinates,
+    waterSourceLatitude,
+    waterSourceLongitude,
     catchmentLevel1: locked.catchmentLevel1,
     catchmentLevel2: locked.catchmentLevel2,
-    district: pickFirstNonEmptyString(internal?.waterSourceDistrict, application.district) || application.district,
-    sector: pickFirstNonEmptyString(internal?.waterSourceSector, application.sector) || application.sector,
-    cell: pickFirstNonEmptyString(internal?.waterSourceCell, application.cell) || application.cell,
-    village: pickFirstNonEmptyString(internal?.waterSourceVillage, application.village) || application.village,
+    province: locationProvince,
+    district: locationDistrict || application.district,
+    sector: locationSector || application.sector,
+    cell: locationCell || application.cell,
+    village: locationVillage || application.village,
     allowedQuantity,
     allowedUnit,
     authorizedMethod,
+    flowRate,
     totalPaymentAmount,
     lastPaymentDate,
     paymentStatus

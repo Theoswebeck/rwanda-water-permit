@@ -9,13 +9,12 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import {
   getPreferredLanguage,
-  setPreferredLanguage,
   subscribeToLanguageChanges,
   type AppLanguage,
 } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 const navItems = [
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
@@ -64,6 +63,8 @@ export function Header() {
     return subscribeToLanguageChanges(setLanguage);
   }, []);
 
+  const tx = (value: string) => translateText(value, language);
+
   return (
     <header className="py-4 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4">
@@ -102,7 +103,7 @@ export function Header() {
                 </svg>
               </div>
               
-              <span className="text-foreground font-semibold tracking-tight">Rwanda Water Permit Portal</span>
+              <span className="text-foreground font-semibold tracking-tight">{tx("Rwanda Water Permit Portal")}</span>
             </Link>
           </motion.div>
 
@@ -123,14 +124,14 @@ export function Header() {
                       rel="noopener noreferrer"
                       className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
                     >
-                      {item.label}
+                      {tx(item.label)}
                     </a>
                   ) : (
                     <Link 
                       href={item.href}
                       className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
                     >
-                      {item.label}
+                      {tx(item.label)}
                     </Link>
                   )}
                 </motion.div>
@@ -141,14 +142,11 @@ export function Header() {
 
           {/* CTA Button */}
           <motion.div 
-            className="hidden md:flex md:items-center md:gap-3"
+            className="hidden md:block"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
           >
-            {isDashboardPage && (
-              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-            )}
             {shouldShowMinimalHeaderForStaff ? (
               <Link href="/dashboard/profile">
                 <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
@@ -163,20 +161,20 @@ export function Header() {
               pathname === "/dashboard/profile" ? null : (
                 <Link href="/dashboard/profile">
                   <Button variant="outline" className="rounded-full px-6">
-                    MY PROFILE
+                    {tx("MY PROFILE")}
                   </Button>
                 </Link>
               )
             ) : isApplyPage ? (
               <Link href="/login">
                 <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                  LOGIN
+                  {tx("LOGIN")}
                 </Button>
               </Link>
             ) : isLoginPage || isRegisterPage ? (
               <Link href="/">
                 <Button variant="outline" className="rounded-full px-6">
-                  HOME
+                  {tx("HOME")}
                 </Button>
               </Link>
             ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
@@ -192,13 +190,13 @@ export function Header() {
             ) : isAuthenticated ? (
               <Link href="/dashboard">
                 <Button variant="outline" className="rounded-full px-6">
-                  DASHBOARD
+                  {tx("DASHBOARD")}
                 </Button>
               </Link>
             ) : (
               <Link href="/apply">
                 <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                  APPLY NOW
+                  {tx("APPLY NOW")}
                 </Button>
               </Link>
             )}
@@ -221,7 +219,7 @@ export function Header() {
               <SheetTrigger asChild className="md:hidden">
                 <Button variant="ghost" size="icon" className="text-primary">
                   <Menu className="h-6 w-6" />
-                  <span className="sr-only">Toggle menu</span>
+                  <span className="sr-only">{tx("Toggle menu")}</span>
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="border-l border-border">
@@ -254,7 +252,7 @@ export function Header() {
                         <path d="M250 550 Q400 500, 550 550" stroke="#3B82F6" strokeWidth="25" fill="none" />
                       </svg>
                     </div>
-                    <span className="text-foreground font-semibold text-sm">Rwanda Water Permit Portal</span>
+                    <span className="text-foreground font-semibold text-sm">{tx("Rwanda Water Permit Portal")}</span>
                   </Link>
                   <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-muted-foreground">
                     <X className="h-5 w-5" />
@@ -272,7 +270,7 @@ export function Header() {
                         className="text-foreground hover:text-primary transition-colors text-base font-medium"
                         onClick={() => setIsOpen(false)}
                       >
-                        {item.label}
+                          {tx(item.label)}
                       </a>
                     ) : (
                       <Link 
@@ -281,7 +279,7 @@ export function Header() {
                         className="text-foreground hover:text-primary transition-colors text-base font-medium"
                         onClick={() => setIsOpen(false)}
                       >
-                        {item.label}
+                        {tx(item.label)}
                       </Link>
                     );
                   })}
@@ -292,20 +290,20 @@ export function Header() {
                       pathname === "/dashboard/profile" ? null : (
                         <Link href="/dashboard/profile" onClick={() => setIsOpen(false)}>
                           <Button variant="outline" className="w-full rounded-full mt-4">
-                            MY PROFILE
+                            {tx("MY PROFILE")}
                           </Button>
                         </Link>
                       )
                     ) : isApplyPage ? (
                       <Link href="/login" onClick={() => setIsOpen(false)}>
                         <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">
-                          LOGIN
+                          {tx("LOGIN")}
                         </Button>
                       </Link>
                     ) : isLoginPage || isRegisterPage ? (
                       <Link href="/" onClick={() => setIsOpen(false)}>
                         <Button variant="outline" className="w-full rounded-full mt-4">
-                          HOME
+                          {tx("HOME")}
                         </Button>
                       </Link>
                     ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
@@ -314,24 +312,18 @@ export function Header() {
                     ) : isAuthenticated ? (
                       <Link href="/dashboard" onClick={() => setIsOpen(false)}>
                         <Button variant="outline" className="w-full rounded-full mt-4">
-                          DASHBOARD
+                          {tx("DASHBOARD")}
                         </Button>
                       </Link>
                     ) : (
                       <Link href="/apply" onClick={() => setIsOpen(false)}>
                         <Button className="w-full bg-primary hover:bg-primary/90 rounded-full mt-4">
-                          APPLY NOW
+                          {tx("APPLY NOW")}
                         </Button>
                       </Link>
                     )}
                   </div>
                 </nav>
-
-                {isDashboardPage && (
-                  <div className="mt-6 border-t pt-4">
-                    <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-                  </div>
-                )}
               </SheetContent>
             </Sheet>
           )}

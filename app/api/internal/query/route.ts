@@ -29,7 +29,14 @@ const JSONB_COLUMNS_BY_TABLE: Record<string, Set<string>> = {
     'modification_changes',
   ]),
   audit_logs: new Set(['old_values', 'new_values']),
-  inspections: new Set(['gps_data']),
+  inspections: new Set([
+    'gps_data',
+    'authorized_concession_boundaries',
+    'actual_concession_boundaries',
+    'employment_gender_breakdown',
+    'ohs_gender_sensitive',
+    'inspection_documents',
+  ]),
   payment_transactions: new Set(['provider_response']),
   payments: new Set(['gateway_response', 'gateway_metadata']),
   permits: new Set(['conditions']),
@@ -377,6 +384,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data, error: null, count })
   } catch (error) {
     console.error('internal/query error:', error)
-    return NextResponse.json({ error: { message: 'Server error' } }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Server error'
+    return NextResponse.json({ error: { message } }, { status: 500 })
   }
 }
