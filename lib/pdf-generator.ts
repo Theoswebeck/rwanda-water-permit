@@ -98,6 +98,7 @@ function numberToKinyarwandaWords(n: number): string {
  */
 let cachedWatermarkDataUrl: string | null = null;
 let cachedPermitHeaderLogoDataUrl: string | null = null;
+const qrDataUrlCache = new Map<string, string>();
 
 async function loadPermitHeaderLogo(): Promise<string | null> {
   if (cachedPermitHeaderLogoDataUrl) {
@@ -111,15 +112,21 @@ async function loadPermitHeaderLogo(): Promise<string | null> {
       img.crossOrigin = "anonymous";
       img.onload = () => {
         try {
+          // Keep high source resolution so the header logo stays crisp.
+          const maxDim = 1800;
+          const longestSide = Math.max(img.width, img.height);
+          const scale = longestSide > maxDim ? maxDim / longestSide : 1;
+          const targetWidth = Math.max(1, Math.round(img.width * scale));
+          const targetHeight = Math.max(1, Math.round(img.height * scale));
           const canvas = document.createElement("canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
           const ctx = canvas.getContext("2d");
           if (!ctx) {
             resolve(null);
             return;
           }
-          ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
           const dataUrl = canvas.toDataURL("image/png");
           cachedPermitHeaderLogoDataUrl = dataUrl;
           resolve(dataUrl);
@@ -141,9 +148,9 @@ async function drawPermitPageHeader(doc: jsPDF, title: string): Promise<void> {
   const logoDataUrl = await loadPermitHeaderLogo();
 
   if (logoDataUrl) {
-    const logoW = 58;
-    const logoH = 24;
-    doc.addImage(logoDataUrl, "PNG", centerX - logoW / 2, 10, logoW, logoH);
+    const logoW = 72;
+    const logoH = 30;
+    doc.addImage(logoDataUrl, "PNG", centerX - logoW / 2, 8, logoW, logoH);
   } else {
     doc.setFont(PERMIT_FONT_FAMILY, "bold");
     doc.setFontSize(13);
@@ -153,11 +160,11 @@ async function drawPermitPageHeader(doc: jsPDF, title: string): Promise<void> {
   doc.setTextColor(0, 0, 0);
   doc.setFont(PERMIT_FONT_FAMILY, "bold");
   doc.setFontSize(12);
-  doc.text(title, centerX, 46, { align: "center" });
+  doc.text(title, centerX, 49, { align: "center" });
 
   const titleWidth = doc.getTextWidth(title);
   doc.setLineWidth(0.25);
-  doc.line(centerX - titleWidth / 2, 47.5, centerX + titleWidth / 2, 47.5);
+  doc.line(centerX - titleWidth / 2, 50.5, centerX + titleWidth / 2, 50.5);
 
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
   doc.setFontSize(11);
@@ -171,20 +178,25 @@ async function loadWatermarkImage(): Promise<string | null> {
   try {
     const watermarkUrl = `${window.location.origin}${WATERMARK_IMAGE_PATH}`;
     
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
         try {
+          const maxDim = 900;
+          const longestSide = Math.max(img.width, img.height);
+          const scale = longestSide > maxDim ? maxDim / longestSide : 1;
+          const targetWidth = Math.max(1, Math.round(img.width * scale));
+          const targetHeight = Math.max(1, Math.round(img.height * scale));
           const canvas = document.createElement("canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
           const ctx = canvas.getContext("2d");
           if (!ctx) {
             resolve(null);
             return;
           }
-          ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
           const dataUrl = canvas.toDataURL("image/png");
           cachedWatermarkDataUrl = dataUrl;
           resolve(dataUrl);
@@ -218,28 +230,21 @@ async function drawCenteredWatermark(doc: jsPDF): Promise<void> {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Watermark size - large and centered behind the permit body text.
-  const watermarkWidth = 130;
-  const watermarkHeight = 130;
+  // Watermark size - larger and centered behind permit text body.
+  const watermarkWidth = 155;
+  const watermarkHeight = 155;
 
-  // Center the watermark
+  // Center the watermark a little lower so it does not interfere with the header logo.
   const x = (pageWidth - watermarkWidth) / 2;
-  const y = (pageHeight - watermarkHeight) / 2;
+  const y = (pageHeight - watermarkHeight) / 2 + 12;
 
-  // Save current graphics state
-  const gState = new (doc as any).GState({ opacity: 0.18 }); // Subtle but visible watermark effect
-  doc.setGState(gState);
-
-  // Add the watermark image
+  // Add the watermark image without extra opacity overlay.
+  // We rely on the source PNG transparency for visual balance.
   try {
     doc.addImage(watermarkDataUrl, "PNG", x, y, watermarkWidth, watermarkHeight);
   } catch (error) {
     console.warn("⚠️ Could not add watermark to PDF:", error);
   }
-
-  // Reset graphics state to full opacity
-  const normalState = new (doc as any).GState({ opacity: 1 });
-  doc.setGState(normalState);
 }
 
 /**
@@ -923,6 +928,10 @@ function drawWrappedParagraph(
 }
 
 async function qrPngDataUrl(text: string, px: number): Promise<string> {
+  const cacheKey = `${text}|${px}`;
+  const cached = qrDataUrlCache.get(cacheKey);
+  if (cached) return cached;
+
   // Using qrcode package for reliable QR code generation
   // HIGH error correction level (H) allows up to 30% damage and still be readable
   const dataUrl = await QRCode.toDataURL(text, {
@@ -934,6 +943,7 @@ async function qrPngDataUrl(text: string, px: number): Promise<string> {
       light: '#ffffff', // Pure white background
     },
   });
+  qrDataUrlCache.set(cacheKey, dataUrl);
   return dataUrl;
 }
 
@@ -1020,7 +1030,7 @@ function drawPortalQrFooter(opts: {
   doc.roundedRect(qrX, qrY, qrBox, qrBox, 2, 2, "FD");
 
   // Higher source pixel size keeps edges crisp after jsPDF scaling.
-  return qrPngDataUrl(url, 1024).then((png) => {
+  return qrPngDataUrl(url, 640).then((png) => {
     doc.addImage(png, "PNG", qrX + qrPadding, qrY + qrPadding, qrSize, qrSize);
 
     // Subtle caption

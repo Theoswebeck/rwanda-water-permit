@@ -200,30 +200,33 @@ export function PermitsList({ permits }: PermitsListProps) {
         }
       );
 
-      // Upload to storage
-      const upload = await uploadPermitPdf({
-        permitId: permit.id,
-        permitNumber: permit.permitNumber,
-        pdfBlob,
-      });
+      // Persist in background so users can view/download immediately.
+      void (async () => {
+        try {
+          const upload = await uploadPermitPdf({
+            permitId: permit.id,
+            permitNumber: permit.permitNumber,
+            pdfBlob,
+          });
 
-      if (upload?.path) {
-        console.log("✅ PDF uploaded:", upload.path);
-
-        // Update permit record with PDF path
-        const updateRes = await fetch(`/api/dashboard/permits/${permit.id}/pdf`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ permitPdfUrl: upload.path }),
-        });
-        const updateJson = await updateRes.json().catch(() => null);
-        if (!updateRes.ok || !updateJson?.success) {
-          console.warn("⚠️ Failed to update permit_pdf_url:", updateJson?.message || updateRes.statusText);
-        } else {
-          console.log("✅ permit_pdf_url saved on permit record");
-          // Update the permit's pdfPath in the local state (won't affect props, but logs are useful)
+          if (upload?.path) {
+            console.log("✅ PDF uploaded:", upload.path);
+            const updateRes = await fetch(`/api/dashboard/permits/${permit.id}/pdf`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ permitPdfUrl: upload.path }),
+            });
+            const updateJson = await updateRes.json().catch(() => null);
+            if (!updateRes.ok || !updateJson?.success) {
+              console.warn("⚠️ Failed to update permit_pdf_url:", updateJson?.message || updateRes.statusText);
+            } else {
+              console.log("✅ permit_pdf_url saved on permit record");
+            }
+          }
+        } catch (persistError) {
+          console.warn("⚠️ Background PDF persistence failed:", persistError);
         }
-      }
+      })();
 
       return pdfBlob;
     } catch (error) {

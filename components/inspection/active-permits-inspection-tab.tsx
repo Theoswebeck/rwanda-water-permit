@@ -414,9 +414,9 @@ export function ActivePermitsInspectionTab() {
                                   </Link>
                                 </DropdownMenuItem>
 
-                                {appId ? (
+                                {app?.application_number ? (
                                   <DropdownMenuItem asChild>
-                                    <Link href={`/dashboard/application/${appId}`} className="flex items-center gap-2">
+                                    <Link href={`/inspection/application/${encodeURIComponent(String(app.application_number))}`} className="flex items-center gap-2">
                                       <Eye className="h-4 w-4" />
                                       View application
                                     </Link>

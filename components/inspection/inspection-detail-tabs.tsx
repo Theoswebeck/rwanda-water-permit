@@ -184,8 +184,8 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {app?.id ? (
-            <Link href={`/dashboard/application/${app.id}`}>
+          {app?.application_number ? (
+            <Link href={`/inspection/application/${encodeURIComponent(app.application_number)}`}>
               <Button variant="outline" className="gap-2">
                 <Eye className="h-4 w-4" />
                 Application
@@ -247,9 +247,6 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
               />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Note: review updates require the DB migration `database/add-inspection-review-workflow.sql` to be applied in Supabase.
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -287,8 +284,8 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
                 </div>
               </div>
               <Separator />
-              {app?.id ? (
-                <Link href={`/dashboard/application/${app.id}`}>
+              {app?.application_number ? (
+                <Link href={`/inspection/application/${encodeURIComponent(app.application_number)}`}>
                   <Button variant="default">Open full application</Button>
                 </Link>
               ) : null}

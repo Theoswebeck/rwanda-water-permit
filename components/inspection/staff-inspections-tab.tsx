@@ -283,9 +283,12 @@ export function StaffInspectionsTab() {
                                 View inspection
                               </Link>
                             </DropdownMenuItem>
-                            {r.application?.id ? (
+                            {r.application?.application_number ? (
                               <DropdownMenuItem asChild>
-                                <Link href={`/dashboard/application/${r.application.id}`} className="flex items-center gap-2">
+                                <Link
+                                  href={`/inspection/application/${encodeURIComponent(r.application.application_number)}`}
+                                  className="flex items-center gap-2"
+                                >
                                   <Eye className="h-4 w-4" />
                                   View application
                                 </Link>
