@@ -195,22 +195,57 @@ export function AssessmentReportForm({
                 className={prefilledClass}
               />
             </div>
-            <div>
-              <Label>Latitude</Label>
-              <Input
-                value={localData.sourceLatitude || ''}
-                readOnly
-                className={prefilledClass}
-              />
-            </div>
-            <div>
-              <Label>Longitude</Label>
-              <Input
-                value={localData.sourceLongitude || ''}
-                readOnly
-                className={prefilledClass}
-              />
-            </div>
+
+            {reportType === 'concession' && localData.sourcePolygonPoints && localData.sourcePolygonPoints.length > 0 ? (
+              <div className="md:col-span-2">
+                <Label>Concession polygon coordinates</Label>
+                <div className="space-y-3 mt-2">
+                  {localData.sourcePolygonPoints.map((point, index) => (
+                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-2">
+                        <Label className="text-sm font-medium">Point {index + 1}</Label>
+                      </div>
+                      <div className="col-span-5">
+                        <Label className="text-xs text-muted-foreground">Latitude</Label>
+                        <Input
+                          value={point.latitude}
+                          readOnly
+                          className={prefilledClass}
+                        />
+                      </div>
+                      <div className="col-span-5">
+                        <Label className="text-xs text-muted-foreground">Longitude</Label>
+                        <Input
+                          value={point.longitude}
+                          readOnly
+                          className={prefilledClass}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label>Latitude</Label>
+                  <Input
+                    value={localData.sourceLatitude || ''}
+                    readOnly
+                    className={prefilledClass}
+                  />
+                </div>
+                <div>
+                  <Label>Longitude</Label>
+                  <Input
+                    value={localData.sourceLongitude || ''}
+                    readOnly
+                    className={prefilledClass}
+                  />
+                </div>
+              </>
+            )}
+
             <div className="md:col-span-2">
               <Label>Location: Coordinates, village, cell, sector, district, level one and level two catchments</Label>
               <Input
@@ -435,11 +470,11 @@ export function AssessmentReportForm({
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>Surface Area (Ha) (attach field pictures)</Label>
+                <Label>Surface Area ({localData.surfaceAreaUnit || 'Ha'}) (attach field pictures)</Label>
                 <Input
                   value={localData.surfaceAreaHa || ''}
                   onChange={(e) => updateField('surfaceAreaHa', e.target.value)}
-                  placeholder="Hectares (Ha)"
+                  placeholder={localData.surfaceAreaUnit || 'Ha'}
                   readOnly={isSurfaceSectionReadOnly}
                   disabled={isSurfaceSectionReadOnly}
                   className={prefilledClass}

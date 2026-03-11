@@ -239,8 +239,6 @@ export default function ReviewApplicationPage() {
   // Assessor Recommendations State (read-only for reviewers)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
-  const [originalBaselineDurationYears, setOriginalBaselineDurationYears] = useState<number | undefined>(undefined);
-  const [originalBaselineVolumeM3, setOriginalBaselineVolumeM3] = useState<number | undefined>(undefined);
   const [recommendedDurationYears, setRecommendedDurationYears] = useState<number | undefined>(undefined);
   const [recommendedVolumeM3, setRecommendedVolumeM3] = useState<number | undefined>(undefined);
 
@@ -554,29 +552,26 @@ export default function ReviewApplicationPage() {
           setRequestedDurationYears(currentRequestedDuration);
         }
         const isConcessionApp = rt === "concession";
-        const currentRequestedVolume = isConcessionApp
-          ? ((appData as any).concession_area || formData.concessionArea || formData.fishLakeAreaHectares)
-          : (formData.waterAbstractionDetails?.[0]?.maxAverageYearly
+        const currentRequestedVolume = (() => {
+          if (isConcessionApp) {
+            const dbArea = Number((appData as any).concession_area);
+            if (Number.isFinite(dbArea) && dbArea > 0) return dbArea;
+            const genericArea = Number(formData.concessionArea);
+            if (Number.isFinite(genericArea) && genericArea > 0) return genericArea;
+            const fishHa = Number(formData.fishLakeAreaHectares);
+            if (Number.isFinite(fishHa) && fishHa > 0) return fishHa;
+            const recM2 = Number(formData.recreationConcessionAreaM2);
+            if (Number.isFinite(recM2) && recM2 > 0) return Number((recM2 / 10000).toFixed(4));
+            return undefined;
+          }
+          return formData.waterAbstractionDetails?.[0]?.maxAverageYearly
             || appData.max_yearly_volume_m3
-            || appData.estimated_usage_volume);
-        if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume)) {
+            || appData.estimated_usage_volume;
+        })();
+        if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume) && currentRequestedVolume > 0) {
           setRequestedVolumeM3(currentRequestedVolume);
         }
 
-        // Original baseline values for historical reference rows
-        const baselineDuration = originalRequestedValues.permitLengthYears;
-        if (typeof baselineDuration === 'number' && baselineDuration >= 1 && baselineDuration <= 15) {
-          setOriginalBaselineDurationYears(baselineDuration);
-        } else {
-          setOriginalBaselineDurationYears(undefined);
-        }
-        const baselineVolume = originalRequestedValues.volumeM3;
-        if (typeof baselineVolume === 'number' && Number.isFinite(baselineVolume)) {
-          setOriginalBaselineVolumeM3(baselineVolume);
-        } else {
-          setOriginalBaselineVolumeM3(undefined);
-        }
-        
         // ASSESSOR RECOMMENDED VALUES (from assessor adjustments — only when assessment exists)
         if (hasAssessmentForThisApp) {
           const assessorDuration = assessorAdjustments.permitLengthYears 
@@ -1331,8 +1326,6 @@ export default function ReviewApplicationPage() {
                     <AssessorRecommendations
                       requestedDurationYears={requestedDurationYears}
                       requestedVolumeM3={requestedVolumeM3}
-                      originalBaselineDurationYears={originalBaselineDurationYears}
-                      originalBaselineVolumeM3={originalBaselineVolumeM3}
                       recommendedDurationYears={recommendedDurationYears}
                       recommendedVolumeM3={recommendedVolumeM3}
                       readOnly={true}

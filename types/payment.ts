@@ -317,6 +317,7 @@ export interface IremboPayStatusResponse {
     createdBy?: string;
     paymentAccountIdentifier?: string;
     paymentItems?: any[];
+    expiryAt?: string;
     paidAt?: string;
     paymentMethod?: string; // e.g., 'MTN_MOMO'
     paymentReference?: string;

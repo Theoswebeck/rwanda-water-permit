@@ -211,10 +211,12 @@ export async function GET(
             const normalizedPaymentMethod =
               normalizeGatewayPaymentMethod(iremboStatus.data.paymentMethod) ||
               normalizeGatewayPaymentMethod(payment.payment_method);
+            const iremboExpiryAt = cleanString(iremboStatus.data.expiryAt);
             const updateData: Record<string, unknown> = {
               status: effectiveStatus,
               irembo_transaction_id: iremboStatus.data.transactionId || payment.irembo_transaction_id,
               payment_method: normalizedPaymentMethod,
+              expires_at: iremboExpiryAt ? new Date(iremboExpiryAt).toISOString() : null,
               gateway_response: {
                 ...gatewayResponse,
                 status_check: iremboStatus.data,
@@ -239,6 +241,7 @@ export async function GET(
                 gateway_response = $5::jsonb,
                 completed_at = coalesce($6::timestamptz, completed_at),
                 failed_at = coalesce($7::timestamptz, failed_at),
+                expires_at = coalesce($8::timestamptz, expires_at),
                 updated_at = now()
               where id = $1
               `,
@@ -250,6 +253,7 @@ export async function GET(
                 JSON.stringify(updateData.gateway_response || {}),
                 updateData.completed_at || null,
                 updateData.failed_at || null,
+                updateData.expires_at || null,
               ]
             );
 

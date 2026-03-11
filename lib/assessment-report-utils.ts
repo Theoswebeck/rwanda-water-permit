@@ -119,6 +119,8 @@ export interface AssessmentReportData {
   sourceLocation: string; // "Village, Cell, Sector, District, Province"
   catchmentLevel1?: string;
   catchmentLevel2?: string;
+  /** Concession: full polygon points from the application (shown instead of single lat/lng) */
+  sourcePolygonPoints?: Array<{ latitude: string; longitude: string }>;
   /** Abstraction template: flow of the water source (attach field pictures) */
   sourceFlowLps?: string;
   sourceFlowM3Day?: string;
@@ -138,6 +140,7 @@ export interface AssessmentReportData {
   
   // Concession-specific fields
   surfaceAreaHa?: string;
+  surfaceAreaUnit?: string;
   beacons?: Array<{ id: string; latitude: string; longitude: string }>;
   existingWaterUses?: string;
   
@@ -153,8 +156,8 @@ export interface AssessmentReportData {
 
 /**
  * Determines if the report type should be concession or abstraction
- * Concession: fish_farming_lakes only (lake-based, requires polygon area)
- * Abstraction: All other activities including fish_farming_ponds (single point)
+ * Concession: fish_farming_lakes or recreation_activities (surface-area based, requires polygon area)
+ * Abstraction: All other activities including fish_farming_ponds (single point, volume-based)
  */
 export function determineReportType(
   activities?: string[] | null,
@@ -171,16 +174,16 @@ export function determineReportType(
       "construction_of_infrastructures",
       "other",
     ]);
-    const hasFishLake = cleaned.includes("fish_farming_lakes");
+    const hasConcessionActivity = cleaned.includes("fish_farming_lakes") || cleaned.includes("recreation_activities");
     const hasAbstractionActivity = cleaned.some((a) => !nonAbstractionActivities.has(a));
-    if (hasFishLake && !hasAbstractionActivity) {
+    if (hasConcessionActivity && !hasAbstractionActivity) {
       return "concession";
     }
     return "abstraction";
   }
   
   // Fallback to water_purpose (legacy format)
-  if (waterPurpose === 'fish_farming_lakes') {
+  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities') {
     return 'concession';
   }
   
@@ -226,8 +229,7 @@ export function extractBeaconCoordinates(
     return [];
   }
   
-  // Extract up to the first 3 points as beacons (B1, B2, B3)
-  return firstPolygon.slice(0, 3).map((coord, index) => ({
+  return firstPolygon.map((coord, index) => ({
     id: `B${index + 1}`,
     latitude: String(coord.latitude || ''),
     longitude: String(coord.longitude || '')
@@ -532,41 +534,58 @@ export function prefillAssessmentReportFromApplication(
   // Extract concession-specific data if applicable
   const concessionData: Partial<AssessmentReportData> = {};
   if (reportType === 'concession') {
-    // Extract surface area (prefer polygon-derived/db value for consistency)
-    const dbConcessionArea = pickFirstNumber((application as any)?.concession_area);
-    const fishLakeAreaHa = pickFirstNumber((formData as any)?.fishLakeAreaHectares);
+    // Extract surface area — prefer the applicant-submitted value from the form
+    const fishLakeAreaM2 = pickFirstNumber((formData as any)?.fishLakeAreaHectares);
     const explicitConcessionArea = pickFirstNumber((formData as any)?.concessionArea);
     const explicitConcessionUnit = getString(formData, "concessionAreaUnit")?.toLowerCase() || "";
+    const dbConcessionArea = pickFirstNumber((application as any)?.concession_area);
 
-    if (typeof dbConcessionArea === "number" && dbConcessionArea > 0) {
-      concessionData.surfaceAreaHa = String(dbConcessionArea);
-    } else if (typeof fishLakeAreaHa === "number" && fishLakeAreaHa > 0) {
-      concessionData.surfaceAreaHa = String(fishLakeAreaHa);
+    if (typeof fishLakeAreaM2 === "number" && fishLakeAreaM2 > 0) {
+      concessionData.surfaceAreaHa = String(fishLakeAreaM2);
+      concessionData.surfaceAreaUnit = "m²";
     } else if (typeof explicitConcessionArea === "number" && explicitConcessionArea > 0) {
-      // Handle legacy forms where concessionArea could be in m2.
       const isM2 =
         explicitConcessionUnit.includes("m2") ||
         explicitConcessionUnit.includes("m²") ||
         explicitConcessionUnit.includes("square");
-      concessionData.surfaceAreaHa = String(isM2 ? explicitConcessionArea / 10000 : explicitConcessionArea);
+      concessionData.surfaceAreaHa = String(explicitConcessionArea);
+      concessionData.surfaceAreaUnit = isM2 ? "m²" : (explicitConcessionUnit || "Ha");
+    } else if (typeof dbConcessionArea === "number" && dbConcessionArea > 0) {
+      concessionData.surfaceAreaHa = String(dbConcessionArea);
+      concessionData.surfaceAreaUnit = "Ha";
     }
     
-    // Extract beacon coordinates
+    // Resolve the full polygon (used for both Section 3 polygon and Section 4 beacons)
     const polysUnknown = (formData as any)?.waterSourcePolygons;
     const normalizedFormPolygons = normalizePolygonsFromUnknown(polysUnknown);
-    if (normalizedFormPolygons.length > 0) {
-      concessionData.beacons = extractBeaconCoordinates(normalizedFormPolygons as any);
+    let resolvedPolygon: Array<{ latitude: string; longitude: string }> = [];
+
+    if (normalizedFormPolygons.length > 0 && normalizedFormPolygons[0].length > 0) {
+      resolvedPolygon = normalizedFormPolygons[0];
     } else {
-      // Try to extract from application coordinates
       try {
         const geom: any = (application as any).coordinates;
         if (geom) {
           const polygons = geometryToCoordinatePolygons(geom);
-          concessionData.beacons = extractBeaconCoordinates(polygons);
+          if (polygons.length > 0 && polygons[0].length > 0) {
+            resolvedPolygon = polygons[0].map((p) => ({
+              latitude: String(p.latitude),
+              longitude: String(p.longitude),
+            }));
+          }
         }
       } catch (error) {
-        console.warn('Error extracting beacon coordinates:', error);
+        console.warn('Error extracting polygon coordinates:', error);
       }
+    }
+
+    if (resolvedPolygon.length > 0) {
+      concessionData.sourcePolygonPoints = resolvedPolygon;
+      concessionData.beacons = resolvedPolygon.map((coord, index) => ({
+        id: `B${index + 1}`,
+        latitude: coord.latitude,
+        longitude: coord.longitude,
+      }));
     }
   }
   
@@ -642,6 +661,9 @@ export function mergeAssessmentReportData(
     "sourceLocation",
     "catchmentLevel1",
     "catchmentLevel2",
+    "sourcePolygonPoints",
+    "surfaceAreaHa",
+    "surfaceAreaUnit",
     "flowRateLps",
     "flowRateM3Day",
   ];

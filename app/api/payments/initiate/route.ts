@@ -513,9 +513,16 @@ export async function POST(request: NextRequest) {
     const paymentRefRaw = iremboData.invoiceNumber || iremboData.payment_ref;
     const paymentUrlRaw = iremboData.paymentLinkUrl || iremboData.payment_url;
     const requestIdRaw = iremboData.transactionId || iremboData.request_id;
+    const iremboExpiryRaw = iremboData.expiryAt;
     const paymentRef = typeof paymentRefRaw === 'string' ? paymentRefRaw.trim() : '';
     const paymentUrl = typeof paymentUrlRaw === 'string' ? paymentUrlRaw.trim() : '';
     const requestId = typeof requestIdRaw === 'string' ? requestIdRaw.trim() : '';
+
+    // Use expiry from IremboPay's response (authoritative) instead of locally-computed value
+    const iremboExpiryIso = typeof iremboExpiryRaw === 'string' && iremboExpiryRaw.trim()
+      ? new Date(iremboExpiryRaw.trim()).toISOString()
+      : null;
+    const finalExpiresAtIso = iremboExpiryIso || expiresAtIso;
 
     if (!paymentRef) {
       console.error('❌ [PAYMENT INITIATE] Missing invoice/payment reference in gateway response:', iremboData);
@@ -562,7 +569,7 @@ export async function POST(request: NextRequest) {
       gateway_response: iremboResponse.data as Record<string, unknown>,
       gateway_metadata: {},
       initiated_at: initiatedAtIso,
-      expires_at: expiresAtIso,
+      expires_at: finalExpiresAtIso,
       created_by: userId,
     };
 
