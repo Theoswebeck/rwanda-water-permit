@@ -6160,6 +6160,7 @@ export function ApplicationForm({
                         isSavingApplication={isLoading}
                         saveError={paymentPrepError}
                         autoRedirectOnCompletion={!readOnly && mode !== "view"}
+                        completionRedirectPath={mode === "create" && !isModification ? "/dashboard" : "/dashboard?tab=applications"}
                         onRetrySave={() => {
                           setPaymentPrepError(null);
                           // Compute modification changes if in modification mode

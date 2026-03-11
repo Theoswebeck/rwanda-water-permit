@@ -19,6 +19,7 @@ type InspectionRow = {
   type?: string;
   result?: string | null;
   review_status?: string | null;
+  review_notes?: string | null;
   reviewed_at?: string | null;
   scheduled_date?: string;
   completed_date?: string | null;
@@ -45,6 +46,11 @@ type PermitLite = {
   expiry_date?: string;
 };
 
+type PermitRegistryHolder = {
+  permit_number: string;
+  permit_holder: string | null;
+};
+
 function shortId(id: string): string {
   return id ? `${id.slice(0, 8)}…` : "—";
 }
@@ -68,6 +74,14 @@ function applicantName(applicant: InspectionRow["application"] extends infer A ?
 
 function statusPill(status: string) {
   const cfg: Record<string, { label: string; className: string }> = {
+    submitted: {
+      label: "Submitted",
+      className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+    },
+    under_review: {
+      label: "Under review",
+      className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+    },
     scheduled: {
       label: "Scheduled",
       className: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800",
@@ -96,12 +110,20 @@ function statusPill(status: string) {
   );
 }
 
+function workflowStatus(row: InspectionRow): string {
+  if (row.status !== "completed") return row.status;
+  if (row.review_status === "reviewed") return "completed";
+  const hasReviewActivity = Boolean(row.reviewed_at || row.review_notes || row.review_status === "changes_requested");
+  return hasReviewActivity ? "under_review" : "submitted";
+}
+
 export function StaffInspectionsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [inspections, setInspections] = useState<InspectionRow[]>([]);
   const [permitByAppId, setPermitByAppId] = useState<Record<string, PermitLite | undefined>>({});
+  const [permitHolderByNumber, setPermitHolderByNumber] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -118,6 +140,7 @@ export function StaffInspectionsTab() {
             type,
             result,
             review_status,
+            review_notes,
             reviewed_at,
             scheduled_date,
             completed_date,
@@ -160,6 +183,34 @@ export function StaffInspectionsTab() {
           if (!map[p.application_id]) map[p.application_id] = p as PermitLite;
         }
         setPermitByAppId(map);
+
+        const permitNumbers = Array.from(
+          new Set(
+            ((permits || []) as PermitLite[])
+              .map((p) => p.permit_number)
+              .filter((permitNumber): permitNumber is string => Boolean(permitNumber))
+          )
+        );
+
+        if (permitNumbers.length > 0) {
+          const { data: registryRows, error: holderErr } = await supabase
+            .from("permit_registry")
+            .select("permit_number, permit_holder")
+            .in("permit_number", permitNumbers);
+
+          if (holderErr) {
+            console.warn("⚠️ Failed to load permit holder names, falling back to applicant names:", holderErr);
+            setPermitHolderByNumber({});
+          } else {
+            const holderMap: Record<string, string> = {};
+            for (const row of (registryRows || []) as PermitRegistryHolder[]) {
+              if (row.permit_number && row.permit_holder) holderMap[row.permit_number] = row.permit_holder;
+            }
+            setPermitHolderByNumber(holderMap);
+          }
+        } else {
+          setPermitHolderByNumber({});
+        }
       } catch (e: any) {
         console.error("❌ Failed to load inspections:", e);
         setError(e?.message || "Failed to load inspections");
@@ -178,10 +229,11 @@ export function StaffInspectionsTab() {
       const id = (r.id || "").toLowerCase();
       const appNo = (r.application?.application_number || "").toLowerCase();
       const permitNo = r.application?.id ? (permitByAppId[r.application.id]?.permit_number || "").toLowerCase() : "";
-      const applicant = applicantName(r.application as any).toLowerCase();
-      return id.includes(q) || appNo.includes(q) || permitNo.includes(q) || applicant.includes(q);
+      const permitNumber = r.application?.id ? permitByAppId[r.application.id]?.permit_number : undefined;
+      const permitHolder = (permitNumber ? permitHolderByNumber[permitNumber] : null) || applicantName(r.application as any);
+      return id.includes(q) || appNo.includes(q) || permitNo.includes(q) || permitHolder.toLowerCase().includes(q);
     });
-  }, [inspections, permitByAppId, search]);
+  }, [inspections, permitByAppId, permitHolderByNumber, search]);
 
   if (loading) {
     return (
@@ -233,14 +285,13 @@ export function StaffInspectionsTab() {
                 <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[22%]">Permit #</TableHead>
                 <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[26%]">Applicant</TableHead>
                 <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Status</TableHead>
-                <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Review</TableHead>
                 <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium w-[8%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                     No inspections found.
                   </TableCell>
                 </TableRow>
@@ -249,7 +300,9 @@ export function StaffInspectionsTab() {
                   const appId = r.application?.id;
                   const permit = appId ? permitByAppId[appId] : undefined;
                   const date = r.completed_date || r.scheduled_date || r.created_at || null;
-                  const review = r.review_status || "pending";
+                  const holderName = permit?.permit_number
+                    ? (permitHolderByNumber[permit.permit_number] || applicantName(r.application as any))
+                    : applicantName(r.application as any);
                   return (
                     <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">
                       <TableCell className="font-medium">
@@ -259,13 +312,8 @@ export function StaffInspectionsTab() {
                       </TableCell>
                       <TableCell>{fmtDate(date)}</TableCell>
                       <TableCell className="font-medium">{permit?.permit_number || "—"}</TableCell>
-                      <TableCell className="truncate max-w-[280px]">{applicantName(r.application as any)}</TableCell>
-                      <TableCell>{statusPill(r.status)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {review}
-                        </Badge>
-                      </TableCell>
+                      <TableCell className="truncate max-w-[280px]">{holderName}</TableCell>
+                      <TableCell>{statusPill(workflowStatus(r))}</TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>

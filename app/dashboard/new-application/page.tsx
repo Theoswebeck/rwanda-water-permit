@@ -392,6 +392,37 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
   }
 }
 
+function buildInitialDocumentMapFromRecords(documents: Document[]): Record<string, { url: string; name: string }> {
+  const documentMap: Record<string, { url: string; name: string }> = {};
+
+  for (const doc of documents) {
+    if (!doc?.file_path || !doc?.name) continue;
+
+    const publicUrl = getDocumentUrl(doc.file_path);
+    if (!publicUrl) continue;
+
+    const rawFileName = (() => {
+      try {
+        if (doc.file_path.startsWith("http://") || doc.file_path.startsWith("https://")) {
+          return new URL(doc.file_path).pathname.split("/").pop() || "";
+        }
+      } catch {}
+      return doc.file_path.split("/").pop() || "";
+    })();
+
+    // Additional documents are rendered from `additionalDocuments` state.
+    if (rawFileName.startsWith("additional_")) continue;
+
+    const fieldName = resolveDocumentFieldToken(doc.file_path, doc.type);
+    documentMap[fieldName] = {
+      url: publicUrl,
+      name: doc.name,
+    };
+  }
+
+  return documentMap;
+}
+
 // Inner component that uses useSearchParams
 function NewApplicationContent() {
   const UUID_PATTERN =
@@ -900,12 +931,32 @@ function NewApplicationContent() {
       if (result) {
         // Upload documents and WAIT for completion
         console.log('🚀 Starting document upload process for draft...');
+        let uploadedDocuments: Document[] = [];
         try {
-          const uploadedDocuments = await uploadApplicationDocuments(result.id, formData, userProfile?.id);
+          uploadedDocuments = await uploadApplicationDocuments(result.id, formData, userProfile?.id);
           console.log(`📎 ${uploadedDocuments.length} documents uploaded successfully`);
+          if (uploadedDocuments.length > 0) {
+            const freshMap = buildInitialDocumentMapFromRecords(uploadedDocuments);
+            if (Object.keys(freshMap).length > 0) {
+              setInitialDocuments(prev => ({ ...prev, ...freshMap }));
+            }
+          }
         } catch (docError) {
           console.error('⚠️ Document upload failed:', docError);
           setError('Draft saved but some documents failed to upload. Please try uploading them again.');
+        }
+
+        // Keep in-memory document URLs synchronized so the form reflects saved uploads immediately.
+        try {
+          const latestDocuments = await getDocuments(result.id);
+          const latestMap = buildInitialDocumentMapFromRecords(
+            Array.isArray(latestDocuments) ? (latestDocuments as Document[]) : []
+          );
+          if (Object.keys(latestMap).length > 0) {
+            setInitialDocuments(prev => ({ ...prev, ...latestMap }));
+          }
+        } catch (docRefreshError) {
+          console.warn('⚠️ Failed to refresh draft document map (non-blocking):', docRefreshError);
         }
         
         // Re-fetch the full application (includes applicant join from users table)
@@ -940,7 +991,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [createApplication, updateApplication, getApplication, userProfile?.id, router]);
+  }, [createApplication, updateApplication, getApplication, getDocuments, userProfile?.id, router]);
 
   // Auto-redirect ONLY after submit (draft saves must not redirect)
   useEffect(() => {
@@ -2048,6 +2099,12 @@ function NewApplicationContent() {
           ...formData,
           legacyPermitIdentityProof: (selectedPermitForModification as any as SelectedPermitRuntimeMeta | null)?.legacyIdentityProofFile || undefined,
         }, userProfile?.id);
+        if (uploadedDocs.length > 0) {
+          const freshMap = buildInitialDocumentMapFromRecords(uploadedDocs);
+          if (Object.keys(freshMap).length > 0) {
+            setInitialDocuments(prev => ({ ...prev, ...freshMap }));
+          }
+        }
 
         // Copy over documents from the original application that weren't re-uploaded
         const originalAppId = selectedPermitForModification?.application_id;
@@ -2115,6 +2172,19 @@ function NewApplicationContent() {
         
         // Keep reference to the current modification application (used to keep edits on the same row)
         setCurrentModificationApplication(result);
+
+        // Ensure copied + uploaded docs are reflected without page refresh.
+        try {
+          const latestDocuments = await getDocuments(result.id);
+          const latestMap = buildInitialDocumentMapFromRecords(
+            Array.isArray(latestDocuments) ? (latestDocuments as Document[]) : []
+          );
+          if (Object.keys(latestMap).length > 0) {
+            setInitialDocuments(prev => ({ ...prev, ...latestMap }));
+          }
+        } catch (docRefreshError) {
+          console.warn('⚠️ Failed to refresh modification draft document map (non-blocking):', docRefreshError);
+        }
         
         setDraftSaved(true);
         setTimeout(() => setDraftSaved(false), 2000);
@@ -2128,7 +2198,7 @@ function NewApplicationContent() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedPermitForModification, userProfile?.id, createApplication, updateApplication, currentModificationApplication]);
+  }, [selectedPermitForModification, userProfile?.id, createApplication, updateApplication, currentModificationApplication, getDocuments]);
   
   if (loadingDraft && !initialFormData) {
     return (

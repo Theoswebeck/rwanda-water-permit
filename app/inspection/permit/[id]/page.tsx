@@ -303,6 +303,10 @@ export default function PermitInspectionUnifiedPage() {
         status: mode === "submit" ? "completed" : "in_progress",
         scheduled_date: nowIso,
         completed_date: mode === "submit" ? nowIso : null,
+        review_status: mode === "submit" ? "pending" : null,
+        review_notes: null,
+        reviewed_by: null,
+        reviewed_at: null,
 
         // Locked fields (stored but not editable)
         operator_name: locked?.operatorName ?? null,

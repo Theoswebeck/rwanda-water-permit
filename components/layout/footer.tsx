@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import {
   getPreferredLanguage,
-  setPreferredLanguage,
   subscribeToLanguageChanges,
   type AppLanguage,
 } from "@/lib/i18n/language";
@@ -152,9 +150,6 @@ export function Footer() {
         
         <div className="border-t border-white/20 pt-8 flex flex-col md:flex-row justify-between items-center text-sm text-white/70">
           <p>© {new Date().getFullYear()} {tx("Rwanda Water Resources Board. All rights reserved.")}</p>
-          <div className="mt-4 md:mt-0">
-            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-          </div>
           {/* Privacy/Terms removed: routes are not part of public site */}
         </div>
       </div>

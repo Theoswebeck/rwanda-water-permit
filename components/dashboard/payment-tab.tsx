@@ -96,6 +96,7 @@ interface PaymentTabProps {
   saveError?: string | null;
   onRetrySave?: () => void;
   autoRedirectOnCompletion?: boolean;
+  completionRedirectPath?: string;
 }
 
 export function PaymentTab({
@@ -106,6 +107,7 @@ export function PaymentTab({
   saveError,
   onRetrySave,
   autoRedirectOnCompletion = true,
+  completionRedirectPath = '/dashboard?tab=applications',
 }: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
@@ -154,13 +156,13 @@ export function PaymentTab({
 
         // Auto-redirect to dashboard after 4 seconds
         const redirectTimer = setTimeout(() => {
-          router.push('/dashboard?tab=applications');
+          router.push(completionRedirectPath);
         }, 4000);
 
         return () => clearTimeout(redirectTimer);
       }
     }
-  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router, autoRedirectOnCompletion]);
+  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router, autoRedirectOnCompletion, completionRedirectPath]);
 
   useEffect(() => {
     if (payment?.status === 'failed' || payment?.status === 'cancelled') {
@@ -326,7 +328,7 @@ export function PaymentTab({
           if (autoRedirectOnCompletion) {
             // Auto-redirect to dashboard after 4 seconds
             setTimeout(() => {
-              router.push('/dashboard?tab=applications');
+              router.push(completionRedirectPath);
             }, 4000);
           }
         } else {
@@ -691,7 +693,7 @@ export function PaymentTab({
 
               <Button
                 type="button"
-                onClick={() => router.push('/dashboard?tab=applications')}
+                onClick={() => router.push(completionRedirectPath)}
                 className="w-full"
               >
                 View My Applications

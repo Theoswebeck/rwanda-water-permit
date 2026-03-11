@@ -9,8 +9,10 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { LanguageSwitcher } from "@/components/shared/language-switcher";
 import {
   getPreferredLanguage,
+  setPreferredLanguage,
   subscribeToLanguageChanges,
   type AppLanguage,
 } from "@/lib/i18n/language";
@@ -140,89 +142,93 @@ export function Header() {
             </nav>
           )}
 
-          {/* CTA Button */}
-          <motion.div 
-            className="hidden md:block"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-          >
-            {shouldShowMinimalHeaderForStaff ? (
-              <Link href="/dashboard/profile">
-                <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
-                  <AvatarImage src={undefined} alt="Profile" />
-                  <AvatarFallback>
-                    <User className="h-5 w-5" />
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
-            ) : isDashboardPage ? (
-              /* On dashboard pages, show the profile link if not already in profile */
-              pathname === "/dashboard/profile" ? null : (
+          <div className="hidden md:flex items-center gap-3">
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            {/* CTA Button */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+            >
+              {shouldShowMinimalHeaderForStaff ? (
                 <Link href="/dashboard/profile">
-                  <Button variant="outline" className="rounded-full px-6">
-                    {tx("MY PROFILE")}
+                  <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
+                    <AvatarImage src={undefined} alt="Profile" />
+                    <AvatarFallback>
+                      <User className="h-5 w-5" />
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+              ) : isDashboardPage ? (
+                /* On dashboard pages, show the profile link if not already in profile */
+                pathname === "/dashboard/profile" ? null : (
+                  <Link href="/dashboard/profile">
+                    <Button variant="outline" className="rounded-full px-6">
+                      {tx("MY PROFILE")}
+                    </Button>
+                  </Link>
+                )
+              ) : isApplyPage ? (
+                <Link href="/login">
+                  <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
+                    {tx("LOGIN")}
                   </Button>
                 </Link>
-              )
-            ) : isApplyPage ? (
-              <Link href="/login">
-                <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                  {tx("LOGIN")}
-                </Button>
-              </Link>
-            ) : isLoginPage || isRegisterPage ? (
-              <Link href="/">
-                <Button variant="outline" className="rounded-full px-6">
-                  {tx("HOME")}
-                </Button>
-              </Link>
-            ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
-              /* Show profile icon on inspection, review, admin, and approver pages */
-              <Link href="/dashboard/profile">
-                <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
-                  <AvatarImage src={undefined} alt="Profile" />
-                  <AvatarFallback>
-                    <User className="h-5 w-5" />
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
-            ) : isAuthenticated ? (
-              <Link href="/dashboard">
-                <Button variant="outline" className="rounded-full px-6">
-                  {tx("DASHBOARD")}
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/apply">
-                <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
-                  {tx("APPLY NOW")}
-                </Button>
-              </Link>
-            )}
-          </motion.div>
+              ) : isLoginPage || isRegisterPage ? (
+                <Link href="/">
+                  <Button variant="outline" className="rounded-full px-6">
+                    {tx("HOME")}
+                  </Button>
+                </Link>
+              ) : isInspectionPage || isReviewPage || isAssessmentPage || isVerificationPage || isAdminPage || isApproverPage || isManagementPage || isTechnicalAssessmentPage ? (
+                /* Show profile icon on inspection, review, admin, and approver pages */
+                <Link href="/dashboard/profile">
+                  <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
+                    <AvatarImage src={undefined} alt="Profile" />
+                    <AvatarFallback>
+                      <User className="h-5 w-5" />
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+              ) : isAuthenticated ? (
+                <Link href="/dashboard">
+                  <Button variant="outline" className="rounded-full px-6">
+                    {tx("DASHBOARD")}
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/apply">
+                  <Button className="bg-primary hover:bg-primary/90 rounded-full px-6">
+                    {tx("APPLY NOW")}
+                  </Button>
+                </Link>
+              )}
+            </motion.div>
+          </div>
 
           {/* Mobile Navigation */}
-          {shouldShowMinimalHeaderForStaff ? (
-            isAuthenticated ? (
-              <Link href="/dashboard/profile" className="md:hidden">
-                <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
-                  <AvatarImage src={undefined} alt="Profile" />
-                  <AvatarFallback>
-                    <User className="h-5 w-5" />
-                  </AvatarFallback>
-                </Avatar>
-              </Link>
-            ) : null
-          ) : (
-            <Sheet open={isOpen} onOpenChange={setIsOpen}>
-              <SheetTrigger asChild className="md:hidden">
-                <Button variant="ghost" size="icon" className="text-primary">
-                  <Menu className="h-6 w-6" />
-                  <span className="sr-only">{tx("Toggle menu")}</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="border-l border-border">
+          <div className="md:hidden flex items-center gap-2">
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            {shouldShowMinimalHeaderForStaff ? (
+              isAuthenticated ? (
+                <Link href="/dashboard/profile">
+                  <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
+                    <AvatarImage src={undefined} alt="Profile" />
+                    <AvatarFallback>
+                      <User className="h-5 w-5" />
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
+              ) : null
+            ) : (
+              <Sheet open={isOpen} onOpenChange={setIsOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="text-primary">
+                    <Menu className="h-6 w-6" />
+                    <span className="sr-only">{tx("Toggle menu")}</span>
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="border-l border-border">
                 <div className="flex items-center justify-between mb-8 mt-2">
                   <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
                     {/* Black and white Rwanda Water Resources Board logo (smaller for mobile) */}
@@ -324,9 +330,10 @@ export function Header() {
                     )}
                   </div>
                 </nav>
-              </SheetContent>
-            </Sheet>
-          )}
+                </SheetContent>
+              </Sheet>
+            )}
+          </div>
         </div>
       </div>
     </header>

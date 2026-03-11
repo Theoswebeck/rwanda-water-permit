@@ -41,6 +41,14 @@ function applicantName(applicant: any): string {
 
 function statusBadge(status: string) {
   const cfg: Record<string, { label: string; className: string }> = {
+    submitted: {
+      label: "Submitted",
+      className: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+    },
+    under_review: {
+      label: "Under review",
+      className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
+    },
     scheduled: {
       label: "Scheduled",
       className: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800",
@@ -67,6 +75,14 @@ function statusBadge(status: string) {
       {c.label}
     </Badge>
   );
+}
+
+function workflowStatus(inspection: any): string {
+  if (!inspection) return "—";
+  if (inspection.status !== "completed") return inspection.status;
+  if (inspection.review_status === "reviewed") return "completed";
+  const hasReviewActivity = Boolean(inspection.reviewed_at || inspection.review_notes || inspection.review_status === "changes_requested");
+  return hasReviewActivity ? "under_review" : "submitted";
 }
 
 export function InspectionDetailTabs({ inspectionId }: { inspectionId: string }) {
@@ -174,7 +190,7 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Inspection {inspectionId.slice(0, 8)}…</h2>
           <div className="mt-2 flex items-center gap-2">
-            {statusBadge(inspection?.status || "—")}
+            {statusBadge(workflowStatus(inspection))}
             <Badge variant="outline" className="text-xs">
               Review: {(inspection?.review_status as string) || "pending"}
             </Badge>
