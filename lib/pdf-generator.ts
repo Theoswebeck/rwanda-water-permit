@@ -100,46 +100,28 @@ let cachedWatermarkDataUrl: string | null = null;
 let cachedPermitHeaderLogoDataUrl: string | null = null;
 const qrDataUrlCache = new Map<string, string>();
 
-async function loadPermitHeaderLogo(): Promise<string | null> {
-  if (cachedPermitHeaderLogoDataUrl) {
-    return cachedPermitHeaderLogoDataUrl;
-  }
-
+async function fetchImageAsDataUrl(imagePath: string): Promise<string | null> {
   try {
-    const logoUrl = `${window.location.origin}${PERMIT_HEADER_LOGO_PATH}`;
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        try {
-          // Keep high source resolution so the header logo stays crisp.
-          const maxDim = 1800;
-          const longestSide = Math.max(img.width, img.height);
-          const scale = longestSide > maxDim ? maxDim / longestSide : 1;
-          const targetWidth = Math.max(1, Math.round(img.width * scale));
-          const targetHeight = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(null);
-            return;
-          }
-          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-          const dataUrl = canvas.toDataURL("image/png");
-          cachedPermitHeaderLogoDataUrl = dataUrl;
-          resolve(dataUrl);
-        } catch {
-          resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-      img.src = logoUrl;
+    const url = `${window.location.origin}${imagePath}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
     });
   } catch {
     return null;
   }
+}
+
+async function loadPermitHeaderLogo(): Promise<string | null> {
+  if (cachedPermitHeaderLogoDataUrl) return cachedPermitHeaderLogoDataUrl;
+  const dataUrl = await fetchImageAsDataUrl(PERMIT_HEADER_LOGO_PATH);
+  if (dataUrl) cachedPermitHeaderLogoDataUrl = dataUrl;
+  return dataUrl;
 }
 
 async function drawPermitPageHeader(doc: jsPDF, title: string): Promise<void> {
@@ -171,50 +153,10 @@ async function drawPermitPageHeader(doc: jsPDF, title: string): Promise<void> {
 }
 
 async function loadWatermarkImage(): Promise<string | null> {
-  if (cachedWatermarkDataUrl) {
-    return cachedWatermarkDataUrl;
-  }
-
-  try {
-    const watermarkUrl = `${window.location.origin}${WATERMARK_IMAGE_PATH}`;
-    
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        try {
-          const maxDim = 900;
-          const longestSide = Math.max(img.width, img.height);
-          const scale = longestSide > maxDim ? maxDim / longestSide : 1;
-          const targetWidth = Math.max(1, Math.round(img.width * scale));
-          const targetHeight = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement("canvas");
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) {
-            resolve(null);
-            return;
-          }
-          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-          const dataUrl = canvas.toDataURL("image/png");
-          cachedWatermarkDataUrl = dataUrl;
-          resolve(dataUrl);
-        } catch (e) {
-          console.warn("⚠️ Could not convert watermark to data URL:", e);
-          resolve(null);
-        }
-      };
-      img.onerror = () => {
-        console.warn("⚠️ Failed to load watermark image");
-        resolve(null);
-      };
-      img.src = watermarkUrl;
-    });
-  } catch (error) {
-    console.warn("⚠️ Error loading watermark image:", error);
-    return null;
-  }
+  if (cachedWatermarkDataUrl) return cachedWatermarkDataUrl;
+  const dataUrl = await fetchImageAsDataUrl(WATERMARK_IMAGE_PATH);
+  if (dataUrl) cachedWatermarkDataUrl = dataUrl;
+  return dataUrl;
 }
 
 /**
