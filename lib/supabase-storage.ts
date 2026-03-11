@@ -48,6 +48,48 @@ export const uploadDocument = async (
   applicationId: string, 
   documentType: string
 ): Promise<{ path: string; url: string } | null> => {
+  const uploadInChunks = async (): Promise<{ path: string; url: string } | null> => {
+    const CHUNK_SIZE_BYTES = 256 * 1024; // 256 KB per request to stay below strict proxy limits
+    const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE_BYTES));
+    const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const endpoint = `/api/dashboard/applications/${encodeURIComponent(applicationId)}/documents/chunked`;
+    let finalPath: string | null = null;
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      const start = chunkIndex * CHUNK_SIZE_BYTES;
+      const end = Math.min(start + CHUNK_SIZE_BYTES, file.size);
+      const chunkBlob = file.slice(start, end);
+      const form = new FormData();
+      form.set('chunk', chunkBlob, file.name || `chunk-${chunkIndex}`);
+      form.set('uploadId', uploadId);
+      form.set('chunkIndex', String(chunkIndex));
+      form.set('totalChunks', String(totalChunks));
+      form.set('filename', file.name || 'document');
+      form.set('mimeType', file.type || 'application/octet-stream');
+      form.set('fileSize', String(file.size || 0));
+      form.set('documentType', documentType);
+
+      const chunkRes = await fetch(endpoint, {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      });
+
+      if (!chunkRes.ok) {
+        console.error('❌ Chunk upload error:', await chunkRes.text());
+        return null;
+      }
+
+      const json = (await chunkRes.json()) as { document?: { file_path?: string | null } };
+      if (json?.document?.file_path) {
+        finalPath = String(json.document.file_path);
+      }
+    }
+
+    if (!finalPath) return null;
+    return { path: finalPath, url: getDocumentUrl(finalPath) || finalPath };
+  };
+
   try {
     const form = new FormData();
     form.set('file', file);
@@ -58,6 +100,10 @@ export const uploadDocument = async (
       credentials: 'include',
     });
     if (!res.ok) {
+      if (res.status === 413) {
+        console.warn('⚠️ Upload hit payload limit. Retrying with chunked upload...');
+        return await uploadInChunks();
+      }
       console.error('❌ Upload error:', await res.text());
       return null;
     }

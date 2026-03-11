@@ -257,6 +257,7 @@ export async function POST(req: NextRequest) {
       'transfer_requests',
       'application_documents',
       'technical_assessments',
+      'portal_feedback',
     ])
     if (!allowedTables.has(table)) {
       return NextResponse.json({ error: { message: `Table not allowed: ${table}` } }, { status: 400 })
