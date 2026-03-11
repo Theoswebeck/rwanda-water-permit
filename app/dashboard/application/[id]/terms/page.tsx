@@ -22,7 +22,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
 import { getApplicationExpiration } from "@/lib/application-expiration";
-import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
+import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
 import { contractTermsByVariant, splitContractSectionsByLanguage } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -391,11 +391,21 @@ export default function TermsConditionsPage() {
         return 5;
       })();
 
+      const isConcession = isConcessionApplication(applicationData as any);
+
       const resolvedVolumeM3: number = (() => {
         if (typeof assessorAdjustments?.recommendedVolumeM3 === 'number' &&
             Number.isFinite(assessorAdjustments.recommendedVolumeM3) &&
             assessorAdjustments.recommendedVolumeM3 > 0) {
           return assessorAdjustments.recommendedVolumeM3;
+        }
+        if (isConcession) {
+          const area = applicationData.concession_area;
+          if (typeof area === 'number' && Number.isFinite(area) && area > 0) return area;
+          const notesArea = parsedNotes?.concessionArea;
+          if (typeof notesArea === 'number' && Number.isFinite(notesArea) && notesArea > 0) return notesArea;
+          const fishHa = parsedNotes?.fishLakeAreaHectares;
+          if (typeof fishHa === 'number' && Number.isFinite(fishHa) && fishHa > 0) return fishHa;
         }
         if (typeof applicationData.max_yearly_volume_m3 === 'number' &&
             Number.isFinite(applicationData.max_yearly_volume_m3) &&
@@ -413,6 +423,8 @@ export default function TermsConditionsPage() {
         }
         return 0;
       })();
+
+      const resolvedAllowanceUnit = isConcession ? 'ha' : (applicationData.usage_unit || 'm³');
 
       console.log('📊 Resolved assessor-approved terms:', {
         durationYears: resolvedDurationYearsGlobal,
@@ -504,9 +516,7 @@ export default function TermsConditionsPage() {
           } else if (applicationData.estimated_usage_volume != null && applicationData.estimated_usage_volume > 0) {
             permitUpdatePayload.water_allowance = applicationData.estimated_usage_volume;
           }
-          if (applicationData.usage_unit) {
-            permitUpdatePayload.allowance_unit = applicationData.usage_unit;
-          }
+          permitUpdatePayload.allowance_unit = resolvedAllowanceUnit || applicationData.usage_unit || 'm³';
           permitUpdatePayload.issued_date = newIssuedDate;
           if (resolvedDurationYears) {
             permitUpdatePayload.expiry_date = newExpiryDate;
@@ -630,7 +640,7 @@ export default function TermsConditionsPage() {
             water_source: applicationData.water_source || 'other',
             purpose: applicationData.water_purpose || 'other',
             water_allowance: resolvedVolumeM3 > 0 ? resolvedVolumeM3 : (applicationData.estimated_usage_volume || 0),
-            allowance_unit: applicationData.usage_unit || 'm³/year',
+            allowance_unit: resolvedAllowanceUnit || 'm³/year',
             issuing_authority: 'Rwanda Water Resources Board',
             issued_date: newIssuedDate,
             expiry_date: newExpiryDate || computeExpiryDateOnly(resolvedDurationYearsGlobal),
@@ -729,7 +739,7 @@ export default function TermsConditionsPage() {
           water_source: applicationData.water_source,
           purpose: applicationData.water_purpose,
           water_allowance: resolvedVolumeM3,
-          allowance_unit: applicationData.usage_unit || 'm³',
+          allowance_unit: resolvedAllowanceUnit || 'm³',
           issuing_authority: 'Rwanda Water Resources Board',
           issued_date: newIssuedDate,
           expiry_date: newExpiryDate,
@@ -790,7 +800,7 @@ export default function TermsConditionsPage() {
           water_source: applicationData.water_source,
           purpose: applicationData.water_purpose,
           water_allowance: resolvedVolumeM3,
-          allowance_unit: applicationData.usage_unit || 'm³',
+          allowance_unit: resolvedAllowanceUnit || 'm³',
           issuing_authority: 'Rwanda Water Resources Board',
           issued_date: newIssuedDate,
           expiry_date: newExpiryDate,

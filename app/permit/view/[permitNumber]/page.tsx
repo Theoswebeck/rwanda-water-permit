@@ -206,18 +206,25 @@ export default async function PublicPermitViewPage({
   })();
 
   const concessionAreaValue = (() => {
-    const applicationArea = parsePositiveNumber(application?.concession_area);
-    if (applicationArea) return `${applicationArea.toLocaleString()} ha`;
+    const dbArea = parsePositiveNumber(application?.concession_area);
+    if (dbArea) return `${dbArea.toLocaleString()} ha`;
 
-    const areaOrVolumeRaw = typeof permit.water_allowance === "string" ? permit.water_allowance.trim() : "";
-    const parsedArea = parsePositiveNumber(permit.water_allowance);
-    if (parsedArea) {
-      const unit = typeof permit.allowance_unit === "string" ? permit.allowance_unit.trim() : "";
-      return `${parsedArea.toLocaleString()}${unit ? ` ${unit}` : ""}`;
+    const notesArea = parsePositiveNumber(internalNotes?.concessionArea);
+    if (notesArea) return `${notesArea.toLocaleString()} ha`;
+
+    const fishLakeHa = parsePositiveNumber(internalNotes?.fishLakeAreaHectares);
+    if (fishLakeHa) return `${fishLakeHa.toLocaleString()} ha`;
+
+    const recreationM2 = parsePositiveNumber(internalNotes?.recreationConcessionAreaM2);
+    if (recreationM2) return `${(recreationM2 / 10000).toLocaleString()} ha`;
+
+    if (permit.source === "permit_registry") {
+      const registryRaw = typeof permit.water_allowance === "string" ? permit.water_allowance.trim() : "";
+      if (registryRaw && registryRaw !== "0" && registryRaw !== "0.0" && registryRaw !== "0.00") {
+        return registryRaw;
+      }
     }
-    if (areaOrVolumeRaw && areaOrVolumeRaw !== "0" && areaOrVolumeRaw !== "0.0" && areaOrVolumeRaw !== "0.00") {
-      return areaOrVolumeRaw;
-    }
+
     return "N/A";
   })();
 

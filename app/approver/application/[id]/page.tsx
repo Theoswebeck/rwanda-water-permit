@@ -456,10 +456,15 @@ export default function ApproverApplicationPage() {
         if (typeof currentRequestedDuration === 'number' && currentRequestedDuration >= 1 && currentRequestedDuration <= 15) {
           setRequestedDurationYears(currentRequestedDuration);
         }
-        const currentRequestedVolume =
-          formData.waterAbstractionDetails?.[0]?.maxAverageYearly
-          || appData.max_yearly_volume_m3
-          || appData.estimated_usage_volume;
+        const isConcessionApp = determineReportType(
+          (appData as any)?.intended_activities as string[] | null,
+          appData.water_purpose || null
+        ) === "concession";
+        const currentRequestedVolume = isConcessionApp
+          ? ((appData as any).concession_area || formData.concessionArea || formData.fishLakeAreaHectares)
+          : (formData.waterAbstractionDetails?.[0]?.maxAverageYearly
+            || appData.max_yearly_volume_m3
+            || appData.estimated_usage_volume);
         if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume)) {
           setRequestedVolumeM3(currentRequestedVolume);
         }
@@ -989,6 +994,7 @@ export default function ApproverApplicationPage() {
                           recommendedDurationYears={recommendedDurationYears}
                           recommendedVolumeM3={recommendedVolumeM3}
                           readOnly={true}
+                          isConcession={rt === "concession"}
                         />
                         
                         {/* Assessment Report Form */}

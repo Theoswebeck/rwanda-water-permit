@@ -32,6 +32,9 @@ interface AssessorRecommendationsProps {
   readOnly?: boolean;
   durationSaving?: boolean;
   volumeSaving?: boolean;
+
+  /** When true, show "Surface concession area" labels instead of volume labels. */
+  isConcession?: boolean;
 }
 
 export function AssessorRecommendations({
@@ -46,15 +49,17 @@ export function AssessorRecommendations({
   readOnly = false,
   durationSaving = false,
   volumeSaving = false,
+  isConcession = false,
 }: AssessorRecommendationsProps) {
   const [localVolume, setLocalVolume] = useState<string>(
     recommendedVolumeM3 != null ? String(recommendedVolumeM3) : ""
   );
 
-  // Format volume with appropriate units
   const formatVolume = (vol: number | null | undefined): string => {
     if (vol == null) return "Not specified";
-    return `${vol.toLocaleString()} m³/year`;
+    return isConcession
+      ? `${vol.toLocaleString()} ha`
+      : `${vol.toLocaleString()} m³/year`;
   };
 
   // Format duration
@@ -151,11 +156,11 @@ export function AssessorRecommendations({
             </div>
           </div>
 
-          {/* Row 2: Current requested water output volume */}
+          {/* Row 2: Current requested water output volume / surface concession area */}
           <div className={`grid grid-cols-3${showBaselineRows ? " border-b" : ""}`}>
             <div className="px-4 py-4 flex items-center">
               <Label className="text-sm font-medium">
-                Water Output Volume
+                {isConcession ? "Surface Concession Area" : "Water Output Volume"}
               </Label>
             </div>
             <div className="px-4 py-4 flex items-center justify-center border-l bg-muted/20">
@@ -183,11 +188,11 @@ export function AssessorRecommendations({
                           handleVolumeBlur();
                         }
                       }}
-                      placeholder="Enter volume"
+                      placeholder={isConcession ? "Enter area" : "Enter volume"}
                       className="w-32 bg-white"
                       disabled={volumeSaving}
                     />
-                    <span className="text-sm text-muted-foreground">m³/year</span>
+                    <span className="text-sm text-muted-foreground">{isConcession ? "ha" : "m³/year"}</span>
                   </div>
                   {volumeSaving && (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -221,7 +226,7 @@ export function AssessorRecommendations({
               <div className="grid grid-cols-3">
                 <div className="px-4 py-4 flex items-center">
                   <Label className="text-sm font-medium text-muted-foreground">
-                    Original Baseline - Water Output Volume
+                    {isConcession ? "Original Baseline - Surface Concession Area" : "Original Baseline - Water Output Volume"}
                   </Label>
                 </div>
                 <div className="px-4 py-4 flex items-center justify-center border-l bg-muted/10">
