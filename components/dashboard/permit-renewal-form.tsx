@@ -727,15 +727,48 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         return data as WaterUseReport;
       }
 
-      const { data, error } = await supabase
+      const { data: insertedData, error: insertError } = await supabase
         .from("water_use_reports")
-        .upsert(payload, { onConflict: "permit_id,reporting_year" })
+        .insert(payload)
         .select("*")
         .single();
-      if (error) { console.error("❌ Failed to upsert water use report:", error); throw error; }
-      console.log("✅ Water use report upserted:", data?.id);
-      setExistingWaterUseReport(data as WaterUseReport);
-      return data as WaterUseReport;
+
+      if (!insertError) {
+        console.log("✅ Water use report inserted:", insertedData?.id);
+        setExistingWaterUseReport(insertedData as WaterUseReport);
+        return insertedData as WaterUseReport;
+      }
+
+      // Self-hosted client does not support `.upsert()`. If a unique conflict occurs,
+      // update the existing report identified by permit + reporting year.
+      const insertErrorMessage = insertError instanceof Error
+        ? insertError.message
+        : String((insertError as { message?: unknown } | null)?.message || "");
+      const isUniqueConflict =
+        insertErrorMessage.includes("duplicate key value") ||
+        insertErrorMessage.includes("water_use_reports_unique_permit_year");
+
+      if (!isUniqueConflict) {
+        console.error("❌ Failed to insert water use report:", insertError);
+        throw insertError;
+      }
+
+      const { data: conflictedData, error: conflictUpdateError } = await supabase
+        .from("water_use_reports")
+        .update(payload)
+        .eq("permit_id", payload.permit_id)
+        .eq("reporting_year", payload.reporting_year)
+        .select("*")
+        .single();
+
+      if (conflictUpdateError) {
+        console.error("❌ Failed to update conflicted water use report:", conflictUpdateError);
+        throw conflictUpdateError;
+      }
+
+      console.log("✅ Water use report updated after unique conflict:", conflictedData?.id);
+      setExistingWaterUseReport(conflictedData as WaterUseReport);
+      return conflictedData as WaterUseReport;
     },
     [userData?.id, permit.id, permit.application_id, permit.application?.applicant?.id, currentApplication?.applicant_id, reportYear, waterUseTemplate, existingWaterUseReport?.id, existingWaterUseReport?.status, existingWaterUseReport?.submitted_at],
   );

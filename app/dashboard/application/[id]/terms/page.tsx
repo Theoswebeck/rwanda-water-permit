@@ -1008,11 +1008,53 @@ export default function TermsConditionsPage() {
 
   const defaultTab = visibleLanguageGroups.length > 0 ? visibleLanguageGroups[0].key : "en";
 
+  const parseSectionHeading = (title: string) => {
+    const parts = title.split("—").map((segment) => segment.trim()).filter(Boolean);
+    if (parts.length < 2) {
+      return {
+        partHeading: null as string | null,
+        articleHeading: title,
+      };
+    }
+
+    const [candidatePart, ...rest] = parts;
+    const isPartHeading = /^(PART|IGICE)\b/i.test(candidatePart);
+    if (!isPartHeading || rest.length === 0) {
+      return {
+        partHeading: null as string | null,
+        articleHeading: title,
+      };
+    }
+
+    return {
+      partHeading: candidatePart,
+      articleHeading: rest.join(" — "),
+    };
+  };
+
   const renderTermsSections = (sections: typeof visibleLanguageGroups[number]["sections"]) => (
     <div className="space-y-6 py-4">
       {sections.map((section, idx) => (
         <div key={`${section.title}-${idx}`}>
-          <h4 className="mb-3 text-base font-semibold text-foreground">{section.title}</h4>
+          {(() => {
+            const { partHeading, articleHeading } = parseSectionHeading(section.title);
+            const previousPartHeading =
+              idx > 0 ? parseSectionHeading(sections[idx - 1].title).partHeading : null;
+            const showPartHeading = Boolean(partHeading && partHeading !== previousPartHeading);
+
+            if (!partHeading) {
+              return <h4 className="mb-3 text-base font-semibold text-foreground">{section.title}</h4>;
+            }
+
+            return (
+              <div className="mb-3 space-y-1.5">
+                {showPartHeading && (
+                  <h4 className="text-base font-semibold text-foreground">{partHeading}</h4>
+                )}
+                <h5 className="text-base font-semibold text-foreground">{articleHeading}</h5>
+              </div>
+            );
+          })()}
           <div className="space-y-2.5">
             {section.paragraphs.map((p, pIdx) => (
               <p key={pIdx} className="text-sm leading-relaxed text-muted-foreground">

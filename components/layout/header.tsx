@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Menu, X, User } from "lucide-react";
@@ -9,16 +9,23 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { LanguageSwitcher } from "@/components/shared/language-switcher";
+import {
+  getPreferredLanguage,
+  setPreferredLanguage,
+  subscribeToLanguageChanges,
+  type AppLanguage,
+} from "@/lib/i18n/language";
 
 const navItems = [
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
-  { label: "Water Use Dashboard", href: "/water-use-dashboard" },
   { label: "Resources", href: "/resources" },
   { label: "Contact", href: "https://rwandawaterpermit.com/contact" },
 ];
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("en");
   const pathname = usePathname();
   const { userProfile, isAuthenticated } = useAuth();
   const isApplyPage = pathname === "/apply";
@@ -51,6 +58,11 @@ export function Header() {
     (isAuthenticated &&
       !!userProfile &&
       ["assessor", "reviewer", "verifier", "approver"].includes(userProfile.role));
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
 
   return (
     <header className="py-4 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
@@ -129,11 +141,14 @@ export function Header() {
 
           {/* CTA Button */}
           <motion.div 
-            className="hidden md:block"
+            className="hidden md:flex md:items-center md:gap-3"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.4 }}
           >
+            {isDashboardPage && (
+              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            )}
             {shouldShowMinimalHeaderForStaff ? (
               <Link href="/dashboard/profile">
                 <Avatar className="h-10 w-10 cursor-pointer hover:ring-2 hover:ring-primary transition-all">
@@ -311,6 +326,12 @@ export function Header() {
                     )}
                   </div>
                 </nav>
+
+                {isDashboardPage && (
+                  <div className="mt-6 border-t pt-4">
+                    <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+                  </div>
+                )}
               </SheetContent>
             </Sheet>
           )}

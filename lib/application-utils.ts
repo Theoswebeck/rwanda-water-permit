@@ -397,6 +397,11 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       // Water abstraction point (single point for abstraction activities)
       waterSourceLatitude: formData.waterSourceLatitude,
       waterSourceLongitude: formData.waterSourceLongitude,
+      // Water activity area polygons (concession activities like fish farming/recreation)
+      // Persist explicitly so submitted applications can be restored without relying only on geometry.
+      waterSourcePolygons: formData.waterSourcePolygons,
+      // Legacy back-compat key kept for older readers.
+      waterSourceCoordinates: formData.waterSourceCoordinates,
       
       // Reliability
       waterReliability: formData.waterReliability,

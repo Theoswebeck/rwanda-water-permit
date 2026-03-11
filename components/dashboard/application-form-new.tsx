@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { Fragment, cloneElement, isValidElement, useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -8,34 +8,34 @@ import { useAuth } from "@/contexts/AuthContext";
 import { 
   Card,
   CardContent,
-  CardDescription,
+  CardDescription as BaseCardDescription,
   CardHeader,
-  CardTitle 
+  CardTitle as BaseCardTitle 
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger as BaseTabsTrigger } from "@/components/ui/tabs";
+import { Input as BaseInput } from "@/components/ui/input";
+import { Label as BaseLabel } from "@/components/ui/label";
+import { Button as BaseButton } from "@/components/ui/button";
+import { Textarea as BaseTextarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   Select, 
   SelectContent, 
-  SelectItem, 
+  SelectItem as BaseSelectItem, 
   SelectTrigger, 
-  SelectValue 
+  SelectValue as BaseSelectValue 
 } from "@/components/ui/select";
 import { 
   Form,
   FormControl,
-  FormDescription,
+  FormDescription as BaseFormDescription,
   FormField,
   FormItem,
-  FormLabel,
-  FormMessage
+  FormLabel as BaseFormLabel,
+  useFormField
 } from "@/components/ui/form";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription as BaseAlertDescription, AlertTitle as BaseAlertTitle } from "@/components/ui/alert";
 import { Upload, X, FileText, FileEdit, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2, Map, Edit3 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -51,6 +51,47 @@ import { validatePolygons, type ValidationResponse } from '@/lib/polygonValidati
 import { isValidCoordinate, isWithinRwanda } from "@/lib/geoUtils";
 import { getAnnexRequirementForActivity, getAnnexRequirementsForSelection } from "@/lib/annex-requirements";
 import { ModificationBadge, ModificationChangesSummary } from "@/components/dashboard/modified-field-marker";
+import { LanguageSwitcher } from "@/components/shared/language-switcher";
+import {
+  getPreferredLanguage,
+  setPreferredLanguage,
+  subscribeToLanguageChanges,
+  type AppLanguage,
+} from "@/lib/i18n/language";
+import enMessages from "@/messages/en.json";
+import rwMessages from "@/messages/rw.json";
+
+const getTranslationMaps = (locale: AppLanguage) => {
+  const source = locale === "rw" ? rwMessages : enMessages;
+  const appForm = source.applicationForm ?? {};
+  return {
+    literal: (appForm.literal ?? {}) as Record<string, string>,
+    words: (appForm.words ?? {}) as Record<string, string>,
+  };
+};
+
+const translateWordByWord = (text: string, words: Record<string, string>) =>
+  text.replace(/\b[A-Za-z][A-Za-z/-]*\b/g, (word) => words[word] ?? word);
+
+const localizeText = (
+  value: string,
+  locale: AppLanguage,
+  literalMap: Record<string, string>,
+  wordMap: Record<string, string>
+) => {
+  if (locale === "en" || !value) return value;
+  const direct = literalMap[value];
+  if (direct) return direct;
+
+  const trimmed = value.trim();
+  if (trimmed && literalMap[trimmed]) {
+    const prefix = value.slice(0, value.indexOf(trimmed));
+    const suffix = value.slice(value.indexOf(trimmed) + trimmed.length);
+    return `${prefix}${literalMap[trimmed]}${suffix}`;
+  }
+
+  return translateWordByWord(value, wordMap);
+};
 
 // Lazy-load heavy tab components to avoid module-eval crashes on pages that never render them (e.g. view-only / terms acceptance).
 const PaymentTab = dynamic(
@@ -799,6 +840,120 @@ export function ApplicationForm({
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
+  const [locale, setLocale] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLocale(getPreferredLanguage());
+  }, []);
+
+  useEffect(() => {
+    return subscribeToLanguageChanges((language) => setLocale(language));
+  }, []);
+
+  const translationMaps = useMemo(() => getTranslationMaps(locale), [locale]);
+  const tx = useCallback(
+    (value: string) => localizeText(value, locale, translationMaps.literal, translationMaps.words),
+    [locale, translationMaps.literal, translationMaps.words]
+  );
+  const localizedFieldLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(FIELD_LABELS).map(([field, label]) => [field, tx(label)])
+      ) as Record<string, string>,
+    [tx]
+  );
+
+  const localizeNode = useCallback(
+    (node: React.ReactNode): React.ReactNode => {
+      if (typeof node === "string") return tx(node);
+      if (Array.isArray(node)) return node.map((child, idx) => <Fragment key={idx}>{localizeNode(child)}</Fragment>);
+      if (!node || typeof node !== "object") return node;
+      if (isValidElement(node)) {
+        const element = node as React.ReactElement<any>;
+        const nextProps: Record<string, unknown> = {};
+        if (typeof element.props.children !== "undefined") {
+          nextProps.children = localizeNode(element.props.children);
+        }
+        if (typeof element.props.placeholder === "string") {
+          nextProps.placeholder = tx(element.props.placeholder);
+        }
+        if (typeof element.props.title === "string") {
+          nextProps.title = tx(element.props.title);
+        }
+        if (typeof element.props["aria-label"] === "string") {
+          nextProps["aria-label"] = tx(element.props["aria-label"]);
+        }
+        return cloneElement(element, nextProps);
+      }
+      return node;
+    },
+    [tx]
+  );
+
+  const Label = ({ children, ...props }: React.ComponentProps<typeof BaseLabel>) => (
+    <BaseLabel {...props}>{localizeNode(children)}</BaseLabel>
+  );
+  const Button = ({ children, ...props }: React.ComponentProps<typeof BaseButton>) => (
+    <BaseButton {...props}>{localizeNode(children)}</BaseButton>
+  );
+  const Input = ({ placeholder, ...props }: React.ComponentProps<typeof BaseInput>) => (
+    <BaseInput {...props} placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder} />
+  );
+  const Textarea = ({ placeholder, children, ...props }: React.ComponentProps<typeof BaseTextarea>) => (
+    <BaseTextarea
+      {...props}
+      placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder}
+    >
+      {localizeNode(children)}
+    </BaseTextarea>
+  );
+  const FormLabel = ({ children, ...props }: React.ComponentProps<typeof BaseFormLabel>) => (
+    <BaseFormLabel {...props}>{localizeNode(children)}</BaseFormLabel>
+  );
+  const FormDescription = ({ children, ...props }: React.ComponentProps<typeof BaseFormDescription>) => (
+    <BaseFormDescription {...props}>{localizeNode(children)}</BaseFormDescription>
+  );
+  const CardTitle = ({ children, ...props }: React.ComponentProps<typeof BaseCardTitle>) => (
+    <BaseCardTitle {...props}>{localizeNode(children)}</BaseCardTitle>
+  );
+  const CardDescription = ({ children, ...props }: React.ComponentProps<typeof BaseCardDescription>) => (
+    <BaseCardDescription {...props}>{localizeNode(children)}</BaseCardDescription>
+  );
+  const AlertTitle = ({ children, ...props }: React.ComponentProps<typeof BaseAlertTitle>) => (
+    <BaseAlertTitle {...props}>{localizeNode(children)}</BaseAlertTitle>
+  );
+  const AlertDescription = ({ children, ...props }: React.ComponentProps<typeof BaseAlertDescription>) => (
+    <BaseAlertDescription {...props}>{localizeNode(children)}</BaseAlertDescription>
+  );
+  const TabsTrigger = ({ children, ...props }: React.ComponentProps<typeof BaseTabsTrigger>) => (
+    <BaseTabsTrigger {...props}>{localizeNode(children)}</BaseTabsTrigger>
+  );
+  const SelectItem = ({ children, ...props }: React.ComponentProps<typeof BaseSelectItem>) => (
+    <BaseSelectItem {...props}>{localizeNode(children)}</BaseSelectItem>
+  );
+  const SelectValue = ({ placeholder, ...props }: React.ComponentProps<typeof BaseSelectValue>) => (
+    <BaseSelectValue
+      {...props}
+      placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder}
+    />
+  );
+
+  const FormMessage = ({ className, ...props }: React.ComponentProps<"p">) => {
+    const { error, formMessageId } = useFormField();
+    const body = error ? String(error?.message ?? "") : props.children;
+    if (!body) return null;
+    const localizedBody = typeof body === "string" ? tx(body) : body;
+    return (
+      <p
+        data-slot="form-message"
+        id={formMessageId}
+        className={`text-destructive text-sm ${className ?? ""}`.trim()}
+        {...props}
+      >
+        {localizedBody}
+      </p>
+    );
+  };
 
   
   // ⚡ PERFORMANCE: Memoize location states to reduce re-renders
@@ -892,11 +1047,11 @@ export function ApplicationForm({
   }, [activeTab]);
 
   const tabLabels: Record<string, string> = {
-    "applicant-info": "Applicant",
-    "water-source": "Water Source",
-    "intended-activity": "Activity",
-    "land-ownership": "Land",
-    payment: "Payment",
+    "applicant-info": tx("Applicant"),
+    "water-source": tx("Water Source"),
+    "intended-activity": tx("Activity"),
+    "land-ownership": tx("Land"),
+    payment: tx("Payment"),
   };
 
   const validateAllTabsBeforeSubmit = async (): Promise<boolean> => {
@@ -919,7 +1074,9 @@ export function ApplicationForm({
       if (!ok) {
         setActiveTab(tab);
         // Preserve the more specific validator error when present.
-        setValidationError((prev) => prev || `Please complete all required fields in ${tabLabels[tab] || 'this'} section before submitting.`);
+        setValidationError((prev) =>
+          prev || tx(`Please complete all required fields in ${tabLabels[tab] || "this"} section before submitting.`)
+        );
         window.scrollTo({ top: 0, behavior: 'smooth' });
         setTimeout(() => setValidationError(null), 5000);
         return false;
@@ -1176,15 +1333,22 @@ export function ApplicationForm({
 
   // Helper function to get input props based on readOnly state
   const getInputProps = (baseProps: any = {}) => {
+    const localizedProps = {
+      ...baseProps,
+      placeholder:
+        typeof baseProps.placeholder === "string"
+          ? tx(baseProps.placeholder)
+          : baseProps.placeholder,
+    };
     if (readOnly) {
       return {
-        ...baseProps,
+        ...localizedProps,
         readOnly: true,
         disabled: true,
         className: `${baseProps.className || ''} bg-gray-50 border-gray-200 cursor-default`.trim()
       };
     }
-    return baseProps;
+    return localizedProps;
   };
 
   // Helper function to get select props based on readOnly state
@@ -2790,12 +2954,12 @@ export function ApplicationForm({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-blue-900">
               <FileText className="h-5 w-5" />
-              WATER USE PERMIT APPLICATION FORM
+              {tx("WATER USE PERMIT APPLICATION FORM")}
             </CardTitle>
             <CardDescription className="space-y-2 text-blue-800">
-              <p><strong>Contact Email:</strong> info@rwb.rw</p>
-              <p><strong>Legal Reference:</strong> REFER TO THE LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA</p>
-              <p><strong>Ministerial Order:</strong> MINISTERIAL ORDER NO 001/MOE/24 OF 02/04/2024 RELATING TO WATER RESOURCES USE PERMIT</p>
+              <p><strong>{tx("Contact Email:")}</strong> info@rwb.rw</p>
+              <p><strong>{tx("Legal Reference:")}</strong> {tx("REFER TO THE LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA")}</p>
+              <p><strong>{tx("Ministerial Order:")}</strong> {tx("MINISTERIAL ORDER NO 001/MOE/24 OF 02/04/2024 RELATING TO WATER RESOURCES USE PERMIT")}</p>
             </CardDescription>
           </CardHeader>
         </Card>
@@ -2804,16 +2968,19 @@ export function ApplicationForm({
       <Card className="border-gray-200 dark:border-gray-800">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Water Permit Application Form</CardTitle>
+            <CardTitle>{tx("Water Permit Application Form")}</CardTitle>
             {/* Show modification badge for staff viewing modification applications */}
             {isStaffView && modificationChanges && Object.keys(modificationChanges).length > 0 && (
               <ModificationBadge changesCount={Object.keys(modificationChanges).length} />
             )}
           </div>
+          <div className="flex items-center justify-end">
+            <LanguageSwitcher language={locale} onChange={setPreferredLanguage} compact />
+          </div>
           <CardDescription>
             {readOnly 
-              ? "Review the submitted water permit application details below."
-              : "Fill out all required fields to submit your water permit application. Fields marked with * are required."
+              ? tx("Review the submitted water permit application details below.")
+              : tx("Fill out all required fields to submit your water permit application. Fields marked with * are required.")
             }
           </CardDescription>
           
@@ -2822,7 +2989,7 @@ export function ApplicationForm({
             <div className="flex items-center gap-2 mt-4">
               <div className="flex items-center gap-2 text-blue-600 text-sm">
                 <Save className="h-4 w-4" />
-                💾 Manual save only - use "Save as Draft" button or "Next" to save progress
+                {tx("💾 Manual save only - use \"Save as Draft\" button or \"Next\" to save progress")}
               </div>
             </div>
           )}
@@ -2833,7 +3000,7 @@ export function ApplicationForm({
               <Alert className="mb-4 border-red-200 bg-red-50">
                 <AlertCircle className="h-4 w-4 text-red-600" />
                 <AlertDescription className="text-red-800">
-                  {validationError}
+                  {validationError ? tx(validationError) : validationError}
                 </AlertDescription>
               </Alert>
             )}
@@ -2842,7 +3009,7 @@ export function ApplicationForm({
             {isStaffView && modificationChanges && Object.keys(modificationChanges).length > 0 && (
               <ModificationChangesSummary 
                 changes={modificationChanges} 
-                fieldLabels={FIELD_LABELS}
+                fieldLabels={localizedFieldLabels}
               />
             )}
 
@@ -2850,7 +3017,7 @@ export function ApplicationForm({
             {isModification && isStaffView && currentApplication?.modification_reason && (
               <Alert className="border-blue-200 bg-blue-50">
                 <FileText className="h-4 w-4 text-blue-600" />
-                <AlertTitle className="text-blue-800 font-semibold">Reason for Modification</AlertTitle>
+                <AlertTitle className="text-blue-800 font-semibold">{tx("Reason for Modification")}</AlertTitle>
                 <AlertDescription className="text-blue-700 whitespace-pre-line mt-1">
                   {currentApplication.modification_reason}
                 </AlertDescription>
@@ -2864,12 +3031,12 @@ export function ApplicationForm({
                   <div className="flex items-center gap-2">
                     <FileEdit className="h-5 w-5 text-amber-600" />
                     <h3 className="text-base font-semibold text-amber-800">
-                      Reason for Modification
+                      {tx("Reason for Modification")}
                     </h3>
-                    <span className="text-xs text-red-500 font-medium">* Required</span>
+                    <span className="text-xs text-red-500 font-medium">{tx("* Required")}</span>
                   </div>
                   <p className="text-sm text-amber-700">
-                    Please provide a clear justification for why you are requesting this permit modification. This will be reviewed by RWB staff.
+                    {tx("Please provide a clear justification for why you are requesting this permit modification. This will be reviewed by RWB staff.")}
                   </p>
                   <FormField
                     control={form.control}
@@ -2879,7 +3046,7 @@ export function ApplicationForm({
                         <FormControl>
                           <Textarea
                             {...field}
-                            placeholder="Explain the reason for your modification request (e.g., change in water usage requirements, updated project scope, change of location, etc.)"
+                            placeholder={tx("Explain the reason for your modification request (e.g., change in water usage requirements, updated project scope, change of location, etc.)")}
                             className="min-h-[100px] bg-white border-amber-200 focus:border-amber-400 focus:ring-amber-400"
                             disabled={readOnly}
                           />
@@ -2900,25 +3067,25 @@ export function ApplicationForm({
                 <TabsList className={`grid w-full ${shouldShowPaymentTab ? 'grid-cols-5 md:grid-cols-5' : 'grid-cols-4 md:grid-cols-4'}`}>
                   <TabsTrigger value="applicant-info" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
-                    <span className="hidden sm:inline">Applicant</span>
+                    <span className="hidden sm:inline">{tx("Applicant")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="intended-activity" className="flex items-center gap-1 text-xs">
                     <Factory className="h-4 w-4" />
-                    <span className="hidden sm:inline">Activity</span>
+                    <span className="hidden sm:inline">{tx("Activity")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="water-source" className="flex items-center gap-1 text-xs">
                     <Droplet className="h-4 w-4" />
-                    <span className="hidden sm:inline">Water Source</span>
+                    <span className="hidden sm:inline">{tx("Water Source")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="land-ownership" className="flex items-center gap-1 text-xs">
                     <Globe className="h-4 w-4" />
-                    <span className="hidden sm:inline">Land</span>
+                    <span className="hidden sm:inline">{tx("Land")}</span>
                   </TabsTrigger>
                   {/* Show payment tab for editable applicant payment flow, and read-only payment details for applicant/staff views. */}
                   {shouldShowPaymentTab && (
                     <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
                       <CreditCard className="h-4 w-4" />
-                      <span className="hidden sm:inline">Payment</span>
+                      <span className="hidden sm:inline">{tx("Payment")}</span>
                     </TabsTrigger>
                   )}
                 </TabsList>
@@ -2928,10 +3095,10 @@ export function ApplicationForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <User className="h-5 w-5" />
-                      Identification and Address of the Applicant
+                      {tx("Identification and Address of the Applicant")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Provide complete identification and address information for the applicant.
+                      {tx("Provide complete identification and address information for the applicant.")}
                     </p>
                   </div>
 
@@ -2942,16 +3109,16 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          1. Full Name of the Applicant *
+                          {tx("1. Full Name of the Applicant *")}
                           <span className="text-sm font-normal text-muted-foreground block">
-                            (Individual, Company, Cooperative, Organization, etc)
+                            {tx("(Individual, Company, Cooperative, Organization, etc)")}
                           </span>
                         </FormLabel>
                         <FormControl>
                           <Input {...field} disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
                         </FormControl>
                         <FormDescription className="text-xs text-gray-500">
-                          This information is pulled from your account profile and cannot be edited here.
+                          {tx("This information is pulled from your account profile and cannot be edited here.")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -2965,26 +3132,26 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          2. Category of the Applicant *
+                          {tx("2. Category of the Applicant *")}
                         </FormLabel>
                         <FormControl>
                           <Select onValueChange={field.onChange} value={field.value || ""} disabled>
                             <SelectTrigger className="bg-gray-100 border-gray-300 cursor-not-allowed">
-                              <SelectValue placeholder="Category is set from your account" />
+                              <SelectValue placeholder={tx("Category is set from your account")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="individual">Individual</SelectItem>
-                              <SelectItem value="company">Company</SelectItem>
-                              <SelectItem value="cooperative">Cooperative</SelectItem>
-                              <SelectItem value="organization">Organization</SelectItem>
-                              <SelectItem value="institution">Institution</SelectItem>
-                              <SelectItem value="ngo_association">NGO / Association</SelectItem>
-                              <SelectItem value="other">Other (specify)</SelectItem>
+                              <SelectItem value="individual">{tx("Individual")}</SelectItem>
+                              <SelectItem value="company">{tx("Company")}</SelectItem>
+                              <SelectItem value="cooperative">{tx("Cooperative")}</SelectItem>
+                              <SelectItem value="organization">{tx("Organization")}</SelectItem>
+                              <SelectItem value="institution">{tx("Institution")}</SelectItem>
+                              <SelectItem value="ngo_association">{tx("NGO / Association")}</SelectItem>
+                              <SelectItem value="other">{tx("Other (specify)")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
                         <FormDescription className="text-xs text-gray-500">
-                          This information is pulled from your account profile and cannot be edited here.
+                          {tx("This information is pulled from your account profile and cannot be edited here.")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -2998,7 +3165,7 @@ export function ApplicationForm({
                       name="categoryApplicantOther"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Please specify category</FormLabel>
+                          <FormLabel>{tx("Please specify category")}</FormLabel>
                           <FormControl>
                             <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Specify category" })} />
                           </FormControl>
@@ -3017,9 +3184,9 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-base font-medium">
-                              3. Name of the Representative *
+                              {tx("3. Name of the Representative *")}
                               <span className="text-sm font-normal text-muted-foreground block">
-                                (for Company, Cooperative, Organization, Institution)
+                                {tx("(for Company, Cooperative, Organization, Institution)")}
                               </span>
                             </FormLabel>
                             <FormControl>
@@ -3036,7 +3203,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-base font-medium">
-                              3a. Representative Position / Title *
+                              {tx("3a. Representative Position / Title *")}
                             </FormLabel>
                             <FormControl>
                               <Input
@@ -3054,11 +3221,11 @@ export function ApplicationForm({
                   {/* 4. Documents */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">
-                      4. Documents *
+                      {tx("4. Documents *")}
                     </Label>
                     <div className="text-sm text-muted-foreground space-y-1">
-                      <p>• For Individual: copy of National ID (NID)</p>
-                      <p>• For Company/Cooperative/Organization: copy of registration certificate</p>
+                      <p>{tx("• For Individual: copy of National ID (NID)")}</p>
+                      <p>{tx("• For Company/Cooperative/Organization: copy of registration certificate")}</p>
                     </div>
                     
                     <FormField
@@ -3084,11 +3251,11 @@ export function ApplicationForm({
                                     onClick={readOnly ? undefined : () => fileInputRefs.identificationDoc.current?.click()}
                                     disabled={readOnly}
                                   >
-                                    Choose File
+                                    {tx("Choose File")}
                                   </Button>
                                 </div>
                                 <p className="text-xs text-gray-500">
-                                  PDF, JPG, PNG, DOC (max 10MB)
+                                  {tx("PDF, JPG, PNG, DOC (max 10MB)")}
                                 </p>
                                 {/* Show newly uploaded file */}
                                 {files.identificationDoc && (
@@ -3126,9 +3293,9 @@ export function ApplicationForm({
                                         // Fallback: extract filename from URL
                                         try {
                                           const urlPath = new URL(uploadedFileUrls.identificationDoc).pathname;
-                                          return urlPath.split('/').pop() || 'Identification document';
+                                          return urlPath.split('/').pop() || tx("Identification document");
                                         } catch {
-                                          return 'Identification document';
+                                          return tx("Identification document");
                                         }
                                       })()}
                                     </a>
@@ -3160,7 +3327,7 @@ export function ApplicationForm({
                   {/* 5. Office Address */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">
-                      5. Office Address * (Province, District, Sector, Cell, Village)
+                      {tx("5. Office Address * (Province, District, Sector, Cell, Village)")}
                     </Label>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3169,7 +3336,7 @@ export function ApplicationForm({
                         name="officeProvince"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Province *</FormLabel>
+                            <FormLabel>{tx("Province *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3189,7 +3356,7 @@ export function ApplicationForm({
                                 disabled={readOnly}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200 focus:border-blue-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder="Select province" />
+                                  <SelectValue placeholder={tx("Select province")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getFormattedProvinceOptions().map((province) => (
@@ -3210,7 +3377,7 @@ export function ApplicationForm({
                         name="officeDistrict"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>District *</FormLabel>
+                            <FormLabel>{tx("District *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3227,7 +3394,7 @@ export function ApplicationForm({
                                 disabled={readOnly || !selectedOfficeProvince}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 focus:border-green-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={selectedOfficeProvince ? "Select district" : "Select province first"} />
+                                  <SelectValue placeholder={selectedOfficeProvince ? tx("Select district") : tx("Select province first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getOfficeDistrictOptions().map((district) => (
@@ -3248,7 +3415,7 @@ export function ApplicationForm({
                         name="officeSector"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Sector *</FormLabel>
+                            <FormLabel>{tx("Sector *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3264,7 +3431,7 @@ export function ApplicationForm({
                                 disabled={readOnly || (!selectedOfficeDistrict && !officeDistrict)}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-purple-50 to-violet-50 border-purple-200 focus:border-purple-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={(selectedOfficeDistrict || officeDistrict) ? "Select sector" : "Select district first"} />
+                                  <SelectValue placeholder={(selectedOfficeDistrict || officeDistrict) ? tx("Select sector") : tx("Select district first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getOfficeSectorOptions().map((sector) => (
@@ -3285,7 +3452,7 @@ export function ApplicationForm({
                         name="officeCell"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Cell *</FormLabel>
+                            <FormLabel>{tx("Cell *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3302,7 +3469,7 @@ export function ApplicationForm({
                                 disabled={readOnly || (!selectedOfficeSector && !officeSector)}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200 focus:border-orange-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={(selectedOfficeSector || officeSector) ? "Select cell" : "Select sector first"} />
+                                  <SelectValue placeholder={(selectedOfficeSector || officeSector) ? tx("Select cell") : tx("Select sector first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getOfficeCellOptions().map((cell) => (
@@ -3323,7 +3490,7 @@ export function ApplicationForm({
                         name="officeVillage"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Village</FormLabel>
+                            <FormLabel>{tx("Village")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3334,7 +3501,7 @@ export function ApplicationForm({
                                 disabled={readOnly || (!selectedOfficeCell && !officeCell)}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={(selectedOfficeCell || officeCell) ? "Select village (optional)" : "Select cell first"} />
+                                  <SelectValue placeholder={(selectedOfficeCell || officeCell) ? tx("Select village (optional)") : tx("Select cell first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getOfficeVillageOptions().map((village) => (
@@ -3355,7 +3522,7 @@ export function ApplicationForm({
                   {/* 6. Contact Information */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">
-                      6. Contact Information *
+                      {tx("6. Contact Information *")}
                     </Label>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3364,7 +3531,7 @@ export function ApplicationForm({
                         name="telephoneContact"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Telephone Contact *</FormLabel>
+                            <FormLabel>{tx("Telephone Contact *")}</FormLabel>
                             <FormControl>
                               <Input {...field} disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
                             </FormControl>
@@ -3378,7 +3545,7 @@ export function ApplicationForm({
                         name="emailAddress"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Email Address *</FormLabel>
+                            <FormLabel>{tx("Email Address *")}</FormLabel>
                             <FormControl>
                               <Input {...field} type="email" disabled className="bg-gray-100 border-gray-300 cursor-not-allowed" />
                             </FormControl>
@@ -3395,10 +3562,10 @@ export function ApplicationForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <Droplet className="h-5 w-5" />
-                      Source of Water
+                      {tx("Source of Water")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Provide details about the water source you intend to use.
+                      {tx("Provide details about the water source you intend to use.")}
                     </p>
                   </div>
 
@@ -3409,20 +3576,20 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          10. Source of Water *
+                          {tx("10. Source of Water *")}
                         </FormLabel>
                         <FormControl>
                           <Select onValueChange={field.onChange} value={field.value || undefined} {...getSelectProps()}>
                             <SelectTrigger className={`bg-gradient-to-r from-blue-50 to-cyan-50 border-blue-200 focus:border-blue-400 ${readOnly ? 'cursor-default' : ''}`}>
-                              <SelectValue placeholder="Select water source type" />
+                              <SelectValue placeholder={tx("Select water source type")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="lake">Lake</SelectItem>
-                              <SelectItem value="dam">Dam</SelectItem>
-                              <SelectItem value="spring">Spring</SelectItem>
-                              <SelectItem value="borehole">Borehole</SelectItem>
-                              <SelectItem value="stream_river">Stream/River</SelectItem>
-                              <SelectItem value="other">Other (specify)</SelectItem>
+                              <SelectItem value="lake">{tx("Lake")}</SelectItem>
+                              <SelectItem value="dam">{tx("Dam")}</SelectItem>
+                              <SelectItem value="spring">{tx("Spring")}</SelectItem>
+                              <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
+                              <SelectItem value="stream_river">{tx("Stream/River")}</SelectItem>
+                              <SelectItem value="other">{tx("Other (specify)")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -3438,9 +3605,9 @@ export function ApplicationForm({
                       name="waterSourceOther"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Please specify water source</FormLabel>
+                          <FormLabel>{tx("Please specify water source")}</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="Specify water source" disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
+                            <Input {...field} placeholder={tx("Specify water source")} disabled={readOnly} readOnly={readOnly} className={readOnly ? "bg-gray-50 cursor-default opacity-60" : ""} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -3455,7 +3622,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          11. Name of the source of water *
+                          {tx("11. Name of the source of water *")}
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" })} />
@@ -3472,7 +3639,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          12. Tributary to (main river/lake)
+                          {tx("12. Tributary to (main river/lake)")}
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter main river/lake (if applicable)" })} />
@@ -3485,7 +3652,7 @@ export function ApplicationForm({
                   {/* 13. Location of water source */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">
-                      13. Location of water source * (Province, District, Sector, Cell, Village)
+                      {tx("13. Location of water source * (Province, District, Sector, Cell, Village)")}
                     </Label>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3494,7 +3661,7 @@ export function ApplicationForm({
                         name="waterSourceProvince"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Province *</FormLabel>
+                            <FormLabel>{tx("Province *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3513,7 +3680,7 @@ export function ApplicationForm({
                                 disabled={readOnly}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder="Select province" />
+                                  <SelectValue placeholder={tx("Select province")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getFormattedProvinceOptions().map((province) => (
@@ -3534,7 +3701,7 @@ export function ApplicationForm({
                         name="waterSourceDistrict"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>District *</FormLabel>
+                            <FormLabel>{tx("District *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3551,7 +3718,7 @@ export function ApplicationForm({
                                 disabled={readOnly || !selectedWaterSourceProvince}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={selectedWaterSourceProvince ? "Select district" : "Select province first"} />
+                                  <SelectValue placeholder={selectedWaterSourceProvince ? tx("Select district") : tx("Select province first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getWaterSourceDistrictOptions().map((district) => (
@@ -3572,7 +3739,7 @@ export function ApplicationForm({
                         name="waterSourceSector"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Sector *</FormLabel>
+                            <FormLabel>{tx("Sector *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3587,7 +3754,7 @@ export function ApplicationForm({
                                 disabled={readOnly || !selectedWaterSourceDistrict}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={selectedWaterSourceDistrict ? "Select sector" : "Select district first"} />
+                                  <SelectValue placeholder={selectedWaterSourceDistrict ? tx("Select sector") : tx("Select district first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getWaterSourceSectorOptions().map((sector) => (
@@ -3608,7 +3775,7 @@ export function ApplicationForm({
                         name="waterSourceCell"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Cell *</FormLabel>
+                            <FormLabel>{tx("Cell *")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3623,7 +3790,7 @@ export function ApplicationForm({
                                 disabled={readOnly || !selectedWaterSourceSector}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={selectedWaterSourceSector ? "Select cell" : "Select sector first"} />
+                                  <SelectValue placeholder={selectedWaterSourceSector ? tx("Select cell") : tx("Select sector first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getWaterSourceCellOptions().map((cell) => (
@@ -3644,7 +3811,7 @@ export function ApplicationForm({
                         name="waterSourceVillage"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Village</FormLabel>
+                            <FormLabel>{tx("Village")}</FormLabel>
                             <FormControl>
                               <Select 
                                 onValueChange={readOnly ? undefined : (value) => {
@@ -3655,7 +3822,7 @@ export function ApplicationForm({
                                 disabled={readOnly || (!selectedWaterSourceCell && !waterSourceCell)}
                               >
                                 <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={(selectedWaterSourceCell || waterSourceCell) ? "Select village (optional)" : "Select cell first"} />
+                                  <SelectValue placeholder={(selectedWaterSourceCell || waterSourceCell) ? tx("Select village (optional)") : tx("Select cell first")} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {getWaterSourceVillageOptions().map((village) => (
@@ -3680,17 +3847,17 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          14. Reliability of water source *
+                          {tx("14. Reliability of water source *")}
                         </FormLabel>
                         <FormControl>
                           <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
                             <SelectTrigger className={`bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200 focus:border-emerald-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                              <SelectValue placeholder="Select water source reliability" />
+                              <SelectValue placeholder={tx("Select water source reliability")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="water_always_available">Water always available</SelectItem>
-                              <SelectItem value="frequently_dry">Frequently dry</SelectItem>
-                              <SelectItem value="dry_during_certain_season">Dry during certain season</SelectItem>
+                              <SelectItem value="water_always_available">{tx("Water always available")}</SelectItem>
+                              <SelectItem value="frequently_dry">{tx("Frequently dry")}</SelectItem>
+                              <SelectItem value="dry_during_certain_season">{tx("Dry during certain season")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -3706,7 +3873,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          15. Requested Permit Duration (Years) *
+                          {tx("15. Requested Permit Duration (Years) *")}
                         </FormLabel>
                         <FormControl>
                           <Select 
@@ -3719,19 +3886,19 @@ export function ApplicationForm({
                             disabled={readOnly}
                           >
                             <SelectTrigger className={`bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 focus:border-amber-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                              <SelectValue placeholder="Select permit duration" />
+                              <SelectValue placeholder={tx("Select permit duration")} />
                             </SelectTrigger>
                             <SelectContent>
                               {Array.from({ length: 15 }, (_, i) => i + 1).map((year) => (
                                 <SelectItem key={year} value={year.toString()}>
-                                  {year} {year === 1 ? 'year' : 'years'}
+                                  {year} {year === 1 ? tx("year") : tx("years")}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         </FormControl>
                         <FormDescription className="text-xs text-gray-500">
-                          Select the duration for which you are requesting the water permit (1-15 years). This may be adjusted by the assessor based on your use case.
+                          {tx("Select the duration for which you are requesting the water permit (1-15 years). This may be adjusted by the assessor based on your use case.")}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -3746,10 +3913,10 @@ export function ApplicationForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <Factory className="h-5 w-5" />
-                      Intended Activity
+                      {tx("Intended Activity")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Specify the activities for which you intend to use water.
+                      {tx("Specify the activities for which you intend to use water.")}
                     </p>
                   </div>
 
@@ -3760,7 +3927,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          7. Intended Activity * (Select one activity)
+                          {tx("7. Intended Activity * (Select one activity)")}
                         </FormLabel>
                         <FormControl>
                           <RadioGroup
@@ -3775,21 +3942,21 @@ export function ApplicationForm({
                             }`}
                           >
                             {[
-                              { value: "coffee_washing", label: "Coffee washing" },
-                              { value: "construction_of_dam", label: "Construction of a dam" },
-                              { value: "construction_of_infrastructures", label: "Construction or installation of infrastructure" },
-                              { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
-                              { value: "fish_farming_lakes", label: "Fish farming in lakes" },
-                              { value: "fish_farming_ponds", label: "Fish farming in ponds" },
-                              { value: "gaz_extraction", label: "Gaz extraction" },
-                              { value: "industry", label: "Industry" },
-                              { value: "irrigation", label: "Irrigation" },
-                              { value: "livestock", label: "Livestock" },
-                              { value: "mining", label: "Mining" },
-                              { value: "navigation", label: "Navigation" },
-                              { value: "recreation_activities", label: "Recreational activities" },
-                              { value: "water_supply", label: "Water supply" },
-                              { value: "other", label: "Other (specify)" },
+                              { value: "coffee_washing", label: tx("Coffee washing") },
+                              { value: "construction_of_dam", label: tx("Construction of a dam") },
+                              { value: "construction_of_infrastructures", label: tx("Construction or installation of infrastructure") },
+                              { value: "electricity_generation", label: tx("Electricity generation (Hydropower)") },
+                              { value: "fish_farming_lakes", label: tx("Fish farming in lakes") },
+                              { value: "fish_farming_ponds", label: tx("Fish farming in ponds") },
+                              { value: "gaz_extraction", label: tx("Gaz extraction") },
+                              { value: "industry", label: tx("Industry") },
+                              { value: "irrigation", label: tx("Irrigation") },
+                              { value: "livestock", label: tx("Livestock") },
+                              { value: "mining", label: tx("Mining") },
+                              { value: "navigation", label: tx("Navigation") },
+                              { value: "recreation_activities", label: tx("Recreational activities") },
+                              { value: "water_supply", label: tx("Water supply") },
+                              { value: "other", label: tx("Other (specify)") },
                             ].map((opt) => (
                               <div key={opt.value} className="flex items-center gap-3">
                                 <RadioGroupItem value={opt.value} id={`activity-${opt.value}`} />
@@ -3809,18 +3976,18 @@ export function ApplicationForm({
                   {!(watchedIntendedActivities?.includes("fish_farming_lakes") || watchedIntendedActivities?.includes("recreation_activities")) && (
                   <div className="space-y-4">
                         <Label className="text-base font-medium">
-                          8. Water Abstraction Point * (LAT, LONG)
+                          {tx("8. Water Abstraction Point * (LAT, LONG)")}
                         </Label>
 
                         <Tabs defaultValue="manual" className="w-full">
                           <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="manual" className="flex items-center gap-2">
                               <Edit3 className="h-4 w-4" />
-                              Manual Entry
+                              {tx("Manual Entry")}
                             </TabsTrigger>
                             <TabsTrigger value="map" className="flex items-center gap-2">
                               <Map className="h-4 w-4" />
-                              Map View
+                              {tx("Map View")}
                             </TabsTrigger>
                           </TabsList>
 
@@ -3831,13 +3998,13 @@ export function ApplicationForm({
                                 name="waterSourceLatitude"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Latitude *</FormLabel>
+                                    <FormLabel>{tx("Latitude *")}</FormLabel>
                                     <FormControl>
                                       <Input
                                         {...field}
                                         type="text"
                                         value={(field.value ?? "").toString()}
-                                        placeholder="e.g., -1.9441"
+                                        placeholder={tx("e.g., -1.9441")}
                                         disabled={readOnly}
                                         onChange={(e) => {
                                           if (readOnly) return;
@@ -3876,13 +4043,13 @@ export function ApplicationForm({
                                 name="waterSourceLongitude"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Longitude *</FormLabel>
+                                    <FormLabel>{tx("Longitude *")}</FormLabel>
                                     <FormControl>
                                       <Input
                                         {...field}
                                         type="text"
                                         value={(field.value ?? "").toString()}
-                                        placeholder="e.g., 29.8739"
+                                        placeholder={tx("e.g., 29.8739")}
                                         disabled={readOnly}
                                         onChange={(e) => {
                                           if (readOnly) return;
@@ -3934,8 +4101,8 @@ export function ApplicationForm({
 
                         <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-950/30 dark:border-blue-800">
                           <p className="text-sm text-blue-800 dark:text-blue-200">
-                            <strong>Note:</strong> For water abstraction activities, only a single point is required (LAT/LONG).
-                            {!readOnly && " Use the Map View tab to click on the map to set your abstraction location."}
+                            <strong>{tx("Note:")}</strong> {tx("For water abstraction activities, only a single point is required (LAT/LONG).")}
+                            {!readOnly && ` ${tx("Use the Map View tab to click on the map to set your abstraction location.")}`}
                           </p>
                         </div>
                       </div>
@@ -3949,9 +4116,9 @@ export function ApplicationForm({
                         name="intendedActivityOther"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Please specify other activity</FormLabel>
+                            <FormLabel>{tx("Please specify other activity")}</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="Specify other activity" disabled={readOnly} />
+                              <Input {...field} placeholder={tx("Specify other activity")} disabled={readOnly} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -3961,10 +4128,10 @@ export function ApplicationForm({
                       {/* Other activity attachments (multiple, dynamic) */}
                       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
                         <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 text-lg border-b pb-2">
-                          Other Activity Attachments
+                          {tx("Other Activity Attachments")}
                         </h4>
                         <p className="text-sm text-muted-foreground mb-4">
-                          Upload any supporting documents for your other activity. You can add multiple attachments.
+                          {tx("Upload any supporting documents for your other activity. You can add multiple attachments.")}
                         </p>
 
                         <AdditionalDocumentsSection category="other" activityType="other" />
@@ -4017,7 +4184,7 @@ export function ApplicationForm({
                       {watchedIntendedActivities?.includes("irrigation") && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
                           <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
-                            Irrigation Details
+                            {tx("Irrigation Details")}
                           </h4>
                           
                           <div className="overflow-x-auto">

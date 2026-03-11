@@ -65,10 +65,10 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
         title: "Preamble",
         paragraphs: [
           "CONTRACT RELATING TO WATER USE PERMIT",
-          "No {{CONTRACT_NUMBER}}",
-          'This contract is made and entered into by and between the Director General of Rwanda Water Resources Board, and hereafter referred to as the ("Director General") on the one hand;',
+          "No ................../RWB/2025",
+          "This contract is made and entered into by and between the Director General of Rwanda Water Resources Board, and hereafter referred to as the (“Director General \") on the one hand;",
           "AND",
-          '“NAME OF APPLICANT”, with ID No. XXXXXXXXXXXXXXXX, and hereafter referred to as the ("Water User") on the other hand;',
+          "“NAME OF APPLICANT”, with ID No. XXXXXXXXXXXXXXXX, and hereafter referred to as the (“Water User”) on the other hand;",
           "And all these hereafter collectively referred to as Parties;",
           "Agree as follows:",
         ],
@@ -211,8 +211,8 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
 
       // Kinyarwanda version
       {
-        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI (Kinyarwanda version)",
-        paragraphs: ["No {{CONTRACT_NUMBER}}"],
+        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI",
+        paragraphs: ["No ................../RWB/2025"],
       },
       {
         title: "Ibisobanuro rusange (Preamble)",

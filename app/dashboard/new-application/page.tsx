@@ -397,6 +397,22 @@ function NewApplicationContent() {
 
   const createManualSelectedPermit = useCallback((payload: ManualPermitSelectionPayload) => {
     const nowIso = new Date().toISOString();
+    const todayDateOnly = nowIso.split("T")[0];
+    const toDateOnly = (value?: string | null): string | null => {
+      if (typeof value !== "string" || !value.trim()) return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return parsed.toISOString().split("T")[0];
+    };
+    const registryIssueDate = toDateOnly(payload.permitReference.registrySnapshot?.issued_date);
+    const registryExpiryDate = toDateOnly(payload.permitReference.registrySnapshot?.expiry_date);
+    const issuedDate = registryIssueDate ?? todayDateOnly;
+    const fallbackExpiryDate = (() => {
+      const issue = new Date(`${issuedDate}T00:00:00.000Z`);
+      issue.setUTCFullYear(issue.getUTCFullYear() + 5);
+      return issue.toISOString().split("T")[0];
+    })();
+    const expiryDate = registryExpiryDate ?? fallbackExpiryDate;
     const normalized = payload.permitReference.normalizedPermitNumber || payload.permitReference.inputPermitNumber;
     return {
       id: `manual-${normalized}`,
@@ -408,8 +424,8 @@ function NewApplicationContent() {
       water_allowance: 0,
       allowance_unit: "m³/year",
       issuing_authority: "Rwanda Water Resources Board",
-      issued_date: nowIso,
-      expiry_date: nowIso,
+      issued_date: issuedDate,
+      expiry_date: expiryDate,
       is_renewal: false,
       is_transfer: false,
       is_modification: false,

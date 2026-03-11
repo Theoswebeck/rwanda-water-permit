@@ -131,10 +131,14 @@ function WaterUseReportContent() {
   }, [existingReportForYear, permitId, reportId, router]);
 
   // Handle save as draft
-  const handleSaveAsDraft = async (formData: any) => {
-    if (!permit || !userProfile?.id) return;
+  const handleSaveAsDraft = async (
+    formData: any,
+    options: { syncUrl?: boolean; showDraftFeedback?: boolean } = {}
+  ): Promise<string | null> => {
+    if (!permit || !userProfile?.id) return null;
 
     try {
+      const { syncUrl = true, showDraftFeedback = true } = options;
       const template = getReportTemplate(permit.application?.intended_activities);
       
       const reportPayload = {
@@ -156,28 +160,34 @@ function WaterUseReportContent() {
         section9_declaration: formData.section9_declaration || null,
       };
 
+      let persistedId: string;
       if (existingReport?.id || reportId) {
+        persistedId = existingReport?.id || reportId!;
         await updateMutation.mutateAsync({
-          id: existingReport?.id || reportId!,
+          id: persistedId,
           ...reportPayload,
         });
       } else {
         const result = await createMutation.mutateAsync(reportPayload);
         setExistingReport(result);
-        // Update URL with the new report ID
-        window.history.replaceState(
-          {},
-          '',
-          `/dashboard/water-use-report?permit_id=${permitId}&id=${result.id}`
-        );
+        persistedId = result.id;
+        if (syncUrl) {
+          // Keep URL/report state in sync for draft workflows.
+          router.replace(`/dashboard/water-use-report?permit_id=${permitId}&id=${result.id}`);
+        }
       }
 
-      setDraftSaved(true);
-      setTimeout(() => setDraftSaved(false), 3000);
+      if (showDraftFeedback) {
+        setDraftSaved(true);
+        setTimeout(() => setDraftSaved(false), 3000);
+      }
+      return persistedId;
     } catch (err) {
       console.error('Error saving draft:', err);
       setError(err instanceof Error ? err.message : 'Failed to save draft');
+      return null;
     }
+    return null;
   };
 
   // Handle submit
@@ -186,10 +196,13 @@ function WaterUseReportContent() {
 
     try {
       // First save the data
-      await handleSaveAsDraft(formData);
+      const savedReportId = await handleSaveAsDraft(formData, {
+        syncUrl: false,
+        showDraftFeedback: false,
+      });
 
       // Then submit
-      const idToSubmit = existingReport?.id || reportId;
+      const idToSubmit = savedReportId || existingReport?.id || reportId;
       if (idToSubmit) {
         await submitMutation.mutateAsync(idToSubmit);
         setSubmitSuccess(true);

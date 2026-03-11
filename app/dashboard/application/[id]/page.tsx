@@ -126,19 +126,26 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       formData.emailAddress = userProfile.email || formData.emailAddress;
     }
     
-    // Ensure polygons are properly formatted (back-compat with legacy waterSourceCoordinates)
+    // Ensure polygons are properly formatted:
+    // 1) persisted `waterSourcePolygons`
+    // 2) legacy `waterSourceCoordinates`
+    // 3) fallback to application.coordinates geometry for older submitted records
     if (Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0) {
       // ok
     } else if (Array.isArray(formData.waterSourceCoordinates)) {
       formData.waterSourcePolygons = [formData.waterSourceCoordinates];
     } else {
-      formData.waterSourcePolygons = [
-        [
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" },
-          { latitude: "", longitude: "" }
-        ]
-      ];
+      const fallbackPolygons = geometryToCoordinatePolygons(application.coordinates);
+      formData.waterSourcePolygons =
+        fallbackPolygons.length > 0
+          ? fallbackPolygons
+          : [
+              [
+                { latitude: "", longitude: "" },
+                { latitude: "", longitude: "" },
+                { latitude: "", longitude: "" }
+              ]
+            ];
     }
     
   } else {
