@@ -1,4 +1,6 @@
 import type { Json } from "@/types/database";
+import { polygonsToGeoJSON } from "@/lib/geoUtils";
+import * as turf from "@turf/turf";
 
 export type ContractPlaceholderContext = {
   applicationNumber: string;
@@ -75,6 +77,36 @@ function getInternalNotes(application: ApplicationForContract): Record<string, a
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(n);
+}
+
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  if (typeof value === "string") {
+    const normalized = value.replace(/,/g, "").trim();
+    if (!normalized) return null;
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function areaHaFromGeometry(geometry: unknown): number | null {
+  if (!geometry || typeof geometry !== "object") return null;
+  const raw = geometry as { type?: unknown };
+  if (raw.type !== "Polygon" && raw.type !== "MultiPolygon") return null;
+  try {
+    const areaSqMeters = turf.area({
+      type: "Feature",
+      properties: {},
+      geometry: raw as any,
+    });
+    if (!Number.isFinite(areaSqMeters) || areaSqMeters <= 0) return null;
+    return areaSqMeters / 10000;
+  } catch {
+    return null;
+  }
 }
 
 function provinceLabelForContract(provinceRaw: string): string {
@@ -334,10 +366,41 @@ function resolveDurationYears(application: ApplicationForContract): string {
 }
 
 function resolveConcessionAreaLabel(application: ApplicationForContract): string {
-  const n = application.concession_area;
-  if (typeof n === "number" && Number.isFinite(n) && n > 0) {
-    return `${formatNumber(n)} Ha`;
+  const dbValue = parsePositiveNumber(application.concession_area);
+  if (dbValue) return `${formatNumber(dbValue)} Ha`;
+
+  const geometryValue = areaHaFromGeometry(application.coordinates);
+  if (geometryValue) return `${formatNumber(geometryValue)} Ha`;
+
+  const notes = getInternalNotes(application);
+  if (notes) {
+    if (Array.isArray(notes.waterSourcePolygons) && notes.waterSourcePolygons.length > 0) {
+      const feature = polygonsToGeoJSON(notes.waterSourcePolygons);
+      if (feature) {
+        const areaSqMeters = turf.area(feature as any);
+        if (Number.isFinite(areaSqMeters) && areaSqMeters > 0) {
+          return `${formatNumber(areaSqMeters / 10000)} Ha`;
+        }
+      }
+    }
+
+    if (Array.isArray(notes.waterSourceCoordinates) && notes.waterSourceCoordinates.length > 0) {
+      const feature = polygonsToGeoJSON([notes.waterSourceCoordinates]);
+      if (feature) {
+        const areaSqMeters = turf.area(feature as any);
+        if (Number.isFinite(areaSqMeters) && areaSqMeters > 0) {
+          return `${formatNumber(areaSqMeters / 10000)} Ha`;
+        }
+      }
+    }
+
+    const fishHa = parsePositiveNumber(notes.fishLakeAreaHectares);
+    if (fishHa) return `${formatNumber(fishHa)} Ha`;
+
+    const recreationM2 = parsePositiveNumber(notes.recreationConcessionAreaM2);
+    if (recreationM2) return `${formatNumber(recreationM2 / 10000)} Ha`;
   }
+
   return "N/A";
 }
 

@@ -1,5 +1,19 @@
 import type { Application } from '@/types/database';
 import { polygonsToGeoJSON, type CoordinatePoint } from '@/lib/geoUtils';
+import * as turf from '@turf/turf';
+
+function parsePositiveNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? value : undefined;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.replace(/,/g, '').trim();
+    if (!normalized) return undefined;
+    const parsed = Number.parseFloat(normalized);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }
+  return undefined;
+}
 
 // Helper function to map Rwanda administrative data province names to database enum
 export function formatProvinceForDB(province: string): Application['province'] | undefined {
@@ -187,6 +201,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
 
   // Handle coordinates: support single polygon (legacy waterSourceCoordinates) and multi-polygons (waterSourcePolygons)
   let coordinates: any = undefined;
+  let polygonFeature: ReturnType<typeof polygonsToGeoJSON> = null;
   try {
     const polygons: CoordinatePoint[][] =
       Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0
@@ -195,14 +210,42 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
           ? [formData.waterSourceCoordinates]
           : [];
 
-    const geometry = polygonsToGeoJSON(polygons);
-    if (geometry) {
+    polygonFeature = polygonsToGeoJSON(polygons);
+    if (polygonFeature) {
       // Store GeoJSON geometry for PostGIS compatibility
-      coordinates = geometry.geometry;
+      coordinates = polygonFeature.geometry;
     }
   } catch (error) {
     console.warn('Invalid coordinates provided:', error);
   }
+
+  const concessionAreaHectares = (() => {
+    // Primary source of truth: polygon geometry area.
+    if (polygonFeature) {
+      const areaSqMeters = turf.area(polygonFeature as any);
+      if (Number.isFinite(areaSqMeters) && areaSqMeters > 0) {
+        return Number((areaSqMeters / 10000).toFixed(4));
+      }
+    }
+
+    // Fallbacks for legacy/manual form fields.
+    const fishHa = parsePositiveNumber(formData.fishLakeAreaHectares);
+    if (fishHa) return fishHa;
+
+    const recreationM2 = parsePositiveNumber(formData.recreationConcessionAreaM2);
+    if (recreationM2) return Number((recreationM2 / 10000).toFixed(4));
+
+    const explicit = parsePositiveNumber(formData.concessionArea);
+    if (explicit) {
+      const unit = String(formData.concessionAreaUnit || '').toLowerCase();
+      if (unit.includes('m2') || unit.includes('m²') || unit.includes('square meter')) {
+        return Number((explicit / 10000).toFixed(4));
+      }
+      return explicit;
+    }
+
+    return undefined;
+  })();
 
   // If polygons are not present/valid, fall back to single abstraction point (LAT/LONG)
   // Stored as GeoJSON Point: [lng, lat]
@@ -325,6 +368,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     // Technical specifications - based on new form structure
     water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
     water_measuring_method: 'Flow meter', // Default for drafts
+    concession_area: concessionAreaHectares,
     return_flow_description: undefined, // Will be filled when form is more complete
     
     // Water source details - map form fields to database fields

@@ -27,6 +27,63 @@ function pickFirstString(...values: Array<string | undefined | null>): string | 
   return undefined;
 }
 
+function pickFirstNumber(...values: Array<unknown>): number | undefined {
+  for (const value of values) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value.trim());
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+  return undefined;
+}
+
+function extractLatLngFromUnknownPoint(
+  point: unknown
+): { lat: string; lng: string } | null {
+  if (Array.isArray(point) && point.length >= 2) {
+    const lng = pickFirstNumber(point[0]);
+    const lat = pickFirstNumber(point[1]);
+    if (typeof lat === "number" && typeof lng === "number") {
+      return { lat: String(lat), lng: String(lng) };
+    }
+    return null;
+  }
+
+  if (!point || typeof point !== "object") return null;
+
+  const asRecord = point as Record<string, unknown>;
+  const lat = pickFirstNumber(asRecord.latitude, asRecord.lat);
+  const lng = pickFirstNumber(asRecord.longitude, asRecord.lng, asRecord.lon);
+  if (typeof lat === "number" && typeof lng === "number") {
+    return { lat: String(lat), lng: String(lng) };
+  }
+  return null;
+}
+
+function normalizePolygonsFromUnknown(
+  polygonsUnknown: unknown
+): Array<Array<{ latitude: string; longitude: string }>> {
+  if (!Array.isArray(polygonsUnknown)) return [];
+
+  const normalized: Array<Array<{ latitude: string; longitude: string }>> = [];
+  for (const poly of polygonsUnknown) {
+    if (!Array.isArray(poly)) continue;
+    const points = poly
+      .map((p) => extractLatLngFromUnknownPoint(p))
+      .filter((p): p is { lat: string; lng: string } => Boolean(p))
+      .map((p) => ({ latitude: p.lat, longitude: p.lng }));
+    if (points.length > 0) {
+      normalized.push(points);
+    }
+  }
+  return normalized;
+}
+
 function getStringArray(formData: FormDataLike | undefined, key: string): string[] | undefined {
   const v = formData?.[key];
   if (!Array.isArray(v)) return undefined;
@@ -255,10 +312,10 @@ export function prefillAssessmentReportFromApplication(
           typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined
         )
       : pickFirstString(
-          getString(formData, "registrationId"),
-          getString(formData, "companyRegistrationId"),
           getString(formData, "companyTin"),
           typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined,
+          getString(formData, "registrationId"),
+          getString(formData, "companyRegistrationId"),
           typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined,
           getString(formData, "nationalIdNumber")
         )) ||
@@ -300,7 +357,7 @@ export function prefillAssessmentReportFromApplication(
   if (fdLat) sourceLatitude = fdLat;
   if (fdLng) sourceLongitude = fdLng;
   
-  // Fallback to application coordinates
+  // Fallback to polygon/geometry coordinates
   if (!sourceLatitude || !sourceLongitude) {
     try {
       const geom: any = (application as any).coordinates;
@@ -310,17 +367,25 @@ export function prefillAssessmentReportFromApplication(
         sourceLongitude = String(lng);
       } else {
         const polysUnknown = formData?.waterSourcePolygons;
+        let extracted: { lat: string; lng: string } | null = null;
         if (Array.isArray(polysUnknown) && polysUnknown.length > 0) {
           const firstPoly = polysUnknown[0];
           if (Array.isArray(firstPoly) && firstPoly.length > 0) {
-            const firstPoint = firstPoly[0] as unknown;
-            if (firstPoint && typeof firstPoint === 'object') {
-              const lat = (firstPoint as { latitude?: unknown }).latitude;
-              const lng = (firstPoint as { longitude?: unknown }).longitude;
-              if (typeof lat === 'string' || typeof lat === 'number') sourceLatitude = String(lat);
-              if (typeof lng === 'string' || typeof lng === 'number') sourceLongitude = String(lng);
-            }
+            extracted = extractLatLngFromUnknownPoint(firstPoly[0]);
           }
+        }
+
+        // If form polygons are absent/empty/invalid, derive from saved geometry.
+        if (!extracted && geom) {
+          const polygons = geometryToCoordinatePolygons(geom);
+          if (Array.isArray(polygons) && polygons.length > 0 && polygons[0].length > 0) {
+            extracted = extractLatLngFromUnknownPoint(polygons[0][0]);
+          }
+        }
+
+        if (extracted) {
+          sourceLatitude = extracted.lat;
+          sourceLongitude = extracted.lng;
         }
       }
     } catch (error) {
@@ -422,9 +487,14 @@ export function prefillAssessmentReportFromApplication(
   
   // Extract abstraction-specific data if applicable
   const abstractionData: Partial<AssessmentReportData> = {};
-  if (reportType === 'abstraction' && formData?.waterAbstractionDetails) {
+  if (reportType === 'abstraction') {
     const detailsUnknown: any = (formData as any).waterAbstractionDetails;
     const abstractionDetail: any = Array.isArray(detailsUnknown) ? detailsUnknown[0] : undefined;
+    const assessorAdjustmentsUnknown = (formData as any)?._assessorAdjustments;
+    const recommendedVolumeM3 = pickFirstNumber(
+      assessorAdjustmentsUnknown?.recommendedVolumeM3,
+      (application as any)?.assessor_recommended_volume_m3
+    );
 
     if (abstractionDetail) {
       abstractionData.abstractionMethod = typeof abstractionDetail.abstractionMethod === "string" ? abstractionDetail.abstractionMethod : "";
@@ -442,23 +512,50 @@ export function prefillAssessmentReportFromApplication(
       } else if (typeof abstractionDetail.maxAverageYearly === "string") {
         abstractionData.flowRateM3Day = abstractionDetail.maxAverageYearly;
       }
+
+      // If assessor recommended a different yearly amount, it should be used in the assessment report.
+      if (typeof recommendedVolumeM3 === "number") {
+        abstractionData.flowRateM3Day = String(recommendedVolumeM3);
+      }
+    } else {
+      const fallbackYearlyVolume = pickFirstNumber(
+        recommendedVolumeM3,
+        (application as any)?.max_yearly_volume_m3,
+        (application as any)?.estimated_usage_volume
+      );
+      if (typeof fallbackYearlyVolume === "number") {
+        abstractionData.flowRateM3Day = String(fallbackYearlyVolume);
+      }
     }
   }
   
   // Extract concession-specific data if applicable
   const concessionData: Partial<AssessmentReportData> = {};
   if (reportType === 'concession') {
-    // Extract surface area
-    if (formData?.concessionArea) {
-      concessionData.surfaceAreaHa = String(formData.concessionArea);
-    } else if (formData?.fishLakeAreaHectares) {
-      concessionData.surfaceAreaHa = String(formData.fishLakeAreaHectares);
+    // Extract surface area (prefer polygon-derived/db value for consistency)
+    const dbConcessionArea = pickFirstNumber((application as any)?.concession_area);
+    const fishLakeAreaHa = pickFirstNumber((formData as any)?.fishLakeAreaHectares);
+    const explicitConcessionArea = pickFirstNumber((formData as any)?.concessionArea);
+    const explicitConcessionUnit = getString(formData, "concessionAreaUnit")?.toLowerCase() || "";
+
+    if (typeof dbConcessionArea === "number" && dbConcessionArea > 0) {
+      concessionData.surfaceAreaHa = String(dbConcessionArea);
+    } else if (typeof fishLakeAreaHa === "number" && fishLakeAreaHa > 0) {
+      concessionData.surfaceAreaHa = String(fishLakeAreaHa);
+    } else if (typeof explicitConcessionArea === "number" && explicitConcessionArea > 0) {
+      // Handle legacy forms where concessionArea could be in m2.
+      const isM2 =
+        explicitConcessionUnit.includes("m2") ||
+        explicitConcessionUnit.includes("m²") ||
+        explicitConcessionUnit.includes("square");
+      concessionData.surfaceAreaHa = String(isM2 ? explicitConcessionArea / 10000 : explicitConcessionArea);
     }
     
     // Extract beacon coordinates
     const polysUnknown = (formData as any)?.waterSourcePolygons;
-    if (Array.isArray(polysUnknown)) {
-      concessionData.beacons = extractBeaconCoordinates(polysUnknown as any);
+    const normalizedFormPolygons = normalizePolygonsFromUnknown(polysUnknown);
+    if (normalizedFormPolygons.length > 0) {
+      concessionData.beacons = extractBeaconCoordinates(normalizedFormPolygons as any);
     } else {
       // Try to extract from application coordinates
       try {
