@@ -894,16 +894,25 @@ export function ApplicationForm({
   const Button = ({ children, ...props }: React.ComponentProps<typeof BaseButton>) => (
     <BaseButton {...props}>{localizeNode(children)}</BaseButton>
   );
-  const Input = ({ placeholder, ...props }: React.ComponentProps<typeof BaseInput>) => (
-    <BaseInput {...props} placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder} />
+  const Input = useCallback(
+    ({ placeholder, ...props }: React.ComponentProps<typeof BaseInput>) => (
+      <BaseInput
+        {...props}
+        placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder}
+      />
+    ),
+    [tx]
   );
-  const Textarea = ({ placeholder, children, ...props }: React.ComponentProps<typeof BaseTextarea>) => (
-    <BaseTextarea
-      {...props}
-      placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder}
-    >
-      {localizeNode(children)}
-    </BaseTextarea>
+  const Textarea = useCallback(
+    ({ placeholder, children, ...props }: React.ComponentProps<typeof BaseTextarea>) => (
+      <BaseTextarea
+        {...props}
+        placeholder={typeof placeholder === "string" ? tx(placeholder) : placeholder}
+      >
+        {localizeNode(children)}
+      </BaseTextarea>
+    ),
+    [tx, localizeNode]
   );
   const FormLabel = ({ children, ...props }: React.ComponentProps<typeof BaseFormLabel>) => (
     <BaseFormLabel {...props}>{localizeNode(children)}</BaseFormLabel>
@@ -4700,9 +4709,10 @@ export function ApplicationForm({
                                           name="nameSourceWater"
                                           render={({ field }) => (
                                             <FormControl>
-                                              <Input
+                                              <BaseInput
                                                 {...field}
                                                 value={field.value ?? ""}
+                                                onChange={(e) => field.onChange(e.target.value)}
                                                 placeholder="Lake name"
                                                 className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
                                                 disabled={readOnly}
@@ -4718,7 +4728,7 @@ export function ApplicationForm({
                                           name="fishLakeNumberOfCages"
                                           render={({ field }) => (
                                             <FormControl>
-                                              <Input
+                                              <BaseInput
                                                 type="number"
                                                 value={field.value ?? ""}
                                                 onChange={(e) => {
@@ -4741,7 +4751,7 @@ export function ApplicationForm({
                                           name="fishLakeCageCapacity"
                                           render={({ field }) => (
                                             <FormControl>
-                                              <Input
+                                              <BaseInput
                                                 type="number"
                                                 value={field.value ?? ""}
                                                 onChange={(e) => {
@@ -4764,7 +4774,7 @@ export function ApplicationForm({
                             name="fishLakeAreaHectares"
                             render={({ field }) => (
                               <FormControl>
-                                <Input 
+                                <BaseInput 
                                   type="number"
                                   value={field.value ?? ""}
                                   onChange={(e) => {
@@ -5584,8 +5594,10 @@ export function ApplicationForm({
                                       name="recreationType"
                                       render={({ field }) => (
                                         <FormControl>
-                                          <Input
+                                          <BaseInput
                                             {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
                                             placeholder="Specify recreation type"
                                             className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
                                             disabled={readOnly}
@@ -5604,8 +5616,10 @@ export function ApplicationForm({
                                       name="recreationProjectDescription"
                                       render={({ field }) => (
                                         <FormControl>
-                                          <Textarea
+                                          <BaseTextarea
                                             {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
                                             placeholder="Describe the recreational project..."
                                             className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
                                             disabled={readOnly}
@@ -5625,7 +5639,7 @@ export function ApplicationForm({
                                       name="recreationConcessionAreaM2"
                                       render={({ field }) => (
                                         <FormControl>
-                                          <Input
+                                          <BaseInput
                                             {...field}
                                             type="number"
                                             min="0"
