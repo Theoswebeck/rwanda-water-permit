@@ -448,6 +448,16 @@ export default function TermsConditionsPage() {
         expiry.setFullYear(expiry.getFullYear() + durationYears);
         return expiry.toISOString().split('T')[0];
       };
+      const computeDurationFromPermitDates = (issuedRaw: unknown, expiryRaw: unknown): number | null => {
+        if (typeof issuedRaw !== 'string' || typeof expiryRaw !== 'string') return null;
+        const issued = new Date(issuedRaw);
+        const expiry = new Date(expiryRaw);
+        if (Number.isNaN(issued.getTime()) || Number.isNaN(expiry.getTime())) return null;
+        let years = expiry.getFullYear() - issued.getFullYear();
+        const anniversary = new Date(issued.getFullYear() + years, issued.getMonth(), issued.getDate());
+        if (expiry.getTime() < anniversary.getTime()) years -= 1;
+        return years > 0 ? years : null;
+      };
 
       // First, get the full application data
       const { data: applicationData, error: fetchError } = await supabase
@@ -614,6 +624,7 @@ export default function TermsConditionsPage() {
       const modificationOriginalPermitId = parsedNotes?.originalPermitId || null;
 
       let permitData: any;
+      let transferOwnershipReassigned = false;
 
       if (isModificationApplication) {
         const permitRef = parsedNotes?.permitReference as { normalizedPermitNumber?: string; registrySnapshot?: { registry_id?: string; permit_number?: string } } | undefined;
@@ -889,65 +900,24 @@ export default function TermsConditionsPage() {
           '| New issued date:', newIssuedDate, 
           '| New expiry date:', newExpiryDate);
       } else if (isTransferApplication && transferOriginalPermitId) {
-        console.log('🔁 Processing TRANSFER - creating new permit from original permit:', transferOriginalPermitId);
-        console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
+        console.log('🔁 Processing TRANSFER - reassigning original permit ownership:', transferOriginalPermitId);
 
-        const newIssuedDate = acceptedDateOnly;
-        const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
-
-        const permitData_insert = {
-          application_id: applicationId,
-          status: 'active',
-          water_source: applicationData.water_source,
-          purpose: applicationData.water_purpose,
-          water_allowance: resolvedVolumeM3,
-          allowance_unit: resolvedAllowanceUnit || 'm³',
-          issuing_authority: 'Rwanda Water Resources Board',
-          issued_date: newIssuedDate,
-          expiry_date: newExpiryDate,
-          is_transfer: true,
-          original_permit_id: transferOriginalPermitId,
-          transfer_reason: (() => {
-            const permitNo = parsedNotes?.originalPermitNumber ? String(parsedNotes.originalPermitNumber) : '';
-            return permitNo ? `Transferred from ${permitNo}` : 'Permit transfer';
-          })(),
-          conditions: { 
-            conditions: [
-              'Comply with all environmental regulations', 
-              'Submit quarterly usage reports', 
-              'Allow inspections as required',
-              ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : [])
-            ],
-            location: {
-              province: applicationData.province,
-              district: applicationData.district,
-              sector: applicationData.sector,
-              cell: applicationData.cell,
-              village: applicationData.village,
-              coordinates: applicationData.coordinates,
-              description: applicationData.location_description
-            },
-            project: {
-              title: applicationData.project_title,
-              description: applicationData.project_description,
-              value: applicationData.project_value
-            }
-          }
-        };
-
-        const { data: newPermit, error: permitError } = await supabase
-          .from('permits')
-          .insert(permitData_insert as any)
-          .select()
-          .single() as { data: any; error: any };
-
-        if (permitError) {
-          console.error('❌ Error creating transfer permit:', permitError);
-          throw permitError;
+        const issueResp = await fetch('/api/transfers/issue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            applicationId,
+            oldPermitId: transferOriginalPermitId,
+          }),
+        });
+        const issueJson = await issueResp.json().catch(() => null);
+        if (!issueResp.ok || !issueJson?.success || !issueJson?.permit) {
+          throw new Error(issueJson?.message || issueResp.statusText || 'Failed to reassign transfer permit');
         }
 
-        permitData = newPermit;
-        console.log('✅ Transfer permit created successfully:', permitData.permit_number);
+        permitData = issueJson.permit;
+        transferOwnershipReassigned = true;
+        console.log('✅ Transfer permit ownership reassigned successfully:', permitData.permit_number);
 
       } else {
         console.log('📝 Creating NEW permit in database...');
@@ -1011,10 +981,11 @@ export default function TermsConditionsPage() {
       }
 
       if (permitData?.id && permitData?.permit_number) {
+        const permitDurationYears = computeDurationFromPermitDates(permitData.issued_date, permitData.expiry_date);
         setIssuedPermit({
           permitId: permitData.id,
           permitNumber: permitData.permit_number,
-          durationYears: resolvedDurationYearsGlobal,
+          durationYears: permitDurationYears ?? resolvedDurationYearsGlobal,
           isModification: isModificationApplication,
         });
       }
@@ -1064,7 +1035,7 @@ export default function TermsConditionsPage() {
         console.log('✅ Application status updated successfully');
       }
 
-      if (isTransferApplication && transferOriginalPermitId) {
+      if (isTransferApplication && transferOriginalPermitId && !transferOwnershipReassigned) {
         try {
           console.log('🧾 Revoking original permit after transfer issuance...');
           const resp = await fetch('/api/transfers/revoke-old-permit', {

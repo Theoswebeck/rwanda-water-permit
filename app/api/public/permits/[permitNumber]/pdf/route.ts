@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
+import { isConcessionApplication } from "@/lib/permit-variant";
 
 export const runtime = "nodejs";
 
@@ -86,6 +87,41 @@ function parseIsoLikeDate(input: string | undefined): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, "").trim());
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
+function applyPermitAllowanceToApplication(
+  application: PermitApplication,
+  permit: Record<string, unknown>
+): PermitApplication {
+  const allowance = parsePositiveNumber(permit.water_allowance);
+  if (!allowance) return application;
+
+  const next: PermitApplication = { ...application };
+  const isConcession = isConcessionApplication(next as any);
+  if (isConcession) {
+    next.concession_area = allowance;
+  } else {
+    next.assessor_recommended_volume_m3 = allowance;
+    next.max_yearly_volume_m3 = allowance;
+    if (typeof next.max_daily_volume_m3 !== "number" || !Number.isFinite(next.max_daily_volume_m3) || next.max_daily_volume_m3 <= 0) {
+      next.max_daily_volume_m3 = allowance / 365;
+    }
+  }
+
+  if (typeof permit.allowance_unit === "string" && permit.allowance_unit.trim()) {
+    next.usage_unit = permit.allowance_unit.trim();
+  }
+
+  return next;
+}
+
 export async function GET(req: NextRequest, context: { params: Promise<{ permitNumber: string }> }) {
   try {
     const { permitNumber } = await context.params;
@@ -110,7 +146,10 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
     const application = (permit.application || null) as Record<string, unknown> | null;
     if (application) {
       // Canonical permit renderer shared with /api/test/permit-pdf.
-      const applicationForPdf = application as unknown as PermitApplication;
+      const applicationForPdf = applyPermitAllowanceToApplication(
+        application as unknown as PermitApplication,
+        permit
+      );
       const issueDate = getCanonicalIssueDate(permit, application);
       const pdfBuffer = await generatePermitPdfBuffer({
         application: applicationForPdf,
