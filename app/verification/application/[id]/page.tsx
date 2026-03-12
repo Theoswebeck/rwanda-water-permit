@@ -28,6 +28,7 @@ import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
+import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { ArrowLeft, Loader2, XCircle, ClipboardCheck, Check, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
@@ -228,8 +229,9 @@ export default function VerificationApplicationPage() {
             return null;
           }
         })();
-        const transferDetected = appData.application_type === 'transfer' || parsedNotes?.isTransfer === true;
-        const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
+        const workflowKind = getApplicationWorkflowKind(appData as any);
+        const transferDetected = workflowKind === "transfer";
+        const modificationDetected = workflowKind === "modification";
         setIsTransferApp(transferDetected);
         setIsModificationApp(modificationDetected);
 

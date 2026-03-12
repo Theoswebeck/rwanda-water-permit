@@ -423,6 +423,17 @@ function buildInitialDocumentMapFromRecords(documents: Document[]): Record<strin
   return documentMap;
 }
 
+function inferAdditionalDocumentCategoryFromId(id?: string): string {
+  if (!id || typeof id !== "string") return "additional";
+  if (id.startsWith("navigation_")) return "navigation";
+  if (id.startsWith("recreation_activities_")) return "recreation_activities";
+  if (id.startsWith("construction_of_infrastructures_")) return "construction_of_infrastructures";
+  if (id.startsWith("gaz_extraction_")) return "gaz_extraction";
+  if (id.startsWith("livestock_")) return "livestock";
+  if (id.startsWith("other_")) return "other";
+  return "additional";
+}
+
 // Inner component that uses useSearchParams
 function NewApplicationContent() {
   const UUID_PATTERN =
@@ -431,6 +442,15 @@ function NewApplicationContent() {
     if (typeof value !== "string") return null;
     const normalized = value.trim();
     return UUID_PATTERN.test(normalized) ? normalized : null;
+  };
+  const pickNonTransferAppType = (
+    candidateType: unknown,
+    fallbackActivity: unknown
+  ): Application["application_type"] => {
+    if (typeof candidateType === "string" && candidateType.trim() && candidateType !== "transfer") {
+      return candidateType as Application["application_type"];
+    }
+    return formatApplicationTypeForDB(typeof fallbackActivity === "string" ? fallbackActivity : "");
   };
 
   type SelectedPermitRuntimeMeta = {
@@ -775,11 +795,14 @@ function NewApplicationContent() {
               if (match) {
                 match.url = dbDoc.url;
                 match.file = null;
+                if (!match.category) {
+                  match.category = inferAdditionalDocumentCategoryFromId(dbDoc.id);
+                }
               } else {
                 existing.push({
                   id: dbDoc.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
                   name: dbDoc.name,
-                  category: "additional",
+                  category: inferAdditionalDocumentCategoryFromId(dbDoc.id),
                   description: "",
                   file: null,
                   url: dbDoc.url,
@@ -1325,6 +1348,37 @@ function NewApplicationContent() {
             originalFormData.additionalDocuments = [];
           }
 
+          const transferFormData = (() => {
+            const raw = (originalFormData as Record<string, unknown>)?.transferFormData;
+            return raw && typeof raw === "object" && !Array.isArray(raw)
+              ? (raw as Record<string, unknown>)
+              : null;
+          })();
+          const sourceIsTransfer =
+            (originalApplication as any).application_type === "transfer" ||
+            (originalFormData as Record<string, unknown>)?.isTransfer === true ||
+            Boolean(transferFormData);
+          if (sourceIsTransfer && transferFormData) {
+            const hasText = (value: unknown) =>
+              typeof value === "string" && value.trim().length > 0;
+            const transfereeName = typeof transferFormData.transfereeName === "string" ? transferFormData.transfereeName.trim() : "";
+            const transfereePhone = typeof transferFormData.transfereePhone === "string" ? transferFormData.transfereePhone.trim() : "";
+            const transfereeEmail = typeof transferFormData.transfereeEmail === "string" ? transferFormData.transfereeEmail.trim() : "";
+
+            if (!hasText(originalFormData.fullNameApplicant) && transfereeName) {
+              originalFormData.fullNameApplicant = transfereeName;
+            }
+            if (!hasText(originalFormData.telephoneContact) && transfereePhone) {
+              originalFormData.telephoneContact = transfereePhone;
+            }
+            if (!hasText(originalFormData.emailAddress) && transfereeEmail) {
+              originalFormData.emailAddress = transfereeEmail;
+            }
+            if (!hasText(originalFormData.telephoneContactOffice) && transfereePhone) {
+              originalFormData.telephoneContactOffice = transfereePhone;
+            }
+          }
+
           // Process documents from the original application (same logic as loadDraft)
           const documentMap: Record<string, { url: string; name: string }> = {};
           const additionalDocsFromDb: Array<{ id?: string; name: string; url: string }> = [];
@@ -1376,11 +1430,14 @@ function NewApplicationContent() {
               if (match) {
                 match.url = dbDoc.url;
                 match.file = null;
+                if (!match.category) {
+                  match.category = inferAdditionalDocumentCategoryFromId(dbDoc.id);
+                }
               } else {
                 existing.push({
                   id: dbDoc.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
                   name: dbDoc.name,
-                  category: "additional",
+                  category: inferAdditionalDocumentCategoryFromId(dbDoc.id),
                   description: "",
                   file: null,
                   url: dbDoc.url,
@@ -1596,7 +1653,12 @@ function NewApplicationContent() {
         applicant_id: userProfile?.id,
         status: 'submitted',
         submitted_at: new Date().toISOString(),
-        application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
+        application_type: pickNonTransferAppType(
+          (selectedPermitForRenewal?.application as any)?.application_type,
+          pd?.intendedActivity ||
+            selectedPermitForRenewal?.application?.water_purpose ||
+            selectedPermitForRenewal?.purpose
+        ),
         water_source: pd?.waterSourceType || selectedPermitForRenewal?.water_source || 'other',
         water_purpose: pd?.waterPurpose || normalizedPurpose,
         province: pd?.province || selectedPermitForRenewal?.application?.province || 'Kigali',
@@ -1728,7 +1790,12 @@ function NewApplicationContent() {
       const corePayload: Record<string, unknown> = {
         applicant_id: userProfile?.id,
         status: 'draft',
-        application_type: (selectedPermitForRenewal?.application as any)?.application_type || 'domestic',
+        application_type: pickNonTransferAppType(
+          (selectedPermitForRenewal?.application as any)?.application_type,
+          pd?.intendedActivity ||
+            selectedPermitForRenewal?.application?.water_purpose ||
+            selectedPermitForRenewal?.purpose
+        ),
         water_source: pd?.waterSourceType || selectedPermitForRenewal?.water_source || 'other',
         water_purpose: pd?.waterPurpose || normalizedWaterPurpose,
         province: pd?.province || selectedPermitForRenewal?.application?.province || 'Kigali',
@@ -1903,7 +1970,12 @@ function NewApplicationContent() {
         applicant_id: userProfile?.id,
         status: 'submitted',
         submitted_at: new Date().toISOString(),
-        application_type: formatApplicationTypeForDB(primaryActivity) || selectedPermitForModification?.application?.application_type || 'domestic',
+        application_type: pickNonTransferAppType(
+          selectedPermitForModification?.application?.application_type,
+          primaryActivity ||
+            selectedPermitForModification?.application?.water_purpose ||
+            selectedPermitForModification?.purpose
+        ),
         water_source: formatWaterSourceForDB(formData.waterSourceType) || selectedPermitForModification?.water_source || 'other',
         water_purpose: formatWaterPurposeForDB(primaryActivity) || selectedPermitForModification?.purpose || 'other',
         province: formatProvinceForDB(formData.waterSourceProvince) || selectedPermitForModification?.application?.province || 'Kigali',
@@ -2051,7 +2123,12 @@ function NewApplicationContent() {
       const modificationApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
-        application_type: formatApplicationTypeForDB(primaryActivity) || selectedPermitForModification?.application?.application_type || 'domestic',
+        application_type: pickNonTransferAppType(
+          selectedPermitForModification?.application?.application_type,
+          primaryActivity ||
+            selectedPermitForModification?.application?.water_purpose ||
+            selectedPermitForModification?.purpose
+        ),
         water_source: formatWaterSourceForDB(formData.waterSourceType) || selectedPermitForModification?.water_source || 'other',
         water_purpose: formatWaterPurposeForDB(primaryActivity) || selectedPermitForModification?.purpose || 'other',
         province: formatProvinceForDB(formData.waterSourceProvince) || selectedPermitForModification?.application?.province || 'Kigali',

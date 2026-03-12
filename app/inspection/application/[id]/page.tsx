@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
+import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import { 
   ArrowLeft, 
   Check, 
@@ -432,8 +433,9 @@ export default function InspectorApplicationView() {
             return null;
           }
         })();
-        const transferDetected = appData.application_type === 'transfer' || parsedNotes?.isTransfer === true;
-        const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
+        const workflowKind = getApplicationWorkflowKind(appData as any);
+        const transferDetected = workflowKind === "transfer";
+        const modificationDetected = workflowKind === "modification";
         setIsTransferApp(transferDetected);
         setIsModificationApp(modificationDetected);
 

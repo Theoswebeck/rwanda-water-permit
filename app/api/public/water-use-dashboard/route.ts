@@ -4,10 +4,8 @@ import { query } from "@/lib/db/postgres";
 import {
   consolidatePermitRecords,
   createConsolidatedPermitFromPermit,
-  createConsolidatedPermitFromRegistry,
   type ConsolidatedPermitRecord,
   type PermitDashboardPermitRow,
-  type PermitDashboardRegistryRow,
 } from "@/lib/permit/consolidated-permit-records";
 
 const QuerySchema = z.object({
@@ -22,9 +20,6 @@ const QuerySchema = z.object({
   includeExpired: z.coerce.boolean().optional().default(false),
   from: z.string().optional(),
   to: z.string().optional(),
-  // registry pagination
-  limit: z.coerce.number().min(1).max(200).optional().default(50),
-  offset: z.coerce.number().min(0).optional().default(0),
 });
 
 type IntensityBucket = "very_low" | "low" | "medium" | "high" | "very_high";
@@ -102,19 +97,6 @@ function labelWaterSource(source: string) {
   return map[source] || source;
 }
 
-function durationLabel(issued: string | null | undefined, expiry: string | null | undefined): string {
-  if (!issued || !expiry) return "N/A";
-  const a = new Date(issued);
-  const b = new Date(expiry);
-  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return "N/A";
-  const days = Math.max(0, Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)));
-  const years = days / 365;
-  if (years >= 1) return `${years.toFixed(1)} years`;
-  const months = days / 30;
-  if (months >= 1) return `${months.toFixed(0)} months`;
-  return `${days} days`;
-}
-
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -134,8 +116,6 @@ export async function GET(req: NextRequest) {
       includeExpired,
       from: fromRaw,
       to: toRaw,
-      limit,
-      offset,
     } = parsed.data;
 
     const from = parseDate(fromRaw);
@@ -177,32 +157,10 @@ export async function GET(req: NextRequest) {
       `
     );
 
-    const registryRes = await query<PermitDashboardRegistryRow>(
-      `
-      select
-        pr.id,
-        pr.permit_number,
-        pr.status,
-        pr.water_source,
-        pr.authorized_activity,
-        pr.volume_or_area,
-        pr.issuance_date::text as issuance_date,
-        pr.expiration_date::text as expiration_date,
-        pr.created_at::text as created_at,
-        pr.updated_at::text as updated_at,
-        pr.latitude,
-        pr.longitude,
-        pr.permit_holder,
-        pr.location
-      from public.permit_registry pr
-      `
-    );
-
     const consolidated = consolidatePermitRecords(
-      [
-        ...permitsRes.rows.map(createConsolidatedPermitFromPermit),
-        ...registryRes.rows.map(createConsolidatedPermitFromRegistry),
-      ].filter((record): record is ConsolidatedPermitRecord => Boolean(record))
+      permitsRes.rows
+        .map(createConsolidatedPermitFromPermit)
+        .filter((record): record is ConsolidatedPermitRecord => Boolean(record))
     );
 
     const qLower = q?.toLowerCase().trim();
@@ -331,25 +289,6 @@ export async function GET(req: NextRequest) {
         };
       });
 
-    // Registry (non-confidential fields only) – paginated view
-    const registryItems = filtered.slice(offset, offset + limit).map((p) => {
-      return {
-        permitId: p.permitId,
-        permitNumber: p.permitNumber,
-        status: p.status,
-        waterSource: p.waterSource,
-        useType: p.purpose,
-        province: p.province ?? null,
-        district: p.district ?? null,
-        sector: p.sector ?? null,
-        catchment1: p.catchment1 ?? null,
-        catchment2: p.catchment2 ?? null,
-        issuedDate: p.issuedDate,
-        expiryDate: p.expiryDate,
-        duration: durationLabel(p.issuedDate, p.expiryDate),
-      };
-    });
-
     return NextResponse.json({
       snapshot: {
         totalPermitsIssued,
@@ -363,15 +302,6 @@ export async function GET(req: NextRequest) {
       },
       map: {
         points,
-      },
-      registry: {
-        items: registryItems,
-        pagination: {
-          total: filtered.length,
-          limit,
-          offset,
-          returned: registryItems.length,
-        },
       },
       generatedAt: new Date().toISOString(),
     });

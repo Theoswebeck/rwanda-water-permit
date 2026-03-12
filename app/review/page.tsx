@@ -63,6 +63,7 @@ import { buildContractPlaceholderContext, fillContractText } from "@/lib/contrac
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -704,13 +705,10 @@ export default function ReviewerDashboard() {
   };
 
     const getApplicationTypeBadge = (app: ReviewApplication) => {
-      const appType = app.application_type;
-      const isModification = appType === 'modification' || (app as any).is_modification === true;
-      const isTransfer = appType === 'transfer';
-      const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
-    if (isRenewal) return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Renewal</Badge>;
-    if (isModification) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Modification</Badge>;
-    if (isTransfer) return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Transfer</Badge>;
+    const workflowKind = getApplicationWorkflowKind(app as any);
+    if (workflowKind === "renewal") return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Renewal</Badge>;
+    if (workflowKind === "modification") return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Modification</Badge>;
+    if (workflowKind === "transfer") return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">Transfer</Badge>;
     return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-medium px-2 py-0.5 rounded-full border whitespace-nowrap">New Application</Badge>;
   };
 

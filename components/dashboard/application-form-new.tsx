@@ -2864,7 +2864,7 @@ export function ApplicationForm({
                           onClick={() => handleViewDocument(doc)}
                           className="text-xs text-blue-600 hover:text-blue-800 underline truncate cursor-pointer"
                         >
-                          {doc.file?.name}
+                          {doc.file?.name || doc.name}
                         </button>
                       </div>
                     </div>

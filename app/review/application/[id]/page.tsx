@@ -39,6 +39,7 @@ import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { enrichModificationChanges } from "@/lib/application-utils";
+import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -335,8 +336,9 @@ export default function ReviewApplicationPage() {
             return null;
           }
         })();
-        const transferDetected = appData.application_type === 'transfer' || parsedNotes?.isTransfer === true;
-        const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
+        const workflowKind = getApplicationWorkflowKind(appData as any);
+        const transferDetected = workflowKind === "transfer";
+        const modificationDetected = workflowKind === "modification";
         setIsTransferApp(transferDetected);
         setIsModificationApp(modificationDetected);
 
@@ -917,15 +919,12 @@ export default function ReviewApplicationPage() {
   const getApplicationTypeBadge = () => {
     if (!application) return null;
     
-    const appType = application.application_type;
-    const isModification = appType === 'modification' || (application as any).is_modification === true;
-    const isTransfer = appType === 'transfer';
-    const isRenewal = appType === 'renewal' || (application as any).is_renewal === true;
-    
+    const workflowKind = getApplicationWorkflowKind(application as any);
+
     let displayType: 'new' | 'modification' | 'transfer' | 'renewal' = 'new';
-    if (isRenewal) displayType = 'renewal';
-    else if (isModification) displayType = 'modification';
-    else if (isTransfer) displayType = 'transfer';
+    if (workflowKind === "renewal") displayType = "renewal";
+    else if (workflowKind === "modification") displayType = "modification";
+    else if (workflowKind === "transfer") displayType = "transfer";
     
     const typeConfig = {
       'new': { 

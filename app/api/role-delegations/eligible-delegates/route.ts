@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { query } from '@/lib/db/postgres'
 
+type PgErrorLike = {
+  code?: string
+}
+
+function isRoleDelegateSchemaCompatibilityError(error: unknown): boolean {
+  const pgError = error as PgErrorLike
+  // 42703 => undefined_column, 22P02 => invalid_text_representation (enum mismatch), 42883 => undefined_function/operator
+  return ['42703', '22P02', '42883'].includes(pgError?.code || '')
+}
+
 async function getUserId(request: NextRequest): Promise<string | null> {
   const token = readSessionTokenFromRequest(request)
   const claims = token ? await verifySessionToken(token) : null
@@ -45,18 +55,40 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get all active staff users except the current user
-    const eligibleDelegates = await query(
-      `
-      select id, email, first_name, last_name, role
-      from public.users
-      where role = any($1::text[])
-        and status = 'active'
-        and id <> $2
-      order by first_name asc nulls last, last_name asc nulls last
-      `,
-      [staffRoles, userId]
-    )
+    // Get all eligible staff users except the current user.
+    // Compatibility fallback avoids 500s when prod schema drifts (e.g. status column/enum differences).
+    let eligibleDelegates
+    try {
+      eligibleDelegates = await query(
+        `
+        select id, email, first_name, last_name, role
+        from public.users
+        where role::text = any($1::text[])
+          and status::text = 'active'
+          and id <> $2
+        order by first_name asc nulls last, last_name asc nulls last
+        `,
+        [staffRoles, userId]
+      )
+    } catch (error) {
+      if (!isRoleDelegateSchemaCompatibilityError(error)) {
+        throw error
+      }
+      console.warn(
+        '⚠️ Falling back to compatible delegate query without status filter:',
+        error
+      )
+      eligibleDelegates = await query(
+        `
+        select id, email, first_name, last_name, role
+        from public.users
+        where role::text = any($1::text[])
+          and id <> $2
+        order by first_name asc nulls last, last_name asc nulls last
+        `,
+        [staffRoles, userId]
+      )
+    }
 
     return NextResponse.json({
       success: true,

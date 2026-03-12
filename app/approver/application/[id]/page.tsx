@@ -29,6 +29,7 @@ import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { enrichModificationChanges } from "@/lib/application-utils";
+import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -360,8 +361,9 @@ export default function ApproverApplicationPage() {
             return null;
           }
         })();
-        const transferDetected = appData.application_type === 'transfer' || parsedNotes?.isTransfer === true;
-        const modificationDetected = (appData as any).is_modification === true || parsedNotes?.isModification === true;
+        const workflowKind = getApplicationWorkflowKind(appData as any);
+        const transferDetected = workflowKind === "transfer";
+        const modificationDetected = workflowKind === "modification";
         setIsTransferApp(transferDetected);
         setIsModificationApp(modificationDetected);
 

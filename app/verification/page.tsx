@@ -26,6 +26,7 @@ import { StatusFilterChips, type StatusChipDef } from "@/components/shared/statu
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 
 interface VerificationApplication extends Application {
   applicant_name?: string;
@@ -173,13 +174,10 @@ export default function VerificationDashboard() {
   };
 
   const getAppTypeBadge = (app: VerificationApplication) => {
-    const appType = app.application_type;
-    const isModification = appType === 'modification' || (app as any).is_modification === true;
-    const isTransfer = appType === 'transfer';
-    const isRenewal = appType === 'renewal' || (app as any).is_renewal === true;
-    if (isRenewal) return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
-    if (isModification) return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
-    if (isTransfer) return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
+    const workflowKind = getApplicationWorkflowKind(app as any);
+    if (workflowKind === "renewal") return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Renewal</Badge>;
+    if (workflowKind === "modification") return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Mod</Badge>;
+    if (workflowKind === "transfer") return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-1.5 py-0 whitespace-nowrap">Transfer</Badge>;
     return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] px-1.5 py-0 whitespace-nowrap">New</Badge>;
   };
 

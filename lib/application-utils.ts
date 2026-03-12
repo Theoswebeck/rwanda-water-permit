@@ -329,6 +329,19 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     project_title: formData.fullNameApplicant ? `${formData.fullNameApplicant} Water Permit Application` : 'Draft Application'
   };
 
+  // Persist metadata for dynamic additional documents, but never embed File blobs in internal_notes.
+  const serializedAdditionalDocuments = Array.isArray(formData?.additionalDocuments)
+    ? formData.additionalDocuments.map((doc: any) => ({
+        id: doc?.id || '',
+        name: doc?.name || '',
+        category: doc?.category || 'additional',
+        description: doc?.description || '',
+        // Keep URL for previously uploaded docs; file objects are intentionally omitted.
+        url: typeof doc?.url === 'string' ? doc.url : undefined,
+        file: null,
+      }))
+    : [];
+
   const mappedData = {
     // Set status based on action
     status,
@@ -553,6 +566,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       miningEIA: formData.miningEIA,
       miningHydrologicalReport: formData.miningHydrologicalReport,
       miningGeneralRequirements: formData.miningGeneralRequirements,
+      additionalDocuments: serializedAdditionalDocuments,
       
       // Metadata for legacy compatibility
       _legacy: {

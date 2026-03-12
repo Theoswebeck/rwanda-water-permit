@@ -13,8 +13,6 @@ export type PublicWaterUseDashboardQuery = {
   includeExpired?: boolean;
   from?: string;
   to?: string;
-  limit?: number;
-  offset?: number;
 };
 
 export type PublicWaterUseDashboardResponse = {
@@ -46,24 +44,6 @@ export type PublicWaterUseDashboardResponse = {
       issuedDate: string;
       expiryDate: string;
     }>;
-  };
-  registry: {
-    items: Array<{
-      permitId: string;
-      permitNumber: string;
-      status: string;
-      waterSource: string;
-      useType: string;
-      province: string | null;
-      district: string | null;
-      sector: string | null;
-      catchment1: string | null;
-      catchment2: string | null;
-      issuedDate: string;
-      expiryDate: string;
-      duration: string;
-    }>;
-    pagination: { total: number; limit: number; offset: number; returned: number };
   };
   generatedAt: string;
 };
