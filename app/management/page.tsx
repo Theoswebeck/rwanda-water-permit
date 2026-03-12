@@ -648,30 +648,56 @@ export default function ManagementDashboardPage() {
                         </CardContent>
                       </Card>
 
-                      <Card className="shadow-sm">
-                        <CardHeader>
-                          <CardTitle>Feedback rating breakdown</CardTitle>
-                          <CardDescription>Distribution of applicant satisfaction scores</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                          {(data?.feedback.ratingBreakdown ?? []).map((row) => {
-                            const totalFeedback = data?.feedback.totalSubmissions ?? 0;
-                            const percentage = totalFeedback > 0 ? (row.count / totalFeedback) * 100 : 0;
-                            return (
-                              <div key={row.rating} className="flex items-center justify-between gap-3">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <div className="font-medium">{row.rating} star</div>
-                                  <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                      <div className="space-y-4">
+                        <Card className="shadow-sm">
+                          <CardHeader>
+                            <CardTitle>Feedback rating breakdown</CardTitle>
+                            <CardDescription>Distribution of applicant satisfaction scores</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {(data?.feedback.ratingBreakdown ?? []).map((row) => {
+                              const totalFeedback = data?.feedback.totalSubmissions ?? 0;
+                              const percentage = totalFeedback > 0 ? (row.count / totalFeedback) * 100 : 0;
+                              return (
+                                <div key={row.rating} className="flex items-center justify-between gap-3">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <div className="font-medium">{row.rating} star</div>
+                                    <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                                  </div>
+                                  <div className="w-44 flex items-center gap-2">
+                                    <Progress value={percentage} className="h-2" />
+                                    <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
+                                  </div>
                                 </div>
-                                <div className="w-44 flex items-center gap-2">
-                                  <Progress value={percentage} className="h-2" />
-                                  <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
+                              );
+                            })}
+                          </CardContent>
+                        </Card>
+
+                        <Card className="shadow-sm">
+                          <CardHeader>
+                            <CardTitle>Inspection recommendation breakdown</CardTitle>
+                            <CardDescription>No action required, warning/reminder, and sanction outcomes</CardDescription>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {(data?.compliance.inspections.recommendationBreakdown ?? []).map((row) => {
+                              const totalInspections = data?.compliance.inspections.conducted ?? 0;
+                              const percentage = totalInspections > 0 ? (row.count / totalInspections) * 100 : 0;
+                              return (
+                                <div key={row.key} className="flex items-center justify-between gap-3">
+                                  <div className="flex min-w-0 items-center gap-2">
+                                    <div className="font-medium">{row.label}</div>
+                                  </div>
+                                  <div className="w-44 flex items-center gap-2">
+                                    <Progress value={percentage} className="h-2" />
+                                    <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </CardContent>
-                      </Card>
+                              );
+                            })}
+                          </CardContent>
+                        </Card>
+                      </div>
                     </div>
                   </div>
                 ) : null}

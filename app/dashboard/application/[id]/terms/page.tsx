@@ -861,6 +861,34 @@ export default function TermsConditionsPage() {
         });
       }
 
+      // Keep the original (underlying) application aligned with approved
+      // modification values after permit issuance succeeds.
+      if (isModificationApplication) {
+        try {
+          console.log('🔄 Syncing approved modification values to underlying application...');
+          const propagateResp = await fetch('/api/modifications/propagate-approved-values', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              modificationApplicationId: applicationId,
+            }),
+          });
+          const propagateJson = await propagateResp.json().catch(() => null);
+          if (!propagateResp.ok || !propagateJson?.success) {
+            console.warn(
+              '⚠️ Underlying-application sync failed (non-blocking):',
+              propagateJson?.message || propagateResp.statusText
+            );
+          } else if (propagateJson?.skipped) {
+            console.log('ℹ️ Underlying-application sync skipped:', propagateJson?.reason || 'No linked base application');
+          } else {
+            console.log('✅ Underlying application updated with approved modification values');
+          }
+        } catch (syncErr) {
+          console.warn('⚠️ Underlying-application sync crashed (non-blocking):', syncErr);
+        }
+      }
+
       console.log('📋 Updating application status to approved...');
       const { error: updateError } = await (supabase as any)
         .from('applications')

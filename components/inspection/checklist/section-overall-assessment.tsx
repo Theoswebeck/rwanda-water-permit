@@ -8,6 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ClipboardCheck } from "lucide-react";
+import {
+  INSPECTION_RECOMMENDATION_OPTIONS,
+  normalizeInspectionRecommendation,
+} from "@/lib/inspection-recommendations";
 
 interface OverallAssessmentSectionProps {
   data: {
@@ -73,16 +77,24 @@ export function OverallAssessmentSection({ data, onChange }: OverallAssessmentSe
         </div>
 
         <div>
-          <Label htmlFor="recommendations">Recommendations</Label>
-          <Textarea
-            id="recommendations"
-            placeholder="Provide specific recommendations for corrective actions, improvements, follow-up inspections, permit modifications, or compliance measures..."
-            value={data.recommendations || ''}
-            onChange={(e) => onChange('recommendations', e.target.value)}
-            rows={5}
-          />
+          <Label htmlFor="recommendations">Recommendations from Assessor</Label>
+          <Select
+            value={normalizeInspectionRecommendation(data.recommendations) || ""}
+            onValueChange={(value) => onChange("recommendations", value)}
+          >
+            <SelectTrigger id="recommendations">
+              <SelectValue placeholder="Select recommendation" />
+            </SelectTrigger>
+            <SelectContent>
+              {INSPECTION_RECOMMENDATION_OPTIONS.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground mt-1">
-            Be specific about what actions are needed, by when, and what the consequences of non-compliance might be
+            Choose the assessor recommendation outcome for this inspection.
           </p>
         </div>
 

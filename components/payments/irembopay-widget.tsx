@@ -64,6 +64,7 @@ export function IremboPayWidget({
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const hasInitiatedRef = useRef(false);
+  const callbackResolvedRef = useRef(false);
 
   // Use explicit sandbox flag (more reliable than guessing from key)
   const scriptUrl = isSandbox
@@ -144,11 +145,23 @@ export function IremboPayWidget({
     hasInitiatedRef.current = true;
 
     try {
-      window.IremboPay.initiate({
+      const widgetPayload = {
         publicKey,
         invoiceNumber,
         locale: window.IremboPay.locale.EN,
+      };
+      console.log('📤 [IREMBOPAY WIDGET] initiate() payload:', {
+        invoiceNumber: widgetPayload.invoiceNumber,
+        locale: widgetPayload.locale,
+        publicKey: publicKey.substring(0, 20) + '...',
+      });
+
+      window.IremboPay.initiate({
+        ...widgetPayload,
         callback: (err, resp) => {
+          if (callbackResolvedRef.current) {
+            return;
+          }
           console.log('📨 [IREMBOPAY WIDGET] Callback received at:', new Date().toISOString());
           console.log('📨 [IREMBOPAY WIDGET] Error object:', err);
           console.log('📨 [IREMBOPAY WIDGET] Response object:', resp);
@@ -176,10 +189,24 @@ export function IremboPayWidget({
               success: resp.success,
               status: resp.status,
               paymentStatus: resp.paymentStatus,
+              paymentProvider: resp.paymentProvider ?? resp.provider ?? resp.network,
               invoiceNumber: resp.invoiceNumber,
               transactionId: resp.transactionId,
               fullResponse: JSON.stringify(resp, null, 2),
             });
+          }
+
+          const providerValue =
+            resp?.paymentProvider ??
+            resp?.provider ??
+            resp?.network ??
+            err?.paymentProvider ??
+            err?.provider ??
+            err?.network;
+          if (providerValue) {
+            console.log('📡 [IREMBOPAY WIDGET] Provider value available:', providerValue);
+          } else {
+            console.log('📡 [IREMBOPAY WIDGET] Provider value not available in callback payload');
           }
 
           if (err) {
@@ -194,14 +221,13 @@ export function IremboPayWidget({
             );
             onFailed?.(err);
           } else {
+            callbackResolvedRef.current = true;
             console.log('✅ [IREMBOPAY WIDGET] Payment successful:', resp);
             setPaymentStatus('success');
             onSuccess?.();
             
-            // Close modal after successful payment
-            setTimeout(() => {
-              window.IremboPay?.closeModal();
-            }, 2000);
+            // Close immediately after successful callback to avoid duplicate downstream initiate attempts.
+            window.IremboPay?.closeModal();
           }
         },
       });
@@ -217,6 +243,7 @@ export function IremboPayWidget({
   // Reset one-shot initiation guard when invoice changes.
   useEffect(() => {
     hasInitiatedRef.current = false;
+    callbackResolvedRef.current = false;
     setPaymentStatus('idle');
   }, [invoiceNumber, publicKey]);
 
@@ -245,12 +272,6 @@ export function IremboPayWidget({
   const handleScriptReady = () => {
     console.log('✅ IremboPay script ready');
     setScriptLoaded(true);
-
-    // Kick off the modal immediately (don’t wait for the effect cycle).
-    // Guarded to avoid double-init.
-    if (invoiceNumber && publicKey && !error && paymentStatus === 'idle') {
-      setTimeout(() => initiatePayment(), 0);
-    }
   };
 
   const handleScriptError = () => {

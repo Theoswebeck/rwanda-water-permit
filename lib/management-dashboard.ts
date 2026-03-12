@@ -1,6 +1,7 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
+import { INSPECTION_RECOMMENDATION_OPTIONS } from "@/lib/inspection-recommendations";
 import {
   consolidatePermitRecords,
   createConsolidatedPermitFromPermit,
@@ -78,6 +79,11 @@ export type ManagementDashboardData = {
       conducted: number;
       violationsDetected: number;
       enforcementActionsTaken: number;
+      recommendationBreakdown: Array<{
+        key: string;
+        label: string;
+        count: number;
+      }>;
     };
     parameters: Array<{
       key: string;
@@ -265,6 +271,24 @@ function isMissingRelationError(err: unknown, tableName: string): boolean {
   return msg.includes("does not exist") && msg.includes(tableName.toLowerCase());
 }
 
+function extractMissingColumnFromError(err: unknown, tableName: string): string | null {
+  if (!err || typeof err !== "object") return null;
+  const maybe = err as { message?: string };
+  const msg = String(maybe.message || "");
+
+  let match = msg.match(/Could not find the '([^']+)' column of '([^']+)' in the schema cache/i);
+  if (match && (match[2] === tableName || match[2] === `public.${tableName}`)) {
+    return match[1];
+  }
+
+  match = msg.match(/column ["']?([^"']+)["']? of relation ["']?([^"']+)["']? does not exist/i);
+  if (match && (match[2] === tableName || match[2] === `public.${tableName}`)) {
+    return match[1];
+  }
+
+  return null;
+}
+
 export async function getManagementDashboardData(filters: ManagementDashboardFilters): Promise<ManagementDashboardData> {
   const from = parseDateMaybe(filters.from);
   const to = parseDateMaybe(filters.to);
@@ -386,12 +410,23 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
   // Inspections table may not exist in some deployments yet. In that case, treat as empty
   // so the rest of the dashboard still renders (portfolio/workflow/permits).
   let inspectionsAll: Inspection[] = [];
-  const { data: inspectionsRaw, error: inspectionsError } = await supabase
+  let { data: inspectionsRaw, error: inspectionsError } = await supabase
     .from("inspections")
     .select(
-      "id,application_id,status,result,created_at,updated_at,completed_date,volume_limits_respected,location_verified,reporting_up_to_date,reports_submitted,fees_paid,fees_payment_verified,regulatory_compliance,actual_quantity,actual_unit,allowed_quantity,allowed_unit"
+      "id,application_id,status,result,created_at,updated_at,completed_date,volume_limits_respected,location_verified,reporting_up_to_date,reports_submitted,fees_paid,fees_payment_verified,regulatory_compliance,actual_quantity,actual_unit,allowed_quantity,allowed_unit,recommendations"
     )
     .order("created_at", { ascending: false });
+
+  if (inspectionsError && extractMissingColumnFromError(inspectionsError, "inspections") === "recommendations") {
+    const fallback = await supabase
+      .from("inspections")
+      .select(
+        "id,application_id,status,result,created_at,updated_at,completed_date,volume_limits_respected,location_verified,reporting_up_to_date,reports_submitted,fees_paid,fees_payment_verified,regulatory_compliance,actual_quantity,actual_unit,allowed_quantity,allowed_unit"
+      )
+      .order("created_at", { ascending: false });
+    inspectionsRaw = fallback.data;
+    inspectionsError = fallback.error;
+  }
 
   if (inspectionsError) {
     if (!isMissingRelationError(inspectionsError, "inspections")) {
@@ -547,6 +582,11 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
   let nonCompliant = 0;
 
   let violationsDetected = 0;
+  const recommendationCounts: Record<string, number> = {
+    "No action required": 0,
+    "Warning/Reminder": 0,
+    "Sanction": 0,
+  };
 
   const denom = latestByApp.size;
   let volumeOk = 0;
@@ -561,6 +601,11 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
     else nonCompliant += 1;
 
     if (isViolation(insp)) violationsDetected += 1;
+
+    const recommendation = String(insp.recommendations || "").trim().toLowerCase();
+    if (recommendation === "no action required") recommendationCounts["No action required"] += 1;
+    if (recommendation === "warning/reminder") recommendationCounts["Warning/Reminder"] += 1;
+    if (recommendation === "sanction") recommendationCounts["Sanction"] += 1;
 
     if (insp.volume_limits_respected === true) volumeOk += 1;
     if (insp.location_verified === true) locationOk += 1;
@@ -683,6 +728,11 @@ export async function getManagementDashboardData(filters: ManagementDashboardFil
         conducted: completedInspections.length,
         violationsDetected,
         enforcementActionsTaken: 0,
+        recommendationBreakdown: INSPECTION_RECOMMENDATION_OPTIONS.map((option) => ({
+          key: option,
+          label: option,
+          count: recommendationCounts[option] || 0,
+        })),
       },
       parameters,
       alerts: alerts.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "high" ? -1 : 1)),

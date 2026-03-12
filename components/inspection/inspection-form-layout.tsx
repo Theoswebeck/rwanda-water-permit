@@ -11,6 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { InspectionDocumentsUpload, type InspectionDocumentFile } from "@/components/inspection/inspection-documents-upload";
+import {
+  INSPECTION_RECOMMENDATION_OPTIONS,
+  normalizeInspectionRecommendation,
+} from "@/lib/inspection-recommendations";
 
 type InspectionTemplate = "authorization" | "concession";
 type BoundaryRow = { beacon: string; latitude?: number | null; longitude?: number | null };
@@ -683,13 +687,28 @@ export function InspectionFormLayout({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Recommendations</Label>
-                  <Textarea
-                    disabled={!canEdit}
-                    className="min-h-[160px] bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
-                    value={form.recommendations ?? ""}
-                    onChange={(e) => setField("recommendations", e.target.value as any)}
-                  />
+                  <Label>Recommendations from Assessor</Label>
+                  {canEdit ? (
+                    <Select
+                      value={normalizeInspectionRecommendation(form.recommendations) ?? ""}
+                      onValueChange={(value) => setField("recommendations", value as any)}
+                    >
+                      <SelectTrigger className="bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
+                        <SelectValue placeholder="Select recommendation" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INSPECTION_RECOMMENDATION_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="min-h-[48px] rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-950/20">
+                      {form.recommendations || "N/A"}
+                    </div>
+                  )}
                 </div>
               </div>
             </SectionShell>

@@ -610,17 +610,27 @@ function resolveOrganizationRepresentative(application: Application): { name: st
   return { name: name || fallbackName, title: title || "Representative" };
 }
 
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const normalized = value.replace(/,/g, "").trim();
+    if (!normalized) return null;
+    const parsed = Number.parseFloat(normalized);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
 function resolveConcessionAreaHectares(application: Application): number | null {
   const notes = getInternalNotes(application);
-  const assessorArea = notes?._assessorAdjustments?.recommendedVolumeM3;
-  if (typeof assessorArea === "number" && Number.isFinite(assessorArea) && assessorArea > 0) return assessorArea;
-  if (typeof application.concession_area === "number" && Number.isFinite(application.concession_area)) {
-    return application.concession_area;
-  }
-  if (typeof notes?.concessionArea === "number" && Number.isFinite(notes.concessionArea)) return notes.concessionArea;
-  if (typeof notes?.fishLakeAreaHectares === "number" && Number.isFinite(notes.fishLakeAreaHectares)) {
-    return notes.fishLakeAreaHectares;
-  }
+  const assessorArea = parsePositiveNumber(notes?._assessorAdjustments?.recommendedVolumeM3);
+  if (assessorArea != null) return assessorArea;
+  const dbConcessionArea = parsePositiveNumber(application.concession_area);
+  if (dbConcessionArea != null) return dbConcessionArea;
+  const notesConcessionArea = parsePositiveNumber(notes?.concessionArea);
+  if (notesConcessionArea != null) return notesConcessionArea;
+  const fishLakeArea = parsePositiveNumber(notes?.fishLakeAreaHectares);
+  if (fishLakeArea != null) return fishLakeArea;
   return null;
 }
 

@@ -9,6 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  INSPECTION_RECOMMENDATION_OPTIONS,
+  normalizeInspectionRecommendation,
+} from "@/lib/inspection-recommendations";
 
 type InspectionTemplate = "authorization" | "concession";
 type BoundaryRow = { beacon: string; latitude?: number | null; longitude?: number | null };
@@ -646,8 +651,28 @@ export function RwbInspectionChecklist({
                 <Textarea disabled={!canEdit} value={form.general_conclusion ?? ""} onChange={(e) => setField("general_conclusion", e.target.value as any)} className="min-h-[140px]" />
               </div>
               <div className="space-y-2">
-                <Label>Recommendations</Label>
-                <Textarea disabled={!canEdit} value={form.recommendations ?? ""} onChange={(e) => setField("recommendations", e.target.value as any)} className="min-h-[140px]" />
+                <Label>Recommendations from Assessor</Label>
+                {canEdit ? (
+                  <Select
+                    value={normalizeInspectionRecommendation(form.recommendations) ?? ""}
+                    onValueChange={(value) => setField("recommendations", value as any)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select recommendation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INSPECTION_RECOMMENDATION_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="min-h-[40px] rounded-md border px-3 py-2 text-sm">
+                    {form.recommendations || "N/A"}
+                  </div>
+                )}
               </div>
             </div>
           </SectionBlock>

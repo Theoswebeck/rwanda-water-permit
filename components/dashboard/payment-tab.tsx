@@ -196,6 +196,14 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           return;
       }
 
+      console.log('📤 [PAYMENT TAB] Payload sent to /api/payments/initiate:', {
+        amount: requestData.amount,
+        currency: requestData.currency,
+        application_id: requestData.application_id,
+        has_application_data: !!requestData.application_data,
+        customer: requestData.customer,
+      });
+
       const result = await initiatePayment(requestData);
 
       if (result.success && result.payment) {

@@ -10,6 +10,7 @@ import { CheckCircle2, XCircle, AlertCircle, Loader2, AlertTriangle, FileText, E
 import { getInspectionById } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { useErrorHandler } from "@/hooks/useErrorHandler";
+import { normalizeInspectionRecommendation } from "@/lib/inspection-recommendations";
 
 interface InspectionDetailProps {
   inspectionId: string
@@ -611,9 +612,11 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
               </div>
             </div>
             <div>
-              <Label className="text-sm text-muted-foreground">Recommendations</Label>
+              <Label className="text-sm text-muted-foreground">Recommendations from Assessor</Label>
               <div className="mt-2 p-4 bg-muted/30 rounded-lg border border-slate-200 dark:border-slate-800 min-h-[120px] whitespace-pre-wrap">
-                {inspection.recommendations || "N/A"}
+                {normalizeInspectionRecommendation(inspection.recommendations) ||
+                  inspection.recommendations ||
+                  "N/A"}
               </div>
             </div>
           </div>

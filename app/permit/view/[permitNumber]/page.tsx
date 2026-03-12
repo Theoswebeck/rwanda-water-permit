@@ -206,6 +206,11 @@ export default async function PublicPermitViewPage({
   })();
 
   const concessionAreaValue = (() => {
+    const assessorArea = parsePositiveNumber(
+      (internalNotes?._assessorAdjustments as Record<string, unknown> | undefined)?.recommendedVolumeM3
+    );
+    if (assessorArea) return `${assessorArea.toLocaleString()} ha`;
+
     const dbArea = parsePositiveNumber(application?.concession_area);
     if (dbArea) return `${dbArea.toLocaleString()} ha`;
 
