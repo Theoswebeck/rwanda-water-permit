@@ -113,7 +113,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       
       // Auto-redirect to dashboard after 4 seconds
       setTimeout(() => {
-        router.push('/dashboard?tab=applications');
+        router.push('/dashboard');
       }, 4000);
     }
   }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
@@ -237,7 +237,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
 
           // Auto-redirect to dashboard after 4 seconds
           setTimeout(() => {
-            router.push('/dashboard?tab=applications');
+            router.push('/dashboard');
           }, 4000);
         } else {
           console.log('⏳ [PAYMENT TAB] Payment not yet completed, waiting for status update...');
@@ -264,8 +264,15 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       errors: error?.errors,
       fullError: error ? JSON.stringify(error, null, 2) : 'no error object',
     });
+    const isAlreadyPaid = error?.code === 'BAD_INVOICES_PAID';
+    if (isAlreadyPaid) {
+      console.log('ℹ️ [PAYMENT TAB] Invoice already paid callback received. Verifying as success...');
+      void handlePaymentSuccess();
+      return;
+    }
+
     console.log('❌ [PAYMENT TAB] Payment failed');
-    
+
     if (payment?.id) {
       checkStatus(payment.id);
     }
@@ -522,7 +529,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
               </Alert>
 
               <Button
-                onClick={() => router.push('/dashboard?tab=applications')}
+                onClick={() => router.push('/dashboard')}
                 className="w-full"
               >
                 View My Applications
