@@ -163,8 +163,10 @@ function fmtProvince(raw: string): string {
 }
 
 function resolveArea(app: PermitApplication): number | null {
-  if (typeof app.concession_area === "number" && Number.isFinite(app.concession_area)) return app.concession_area;
   const notes = resolveNotes(app);
+  const assessorArea = notes?._assessorAdjustments?.recommendedVolumeM3;
+  if (typeof assessorArea === "number" && Number.isFinite(assessorArea) && assessorArea > 0) return assessorArea;
+  if (typeof app.concession_area === "number" && Number.isFinite(app.concession_area)) return app.concession_area;
   if (typeof notes?.concessionArea === "number") return notes.concessionArea;
   if (typeof notes?.fishLakeAreaHectares === "number") return notes.fishLakeAreaHectares;
   return null;

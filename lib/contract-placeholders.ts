@@ -366,13 +366,17 @@ function resolveDurationYears(application: ApplicationForContract): string {
 }
 
 function resolveConcessionAreaLabel(application: ApplicationForContract): string {
+  const notes = getInternalNotes(application);
+
+  const assessorArea = parsePositiveNumber(notes?._assessorAdjustments?.recommendedVolumeM3);
+  if (assessorArea) return `${formatNumber(assessorArea)} Ha`;
+
   const dbValue = parsePositiveNumber(application.concession_area);
   if (dbValue) return `${formatNumber(dbValue)} Ha`;
 
   const geometryValue = areaHaFromGeometry(application.coordinates);
   if (geometryValue) return `${formatNumber(geometryValue)} Ha`;
 
-  const notes = getInternalNotes(application);
   if (notes) {
     if (Array.isArray(notes.waterSourcePolygons) && notes.waterSourcePolygons.length > 0) {
       const feature = polygonsToGeoJSON(notes.waterSourcePolygons);

@@ -611,10 +611,12 @@ function resolveOrganizationRepresentative(application: Application): { name: st
 }
 
 function resolveConcessionAreaHectares(application: Application): number | null {
+  const notes = getInternalNotes(application);
+  const assessorArea = notes?._assessorAdjustments?.recommendedVolumeM3;
+  if (typeof assessorArea === "number" && Number.isFinite(assessorArea) && assessorArea > 0) return assessorArea;
   if (typeof application.concession_area === "number" && Number.isFinite(application.concession_area)) {
     return application.concession_area;
   }
-  const notes = getInternalNotes(application);
   if (typeof notes?.concessionArea === "number" && Number.isFinite(notes.concessionArea)) return notes.concessionArea;
   if (typeof notes?.fishLakeAreaHectares === "number" && Number.isFinite(notes.fishLakeAreaHectares)) {
     return notes.fishLakeAreaHectares;
@@ -1710,7 +1712,7 @@ export const generateDigitalWaterPermitBlob = async (
     ['Purpose', application.water_purpose.replace('_', ' ').toUpperCase()],
     ['Authorized Volume', `${application.estimated_usage_volume?.toLocaleString() || 'N/A'} ${application.usage_unit || ''}`],
     ['Maximum Yearly Volume', application.max_yearly_volume_m3 ? `${application.max_yearly_volume_m3.toLocaleString()} m³` : 'N/A'],
-    ['Concession Area', application.concession_area ? `${application.concession_area} hectares` : 'N/A']
+    ['Concession Area', (() => { const a = resolveConcessionAreaHectares(application); return a != null ? `${a} hectares` : 'N/A'; })()]
   ];
 
   autoTable(doc, {

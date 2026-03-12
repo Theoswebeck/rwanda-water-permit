@@ -392,6 +392,9 @@ export default function ApplicationDetailPage() {
       setIsDownloadingTerms(false);
     }
   };
+
+  const canDownloadPermit = Boolean(issuedPermit?.permitPdfPath || issuedPermit?.permitNumber);
+  const canDownloadTerms = Boolean(getAcceptedTermsPdfPath(application) || issuedPermit?.permitNumber);
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -1013,38 +1016,48 @@ export default function ApplicationDetailPage() {
                     <p className="text-green-700">
                       Congratulations! Your water permit application has been approved by Rwanda Water Resources Board.
                     </p>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="bg-white hover:bg-green-100 border-green-300 text-green-800"
-                        onClick={handleDownloadPermit}
-                        disabled={isDownloadingPermit}
-                      >
-                        {isDownloadingPermit ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Download className="h-4 w-4 mr-2" />
+                    {(canDownloadPermit || canDownloadTerms) ? (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {canDownloadPermit && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="bg-white hover:bg-green-100 border-green-300 text-green-800"
+                            onClick={handleDownloadPermit}
+                            disabled={isDownloadingPermit}
+                          >
+                            {isDownloadingPermit ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4 mr-2" />
+                            )}
+                            {isDownloadingPermit ? "Downloading Permit..." : "Download Permit"}
+                          </Button>
                         )}
-                        {isDownloadingPermit ? "Downloading Permit..." : "Download Permit"}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="bg-white hover:bg-green-100 border-green-300 text-green-800"
-                        onClick={handleDownloadTerms}
-                        disabled={isDownloadingTerms}
-                      >
-                        {isDownloadingTerms ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <FileText className="h-4 w-4 mr-2" />
+                        {canDownloadTerms && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="bg-white hover:bg-green-100 border-green-300 text-green-800"
+                            onClick={handleDownloadTerms}
+                            disabled={isDownloadingTerms}
+                          >
+                            {isDownloadingTerms ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <FileText className="h-4 w-4 mr-2" />
+                            )}
+                            {isDownloadingTerms ? "Downloading Terms..." : "Download Terms & Conditions"}
+                          </Button>
                         )}
-                        {isDownloadingTerms ? "Downloading Terms..." : "Download Terms & Conditions"}
-                      </Button>
-                    </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-green-700 pt-1">
+                        Permit documents are being prepared and will appear here shortly.
+                      </p>
+                    )}
                     {application.approval_conditions && (
                       <div className="mt-2">
                         <p className="font-medium text-green-800">Approval Conditions:</p>

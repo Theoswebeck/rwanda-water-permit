@@ -1244,7 +1244,7 @@ export default function TermsConditionsPage() {
 
                   <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
                     {issuedPermit?.permitNumber && (
-                      <Link href={`/permit/view/${issuedPermit.permitNumber}`}>
+                      <Link href={`/permit/view/${encodeURIComponent(issuedPermit.permitNumber)}`}>
                         <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
                           <ExternalLink className="mr-2 h-4 w-4" />
                           View Permit
@@ -1315,11 +1315,6 @@ export default function TermsConditionsPage() {
                       )}
 
                       <div className="flex justify-end gap-3">
-                        <Link href="/dashboard">
-                          <Button variant="ghost" disabled={isSubmittingFeedback}>
-                            Skip
-                          </Button>
-                        </Link>
                         <Button
                           onClick={handleSubmitFeedback}
                           disabled={isSubmittingFeedback || !feedback.trim()}

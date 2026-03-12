@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { FileText, Droplet, MapPin, Factory, AlertCircle, Plus, X, ThumbsUp, ThumbsDown, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Droplet, MapPin, Factory, AlertCircle, ThumbsUp, ThumbsDown, CheckCircle, XCircle } from "lucide-react";
 import type { AssessmentReportData } from "@/lib/assessment-report-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -73,26 +73,6 @@ export function AssessmentReportForm({
     if (!sourceFlowLpsValue || sourceFlowM3DayValue) return;
     updateField("sourceFlowM3Day" as any, toDerivedM3Day(sourceFlowLpsValue) as any);
   }, [sourceFlowLpsValue, sourceFlowM3DayValue]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const updateBeacon = (index: number, field: 'latitude' | 'longitude', value: string) => {
-    const beacons = [...(localData.beacons || [])];
-    if (!beacons[index]) {
-      beacons[index] = { id: `B${index + 1}`, latitude: '', longitude: '' };
-    }
-    beacons[index][field] = value;
-    updateField('beacons', beacons);
-  };
-
-  const addBeacon = () => {
-    const beacons = localData.beacons || [];
-    const newId = `B${beacons.length + 1}`;
-    updateField('beacons', [...beacons, { id: newId, latitude: '', longitude: '' }]);
-  };
-
-  const removeBeacon = (index: number) => {
-    const beacons = localData.beacons || [];
-    updateField('beacons', beacons.filter((_, i) => i !== index));
-  };
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
   const prefilledClass = `bg-muted/50${readOnly ? " cursor-not-allowed" : ""}`;
@@ -479,63 +459,6 @@ export function AssessmentReportForm({
                   disabled={isSurfaceSectionReadOnly}
                   className={prefilledClass}
                 />
-              </div>
-              <div>
-                <Label>Concession boundaries (attach concession area map)</Label>
-                <div className="space-y-3 mt-2">
-                  {(localData.beacons || []).map((beacon, index) => (
-                    <div key={index} className="grid grid-cols-12 gap-2 items-center">
-                      <div className="col-span-1">
-                        <Label className="text-sm">{beacon.id}</Label>
-                      </div>
-                      <div className="col-span-5">
-                        <Input
-                          value={beacon.latitude}
-                          onChange={(e) => updateBeacon(index, 'latitude', e.target.value)}
-                          placeholder="Latitude"
-                          readOnly={isSurfaceSectionReadOnly}
-                          disabled={isSurfaceSectionReadOnly}
-                          className={prefilledClass}
-                        />
-                      </div>
-                      <div className="col-span-5">
-                        <Input
-                          value={beacon.longitude}
-                          onChange={(e) => updateBeacon(index, 'longitude', e.target.value)}
-                          placeholder="Longitude"
-                          readOnly={isSurfaceSectionReadOnly}
-                          disabled={isSurfaceSectionReadOnly}
-                          className={prefilledClass}
-                        />
-                      </div>
-                      {!isSurfaceSectionReadOnly && !readOnly && (
-                        <div className="col-span-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeBeacon(index)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {!isSurfaceSectionReadOnly && !readOnly && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addBeacon}
-                      className="w-full"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Beacon
-                    </Button>
-                  )}
-                </div>
               </div>
             </CardContent>
           </Card>

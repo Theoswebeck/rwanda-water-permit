@@ -5,7 +5,7 @@
 // Main payment interface for water permit applications
 // =============================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,6 +79,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
+  const blockedAutoOpenInvoiceRef = useRef<string | null>(null);
   
   const {
     payment,
@@ -125,8 +126,13 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   useEffect(() => {
     const isPendingWithRef =
       (payment?.status === 'pending' || payment?.status === 'processing') && !!payment?.irembo_payment_ref;
+    const currentInvoice = payment?.irembo_payment_ref ?? null;
 
-    if (isPendingWithRef && !showWidget) {
+    if (payment?.status === 'completed') {
+      blockedAutoOpenInvoiceRef.current = null;
+    }
+
+    if (isPendingWithRef && !showWidget && blockedAutoOpenInvoiceRef.current !== currentInvoice) {
       setShowWidget(true);
     }
   }, [payment?.status, payment?.irembo_payment_ref, showWidget]);
@@ -139,6 +145,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       setIsInitializing(true);
       clearError();
       setCustomerValidationError(null);
+      blockedAutoOpenInvoiceRef.current = null;
 
       console.log('🚀 Initiating payment...');
 
@@ -217,6 +224,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
     
     try {
+      blockedAutoOpenInvoiceRef.current = payment?.irembo_payment_ref ?? null;
+      setShowWidget(false);
       setIsCompletingPayment(true);
       console.log('💾 [PAYMENT TAB] Verifying payment status...');
 
@@ -265,6 +274,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       fullError: error ? JSON.stringify(error, null, 2) : 'no error object',
     });
     console.log('❌ [PAYMENT TAB] Payment failed');
+    blockedAutoOpenInvoiceRef.current = payment?.irembo_payment_ref ?? null;
+    setShowWidget(false);
     
     if (payment?.id) {
       checkStatus(payment.id);
@@ -275,6 +286,7 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
    * Handle retry payment
    */
   const handleRetryPayment = () => {
+    blockedAutoOpenInvoiceRef.current = null;
     setShowWidget(false);
     setTimeout(() => {
       handleInitiatePayment();
