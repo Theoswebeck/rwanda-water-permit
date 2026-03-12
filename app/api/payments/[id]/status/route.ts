@@ -190,16 +190,13 @@ export async function GET(
           // Map IremboPay status to our internal status
           const iremboPaymentStatus = iremboStatus.data.paymentStatus; // IremboPay uses 'paymentStatus' field
           const mappedStatus = mapIremboPayStatus(iremboPaymentStatus);
-          const completionVerified =
-            mappedStatus !== 'completed' ||
-            hasCompletionEvidence(iremboStatus.data, iremboPaymentRef);
-          const effectiveStatus =
-            mappedStatus === 'completed' && !completionVerified ? 'processing' : mappedStatus;
-          
-          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus, '→ Effective:', effectiveStatus);
-          if (mappedStatus === 'completed' && !completionVerified) {
-            console.warn('⚠️ [PAYMENT STATUS] Gateway reported completed without strong proof; keeping payment in processing state');
+          const effectiveStatus = mappedStatus;
+
+          if (mappedStatus === 'completed' && !hasCompletionEvidence(iremboStatus.data, iremboPaymentRef)) {
+            console.warn('⚠️ [PAYMENT STATUS] Gateway reported completed without paidAt/transactionId — proceeding anyway');
           }
+          
+          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus);
 
           // Real payment flow only - no auto-completion
 

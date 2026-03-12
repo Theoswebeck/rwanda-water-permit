@@ -299,42 +299,47 @@ export function PaymentTab({
       status: payment?.status,
       invoiceNumber: payment?.irembo_payment_ref,
     });
-    console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
+    console.log('✅ [PAYMENT TAB] Payment successful - verifying with gateway...');
     
     try {
       setGatewayError(null);
       setPauseAutoPolling(false);
-      setAwaitingGatewayConfirmation(true);
       setShowWidget(false);
       setIsCompletingPayment(true);
-      console.log('💾 [PAYMENT TAB] Verifying payment status...');
+      setAwaitingGatewayConfirmation(false);
 
-      // Check status one final time to get the latest payment data
       if (payment?.id) {
-        const finalPayment = await checkStatus(payment.id);
-        
-        console.log('💾 [PAYMENT TAB] Status check result:', {
-          paymentId: finalPayment?.id,
-          status: finalPayment?.status,
-          applicationNumber: finalPayment?.application?.application_number,
-        });
-        
-        if (finalPayment && finalPayment.status === 'completed') {
-          setCompletedApplication(finalPayment.application);
-          setPaymentCompleted(true);
-          setAwaitingGatewayConfirmation(false);
-          console.log('✅ [PAYMENT TAB] Application submitted:', finalPayment.application?.application_number);
+        const retryDelays = [2000, 3000, 5000];
 
-          if (autoRedirectOnCompletion) {
-            // Auto-redirect to dashboard after 4 seconds
-            setTimeout(() => {
-              router.push(completionRedirectPath);
-            }, 4000);
+        for (let i = 0; i < retryDelays.length; i++) {
+          await new Promise(resolve => setTimeout(resolve, retryDelays[i]));
+
+          console.log(`💾 [PAYMENT TAB] Status check attempt ${i + 1}/${retryDelays.length}...`);
+          const result = await checkStatus(payment.id);
+
+          console.log(`💾 [PAYMENT TAB] Attempt ${i + 1} result:`, {
+            paymentId: result?.id,
+            status: result?.status,
+            applicationNumber: result?.application?.application_number,
+          });
+
+          if (result && result.status === 'completed') {
+            setCompletedApplication(result.application);
+            setPaymentCompleted(true);
+            setAwaitingGatewayConfirmation(false);
+            console.log('✅ [PAYMENT TAB] Application submitted:', result.application?.application_number);
+
+            if (autoRedirectOnCompletion) {
+              setTimeout(() => {
+                router.push(completionRedirectPath);
+              }, 4000);
+            }
+            return;
           }
-        } else {
-          console.log('⏳ [PAYMENT TAB] Payment not yet completed, waiting for status update...');
-          // The hook's polling will handle the rest
         }
+
+        console.log('⏳ [PAYMENT TAB] Payment not confirmed after retries, falling back to polling...');
+        setAwaitingGatewayConfirmation(true);
       }
     } catch (error) {
       console.error('❌ [PAYMENT TAB] Error completing payment:', error);
