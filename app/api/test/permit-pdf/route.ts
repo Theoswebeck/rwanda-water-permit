@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
+import { generatePermitPdfBuffer } from "@/lib/pdf-permit-server";
 
 export const runtime = "nodejs";
 
@@ -36,20 +36,18 @@ const DUMMY_APPLICATION = {
 
 export async function GET() {
   try {
-    const issuedDate = new Date(2026, 2, 11); // 11/03/2026
-    const expiryDate = new Date(2039, 2, 12); // 12/03/2039
+    const issuedDate = new Date(2026, 2, 11);
+    const expiryDate = new Date(2039, 2, 12);
 
-    const pdfBlob = await generateDigitalWaterPermitBlob(
-      DUMMY_APPLICATION as any,
-      "000011/RWB/2026",
-      [],
-      13,
-      false,
-      { issuedDate, expiryDate },
-    );
+    const pdfBuffer = await generatePermitPdfBuffer({
+      application: DUMMY_APPLICATION as any,
+      permitNumber: "000011/RWB/2026",
+      permitValidityYears: 13,
+      issuedDate,
+      expiryDate,
+    });
 
-    const bytes = Buffer.from(await pdfBlob.arrayBuffer());
-    return new NextResponse(bytes, {
+    return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="test-permit-000011.pdf"',

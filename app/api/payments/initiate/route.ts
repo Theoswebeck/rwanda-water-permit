@@ -518,10 +518,30 @@ export async function POST(request: NextRequest) {
     const paymentUrl = typeof paymentUrlRaw === 'string' ? paymentUrlRaw.trim() : '';
     const requestId = typeof requestIdRaw === 'string' ? requestIdRaw.trim() : '';
 
-    // Use expiry from IremboPay's response (authoritative) instead of locally-computed value
-    const iremboExpiryIso = typeof iremboExpiryRaw === 'string' && iremboExpiryRaw.trim()
-      ? new Date(iremboExpiryRaw.trim()).toISOString()
-      : null;
+    const normalizeDateToIso = (value: unknown): string | null => {
+      if (value === null || value === undefined) {
+        return null;
+      }
+
+      const candidate =
+        value instanceof Date
+          ? value
+          : typeof value === 'string' || typeof value === 'number'
+            ? new Date(value)
+            : null;
+
+      if (!candidate || Number.isNaN(candidate.getTime())) {
+        return null;
+      }
+
+      return candidate.toISOString();
+    };
+
+    // Prefer expiry from IremboPay when parseable; otherwise use local fallback.
+    const iremboExpiryIso = normalizeDateToIso(iremboExpiryRaw);
+    if (!iremboExpiryIso && iremboExpiryRaw !== null && iremboExpiryRaw !== undefined) {
+      console.warn('⚠️ [PAYMENT INITIATE] Ignoring invalid expiryAt from gateway response:', iremboExpiryRaw);
+    }
     const finalExpiresAtIso = iremboExpiryIso || expiresAtIso;
 
     if (!paymentRef) {
