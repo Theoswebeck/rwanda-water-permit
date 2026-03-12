@@ -61,32 +61,6 @@ type CompletedApplication = {
   [key: string]: unknown
 }
 
-type CustomerSnapshot = {
-  email?: string
-  phone?: string
-  name?: string
-}
-
-function pickFirstNonEmptyString(...values: unknown[]): string {
-  for (const value of values) {
-    if (typeof value === 'string') {
-      const normalized = value.trim();
-      if (normalized) return normalized;
-    }
-  }
-  return '';
-}
-
-function parseInternalNotes(internalNotes: string | undefined): Record<string, unknown> | null {
-  if (!internalNotes || typeof internalNotes !== 'string') return null;
-  try {
-    const parsed = JSON.parse(internalNotes);
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
 interface PaymentTabProps {
   application?: Application; // Optional - may not exist yet
   formData?: DraftFormData; // Unsaved form data for new applications
@@ -95,30 +69,16 @@ interface PaymentTabProps {
   isSavingApplication?: boolean;
   saveError?: string | null;
   onRetrySave?: () => void;
-  autoRedirectOnCompletion?: boolean;
-  completionRedirectPath?: string;
 }
 
-export function PaymentTab({
-  application,
-  formData,
-  onBack,
-  isSavingApplication,
-  saveError,
-  onRetrySave,
-  autoRedirectOnCompletion = true,
-  completionRedirectPath = '/dashboard?tab=applications',
-}: PaymentTabProps) {
+export function PaymentTab({ application, formData, onBack, isSavingApplication, saveError, onRetrySave }: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [customerValidationError, setCustomerValidationError] = useState<string | null>(null);
-  const [gatewayError, setGatewayError] = useState<string | null>(null);
-  const [pauseAutoPolling, setPauseAutoPolling] = useState(false);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
-  const [awaitingGatewayConfirmation, setAwaitingGatewayConfirmation] = useState(false);
   
   const {
     payment,
@@ -130,7 +90,7 @@ export function PaymentTab({
   } = usePayment({
     applicationId: application?.id,
     autoFetch: !!application?.id, // Only auto-fetch if there is an application
-    pollInterval: pauseAutoPolling ? undefined : 5000,
+    pollInterval: 5000,
   });
 
   const applicationFee = getApplicationFee();
@@ -141,7 +101,8 @@ export function PaymentTab({
   useEffect(() => {
     if (payment && payment.status === 'completed' && !paymentCompleted && !isCompletingPayment) {
       console.log('✅ Payment completed detected via polling');
-      setAwaitingGatewayConfirmation(false);
+      setCompletedApplication(payment.application);
+      setPaymentCompleted(true);
 
       // Close Irembo modal if it is open (helps demo flow)
       try {
@@ -149,26 +110,13 @@ export function PaymentTab({
       } catch {
         // ignore
       }
-
-      if (autoRedirectOnCompletion) {
-        setCompletedApplication(payment.application);
-        setPaymentCompleted(true);
-
-        // Auto-redirect to dashboard after 4 seconds
-        const redirectTimer = setTimeout(() => {
-          router.push(completionRedirectPath);
-        }, 4000);
-
-        return () => clearTimeout(redirectTimer);
-      }
+      
+      // Auto-redirect to dashboard after 4 seconds
+      setTimeout(() => {
+        router.push('/dashboard?tab=applications');
+      }, 4000);
     }
-  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router, autoRedirectOnCompletion, completionRedirectPath]);
-
-  useEffect(() => {
-    if (payment?.status === 'failed' || payment?.status === 'cancelled') {
-      setAwaitingGatewayConfirmation(false);
-    }
-  }, [payment?.status]);
+  }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
 
   /**
    * If a user comes back to an existing pending payment, automatically show the widget
@@ -178,19 +126,10 @@ export function PaymentTab({
     const isPendingWithRef =
       (payment?.status === 'pending' || payment?.status === 'processing') && !!payment?.irembo_payment_ref;
 
-    if (isPendingWithRef && !showWidget && !awaitingGatewayConfirmation && !gatewayError) {
+    if (isPendingWithRef && !showWidget) {
       setShowWidget(true);
     }
-  }, [payment?.status, payment?.irembo_payment_ref, showWidget, awaitingGatewayConfirmation, gatewayError]);
-
-  const getGatewayErrorMessage = (gatewayIssue?: any) => {
-    return (
-      gatewayIssue?.message ||
-      gatewayIssue?.detail ||
-      gatewayIssue?.errors?.[0]?.detail ||
-      'IremboPay returned an error while trying to start the payment.'
-    );
-  };
+  }, [payment?.status, payment?.irembo_payment_ref, showWidget]);
 
   /**
    * Handle payment initiation
@@ -200,10 +139,6 @@ export function PaymentTab({
       setIsInitializing(true);
       clearError();
       setCustomerValidationError(null);
-      setGatewayError(null);
-      setPauseAutoPolling(false);
-      setAwaitingGatewayConfirmation(false);
-      setShowWidget(false);
 
       console.log('🚀 Initiating payment...');
 
@@ -213,37 +148,17 @@ export function PaymentTab({
       };
 
       if (application) {
-        // application.applicant may be missing in some transfer draft responses.
-        // Fall back to current form values when available so payment can still proceed.
+        // application.applicant is populated via Supabase join (users!applications_applicant_id_fkey)
         const applicant = application.applicant;
-        const internalNotes = parseInternalNotes(application.internal_notes);
-        const transferFormData = internalNotes?.transferFormData as Record<string, unknown> | undefined;
-        const customerSnapshot = internalNotes?.customerSnapshot as CustomerSnapshot | undefined;
-        const email = pickFirstNonEmptyString(
-          applicant?.email,
-          formData?.emailAddress,
-          transferFormData?.transferorEmail,
-          customerSnapshot?.email
-        );
-        const phone = pickFirstNonEmptyString(
-          applicant?.phone,
-          applicant?.mobile_phone,
-          applicant?.company_phone,
-          formData?.telephoneContact,
-          transferFormData?.transferorPhone,
-          customerSnapshot?.phone
-        );
-        const name = pickFirstNonEmptyString(
-          `${applicant?.first_name || ''} ${applicant?.last_name || ''}`,
-          applicant?.company_name,
-          formData?.fullNameApplicant,
-          transferFormData?.transferorName,
-          customerSnapshot?.name
-        );
+        const email = (applicant?.email || '').trim();
+        const phone = (applicant?.phone || applicant?.mobile_phone || applicant?.company_phone || '').trim();
+        const name =
+          `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim() ||
+          (applicant?.company_name || '').trim();
 
         if (!email || !phone || !name) {
           setCustomerValidationError(
-            "Missing payer contact details. Please update your profile or transferor details (name, email, phone) before initiating payment."
+            "Missing applicant contact details. Please update the applicant profile (name, email, phone) before initiating payment."
           );
           return;
         }
@@ -278,7 +193,7 @@ export function PaymentTab({
 
       if (result.success && result.payment) {
         console.log('✅ Payment initialized successfully');
-        setShowWidget(true);
+        setShowWidget(true); // always open modal so demo can "attempt to pay"
       } else {
         console.error('❌ Payment initialization failed:', result.error);
       }
@@ -299,47 +214,35 @@ export function PaymentTab({
       status: payment?.status,
       invoiceNumber: payment?.irembo_payment_ref,
     });
-    console.log('✅ [PAYMENT TAB] Payment successful - verifying with gateway...');
+    console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
     
     try {
-      setGatewayError(null);
-      setPauseAutoPolling(false);
-      setShowWidget(false);
       setIsCompletingPayment(true);
-      setAwaitingGatewayConfirmation(false);
+      console.log('💾 [PAYMENT TAB] Verifying payment status...');
 
+      // Check status one final time to get the latest payment data
       if (payment?.id) {
-        const retryDelays = [2000, 3000, 5000];
+        const finalPayment = await checkStatus(payment.id);
+        
+        console.log('💾 [PAYMENT TAB] Status check result:', {
+          paymentId: finalPayment?.id,
+          status: finalPayment?.status,
+          applicationNumber: finalPayment?.application?.application_number,
+        });
+        
+        if (finalPayment && finalPayment.status === 'completed') {
+          setCompletedApplication(finalPayment.application);
+          setPaymentCompleted(true);
+          console.log('✅ [PAYMENT TAB] Application submitted:', finalPayment.application?.application_number);
 
-        for (let i = 0; i < retryDelays.length; i++) {
-          await new Promise(resolve => setTimeout(resolve, retryDelays[i]));
-
-          console.log(`💾 [PAYMENT TAB] Status check attempt ${i + 1}/${retryDelays.length}...`);
-          const result = await checkStatus(payment.id);
-
-          console.log(`💾 [PAYMENT TAB] Attempt ${i + 1} result:`, {
-            paymentId: result?.id,
-            status: result?.status,
-            applicationNumber: result?.application?.application_number,
-          });
-
-          if (result && result.status === 'completed') {
-            setCompletedApplication(result.application);
-            setPaymentCompleted(true);
-            setAwaitingGatewayConfirmation(false);
-            console.log('✅ [PAYMENT TAB] Application submitted:', result.application?.application_number);
-
-            if (autoRedirectOnCompletion) {
-              setTimeout(() => {
-                router.push(completionRedirectPath);
-              }, 4000);
-            }
-            return;
-          }
+          // Auto-redirect to dashboard after 4 seconds
+          setTimeout(() => {
+            router.push('/dashboard?tab=applications');
+          }, 4000);
+        } else {
+          console.log('⏳ [PAYMENT TAB] Payment not yet completed, waiting for status update...');
+          // The hook's polling will handle the rest
         }
-
-        console.log('⏳ [PAYMENT TAB] Payment not confirmed after retries, falling back to polling...');
-        setAwaitingGatewayConfirmation(true);
       }
     } catch (error) {
       console.error('❌ [PAYMENT TAB] Error completing payment:', error);
@@ -361,46 +264,10 @@ export function PaymentTab({
       errors: error?.errors,
       fullError: error ? JSON.stringify(error, null, 2) : 'no error object',
     });
-    const isAlreadyPaid = error?.code === 'BAD_INVOICES_PAID';
-    if (isAlreadyPaid) {
-      console.log('ℹ️ [PAYMENT TAB] Invoice already paid - treating as completed and waiting for status confirmation');
-      setGatewayError(null);
-      setPauseAutoPolling(false);
-      setAwaitingGatewayConfirmation(true);
-      setShowWidget(false);
-      if (payment?.id) {
-        checkStatus(payment.id);
-      }
-      return;
-    }
-
-    // Irembo sandbox can intermittently return callback errors while payment later succeeds.
-    // Verify status first before surfacing a hard failure to users.
-    console.log('⚠️ [PAYMENT TAB] Gateway returned an error callback; verifying status before marking as failed');
-    setGatewayError(null);
-    setPauseAutoPolling(false);
-    setAwaitingGatewayConfirmation(true);
-    setShowWidget(false);
-
+    console.log('❌ [PAYMENT TAB] Payment failed');
+    
     if (payment?.id) {
-      void checkStatus(payment.id)
-        .then((latestPayment) => {
-          if (latestPayment?.status === 'completed') {
-            setGatewayError(null);
-            setCompletedApplication(latestPayment.application);
-            setPaymentCompleted(true);
-            setAwaitingGatewayConfirmation(false);
-            return;
-          }
-
-          if (latestPayment?.status === 'failed' || latestPayment?.status === 'cancelled') {
-            setGatewayError(getGatewayErrorMessage(error));
-            setAwaitingGatewayConfirmation(false);
-          }
-        })
-        .catch((statusError) => {
-          console.error('❌ [PAYMENT TAB] Status verification after gateway error failed:', statusError);
-        });
+      checkStatus(payment.id);
     }
   };
 
@@ -408,50 +275,10 @@ export function PaymentTab({
    * Handle retry payment
    */
   const handleRetryPayment = () => {
-    setGatewayError(null);
-    setPauseAutoPolling(false);
     setShowWidget(false);
     setTimeout(() => {
       handleInitiatePayment();
     }, 500);
-  };
-
-  const handleManualStatusCheck = async () => {
-    if (!payment?.id) return;
-
-    try {
-      setIsCompletingPayment(true);
-      const latestPayment = await checkStatus(payment.id);
-
-      if (latestPayment?.status === 'completed') {
-        setGatewayError(null);
-        setPauseAutoPolling(false);
-        setCompletedApplication(latestPayment.application);
-        setPaymentCompleted(true);
-        return;
-      }
-
-      if (latestPayment?.status === 'failed' || latestPayment?.status === 'cancelled') {
-        setPauseAutoPolling(false);
-        setGatewayError(
-          'IremboPay still reports this payment as failed or cancelled. Please retry the payment.'
-        );
-        return;
-      }
-
-      setGatewayError(
-        'The gateway has not confirmed this payment yet. If you already approved it on your phone, wait a moment and check status again.'
-      );
-    } catch (statusError) {
-      console.error('❌ [PAYMENT TAB] Manual status check failed:', statusError);
-      setGatewayError(
-        statusError instanceof Error
-          ? statusError.message
-          : 'Unable to verify payment status right now. Please try again.'
-      );
-    } finally {
-      setIsCompletingPayment(false);
-    }
   };
 
   /**
@@ -474,8 +301,16 @@ export function PaymentTab({
     }).format(amount);
   };
 
-  // Payment should be considered complete only when payment confirmation is explicit.
-  const isPaymentCompleted = paymentCompleted || payment?.status === 'completed';
+  // Check if payment is already completed
+  // IMPORTANT: If there's no application yet (undefined/null), payment is NOT completed
+  // Only consider payment completed if we have an application with a status beyond draft/pending_payment
+  const isPaymentCompleted = payment?.status === 'completed' || (
+    application?.id && 
+    application?.status && 
+    application.status !== 'draft' && 
+    application.status !== 'pending_payment' && 
+    application.status !== 'revision_required'
+  );
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
 
@@ -516,7 +351,7 @@ export function PaymentTab({
 
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>{autoRedirectOnCompletion ? 'Redirecting to dashboard...' : 'Payment confirmation complete.'}</span>
+          <span>Redirecting to dashboard...</span>
         </div>
       </motion.div>
     );
@@ -554,24 +389,6 @@ export function PaymentTab({
           <p className="text-lg font-medium">Verifying payment...</p>
           <p className="text-sm text-muted-foreground">
             This may take a few seconds. Please do not close this page.
-          </p>
-        </div>
-      </motion.div>
-    );
-  }
-
-  if (awaitingGatewayConfirmation && !paymentCompleted) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex flex-col items-center justify-center py-16 space-y-4"
-      >
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        <div className="text-center space-y-2">
-          <p className="text-lg font-medium">Confirming payment with gateway...</p>
-          <p className="text-sm text-muted-foreground">
-            We received a success callback. Final confirmation can take a few seconds.
           </p>
         </div>
       </motion.div>
@@ -616,12 +433,40 @@ export function PaymentTab({
           </p>
         </div>
         {onBack && (
-          <Button type="button" variant="ghost" onClick={onBack}>
+          <Button variant="ghost" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
         )}
       </div>
+
+      {/* Application Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Application Summary</CardTitle>
+          <CardDescription>Water Permit Application Details</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground">Application Number</p>
+              <p className="text-sm font-medium">{application?.application_number || 'Pending'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Application Type</p>
+              <p className="text-sm font-medium">{application?.application_type || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Application Fee</p>
+              <p className="text-lg font-bold text-primary">{formatAmount(applicationFee)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Location</p>
+              <p className="text-sm">{application?.district}, {application?.province}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Error Alert */}
       {error && (
@@ -629,26 +474,6 @@ export function PaymentTab({
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-      {gatewayError && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Gateway Error</AlertTitle>
-          <AlertDescription className="space-y-3">
-            <div>{gatewayError}</div>
-            <div className="text-sm">
-              Automatic status polling has been paused so the application is not submitted after a widget error.
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 pt-1">
-              <Button type="button" variant="outline" onClick={handleManualStatusCheck}>
-                Check payment status
-              </Button>
-              <Button type="button" onClick={handleRetryPayment}>
-                Retry payment
-              </Button>
-            </div>
-          </AlertDescription>
         </Alert>
       )}
 
@@ -697,8 +522,7 @@ export function PaymentTab({
               </Alert>
 
               <Button
-                type="button"
-                onClick={() => router.push(completionRedirectPath)}
+                onClick={() => router.push('/dashboard?tab=applications')}
                 className="w-full"
               >
                 View My Applications
@@ -712,7 +536,7 @@ export function PaymentTab({
                 onRetry={isPaymentFailed ? handleRetryPayment : undefined}
               />
 
-              {showWidget && payment.irembo_payment_ref && isPaymentPending && !awaitingGatewayConfirmation && (
+              {showWidget && payment.irembo_payment_ref && isPaymentPending && (
                 <div className="pt-6 border-t">
                   <IremboPayWidget
                     invoiceNumber={payment.irembo_payment_ref}
@@ -761,7 +585,6 @@ export function PaymentTab({
               </div>
 
               <Button
-                type="button"
                 onClick={handleInitiatePayment}
                 disabled={isInitializing}
                 size="lg"
