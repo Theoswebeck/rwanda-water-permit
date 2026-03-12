@@ -840,8 +840,97 @@ export default function AssessmentApplicationPage() {
           formData._originalRequestedValues = originals;
         }
 
-        // Prefill the official assessment report template from application data and merge saved assessor inputs
-        const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
+        // Prefill the official assessment report template.
+        // For renewals, the read-only assessment source fields must come from the underlying
+        // permit application (the one the permit was issued from), not from the renewal wrapper.
+        let reportSourceApplication: ApplicationWithRelations = appData as ApplicationWithRelations;
+        let reportSourceFormData: any = formData;
+        let reportSourceDocuments: Document[] = Array.isArray(appData.documents) ? appData.documents : [];
+        let renewalSurfaceAreaFallback: { value: string; unit: string } | null = null;
+        const renewalPermitId = (appData as any).renewed_from_permit_id as string | undefined;
+        if ((appData as any).is_renewal === true && renewalPermitId) {
+          try {
+            const { data: renewedFromPermitRaw, error: renewedFromPermitError } = await supabase
+              .from("permits")
+              .select("application_id, water_allowance, allowance_unit")
+              .eq("id", renewalPermitId)
+              .maybeSingle();
+            const renewedFromPermit = renewedFromPermitRaw as
+              | { application_id?: string; water_allowance?: number; allowance_unit?: string }
+              | null;
+
+            if (renewedFromPermitError) {
+              console.error("❌ Failed to resolve source permit for renewal report prefill:", renewedFromPermitError);
+            } else if (renewedFromPermit?.application_id) {
+              const allowanceValue =
+                typeof renewedFromPermit.water_allowance === "number" && Number.isFinite(renewedFromPermit.water_allowance)
+                  ? renewedFromPermit.water_allowance
+                  : undefined;
+              const allowanceUnit = typeof renewedFromPermit.allowance_unit === "string"
+                ? renewedFromPermit.allowance_unit.trim().toLowerCase()
+                : "";
+              if (typeof allowanceValue === "number" && allowanceValue > 0) {
+                const isAreaUnit =
+                  allowanceUnit.includes("ha") ||
+                  allowanceUnit.includes("hectare") ||
+                  allowanceUnit.includes("m2") ||
+                  allowanceUnit.includes("m²") ||
+                  allowanceUnit.includes("square");
+                if (isAreaUnit) {
+                  renewalSurfaceAreaFallback = {
+                    value: String(allowanceValue),
+                    unit:
+                      allowanceUnit.includes("m2") || allowanceUnit.includes("m²") || allowanceUnit.includes("square")
+                        ? "m²"
+                        : "Ha",
+                  };
+                }
+              }
+
+              const { data: sourceApplication, error: sourceApplicationError } = await supabase
+                .from("applications")
+                .select(`
+                  *,
+                  applicant:users!applicant_id(*),
+                  documents(*)
+                `)
+                .eq("id", renewedFromPermit.application_id)
+                .maybeSingle();
+
+              if (sourceApplicationError) {
+                console.error("❌ Failed to load source application for renewal report prefill:", sourceApplicationError);
+              } else if (sourceApplication) {
+                reportSourceApplication = sourceApplication as ApplicationWithRelations;
+                reportSourceFormData = mapApplicationToFormData(
+                  reportSourceApplication,
+                  (reportSourceApplication as any).applicant
+                );
+                reportSourceDocuments = Array.isArray((reportSourceApplication as any).documents)
+                  ? ((reportSourceApplication as any).documents as Document[])
+                  : [];
+                console.log("✅ Renewal assessment report prefill uses source permit application:", renewedFromPermit.application_id);
+              } else {
+                console.warn("⚠️ Renewal source application not found; using current renewal application for report prefill.");
+              }
+            }
+          } catch (renewalPrefillError) {
+            console.error("❌ Unexpected error while loading renewal source application for report prefill:", renewalPrefillError);
+          }
+        }
+
+        const prefilledReport = prefillAssessmentReportFromApplication(
+          reportSourceApplication,
+          reportSourceFormData,
+          reportSourceDocuments
+        );
+        if (
+          (appData as any).is_renewal === true &&
+          (!prefilledReport.surfaceAreaHa || String(prefilledReport.surfaceAreaHa).trim() === "") &&
+          renewalSurfaceAreaFallback
+        ) {
+          prefilledReport.surfaceAreaHa = renewalSurfaceAreaFallback.value;
+          prefilledReport.surfaceAreaUnit = renewalSurfaceAreaFallback.unit;
+        }
         const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);
         setAssessmentReportData(mergedReport);
         
