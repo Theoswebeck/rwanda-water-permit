@@ -1542,10 +1542,15 @@ export function ApplicationForm({
 
   // Tab validation functions
   const validateApplicantTab = async () => {
+    const categoryApplicant = String(form.getValues('categoryApplicant') ?? '').trim().toLowerCase();
+    const requiresRepresentativeFields = ["company", "cooperative", "organization", "institution"].includes(categoryApplicant);
     const fields = [
       'fullNameApplicant', 'categoryApplicant', 'officeProvince', 
       'officeDistrict', 'officeSector', 'officeCell', 'telephoneContact', 'emailAddress'
     ];
+    if (requiresRepresentativeFields) {
+      fields.push('nameRepresentative', 'representativePosition');
+    }
     const errors = await form.trigger(fields as any);
     
     // Check if identification document is uploaded
@@ -1958,6 +1963,10 @@ export function ApplicationForm({
         // Note: categoryApplicant has a default value of 'individual', so use form.watch() to ensure we get current values
         const fullNameApplicant = form.watch('fullNameApplicant') || form.getValues('fullNameApplicant') || '';
         const categoryApplicant = form.watch('categoryApplicant') || form.getValues('categoryApplicant') || 'individual';
+        const normalizedCategoryApplicant = String(categoryApplicant).trim().toLowerCase();
+        const requiresRepresentativeFields = ["company", "cooperative", "organization", "institution"].includes(normalizedCategoryApplicant);
+        const nameRepresentative = String(form.watch('nameRepresentative') || form.getValues('nameRepresentative') || '').trim();
+        const representativePosition = String(form.watch('representativePosition') || form.getValues('representativePosition') || '').trim();
         const officeProvince = form.watch('officeProvince') || form.getValues('officeProvince') || '';
         const officeDistrict = form.watch('officeDistrict') || form.getValues('officeDistrict') || '';
         const officeSector = form.watch('officeSector') || form.getValues('officeSector') || '';
@@ -1974,10 +1983,13 @@ export function ApplicationForm({
           officeCell.trim() !== '' &&
           telephoneContact.trim() !== '' &&
           emailAddress.trim() !== '';
+        const hasRepresentativeFields =
+          !requiresRepresentativeFields ||
+          (nameRepresentative !== '' && representativePosition !== '');
           
         // Check identification document
         const hasIdentificationDoc = files.identificationDoc || uploadedFileUrls.identificationDoc;
-        return !hasApplicantFields || !hasIdentificationDoc;
+        return !hasApplicantFields || !hasRepresentativeFields || !hasIdentificationDoc;
       }
         
       case "water-source": {
