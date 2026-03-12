@@ -213,6 +213,8 @@ export default function ReviewApplicationPage() {
   // Renewal permit state (for renewal applications)
   const [renewalPermit, setRenewalPermit] = useState<PermitWithApplication | null>(null);
   const [loadingRenewalPermit, setLoadingRenewalPermit] = useState(false);
+  const [renewalRecommendedDurationYears, setRenewalRecommendedDurationYears] = useState<number | undefined>(undefined);
+  const [renewalRecommendedVolumeM3, setRenewalRecommendedVolumeM3] = useState<number | undefined>(undefined);
 
   // Transfer permit state (for transfer applications)
   const [transferPermit, setTransferPermit] = useState<PermitWithApplication | null>(null);
@@ -640,6 +642,8 @@ export default function ReviewApplicationPage() {
       
       if (!isRenewal || !permitId) {
         setRenewalPermit(null);
+        setRenewalRecommendedDurationYears(undefined);
+        setRenewalRecommendedVolumeM3(undefined);
         return;
       }
       
@@ -688,8 +692,57 @@ export default function ReviewApplicationPage() {
         if (permitError) {
           console.error('Error loading renewal permit:', permitError);
         } else {
-          setRenewalPermit(permit as PermitWithApplication);
-          console.log('✅ Renewal permit loaded for review:', permit);
+          const typedPermit = permit as PermitWithApplication;
+          setRenewalPermit(typedPermit);
+
+          // For renewal workflows, read assessor recommended values from the previous
+          // permit's source application so all staff stages show the same locked values.
+          try {
+            const prevApp: any = (typedPermit as any)?.application;
+            const prevNotesRaw = prevApp?.internal_notes;
+            let prevNotes: any = {};
+            if (typeof prevNotesRaw === "string" && prevNotesRaw.trim()) {
+              try {
+                prevNotes = JSON.parse(prevNotesRaw);
+              } catch {
+                prevNotes = {};
+              }
+            }
+
+            const prevAdjustments = prevNotes?._assessorAdjustments || {};
+            const durCandidate =
+              (typeof prevAdjustments.permitLengthYears === "number" && Number.isFinite(prevAdjustments.permitLengthYears)
+                ? prevAdjustments.permitLengthYears
+                : undefined) ??
+              (typeof prevApp?.proposed_duration_years === "number" && Number.isFinite(prevApp.proposed_duration_years)
+                ? prevApp.proposed_duration_years
+                : undefined);
+            if (typeof durCandidate === "number" && durCandidate >= 1 && durCandidate <= 15) {
+              setRenewalRecommendedDurationYears(durCandidate);
+            } else {
+              setRenewalRecommendedDurationYears(undefined);
+            }
+
+            const volCandidate =
+              (typeof prevAdjustments.recommendedVolumeM3 === "number" && Number.isFinite(prevAdjustments.recommendedVolumeM3)
+                ? prevAdjustments.recommendedVolumeM3
+                : undefined) ??
+              (typeof prevApp?.assessor_recommended_volume_m3 === "number" && Number.isFinite(prevApp.assessor_recommended_volume_m3)
+                ? prevApp.assessor_recommended_volume_m3
+                : undefined) ??
+              (typeof prevApp?.max_yearly_volume_m3 === "number" && Number.isFinite(prevApp.max_yearly_volume_m3)
+                ? prevApp.max_yearly_volume_m3
+                : undefined);
+            if (typeof volCandidate === "number" && Number.isFinite(volCandidate)) {
+              setRenewalRecommendedVolumeM3(volCandidate);
+            } else {
+              setRenewalRecommendedVolumeM3(undefined);
+            }
+          } catch (e) {
+            console.warn("⚠️ Failed to derive renewal assessor recommendations for review page:", e);
+            setRenewalRecommendedDurationYears(undefined);
+            setRenewalRecommendedVolumeM3(undefined);
+          }
         }
       } catch (err) {
         console.error('Error loading renewal permit:', err);
@@ -1326,8 +1379,8 @@ export default function ReviewApplicationPage() {
                     <AssessorRecommendations
                       requestedDurationYears={requestedDurationYears}
                       requestedVolumeM3={requestedVolumeM3}
-                      recommendedDurationYears={recommendedDurationYears}
-                      recommendedVolumeM3={recommendedVolumeM3}
+                      recommendedDurationYears={(application as any).is_renewal ? renewalRecommendedDurationYears : recommendedDurationYears}
+                      recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : recommendedVolumeM3}
                       readOnly={true}
                       isConcession={reportType === "concession"}
                     />

@@ -31,6 +31,92 @@ import { buildContractPlaceholderContext, fillContractText } from "@/lib/contrac
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 
+function parseInternalNotes(input: unknown): Record<string, any> | null {
+  if (typeof input !== "string" || !input.trim()) return null;
+  try {
+    const parsed = JSON.parse(input);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveDurationFromAssessor(
+  applicationData: any,
+  parsedNotes: Record<string, any> | null
+): number {
+  const assessorAdjustments = parsedNotes?._assessorAdjustments;
+  if (
+    typeof assessorAdjustments?.permitLengthYears === "number" &&
+    Number.isFinite(assessorAdjustments.permitLengthYears) &&
+    assessorAdjustments.permitLengthYears >= 1 &&
+    assessorAdjustments.permitLengthYears <= 15
+  ) {
+    return assessorAdjustments.permitLengthYears;
+  }
+  if (
+    typeof applicationData?.proposed_duration_years === "number" &&
+    Number.isFinite(applicationData.proposed_duration_years) &&
+    applicationData.proposed_duration_years >= 1 &&
+    applicationData.proposed_duration_years <= 15
+  ) {
+    return applicationData.proposed_duration_years;
+  }
+  if (
+    typeof parsedNotes?.permitLengthYears === "number" &&
+    Number.isFinite(parsedNotes.permitLengthYears) &&
+    parsedNotes.permitLengthYears >= 1 &&
+    parsedNotes.permitLengthYears <= 15
+  ) {
+    return parsedNotes.permitLengthYears;
+  }
+  return 5;
+}
+
+function resolveVolumeOrAreaFromAssessor(
+  applicationData: any,
+  parsedNotes: Record<string, any> | null,
+  isConcession: boolean
+): number {
+  const assessorAdjustments = parsedNotes?._assessorAdjustments;
+  if (
+    typeof assessorAdjustments?.recommendedVolumeM3 === "number" &&
+    Number.isFinite(assessorAdjustments.recommendedVolumeM3) &&
+    assessorAdjustments.recommendedVolumeM3 > 0
+  ) {
+    return assessorAdjustments.recommendedVolumeM3;
+  }
+
+  if (isConcession) {
+    const area = applicationData?.concession_area;
+    if (typeof area === "number" && Number.isFinite(area) && area > 0) return area;
+    const notesArea = parsedNotes?.concessionArea;
+    if (typeof notesArea === "number" && Number.isFinite(notesArea) && notesArea > 0) return notesArea;
+    const fishHa = parsedNotes?.fishLakeAreaHectares;
+    if (typeof fishHa === "number" && Number.isFinite(fishHa) && fishHa > 0) return fishHa;
+  }
+
+  if (
+    typeof applicationData?.max_yearly_volume_m3 === "number" &&
+    Number.isFinite(applicationData.max_yearly_volume_m3) &&
+    applicationData.max_yearly_volume_m3 > 0
+  ) {
+    return applicationData.max_yearly_volume_m3;
+  }
+  if (
+    typeof applicationData?.estimated_usage_volume === "number" &&
+    Number.isFinite(applicationData.estimated_usage_volume) &&
+    applicationData.estimated_usage_volume > 0
+  ) {
+    return applicationData.estimated_usage_volume;
+  }
+  const formVolume = parsedNotes?.waterAbstractionDetails?.[0]?.maxAverageYearly;
+  if (typeof formVolume === "number" && Number.isFinite(formVolume) && formVolume > 0) {
+    return formVolume;
+  }
+  return 0;
+}
+
 export default function TermsConditionsPage() {
   const params = useParams();
   const router = useRouter();
@@ -99,8 +185,12 @@ export default function TermsConditionsPage() {
             estimated_usage_volume,
             usage_unit,
             proposed_duration_years,
+            assessor_recommended_volume_m3,
             concession_area,
             intended_activities,
+            water_purpose,
+            is_renewal,
+            renewed_from_permit_id,
             applicant:users!applicant_id(account_type, first_name, last_name, company_name, id_number)
           `
           )
@@ -211,6 +301,68 @@ export default function TermsConditionsPage() {
             }
           } catch (origErr) {
             console.warn("⚠️ Could not load original application for transfer contract:", origErr);
+          }
+        }
+
+        const isRenewal = (data as any).is_renewal === true || parsedNotes?.isRenewal === true;
+        const renewedFromPermitId = (data as any).renewed_from_permit_id || parsedNotes?.originalPermitId;
+        if (isRenewal && renewedFromPermitId) {
+          try {
+            const { data: renewalPermit, error: renewalPermitError } = await supabase
+              .from("permits")
+              .select(`
+                application_id,
+                application:applications!application_id(
+                  internal_notes,
+                  proposed_duration_years,
+                  assessor_recommended_volume_m3,
+                  max_yearly_volume_m3,
+                  concession_area,
+                  intended_activities,
+                  water_purpose
+                )
+              `)
+              .eq("id", renewedFromPermitId)
+              .maybeSingle() as { data: any; error: any };
+
+            if (renewalPermitError) {
+              console.warn("⚠️ Could not load renewal source permit application for terms:", renewalPermitError);
+            } else {
+              const sourceApp = renewalPermit?.application;
+              const sourceNotes = parseInternalNotes(sourceApp?.internal_notes);
+              const sourceIsConcession = isConcessionApplication(sourceApp || data);
+              const sourceDuration = resolveDurationFromAssessor(sourceApp, sourceNotes);
+              const sourceVolumeOrArea = resolveVolumeOrAreaFromAssessor(sourceApp, sourceNotes, sourceIsConcession);
+
+              const mergedNotes = {
+                ...(parsedNotes || {}),
+                _assessorAdjustments: {
+                  ...((parsedNotes as any)?._assessorAdjustments || {}),
+                  permitLengthYears: sourceDuration,
+                  recommendedVolumeM3: sourceVolumeOrArea,
+                  adjustedAt: new Date().toISOString(),
+                },
+              };
+
+              (data as any).internal_notes = JSON.stringify(mergedNotes);
+              parsedNotes = mergedNotes;
+              (data as any).proposed_duration_years = sourceDuration;
+              if (sourceIsConcession) {
+                (data as any).concession_area = sourceVolumeOrArea;
+              } else {
+                (data as any).max_yearly_volume_m3 = sourceVolumeOrArea;
+                (data as any).assessor_recommended_volume_m3 = sourceVolumeOrArea;
+              }
+
+              if ((!Array.isArray((data as any).intended_activities) || (data as any).intended_activities.length === 0) && Array.isArray(sourceApp?.intended_activities)) {
+                (data as any).intended_activities = sourceApp.intended_activities;
+              }
+              if (!(data as any).water_purpose && sourceApp?.water_purpose) {
+                (data as any).water_purpose = sourceApp.water_purpose;
+              }
+            }
+          } catch (renewalErr) {
+            console.warn("⚠️ Could not apply renewal assessor values to terms display:", renewalErr);
           }
         }
 
@@ -371,63 +523,74 @@ export default function TermsConditionsPage() {
         parsedNotes = applicationData.internal_notes ? JSON.parse(applicationData.internal_notes) : null;
       } catch { parsedNotes = null; }
 
+      const isRenewalApplication = applicationData.is_renewal === true || 
+        (parsedNotes?.isRenewal === true);
+      
+      const renewedFromPermitId = applicationData.renewed_from_permit_id || parsedNotes?.originalPermitId || null;
+      if (isRenewalApplication && renewedFromPermitId) {
+        try {
+          const { data: renewalPermit, error: renewalPermitError } = await supabase
+            .from("permits")
+            .select(`
+              application_id,
+              application:applications!application_id(
+                internal_notes,
+                proposed_duration_years,
+                assessor_recommended_volume_m3,
+                max_yearly_volume_m3,
+                concession_area,
+                intended_activities,
+                water_purpose
+              )
+            `)
+            .eq("id", renewedFromPermitId)
+            .maybeSingle() as { data: any; error: any };
+
+          if (renewalPermitError) {
+            console.warn("⚠️ Could not load renewal source permit application for terms acceptance:", renewalPermitError);
+          } else {
+            const sourceApp = renewalPermit?.application;
+            if (sourceApp) {
+              const sourceNotes = parseInternalNotes(sourceApp.internal_notes);
+              const sourceIsConcession = isConcessionApplication(sourceApp || applicationData);
+              const sourceDuration = resolveDurationFromAssessor(sourceApp, sourceNotes);
+              const sourceVolumeOrArea = resolveVolumeOrAreaFromAssessor(sourceApp, sourceNotes, sourceIsConcession);
+
+              const mergedNotes = {
+                ...(parsedNotes || {}),
+                _assessorAdjustments: {
+                  ...((parsedNotes as any)?._assessorAdjustments || {}),
+                  permitLengthYears: sourceDuration,
+                  recommendedVolumeM3: sourceVolumeOrArea,
+                  adjustedAt: new Date().toISOString(),
+                },
+              };
+              parsedNotes = mergedNotes;
+              applicationData.internal_notes = JSON.stringify(mergedNotes);
+              applicationData.proposed_duration_years = sourceDuration;
+              if (sourceIsConcession) {
+                applicationData.concession_area = sourceVolumeOrArea;
+              } else {
+                applicationData.max_yearly_volume_m3 = sourceVolumeOrArea;
+                applicationData.assessor_recommended_volume_m3 = sourceVolumeOrArea;
+              }
+              if ((!Array.isArray(applicationData.intended_activities) || applicationData.intended_activities.length === 0) && Array.isArray(sourceApp.intended_activities)) {
+                applicationData.intended_activities = sourceApp.intended_activities;
+              }
+              if (!applicationData.water_purpose && sourceApp.water_purpose) {
+                applicationData.water_purpose = sourceApp.water_purpose;
+              }
+            }
+          }
+        } catch (renewalErr) {
+          console.warn("⚠️ Could not apply renewal assessor values during terms acceptance:", renewalErr);
+        }
+      }
+
       const assessorAdjustments = parsedNotes?._assessorAdjustments;
-
-      const resolvedDurationYearsGlobal: number = (() => {
-        if (typeof assessorAdjustments?.permitLengthYears === 'number' &&
-            Number.isFinite(assessorAdjustments.permitLengthYears) &&
-            assessorAdjustments.permitLengthYears >= 1 &&
-            assessorAdjustments.permitLengthYears <= 15) {
-          return assessorAdjustments.permitLengthYears;
-        }
-        if (typeof applicationData.proposed_duration_years === 'number' &&
-            Number.isFinite(applicationData.proposed_duration_years) &&
-            applicationData.proposed_duration_years >= 1 &&
-            applicationData.proposed_duration_years <= 15) {
-          return applicationData.proposed_duration_years;
-        }
-        if (typeof parsedNotes?.permitLengthYears === 'number' &&
-            Number.isFinite(parsedNotes.permitLengthYears) &&
-            parsedNotes.permitLengthYears >= 1 &&
-            parsedNotes.permitLengthYears <= 15) {
-          return parsedNotes.permitLengthYears;
-        }
-        return 5;
-      })();
-
       const isConcession = isConcessionApplication(applicationData as any);
-
-      const resolvedVolumeM3: number = (() => {
-        if (typeof assessorAdjustments?.recommendedVolumeM3 === 'number' &&
-            Number.isFinite(assessorAdjustments.recommendedVolumeM3) &&
-            assessorAdjustments.recommendedVolumeM3 > 0) {
-          return assessorAdjustments.recommendedVolumeM3;
-        }
-        if (isConcession) {
-          const area = applicationData.concession_area;
-          if (typeof area === 'number' && Number.isFinite(area) && area > 0) return area;
-          const notesArea = parsedNotes?.concessionArea;
-          if (typeof notesArea === 'number' && Number.isFinite(notesArea) && notesArea > 0) return notesArea;
-          const fishHa = parsedNotes?.fishLakeAreaHectares;
-          if (typeof fishHa === 'number' && Number.isFinite(fishHa) && fishHa > 0) return fishHa;
-        }
-        if (typeof applicationData.max_yearly_volume_m3 === 'number' &&
-            Number.isFinite(applicationData.max_yearly_volume_m3) &&
-            applicationData.max_yearly_volume_m3 > 0) {
-          return applicationData.max_yearly_volume_m3;
-        }
-        if (typeof applicationData.estimated_usage_volume === 'number' &&
-            Number.isFinite(applicationData.estimated_usage_volume) &&
-            applicationData.estimated_usage_volume > 0) {
-          return applicationData.estimated_usage_volume;
-        }
-        const formVolume = parsedNotes?.waterAbstractionDetails?.[0]?.maxAverageYearly;
-        if (typeof formVolume === 'number' && Number.isFinite(formVolume) && formVolume > 0) {
-          return formVolume;
-        }
-        return 0;
-      })();
-
+      const resolvedDurationYearsGlobal = resolveDurationFromAssessor(applicationData, parsedNotes);
+      const resolvedVolumeM3 = resolveVolumeOrAreaFromAssessor(applicationData, parsedNotes, isConcession);
       const resolvedAllowanceUnit = isConcession ? 'ha' : (applicationData.usage_unit || 'm³');
 
       console.log('📊 Resolved assessor-approved terms:', {
@@ -435,11 +598,6 @@ export default function TermsConditionsPage() {
         volumeM3: resolvedVolumeM3,
         source: assessorAdjustments ? 'assessor adjustments' : 'application data',
       });
-
-      const isRenewalApplication = applicationData.is_renewal === true || 
-        (parsedNotes?.isRenewal === true);
-      
-      const renewedFromPermitId = applicationData.renewed_from_permit_id || parsedNotes?.originalPermitId || null;
 
       const isTransferApplication =
         (applicationData as any).application_type === 'transfer' ||
