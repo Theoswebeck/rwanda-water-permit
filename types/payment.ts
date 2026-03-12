@@ -357,6 +357,14 @@ export interface PaymentStatusResponse {
   success: boolean;
   payment?: Payment;
   transaction?: PaymentTransaction;
+  status_debug?: {
+    gateway_status?: string;
+    mapped_status?: PaymentStatus;
+    settlement_reason?: string;
+    invoice_number?: string;
+    transaction_id?: string;
+    checked_at?: string;
+  };
   error?: string;
 }
 

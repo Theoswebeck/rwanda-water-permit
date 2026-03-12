@@ -1340,6 +1340,83 @@ export default function AssessmentApplicationPage() {
         }
       }
 
+      // Keep assessor recommendations in sync on the application record for this cycle.
+      // This prevents modification flows from reusing stale _assessorAdjustments from previous cycles.
+      if (!(application as any).is_renewal) {
+        let existingFormData: any = {};
+        try {
+          existingFormData = JSON.parse(application.internal_notes || '{}');
+        } catch {
+          existingFormData = {};
+        }
+
+        const resolvedDuration =
+          typeof assessorPermitLength === 'number' && Number.isFinite(assessorPermitLength) && assessorPermitLength >= 1 && assessorPermitLength <= 15
+            ? assessorPermitLength
+            : (typeof requestedDurationYears === 'number' && Number.isFinite(requestedDurationYears) && requestedDurationYears >= 1 && requestedDurationYears <= 15
+              ? requestedDurationYears
+              : undefined);
+
+        const resolvedVolume =
+          typeof assessorRecommendedVolume === 'number' && Number.isFinite(assessorRecommendedVolume) && assessorRecommendedVolume > 0
+            ? assessorRecommendedVolume
+            : (typeof requestedVolumeM3 === 'number' && Number.isFinite(requestedVolumeM3) && requestedVolumeM3 > 0
+              ? requestedVolumeM3
+              : undefined);
+
+        if (!existingFormData._originalRequestedValues) {
+          existingFormData._originalRequestedValues = {
+            permitLengthYears: requestedDurationYears,
+            volumeM3: requestedVolumeM3,
+            storedAt: new Date().toISOString(),
+          };
+        }
+
+        const previousAdjustments = existingFormData._assessorAdjustments || {};
+        const nextAdjustments = {
+          ...previousAdjustments,
+        };
+
+        if (typeof resolvedDuration === 'number') {
+          nextAdjustments.permitLengthYears = resolvedDuration;
+          nextAdjustments.adjustedAt = new Date().toISOString();
+        }
+        if (typeof resolvedVolume === 'number') {
+          nextAdjustments.recommendedVolumeM3 = resolvedVolume;
+          nextAdjustments.volumeAdjustedAt = new Date().toISOString();
+        }
+
+        existingFormData._assessorAdjustments = nextAdjustments;
+
+        const durationChanged = nextAdjustments.permitLengthYears !== previousAdjustments.permitLengthYears;
+        const volumeChanged = nextAdjustments.recommendedVolumeM3 !== previousAdjustments.recommendedVolumeM3;
+        const needsAppSync = durationChanged || volumeChanged;
+
+        if (needsAppSync) {
+          const appUpdateData: any = {
+            internal_notes: JSON.stringify(existingFormData),
+          };
+          if (typeof resolvedDuration === 'number') {
+            appUpdateData.proposed_duration_years = resolvedDuration;
+          }
+          if (typeof resolvedVolume === 'number') {
+            appUpdateData.assessor_recommended_volume_m3 = resolvedVolume;
+          }
+
+          const { error: appSyncError } = await supabase
+            .from('applications')
+            .update(appUpdateData)
+            .eq('id', application.id);
+
+          if (appSyncError) throw appSyncError;
+
+          setApplication({
+            ...application,
+            ...appUpdateData,
+          } as any);
+        }
+      }
+
       return result.data;
     } catch (err) {
       console.error('Error saving assessment:', err);

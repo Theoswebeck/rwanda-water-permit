@@ -79,14 +79,18 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [completedApplication, setCompletedApplication] = useState<CompletedApplication | null>(null);
   const [isCompletingPayment, setIsCompletingPayment] = useState(false);
+  const [awaitingSettlement, setAwaitingSettlement] = useState(false);
+  const [callbackAcknowledgedAt, setCallbackAcknowledgedAt] = useState<number | null>(null);
   const blockedAutoOpenInvoiceRef = useRef<string | null>(null);
   
   const {
     payment,
     loading,
     error,
+    statusDebug,
     initiatePayment,
     checkStatus,
+    triggerAcceleratedPolling,
     clearError,
   } = usePayment({
     applicationId: application?.id,
@@ -104,6 +108,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       console.log('✅ Payment completed detected via polling');
       setCompletedApplication(payment.application);
       setPaymentCompleted(true);
+      setAwaitingSettlement(false);
+      setCallbackAcknowledgedAt(null);
 
       // Close Irembo modal if it is open (helps demo flow)
       try {
@@ -118,6 +124,13 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       }, 4000);
     }
   }, [payment?.status, payment?.application, paymentCompleted, isCompletingPayment, router]);
+
+  useEffect(() => {
+    if (payment?.status === 'failed' || payment?.status === 'cancelled') {
+      setAwaitingSettlement(false);
+      setCallbackAcknowledgedAt(null);
+    }
+  }, [payment?.status]);
 
   /**
    * If a user comes back to an existing pending payment, automatically show the widget
@@ -145,6 +158,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       setIsInitializing(true);
       clearError();
       setCustomerValidationError(null);
+      setAwaitingSettlement(false);
+      setCallbackAcknowledgedAt(null);
       blockedAutoOpenInvoiceRef.current = null;
 
       console.log('🚀 Initiating payment...');
@@ -234,7 +249,10 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     try {
       blockedAutoOpenInvoiceRef.current = payment?.irembo_payment_ref ?? null;
       setShowWidget(false);
+      setAwaitingSettlement(true);
+      setCallbackAcknowledgedAt(Date.now());
       setIsCompletingPayment(true);
+      triggerAcceleratedPolling(30000, 1500);
       console.log('💾 [PAYMENT TAB] Verifying payment status...');
 
       // Check status one final time to get the latest payment data
@@ -250,6 +268,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
         if (finalPayment && finalPayment.status === 'completed') {
           setCompletedApplication(finalPayment.application);
           setPaymentCompleted(true);
+          setAwaitingSettlement(false);
+          setCallbackAcknowledgedAt(null);
           console.log('✅ [PAYMENT TAB] Application submitted:', finalPayment.application?.application_number);
 
           // Auto-redirect to dashboard after 4 seconds
@@ -282,6 +302,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       fullError: error ? JSON.stringify(error, null, 2) : 'no error object',
     });
     console.log('❌ [PAYMENT TAB] Payment failed');
+    setAwaitingSettlement(false);
+    setCallbackAcknowledgedAt(null);
     blockedAutoOpenInvoiceRef.current = payment?.irembo_payment_ref ?? null;
     setShowWidget(false);
     
@@ -294,6 +316,8 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
    * Handle retry payment
    */
   const handleRetryPayment = () => {
+    setAwaitingSettlement(false);
+    setCallbackAcknowledgedAt(null);
     blockedAutoOpenInvoiceRef.current = null;
     setShowWidget(false);
     setTimeout(() => {
@@ -333,6 +357,12 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
   );
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
+  const settlementPendingReason = typeof statusDebug?.settlement_reason === 'string'
+    ? statusDebug.settlement_reason
+    : null;
+  const callbackAckTimeLabel = callbackAcknowledgedAt
+    ? new Date(callbackAcknowledgedAt).toLocaleTimeString()
+    : null;
 
   // Show success screen if payment completed and application saved
   if (paymentCompleted && completedApplication) {
@@ -390,25 +420,6 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           <p className="text-lg font-medium">Saving your application…</p>
           <p className="text-sm text-muted-foreground">
             Please wait — we’re preparing payment.
-          </p>
-        </div>
-      </motion.div>
-    );
-  }
-
-  // Show completing payment loader
-  if (isCompletingPayment) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="flex flex-col items-center justify-center py-16 space-y-4"
-      >
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-        <div className="text-center space-y-2">
-          <p className="text-lg font-medium">Verifying payment...</p>
-          <p className="text-sm text-muted-foreground">
-            This may take a few seconds. Please do not close this page.
           </p>
         </div>
       </motion.div>
@@ -494,6 +505,21 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {awaitingSettlement && (
+        <Alert>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <AlertTitle>
+            {isCompletingPayment ? 'Verifying payment with gateway' : 'Awaiting mobile money settlement'}
+          </AlertTitle>
+          <AlertDescription>
+            {callbackAckTimeLabel
+              ? `Callback received at ${callbackAckTimeLabel}. We are now waiting for settlement confirmation.`
+              : 'Callback received. We are now waiting for settlement confirmation.'}
+            {settlementPendingReason ? ` (${settlementPendingReason})` : ''}
+          </AlertDescription>
         </Alert>
       )}
 
