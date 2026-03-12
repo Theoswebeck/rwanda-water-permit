@@ -2395,7 +2395,7 @@ export function ApplicationForm({
                                 <SelectContent>
                                   <SelectItem value="irrigation">Irrigation</SelectItem>
                                   <SelectItem value="livestock">Livestock</SelectItem>
-                                  <SelectItem value="aquaculture">Aquaculture</SelectItem>
+                                  <SelectItem value="fish_farming_lakes">Aquaculture</SelectItem>
                                   <SelectItem value="hydropower">Hydropower</SelectItem>
                                   <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
                                   <SelectItem value="industrial">Industrial Use</SelectItem>

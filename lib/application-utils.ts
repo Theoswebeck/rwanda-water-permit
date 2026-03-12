@@ -54,25 +54,24 @@ export function formatWaterSourceForDB(waterSourceType: string): Application['wa
 }
 
 // Helper function to map form activity types to database water_purpose enum values
-// Database enum: 'domestic', 'irrigation', 'industrial', 'livestock', 'aquaculture', 'recreation', 'electricity_generation', 'mining', 'municipal_supply', 'other'
+// Database enum (migrated): 'domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation', 'recreation_activities', 'electricity_generation', 'mining', 'municipal_supply', 'other'
 export function formatWaterPurposeForDB(activity: string): Application['water_purpose'] {
   if (!activity) return 'other';
   const purposeMap: Record<string, Application['water_purpose']> = {
-    // Direct mappings to valid DB enum values
     'domestic': 'domestic',
     'irrigation': 'irrigation',
     'industrial': 'industrial',
     'livestock': 'livestock',
-    'aquaculture': 'aquaculture',
+    'fish_farming_lakes': 'fish_farming_lakes',
+    'fish_farming_ponds': 'fish_farming_ponds',
+    'aquaculture': 'fish_farming_lakes',
     'recreation': 'recreation',
+    'recreation_activities': 'recreation',
     'electricity_generation': 'electricity_generation',
     'mining': 'mining',
     'municipal_supply': 'municipal_supply',
     'other': 'other',
-    // Form values that need mapping
     'water_supply': 'domestic',
-    'fish_farming_lakes': 'aquaculture',
-    'fish_farming_ponds': 'aquaculture',
     'coffee_washing': 'industrial',
     'industry': 'industrial',
     'electricity': 'electricity_generation',
@@ -80,7 +79,6 @@ export function formatWaterPurposeForDB(activity: string): Application['water_pu
     'construction_of_dam': 'industrial',
     'construction_of_infrastructures': 'industrial',
     'navigation': 'recreation',
-    'recreation_activities': 'recreation',
     'gaz_extraction': 'industrial',
   };
   return purposeMap[activity] || 'other';

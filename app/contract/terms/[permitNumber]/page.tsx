@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { contractTermsByVariant, splitContractSectionsByLanguage } from "@/lib/contract-terms";
+import { contractTermsByVariant, splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -165,18 +165,30 @@ export default async function PublicContractTermsPage({
                         </div>
                       ) : null}
 
-                      {group.sections.map((section, idx) => (
-                        <div key={`${group.key}-${section.title}-${idx}`} className="space-y-2">
-                          <h2 className="text-sm font-semibold text-slate-900">{section.title}</h2>
-                          <div className="space-y-2 text-sm text-slate-700">
-                            {section.paragraphs.map((p, pIdx) => (
-                              <p key={pIdx} className="whitespace-pre-wrap leading-relaxed">
-                                {p}
-                              </p>
-                            ))}
+                      {group.sections.map((section, idx) => {
+                        const { partHeading, articleHeading } = parseSectionHeading(section.title);
+                        const previousPartHeading =
+                          idx > 0 ? parseSectionHeading(group.sections[idx - 1].title).partHeading : null;
+                        const showPartHeading = Boolean(partHeading && partHeading !== previousPartHeading);
+
+                        return (
+                          <div key={`${group.key}-${section.title}-${idx}`} className="space-y-2">
+                            {showPartHeading && (
+                              <h2 className="text-sm font-bold text-slate-900 pt-2">{partHeading}</h2>
+                            )}
+                            <h3 className="text-sm font-semibold text-slate-900">
+                              {partHeading ? articleHeading : section.title}
+                            </h3>
+                            <div className="space-y-2 text-sm text-slate-700">
+                              {section.paragraphs.map((p, pIdx) => (
+                                <p key={pIdx} className="whitespace-pre-wrap leading-relaxed">
+                                  {p}
+                                </p>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ))}
 

@@ -155,7 +155,9 @@ export async function POST(
       errors.push(...basic.errors.map((e) => `Polygon ${i + 1}: ${e}`));
     }
 
-    // Duplicate polygon check against other applications
+    // Duplicate polygon check against other applications.
+    // Excludes the parent application for modifications, renewals, and transfers
+    // so the inherited polygon isn't flagged as a duplicate.
     if (errors.length === 0) {
       const candidateKeys = polyFeatures.map((p) => polygonToKey(p));
       const apps = await query<{ id: string; project_title: string | null; coordinates: unknown }>(
@@ -164,6 +166,20 @@ export async function POST(
         from public.applications
         where coordinates is not null
           and id <> $1
+          and id not in (
+            select unnest(array_remove(array[
+              -- modification: exclude the parent application
+              a.modified_from_application_id,
+              -- renewal: exclude the application that produced the parent permit
+              (select p.application_id from public.permits p where p.id = a.renewed_from_permit_id),
+              -- transfer: exclude the application that produced the original permit (stored in internal_notes JSON)
+              (select p.application_id from public.permits p
+               where a.application_type = 'transfer'
+                 and p.id = (a.internal_notes::jsonb ->> 'originalPermitId')::uuid)
+            ], null))
+            from public.applications a
+            where a.id = $1
+          )
         `,
         [applicationId]
       )

@@ -373,7 +373,7 @@ export default function ManagementDashboardPage() {
                                 <SelectItem value="industrial">Industry</SelectItem>
                                 <SelectItem value="electricity_generation">Hydropower</SelectItem>
                                 <SelectItem value="mining">Mining</SelectItem>
-                                <SelectItem value="aquaculture">Fish farming</SelectItem>
+                                <SelectItem value="fish_farming_lakes">Fish farming</SelectItem>
                                 <SelectItem value="recreation">Recreation</SelectItem>
                                 <SelectItem value="other">Other</SelectItem>
                               </SelectContent>

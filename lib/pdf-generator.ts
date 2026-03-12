@@ -4,11 +4,8 @@ import QRCode from 'qrcode';
 import { isConcessionApplication, selectPermitVariant } from "@/lib/permit-variant";
 import { splitContractSectionsByLanguage } from "@/lib/contract-terms";
 
-// Large centered background watermark behind permit text.
 const WATERMARK_IMAGE_PATH = "/assets/rwanda_logo.png";
-// Official RWB logo at the top center.
 const PERMIT_HEADER_LOGO_PATH = "/assets/rwanda_water_board_Logo.png";
-// Closest built-in jsPDF serif to Palatino Linotype.
 const PERMIT_FONT_FAMILY = "times";
 
 // =============================================
@@ -101,6 +98,22 @@ let cachedPermitHeaderLogoDataUrl: string | null = null;
 const qrDataUrlCache = new Map<string, string>();
 
 async function fetchImageAsDataUrl(imagePath: string): Promise<string | null> {
+  // Server-side (Node.js): read directly from the filesystem
+  if (typeof window === "undefined") {
+    try {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const filePath = path.join(process.cwd(), "public", imagePath);
+      const buffer = fs.readFileSync(filePath);
+      const ext = path.extname(imagePath).replace(".", "").toLowerCase();
+      const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : `image/${ext}`;
+      return `data:${mime};base64,${buffer.toString("base64")}`;
+    } catch {
+      return null;
+    }
+  }
+
+  // Browser: fetch from origin
   try {
     const url = `${window.location.origin}${imagePath}`;
     const res = await fetch(url);
@@ -132,7 +145,7 @@ async function drawPermitPageHeader(doc: jsPDF, title: string): Promise<void> {
   if (logoDataUrl) {
     const logoW = 72;
     const logoH = 30;
-    doc.addImage(logoDataUrl, "PNG", centerX - logoW / 2, 8, logoW, logoH);
+    doc.addImage(logoDataUrl, "PNG", centerX - logoW / 2, 8, logoW, logoH, undefined, "NONE");
   } else {
     doc.setFont(PERMIT_FONT_FAMILY, "bold");
     doc.setFontSize(13);
@@ -160,44 +173,29 @@ async function loadWatermarkImage(): Promise<string | null> {
 }
 
 /**
- * Draw a centered watermark on the current page of the PDF document.
- * The watermark is drawn with low opacity to appear behind content.
+ * Draw the watermark on the CURRENT page using a pre-loaded data URL.
+ * Must be called BEFORE any text/content so it renders behind everything.
  */
-async function drawCenteredWatermark(doc: jsPDF): Promise<void> {
-  const watermarkDataUrl = await loadWatermarkImage();
-  if (!watermarkDataUrl) {
-    return; // Silently skip if watermark can't be loaded
-  }
-
+function stampWatermark(doc: jsPDF, dataUrl: string): void {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
 
-  // Watermark size - larger and centered behind permit text body.
-  const watermarkWidth = 155;
-  const watermarkHeight = 155;
+  const wmW = 155;
+  const wmH = 155;
+  const x = (pageWidth - wmW) / 2;
+  const y = (pageHeight - wmH) / 2 + 12;
 
-  // Center the watermark a little lower so it does not interfere with the header logo.
-  const x = (pageWidth - watermarkWidth) / 2;
-  const y = (pageHeight - watermarkHeight) / 2 + 12;
-
-  // Add the watermark image without extra opacity overlay.
-  // We rely on the source PNG transparency for visual balance.
   try {
-    doc.addImage(watermarkDataUrl, "PNG", x, y, watermarkWidth, watermarkHeight);
-  } catch (error) {
-    console.warn("⚠️ Could not add watermark to PDF:", error);
-  }
-}
-
-/**
- * Add watermark to all pages of a PDF document.
- * Call this AFTER all content has been added and before outputting the blob.
- */
-async function addWatermarkToAllPages(doc: jsPDF): Promise<void> {
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    await drawCenteredWatermark(doc);
+    doc.saveGraphicsState();
+    doc.setGState(doc.GState({ opacity: 0.12 }));
+    doc.addImage(dataUrl, "PNG", x, y, wmW, wmH, undefined, "NONE");
+    doc.restoreGraphicsState();
+  } catch {
+    try {
+      doc.addImage(dataUrl, "PNG", x, y, wmW, wmH, undefined, "NONE");
+    } catch (err) {
+      console.warn("Could not add watermark to PDF:", err);
+    }
   }
 }
 
@@ -851,7 +849,7 @@ function drawWrappedParagraph(
   x: number,
   y: number,
   maxWidth: number,
-  opts?: { lineHeight?: number; paragraphSpacing?: number; pageBottomY?: number; newPageY?: number }
+  opts?: { lineHeight?: number; paragraphSpacing?: number; pageBottomY?: number; newPageY?: number; watermark?: string | null }
 ): number {
   const lineHeight = opts?.lineHeight ?? 6;
   const paragraphSpacing = opts?.paragraphSpacing ?? 6;
@@ -862,6 +860,7 @@ function drawWrappedParagraph(
 
   if (y + blockHeight > pageBottomY) {
     doc.addPage();
+    if (opts?.watermark) stampWatermark(doc, opts.watermark);
     y = newPageY;
   }
 
@@ -997,6 +996,7 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
 }): Promise<Blob> {
   const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
+  const wm = await loadWatermarkImage();
 
   const issueDate = issuedDate ?? new Date();
   const resolvedExpiryDate =
@@ -1006,6 +1006,8 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
       d.setFullYear(issueDate.getFullYear() + permitValidityYears);
       return d;
     })();
+
+  if (wm) stampWatermark(doc, wm);
 
   const headerYear = issueDate.getFullYear();
   const titlePermitNo = resolvePermitTitleLine(application, permitNumber, headerYear);
@@ -1047,10 +1049,10 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
     y += lines.length * 6 + 6;
   }
 
-  // Signature section (keep above QR footer area)
   const footerCutoffY = 232;
   if (y > footerCutoffY) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     y = 30;
   }
 
@@ -1066,16 +1068,10 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
   const rightX = 190;
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
-  // QR footer on last page only
   await drawPermitQrFooter({ doc, permitNumber });
 
-  // Add watermark to all pages BEFORE adding footer text (so watermark is behind everything)
-  await addWatermarkToAllPages(doc);
-
-  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
   if (isModified) drawModifiedBadge(doc);
 
-  // Minimal page footer metadata (keep consistent with existing PDFs)
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -1098,6 +1094,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
 }): Promise<Blob> {
   const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
+  const wm = await loadWatermarkImage();
 
   const issueDate = issuedDate ?? new Date();
   const resolvedExpiryDate =
@@ -1107,6 +1104,8 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
       d.setFullYear(issueDate.getFullYear() + permitValidityYears);
       return d;
     })();
+
+  if (wm) stampWatermark(doc, wm);
 
   const headerYear = issueDate.getFullYear();
   const permitTitleLine = resolvePermitTitleLine(application, permitNumber, headerYear);
@@ -1174,13 +1173,15 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const paraRw5 =
     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.";
 
-  y = drawWrappedParagraph(doc, para1, leftX, y, maxWidth);
-  y = drawWrappedParagraph(doc, para2, leftX, y, maxWidth);
-  y = drawWrappedParagraph(doc, para3, leftX, y, maxWidth);
-  y = drawWrappedParagraph(doc, para4, leftX, y, maxWidth);
+  const wmOpt = { watermark: wm };
+  y = drawWrappedParagraph(doc, para1, leftX, y, maxWidth, wmOpt);
+  y = drawWrappedParagraph(doc, para2, leftX, y, maxWidth, wmOpt);
+  y = drawWrappedParagraph(doc, para3, leftX, y, maxWidth, wmOpt);
+  y = drawWrappedParagraph(doc, para4, leftX, y, maxWidth, wmOpt);
 
   if (y > 236) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     y = 30;
   } else {
     y += 4;
@@ -1199,16 +1200,18 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   doc.addPage();
+  if (wm) stampWatermark(doc, wm);
   await drawPermitPageHeader(doc, paraRw1);
   y = 62;
 
-  y = drawWrappedParagraph(doc, paraRw2, leftX, y, maxWidth);
-  y = drawWrappedParagraph(doc, paraRw3, leftX, y, maxWidth);
-  y = drawWrappedParagraph(doc, paraRw4, leftX, y, maxWidth);
-  y = drawWrappedParagraph(doc, paraRw5, leftX, y, maxWidth);
+  y = drawWrappedParagraph(doc, paraRw2, leftX, y, maxWidth, wmOpt);
+  y = drawWrappedParagraph(doc, paraRw3, leftX, y, maxWidth, wmOpt);
+  y = drawWrappedParagraph(doc, paraRw4, leftX, y, maxWidth, wmOpt);
+  y = drawWrappedParagraph(doc, paraRw5, leftX, y, maxWidth, wmOpt);
 
   if (y > 236) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     y = 30;
   }
 
@@ -1224,10 +1227,6 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
 
   await drawPermitQrFooter({ doc, permitNumber });
 
-  // Add watermark to all pages
-  await addWatermarkToAllPages(doc);
-
-  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
   if (isModified) drawModifiedBadge(doc);
 
   const pageCount = doc.getNumberOfPages();
@@ -1252,6 +1251,7 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
 }): Promise<Blob> {
   const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
+  const wm = await loadWatermarkImage();
 
   const issueDate = issuedDate ?? new Date();
   const resolvedExpiryDate =
@@ -1261,6 +1261,8 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
       d.setFullYear(issueDate.getFullYear() + permitValidityYears);
       return d;
     })();
+
+  if (wm) stampWatermark(doc, wm);
 
   const headerYear = issueDate.getFullYear();
   await drawPermitPageHeader(
@@ -1306,10 +1308,10 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
     y += lines.length * 6 + 6;
   }
 
-  // Signature section (keep above QR footer area)
   const footerCutoffY = 232;
   if (y > footerCutoffY) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     y = 30;
   }
 
@@ -1320,17 +1322,13 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 6;
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
-  doc.text("Director General", leftX, y);
+  doc.text("Director General/", leftX, y);
 
   const rightX = 190;
   doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
-  // Add watermark to all pages
-  await addWatermarkToAllPages(doc);
-
-  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
   if (isModified) drawModifiedBadge(doc);
 
   const pageCount = doc.getNumberOfPages();
@@ -1355,6 +1353,7 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
 }): Promise<Blob> {
   const { application, permitNumber, permitValidityYears, issuedDate, expiryDate, isModified } = opts;
   const doc = new jsPDF();
+  const wm = await loadWatermarkImage();
 
   const issueDate = issuedDate ?? new Date();
   const resolvedExpiryDate =
@@ -1364,6 +1363,8 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
       d.setFullYear(issueDate.getFullYear() + permitValidityYears);
       return d;
     })();
+
+  if (wm) stampWatermark(doc, wm);
 
   const headerYear = issueDate.getFullYear();
   await drawPermitPageHeader(
@@ -1411,10 +1412,10 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
     y += lines.length * 6 + 6;
   }
 
-  // Signature section (keep above QR footer area)
   const footerCutoffY = 232;
   if (y > footerCutoffY) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     y = 30;
   }
 
@@ -1432,10 +1433,6 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
 
   await drawPermitQrFooter({ doc, permitNumber });
 
-  // Add watermark to all pages
-  await addWatermarkToAllPages(doc);
-
-  // Stamp "MODIFIED PERMIT" badge on page 1 when applicable
   if (isModified) drawModifiedBadge(doc);
 
   const pageCount = doc.getNumberOfPages();
@@ -1535,6 +1532,8 @@ export const generateDigitalWaterPermitBlob = async (
   }
 
   const doc = new jsPDF();
+  const wm = await loadWatermarkImage();
+  if (wm) stampWatermark(doc, wm);
 
   // Helper function to format currency
   const formatCurrency = (amount?: number) => {
@@ -1694,9 +1693,9 @@ export const generateDigitalWaterPermitBlob = async (
 
   currentY = (doc as any).lastAutoTable.finalY + 15;
 
-  // Check if we need a new page
   if (currentY > 240) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     currentY = 20;
   }
 
@@ -1768,9 +1767,9 @@ export const generateDigitalWaterPermitBlob = async (
     currentY = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // Add new page for legal information if needed
   if (currentY > 220) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
     currentY = 20;
   }
 
@@ -1819,18 +1818,13 @@ export const generateDigitalWaterPermitBlob = async (
   doc.text('Acknowledgment', 145, currentY + 20, { align: 'center' });
   doc.text('Date and Signature', 145, currentY + 35, { align: 'center' });
 
-  // If signature blocks push too low, add a clean page for the QR footer
   if (currentY + 50 > 235) {
     doc.addPage();
+    if (wm) stampWatermark(doc, wm);
   }
 
-  // Add QR footer on the last page only
   await drawPermitQrFooter({ doc, permitNumber });
 
-  // Add watermark to all pages
-  await addWatermarkToAllPages(doc);
-
-  // Footer with security features
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -2250,6 +2244,8 @@ export const generateTermsConditionsPdfBlob = async (opts: {
   } = opts;
 
   const doc = new jsPDF();
+  const wmContract = await loadWatermarkImage();
+  if (wmContract) stampWatermark(doc, wmContract);
   const issueDate = new Date();
   const signatureDate = formatDateDMY(issueDate);
 
@@ -2361,6 +2357,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
   for (const [groupIndex, group] of sectionGroups.entries()) {
     if (groupIndex > 0) {
       doc.addPage();
+      if (wmContract) stampWatermark(doc, wmContract);
       currentY = 20;
     }
 
@@ -2375,6 +2372,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
     for (const section of group.sections) {
       if (currentY > 260) {
         doc.addPage();
+        if (wmContract) stampWatermark(doc, wmContract);
         currentY = 20;
       }
 
@@ -2392,6 +2390,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
 
         if (currentY > 270) {
           doc.addPage();
+          if (wmContract) stampWatermark(doc, wmContract);
           currentY = 20;
         }
 
@@ -2405,10 +2404,10 @@ export const generateTermsConditionsPdfBlob = async (opts: {
     }
   }
 
-  // Important Notice
   if (importantNotice) {
     if (currentY > 240) {
       doc.addPage();
+      if (wmContract) stampWatermark(doc, wmContract);
       currentY = 20;
     }
 
@@ -2438,6 +2437,7 @@ export const generateTermsConditionsPdfBlob = async (opts: {
     const safeContentBottomY = footerY - 6;
     if (currentY > safeContentBottomY) {
       doc.addPage();
+      if (wmContract) stampWatermark(doc, wmContract);
       currentY = 20;
     }
   }
@@ -2447,9 +2447,6 @@ export const generateTermsConditionsPdfBlob = async (opts: {
     doc,
     url: buildContractTermsHostedUrl(contractNumber),
   });
-
-  // Add watermark to all pages
-  await addWatermarkToAllPages(doc);
 
   // Footer with page numbers
   const pageCount = doc.getNumberOfPages();
@@ -2466,8 +2463,9 @@ export const generateTermsConditionsPdfBlob = async (opts: {
 };
 
 export const generatePermitPDF = async (permit: Permit): Promise<void> => {
-  // Create a new PDF document
   const doc = new jsPDF();
+  const wmLegacy = await loadWatermarkImage();
+  if (wmLegacy) stampWatermark(doc, wmLegacy);
   
   // Format date
   const formatDate = (dateString: string) => {
@@ -2550,12 +2548,10 @@ export const generatePermitPDF = async (permit: Permit): Promise<void> => {
   const lastY = (doc as any).lastAutoTable?.finalY ?? 0;
   if (lastY > 235) {
     doc.addPage();
+    if (wmLegacy) stampWatermark(doc, wmLegacy);
   }
   await drawPermitQrFooter({ doc, permitNumber: permit.permitNumber });
 
-  // Add watermark to all pages
-  await addWatermarkToAllPages(doc);
-  
   // Open the PDF in a new tab
   const pdfBlob = doc.output('blob');
   const pdfUrl = URL.createObjectURL(pdfBlob);

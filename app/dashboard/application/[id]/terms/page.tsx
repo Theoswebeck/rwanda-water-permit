@@ -18,12 +18,15 @@ import {
   Loader2,
   Star,
   ArrowLeft,
+  Home,
+  ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
-import { contractTermsByVariant, splitContractSectionsByLanguage } from "@/lib/contract-terms";
+import { contractTermsByVariant, splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -40,6 +43,7 @@ export default function TermsConditionsPage() {
   const [feedback, setFeedback] = useState<string>("");
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
   const [termsVariant, setTermsVariant] = useState<PermitVariant | null>(null);
   const [isLoadingTerms, setIsLoadingTerms] = useState(true);
   const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
@@ -1007,7 +1011,7 @@ export default function TermsConditionsPage() {
         throw new Error(result?.message || "Failed to submit feedback. Please try again.");
       }
 
-      navigateBack();
+      setFeedbackSubmitted(true);
     } catch (error) {
       console.error("❌ Error submitting feedback:", error);
       setFeedbackError(error instanceof Error ? error.message : "Failed to submit feedback. Please try again.");
@@ -1017,30 +1021,6 @@ export default function TermsConditionsPage() {
   };
 
   const defaultTab = visibleLanguageGroups.length > 0 ? visibleLanguageGroups[0].key : "en";
-
-  const parseSectionHeading = (title: string) => {
-    const parts = title.split("—").map((segment) => segment.trim()).filter(Boolean);
-    if (parts.length < 2) {
-      return {
-        partHeading: null as string | null,
-        articleHeading: title,
-      };
-    }
-
-    const [candidatePart, ...rest] = parts;
-    const isPartHeading = /^(PART|IGICE)\b/i.test(candidatePart);
-    if (!isPartHeading || rest.length === 0) {
-      return {
-        partHeading: null as string | null,
-        articleHeading: title,
-      };
-    }
-
-    return {
-      partHeading: candidatePart,
-      articleHeading: rest.join(" — "),
-    };
-  };
 
   const renderTermsSections = (sections: typeof visibleLanguageGroups[number]["sections"]) => (
     <div className="space-y-6 py-4">
@@ -1240,6 +1220,45 @@ export default function TermsConditionsPage() {
                     </CardContent>
                   </Card>
                 </div>
+              ) : feedbackSubmitted ? (
+                /* Completion screen after feedback */
+                <div className="space-y-6">
+                  <Card className="border-green-200 bg-green-50/50">
+                    <CardContent className="flex items-start gap-3 p-5">
+                      <CheckCircle className="mt-0.5 h-6 w-6 shrink-0 text-green-600" />
+                      <div>
+                        <p className="text-base font-semibold text-green-800">
+                          Thank you! Your permit has been issued.
+                        </p>
+                        {issuedPermit?.permitNumber && (
+                          <p className="mt-1 text-sm text-green-700/80">
+                            Permit Number: <span className="font-medium">{issuedPermit.permitNumber}</span>
+                          </p>
+                        )}
+                        <p className="mt-2 text-sm text-green-700/80">
+                          Your feedback has been recorded. You can now view your permit or return to the dashboard.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+                    {issuedPermit?.permitNumber && (
+                      <Link href={`/permit/view/${issuedPermit.permitNumber}`}>
+                        <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          View Permit
+                        </Button>
+                      </Link>
+                    )}
+                    <Link href="/dashboard">
+                      <Button variant="outline" className="w-full sm:w-auto">
+                        <Home className="mr-2 h-4 w-4" />
+                        Back to Dashboard
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
               ) : (
                 /* Feedback step */
                 <div className="space-y-6">
@@ -1295,7 +1314,12 @@ export default function TermsConditionsPage() {
                         </div>
                       )}
 
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-3">
+                        <Link href="/dashboard">
+                          <Button variant="ghost" disabled={isSubmittingFeedback}>
+                            Skip
+                          </Button>
+                        </Link>
                         <Button
                           onClick={handleSubmitFeedback}
                           disabled={isSubmittingFeedback || !feedback.trim()}

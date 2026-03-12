@@ -55,6 +55,27 @@ export function splitContractSectionsByLanguage(sections: ContractTermsSection[]
   );
 }
 
+export function parseSectionHeading(title: string): {
+  partHeading: string | null;
+  articleHeading: string;
+} {
+  const parts = title.split("—").map((segment) => segment.trim()).filter(Boolean);
+  if (parts.length < 2) {
+    return { partHeading: null, articleHeading: title };
+  }
+
+  const [candidatePart, ...rest] = parts;
+  const isPartHeading = /^(PART|IGICE)\b/i.test(candidatePart);
+  if (!isPartHeading || rest.length === 0) {
+    return { partHeading: null, articleHeading: title };
+  }
+
+  return {
+    partHeading: candidatePart,
+    articleHeading: rest.join(" — "),
+  };
+}
+
 // NOTE: We'll progressively fill these with the real contract text per variant.
 export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null> = {
   abstraction_individual: {
@@ -526,7 +547,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
 
       // Kinyarwanda version
       {
-        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI (Kinyarwanda version)",
+        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI",
         paragraphs: ["No {{CONTRACT_NUMBER}}"],
       },
       {
@@ -688,7 +709,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     },
   },
   concession_individual: {
-    heading: "CONTRACT RELATING TO WATER USE PERMIT (Concession — Individual)",
+    heading: "CONTRACT RELATING TO WATER USE PERMIT",
     subheading: "The fields in this contract are auto-filled from your application details.",
     sections: [
       {
@@ -852,7 +873,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
 
       // Kinyarwanda version
       {
-        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI (Kinyarwanda version)",
+        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI",
         paragraphs: ["No {{CONTRACT_NUMBER}}"],
       },
       {
@@ -1018,7 +1039,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
     },
   },
   concession_organization: {
-    heading: "CONTRACT RELATING TO WATER USE PERMIT (Concession — Organization)",
+    heading: "CONTRACT RELATING TO WATER USE PERMIT",
     subheading: "The fields in this contract are auto-filled from your application details.",
     sections: [
       {
@@ -1181,7 +1202,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
 
       // Kinyarwanda version
       {
-        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI (Kinyarwanda version)",
+        title: "AMASEZERANO YEREKEYE URUHUSHYA RWO GUKORESHA AMAZI",
         paragraphs: ["No {{CONTRACT_NUMBER}}"],
       },
       {

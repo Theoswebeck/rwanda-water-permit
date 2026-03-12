@@ -46,10 +46,10 @@ const WATER_PURPOSE = new Set([
   'irrigation',
   'industrial',
   'livestock',
-  'aquaculture',
   'fish_farming_lakes',
   'fish_farming_ponds',
   'recreation',
+  'recreation_activities',
   'electricity_generation',
   'mining',
   'municipal_supply',
@@ -116,6 +116,7 @@ function mapWaterSource(value: unknown): string {
 function mapWaterPurpose(value: unknown): string {
   const key = asLowerString(value)
   const aliases: Record<string, string> = {
+    aquaculture: 'fish_farming_lakes',
     water_supply: 'domestic',
     industry: 'industrial',
     coffee_washing: 'industrial',
@@ -124,7 +125,6 @@ function mapWaterPurpose(value: unknown): string {
     construction_of_dam: 'industrial',
     construction_of_infrastructures: 'industrial',
     navigation: 'recreation',
-    recreation_activities: 'recreation',
     gaz_extraction: 'industrial',
   }
   const normalized = aliases[key] || key
