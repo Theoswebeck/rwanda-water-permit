@@ -33,6 +33,7 @@ export interface MultiPolygonInputWithValidationProps {
   onPolygonsChange: (polygons: CoordinatePoint[][]) => void;
   onValidationChange?: (validation: ValidationResponse | null) => void;
   applicationId?: string;
+  excludeApplicationIds?: string[];
   disabled?: boolean;
   className?: string;
   showValidation?: boolean;
@@ -56,6 +57,7 @@ export function MultiPolygonInputWithValidation({
   onPolygonsChange,
   onValidationChange,
   applicationId,
+  excludeApplicationIds,
   disabled = false,
   className = "",
   showValidation = true,
@@ -103,6 +105,7 @@ export function MultiPolygonInputWithValidation({
         {
           polygons: safePolygons,
           applicationId,
+          excludeApplicationIds,
         },
         true
       );

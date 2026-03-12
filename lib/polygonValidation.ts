@@ -4,11 +4,13 @@ import type { CoordinatePoint, IntersectionDetail } from './geoUtils';
 export interface ValidationRequest {
   coordinates: CoordinatePoint[];
   applicationId?: string;
+  excludeApplicationIds?: string[];
 }
 
 export interface MultiPolygonValidationRequest {
   polygons: CoordinatePoint[][];
   applicationId?: string;
+  excludeApplicationIds?: string[];
 }
 
 export interface ValidationResponse {

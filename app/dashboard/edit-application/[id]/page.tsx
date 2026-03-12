@@ -1135,7 +1135,7 @@ export default function EditApplicationPage() {
           )}
           
           {application && initialFormData && (
-            <ApplicationForm 
+            <ApplicationForm
               userData={userData}
               onSubmit={handleSubmitApplication}
               onSaveAsDraft={handleSaveAsDraft}
@@ -1145,6 +1145,7 @@ export default function EditApplicationPage() {
               mode={isExpired ? "view" : "edit"}
               readOnly={isExpired}
               currentApplication={application}
+              excludeApplicationIds={[(application as any)?.modified_from_application_id].filter(Boolean)}
             />
           )}
         </motion.div>

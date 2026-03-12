@@ -74,6 +74,7 @@ interface PaymentTabProps {
 export function PaymentTab({ application, formData, onBack, isSavingApplication, saveError, onRetrySave }: PaymentTabProps) {
   const router = useRouter();
   const [showWidget, setShowWidget] = useState(false);
+  const [widgetDismissed, setWidgetDismissed] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [customerValidationError, setCustomerValidationError] = useState<string | null>(null);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
@@ -126,10 +127,10 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     const isPendingWithRef =
       (payment?.status === 'pending' || payment?.status === 'processing') && !!payment?.irembo_payment_ref;
 
-    if (isPendingWithRef && !showWidget) {
+    if (isPendingWithRef && !showWidget && !widgetDismissed) {
       setShowWidget(true);
     }
-  }, [payment?.status, payment?.irembo_payment_ref, showWidget]);
+  }, [payment?.status, payment?.irembo_payment_ref, showWidget, widgetDismissed]);
 
   /**
    * Handle payment initiation
@@ -215,6 +216,9 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
       invoiceNumber: payment?.irembo_payment_ref,
     });
     console.log('✅ [PAYMENT TAB] Payment successful - checking final status');
+
+    setShowWidget(false);
+    setWidgetDismissed(true);
     
     try {
       setIsCompletingPayment(true);
@@ -266,8 +270,27 @@ export function PaymentTab({ application, formData, onBack, isSavingApplication,
     });
     const isAlreadyPaid = error?.code === 'BAD_INVOICES_PAID';
     if (isAlreadyPaid) {
-      console.log('ℹ️ [PAYMENT TAB] Invoice already paid callback received. Verifying as success...');
-      void handlePaymentSuccess();
+      console.log('ℹ️ [PAYMENT TAB] Invoice already paid — dismissing widget and verifying...');
+      setShowWidget(false);
+      setWidgetDismissed(true);
+      setIsCompletingPayment(true);
+
+      if (payment?.id) {
+        checkStatus(payment.id)
+          .then((result) => {
+            if (result?.status === 'completed') {
+              setCompletedApplication(result.application);
+              setPaymentCompleted(true);
+              setTimeout(() => router.push('/dashboard'), 4000);
+            } else {
+              console.log('⏳ [PAYMENT TAB] Status still pending after BAD_INVOICES_PAID — polling will continue');
+            }
+          })
+          .catch((err) => console.error('❌ [PAYMENT TAB] Status check after already-paid failed:', err))
+          .finally(() => setIsCompletingPayment(false));
+      } else {
+        setIsCompletingPayment(false);
+      }
       return;
     }
 

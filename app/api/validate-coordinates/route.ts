@@ -41,6 +41,7 @@ const ValidationRequestSchema = z.object({
     message: 'Exactly 5 coordinate points are required'
   }),
   applicationId: z.string().uuid().optional(),
+  excludeApplicationIds: z.array(z.string().uuid()).optional(),
   // kept for backwards compatibility, but ignored in the new implementation
   useServerValidation: z.boolean().optional().default(true)
 });
@@ -50,6 +51,7 @@ const MultiPolygonValidationRequestSchema = z.object({
     message: 'At least one polygon is required'
   }),
   applicationId: z.string().uuid().optional(),
+  excludeApplicationIds: z.array(z.string().uuid()).optional(),
   useServerValidation: z.boolean().optional().default(true)
 });
 
@@ -91,6 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const applicationId = (parsedMulti.success ? parsedMulti.data.applicationId : parsedLegacy.data.applicationId) || undefined;
+    const excludeApplicationIds = (parsedMulti.success ? parsedMulti.data.excludeApplicationIds : parsedLegacy.data.excludeApplicationIds) || [];
 
     const polygons: CoordinatePoint[][] = parsedMulti.success
       ? (parsedMulti.data.polygons as CoordinatePoint[][])
@@ -158,32 +161,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Duplicate polygon check across existing applications.
-    // Excludes the current application AND, for modifications / renewals / transfers,
-    // the parent application whose polygon is being carried over.
+    // Excludes the current application AND any explicitly provided IDs
+    // (parent application for modifications / renewals / transfers).
     const candidateKeys = polyFeatures.map((f) => polygonToKey(f));
-    const appsRes = applicationId
+    const allExcludeIds = [...new Set([applicationId, ...excludeApplicationIds].filter(Boolean))] as string[];
+
+    const appsRes = allExcludeIds.length > 0
       ? await query<{ id: string; project_title: string | null; coordinates: unknown }>(
           `
           select id, project_title, st_asgeojson(coordinates)::jsonb as coordinates
           from public.applications
           where coordinates is not null
-            and id <> $1
-            and id not in (
-              select unnest(array_remove(array[
-                -- modification: exclude the parent application
-                a.modified_from_application_id,
-                -- renewal: exclude the application that produced the parent permit
-                (select p.application_id from public.permits p where p.id = a.renewed_from_permit_id),
-                -- transfer: exclude the application that produced the original permit (stored in internal_notes JSON)
-                (select p.application_id from public.permits p
-                 where a.application_type = 'transfer'
-                   and p.id = (a.internal_notes::jsonb ->> 'originalPermitId')::uuid)
-              ], null))
-              from public.applications a
-              where a.id = $1
-            )
+            and id <> all($1::uuid[])
           `,
-          [applicationId]
+          [allExcludeIds]
         )
       : await query<{ id: string; project_title: string | null; coordinates: unknown }>(
           `

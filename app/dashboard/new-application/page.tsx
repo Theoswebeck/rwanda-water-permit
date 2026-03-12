@@ -2448,6 +2448,7 @@ function NewApplicationContent() {
             currentApplication={currentModificationApplication}
             isModification={true}
             originalApplicationData={originalApplicationData}
+            excludeApplicationIds={[selectedPermitForModification?.application_id].filter(Boolean) as string[]}
           />
         </>
       );

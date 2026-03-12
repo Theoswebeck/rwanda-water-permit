@@ -813,6 +813,7 @@ interface ApplicationFormProps {
   isModification?: boolean; // True when modifying an existing permit
   originalApplicationData?: Partial<FormValues>; // Original data for comparison (modification mode)
   modificationChanges?: Record<string, { previous: any; current: any }>; // Stored changes from DB (staff view)
+  excludeApplicationIds?: string[]; // Parent application IDs to exclude from polygon duplicate check (modification/renewal/transfer)
 }
 
 export function ApplicationForm({ 
@@ -828,7 +829,8 @@ export function ApplicationForm({
   isStaffView = false,
   isModification: isModificationProp = false,
   originalApplicationData,
-  modificationChanges
+  modificationChanges,
+  excludeApplicationIds = []
 }: ApplicationFormProps) {
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
@@ -1792,7 +1794,8 @@ export function ApplicationForm({
       try {
         const validation = await validatePolygons({
           polygons,
-          applicationId: currentApplication?.id
+          applicationId: currentApplication?.id,
+          excludeApplicationIds
         });
 
         setCoordinateValidation(validation);
@@ -4165,6 +4168,7 @@ export function ApplicationForm({
                                 setCanSubmit(true);
                               }}
                               applicationId={currentApplication?.id}
+                              excludeApplicationIds={excludeApplicationIds}
                               disabled={Boolean(readOnly)}
                               showValidation={true}
                             />
