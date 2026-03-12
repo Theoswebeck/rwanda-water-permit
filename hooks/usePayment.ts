@@ -22,10 +22,8 @@ interface UsePaymentReturn {
   payment: Payment | null;
   loading: boolean;
   error: string | null;
-  statusDebug: Record<string, unknown> | null;
   initiatePayment: (data: InitiatePaymentRequest) => Promise<{ success: boolean; payment?: Payment; payment_url?: string; error?: string }>;
   checkStatus: (paymentId: string) => Promise<Payment | null>;
-  triggerAcceleratedPolling: (durationMs?: number, intervalMs?: number) => void;
   refetch: () => Promise<void>;
   clearError: () => void;
 }
@@ -36,11 +34,6 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusDebug, setStatusDebug] = useState<Record<string, unknown> | null>(null);
-  const [acceleratedPollingConfig, setAcceleratedPollingConfig] = useState<{
-    until: number;
-    intervalMs: number;
-  } | null>(null);
 
   /**
    * Fetch payment for application
@@ -73,10 +66,8 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
 
       if (data.success && data.payment) {
         setPayment(data.payment);
-        setStatusDebug(null);
       } else {
         setPayment(null);
-        setStatusDebug(null);
       }
     } catch (err) {
       console.error('Error fetching payment:', err);
@@ -122,7 +113,6 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
 
       if (result.success && result.payment) {
         setPayment(result.payment);
-        setStatusDebug(null);
         debugLog('✅ Payment initiated successfully');
         return {
           success: true,
@@ -180,11 +170,6 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
 
       if (result.success && result.payment) {
         setPayment(result.payment);
-        setStatusDebug(
-          result.status_debug && typeof result.status_debug === 'object'
-            ? (result.status_debug as Record<string, unknown>)
-            : null
-        );
         debugLog('✅ Payment status:', result.payment.status);
         return result.payment;
       } else {
@@ -207,19 +192,6 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
     await fetchPayment();
   }, [fetchPayment]);
 
-  const triggerAcceleratedPolling = useCallback((durationMs = 30000, intervalMs = 1500) => {
-    const normalizedDuration = Math.max(5000, durationMs);
-    const normalizedInterval = Math.max(750, intervalMs);
-    setAcceleratedPollingConfig({
-      until: Date.now() + normalizedDuration,
-      intervalMs: normalizedInterval,
-    });
-    debugLog('⚡ Accelerated polling enabled:', {
-      durationMs: normalizedDuration,
-      intervalMs: normalizedInterval,
-    });
-  }, []);
-
   /**
    * Clear error state
    */
@@ -240,27 +212,6 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
    * Auto-poll for status updates if payment is pending/processing
    */
   useEffect(() => {
-    if (!acceleratedPollingConfig) return;
-
-    const remainingMs = acceleratedPollingConfig.until - Date.now();
-    if (remainingMs <= 0) {
-      setAcceleratedPollingConfig(null);
-      debugLog('⚡ Accelerated polling window ended');
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      setAcceleratedPollingConfig(null);
-      debugLog('⚡ Accelerated polling disabled');
-    }, remainingMs);
-
-    return () => clearTimeout(timeoutId);
-  }, [acceleratedPollingConfig]);
-
-  /**
-   * Auto-poll for status updates if payment is pending/processing
-   */
-  useEffect(() => {
     if (!pollInterval || !payment || !payment.id) return;
 
     // Only poll if payment is in an active state
@@ -271,40 +222,24 @@ export function usePayment(options: UsePaymentOptions = {}): UsePaymentReturn {
       return;
     }
 
-    const now = Date.now();
-    const acceleratedActive = !!acceleratedPollingConfig && acceleratedPollingConfig.until > now;
-    const effectiveInterval = acceleratedActive ? acceleratedPollingConfig.intervalMs : pollInterval;
-
-    debugLog('🔄 Starting payment status polling for payment:', payment.id, {
-      effectiveInterval,
-      acceleratedActive,
-    });
+    debugLog('🔄 Starting payment status polling for payment:', payment.id);
 
     const intervalId = setInterval(() => {
       checkStatus(payment.id);
-    }, effectiveInterval);
+    }, pollInterval);
 
     return () => {
       debugLog('⏹️  Stopping payment status polling');
       clearInterval(intervalId);
     };
-  }, [
-    pollInterval,
-    payment?.id,
-    payment?.status,
-    checkStatus,
-    acceleratedPollingConfig?.until,
-    acceleratedPollingConfig?.intervalMs,
-  ]);
+  }, [pollInterval, payment?.id, payment?.status, checkStatus]);
 
   return {
     payment,
     loading,
     error,
-    statusDebug,
     initiatePayment,
     checkStatus,
-    triggerAcceleratedPolling,
     refetch,
     clearError,
   };

@@ -513,36 +513,9 @@ export async function POST(request: NextRequest) {
     const paymentRefRaw = iremboData.invoiceNumber || iremboData.payment_ref;
     const paymentUrlRaw = iremboData.paymentLinkUrl || iremboData.payment_url;
     const requestIdRaw = iremboData.transactionId || iremboData.request_id;
-    const iremboExpiryRaw = iremboData.expiryAt;
     const paymentRef = typeof paymentRefRaw === 'string' ? paymentRefRaw.trim() : '';
     const paymentUrl = typeof paymentUrlRaw === 'string' ? paymentUrlRaw.trim() : '';
     const requestId = typeof requestIdRaw === 'string' ? requestIdRaw.trim() : '';
-
-    const normalizeDateToIso = (value: unknown): string | null => {
-      if (value === null || value === undefined) {
-        return null;
-      }
-
-      const candidate =
-        value instanceof Date
-          ? value
-          : typeof value === 'string' || typeof value === 'number'
-            ? new Date(value)
-            : null;
-
-      if (!candidate || Number.isNaN(candidate.getTime())) {
-        return null;
-      }
-
-      return candidate.toISOString();
-    };
-
-    // Prefer expiry from IremboPay when parseable; otherwise use local fallback.
-    const iremboExpiryIso = normalizeDateToIso(iremboExpiryRaw);
-    if (!iremboExpiryIso && iremboExpiryRaw !== null && iremboExpiryRaw !== undefined) {
-      console.warn('⚠️ [PAYMENT INITIATE] Ignoring invalid expiryAt from gateway response:', iremboExpiryRaw);
-    }
-    const finalExpiresAtIso = iremboExpiryIso || expiresAtIso;
 
     if (!paymentRef) {
       console.error('❌ [PAYMENT INITIATE] Missing invoice/payment reference in gateway response:', iremboData);
@@ -589,7 +562,7 @@ export async function POST(request: NextRequest) {
       gateway_response: iremboResponse.data as Record<string, unknown>,
       gateway_metadata: {},
       initiated_at: initiatedAtIso,
-      expires_at: finalExpiresAtIso,
+      expires_at: expiresAtIso,
       created_by: userId,
     };
 

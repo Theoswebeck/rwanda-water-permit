@@ -168,17 +168,6 @@ export async function GET(
       [paymentId]
     );
     const latestTransaction = latestTxRes.rows[0] || null;
-    const statusDebug: NonNullable<PaymentStatusResponse['status_debug']> = {
-      gateway_status: undefined,
-      mapped_status: payment.status as Payment['status'],
-      settlement_reason:
-        payment.status === 'pending' || payment.status === 'processing'
-          ? 'awaiting_gateway_confirmation'
-          : 'local_status_terminal',
-      invoice_number: iremboPaymentRef || undefined,
-      transaction_id: cleanString(payment.irembo_transaction_id) || undefined,
-      checked_at: new Date().toISOString(),
-    };
 
     // =============================================
     // 3. VERIFY WITH IREMBOPAY (OPTIONAL)
@@ -201,30 +190,16 @@ export async function GET(
           // Map IremboPay status to our internal status
           const iremboPaymentStatus = iremboStatus.data.paymentStatus; // IremboPay uses 'paymentStatus' field
           const mappedStatus = mapIremboPayStatus(iremboPaymentStatus);
-          const effectiveStatus = mappedStatus;
-          statusDebug.gateway_status = cleanString(iremboPaymentStatus) || 'UNKNOWN';
-          statusDebug.mapped_status = mappedStatus;
-          statusDebug.invoice_number =
-            cleanString(iremboStatus.data.invoiceNumber || iremboStatus.data.paymentReference) ||
-            iremboPaymentRef ||
-            undefined;
-          statusDebug.transaction_id =
-            cleanString(iremboStatus.data.transactionId) ||
-            cleanString(payment.irembo_transaction_id) ||
-            undefined;
-
-          if (mappedStatus === 'completed' && !hasCompletionEvidence(iremboStatus.data, iremboPaymentRef)) {
-            console.warn('⚠️ [PAYMENT STATUS] Gateway reported completed without paidAt/transactionId — proceeding anyway');
-          }
-          if (mappedStatus === 'completed') {
-            statusDebug.settlement_reason = 'gateway_reported_completed';
-          } else if (mappedStatus === 'failed' || mappedStatus === 'cancelled') {
-            statusDebug.settlement_reason = 'gateway_reported_failure';
-          } else {
-            statusDebug.settlement_reason = 'gateway_pending_settlement';
-          }
+          const completionVerified =
+            mappedStatus !== 'completed' ||
+            hasCompletionEvidence(iremboStatus.data, iremboPaymentRef);
+          const effectiveStatus =
+            mappedStatus === 'completed' && !completionVerified ? 'processing' : mappedStatus;
           
-          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus, '→ Debug:', statusDebug);
+          console.log('✅ [PAYMENT STATUS] IremboPay status:', iremboPaymentStatus, '→ Mapped:', mappedStatus, '→ Effective:', effectiveStatus);
+          if (mappedStatus === 'completed' && !completionVerified) {
+            console.warn('⚠️ [PAYMENT STATUS] Gateway reported completed without strong proof; keeping payment in processing state');
+          }
 
           // Real payment flow only - no auto-completion
 
@@ -236,12 +211,10 @@ export async function GET(
             const normalizedPaymentMethod =
               normalizeGatewayPaymentMethod(iremboStatus.data.paymentMethod) ||
               normalizeGatewayPaymentMethod(payment.payment_method);
-            const iremboExpiryAt = cleanString(iremboStatus.data.expiryAt);
             const updateData: Record<string, unknown> = {
               status: effectiveStatus,
               irembo_transaction_id: iremboStatus.data.transactionId || payment.irembo_transaction_id,
               payment_method: normalizedPaymentMethod,
-              expires_at: iremboExpiryAt ? new Date(iremboExpiryAt).toISOString() : null,
               gateway_response: {
                 ...gatewayResponse,
                 status_check: iremboStatus.data,
@@ -266,7 +239,6 @@ export async function GET(
                 gateway_response = $5::jsonb,
                 completed_at = coalesce($6::timestamptz, completed_at),
                 failed_at = coalesce($7::timestamptz, failed_at),
-                expires_at = coalesce($8::timestamptz, expires_at),
                 updated_at = now()
               where id = $1
               `,
@@ -278,7 +250,6 @@ export async function GET(
                 JSON.stringify(updateData.gateway_response || {}),
                 updateData.completed_at || null,
                 updateData.failed_at || null,
-                updateData.expires_at || null,
               ]
             );
 
@@ -377,7 +348,6 @@ export async function GET(
         }
       } catch (verifyError) {
         console.error('⚠️  [PAYMENT STATUS] IremboPay verification failed:', verifyError);
-        statusDebug.settlement_reason = 'gateway_verification_error';
         // Non-critical error, continue with local status
       }
     }
@@ -390,7 +360,6 @@ export async function GET(
       success: true,
       payment: payment as unknown as Payment,
       transaction: (latestTransaction as PaymentTransaction | null) || undefined,
-      status_debug: statusDebug,
     };
 
     console.log('✅ [PAYMENT STATUS] Returning status:', payment.status);
