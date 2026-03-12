@@ -293,15 +293,16 @@ function drawWatermark(doc: PDFKit.PDFDocument): void {
   const x = (pw - wmSize) / 2 - 4 * PT;
   const y = (ph - wmSize) / 2 - 18 * PT;
   doc.save();
-  doc.opacity(0.16);
+  doc.opacity(0.50);
   doc.image(WATERMARK_PATH, x, y, { width: wmSize, height: wmSize });
   doc.restore();
 }
 
 function drawLogo(doc: PDFKit.PDFDocument): number {
   const pw = 595.28;
-  const logoW = 72 * PT;
-  const logoH = 30 * PT;
+  // Slightly taller/narrower box to avoid horizontal stretching.
+  const logoW = 52 * PT;
+  const logoH = 36 * PT;
   const logoX = (pw - logoW) / 2;
   const logoY = 8 * PT;
   if (fs.existsSync(LOGO_PATH)) {
