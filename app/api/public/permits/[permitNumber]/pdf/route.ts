@@ -1,7 +1,7 @@
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { NextRequest, NextResponse } from "next/server";
-import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
+import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 
 export const runtime = "nodejs";
@@ -64,21 +64,26 @@ async function tryReadStoredPdf(permitPdfUrl: string, req: NextRequest): Promise
   }
 }
 
-function resolveConditions(raw: unknown): string[] {
-  if (Array.isArray(raw)) {
-    return raw.map((v) => String(v)).filter(Boolean);
-  }
-  if (raw && typeof raw === "object" && Array.isArray((raw as { conditions?: unknown[] }).conditions)) {
-    return (raw as { conditions: unknown[] }).conditions.map((v) => String(v)).filter(Boolean);
-  }
-  return [];
-}
-
 function getCanonicalIssueDate(permit: Record<string, unknown>, application: Record<string, unknown> | null): string | undefined {
   const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
   if (issuedDate) return issuedDate;
   const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
   return acceptedAt || undefined;
+}
+
+function parseIsoLikeDate(input: string | undefined): Date | undefined {
+  if (!input) return undefined;
+  const raw = input.trim();
+  if (!raw) return undefined;
+
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (dateOnly) {
+    const [, year, month, day] = dateOnly;
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ permitNumber: string }> }) {
@@ -104,25 +109,19 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
     const existingPdfPath = typeof permit.permit_pdf_url === "string" ? permit.permit_pdf_url : "";
     const application = (permit.application || null) as Record<string, unknown> | null;
     if (application) {
-      // Always prefer the shared on-demand generator so public verification
-      // returns the same canonical PDF layout/content as other permit views.
-      const conditions = resolveConditions(permit.conditions);
-      const applicationForPdf = application as Parameters<typeof generateDigitalWaterPermitBlob>[0];
+      // Canonical permit renderer shared with /api/test/permit-pdf.
+      const applicationForPdf = application as unknown as PermitApplication;
       const issueDate = getCanonicalIssueDate(permit, application);
-      const pdfBlob = await generateDigitalWaterPermitBlob(
-        applicationForPdf,
-        permitNumberValue,
-        conditions,
-        5,
-        Boolean(permit.is_modification),
-        {
-          issuedDate: issueDate,
-          expiryDate: (permit.expiry_date as string | undefined) || undefined,
-        }
-      );
+      const pdfBuffer = await generatePermitPdfBuffer({
+        application: applicationForPdf,
+        permitNumber: permitNumberValue,
+        permitValidityYears: 5,
+        isModified: Boolean(permit.is_modification),
+        issuedDate: parseIsoLikeDate(issueDate),
+        expiryDate: parseIsoLikeDate((permit.expiry_date as string | undefined) || undefined),
+      });
 
-      const bytes = Buffer.from(await pdfBlob.arrayBuffer());
-      return new NextResponse(bytes, {
+      return new NextResponse(pdfBuffer, {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `inline; filename="permit-${permitNumberValue}.pdf"`,

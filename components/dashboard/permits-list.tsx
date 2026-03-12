@@ -40,7 +40,6 @@ import {
 } from "@/components/ui/dialog";
 import { Eye, AlertCircle, Search, Loader2, List, FileText } from "lucide-react";
 import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
-import { generateDigitalWaterPermitBlob } from "@/lib/pdf-generator";
 
 export interface Permit {
   id: string;
@@ -139,66 +138,21 @@ export function PermitsList({ permits }: PermitsListProps) {
 
   /**
    * Generate permit PDF on-demand if it doesn't exist.
-   * Returns the PDF blob and updates the permit_pdf_url in the database.
+   * Uses the canonical server renderer and updates permit_pdf_url.
    */
   const generatePermitPdfOnDemand = async (permit: Permit): Promise<Blob | null> => {
     try {
       setGeneratingPdf(permit.id);
       console.log("📄 Generating PDF on-demand for permit:", permit.permitNumber);
 
-      // Fetch permit with application data + modification flag
-      const metadataRes = await fetch(`/api/dashboard/permits/${permit.id}/pdf`, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const metadataJson = await metadataRes.json().catch(() => null);
-      if (!metadataRes.ok || !metadataJson?.success) {
-        throw new Error(metadataJson?.message || "Failed to fetch permit data for PDF generation");
+      // Reuse the same public verification renderer for consistent UX.
+      const pdfUrl = `/api/public/permits/${encodeURIComponent(permit.permitNumber)}/pdf`;
+      const pdfRes = await fetch(pdfUrl, { method: "GET", cache: "no-store" });
+      if (!pdfRes.ok) {
+        const json = (await pdfRes.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(json?.message || "Failed to generate permit PDF");
       }
-
-      const permitData = metadataJson.permit as Record<string, unknown>;
-      const application = metadataJson.application as Record<string, unknown> | null;
-      if (!application) {
-        throw new Error("No application data found for this permit");
-      }
-      const canonicalIssueDate =
-        (typeof permitData.issued_date === "string" && permitData.issued_date.trim()) ||
-        (typeof application.terms_accepted_at === "string" && application.terms_accepted_at.trim()) ||
-        permit.issueDate;
-
-      // Parse conditions
-      let conditions: string[] = [];
-      if (permitData.conditions) {
-        if (Array.isArray(permitData.conditions)) {
-          conditions = permitData.conditions as string[];
-        } else if (typeof permitData.conditions === "string") {
-          try {
-            const parsed = JSON.parse(permitData.conditions);
-            conditions = Array.isArray(parsed) ? parsed : [];
-          } catch {
-            conditions = [];
-          }
-        }
-      }
-
-      // Determine if this permit has been modified
-      const isModified =
-        (permitData as any).is_modification === true ||
-        ((permitData as any).modification_count ?? 0) > 0 ||
-        (permit.modifiedCount ?? 0) > 0;
-
-      // Generate PDF blob (with "MODIFIED PERMIT" badge when applicable)
-      const pdfBlob = await generateDigitalWaterPermitBlob(
-        application as any,
-        permit.permitNumber,
-        conditions,
-        5, // Default validity years
-        isModified,
-        {
-          issuedDate: canonicalIssueDate,
-          expiryDate: (permitData as any).expiry_date ?? permit.expiryDate,
-        }
-      );
+      const pdfBlob = await pdfRes.blob();
 
       // Persist in background so users can view/download immediately.
       void (async () => {
