@@ -1440,6 +1440,7 @@ export function ApplicationForm({
     category: string;
     description?: string;
     file?: File | null;
+    url?: string;
   }>>([]);
 
 
@@ -2384,10 +2385,45 @@ export function ApplicationForm({
         setSelectedWaterSourceSector(initialData.waterSourceSector);
       }
       
-      // Initialize additionalDocuments if they exist in initialData
+      // Initialize/merge additional documents from initialData.
+      // Preserve richer in-memory entries (File/url) so links stay viewable right after save.
       if (initialData.additionalDocuments && Array.isArray(initialData.additionalDocuments)) {
         console.log('📎 Initializing additionalDocuments from initialData:', initialData.additionalDocuments.length, initialData.additionalDocuments);
-        setAdditionalDocuments(initialData.additionalDocuments);
+        setAdditionalDocuments((prev) => {
+          type AdditionalDocumentEntry = {
+            id?: string;
+            name?: string;
+            category?: string;
+            description?: string;
+            file?: File | null;
+            url?: string;
+          };
+          const incoming = initialData.additionalDocuments as AdditionalDocumentEntry[];
+          const byId = new globalThis.Map<string, AdditionalDocumentEntry>();
+          const byName = new globalThis.Map<string, AdditionalDocumentEntry>();
+          for (const doc of prev) {
+            if (doc?.id) byId.set(String(doc.id), doc);
+            if (doc?.name) byName.set(String(doc.name), doc);
+          }
+
+          const merged = incoming.map((doc) => {
+            const existing =
+              (doc?.id ? byId.get(String(doc.id)) : undefined) ||
+              (doc?.name ? byName.get(String(doc.name)) : undefined);
+            return {
+              ...existing,
+              ...doc,
+              id: String(doc?.id || existing?.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`),
+              name: String(doc?.name || existing?.name || "Document"),
+              category: String(doc?.category || existing?.category || "additional"),
+              // Keep URL/file from existing state when incoming payload does not have them.
+              url: doc?.url || existing?.url,
+              file: doc?.file || existing?.file || null,
+            };
+          });
+
+          return merged;
+        });
       } else {
         console.log('📎 No additionalDocuments in initialData:', { has: !!initialData.additionalDocuments, isArray: Array.isArray(initialData.additionalDocuments) });
       }
