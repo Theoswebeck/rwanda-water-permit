@@ -192,6 +192,10 @@ export interface User {
   must_change_password: boolean
   account_confirmed: boolean
   confirmed_at?: string | null
+
+  // Resolved from role_delegations (added by /api/auth/me)
+  effective_roles?: string[]
+  delegated_roles?: string[]
 }
 
 export interface Application {

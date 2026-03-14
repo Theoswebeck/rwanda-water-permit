@@ -64,18 +64,23 @@ export default function ChangePasswordRequiredPage() {
       // Refresh profile to get updated flags
       await refreshProfile();
       
-      // Redirect to appropriate dashboard based on role
+      // Redirect to appropriate dashboard based on effective roles (base + delegated)
       setTimeout(() => {
         const roleRedirects: Record<string, string> = {
           admin: '/admin',
           approver: '/approver',
+          verifier: '/verification',
           inspector: '/inspection',
           assessor: '/assessment',
           reviewer: '/review',
           applicant: '/dashboard'
         };
-        
-        const redirectPath = roleRedirects[userProfile?.role || 'applicant'] || '/dashboard';
+
+        const effectiveRoles = (userProfile?.effective_roles as string[] | undefined) || [];
+        const rolePriority = ['admin', 'approver', 'verifier', 'inspector', 'reviewer', 'assessor', 'applicant'];
+        const highestRole = rolePriority.find((r) => effectiveRoles.map(er => String(er).toLowerCase()).includes(r));
+        const redirectRole = highestRole || userProfile?.role || 'applicant';
+        const redirectPath = roleRedirects[redirectRole] || '/dashboard';
         router.push(redirectPath);
       }, 1500);
       

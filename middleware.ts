@@ -53,37 +53,19 @@ function loginRedirect(request: NextRequest, pathname: string) {
   return NextResponse.redirect(redirectUrl)
 }
 
-async function resolveEffectiveRolesForRequest(
-  request: NextRequest,
-  token: string,
+function resolveEffectiveRolesFromClaims(
+  claims: { effectiveRoles?: unknown; role?: unknown },
   baseRole: string
-): Promise<Set<string>> {
-  const fallback = new Set([baseRole].filter(Boolean))
-  try {
-    const endpoint = new URL('/api/auth/effective-roles', request.url)
-    const cookieName = getAuthCookieName()
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        cookie: `${cookieName}=${encodeURIComponent(token)}`,
-      },
-      cache: 'no-store',
-    })
-    if (!response.ok) return fallback
-
-    const data = (await response.json()) as { effectiveRoles?: unknown }
-    if (!Array.isArray(data?.effectiveRoles)) return fallback
-
+): Set<string> {
+  if (Array.isArray(claims.effectiveRoles) && claims.effectiveRoles.length > 0) {
     const roles = new Set(
-      data.effectiveRoles
-        .map((role) => normalizeRole(role))
+      claims.effectiveRoles
+        .map((role: unknown) => normalizeRole(role))
         .filter(Boolean)
     )
-    if (roles.size === 0 && baseRole) roles.add(baseRole)
-    return roles
-  } catch {
-    return fallback
+    if (roles.size > 0) return roles
   }
+  return new Set([baseRole].filter(Boolean))
 }
 
 export async function middleware(request: NextRequest) {
@@ -131,7 +113,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    const effectiveRoles = await resolveEffectiveRolesForRequest(request, token, normalizedRole)
+    const effectiveRoles = resolveEffectiveRolesFromClaims(claims, normalizedRole)
 
     if (
       pathname.startsWith('/dashboard') &&

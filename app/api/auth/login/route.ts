@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { verifyPassword } from '@/lib/auth/password'
 import { createSessionToken, setSessionCookie } from '@/lib/auth/session'
+import { resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 import type { AccountType, UserRole, UserStatus } from '@/types/database'
 
 type UserRow = {
@@ -59,12 +60,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const resolved = await resolveEffectiveRoles({
+      userId: user.id,
+      claimsRole: user.role,
+    })
+
     const token = await createSessionToken({
       userId: user.id,
       email: user.email,
       role: user.role,
       status: user.status,
       accountType: user.account_type,
+      effectiveRoles: resolved.effectiveRoles,
     })
 
     await query(`update public.users set last_login_at = now(), updated_at = now() where id = $1`, [user.id])
@@ -78,6 +85,9 @@ export async function POST(req: NextRequest) {
           role: user.role,
           status: user.status,
           account_type: user.account_type,
+          base_role: resolved.baseRole,
+          delegated_roles: resolved.delegatedRoles,
+          effective_roles: resolved.effectiveRoles,
         },
       },
       mustChangePassword: Boolean(user.must_change_password),

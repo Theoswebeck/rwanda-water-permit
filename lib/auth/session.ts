@@ -8,6 +8,7 @@ export type SessionClaims = JWTPayload & {
   role: UserRole
   status: UserStatus
   accountType?: AccountType
+  effectiveRoles?: string[]
 }
 
 export function getAuthCookieName(): string {
@@ -50,6 +51,7 @@ export async function createSessionToken(input: {
   role: UserRole
   status: UserStatus
   accountType?: AccountType
+  effectiveRoles?: string[]
 }): Promise<string> {
   const ttlSeconds = getSessionTtlSeconds()
   const now = Math.floor(Date.now() / 1000)
@@ -59,6 +61,7 @@ export async function createSessionToken(input: {
     role: input.role,
     status: input.status,
     accountType: input.accountType,
+    effectiveRoles: input.effectiveRoles,
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setSubject(input.userId)

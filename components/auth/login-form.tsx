@@ -96,7 +96,7 @@ export function LoginForm() {
     }
   }, [searchParams]);
 
-  // Handle redirect after successful login
+  // Handle redirect after successful login - use effective roles (includes delegations)
   useEffect(() => {
     if (!shouldRedirect || !user) return;
 
@@ -120,11 +120,17 @@ export function LoginForm() {
       }
     };
 
-    // Get role from userProfile (preferred) or user metadata (fallback)
-    const role = normalizeRole(userProfile?.role || (user.user_metadata?.role as string | undefined));
+    // Prefer effective roles (base + delegated) so delegated approvers land on /approver
+    const effectiveRoles = (user.user_metadata?.effective_roles as string[] | undefined) ||
+      (userProfile?.effective_roles as string[] | undefined) ||
+      [];
+    const normalizedEffective = effectiveRoles.map((r) => normalizeRole(r)).filter(Boolean);
+    const rolePriority = ['admin', 'approver', 'verifier', 'inspector', 'reviewer', 'assessor', 'applicant'];
+    const highestRole = rolePriority.find((r) => normalizedEffective.includes(r));
+    const role = highestRole ?? normalizeRole(userProfile?.role ?? (user.user_metadata?.role as string | undefined));
     const redirectPath = getRedirectPath(role);
-    
-    console.log("✅ Login successful, redirecting to:", redirectPath);
+
+    console.log("✅ Login successful, redirecting to:", redirectPath, "(effective roles:", normalizedEffective, ")");
     setShouldRedirect(false);
     router.push(redirectPath);
   }, [shouldRedirect, user, userProfile, router]);

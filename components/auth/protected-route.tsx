@@ -29,8 +29,11 @@ function getEffectiveRoles(user: any, userProfile: any): string[] {
   const fromMetadata = Array.isArray(user?.user_metadata?.effective_roles)
     ? user.user_metadata.effective_roles.map((role: unknown) => normalizeRole(role)).filter(Boolean)
     : [];
-  const fromProfile = normalizeRole(userProfile?.role);
-  const merged = new Set<string>([...fromMetadata, fromProfile].filter(Boolean));
+  const fromProfileEffective = Array.isArray(userProfile?.effective_roles)
+    ? userProfile.effective_roles.map((role: unknown) => normalizeRole(role)).filter(Boolean)
+    : [];
+  const fromProfileRole = normalizeRole(userProfile?.role);
+  const merged = new Set<string>([...fromMetadata, ...fromProfileEffective, fromProfileRole].filter(Boolean));
   return Array.from(merged);
 }
 
@@ -234,7 +237,7 @@ export const ApplicantOnly = ({ children }: { children: React.ReactNode }) => (
 );
 
 export const StaffOnly = ({ children }: { children: React.ReactNode }) => (
-  <ProtectedRoute allowedRoles={['admin', 'approver', 'inspector', 'reviewer']}>
+  <ProtectedRoute allowedRoles={['admin', 'approver', 'inspector', 'reviewer', 'assessor', 'verifier']}>
     {children}
   </ProtectedRoute>
 );

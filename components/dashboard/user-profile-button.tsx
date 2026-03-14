@@ -61,7 +61,19 @@ export function UserProfileButton() {
     applicant: { href: "/dashboard", label: "My Applications" },
   };
 
-  const primaryDashboard = roleDashboards[userProfile.role] || roleDashboards.applicant;
+  // Use effective roles (base + delegated) so delegated approvers see Approver Dashboard link
+  const effectiveRoles = (userProfile?.effective_roles as string[] | undefined) ||
+    (user?.user_metadata?.effective_roles as string[] | undefined) ||
+    [];
+  const normalizedEffective = effectiveRoles.map((r) => String(r ?? "").trim().toLowerCase()).filter(Boolean);
+  const rolePriority = ["admin", "approver", "verifier", "inspector", "reviewer", "assessor", "applicant"];
+  const highestRole = rolePriority.find((r) => normalizedEffective.includes(r));
+  const primaryRole = highestRole ?? userProfile.role ?? "applicant";
+  const primaryDashboard = roleDashboards[primaryRole] || roleDashboards.applicant;
+
+  // All dashboards user can access via effective roles (for delegated users)
+  const accessibleDashboards = rolePriority
+    .filter((r) => normalizedEffective.includes(r));
   const isApplicant = userProfile.role === "applicant";
 
   return (
@@ -103,6 +115,20 @@ export function UserProfileButton() {
                 <span className="text-sm font-medium">{primaryDashboard.label}</span>
               </Link>
             </DropdownMenuItem>
+            {accessibleDashboards.length > 1 && (
+              <>
+                {accessibleDashboards
+                  .filter((r) => roleDashboards[r] && roleDashboards[r].href !== primaryDashboard.href)
+                  .map((r) => (
+                    <DropdownMenuItem key={r} asChild>
+                      <Link href={roleDashboards[r].href} className="flex items-center cursor-pointer rounded-md px-3 py-2 hover:bg-gray-50 transition-colors">
+                        <Shield className="mr-3 h-4 w-4 text-gray-500" />
+                        <span className="text-sm font-medium">{roleDashboards[r].label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+              </>
+            )}
             {isApplicant && (
               <DropdownMenuItem asChild>
                 <Link href="/dashboard/settings" className="flex items-center cursor-pointer rounded-md px-3 py-2 hover:bg-gray-50 transition-colors">
