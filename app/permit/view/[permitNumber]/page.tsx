@@ -14,12 +14,12 @@ function formatDate(dateString: string): string {
   const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
   if (dateOnlyMatch) {
     const [, year, month, day] = dateOnlyMatch;
+    // Date-only values should be interpreted in the viewer's local timezone.
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
-      timeZone: "UTC",
-    }).format(new Date(Date.UTC(Number(year), Number(month) - 1, Number(day))));
+    }).format(new Date(Number(year), Number(month) - 1, Number(day)));
   }
 
   const parsed = new Date(raw);
