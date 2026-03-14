@@ -290,4 +290,21 @@ export function isTerminalStatus(
   return workflowStatus === "approved" || workflowStatus === "rejected";
 }
 
+export function getInspectionBasePath(role: string | undefined): string {
+  switch (role) {
+    case "reviewer":
+      return "/review/inspection";
+    case "assessor":
+      return "/assessment/inspection";
+    case "verifier":
+      return "/verification/inspection";
+    case "approver":
+      return "/approver/inspection";
+    case "admin":
+      return "/review/inspection";
+    default:
+      return "/inspection";
+  }
+}
+
 export type { WorkflowTransition };

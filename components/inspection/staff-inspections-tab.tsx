@@ -19,6 +19,7 @@ import {
   getInspectionWorkflowClassName,
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
+import { getInspectionBasePath } from "@/lib/inspection-workflow";
 
 type InspectionRow = {
   id: string;
@@ -95,6 +96,7 @@ function getDisplayStatus(row: InspectionRow): string {
   return row.workflow_status || "submitted";
 }
 
+
 const CHIP_DEFS: StatusChipDef[] = [
   {
     id: "all",
@@ -148,6 +150,7 @@ const CHIP_DEFS: StatusChipDef[] = [
 
 export function StaffInspectionsTab() {
   const { userProfile } = useAuth();
+  const basePath = getInspectionBasePath(userProfile?.role);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -366,7 +369,7 @@ export function StaffInspectionsTab() {
                     return (
                       <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">
                         <TableCell className="font-medium">
-                          <Link href={`/inspection/${r.id}`} className="hover:underline">
+                          <Link href={`${basePath}/${r.id}`} className="hover:underline">
                             {shortId(r.id)}
                           </Link>
                         </TableCell>
@@ -386,7 +389,7 @@ export function StaffInspectionsTab() {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
-                                <Link href={`/inspection/${r.id}`} className="flex items-center gap-2">
+                                <Link href={`${basePath}/${r.id}`} className="flex items-center gap-2">
                                   <Eye className="h-4 w-4" />
                                   View inspection
                                 </Link>

@@ -162,6 +162,7 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
         inspectionId={inspectionId}
         workflowStatus={workflowStatus}
         inspectionStatus={inspectionStatus}
+        inspection={inspection || {}}
         onStatusChange={handleWorkflowStatusChange}
       />
 

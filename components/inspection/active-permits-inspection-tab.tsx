@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { getInspectionBasePath } from "@/lib/inspection-workflow";
 import type { Inspection, Permit } from "@/types/database";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +64,7 @@ function formatDate(dateString?: string): string {
 export function ActivePermitsInspectionTab() {
   const { userProfile, loading: authLoading } = useAuth();
   const isAssessor = userProfile?.role === "assessor";
+  const basePath = getInspectionBasePath(userProfile?.role);
 
   const [permits, setPermits] = useState<PermitRow[]>([]);
   const [latestInspectionByAppId, setLatestInspectionByAppId] = useState<Record<string, Inspection | undefined>>({});
@@ -440,7 +442,7 @@ export function ActivePermitsInspectionTab() {
                                   )
                                 ) : latest ? (
                                   <DropdownMenuItem asChild>
-                                    <Link href={`/inspection/${latest.id}`} className="flex items-center gap-2">
+                                    <Link href={`${basePath}/${latest.id}`} className="flex items-center gap-2">
                                       <Eye className="h-4 w-4" />
                                       View inspection
                                     </Link>

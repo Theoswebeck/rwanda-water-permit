@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ClipboardList, Loader2, MessageSquare } from "lucide-react";
 
 import {
   getAvailableTransitions,
@@ -45,17 +46,78 @@ type StaffMember = {
   email: string;
 };
 
+interface StepComment {
+  label: string;
+  role: string;
+  notes: string;
+  date?: string | null;
+  userName?: string | null;
+}
+
 interface InspectionWorkflowActionsProps {
   inspectionId: string;
   workflowStatus: InspectionWorkflowStatus | string;
   inspectionStatus: string;
+  inspection: Record<string, any>;
   onStatusChange?: (newStatus: InspectionWorkflowStatus) => void;
+}
+
+function fmtDateTime(dateString?: string | null): string {
+  if (!dateString) return "";
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString();
+}
+
+function StepCommentsCard({ comments }: { comments: StepComment[] }) {
+  if (comments.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          Step Comments
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-0">
+        {comments.map((c, idx) => (
+          <div key={c.label}>
+            {idx > 0 && <Separator className="my-3" />}
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-sm font-medium">{c.label}</span>
+                <Badge variant="outline" className="text-[11px] px-1.5 py-0">
+                  {c.role}
+                </Badge>
+                {c.userName && (
+                  <span className="text-xs text-muted-foreground">
+                    by {c.userName}
+                  </span>
+                )}
+                {c.date && (
+                  <span className="text-xs text-muted-foreground">
+                    {fmtDateTime(c.date)}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-5">
+                {c.notes}
+              </p>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
 }
 
 export function InspectionWorkflowActions({
   inspectionId,
   workflowStatus,
   inspectionStatus,
+  inspection,
   onStatusChange,
 }: InspectionWorkflowActionsProps) {
   const { userProfile } = useAuth();
@@ -69,18 +131,21 @@ export function InspectionWorkflowActions({
     transition: WorkflowTransition | null;
   }>({ open: false, transition: null });
 
-  // Assessor assignment state
   const [assessors, setAssessors] = useState<StaffMember[]>([]);
   const [selectedAssessorId, setSelectedAssessorId] = useState("");
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
 
+  // Resolve user names for step comments
+  const [userNames, setUserNames] = useState<Record<string, string>>({});
+
   const transitions = getAvailableTransitions(workflowStatus, role);
   const responsibleRole = getResponsibleRole(workflowStatus);
 
+  // Fetch assessors for assignment
   useEffect(() => {
     if (
       (role === "reviewer" || role === "admin") &&
-      (workflowStatus === "submitted")
+      workflowStatus === "submitted"
     ) {
       const fetchAssessors = async () => {
         const { data, error } = await supabase
@@ -99,6 +164,42 @@ export function InspectionWorkflowActions({
       fetchAssessors();
     }
   }, [role, workflowStatus]);
+
+  // Resolve user names for the step comments display
+  useEffect(() => {
+    const ids = [
+      inspection?.reviewed_by,
+      inspection?.verified_by,
+      inspection?.approved_by,
+      inspection?.assigned_assessor_id,
+    ].filter(Boolean) as string[];
+
+    const uniqueIds = Array.from(new Set(ids));
+    if (uniqueIds.length === 0) return;
+
+    const fetchNames = async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, first_name, last_name")
+        .in("id", uniqueIds);
+
+      if (error) {
+        console.error("❌ Error fetching user names:", error);
+        return;
+      }
+      const map: Record<string, string> = {};
+      for (const u of (data || []) as any[]) {
+        map[u.id] = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "Unknown";
+      }
+      setUserNames(map);
+    };
+    fetchNames();
+  }, [
+    inspection?.reviewed_by,
+    inspection?.verified_by,
+    inspection?.approved_by,
+    inspection?.assigned_assessor_id,
+  ]);
 
   const handleTransition = useCallback(
     async (transition: WorkflowTransition, assigneeId?: string) => {
@@ -198,63 +299,136 @@ export function InspectionWorkflowActions({
         setLoading(false);
       }
     },
-    [
-      inspectionId,
-      userId,
-      workflowStatus,
-      notes,
-      assessors,
-      onStatusChange,
-    ]
+    [inspectionId, userId, workflowStatus, notes, assessors, onStatusChange]
   );
+
+  // Build step comments from inspection data
+  const stepComments: StepComment[] = [];
+
+  if (inspection?.assessment_notes) {
+    stepComments.push({
+      label: "Assessment",
+      role: "Assessor",
+      notes: inspection.assessment_notes,
+      date: inspection.assessment_completed_at,
+      userName: inspection.assigned_assessor_id
+        ? userNames[inspection.assigned_assessor_id]
+        : null,
+    });
+  }
+
+  if (inspection?.review_notes) {
+    stepComments.push({
+      label: "Review",
+      role: "Reviewer",
+      notes: inspection.review_notes,
+      date: inspection.reviewed_at,
+      userName: inspection.reviewed_by
+        ? userNames[inspection.reviewed_by]
+        : null,
+    });
+  }
+
+  if (inspection?.verification_notes) {
+    stepComments.push({
+      label: "Verification",
+      role: "Verifier",
+      notes: inspection.verification_notes,
+      date: inspection.verified_at,
+      userName: inspection.verified_by
+        ? userNames[inspection.verified_by]
+        : null,
+    });
+  }
+
+  if (inspection?.approval_notes) {
+    stepComments.push({
+      label: "Approval",
+      role: "Approver",
+      notes: inspection.approval_notes,
+      date: inspection.approved_at,
+      userName: inspection.approved_by
+        ? userNames[inspection.approved_by]
+        : null,
+    });
+  }
+
+  if (inspection?.rejection_reason) {
+    stepComments.push({
+      label: "Rejection Reason",
+      role: "Approver",
+      notes: inspection.rejection_reason,
+      date: inspection.approved_at,
+      userName: inspection.approved_by
+        ? userNames[inspection.approved_by]
+        : null,
+    });
+  }
+
+  if (inspection?.internal_notes) {
+    stepComments.push({
+      label: "Return Notes",
+      role: "Staff",
+      notes: inspection.internal_notes,
+    });
+  }
 
   if (inspectionStatus !== "completed") {
     return null;
   }
 
+  // Terminal status -- view-only with step comments
   if (isTerminalStatus(workflowStatus)) {
     return (
-      <Card>
-        <CardContent className="py-6">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            <span className="font-medium">
-              This inspection has been{" "}
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="py-6">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <span className="font-medium">
+                This inspection has been{" "}
+                <Badge
+                  variant="outline"
+                  className={`${getInspectionWorkflowClassName(workflowStatus)} text-xs font-medium px-2 py-0.5 rounded-full border`}
+                >
+                  {getInspectionWorkflowLabel(workflowStatus)}
+                </Badge>
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+        <StepCommentsCard comments={stepComments} />
+      </div>
+    );
+  }
+
+  // No available actions for this role -- view-only with step comments
+  if (transitions.length === 0) {
+    const waitingFor = responsibleRole
+      ? `Waiting for ${responsibleRole}`
+      : "No actions available";
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardContent className="py-6">
+            <div className="flex items-center gap-3 text-muted-foreground">
+              <AlertCircle className="h-5 w-5" />
+              <span className="text-sm">{waitingFor}</span>
               <Badge
                 variant="outline"
                 className={`${getInspectionWorkflowClassName(workflowStatus)} text-xs font-medium px-2 py-0.5 rounded-full border`}
               >
                 {getInspectionWorkflowLabel(workflowStatus)}
               </Badge>
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+        <StepCommentsCard comments={stepComments} />
+      </div>
     );
   }
 
-  if (transitions.length === 0) {
-    const waitingFor = responsibleRole
-      ? `Waiting for ${responsibleRole}`
-      : "No actions available";
-    return (
-      <Card>
-        <CardContent className="py-6">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <AlertCircle className="h-5 w-5" />
-            <span className="text-sm">{waitingFor}</span>
-            <Badge
-              variant="outline"
-              className={`${getInspectionWorkflowClassName(workflowStatus)} text-xs font-medium px-2 py-0.5 rounded-full border`}
-            >
-              {getInspectionWorkflowLabel(workflowStatus)}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
+  // Active role -- action buttons + step comments
   const hasAssignAction = transitions.some(
     (t) => t.action === "assign_assessor"
   );
@@ -265,66 +439,67 @@ export function InspectionWorkflowActions({
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-3">
-            Workflow Actions
-            <Badge
-              variant="outline"
-              className={`${getInspectionWorkflowClassName(workflowStatus)} text-xs font-medium px-2 py-0.5 rounded-full border`}
-            >
-              {getInspectionWorkflowLabel(workflowStatus)}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {anyRequiresNotes && (
-            <Textarea
-              placeholder="Notes (required for some actions)..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-            />
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            {hasAssignAction && (
-              <Button
-                type="button"
-                variant="default"
-                disabled={loading}
-                onClick={() => setAssignDialogOpen(true)}
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-3">
+              Workflow Actions
+              <Badge
+                variant="outline"
+                className={`${getInspectionWorkflowClassName(workflowStatus)} text-xs font-medium px-2 py-0.5 rounded-full border`}
               >
-                Assign Assessor
-              </Button>
+                {getInspectionWorkflowLabel(workflowStatus)}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {anyRequiresNotes && (
+              <Textarea
+                placeholder="Notes (required for some actions)..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+              />
             )}
 
-            {otherTransitions.map((t) => (
-              <Button
-                key={t.action}
-                type="button"
-                variant={t.variant}
-                disabled={loading || (t.requiresNotes && !notes.trim())}
-                onClick={() => {
-                  if (
-                    t.action === "approve" ||
-                    t.action === "reject"
-                  ) {
-                    setConfirmDialog({ open: true, transition: t });
-                  } else {
-                    handleTransition(t);
-                  }
-                }}
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
-                {t.label}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasAssignAction && (
+                <Button
+                  type="button"
+                  variant="default"
+                  disabled={loading}
+                  onClick={() => setAssignDialogOpen(true)}
+                >
+                  Assign Assessor
+                </Button>
+              )}
+
+              {otherTransitions.map((t) => (
+                <Button
+                  key={t.action}
+                  type="button"
+                  variant={t.variant}
+                  disabled={loading || (t.requiresNotes && !notes.trim())}
+                  onClick={() => {
+                    if (t.action === "approve" || t.action === "reject") {
+                      setConfirmDialog({ open: true, transition: t });
+                    } else {
+                      handleTransition(t);
+                    }
+                  }}
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  {t.label}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <StepCommentsCard comments={stepComments} />
+      </div>
 
       {/* Assign Assessor Dialog */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
