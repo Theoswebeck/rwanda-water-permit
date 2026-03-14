@@ -1157,7 +1157,7 @@ export default function ReviewApplicationPage() {
           )}
 
           {/* Review Actions (aligned with Assessment/Approver UX) */}
-          {(application.status === 'pending_review' || application.status === 'under_review') && (
+          {(application.status === 'pending_review' || application.status === 'under_review' || application.status === 'returned_to_review') && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}

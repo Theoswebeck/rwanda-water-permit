@@ -429,7 +429,8 @@ export default function AssessmentApplicationPage() {
   // Once it's forwarded to the next stage (pending_review or beyond) it must be view-only.
   const isEditableAssessment =
     application?.status === "pending_assessment" ||
-    application?.status === "under_review";
+    application?.status === "under_review" ||
+    application?.status === "returned_to_assessment";
   const isReadOnly = application ? !isEditableAssessment : true;
 
   const permitRef = application ? getPermitReferenceFromApplication(application) : null;

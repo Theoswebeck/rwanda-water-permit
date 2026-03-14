@@ -763,7 +763,7 @@ export default function VerificationApplicationPage() {
             </div>
 
             {/* Verifier Actions (aligned with Review/Assessment UX) */}
-            {application.status === "pending_verification" && (
+            {(application.status === "pending_verification" || application.status === "returned_to_verification") && (
               <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
                 <div className="flex items-center gap-2 mr-auto">
                   <Badge
