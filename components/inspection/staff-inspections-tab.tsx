@@ -90,36 +90,6 @@ function statusPill(status: InspectionWorkflowStatus | string) {
   );
 }
 
-function physicalStatusPill(status: string) {
-  const cfg: Record<string, { label: string; className: string }> = {
-    scheduled: {
-      label: "Scheduled",
-      className: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800",
-    },
-    in_progress: {
-      label: "Ongoing",
-      className: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
-    },
-    completed: {
-      label: "Completed",
-      className: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800",
-    },
-    cancelled: {
-      label: "Cancelled",
-      className: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800",
-    },
-  };
-  const c = cfg[status] || {
-    label: status,
-    className: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800",
-  };
-  return (
-    <Badge variant="outline" className={`${c.className} text-xs font-medium px-2 py-1 rounded-full border whitespace-nowrap`}>
-      {c.label}
-    </Badge>
-  );
-}
-
 function getDisplayStatus(row: InspectionRow): string {
   if (row.status !== "completed") return row.status;
   return row.workflow_status || "submitted";
@@ -372,16 +342,15 @@ export function StaffInspectionsTab() {
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[14%]">Inspection</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[18%]">Permit #</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[22%]">Applicant</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Field Status</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[14%]">Workflow</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[24%]">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[16%]">Workflow</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium w-[8%]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
                       No inspections found.
                     </TableCell>
                   </TableRow>
@@ -404,7 +373,6 @@ export function StaffInspectionsTab() {
                         <TableCell>{fmtDate(date)}</TableCell>
                         <TableCell className="font-medium">{permit?.permit_number || "—"}</TableCell>
                         <TableCell className="truncate max-w-[280px]">{holderName}</TableCell>
-                        <TableCell>{physicalStatusPill(r.status)}</TableCell>
                         <TableCell>{statusPill(displayStatus)}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>

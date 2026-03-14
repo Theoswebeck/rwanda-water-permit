@@ -32,7 +32,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   approver: ['/approver', '/dashboard/profile', '/dashboard/settings', '/management'],
   inspector: ['/inspection', '/inspector', '/dashboard/profile', '/dashboard/settings', '/management'],
   reviewer: ['/review', '/dashboard/profile', '/dashboard/settings', '/management'],
-  assessor: ['/assessment', '/review', '/technical-assessment', '/dashboard/profile', '/dashboard/settings', '/management'],
+  assessor: ['/assessment', '/technical-assessment', '/inspection', '/dashboard/profile', '/dashboard/settings', '/management'],
   verifier: ['/verification', '/verifier', '/dashboard/profile', '/dashboard/settings', '/management'],
   applicant: ['/dashboard', '/apply'],
 }

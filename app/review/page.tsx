@@ -934,7 +934,7 @@ export default function ReviewerDashboard() {
     .join(" + ") || "All Applications";
 
   return (
-    <ProtectedRoute allowedRoles={['reviewer', 'assessor', 'admin']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['reviewer', 'admin']} requireProfile={true}>
       <DashboardLayout>
         {busyAction ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">

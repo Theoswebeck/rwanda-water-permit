@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
+import { format, parse, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { InspectionDocumentsUpload, type InspectionDocumentFile } from "@/components/inspection/inspection-documents-upload";
 import {
@@ -259,6 +264,128 @@ function YesNoRemarks({
         </div>
       </div>
     </div>
+  );
+}
+
+function ReportsSection({
+  form,
+  canEdit,
+  setField,
+}: {
+  form: InspectionFormState;
+  canEdit: boolean;
+  setField: <K extends keyof InspectionFormState>(key: K, value: InspectionFormState[K]) => void;
+}) {
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const markTouched = useCallback((field: string) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  }, []);
+
+  const selectedDate = form.reports_submission_date
+    ? parse(form.reports_submission_date, "yyyy-MM-dd", new Date())
+    : undefined;
+  const isDateValid = selectedDate && isValid(selectedDate);
+
+  const errors: Record<string, string | null> = {
+    reports_submission_date:
+      touched.reports_submission_date && !form.reports_submission_date
+        ? "Submission date is required"
+        : touched.reports_submission_date && form.reports_submission_date && !isDateValid
+          ? "Invalid date format"
+          : null,
+    reports_reference_number:
+      touched.reports_reference_number && !form.reports_reference_number?.trim()
+        ? "Reference number is required"
+        : null,
+    reports_proof:
+      touched.reports_proof && !form.reports_proof?.trim()
+        ? "Proof of reception is required"
+        : null,
+  };
+
+  return (
+    <SectionShell title="11. Reports">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <Label className="text-sm">Submission date</Label>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={!canEdit}
+                className={cn(
+                  "w-full h-11 justify-start text-left font-normal bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800",
+                  !form.reports_submission_date && "text-muted-foreground",
+                  errors.reports_submission_date && "border-red-500 ring-1 ring-red-500"
+                )}
+                onBlur={() => markTouched("reports_submission_date")}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {isDateValid
+                  ? format(selectedDate, "PPP")
+                  : "Select a date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={isDateValid ? selectedDate : undefined}
+                onSelect={(date) => {
+                  if (date) {
+                    setField("reports_submission_date", format(date, "yyyy-MM-dd"));
+                  } else {
+                    setField("reports_submission_date", undefined);
+                  }
+                  markTouched("reports_submission_date");
+                  setCalendarOpen(false);
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+          {errors.reports_submission_date && (
+            <p className="text-sm text-red-500 mt-1">{errors.reports_submission_date}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm">Reference number</Label>
+          <Input
+            value={form.reports_reference_number ?? ""}
+            disabled={!canEdit}
+            className={cn(
+              "h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800",
+              errors.reports_reference_number && "border-red-500 ring-1 ring-red-500"
+            )}
+            onChange={(e) => setField("reports_reference_number", e.target.value)}
+            onBlur={() => markTouched("reports_reference_number")}
+          />
+          {errors.reports_reference_number && (
+            <p className="text-sm text-red-500 mt-1">{errors.reports_reference_number}</p>
+          )}
+        </div>
+
+        <div className="md:col-span-2 space-y-2">
+          <Label className="text-sm">Proof of reception</Label>
+          <Input
+            value={form.reports_proof ?? ""}
+            disabled={!canEdit}
+            placeholder="URL or reference"
+            className={cn(
+              "h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800",
+              errors.reports_proof && "border-red-500 ring-1 ring-red-500"
+            )}
+            onChange={(e) => setField("reports_proof", e.target.value)}
+            onBlur={() => markTouched("reports_proof")}
+          />
+          {errors.reports_proof && (
+            <p className="text-sm text-red-500 mt-1">{errors.reports_proof}</p>
+          )}
+        </div>
+      </div>
+    </SectionShell>
   );
 }
 
@@ -622,15 +749,11 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title="11. Reports">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TextField label="Submission date" value={form.reports_submission_date ?? ""} disabled={!canEdit} onChange={(v) => setField("reports_submission_date", v as any)} placeholder="YYYY-MM-DD" />
-                <TextField label="Reference number" value={form.reports_reference_number ?? ""} disabled={!canEdit} onChange={(v) => setField("reports_reference_number", v as any)} />
-                <div className="md:col-span-2">
-                  <TextField label="Proof of reception" value={form.reports_proof ?? ""} disabled={!canEdit} onChange={(v) => setField("reports_proof", v as any)} placeholder="URL or reference" />
-                </div>
-              </div>
-            </SectionShell>
+            <ReportsSection
+              form={form}
+              canEdit={canEdit}
+              setField={setField}
+            />
           </TabsContent>
 
           <TabsContent value="documents" className="pt-6 space-y-6">
