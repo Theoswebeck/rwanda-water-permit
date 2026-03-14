@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildWaterUseReportInsertParts } from '@/lib/db/water-use-report-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { isEffectiveStaffUser, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 async function getClaims(req: NextRequest) {
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
   return verifySessionToken(token)
-}
-
-function isStaffRole(role?: string): boolean {
-  return ['admin', 'reviewer', 'assessor', 'inspector', 'approver', 'verifier'].includes(String(role || ''))
 }
 
 export async function GET(req: NextRequest) {
@@ -28,7 +25,11 @@ export async function GET(req: NextRequest) {
     const params: unknown[] = []
     let idx = 1
 
-    if (!isStaffRole(String(claims.role))) {
+    const resolvedRoles = await resolveEffectiveRoles({
+      userId: claims.sub,
+      claimsRole: claims.role,
+    })
+    if (!isEffectiveStaffUser(resolvedRoles.effectiveRoles)) {
       where.push(`wur.applicant_id = $${idx}`)
       params.push(claims.sub)
       idx += 1

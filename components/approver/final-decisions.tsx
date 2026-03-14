@@ -293,7 +293,7 @@ export function FinalDecisions() {
         body: JSON.stringify({
           applicationId,
           decision,
-          reason: decisionReason,
+          reason: decisionReason.trim(),
         }),
       });
 
@@ -474,7 +474,7 @@ export function FinalDecisions() {
                           <Select
                             onValueChange={(value) => {
                               if (value === "approve" || value === "reject" || value === "return_to_assessment") {
-                                openDecisionDialog(application, value as any);
+                                openDecisionDialog(application, value);
                               }
                             }}
                           >
@@ -529,7 +529,7 @@ export function FinalDecisions() {
                 ? "You are about to approve this water permit application. This decision is final."
                 : decisionType === "reject"
                   ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the verification stage."
+                  : "You are about to return this application to the verification stage. Please provide a reason."
               }
             </DialogDescription>
           </DialogHeader>
@@ -554,24 +554,43 @@ export function FinalDecisions() {
                 </div>
               </div>
               
-              {decisionType === "reject" ? (
+              {decisionType === "reject" || decisionType === "return_to_assessment" ? (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Rejection Reason (Required)</label>
+                  <label className="text-sm font-medium">
+                    {decisionType === "reject" ? "Rejection Reason (Required)" : "Reason for Return to Verification (Required)"}
+                  </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <Select value={decisionReasonPreset} onValueChange={(v)=>{ setDecisionReasonPreset(v); setDecisionReason(v === 'other' ? '' : v); }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a reason" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="incomplete_documentation">Incomplete documentation</SelectItem>
-                        <SelectItem value="non_compliance_requirements">Non-compliance with requirements</SelectItem>
-                        <SelectItem value="inconsistent_information">Inconsistent information provided</SelectItem>
-                        <SelectItem value="requires_further_review">Requires further technical assessment</SelectItem>
+                        {decisionType === "reject" ? (
+                          <>
+                            <SelectItem value="Incomplete documentation">Incomplete documentation</SelectItem>
+                            <SelectItem value="Non-compliance with requirements">Non-compliance with requirements</SelectItem>
+                            <SelectItem value="Inconsistent information provided">Inconsistent information provided</SelectItem>
+                            <SelectItem value="Does not meet technical requirements">Does not meet technical requirements</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="Missing or incomplete supporting documents">Missing or incomplete supporting documents</SelectItem>
+                            <SelectItem value="Verification details require clarification">Verification details require clarification</SelectItem>
+                            <SelectItem value="Field assessment requires correction">Field assessment requires correction</SelectItem>
+                            <SelectItem value="Additional technical review is required">Additional technical review is required</SelectItem>
+                          </>
+                        )}
                         <SelectItem value="other">Other...</SelectItem>
                       </SelectContent>
                     </Select>
                     <Textarea
-                      placeholder={decisionReasonPreset === 'other' || decisionReasonPreset === '' ? "Type rejection reason..." : "Add details (optional)"}
+                      placeholder={
+                        decisionReasonPreset === 'other' || decisionReasonPreset === ''
+                          ? decisionType === "reject"
+                            ? "Type rejection reason..."
+                            : "Type reason for returning to verification..."
+                          : "Add details (optional)"
+                      }
                       value={decisionReason}
                       onChange={(e) => setDecisionReason(e.target.value)}
                       rows={3}
@@ -588,7 +607,7 @@ export function FinalDecisions() {
             </Button>
             <Button
               onClick={() => selectedApplication && handleFinalDecision(selectedApplication.id, decisionType)}
-              disabled={submitting || (decisionType === "reject" && !decisionReason.trim())}
+              disabled={submitting || (decisionType !== "approve" && !decisionReason.trim())}
               variant={
                 decisionType === "approve" 
                   ? "default" 

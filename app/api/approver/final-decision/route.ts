@@ -6,6 +6,7 @@ import { sendResendEmail } from '@/lib/notifications/resend-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
 import { notifyOnTransferPendingTerms } from '@/lib/notifications/transfer-pending-terms'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { hasAnyRole, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 type Decision = 'approve' | 'reject' | 'return_to_assessment'
 const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
@@ -34,13 +35,6 @@ function logFinalDecision(
 ) {
   const payload = details ? { traceId, ...details } : { traceId }
   console[level](`🧾 [approver/final-decision] ${step}`, payload)
-}
-
-function normalizeRole(input: unknown): string {
-  const raw = String(input ?? '').trim().toLowerCase()
-  if (!raw) return ''
-  const aliases: Record<string, string> = { application: 'applicant' }
-  return aliases[raw] ?? raw
 }
 
 function buildDecisionCopy(params: { decision: Decision; applicantName: string; applicationNumber: string; reason?: string }) {
@@ -130,27 +124,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 })
     }
 
-    const actorRoleRes = await query<{ role: string | null }>(
-      `
-      select role
-      from public.users
-      where id = $1
-      limit 1
-      `,
-      [actorUserId]
-    )
-    const roleFromDb = normalizeRole(actorRoleRes.rows[0]?.role)
-    const roleFromClaims = normalizeRole(claims?.role)
-    const effectiveRole = roleFromDb || roleFromClaims
+    const resolvedRoles = await resolveEffectiveRoles({
+      userId: actorUserId,
+      claimsRole: claims?.role,
+    })
     const actorEmail = String(claims?.email || '').trim().toLowerCase()
     const isSuperuser = SUPERUSER_EMAILS.has(actorEmail)
     logFinalDecision('log', traceId, 'resolved actor identity', {
       actorUserId,
       actorEmail: maskEmail(actorEmail),
-      effectiveRole,
+      baseRole: resolvedRoles.baseRole,
+      effectiveRoles: resolvedRoles.effectiveRoles,
       isSuperuser,
     })
-    if (!isSuperuser && !['approver', 'admin'].includes(effectiveRole)) {
+    if (!isSuperuser && !hasAnyRole(resolvedRoles.effectiveRoles, ['approver', 'admin'])) {
       logFinalDecision('warn', traceId, 'rejecting request because actor is not authorized')
       return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
     }

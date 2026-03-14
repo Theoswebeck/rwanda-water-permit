@@ -10,6 +10,7 @@ import { notifyOnApplicationSubmitted } from '@/lib/notifications/submission';
 import type { Payment, PaymentStatusResponse, PaymentTransaction } from '@/types/payment';
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session';
 import { query } from '@/lib/db/postgres';
+import { isEffectiveStaffUser, resolveEffectiveRoles } from '@/lib/auth/effective-roles';
 
 const PAYMENT_METHOD_ENUM_VALUES = new Set([
   'mobile_money',
@@ -82,20 +83,13 @@ export async function GET(
 
     // Determine whether the current user is staff (reviewer/verifier/approver/assessor/inspector/admin).
     // Applicants can only check their own payments; staff can verify any payment to support assessment.
-    const staffRoles = ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'] as const;
     let isStaff = false;
     try {
-      const roleRes = await query<{ role: string | null }>(
-        `
-        select role
-        from public.users
-        where id = $1
-        limit 1
-        `,
-        [userId]
-      );
-      const role = roleRes.rows[0]?.role || undefined;
-      isStaff = !!role && (staffRoles as readonly string[]).includes(role);
+      const resolvedRoles = await resolveEffectiveRoles({
+        userId,
+        claimsRole: claims?.role,
+      });
+      isStaff = isEffectiveStaffUser(resolvedRoles.effectiveRoles);
     } catch {
       // If role lookup fails, default to non-staff behavior.
       isStaff = false;

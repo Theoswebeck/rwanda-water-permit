@@ -143,7 +143,7 @@ export default function ManagementDashboardPage() {
   }, [filters.province, filters.district]);
 
   return (
-    <ProtectedRoute allowedRoles={["reviewer", "inspector", "verifier", "approver", "admin"]} requireProfile={true}>
+    <ProtectedRoute allowedRoles={["reviewer", "inspector", "verifier", "assessor", "approver", "admin"]} requireProfile={true}>
       <DashboardLayout>
         <div className="w-full px-4 py-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>

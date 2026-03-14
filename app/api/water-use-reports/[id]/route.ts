@@ -2,15 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { buildWaterUseReportUpdateParts } from '@/lib/db/water-use-report-payload'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { isEffectiveStaffUser, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 async function getClaims(req: NextRequest) {
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
   return verifySessionToken(token)
-}
-
-function isStaffRole(role?: string): boolean {
-  return ['admin', 'reviewer', 'assessor', 'inspector', 'approver', 'verifier'].includes(String(role || ''))
 }
 
 function pickPayload(input: Record<string, unknown>): Record<string, unknown> {
@@ -31,9 +28,14 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 })
     }
     const { id } = await context.params
+    const resolvedRoles = await resolveEffectiveRoles({
+      userId: claims.sub,
+      claimsRole: claims.role,
+    })
+    const isStaff = isEffectiveStaffUser(resolvedRoles.effectiveRoles)
 
-    const where = isStaffRole(String(claims.role)) ? `wur.id = $1` : `wur.id = $1 and wur.applicant_id = $2`
-    const params = isStaffRole(String(claims.role)) ? [id] : [id, claims.sub]
+    const where = isStaff ? `wur.id = $1` : `wur.id = $1 and wur.applicant_id = $2`
+    const params = isStaff ? [id] : [id, claims.sub]
 
     const res = await query(
       `
@@ -75,6 +77,11 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 })
     }
     const { id } = await context.params
+    const resolvedRoles = await resolveEffectiveRoles({
+      userId: claims.sub,
+      claimsRole: claims.role,
+    })
+    const isStaff = isEffectiveStaffUser(resolvedRoles.effectiveRoles)
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
     if (!body || typeof body !== 'object') {
       return NextResponse.json({ success: false, message: 'Invalid body' }, { status: 400 })
@@ -89,10 +96,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
 
     const { sets, values } = buildWaterUseReportUpdateParts(payload)
 
-    const where = isStaffRole(String(claims.role))
+    const where = isStaff
       ? `id = $${keys.length + 1}`
       : `id = $${keys.length + 1} and applicant_id = $${keys.length + 2}`
-    const params = isStaffRole(String(claims.role))
+    const params = isStaff
       ? [...values, id]
       : [...values, id, claims.sub]
 

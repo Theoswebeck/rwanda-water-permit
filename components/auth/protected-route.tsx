@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,15 @@ function getUserEmail(user: any): string {
   return fromIdentities;
 }
 
+function getEffectiveRoles(user: any, userProfile: any): string[] {
+  const fromMetadata = Array.isArray(user?.user_metadata?.effective_roles)
+    ? user.user_metadata.effective_roles.map((role: unknown) => normalizeRole(role)).filter(Boolean)
+    : [];
+  const fromProfile = normalizeRole(userProfile?.role);
+  const merged = new Set<string>([...fromMetadata, fromProfile].filter(Boolean));
+  return Array.from(merged);
+}
+
 interface ProtectedRouteProps {
   children: React.ReactNode;
   allowedRoles?: string[];
@@ -41,8 +50,9 @@ export function ProtectedRoute({
   const router = useRouter();
   const { user, userProfile, loading, isAuthenticated } = useAuth();
   const isSuperuser = SUPERUSER_EMAILS.has(getUserEmail(user));
+  const effectiveRoles = useMemo(() => getEffectiveRoles(user, userProfile), [user, userProfile]);
   const normalizedProfileRole = normalizeRole(userProfile?.role);
-  const isAdmin = normalizedProfileRole === 'admin';
+  const isAdmin = effectiveRoles.includes('admin');
 
   useEffect(() => {
     if (loading) return; // Wait for auth state to load
@@ -86,7 +96,8 @@ export function ProtectedRoute({
     if (allowedRoles.length > 0 && userProfile) {
       const normalizedAllowedRoles = allowedRoles.map((role) => normalizeRole(role));
       // Admins can access all pages even if a page forgot to include 'admin' in allowedRoles.
-      if (!isAdmin && !normalizedAllowedRoles.includes(normalizedProfileRole)) {
+      const hasAllowedRole = normalizedAllowedRoles.some((allowedRole) => effectiveRoles.includes(allowedRole));
+      if (!isAdmin && !hasAllowedRole) {
         // Redirect based on user role if access denied
         const roleRedirects: Record<string, string> = {
           admin: '/admin',
@@ -103,7 +114,7 @@ export function ProtectedRoute({
         return;
       }
     }
-  }, [user, userProfile, loading, isAuthenticated, allowedRoles, redirectTo, requireProfile, router]);
+  }, [user, userProfile, loading, isAuthenticated, allowedRoles, redirectTo, requireProfile, router, isAdmin, normalizedProfileRole, effectiveRoles]);
 
   // Show loading state
   if (loading) {
@@ -175,7 +186,7 @@ export function ProtectedRoute({
     !isAdmin &&
     allowedRoles.length > 0 &&
     userProfile &&
-    !allowedRoles.map((role) => normalizeRole(role)).includes(normalizedProfileRole)
+    !allowedRoles.map((role) => normalizeRole(role)).some((role) => effectiveRoles.includes(role))
   ) {
     return (
       <div className="flex items-center justify-center min-h-screen">

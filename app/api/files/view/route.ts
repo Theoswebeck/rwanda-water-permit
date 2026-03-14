@@ -3,10 +3,9 @@ import { readFile } from "node:fs/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from "@/lib/auth/session";
+import { isEffectiveStaffUser, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 
 export const runtime = "nodejs";
-
-const STAFF_ROLES = new Set(["reviewer", "verifier", "approver", "assessor", "inspector", "admin"]);
 
 function toError(message: string, status: number) {
   return NextResponse.json({ success: false, message }, { status });
@@ -23,17 +22,8 @@ function sanitizeRequestedPath(rawPath: string): string | null {
 }
 
 async function isStaffUser(userId: string): Promise<boolean> {
-  const res = await query<{ role: string | null }>(
-    `
-    select role
-    from public.users
-    where id = $1
-    limit 1
-    `,
-    [userId]
-  );
-  const role = String(res.rows[0]?.role || "").toLowerCase();
-  return STAFF_ROLES.has(role);
+  const resolved = await resolveEffectiveRoles({ userId });
+  return isEffectiveStaffUser(resolved.effectiveRoles);
 }
 
 async function findAccessibleDocument(

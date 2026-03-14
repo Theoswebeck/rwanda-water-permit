@@ -53,6 +53,39 @@ function loginRedirect(request: NextRequest, pathname: string) {
   return NextResponse.redirect(redirectUrl)
 }
 
+async function resolveEffectiveRolesForRequest(
+  request: NextRequest,
+  token: string,
+  baseRole: string
+): Promise<Set<string>> {
+  const fallback = new Set([baseRole].filter(Boolean))
+  try {
+    const endpoint = new URL('/api/auth/effective-roles', request.url)
+    const cookieName = getAuthCookieName()
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        cookie: `${cookieName}=${encodeURIComponent(token)}`,
+      },
+      cache: 'no-store',
+    })
+    if (!response.ok) return fallback
+
+    const data = (await response.json()) as { effectiveRoles?: unknown }
+    if (!Array.isArray(data?.effectiveRoles)) return fallback
+
+    const roles = new Set(
+      data.effectiveRoles
+        .map((role) => normalizeRole(role))
+        .filter(Boolean)
+    )
+    if (roles.size === 0 && baseRole) roles.add(baseRole)
+    return roles
+  } catch {
+    return fallback
+  }
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route))
@@ -98,6 +131,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
+    const effectiveRoles = await resolveEffectiveRolesForRequest(request, token, normalizedRole)
+
     if (
       pathname.startsWith('/dashboard') &&
       !pathname.startsWith('/dashboard/profile') &&
@@ -108,8 +143,10 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!isSuperuser && normalizedRole !== 'admin') {
-      const allowedRoutes = ROLE_ROUTES[normalizedRole] || []
-      const hasAccess = allowedRoutes.some((route) => pathname.startsWith(route))
+      const hasAccess = Array.from(effectiveRoles).some((role) => {
+        const allowedRoutes = ROLE_ROUTES[role] || []
+        return allowedRoutes.some((route) => pathname.startsWith(route))
+      })
       if (!hasAccess) {
         return NextResponse.redirect(new URL(ROLE_DASHBOARDS[normalizedRole] || '/dashboard', request.url))
       }

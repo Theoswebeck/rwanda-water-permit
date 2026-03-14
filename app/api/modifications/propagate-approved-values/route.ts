@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
+import { hasAnyRole, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 type JsonRecord = Record<string, unknown>
 
@@ -50,13 +51,6 @@ function parseJsonObject(input: unknown): JsonRecord | null {
   } catch {
     return null
   }
-}
-
-function normalizeRole(input: unknown): string {
-  const raw = String(input ?? '').trim().toLowerCase()
-  if (!raw) return ''
-  if (raw === 'application') return 'applicant'
-  return raw
 }
 
 function pickPositiveNumber(...values: unknown[]): number | null {
@@ -171,9 +165,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Application is not a modification request' }, { status: 400 })
     }
 
-    const actorRole = normalizeRole(claims?.role)
     const actorEmail = String(claims?.email || '').trim().toLowerCase()
-    const isStaffActor = ['admin', 'approver'].includes(actorRole) || SUPERUSER_EMAILS.has(actorEmail)
+    const resolvedRoles = await resolveEffectiveRoles({
+      userId: actorUserId,
+      claimsRole: claims?.role,
+    })
+    const isStaffActor = hasAnyRole(resolvedRoles.effectiveRoles, ['admin', 'approver']) || SUPERUSER_EMAILS.has(actorEmail)
     if (!isStaffActor && actorUserId !== modificationApplication.applicant_id) {
       return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
     }

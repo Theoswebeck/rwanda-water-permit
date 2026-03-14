@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { readSessionTokenFromRequest, verifySessionToken, clearSessionCookie } from '@/lib/auth/session'
+import { resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 type UserRow = Record<string, unknown> & {
   id: string
@@ -41,6 +42,10 @@ export async function GET(req: NextRequest) {
     }
 
     const { password_hash, ...profile } = row
+    const resolved = await resolveEffectiveRoles({
+      userId: row.id,
+      claimsRole: claims.role,
+    })
 
     return NextResponse.json({
       success: true,
@@ -51,9 +56,16 @@ export async function GET(req: NextRequest) {
           role: row.role,
           status: row.status,
           account_type: row.account_type,
+          base_role: resolved.baseRole,
+          delegated_roles: resolved.delegatedRoles,
+          effective_roles: resolved.effectiveRoles,
         },
       },
-      profile,
+      profile: {
+        ...profile,
+        effective_roles: resolved.effectiveRoles,
+        delegated_roles: resolved.delegatedRoles,
+      },
     })
   } catch (err) {
     console.error('❌ me server error:', err)

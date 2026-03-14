@@ -720,7 +720,7 @@ export default function ApproverApplicationPage() {
         body: JSON.stringify({
           applicationId: application.id,
           decision: decisionType,
-          reason: decisionReason,
+          reason: decisionReason.trim(),
         }),
       });
 
@@ -741,7 +741,7 @@ export default function ApproverApplicationPage() {
           ? "approved_pending_permit"
           : decisionType === "reject"
             ? "rejected"
-            : "pending_verification";
+            : "returned_to_verification";
 
       setApplication((prev) => (prev ? { ...prev, status: nextStatus } : prev));
       setDecisionSuccess(`Application ${actionText} successfully.`);
@@ -1097,7 +1097,7 @@ export default function ApproverApplicationPage() {
                 ? "You are about to approve this water permit application. This decision is final."
                 : decisionType === "reject"
                   ? "You are about to reject this water permit application. Please provide a reason."
-                  : "You are about to return this application to the verification stage."}
+                  : "You are about to return this application to the verification stage. Please provide a reason."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1120,9 +1120,11 @@ export default function ApproverApplicationPage() {
               </div>
             </div>
 
-            {decisionType === "reject" ? (
+            {decisionType === "reject" || decisionType === "return_to_assessment" ? (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Rejection Reason (Required)</label>
+                <label className="text-sm font-medium">
+                  {decisionType === "reject" ? "Rejection Reason (Required)" : "Reason for Return to Verification (Required)"}
+                </label>
                 <div className="space-y-2">
                   <Select
                     value={decisionReasonPreset}
@@ -1135,15 +1137,32 @@ export default function ApproverApplicationPage() {
                       <SelectValue placeholder="Select a reason" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="incomplete_documentation">Incomplete documentation</SelectItem>
-                      <SelectItem value="non_compliance_requirements">Non-compliance with requirements</SelectItem>
-                      <SelectItem value="inconsistent_information">Inconsistent information provided</SelectItem>
-                      <SelectItem value="requires_further_review">Requires further technical assessment</SelectItem>
+                      {decisionType === "reject" ? (
+                        <>
+                          <SelectItem value="Incomplete documentation">Incomplete documentation</SelectItem>
+                          <SelectItem value="Non-compliance with requirements">Non-compliance with requirements</SelectItem>
+                          <SelectItem value="Inconsistent information provided">Inconsistent information provided</SelectItem>
+                          <SelectItem value="Does not meet technical requirements">Does not meet technical requirements</SelectItem>
+                        </>
+                      ) : (
+                        <>
+                          <SelectItem value="Missing or incomplete supporting documents">Missing or incomplete supporting documents</SelectItem>
+                          <SelectItem value="Verification details require clarification">Verification details require clarification</SelectItem>
+                          <SelectItem value="Field assessment requires correction">Field assessment requires correction</SelectItem>
+                          <SelectItem value="Additional technical review is required">Additional technical review is required</SelectItem>
+                        </>
+                      )}
                       <SelectItem value="other">Other...</SelectItem>
                     </SelectContent>
                   </Select>
                   <Textarea
-                    placeholder={decisionReasonPreset === "other" || decisionReasonPreset === "" ? "Type rejection reason..." : "Add details (optional)"}
+                    placeholder={
+                      decisionReasonPreset === "other" || decisionReasonPreset === ""
+                        ? decisionType === "reject"
+                          ? "Type rejection reason..."
+                          : "Type reason for returning to verification..."
+                        : "Add details (optional)"
+                    }
                     value={decisionReason}
                     onChange={(e) => setDecisionReason(e.target.value)}
                     rows={3}
@@ -1158,7 +1177,7 @@ export default function ApproverApplicationPage() {
             </Button>
             <Button
               onClick={handleFinalDecision}
-              disabled={submittingDecision || (decisionType === "reject" && !decisionReason.trim())}
+              disabled={submittingDecision || (decisionType !== "approve" && !decisionReason.trim())}
               variant={
                 decisionType === "approve"
                   ? "default"

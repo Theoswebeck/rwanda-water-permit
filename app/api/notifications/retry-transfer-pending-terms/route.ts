@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db/postgres'
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { notifyOnTransferPendingTerms, retryTransferPendingTermsNotifications } from '@/lib/notifications/transfer-pending-terms'
+import { hasAnyRole, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
-
-function normalizeRole(input: unknown): string {
-  const raw = String(input ?? '').trim().toLowerCase()
-  if (!raw) return ''
-  const aliases: Record<string, string> = { application: 'applicant' }
-  return aliases[raw] ?? raw
-}
 
 function isCronAuthorized(req: NextRequest): boolean {
   const expected = String(process.env.CRON_SECRET || '').trim()
@@ -28,17 +21,11 @@ async function isPrivilegedUser(req: NextRequest): Promise<boolean> {
   const actorEmail = String(claims?.email || '').trim().toLowerCase()
   if (SUPERUSER_EMAILS.has(actorEmail)) return true
 
-  const roleRes = await query<{ role: string | null }>(
-    `
-    select role
-    from public.users
-    where id = $1
-    limit 1
-    `,
-    [userId]
-  )
-  const effectiveRole = normalizeRole(roleRes.rows[0]?.role) || normalizeRole(claims?.role)
-  return ['approver', 'admin'].includes(effectiveRole)
+  const resolvedRoles = await resolveEffectiveRoles({
+    userId,
+    claimsRole: claims?.role,
+  })
+  return hasAnyRole(resolvedRoles.effectiveRoles, ['approver', 'admin'])
 }
 
 export async function GET(req: NextRequest) {

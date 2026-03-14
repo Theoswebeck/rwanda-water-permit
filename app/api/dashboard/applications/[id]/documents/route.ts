@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { query } from '@/lib/db/postgres'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { normalizeDocumentType, safeStorageToken } from '@/lib/documents/upload-mapping'
+import { isEffectiveStaffUser, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 export const runtime = 'nodejs'
 
@@ -31,17 +32,8 @@ async function assertApplicationOwnership(applicationId: string, userId: string)
 }
 
 async function isStaffUser(userId: string): Promise<boolean> {
-  const res = await query<{ role: string | null }>(
-    `
-    select role
-    from public.users
-    where id = $1
-    limit 1
-    `,
-    [userId]
-  )
-  const role = String(res.rows[0]?.role || '').toLowerCase()
-  return ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'].includes(role)
+  const resolved = await resolveEffectiveRoles({ userId })
+  return isEffectiveStaffUser(resolved.effectiveRoles)
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
