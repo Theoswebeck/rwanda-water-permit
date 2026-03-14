@@ -44,7 +44,7 @@ function applicantName(applicant: any): string {
   return applicant.company_name || `${applicant.first_name ?? ""} ${applicant.last_name ?? ""}`.trim() || "—";
 }
 
-export function InspectionDetailTabs({ inspectionId }: { inspectionId: string }) {
+export function InspectionDetailTabs({ inspectionId, roleContext }: { inspectionId: string; roleContext?: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inspection, setInspection] = useState<any>(null);
@@ -163,6 +163,7 @@ export function InspectionDetailTabs({ inspectionId }: { inspectionId: string })
         workflowStatus={workflowStatus}
         inspectionStatus={inspectionStatus}
         inspection={inspection || {}}
+        roleContext={roleContext}
         onStatusChange={handleWorkflowStatusChange}
       />
 

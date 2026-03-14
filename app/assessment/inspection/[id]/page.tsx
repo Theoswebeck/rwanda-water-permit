@@ -19,7 +19,7 @@ export default function AssessmentInspectionDetailPage() {
         </div>
         <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12 space-y-6">
           <BackButton />
-          <InspectionDetailTabs inspectionId={id} />
+          <InspectionDetailTabs inspectionId={id} roleContext="assessor" />
         </div>
       </DashboardLayout>
     </ProtectedRoute>

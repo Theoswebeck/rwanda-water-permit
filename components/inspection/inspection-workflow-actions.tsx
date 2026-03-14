@@ -59,6 +59,7 @@ interface InspectionWorkflowActionsProps {
   workflowStatus: InspectionWorkflowStatus | string;
   inspectionStatus: string;
   inspection: Record<string, any>;
+  roleContext?: string;
   onStatusChange?: (newStatus: InspectionWorkflowStatus) => void;
 }
 
@@ -118,10 +119,11 @@ export function InspectionWorkflowActions({
   workflowStatus,
   inspectionStatus,
   inspection,
+  roleContext,
   onStatusChange,
 }: InspectionWorkflowActionsProps) {
   const { userProfile } = useAuth();
-  const role = userProfile?.role ?? "";
+  const role = roleContext || userProfile?.role || "";
   const userId = userProfile?.id;
 
   const [loading, setLoading] = useState(false);
