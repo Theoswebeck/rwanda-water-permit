@@ -29,11 +29,11 @@ const AUTH_PAGES = ['/login', '/register']
 
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: PROTECTED_ROUTES,
-  approver: ['/approver', '/review', '/assessment', '/verification', '/dashboard/profile', '/management'],
-  inspector: ['/inspection', '/inspector', '/dashboard/profile', '/management'],
-  reviewer: ['/review', '/assessment', '/dashboard/profile', '/management'],
-  assessor: ['/assessment', '/review', '/technical-assessment', '/dashboard/profile', '/management'],
-  verifier: ['/verification', '/verifier', '/dashboard/profile', '/management'],
+  approver: ['/approver', '/dashboard/profile', '/dashboard/settings', '/management'],
+  inspector: ['/inspection', '/inspector', '/dashboard/profile', '/dashboard/settings', '/management'],
+  reviewer: ['/review', '/dashboard/profile', '/dashboard/settings', '/management'],
+  assessor: ['/assessment', '/review', '/technical-assessment', '/dashboard/profile', '/dashboard/settings', '/management'],
+  verifier: ['/verification', '/verifier', '/dashboard/profile', '/dashboard/settings', '/management'],
   applicant: ['/dashboard', '/apply'],
 }
 

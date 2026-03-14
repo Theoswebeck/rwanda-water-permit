@@ -1034,7 +1034,7 @@ export default function ReviewApplicationPage() {
   const showReviewActions = shouldShowReviewActions(application.status);
 
   return (
-    <ProtectedRoute allowedRoles={['reviewer', 'assessor', 'admin', 'approver']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['reviewer', 'assessor', 'admin']} requireProfile={true}>
       <DashboardLayout>
         <div className="flex justify-end p-6">
           <UserProfileButton />

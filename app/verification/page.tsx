@@ -302,7 +302,7 @@ export default function VerificationDashboard() {
   const activeChipLabel = VERIFIER_CHIPS.find((c) => c.id === activeChipId)?.label ?? "All Applications";
 
   return (
-    <ProtectedRoute allowedRoles={["verifier", "admin", "approver"]} requireProfile={true}>
+    <ProtectedRoute allowedRoles={["verifier", "admin"]} requireProfile={true}>
     <DashboardLayout>
         <motion.div
           initial={{ opacity: 0, y: 10 }}

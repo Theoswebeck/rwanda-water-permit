@@ -13,6 +13,7 @@ import { ActivityLogs } from "@/components/admin/activity-logs";
 import { RoleDelegationManagement } from "@/components/admin/role-delegation-management";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 import { getAdminDashboardStats } from "@/lib/supabase";
 import { 
@@ -60,7 +61,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      // <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+      <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
         <DashboardLayout>
           <div className="container mx-auto px-4 py-6">
             <div className="flex items-center justify-center h-64">
@@ -68,13 +69,13 @@ export default function AdminDashboard() {
             </div>
           </div>
         </DashboardLayout>
-      // </ProtectedRoute>
+      </ProtectedRoute>
     );
   }
 
   if (error) {
     return (
-      // <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+      <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
         <DashboardLayout>
           <div className="container mx-auto px-4 py-6">
             <div className="text-center py-12">
@@ -84,12 +85,12 @@ export default function AdminDashboard() {
             </div>
           </div>
         </DashboardLayout>
-      // </ProtectedRoute>
+      </ProtectedRoute>
     );
   }
 
   return (
-    // <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
+    <ProtectedRoute allowedRoles={['admin']} requireProfile={true}>
       <DashboardLayout>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -240,6 +241,6 @@ export default function AdminDashboard() {
           </div>
         </motion.div>
       </DashboardLayout>
-    // </ProtectedRoute>
+    </ProtectedRoute>
   );
 } 

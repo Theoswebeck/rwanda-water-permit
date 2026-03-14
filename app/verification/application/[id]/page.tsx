@@ -728,7 +728,7 @@ export default function VerificationApplicationPage() {
   }
 
   return (
-    <ProtectedRoute allowedRoles={["verifier", "admin", "approver"]} requireProfile={true}>
+    <ProtectedRoute allowedRoles={["verifier", "admin"]} requireProfile={true}>
       <DashboardLayout>
         <div className="flex justify-end p-6">
           <UserProfileButton />
