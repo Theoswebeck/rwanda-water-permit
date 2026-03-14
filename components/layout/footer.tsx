@@ -17,7 +17,7 @@ const usefulLinks = [
   { label: "REMA", href: "#" },
   { label: "IPPS", href: "#" },
   { label: "Water Permits", href: "#" },
-  { label: "Rwanda Water Portal", href: "#" },
+  { label: "Rwanda Water Permit Portal", href: "#" },
   { label: "IWRM Geo-Portal", href: "#" },
 ];
 

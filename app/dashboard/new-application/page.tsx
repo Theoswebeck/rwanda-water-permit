@@ -1994,6 +1994,7 @@ function NewApplicationContent() {
         proposed_duration_years: formData.permitLengthYears || undefined,
         estimated_usage_volume: formData.waterAbstractionDetails?.[0]?.maxAverageYearly || undefined,
         usage_unit: 'm³/year',
+        water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || undefined,
         village: formData.waterSourceVillage || selectedPermitForModification?.application?.village || '',
         internal_notes: JSON.stringify({
           ...formData,
@@ -2146,6 +2147,7 @@ function NewApplicationContent() {
         proposed_duration_years: formData.permitLengthYears || undefined,
         estimated_usage_volume: formData.waterAbstractionDetails?.[0]?.maxAverageYearly || undefined,
         usage_unit: 'm³/year',
+        water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || undefined,
         village: formData.waterSourceVillage || selectedPermitForModification?.application?.village || '',
         internal_notes: JSON.stringify({
           ...formData,

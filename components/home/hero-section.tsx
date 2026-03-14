@@ -93,7 +93,7 @@ export function HeroSection() {
           className="h-full w-full"
         >
           <img 
-            src="/water-image-2.jpg" 
+            src="/assets/serrah-galos-bVMnhNOfFCo-unsplash.jpg" 
             alt="Rwanda water scene" 
             className="h-full w-full object-cover"
             style={{ position: "absolute" }}
@@ -122,15 +122,7 @@ export function HeroSection() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.7, delay: 0.3 }}
               >
-                Rwanda water Portal
-              </motion.span>
-              <br />
-              <motion.span
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.7, delay: 0.5 }}
-              >
-                Rwanda
+                Rwanda Water Permit Portal
               </motion.span>
             </motion.h1>
             

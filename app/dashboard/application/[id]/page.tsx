@@ -998,7 +998,7 @@ export default function ApplicationDetailPage() {
                         </p>
                       </>
                     )}
-                    <p className="text-red-600 text-sm">You may submit a new application with the necessary corrections.</p>
+
                   </div>
                 </div>
               </AlertDescription>

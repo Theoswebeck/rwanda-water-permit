@@ -460,6 +460,7 @@ export const completeInspection = async (
       .update({
         ...inspectionData,
         status: 'completed',
+        workflow_status: 'submitted',
         completed_date: new Date().toISOString()
       })
       .eq('id', inspectionId)

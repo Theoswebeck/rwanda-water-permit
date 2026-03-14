@@ -760,7 +760,7 @@ function resolveLatLng(application: Application): { lat: string; lng: string } {
   return { lat: "N/A", lng: "N/A" };
 }
 
-function resolveSystemType(application: Application): "GRAVITY SYSTEM" | "PUMPING SYSTEM" {
+function resolveAbstractionMethodRaw(application: Application): string {
   const candidate =
     (typeof application.water_taking_method === "string" ? application.water_taking_method : "") ||
     (() => {
@@ -768,17 +768,49 @@ function resolveSystemType(application: Application): "GRAVITY SYSTEM" | "PUMPIN
       const m = notes?.waterAbstractionDetails?.[0]?.abstractionMethod;
       return typeof m === "string" ? m : "";
     })();
-  const normalized = candidate.toLowerCase();
+  return candidate.trim();
+}
+
+function resolveSystemType(application: Application): string {
+  const raw = resolveAbstractionMethodRaw(application);
+  const normalized = raw.toLowerCase();
+  if (!normalized) return "GRAVITY SYSTEM";
   if (normalized.includes("pump")) return "PUMPING SYSTEM";
-  return "GRAVITY SYSTEM";
+  if (normalized.includes("grav")) return "GRAVITY SYSTEM";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "DIVERSION CHANNEL";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "DAM/RESERVOIR";
+  if (normalized.includes("borehole")) return "BOREHOLE";
+  if (normalized.includes("spring")) return "SPRING CAPTURE";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "HAND DUG WELL";
+  return raw.replace(/[_-]/g, " ").toUpperCase() || "GRAVITY SYSTEM";
 }
 
-function resolveEnglishSystemTypeLabel(application: Application): "GRAVITY system" | "PUMPING system" {
-  return resolveSystemType(application) === "PUMPING SYSTEM" ? "PUMPING system" : "GRAVITY system";
+function resolveEnglishSystemTypeLabel(application: Application): string {
+  const raw = resolveAbstractionMethodRaw(application);
+  const normalized = raw.toLowerCase();
+  if (!normalized) return "GRAVITY system";
+  if (normalized.includes("pump")) return "PUMPING system";
+  if (normalized.includes("grav")) return "GRAVITY system";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "Diversion Channel";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "Dam/Reservoir";
+  if (normalized.includes("borehole")) return "Borehole";
+  if (normalized.includes("spring")) return "Spring Capture";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "Hand Dug Well";
+  return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GRAVITY system";
 }
 
-function resolveKinyarwandaSystemTypeLabel(application: Application): "GUPOMPA" | "GUKORESHA" {
-  return resolveSystemType(application) === "PUMPING SYSTEM" ? "GUPOMPA" : "GUKORESHA";
+function resolveKinyarwandaSystemTypeLabel(application: Application): string {
+  const raw = resolveAbstractionMethodRaw(application);
+  const normalized = raw.toLowerCase();
+  if (!normalized) return "GUKORESHA";
+  if (normalized.includes("pump")) return "GUPOMPA";
+  if (normalized.includes("grav")) return "GUKORESHA";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "gukoresha umuyoboro w'amazi";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "gukoresha ikidendezi";
+  if (normalized.includes("borehole")) return "gukoresha iriba ryatobowe";
+  if (normalized.includes("spring")) return "gufata amazi y'isoko";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "gukoresha iriba ryacukuwe";
+  return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GUKORESHA";
 }
 
 /**

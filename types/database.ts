@@ -40,6 +40,8 @@ export type ApplicationStatus =
   | 'returned_to_review'        // Returned to reviewer by verifier/approver  
   | 'returned_to_verification'  // Returned to verifier by approver
 
+export type { InspectionWorkflowStatus } from './inspection-workflow'
+
 export type ApplicationType = 
   | 'domestic' 
   | 'industrial' 

@@ -301,6 +301,7 @@ export default function PermitInspectionUnifiedPage() {
         type: "annual",
         inspection_template: template,
         status: mode === "submit" ? "completed" : "in_progress",
+        workflow_status: mode === "submit" ? "submitted" : "draft",
         scheduled_date: nowIso,
         completed_date: mode === "submit" ? nowIso : null,
         review_status: mode === "submit" ? "pending" : null,

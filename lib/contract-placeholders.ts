@@ -293,23 +293,34 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
     (typeof notes?.abstractionMethod === "string" ? notes.abstractionMethod : "");
 
   const normalized = rawMethod.trim().toLowerCase();
-  if (normalized.includes("pump")) {
-    return {
-      english: "Pumping system",
-      kinyarwanda: "gupompa",
-    };
-  }
-  if (normalized.includes("grav")) {
-    return {
-      english: "Gravity system",
-      kinyarwanda: "gravity",
-    };
+  if (!normalized) {
+    return { english: "N/A", kinyarwanda: "N/A" };
   }
 
-  return {
-    english: "Gravity system",
-    kinyarwanda: "gravity",
-  };
+  if (normalized.includes("pump")) {
+    return { english: "Pumping system", kinyarwanda: "gupompa" };
+  }
+  if (normalized.includes("grav")) {
+    return { english: "Gravity system", kinyarwanda: "gravity" };
+  }
+  if (normalized.includes("diversion") || normalized === "diversion_channel") {
+    return { english: "Diversion Channel", kinyarwanda: "umuyoboro w'amazi" };
+  }
+  if (normalized.includes("dam") || normalized.includes("reservoir")) {
+    return { english: "Dam/Reservoir", kinyarwanda: "ikidendezi/reservoir" };
+  }
+  if (normalized.includes("borehole")) {
+    return { english: "Borehole", kinyarwanda: "iriba ryatobowe" };
+  }
+  if (normalized.includes("spring")) {
+    return { english: "Spring Capture", kinyarwanda: "gufata amazi y'isoko" };
+  }
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) {
+    return { english: "Hand Dug Well", kinyarwanda: "iriba ryacukuwe n'intoki" };
+  }
+
+  const capitalizedMethod = rawMethod.trim().replace(/[_-]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+  return { english: capitalizedMethod, kinyarwanda: capitalizedMethod };
 }
 
 function resolveVolumeLabel(application: ApplicationForContract): string {

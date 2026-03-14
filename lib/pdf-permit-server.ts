@@ -207,9 +207,40 @@ function resolveLatLng(app: PermitApplication): { lat: string; lng: string } {
   return { lat: "N/A", lng: "N/A" };
 }
 
-function resolveSystemType(app: PermitApplication): "GRAVITY SYSTEM" | "PUMPING SYSTEM" {
-  const method = app.water_taking_method || "";
-  return method.toLowerCase().includes("pump") ? "PUMPING SYSTEM" : "GRAVITY SYSTEM";
+function resolveAbstractionMethodRaw(app: PermitApplication): string {
+  const fromCol = typeof app.water_taking_method === "string" ? app.water_taking_method.trim() : "";
+  if (fromCol) return fromCol;
+  const notes = resolveNotes(app);
+  const fromNotes = notes?.waterAbstractionDetails?.[0]?.abstractionMethod;
+  return typeof fromNotes === "string" ? fromNotes.trim() : "";
+}
+
+function resolveSystemType(app: PermitApplication): string {
+  const raw = resolveAbstractionMethodRaw(app);
+  const normalized = raw.toLowerCase();
+  if (!normalized) return "GRAVITY SYSTEM";
+  if (normalized.includes("pump")) return "PUMPING SYSTEM";
+  if (normalized.includes("grav")) return "GRAVITY SYSTEM";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "DIVERSION CHANNEL";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "DAM/RESERVOIR";
+  if (normalized.includes("borehole")) return "BOREHOLE";
+  if (normalized.includes("spring")) return "SPRING CAPTURE";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "HAND DUG WELL";
+  return raw.replace(/[_-]/g, " ").toUpperCase() || "GRAVITY SYSTEM";
+}
+
+function resolveEnglishSystemLabel(app: PermitApplication): string {
+  const raw = resolveAbstractionMethodRaw(app);
+  const normalized = raw.toLowerCase();
+  if (!normalized) return "GRAVITY system";
+  if (normalized.includes("pump")) return "PUMPING system";
+  if (normalized.includes("grav")) return "GRAVITY system";
+  if (normalized.includes("diversion") || normalized === "diversion_channel") return "Diversion Channel";
+  if (normalized.includes("dam") || normalized.includes("reservoir")) return "Dam/Reservoir";
+  if (normalized.includes("borehole")) return "Borehole";
+  if (normalized.includes("spring")) return "Spring Capture";
+  if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "Hand Dug Well";
+  return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GRAVITY system";
 }
 
 function resolveVolumes(app: PermitApplication): { yearly: number | null; daily: number | null } {
@@ -572,7 +603,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   const wsName = resolveWaterSourceName(app);
   const loc = resolveAdminLocation(app);
   const { lat, lng } = resolveLatLng(app);
-  const sysLabel = resolveSystemType(app) === "PUMPING SYSTEM" ? "PUMPING system" : "GRAVITY system";
+  const sysLabel = resolveEnglishSystemLabel(app);
   const flowRate = resolveFlowRate(app);
   const acts = resolveActivities(app);
   const validYears = computeYearsBetween(issueDate, expiryDate);
