@@ -174,7 +174,13 @@ export default async function PublicPermitViewPage({
 
     const appWaterPurpose = typeof app?.water_purpose === "string" ? app.water_purpose.trim() : "";
     const permitPurpose = typeof permit.purpose === "string" ? permit.purpose.trim() : "";
-    const primaryActivity = intendedActivities[0] || appWaterPurpose || permitPurpose;
+
+    const isTransfer = Boolean(permit.is_transfer) ||
+      (typeof app?.application_type === "string" && app.application_type === "transfer");
+
+    const primaryActivity = isTransfer
+      ? (intendedActivities[0] || permitPurpose || appWaterPurpose)
+      : (intendedActivities[0] || appWaterPurpose || permitPurpose);
 
     return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
   })();
@@ -300,7 +306,11 @@ export default async function PublicPermitViewPage({
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500">Water source</div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.water_source}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {typeof permit.water_source === "string"
+                      ? permit.water_source.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                      : "N/A"}
+                  </div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500">Intended water activity</div>

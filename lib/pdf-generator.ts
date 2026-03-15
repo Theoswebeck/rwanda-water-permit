@@ -761,14 +761,13 @@ function resolveLatLng(application: Application): { lat: string; lng: string } {
 }
 
 function resolveAbstractionMethodRaw(application: Application): string {
-  const candidate =
-    (typeof application.water_taking_method === "string" ? application.water_taking_method : "") ||
-    (() => {
-      const notes = getInternalNotes(application);
-      const m = notes?.waterAbstractionDetails?.[0]?.abstractionMethod;
-      return typeof m === "string" ? m : "";
-    })();
-  return candidate.trim();
+  const fromCol = typeof application.water_taking_method === "string" ? application.water_taking_method.trim() : "";
+  if (fromCol) return fromCol;
+  const notes = getInternalNotes(application);
+  const fromNotes = notes?.waterAbstractionDetails?.[0]?.abstractionMethod;
+  if (typeof fromNotes === "string" && fromNotes.trim()) return fromNotes.trim();
+  const fromTransfer = notes?.transferFormData?.abstractionMethod;
+  return typeof fromTransfer === "string" ? fromTransfer.trim() : "";
 }
 
 function resolveSystemType(application: Application): string {

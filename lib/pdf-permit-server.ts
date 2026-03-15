@@ -212,7 +212,9 @@ function resolveAbstractionMethodRaw(app: PermitApplication): string {
   if (fromCol) return fromCol;
   const notes = resolveNotes(app);
   const fromNotes = notes?.waterAbstractionDetails?.[0]?.abstractionMethod;
-  return typeof fromNotes === "string" ? fromNotes.trim() : "";
+  if (typeof fromNotes === "string" && fromNotes.trim()) return fromNotes.trim();
+  const fromTransfer = notes?.transferFormData?.abstractionMethod;
+  return typeof fromTransfer === "string" ? fromTransfer.trim() : "";
 }
 
 function resolveSystemType(app: PermitApplication): string {

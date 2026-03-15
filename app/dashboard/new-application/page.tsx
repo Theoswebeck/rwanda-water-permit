@@ -1130,6 +1130,8 @@ function NewApplicationContent() {
         project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
+        water_taking_method: formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '',
+        flow_rate_m3_per_second: formData.flowRate ? parseFloat(formData.flowRate) : (selectedPermit?.application?.flow_rate_m3_per_second ?? undefined),
         ...(originalActivities.length > 0 ? { intended_activities: originalActivities } : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
@@ -1231,6 +1233,8 @@ function NewApplicationContent() {
         project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
+        water_taking_method: formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '',
+        flow_rate_m3_per_second: formData.flowRate ? parseFloat(formData.flowRate) : (selectedPermit?.application?.flow_rate_m3_per_second ?? undefined),
         ...(draftOriginalActivities.length > 0 ? { intended_activities: draftOriginalActivities } : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,

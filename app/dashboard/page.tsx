@@ -28,6 +28,7 @@ import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useA
 import { usePermitsQuery, PermitWithApplication } from "@/hooks/usePermitsQuery";
 import { useIncomingTransfersQuery, type IncomingTransferRequest } from "@/hooks/useIncomingTransfersQuery";
 import { useAuth } from "@/contexts/AuthContext";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 import type { Permit as DatabasePermit } from "@/types/database";
 import type { Application, ApplicationStatus as DbApplicationStatus } from "@/types/database";
 import {
@@ -218,14 +219,21 @@ function DashboardContent() {
         displayStatus = "expiring-soon";
       }
 
+      const app = dbPermit.application as Record<string, unknown> | null | undefined;
+      const intendedActivities = Array.isArray(app?.intended_activities)
+        ? (app.intended_activities as string[]).filter((a) => typeof a === "string" && a.trim())
+        : [];
+      const activityCode = intendedActivities[0] || dbPermit.purpose || "";
+      const activityLabel = activityCode ? getActivityLabel(activityCode) : (dbPermit.purpose || "N/A");
+
       return {
         id: dbPermit.id,
-        title: `${dbPermit.purpose} ${tx("Water Permit")}`, // Create a title from purpose
-        issueDate: (dbPermit.application as { terms_accepted_at?: string | null } | undefined)?.terms_accepted_at || dbPermit.issued_date,
+        title: `${activityLabel} ${tx("Water Permit")}`,
+        issueDate: (app as { terms_accepted_at?: string | null } | undefined)?.terms_accepted_at || dbPermit.issued_date,
         expiryDate: dbPermit.expiry_date,
         status: displayStatus,
-        type: dbPermit.purpose, // Use purpose as type
-        location: "N/A", // We'll need to get this from related application
+        type: activityLabel,
+        location: "N/A",
         permitNumber: dbPermit.permit_number,
         isModification: (dbPermit as any).is_modification === true,
         modifiedCount: dbPermit.modification_count ?? 0,

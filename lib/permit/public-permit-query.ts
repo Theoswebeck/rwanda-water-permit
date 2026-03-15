@@ -16,6 +16,24 @@ export type PublicPermitRecord = JsonRecord & {
   longitude: number | null;
 };
 
+function extractCoordinateFromNotes(
+  application: JsonRecord | null | undefined,
+  key: "waterSourceLatitude" | "waterSourceLongitude"
+): number | null {
+  if (!application) return null;
+  const raw = application.internal_notes;
+  if (!raw) return null;
+  try {
+    const notes = typeof raw === "string" ? JSON.parse(raw) : typeof raw === "object" ? raw : null;
+    if (!notes || typeof notes !== "object") return null;
+    const value = (notes as Record<string, unknown>)[key];
+    const num = typeof value === "number" ? value : typeof value === "string" ? parseFloat(value) : NaN;
+    return Number.isFinite(num) ? num : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function findPublicPermitByNumber(
   rawPermitNumber: string,
   opts?: { includeRegistryFallback?: boolean }
@@ -42,14 +60,23 @@ export async function findPublicPermitByNumber(
       p.permit_pdf_url,
       p.conditions,
       p.is_modification,
+      p.is_transfer,
       p.modification_count,
       row_to_json(a) as application,
       row_to_json(u) as applicant,
-      case when a.coordinates is not null then st_y(a.coordinates) end as latitude,
-      case when a.coordinates is not null then st_x(a.coordinates) end as longitude
+      coalesce(
+        case when a.coordinates is not null then st_y(a.coordinates) end,
+        case when oa.coordinates is not null then st_y(oa.coordinates) end
+      ) as latitude,
+      coalesce(
+        case when a.coordinates is not null then st_x(a.coordinates) end,
+        case when oa.coordinates is not null then st_x(oa.coordinates) end
+      ) as longitude
     from public.permits p
     left join public.applications a on a.id = p.application_id
     left join public.users u on u.id = a.applicant_id
+    left join public.permits op on op.id = p.original_permit_id
+    left join public.applications oa on oa.id = op.application_id
     where regexp_replace(upper(trim(p.permit_number)), '[^A-Z0-9]', '', 'g') = any($1::text[])
     order by
       case
@@ -73,12 +100,19 @@ export async function findPublicPermitByNumber(
         }
       : null;
 
+    const latitude = (typeof permitRow.latitude === "number" ? permitRow.latitude : null)
+      ?? extractCoordinateFromNotes(application, "waterSourceLatitude");
+    const longitude = (typeof permitRow.longitude === "number" ? permitRow.longitude : null)
+      ?? extractCoordinateFromNotes(application, "waterSourceLongitude");
+
     return {
       inputPermitNumber: lookup.raw,
       permit: {
         ...permitRow,
         source: "permits",
         application,
+        latitude,
+        longitude,
       } as PublicPermitRecord,
     };
   }

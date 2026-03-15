@@ -290,7 +290,10 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
     (typeof notes?.waterAbstractionDetails?.[0]?.abstractionMethod === "string"
       ? notes.waterAbstractionDetails[0].abstractionMethod
       : "") ||
-    (typeof notes?.abstractionMethod === "string" ? notes.abstractionMethod : "");
+    (typeof notes?.abstractionMethod === "string" ? notes.abstractionMethod : "") ||
+    (typeof notes?.transferFormData?.abstractionMethod === "string"
+      ? notes.transferFormData.abstractionMethod
+      : "");
 
   const normalized = rawMethod.trim().toLowerCase();
   if (!normalized) {
