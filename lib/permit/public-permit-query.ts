@@ -12,6 +12,8 @@ export type PublicPermitRecord = JsonRecord & {
   issued_date: string | null;
   expiry_date: string | null;
   application: JsonRecord | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export async function findPublicPermitByNumber(
@@ -42,7 +44,9 @@ export async function findPublicPermitByNumber(
       p.is_modification,
       p.modification_count,
       row_to_json(a) as application,
-      row_to_json(u) as applicant
+      row_to_json(u) as applicant,
+      case when a.coordinates is not null then st_y(a.coordinates) end as latitude,
+      case when a.coordinates is not null then st_x(a.coordinates) end as longitude
     from public.permits p
     left join public.applications a on a.id = p.application_id
     left join public.users u on u.id = a.applicant_id
@@ -97,7 +101,9 @@ export async function findPublicPermitByNumber(
       pr.issuance_date::text as issued_date,
       pr.expiration_date::text as expiry_date,
       pr.permit_holder::text as permit_holder,
-      pr.location::text as registry_location
+      pr.location::text as registry_location,
+      pr.latitude,
+      pr.longitude
     from public.permit_registry pr
     where regexp_replace(upper(trim(pr.permit_number)), '[^A-Z0-9]', '', 'g') = any($1::text[])
     order by

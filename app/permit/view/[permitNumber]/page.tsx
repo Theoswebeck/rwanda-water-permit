@@ -8,6 +8,7 @@ import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { PermitPublicActions } from "@/components/public/permit-public-actions";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { isConcessionApplication } from "@/lib/permit-variant";
+import { PermitLocationMap } from "@/components/public/permit-location-map";
 
 function formatDate(dateString: string): string {
   const raw = dateString.trim();
@@ -324,6 +325,11 @@ export default async function PublicPermitViewPage({
                   </div>
                 ) : null}
               </div>
+
+              <PermitLocationMap
+                latitude={permit.latitude}
+                longitude={permit.longitude}
+              />
 
               <div className="mt-8 border-t pt-6 text-xs text-slate-500">
                 If you received this link from a QR code on a permit, compare the permit number above with the printed
