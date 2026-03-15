@@ -6,7 +6,7 @@
 // =============================================
 
 import { motion } from 'framer-motion';
-import { CheckCircle, XCircle, Clock, Loader2, AlertCircle, Download } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { Payment, PaymentStatus } from '@/types/payment';
@@ -14,10 +14,9 @@ import type { Payment, PaymentStatus } from '@/types/payment';
 interface PaymentStatusProps {
   payment: Payment | null | undefined;
   onRetry?: () => void;
-  onDownloadReceipt?: () => void;
 }
 
-export function PaymentStatusDisplay({ payment, onRetry, onDownloadReceipt }: PaymentStatusProps) {
+export function PaymentStatusDisplay({ payment, onRetry }: PaymentStatusProps) {
   // Handle null/undefined payment
   if (!payment) {
     return (
@@ -41,7 +40,6 @@ export function PaymentStatusDisplay({ payment, onRetry, onDownloadReceipt }: Pa
           borderColor: 'border-green-200 dark:border-green-900',
           title: 'Payment Successful!',
           description: 'Your payment has been processed successfully. Your application will now proceed to review.',
-          showReceipt: true,
         };
       
       case 'processing':
@@ -199,21 +197,14 @@ export function PaymentStatusDisplay({ payment, onRetry, onDownloadReceipt }: Pa
       </div>
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        {config.showRetry && onRetry && (
+      {config.showRetry && onRetry && (
+        <div className="flex flex-col sm:flex-row gap-3">
           <Button onClick={onRetry} variant="default" className="flex-1">
             <AlertCircle className="h-4 w-4 mr-2" />
             Retry Payment
           </Button>
-        )}
-
-        {config.showReceipt && onDownloadReceipt && (
-          <Button onClick={onDownloadReceipt} variant="outline" className="flex-1">
-            <Download className="h-4 w-4 mr-2" />
-            Download Receipt
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Processing Info */}
       {payment.status === 'processing' && (

@@ -1112,6 +1112,9 @@ function NewApplicationContent() {
       const normalizedWaterPurpose = formatWaterPurposeForDB(
         formData.waterPurpose || selectedPermit?.purpose || 'other'
       );
+      const originalActivities = Array.isArray(selectedPermit?.application?.intended_activities)
+        ? selectedPermit.application.intended_activities
+        : [];
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'pending_payment',
@@ -1127,6 +1130,7 @@ function NewApplicationContent() {
         project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
+        ...(originalActivities.length > 0 ? { intended_activities: originalActivities } : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
@@ -1209,6 +1213,9 @@ function NewApplicationContent() {
       const normalizedWaterPurpose = formatWaterPurposeForDB(
         formData.waterPurpose || selectedPermit?.purpose || 'other'
       );
+      const draftOriginalActivities = Array.isArray(selectedPermit?.application?.intended_activities)
+        ? selectedPermit.application.intended_activities
+        : [];
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
@@ -1224,6 +1231,7 @@ function NewApplicationContent() {
         project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
+        ...(draftOriginalActivities.length > 0 ? { intended_activities: draftOriginalActivities } : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,

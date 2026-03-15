@@ -452,12 +452,6 @@ export function PaymentTab({
   /**
    * Handle download receipt
    */
-  const handleDownloadReceipt = () => {
-    // TODO: Implement receipt download
-    console.log('📄 Download receipt for payment:', payment?.id);
-    alert('Receipt download feature coming soon!');
-  };
-
   /**
    * Format amount
    */
@@ -671,7 +665,6 @@ export function PaymentTab({
               {payment ? (
                 <PaymentStatusDisplay
                   payment={payment}
-                  onDownloadReceipt={handleDownloadReceipt}
                 />
               ) : (
                 <Alert className="bg-green-50 border-green-200">

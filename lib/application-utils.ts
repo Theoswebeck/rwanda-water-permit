@@ -54,7 +54,7 @@ export function formatWaterSourceForDB(waterSourceType: string): Application['wa
 }
 
 // Helper function to map form activity types to database water_purpose enum values
-// Database enum (migrated): 'domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation', 'recreation_activities', 'electricity_generation', 'mining', 'municipal_supply', 'other'
+// Database enum: 'domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation', 'recreation_activities', 'electricity_generation', 'mining', 'municipal_supply', 'water_supply', 'coffee_washing', 'gaz_extraction', 'construction_of_dam', 'construction_of_infrastructures', 'navigation', 'other'
 export function formatWaterPurposeForDB(activity: string): Application['water_purpose'] {
   if (!activity) return 'other';
   const purposeMap: Record<string, Application['water_purpose']> = {
@@ -71,15 +71,15 @@ export function formatWaterPurposeForDB(activity: string): Application['water_pu
     'mining': 'mining',
     'municipal_supply': 'municipal_supply',
     'other': 'other',
-    'water_supply': 'domestic',
-    'coffee_washing': 'industrial',
+    'water_supply': 'water_supply',
+    'coffee_washing': 'coffee_washing',
+    'gaz_extraction': 'gaz_extraction',
+    'construction_of_dam': 'construction_of_dam',
+    'construction_of_infrastructures': 'construction_of_infrastructures',
+    'navigation': 'navigation',
     'industry': 'industrial',
     'electricity': 'electricity_generation',
     'construction': 'industrial',
-    'construction_of_dam': 'industrial',
-    'construction_of_infrastructures': 'industrial',
-    'navigation': 'recreation',
-    'gaz_extraction': 'industrial',
   };
   return purposeMap[activity] || 'other';
 }
@@ -296,23 +296,23 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
 
   const activityPurposeMap: Record<string, Application['water_purpose']> = {
     'irrigation': 'irrigation',
-    'water_supply': 'domestic',
+    'water_supply': 'water_supply',
     'aquaculture': 'fish_farming_lakes', // legacy -> migrated enum
     'fish_farming_lakes': 'fish_farming_lakes',
     'fish_farming_ponds': 'fish_farming_ponds',
-    'coffee_washing': 'industrial',
+    'coffee_washing': 'coffee_washing',
     'industry': 'industrial',
     'electricity': 'electricity_generation', // legacy
     'electricity_generation': 'electricity_generation',
     'mining': 'mining',
     'construction': 'industrial', // legacy
-    'construction_of_dam': 'industrial',
-    'construction_of_infrastructures': 'industrial',
-    'navigation': 'recreation', // navigation falls under recreation
+    'construction_of_dam': 'construction_of_dam',
+    'construction_of_infrastructures': 'construction_of_infrastructures',
+    'navigation': 'navigation',
     'recreation': 'recreation', // legacy
     'recreation_activities': 'recreation',
     'livestock': 'livestock',
-    'gaz_extraction': 'industrial',
+    'gaz_extraction': 'gaz_extraction',
     'other': 'domestic'
   };
 

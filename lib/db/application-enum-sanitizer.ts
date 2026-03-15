@@ -53,6 +53,12 @@ const WATER_PURPOSE = new Set([
   'electricity_generation',
   'mining',
   'municipal_supply',
+  'water_supply',
+  'coffee_washing',
+  'gaz_extraction',
+  'construction_of_dam',
+  'construction_of_infrastructures',
+  'navigation',
   'other',
 ])
 
@@ -117,15 +123,9 @@ function mapWaterPurpose(value: unknown): string {
   const key = asLowerString(value)
   const aliases: Record<string, string> = {
     aquaculture: 'fish_farming_lakes',
-    water_supply: 'domestic',
     industry: 'industrial',
-    coffee_washing: 'industrial',
     electricity: 'electricity_generation',
     construction: 'industrial',
-    construction_of_dam: 'industrial',
-    construction_of_infrastructures: 'industrial',
-    navigation: 'recreation',
-    gaz_extraction: 'industrial',
   }
   const normalized = aliases[key] || key
   return WATER_PURPOSE.has(normalized) ? normalized : 'other'

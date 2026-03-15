@@ -114,18 +114,12 @@ function normalizeWaterSource(value: string | null | undefined): string {
 function normalizePurpose(value: string | null | undefined): string {
   const key = String(value ?? "").trim().toLowerCase();
   const aliases: Record<string, string> = {
-    water_supply: "domestic",
     industry: "industrial",
-    coffee_washing: "industrial",
-    coffee_washing_station: "industrial",
+    coffee_washing_station: "coffee_washing",
     electricity: "electricity_generation",
     construction: "industrial",
-    construction_of_dam: "industrial",
-    construction_of_infrastructures: "industrial",
-    navigation: "recreation",
     recreation_activities: "recreation",
-    gaz_extraction: "industrial",
-    gas_extraction: "industrial",
+    gas_extraction: "gaz_extraction",
     aquaculture: "fish_farming_lakes",
   };
   return aliases[key] || key || "other";

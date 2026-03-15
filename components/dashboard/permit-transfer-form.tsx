@@ -223,6 +223,13 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     registrationCertificate: useRef<HTMLInputElement>(null),
   };
 
+  // State for cascading dropdowns - Transferor Address
+  const [selectedTransferorProvince, setSelectedTransferorProvince] = useState("");
+  const [selectedTransferorDistrict, setSelectedTransferorDistrict] = useState("");
+  const [selectedTransferorSector, setSelectedTransferorSector] = useState("");
+  const [selectedTransferorCell, setSelectedTransferorCell] = useState("");
+  const [selectedTransferorVillage, setSelectedTransferorVillage] = useState("");
+
   // State for cascading dropdowns - Transferee Address
   const [selectedTransfereeProvince, setSelectedTransfereeProvince] = useState("");
   const [selectedTransfereeDistrict, setSelectedTransfereeDistrict] = useState("");
@@ -435,6 +442,11 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   }, [form, transferorProfileDefaults]);
 
   // Get form values for cascading dropdowns
+  const transferorProvince = form.watch('transferorAddressProvince');
+  const transferorDistrict = form.watch('transferorAddressDistrict');
+  const transferorSector = form.watch('transferorAddressSector');
+  const transferorCell = form.watch('transferorAddressCell');
+  const transferorVillage = form.watch('transferorAddressVillage');
   const transfereeProvince = form.watch('transfereeAddressProvince');
   const transfereeDistrict = form.watch('transfereeAddressDistrict');
   const transfereeSector = form.watch('transfereeAddressSector');
@@ -543,6 +555,21 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
   // Update dropdown states when form values change
   useEffect(() => {
+    if (transferorProvince !== selectedTransferorProvince) {
+      setSelectedTransferorProvince(transferorProvince || "");
+    }
+    if (transferorDistrict !== selectedTransferorDistrict) {
+      setSelectedTransferorDistrict(transferorDistrict || "");
+    }
+    if (transferorSector !== selectedTransferorSector) {
+      setSelectedTransferorSector(transferorSector || "");
+    }
+    if (transferorCell !== selectedTransferorCell) {
+      setSelectedTransferorCell(transferorCell || "");
+    }
+    if (transferorVillage !== selectedTransferorVillage) {
+      setSelectedTransferorVillage(transferorVillage || "");
+    }
     if (transfereeProvince !== selectedTransfereeProvince) {
       setSelectedTransfereeProvince(transfereeProvince || "");
     }
@@ -574,6 +601,16 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       setSelectedPermitVillage(permitLocationVillage || "");
     }
   }, [
+    transferorProvince,
+    transferorDistrict,
+    transferorSector,
+    transferorCell,
+    transferorVillage,
+    selectedTransferorProvince,
+    selectedTransferorDistrict,
+    selectedTransferorSector,
+    selectedTransferorCell,
+    selectedTransferorVillage,
     transfereeProvince,
     transfereeDistrict,
     transfereeSector,
@@ -596,7 +633,28 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     selectedPermitVillage,
   ]);
 
-  // Helper functions for dropdown options
+  // Helper functions for dropdown options - Transferor
+  const getTransferorDistrictOptions = () => {
+    if (!selectedTransferorProvince) return [];
+    return getFormattedDistrictOptions(selectedTransferorProvince);
+  };
+
+  const getTransferorSectorOptions = () => {
+    if (!selectedTransferorProvince || !selectedTransferorDistrict) return [];
+    return getFormattedSectorOptions(selectedTransferorProvince, selectedTransferorDistrict);
+  };
+
+  const getTransferorCellOptions = () => {
+    if (!selectedTransferorProvince || !selectedTransferorDistrict || !selectedTransferorSector) return [];
+    return getFormattedCellOptions(selectedTransferorProvince, selectedTransferorDistrict, selectedTransferorSector);
+  };
+
+  const getTransferorVillageOptions = () => {
+    if (!selectedTransferorProvince || !selectedTransferorDistrict || !selectedTransferorSector || !selectedTransferorCell) return [];
+    return getFormattedVillageOptions(selectedTransferorProvince, selectedTransferorDistrict, selectedTransferorSector, selectedTransferorCell);
+  };
+
+  // Helper functions for dropdown options - Transferee
   const getTransfereeDistrictOptions = () => {
     if (!selectedTransfereeProvince) return [];
     return getFormattedDistrictOptions(selectedTransfereeProvince);
@@ -1430,16 +1488,22 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
+                                  <SelectItem value="coffee_washing">Coffee Washing</SelectItem>
+                                  <SelectItem value="construction_of_dam">Construction of Dam</SelectItem>
+                                  <SelectItem value="construction_of_infrastructures">Construction of Infrastructure</SelectItem>
                                   <SelectItem value="domestic">Domestic Use</SelectItem>
-                                  <SelectItem value="irrigation">Irrigation</SelectItem>
-                                  <SelectItem value="industrial">Industrial</SelectItem>
-                                  <SelectItem value="livestock">Livestock</SelectItem>
+                                  <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
                                   <SelectItem value="fish_farming_lakes">Fish Farming (Lakes)</SelectItem>
                                   <SelectItem value="fish_farming_ponds">Fish Farming (Ponds)</SelectItem>
-                                  <SelectItem value="recreation">Recreation</SelectItem>
-                                  <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
+                                  <SelectItem value="gaz_extraction">Gaz Extraction</SelectItem>
+                                  <SelectItem value="industrial">Industrial</SelectItem>
+                                  <SelectItem value="irrigation">Irrigation</SelectItem>
+                                  <SelectItem value="livestock">Livestock</SelectItem>
                                   <SelectItem value="mining">Mining</SelectItem>
                                   <SelectItem value="municipal_supply">Municipal Supply</SelectItem>
+                                  <SelectItem value="navigation">Navigation</SelectItem>
+                                  <SelectItem value="recreation">Recreation</SelectItem>
+                                  <SelectItem value="water_supply">Water Supply</SelectItem>
                                   <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -1706,9 +1770,35 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Province / City of Kigali</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                setSelectedTransferorProvince(value);
+                                form.setValue('transferorAddressDistrict', '');
+                                form.setValue('transferorAddressSector', '');
+                                form.setValue('transferorAddressCell', '');
+                                form.setValue('transferorAddressVillage', '');
+                                setSelectedTransferorDistrict('');
+                                setSelectedTransferorSector('');
+                                setSelectedTransferorCell('');
+                                setSelectedTransferorVillage('');
+                              }} 
+                              value={field.value || ""}
+                              disabled={readOnly}
+                            >
+                              <FormControl>
+                                <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
+                                  <SelectValue placeholder="Select Province" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {getFormattedProvinceOptions().map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1719,9 +1809,33 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>District</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                setSelectedTransferorDistrict(value);
+                                form.setValue('transferorAddressSector', '');
+                                form.setValue('transferorAddressCell', '');
+                                form.setValue('transferorAddressVillage', '');
+                                setSelectedTransferorSector('');
+                                setSelectedTransferorCell('');
+                                setSelectedTransferorVillage('');
+                              }} 
+                              value={field.value || ""}
+                              disabled={!selectedTransferorProvince || readOnly}
+                            >
+                              <FormControl>
+                                <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
+                                  <SelectValue placeholder="Select District" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {getTransferorDistrictOptions().map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1732,9 +1846,31 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Sector</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                setSelectedTransferorSector(value);
+                                form.setValue('transferorAddressCell', '');
+                                form.setValue('transferorAddressVillage', '');
+                                setSelectedTransferorCell('');
+                                setSelectedTransferorVillage('');
+                              }} 
+                              value={field.value || ""}
+                              disabled={!selectedTransferorDistrict || readOnly}
+                            >
+                              <FormControl>
+                                <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
+                                  <SelectValue placeholder="Select Sector" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {getTransferorSectorOptions().map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1745,9 +1881,29 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Cell</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                setSelectedTransferorCell(value);
+                                form.setValue('transferorAddressVillage', '');
+                                setSelectedTransferorVillage('');
+                              }} 
+                              value={field.value || ""}
+                              disabled={!selectedTransferorSector || readOnly}
+                            >
+                              <FormControl>
+                                <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
+                                  <SelectValue placeholder="Select Cell" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {getTransferorCellOptions().map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1758,9 +1914,27 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Village</FormLabel>
-                            <FormControl>
-                              <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
-                            </FormControl>
+                            <Select 
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                setSelectedTransferorVillage(value);
+                              }} 
+                              value={field.value || ""}
+                              disabled={!selectedTransferorCell || readOnly}
+                            >
+                              <FormControl>
+                                <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
+                                  <SelectValue placeholder="Select Village (optional)" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {getTransferorVillageOptions().map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                             <FormMessage />
                           </FormItem>
                         )}

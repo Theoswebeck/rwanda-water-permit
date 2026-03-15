@@ -31,9 +31,11 @@ CREATE TYPE water_source_type AS ENUM (
     'lake', 'spring', 'other'
 );
 CREATE TYPE water_purpose AS ENUM (
-    'domestic', 'irrigation', 'industrial', 'livestock', 
-    'aquaculture', 'recreation', 'electricity_generation', 
-    'mining', 'municipal_supply', 'other'
+    'domestic', 'irrigation', 'industrial', 'livestock',
+    'aquaculture', 'recreation', 'electricity_generation',
+    'mining', 'municipal_supply', 'water_supply',
+    'coffee_washing', 'gaz_extraction', 'construction_of_dam',
+    'construction_of_infrastructures', 'navigation', 'other'
 );
 CREATE TYPE sla_status AS ENUM ('on_time', 'due_soon', 'overdue');
 

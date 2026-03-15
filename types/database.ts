@@ -81,6 +81,12 @@ export type WaterPurpose =
   | 'electricity_generation'
   | 'mining' 
   | 'municipal_supply' 
+  | 'water_supply'
+  | 'coffee_washing'
+  | 'gaz_extraction'
+  | 'construction_of_dam'
+  | 'construction_of_infrastructures'
+  | 'navigation'
   | 'other'
 
 export type WaterReliability = 'always_available' | 'frequently_dry' | 'seasonal_dry'

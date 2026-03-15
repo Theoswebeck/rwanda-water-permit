@@ -39,7 +39,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Eye, AlertCircle, Search, Loader2, List, FileText } from "lucide-react";
-import { downloadFromDocumentsBucket, uploadPermitPdf } from "@/lib/supabase-storage";
 
 export interface Permit {
   id: string;
@@ -89,10 +88,6 @@ export function PermitsList({ permits }: PermitsListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [busyPermitId, setBusyPermitId] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<"view" | null>(null);
-  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
-
   // Applications dialog state (permit-linked applications list)
   const [appsDialogOpen, setAppsDialogOpen] = useState(false);
   const [appsPermit, setAppsPermit] = useState<Permit | null>(null);
@@ -134,87 +129,6 @@ export function PermitsList({ permits }: PermitsListProps) {
       setAppsLoading(false);
       setAppsBusyPermitId(null);
     }
-  };
-
-  /**
-   * Generate permit PDF on-demand if it doesn't exist.
-   * Uses the canonical server renderer and updates permit_pdf_url.
-   */
-  const generatePermitPdfOnDemand = async (permit: Permit): Promise<Blob | null> => {
-    try {
-      setGeneratingPdf(permit.id);
-      console.log("📄 Generating PDF on-demand for permit:", permit.permitNumber);
-
-      // Reuse the same public verification renderer for consistent UX.
-      const pdfUrl = `/api/public/permits/${encodeURIComponent(permit.permitNumber)}/pdf`;
-      const pdfRes = await fetch(pdfUrl, { method: "GET", cache: "no-store" });
-      if (!pdfRes.ok) {
-        const json = (await pdfRes.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(json?.message || "Failed to generate permit PDF");
-      }
-      const pdfBlob = await pdfRes.blob();
-
-      // Persist in background so users can view/download immediately.
-      void (async () => {
-        try {
-          const upload = await uploadPermitPdf({
-            permitId: permit.id,
-            permitNumber: permit.permitNumber,
-            pdfBlob,
-          });
-
-          if (upload?.path) {
-            console.log("✅ PDF uploaded:", upload.path);
-            const updateRes = await fetch(`/api/dashboard/permits/${permit.id}/pdf`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ permitPdfUrl: upload.path }),
-            });
-            const updateJson = await updateRes.json().catch(() => null);
-            if (!updateRes.ok || !updateJson?.success) {
-              console.warn("⚠️ Failed to update permit_pdf_url:", updateJson?.message || updateRes.statusText);
-            } else {
-              console.log("✅ permit_pdf_url saved on permit record");
-            }
-          }
-        } catch (persistError) {
-          console.warn("⚠️ Background PDF persistence failed:", persistError);
-        }
-      })();
-
-      return pdfBlob;
-    } catch (error) {
-      console.error("❌ Failed to generate PDF on-demand:", error);
-      return null;
-    } finally {
-      setGeneratingPdf(null);
-    }
-  };
-
-  /**
-   * Get PDF blob - either from storage or by generating on-demand
-   */
-  const getPermitPdfBlob = async (permit: Permit): Promise<Blob | null> => {
-    // If the permit has been modified we MUST regenerate so the "MODIFIED PERMIT"
-    // badge is stamped on the PDF — the stored version was created before modification.
-    const permitIsModified = (permit.modifiedCount ?? 0) > 0 || permit.isModification === true;
-
-    if (!permitIsModified && permit.pdfPath) {
-      // Non-modified: try to download existing PDF from storage first
-      console.log("📥 Attempting to download PDF from:", permit.pdfPath);
-      const blob = await downloadFromDocumentsBucket(permit.pdfPath);
-      if (blob) {
-        return blob;
-      }
-      console.warn("⚠️ PDF not found in storage, will generate on-demand...");
-    }
-
-    if (permitIsModified) {
-      console.log("🔧 Permit is modified — regenerating PDF with MODIFIED badge");
-    }
-
-    // PDF doesn't exist or couldn't be downloaded (or is modified) - generate on-demand
-    return await generatePermitPdfOnDemand(permit);
   };
 
   // Filter permits based on search and filters
@@ -371,41 +285,22 @@ export function PermitsList({ permits }: PermitsListProps) {
                             variant="ghost"
                             size="sm"
                             className="text-gray-600 hover:text-gray-900"
-                            disabled={busyPermitId === permit.id || generatingPdf === permit.id}
                           >
-                            {generatingPdf === permit.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
+                            <Eye className="h-4 w-4" />
                             <span className="sr-only">View options</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52">
                           <DropdownMenuLabel>View</DropdownMenuLabel>
-                          <DropdownMenuItem
-                            onSelect={async () => {
-                              try {
-                                setBusyPermitId(permit.id);
-                                setBusyAction("view");
-
-                                const blob = await getPermitPdfBlob(permit);
-                                if (!blob) throw new Error("Failed to get permit PDF");
-
-                                const url = URL.createObjectURL(blob);
-                                window.open(url, "_blank");
-                                setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                              } catch (e) {
-                                console.error("❌ Failed to open permit PDF:", e);
-                                alert("Failed to open permit PDF. Please try again.");
-                              } finally {
-                                setBusyPermitId(null);
-                                setBusyAction(null);
-                              }
-                            }}
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            View permit PDF
+                          <DropdownMenuItem asChild>
+                            <Link
+                              href={`https://rwandawaterpermit.com/permit/view/${encodeURIComponent(permit.permitNumber)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View permit PDF
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link
@@ -420,13 +315,6 @@ export function PermitsList({ permits }: PermitsListProps) {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
-                    {(busyPermitId === permit.id || generatingPdf === permit.id) ? (
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {generatingPdf === permit.id 
-                          ? "Generating PDF…" 
-                          : "Opening…"}
-                      </div>
-                    ) : null}
                   </TableCell>
                 </TableRow>
               ))
