@@ -398,7 +398,13 @@ function getIntendedActivities(application: Application): string[] {
   if (direct.length) return direct;
   const notes = getInternalNotes(application);
   if (!notes) return [];
-  return normalizeActivities(notes.intendedActivities);
+  const fromNotes = normalizeActivities(notes.intendedActivities);
+  if (fromNotes.length) return fromNotes;
+  if (typeof notes.transferFormData?.waterPurpose === "string") {
+    const tp = notes.transferFormData.waterPurpose.trim();
+    if (tp) return [tp];
+  }
+  return [];
 }
 
 // NOTE: concession detection is shared with the UI via `lib/permit-variant.ts`.

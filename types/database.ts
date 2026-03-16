@@ -424,6 +424,7 @@ export interface PermitRegistryEntry {
   uploaded_doc_uploaded_at: string | null
   created_at: string
   updated_at: string
+  source_kind?: string | null
 }
 
 export interface WaterUseReport {

@@ -14,6 +14,7 @@ import { normalizeInspectionRecommendation } from "@/lib/inspection-recommendati
 
 interface InspectionDetailProps {
   inspectionId: string
+  permitNumber?: string
 }
 
 type EmploymentRow = { male?: number | null; female?: number | null; total?: number | null };
@@ -195,7 +196,7 @@ function YesNoDisplay({ label, value, remarks }: { label: string; value?: boolea
   );
 }
 
-export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
+export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetailProps) {
   const [inspection, setInspection] = useState<Inspection | null>(null)
   const [loading, setLoading] = useState(true)
   
@@ -347,7 +348,7 @@ export function InspectionDetail({ inspectionId }: InspectionDetailProps) {
         <div>
           <h2 className="text-2xl font-bold">{inspection.inspection_number || `Inspection ${inspectionId.slice(0, 8)}...`}</h2>
           <p className="text-muted-foreground">
-            Application: {inspection.application?.application_number || "N/A"}
+            Permit: {permitNumber || "N/A"}
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -126,6 +126,9 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">Inspection {inspectionId.slice(0, 8)}…</h2>
+          <p className="text-muted-foreground">
+            Permit: {permit?.permit_number || "N/A"}
+          </p>
           <div className="mt-2 flex items-center gap-2">
             <Badge
               variant="outline"
@@ -258,7 +261,7 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
         </TabsContent>
 
         <TabsContent value="report" className="mt-6">
-          <InspectionDetail inspectionId={inspectionId} />
+          <InspectionDetail inspectionId={inspectionId} permitNumber={permit?.permit_number} />
         </TabsContent>
 
         <TabsContent value="history" className="mt-6">

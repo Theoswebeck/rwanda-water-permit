@@ -413,9 +413,12 @@ function prepareInspectionData(
   // Section 2: Activity Details
   const intendedActivities = normalizeIntendedActivities(application.intended_activities);
   const primaryActivity = pickFirstNonEmptyString(intendedActivities[0], application.water_purpose) || 'other';
+  const activitiesLabel = intendedActivities.length > 1
+    ? intendedActivities.map(getActivityLabel).join(", ")
+    : getActivityLabel(primaryActivity);
   const activityType = pickFirstNonEmptyString(
-    toDisplayLabel(permit?.purpose),
-    getActivityLabel(primaryActivity)
+    activitiesLabel,
+    toDisplayLabel(permit?.purpose)
   ) || "N/A";
   const activityStartingDate = toDateOnly(permit?.issued_date);
   

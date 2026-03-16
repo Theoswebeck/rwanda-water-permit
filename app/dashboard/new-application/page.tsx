@@ -1127,7 +1127,7 @@ function NewApplicationContent() {
         cell: formData.permitLocationCell || selectedPermit?.application?.cell || '',
         village: formData.permitLocationVillage || selectedPermit?.application?.village || '',
         water_body_name: formData.waterSourceName || selectedPermit?.application?.water_body_name || '',
-        project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
+        project_title: `Transfer: ${formData.transfereeName} Water Permit Application`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
         water_taking_method: formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '',
@@ -1230,7 +1230,7 @@ function NewApplicationContent() {
         cell: formData.permitLocationCell || selectedPermit?.application?.cell || '',
         village: formData.permitLocationVillage || selectedPermit?.application?.village || '',
         water_body_name: formData.waterSourceName || selectedPermit?.application?.water_body_name || '',
-        project_title: `Transfer: ${formData.facilityProjectName || selectedPermit?.application?.project_title || selectedPermit?.permit_number}`,
+        project_title: `Transfer: ${formData.transfereeName || formData.facilityProjectName || selectedPermit?.permit_number} Water Permit Application`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
         water_taking_method: formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '',
@@ -1373,13 +1373,9 @@ function NewApplicationContent() {
           if (sourceIsTransfer && transferFormData) {
             const hasText = (value: unknown) =>
               typeof value === "string" && value.trim().length > 0;
-            const transfereeName = typeof transferFormData.transfereeName === "string" ? transferFormData.transfereeName.trim() : "";
             const transfereePhone = typeof transferFormData.transfereePhone === "string" ? transferFormData.transfereePhone.trim() : "";
             const transfereeEmail = typeof transferFormData.transfereeEmail === "string" ? transferFormData.transfereeEmail.trim() : "";
 
-            if (!hasText(originalFormData.fullNameApplicant) && transfereeName) {
-              originalFormData.fullNameApplicant = transfereeName;
-            }
             if (!hasText(originalFormData.telephoneContact) && transfereePhone) {
               originalFormData.telephoneContact = transfereePhone;
             }

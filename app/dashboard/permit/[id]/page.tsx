@@ -165,8 +165,12 @@ export default function PermitDetailPage() {
         const intendedActivities = Array.isArray(app?.intended_activities)
           ? (app.intended_activities as unknown[]).map(String).filter(Boolean)
           : [];
+        const transferFormData = notes?.transferFormData as Record<string, unknown> | undefined;
+        const transferActivity = !intendedActivities.length && typeof transferFormData?.waterPurpose === "string"
+          ? (transferFormData.waterPurpose as string).trim()
+          : "";
         const primaryActivityCode =
-          firstNonEmptyString([intendedActivities[0], app?.water_purpose, rawPermit?.purpose]) || "";
+          firstNonEmptyString([intendedActivities[0], transferActivity, app?.water_purpose, rawPermit?.purpose]) || "";
         const waterActivity = primaryActivityCode ? getActivityLabel(primaryActivityCode) : "N/A";
 
         const conditions = (() => {

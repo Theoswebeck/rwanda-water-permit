@@ -48,6 +48,8 @@ import {
   Activity,
   FileText,
   ExternalLink,
+  Database,
+  Eye,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
@@ -348,6 +350,22 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     setSearchTerm("");
     setRegimeFilter("all");
     setStatusFilter("all");
+  };
+
+  const hasRegistrySource = (entry: PermitRegistryEntry) => {
+    const sk = entry.source_kind ?? "";
+    return sk.includes("registry");
+  };
+
+  const isPermitOnly = (entry: PermitRegistryEntry) => {
+    return entry.source_kind === "permit";
+  };
+
+  const getSourceLabel = (entry: PermitRegistryEntry) => {
+    const sk = entry.source_kind ?? "";
+    if (sk.includes("permit") && sk.includes("registry")) return "Both";
+    if (sk === "permit") return "System";
+    return "Registry";
   };
 
   const permitsContent = (
@@ -694,9 +712,20 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             {entry.serial_number ?? "-"}
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 max-w-[280px]">
-                            <span className="font-medium text-slate-900 dark:text-slate-100 text-sm block truncate">
-                              {entry.permit_holder}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
+                                {entry.permit_holder}
+                              </span>
+                              {isPermitOnly(entry) && (
+                                <span
+                                  title="From permits table (system-issued)"
+                                  className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 px-1.5 py-0 text-[10px] font-medium text-indigo-600 dark:text-indigo-400"
+                                >
+                                  <Database className="h-2.5 w-2.5" />
+                                  {getSourceLabel(entry)}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 max-w-[170px]">
                             <code className="text-xs font-mono bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-700 dark:text-slate-300 block truncate whitespace-nowrap">
@@ -723,31 +752,46 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             className="p-2 sm:p-3 text-right"
                             onClick={(event) => event.stopPropagation()}
                           >
-                            <label className="inline-flex cursor-pointer" onClick={(event) => event.stopPropagation()}>
-                              <input
-                                type="file"
-                                accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
-                                onChange={(event) => handlePermitDocUpload(entry.id, event)}
-                                className="hidden"
-                                disabled={uploadingDocId === entry.id}
-                              />
+                            {hasRegistrySource(entry) ? (
+                              <label className="inline-flex cursor-pointer" onClick={(event) => event.stopPropagation()}>
+                                <input
+                                  type="file"
+                                  accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
+                                  onChange={(event) => handlePermitDocUpload(entry.id, event)}
+                                  className="hidden"
+                                  disabled={uploadingDocId === entry.id}
+                                />
+                                <Button
+                                  variant={entry.uploaded_doc_path ? "secondary" : "outline"}
+                                  size="sm"
+                                  asChild
+                                  disabled={uploadingDocId === entry.id}
+                                  className="h-8 rounded-md"
+                                >
+                                  <span>
+                                    {uploadingDocId === entry.id ? (
+                                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                    ) : (
+                                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                                    )}
+                                    {entry.uploaded_doc_path ? "Replace" : "Upload"}
+                                  </span>
+                                </Button>
+                              </label>
+                            ) : (
                               <Button
-                                variant={entry.uploaded_doc_path ? "secondary" : "outline"}
+                                variant="ghost"
                                 size="sm"
                                 asChild
-                                disabled={uploadingDocId === entry.id}
-                                className="h-8 rounded-md"
+                                className="h-8 rounded-md text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                onClick={(event) => event.stopPropagation()}
                               >
-                                <span>
-                                  {uploadingDocId === entry.id ? (
-                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                  ) : (
-                                    <Upload className="h-3.5 w-3.5 mr-1.5" />
-                                  )}
-                                  {entry.uploaded_doc_path ? "Replace" : "Upload"}
-                                </span>
+                                <a href={`/dashboard/permit/${entry.id}`} target="_blank" rel="noopener noreferrer">
+                                  <Eye className="h-3.5 w-3.5 mr-1.5" />
+                                  View
+                                </a>
                               </Button>
-                            </label>
+                            )}
                           </TableCell>
                         </TableRow>
                         {isExpanded && (
@@ -817,7 +861,32 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                   )}
                                 </div>
                                 <SourceComparison entry={entry} />
-                                <UploadedDocSection entry={entry} />
+                                {hasRegistrySource(entry) && <UploadedDocSection entry={entry} />}
+                                {isPermitOnly(entry) && entry.id && (
+                                  <div className="rounded-xl border border-indigo-200/70 dark:border-indigo-900/70 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/70 dark:from-indigo-950/30 dark:to-blue-950/20">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div className="h-6 w-6 rounded-md bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center">
+                                          <Database className="h-3.5 w-3.5 text-indigo-700 dark:text-indigo-300" />
+                                        </div>
+                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                          System-issued permit
+                                        </p>
+                                      </div>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        asChild
+                                        className="border-indigo-300/80 text-indigo-800 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
+                                      >
+                                        <a href={`/dashboard/permit/${entry.id}`} target="_blank" rel="noopener noreferrer">
+                                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                                          View permit details
+                                        </a>
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
                                 <PermitLocationMap entry={entry} />
                               </div>
                             </TableCell>

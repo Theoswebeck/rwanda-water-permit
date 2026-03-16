@@ -231,11 +231,15 @@ function resolveOfficeAdminLocation(application: ApplicationForContract): {
 
 function resolveActivityLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
-  const intended = Array.isArray((application as any).intended_activities)
+  let intended = Array.isArray((application as any).intended_activities)
     ? ((application as any).intended_activities as unknown[]).map(String).filter(Boolean)
     : Array.isArray(notes?.intendedActivities)
       ? (notes?.intendedActivities as unknown[]).map(String).filter(Boolean)
       : [];
+  if (!intended.length && typeof notes?.transferFormData?.waterPurpose === "string") {
+    const tp = notes.transferFormData.waterPurpose.trim();
+    if (tp) intended = [tp];
+  }
   const primary = intended?.[0] ?? "";
   const labels: Record<string, string> = {
     fish_farming_lakes: "Fish farming in lakes",

@@ -25,6 +25,7 @@ type PermitPickRow = {
   status: string;
   issued_date?: string | null;
   expiry_date?: string | null;
+  source: "permits" | "permit_registry";
   application: {
     id: string;
     application_number?: string | null;
@@ -88,35 +89,96 @@ export function CreateInspectionDialog({
         setLoading(true);
         setError(null);
 
-        const { data, error: permitsError } = await supabase
-          .from("permits")
-          .select(
-            `
-            id,
-            permit_number,
-            status,
-            issued_date,
-            expiry_date,
-            application:applications!permits_application_id_fkey(
+        const [permitsResult, registryResult] = await Promise.all([
+          supabase
+            .from("permits")
+            .select(
+              `
               id,
-              application_number,
-              project_title,
-              district,
-              sector,
-              applicant:users!applicant_id(
-                first_name,
-                last_name,
-                company_name,
-                account_type
+              permit_number,
+              status,
+              issued_date,
+              expiry_date,
+              application:applications!permits_application_id_fkey(
+                id,
+                application_number,
+                project_title,
+                district,
+                sector,
+                applicant:users!applicant_id(
+                  first_name,
+                  last_name,
+                  company_name,
+                  account_type
+                )
               )
+            `
             )
-          `
-          )
-          .eq("status", "active")
-          .order("issued_date", { ascending: false });
+            .eq("status", "active")
+            .order("issued_date", { ascending: false }),
+          supabase
+            .from("permit_registry")
+            .select("id, permit_number, permit_holder, location, issuance_date, expiration_date, status")
+            .order("issuance_date", { ascending: false }),
+        ]);
 
-        if (permitsError) throw permitsError;
-        setPermits((data || []) as unknown as PermitPickRow[]);
+        if (permitsResult.error) throw permitsResult.error;
+        if (registryResult.error) throw registryResult.error;
+
+        const permitRows: PermitPickRow[] = ((permitsResult.data || []) as any[]).map((row) => ({
+          ...row,
+          source: "permits" as const,
+        }));
+
+        const ACTIVE_STATUSES = new Set(["active", "operational", "approved", "valid"]);
+        const registryRows: PermitPickRow[] = ((registryResult.data || []) as any[])
+          .filter((r) => {
+            const s = (r.status || "").trim().toLowerCase();
+            if (ACTIVE_STATUSES.has(s)) return true;
+            if (r.expiration_date) {
+              const exp = new Date(r.expiration_date);
+              if (!Number.isNaN(exp.getTime()) && exp >= new Date()) return true;
+            }
+            return false;
+          })
+          .map((r) => ({
+            id: r.id,
+            permit_number: r.permit_number,
+            status: r.status || "active",
+            issued_date: r.issuance_date,
+            expiry_date: r.expiration_date,
+            source: "permit_registry" as const,
+            application: {
+              id: r.id,
+              application_number: null,
+              project_title: null,
+              district: r.location || null,
+              sector: null,
+              applicant: {
+                first_name: null,
+                last_name: null,
+                company_name: r.permit_holder || null,
+                account_type: "company",
+              },
+            },
+          }));
+
+        // Deduplicate: prefer `permits` table rows over registry rows with the same permit number
+        const seen = new Set<string>();
+        const merged: PermitPickRow[] = [];
+        for (const row of permitRows) {
+          const key = (row.permit_number || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (key) seen.add(key);
+          merged.push(row);
+        }
+        for (const row of registryRows) {
+          const key = (row.permit_number || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          merged.push(row);
+        }
+
+        setPermits(merged);
       } catch (e: any) {
         console.error("❌ Failed to load permits for inspection picker:", e);
         setError(e?.message || "Failed to load permits");
@@ -142,13 +204,14 @@ export function CreateInspectionDialog({
   }, [permits, search]);
 
   const start = () => {
-    const applicationNumber = selected?.application?.application_number || "";
-    if (!applicationNumber) {
-      setError("Selected permit is missing an application number.");
+    const identifier =
+      selected?.application?.application_number || selected?.permit_number || "";
+    if (!identifier) {
+      setError("Selected permit is missing an identifier.");
       return;
     }
     setOpen(false);
-    router.push(`/inspection/permit/${applicationNumber}`);
+    router.push(`/inspection/permit/${encodeURIComponent(identifier)}`);
   };
 
   return (

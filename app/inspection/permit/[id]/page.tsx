@@ -492,7 +492,7 @@ export default function PermitInspectionUnifiedPage() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Permit inspection</h1>
           <p className="text-muted-foreground">
-            Application: <span className="font-medium">{inspectionData?.application?.application_number}</span>
+            Permit: <span className="font-medium">{inspectionData?.permit?.permit_number || inspectionData?.prepopulatedData?.permitNumber || "N/A"}</span>
           </p>
           <div className="mt-2 flex items-center gap-2">
             <Badge variant="outline">Template: {template}</Badge>

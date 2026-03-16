@@ -190,6 +190,10 @@ function resolveActivities(app: PermitApplication): string {
     const notes = resolveNotes(app);
     const fromNotes = notes?.intendedActivities;
     if (Array.isArray(fromNotes)) acts = fromNotes.map(String).filter(Boolean);
+    if (!acts.length && typeof notes?.transferFormData?.waterPurpose === "string") {
+      const tp = notes.transferFormData.waterPurpose.trim();
+      if (tp) acts = [tp];
+    }
   }
   if (acts.length) return acts.map((a) => ACTIVITY_LABELS[a] || a).join(", ");
   const purpose = app.water_purpose?.trim();

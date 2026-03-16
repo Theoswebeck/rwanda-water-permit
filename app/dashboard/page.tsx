@@ -223,7 +223,20 @@ function DashboardContent() {
       const intendedActivities = Array.isArray(app?.intended_activities)
         ? (app.intended_activities as string[]).filter((a) => typeof a === "string" && a.trim())
         : [];
-      const activityCode = intendedActivities[0] || dbPermit.purpose || "";
+
+      let transferActivity = "";
+      if (!intendedActivities.length && app?.internal_notes) {
+        try {
+          const notes = typeof app.internal_notes === "string"
+            ? JSON.parse(app.internal_notes)
+            : app.internal_notes;
+          if (notes?.transferFormData?.waterPurpose) {
+            transferActivity = String(notes.transferFormData.waterPurpose);
+          }
+        } catch { /* ignore */ }
+      }
+
+      const activityCode = intendedActivities[0] || transferActivity || dbPermit.purpose || "";
       const activityLabel = activityCode ? getActivityLabel(activityCode) : (dbPermit.purpose || "N/A");
 
       return {

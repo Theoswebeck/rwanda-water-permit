@@ -140,9 +140,11 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       district: formData?.district || formData?.officeDistrict || (status === 'draft' ? 'Draft District' : ''),
       sector: formData?.sector || formData?.officeSector || (status === 'draft' ? 'Draft Sector' : ''),
       cell: formData?.cell || formData?.officeCell || (status === 'draft' ? 'Draft Cell' : ''),
-      project_title: formData?.projectTitle
-        ? `Transfer: ${formData.projectTitle}`
-        : `Transfer: ${formData?.permitNumber || 'Permit'}`,
+      project_title: formData?.transfereeName
+        ? `Transfer: ${formData.transfereeName} Water Permit Application`
+        : formData?.projectTitle
+          ? `Transfer: ${formData.projectTitle}`
+          : `Transfer: ${formData?.permitNumber || 'Permit'}`,
       project_description: `Permit transfer request for permit ${formData?.permitNumber || 'N/A'}`,
       internal_notes: JSON.stringify({
         isTransfer: true,

@@ -172,15 +172,21 @@ export default async function PublicPermitViewPage({
           .filter((activity) => activity.length > 0)
       : [];
 
+    let transferActivity = "";
+    if (!intendedActivities.length && app?.internal_notes) {
+      try {
+        const notes = typeof app.internal_notes === "string"
+          ? JSON.parse(app.internal_notes as string)
+          : app.internal_notes;
+        if (notes?.transferFormData?.waterPurpose) {
+          transferActivity = String(notes.transferFormData.waterPurpose);
+        }
+      } catch { /* ignore */ }
+    }
+
     const appWaterPurpose = typeof app?.water_purpose === "string" ? app.water_purpose.trim() : "";
     const permitPurpose = typeof permit.purpose === "string" ? permit.purpose.trim() : "";
-
-    const isTransfer = Boolean(permit.is_transfer) ||
-      (typeof app?.application_type === "string" && app.application_type === "transfer");
-
-    const primaryActivity = isTransfer
-      ? (intendedActivities[0] || permitPurpose || appWaterPurpose)
-      : (intendedActivities[0] || appWaterPurpose || permitPurpose);
+    const primaryActivity = intendedActivities[0] || transferActivity || appWaterPurpose || permitPurpose;
 
     return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
   })();

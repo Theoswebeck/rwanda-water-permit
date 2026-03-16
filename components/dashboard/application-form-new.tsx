@@ -1288,7 +1288,18 @@ export function ApplicationForm({
     }
 
     // Override with any provided initial data
-    return { ...defaults, ...initialData };
+    const merged = { ...defaults, ...initialData };
+
+    // fullNameApplicant always comes from the logged-in user's profile
+    if (userProfile) {
+      if (userProfile.account_type === 'individual') {
+        merged.fullNameApplicant = `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim() || merged.fullNameApplicant;
+      } else if (userProfile.account_type === 'company') {
+        merged.fullNameApplicant = userProfile.company_name || merged.fullNameApplicant;
+      }
+    }
+
+    return merged;
   }, [initialData, userProfile]);
 
   const form = useForm<FormValues>({
