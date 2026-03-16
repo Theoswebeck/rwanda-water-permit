@@ -199,15 +199,66 @@ export default function PermitInspectionUnifiedPage() {
           return;
         }
 
-        setInspectionData(data);
         const tpl = templateFromPermit(data?.application?.intended_activities, data?.permit?.purpose);
         setTemplate(tpl);
 
         const isRegistry = data.source === "permit_registry";
 
-        // For registry permits the application.id is the registry UUID, not a real applications row,
-        // so skip the existing-inspection lookup. For normal permits, check for prior inspections.
-        if (!isRegistry) {
+        // For registry permits, eagerly create the stub application so document
+        // uploads (which go through /api/dashboard/applications/[id]/documents)
+        // have a valid FK target in the applications table.
+        if (isRegistry) {
+          const reg = data.registryEntry;
+          const regPermitNumber = reg?.permit_number || applicationNumber || "";
+          const { data: sessionData } = await supabase.auth.getSession();
+          const sessionUserId = sessionData?.session?.user?.id;
+
+          if (sessionUserId) {
+            const { data: existingStub } = await supabase
+              .from("applications")
+              .select("id")
+              .eq("application_number", `REG-${regPermitNumber}`)
+              .maybeSingle();
+
+            let realAppId = existingStub?.id;
+
+            if (!realAppId) {
+              const { data: stubApp, error: stubErr } = await supabase
+                .from("applications")
+                .insert({
+                  applicant_id: sessionUserId,
+                  application_number: `REG-${regPermitNumber}`,
+                  application_type: "new",
+                  status: "approved",
+                  project_title: `Registry Permit: ${regPermitNumber}`,
+                  water_source: reg?.water_source || "other",
+                  water_purpose: reg?.authorized_activity || "other",
+                  district: reg?.location || "N/A",
+                  sector: "N/A",
+                  cell: "N/A",
+                  province: "N/A",
+                })
+                .select("id")
+                .single();
+
+              if (!stubErr && stubApp?.id) realAppId = stubApp.id;
+            }
+
+            if (realAppId) {
+              data.application = { ...data.application, id: realAppId };
+              data.source = "application" as any;
+            }
+          }
+        }
+
+        // Set state AFTER the stub is resolved so the real application ID
+        // is available for document uploads and other downstream operations.
+        setInspectionData(data);
+
+        // For registry permits the application.id is now the real stub, or for normal
+        // permits it was always real. Skip existing-inspection lookup only if we
+        // never resolved a real application row.
+        if (data.source !== "permit_registry") {
           const { data: latest, error: latestError } = await supabase
             .from("inspections")
             .select("*")

@@ -545,7 +545,24 @@ export function InspectionFormLayout({
                       </SelectContent>
                     </Select>
                   </div>
-                  <TextField label="Actual method" value={form.actual_abstraction_method ?? ""} disabled={!canEdit} onChange={(v) => setField("actual_abstraction_method", v as any)} />
+                  <div className="space-y-2">
+                    <Label className="text-sm">Actual method</Label>
+                    <Select value={form.actual_abstraction_method ?? ""} onValueChange={(v) => setField("actual_abstraction_method", v as any)} disabled={!canEdit}>
+                      <SelectTrigger className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
+                        <SelectValue placeholder="Select method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Pumping">Pumping</SelectItem>
+                        <SelectItem value="Gravity">Gravity</SelectItem>
+                        <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
+                        <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
+                        <SelectItem value="Borehole">Borehole</SelectItem>
+                        <SelectItem value="Spring Capture">Spring Capture</SelectItem>
+                        <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="mt-6">
