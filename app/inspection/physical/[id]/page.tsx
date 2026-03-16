@@ -108,7 +108,7 @@ export default function PermitInspectionPage() {
           return;
         }
 
-        const data = await fetchInspectionData(params.id as string);
+        const data = await fetchInspectionData(decodeURIComponent(params.id as string));
         
         if (!data) {
           setError('Application not found');

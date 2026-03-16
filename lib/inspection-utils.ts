@@ -84,9 +84,14 @@ export interface PrepopulatedInspectionData {
  * Fetch comprehensive inspection data for a permit/application
  */
 export async function fetchInspectionData(
-  applicationNumber: string
+  rawIdentifier: string
 ): Promise<PermitInspectionData | null> {
   try {
+    // Permit numbers can contain slashes (e.g. "0782/RWB/2025") which get URL-encoded
+    // to %2F. Normalize once here so every downstream query uses the decoded value.
+    let applicationNumber = rawIdentifier;
+    try { applicationNumber = decodeURIComponent(rawIdentifier); } catch { /* already decoded */ }
+
     const applicantSelect = `
       *,
       applicant:users!applicant_id(

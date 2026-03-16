@@ -157,7 +157,8 @@ export default function PermitInspectionUnifiedPage() {
     "";
   const canCreateInspection = ["assessor", "inspector", "reviewer", "admin"].includes(effectiveRole);
 
-  const applicationNumber = params.id as string | undefined;
+  const rawId = params.id as string | undefined;
+  const applicationNumber = rawId ? decodeURIComponent(rawId) : undefined;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

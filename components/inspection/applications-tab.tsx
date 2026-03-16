@@ -321,7 +321,7 @@ export function ApplicationsTab() {
                         </div>
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
-                        <Link href={`/inspection/assessment/${app.application_number}`}>
+                        <Link href={`/inspection/assessment/${encodeURIComponent(app.application_number)}`}>
                           <Button 
                             size="sm" 
                             className="flex items-center gap-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"

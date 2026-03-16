@@ -357,8 +357,8 @@ export function ActivePermitsInspectionTab() {
                       latest.inspector_id === userProfile?.id &&
                       (latest.status === "scheduled" || latest.status === "in_progress");
 
-                    const appNumber = app?.application_number;
-                    const inspectionHref = appNumber ? `/inspection/permit/${appNumber}` : undefined;
+                    const identifier = p.permit_number || app?.application_number;
+                    const inspectionHref = identifier ? `/inspection/permit/${encodeURIComponent(identifier)}` : undefined;
 
                     return (
                       <TableRow key={p.id}>

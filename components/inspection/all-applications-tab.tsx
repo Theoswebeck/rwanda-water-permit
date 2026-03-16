@@ -226,7 +226,7 @@ export function AllApplicationsTab() {
     // For pre-permit assessment
     if (application.status === 'pending_assessment') {
       return (
-        <Link href={`/inspection/assessment/${application.application_number}`}>
+        <Link href={`/inspection/assessment/${encodeURIComponent(application.application_number)}`}>
           <Button 
             size="sm" 
             className="flex items-center gap-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-3 py-1.5 text-xs font-medium"
@@ -241,7 +241,7 @@ export function AllApplicationsTab() {
     else if (application.status === 'approved_pending_permit' || 
              (application.status === 'approved' && !application.inspected_at)) {
       return (
-        <Link href={`/inspection/physical/${application.application_number}`}>
+        <Link href={`/inspection/physical/${encodeURIComponent(application.application_number)}`}>
           <Button 
             size="sm" 
             className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-3 py-1.5 text-xs font-medium"
@@ -255,7 +255,7 @@ export function AllApplicationsTab() {
     // Default view action
     else {
       return (
-        <Link href={`/inspection/application/${application.application_number}`}>
+        <Link href={`/inspection/application/${encodeURIComponent(application.application_number)}`}>
           <Button 
             size="sm" 
             variant="ghost" 

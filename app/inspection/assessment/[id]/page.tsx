@@ -266,7 +266,7 @@ export default function AssessmentPage() {
         setLoading(true);
         setError(null);
 
-        const applicationNumber = params.id as string;
+        const applicationNumber = decodeURIComponent(params.id as string);
         
         // Fetch application with related data
         const { data: appData, error: appError } = await supabase

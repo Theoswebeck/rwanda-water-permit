@@ -41,15 +41,12 @@ type PermitPickRow = {
   } | null;
 };
 
-function applicantName(app: PermitPickRow["application"]): string {
+function permitHolderName(app: PermitPickRow["application"]): string {
   const a = app?.applicant;
   if (!a) return "—";
-  const isIndividual = a.account_type === "individual";
-  if (isIndividual) {
-    const name = `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim();
-    return name || "—";
-  }
-  return a.company_name || "—";
+  const company = (a.company_name ?? "").trim();
+  const fullName = `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim();
+  return company || fullName || "—";
 }
 
 function formatDate(dateStr?: string | null): string {
@@ -195,11 +192,9 @@ export function CreateInspectionDialog({
     if (!q) return permits;
     return permits.filter((p) => {
       const permitNo = (p.permit_number || "").toLowerCase();
-      const appNo = (p.application?.application_number || "").toLowerCase();
-      const title = (p.application?.project_title || "").toLowerCase();
-      const applicant = applicantName(p.application).toLowerCase();
+      const holder = permitHolderName(p.application).toLowerCase();
       const location = getLocation(p.application).toLowerCase();
-      return permitNo.includes(q) || appNo.includes(q) || title.includes(q) || applicant.includes(q) || location.includes(q);
+      return permitNo.includes(q) || holder.includes(q) || location.includes(q);
     });
   }, [permits, search]);
 
@@ -254,7 +249,7 @@ export function CreateInspectionDialog({
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
-              placeholder="Search permit #, application #, applicant, location…"
+              placeholder="Search permit #, permit holder, location…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-12 pr-20 h-12 text-base bg-muted/30 border border-border/50 rounded-xl focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:border-primary"
@@ -277,11 +272,10 @@ export function CreateInspectionDialog({
         ) : (
           <div className="border-t">
             {/* Table header */}
-            <div className="grid grid-cols-[48px_1.2fr_1fr_1fr_1fr_0.9fr_0.9fr] gap-4 px-8 py-4 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="grid grid-cols-[48px_1.2fr_1.2fr_1fr_0.9fr_0.9fr] gap-4 px-8 py-4 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wider">
               <div></div>
               <div>Permit #</div>
-              <div>Application #</div>
-              <div>Applicant</div>
+              <div>Permit Holder</div>
               <div>Location</div>
               <div>Issued</div>
               <div>Expires</div>
@@ -303,7 +297,7 @@ export function CreateInspectionDialog({
                       key={p.id}
                       onClick={() => setSelected(p)}
                       className={`
-                        grid grid-cols-[48px_1.2fr_1fr_1fr_1fr_0.9fr_0.9fr] gap-4 px-8 py-4 cursor-pointer
+                        grid grid-cols-[48px_1.2fr_1.2fr_1fr_0.9fr_0.9fr] gap-4 px-8 py-4 cursor-pointer
                         border-b last:border-b-0 transition-all duration-200
                         ${isSelected 
                           ? "bg-blue-50 dark:bg-blue-950/40 border-l-4 border-l-blue-500" 
@@ -333,17 +327,10 @@ export function CreateInspectionDialog({
                         </span>
                       </div>
 
-                      {/* Application # */}
-                      <div className="flex items-center min-w-0">
-                        <span className="text-sm text-muted-foreground truncate">
-                          {p.application?.application_number || "—"}
-                        </span>
-                      </div>
-
-                      {/* Applicant */}
+                      {/* Permit Holder */}
                       <div className="flex items-center min-w-0">
                         <span className="text-sm text-foreground truncate font-medium">
-                          {applicantName(p.application)}
+                          {permitHolderName(p.application)}
                         </span>
                       </div>
 
