@@ -17,6 +17,8 @@ export interface PermitInspectionData {
   permit?: Permit;
   paymentHistory?: PaymentRecord[];
   prepopulatedData: PrepopulatedInspectionData;
+  source?: "application" | "permit_registry";
+  registryEntry?: any;
 }
 
 export interface PaymentRecord {
@@ -125,19 +127,58 @@ export async function fetchInspectionData(
       if (permitByNoError) throw permitByNoError;
       permitData = (permitByNo as Permit | null) ?? null;
 
-      if (!permitData?.application_id) return null;
+      if (permitData?.application_id) {
+        const { data: appById, error: appByIdError } = await supabase
+          .from('applications')
+          .select(applicantSelect)
+          .eq('id', permitData.application_id)
+          .maybeSingle();
 
-      const { data: appById, error: appByIdError } = await supabase
-        .from('applications')
-        .select(applicantSelect)
-        .eq('id', permitData.application_id)
-        .maybeSingle();
-
-      if (appByIdError) throw appByIdError;
-      application = appById as any | null;
+        if (appByIdError) throw appByIdError;
+        application = appById as any | null;
+      }
     }
 
-    if (!application) return null;
+    // Third fallback: registry-only permit (no application or permits-table entry)
+    if (!application) {
+      const { data: registryEntry, error: regError } = await supabase
+        .from('permit_registry')
+        .select('*')
+        .eq('permit_number', applicationNumber)
+        .maybeSingle();
+
+      if (regError) throw regError;
+      if (!registryEntry) return null;
+
+      const prepopulatedData = prepareRegistryInspectionData(registryEntry);
+
+      const syntheticApplication = {
+        id: registryEntry.id,
+        applicant_id: '',
+        application_number: registryEntry.permit_number,
+        status: 'approved' as const,
+        application_type: 'new' as const,
+        water_source: (registryEntry.water_source || 'other') as any,
+        water_purpose: (registryEntry.authorized_activity || 'other') as any,
+        intended_activities: registryEntry.authorized_activity ? [registryEntry.authorized_activity] : null,
+        province: '' as any,
+        district: registryEntry.location || '',
+        sector: '',
+        cell: '',
+        project_title: `Registry Permit: ${registryEntry.permit_number}`,
+        created_at: registryEntry.created_at,
+        updated_at: registryEntry.updated_at,
+      } as any;
+
+      return {
+        application: syntheticApplication,
+        permit: undefined,
+        paymentHistory: [],
+        prepopulatedData,
+        source: "permit_registry" as const,
+        registryEntry,
+      };
+    }
 
     // If we didn't already resolve permit via permit_number, attempt to fetch it by application_id
     if (!permitData) {
@@ -164,7 +205,8 @@ export async function fetchInspectionData(
       },
       permit: permitData || undefined,
       paymentHistory,
-      prepopulatedData
+      prepopulatedData,
+      source: "application" as const,
     };
   } catch (error) {
     console.error('Error fetching inspection data:', error);
@@ -502,6 +544,78 @@ function prepareInspectionData(
     lastPaymentDate,
     paymentStatus
   };
+}
+
+/**
+ * Prepare pre-populated inspection data from a permit_registry entry (no application/permit records).
+ */
+function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionData {
+  const permitHolderName = registry.permit_holder || 'N/A';
+  const permitNumber = registry.permit_number || 'N/A';
+  const activityType = registry.authorized_activity || 'N/A';
+  const issuanceDate = registry.issuance_date || undefined;
+  const expirationDate = registry.expiration_date || undefined;
+  const waterSourceName = registry.water_source || 'N/A';
+  const location = registry.location || '';
+  const contacts = registry.contact ? `Contact: ${registry.contact}` : 'N/A';
+  const authorizedMethod = registry.method_of_water_taking || undefined;
+
+  const parsed = parseVolumeOrArea(registry.volume_or_area);
+
+  const lat = registry.latitude != null ? String(registry.latitude) : undefined;
+  const lng = registry.longitude != null ? String(registry.longitude) : undefined;
+  const coordinates = lat && lng ? `Lat: ${lat}, Lng: ${lng}` : undefined;
+
+  return {
+    permitHolderName,
+    permitHolderId: 'N/A',
+    residence: location || 'N/A',
+    representative: 'N/A',
+    contacts,
+    operatorName: permitHolderName !== 'N/A' ? permitHolderName : undefined,
+    operatorIdTin: undefined,
+    operatorResidence: location || undefined,
+    activityType,
+    activityStartingDate: issuanceDate,
+    permitNumber,
+    facilityProjectName: undefined,
+    issuanceDate,
+    expirationDate,
+    waterSourceName,
+    waterSourceType: undefined,
+    waterPurpose: activityType !== 'N/A' ? activityType : undefined,
+    waterSourceLocation: location || 'N/A',
+    coordinates,
+    waterSourceLatitude: lat,
+    waterSourceLongitude: lng,
+    catchmentLevel1: undefined,
+    catchmentLevel2: undefined,
+    province: undefined,
+    district: location || '',
+    sector: '',
+    cell: '',
+    village: undefined,
+    allowedQuantity: parsed.allowedQuantity ?? undefined,
+    allowedUnit: parsed.allowedUnit ?? undefined,
+    authorizedMethod,
+    flowRate: undefined,
+    totalPaymentAmount: undefined,
+    lastPaymentDate: undefined,
+    paymentStatus: undefined,
+  };
+}
+
+function parseVolumeOrArea(value: unknown): { allowedQuantity: number | null; allowedUnit: string | null } {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { allowedQuantity: null, allowedUnit: null };
+
+  const match = raw.match(/-?\d[\d,]*(?:\.\d+)?/);
+  if (!match) return { allowedQuantity: null, allowedUnit: null };
+
+  const num = Number(match[0].replace(/,/g, ""));
+  const allowedQuantity = Number.isFinite(num) ? num : null;
+  const allowedUnit = raw.replace(match[0], "").trim() || null;
+  return { allowedQuantity, allowedUnit };
 }
 
 /**

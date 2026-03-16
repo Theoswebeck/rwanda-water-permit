@@ -194,7 +194,7 @@ export default function PermitInspectionUnifiedPage() {
 
         const data = await fetchInspectionData(applicationNumber);
         if (!data) {
-          setError("Application not found");
+          setError("Permit not found");
           return;
         }
 
@@ -202,63 +202,65 @@ export default function PermitInspectionUnifiedPage() {
         const tpl = templateFromPermit(data?.application?.intended_activities, data?.permit?.purpose);
         setTemplate(tpl);
 
-        // Find latest inspection for this application
-        const { data: latest, error: latestError } = await supabase
-          .from("inspections")
-          .select("*")
-          .eq("application_id", data.application.id)
-          .order("created_at", { ascending: false })
-          .limit(1);
+        const isRegistry = data.source === "permit_registry";
 
-        if (latestError) throw latestError;
-        const existing = (latest && latest[0]) as Inspection | undefined;
+        // For registry permits the application.id is the registry UUID, not a real applications row,
+        // so skip the existing-inspection lookup. For normal permits, check for prior inspections.
+        if (!isRegistry) {
+          const { data: latest, error: latestError } = await supabase
+            .from("inspections")
+            .select("*")
+            .eq("application_id", data.application.id)
+            .order("created_at", { ascending: false })
+            .limit(1);
 
-        if (existing) {
-          setInspectionId(existing.id);
+          if (latestError) throw latestError;
+          const existing = (latest && latest[0]) as Inspection | undefined;
 
-          // Non-assessors can view submitted inspections, but should not edit
-          if (!canCreateInspection) {
-            router.replace(`/inspection/${existing.id}`);
+          if (existing) {
+            setInspectionId(existing.id);
+
+            if (!canCreateInspection) {
+              router.replace(`/inspection/${existing.id}`);
+              return;
+            }
+
+            const isDraft = existing.status === "scheduled" || existing.status === "in_progress";
+            const isOwner = existing.inspector_id === user?.id;
+            if (!isOwner || !isDraft) {
+              router.replace(`/inspection/${existing.id}`);
+              return;
+            }
+
+            setForm(prev => ({
+              ...prev,
+              ...existing,
+              activity_type: (existing as any).activity_type ?? data?.prepopulatedData?.activityType ?? prev.activity_type,
+              activity_starting_date: (existing as any).activity_starting_date ?? data?.prepopulatedData?.activityStartingDate ?? prev.activity_starting_date,
+              allowed_quantity: (existing as any).allowed_quantity ?? data?.permit?.water_allowance ?? prev.allowed_quantity,
+              allowed_unit: (existing as any).allowed_unit ?? data?.permit?.allowance_unit ?? prev.allowed_unit,
+              authorized_abstraction_method:
+                (existing as any).authorized_abstraction_method ?? data?.prepopulatedData?.authorizedMethod ?? prev.authorized_abstraction_method,
+              authorized_concession_boundaries: normalizeBoundaryRows((existing as any).authorized_concession_boundaries),
+              actual_concession_boundaries: normalizeBoundaryRows((existing as any).actual_concession_boundaries),
+              employment_gender_breakdown: ((existing as any).employment_gender_breakdown as any) || prev.employment_gender_breakdown,
+              ohs_gender_sensitive: ((existing as any).ohs_gender_sensitive as any) || prev.ohs_gender_sensitive,
+            }));
+            setTemplate(((existing as any).inspection_template as InspectionTemplate) || tpl);
             return;
           }
-
-          // Assessors can only edit their own draft/in-progress
-          const isDraft = existing.status === "scheduled" || existing.status === "in_progress";
-          const isOwner = existing.inspector_id === user?.id;
-          if (!isOwner || !isDraft) {
-            router.replace(`/inspection/${existing.id}`);
-            return;
-          }
-
-          // Load existing values into form
-          setForm(prev => ({
-            ...prev,
-            ...existing,
-            activity_type: (existing as any).activity_type ?? data?.prepopulatedData?.activityType ?? prev.activity_type,
-            activity_starting_date: (existing as any).activity_starting_date ?? data?.prepopulatedData?.activityStartingDate ?? prev.activity_starting_date,
-            allowed_quantity: (existing as any).allowed_quantity ?? data?.permit?.water_allowance ?? prev.allowed_quantity,
-            allowed_unit: (existing as any).allowed_unit ?? data?.permit?.allowance_unit ?? prev.allowed_unit,
-            authorized_abstraction_method:
-              (existing as any).authorized_abstraction_method ?? data?.prepopulatedData?.authorizedMethod ?? prev.authorized_abstraction_method,
-            authorized_concession_boundaries: normalizeBoundaryRows((existing as any).authorized_concession_boundaries),
-            actual_concession_boundaries: normalizeBoundaryRows((existing as any).actual_concession_boundaries),
-            employment_gender_breakdown: ((existing as any).employment_gender_breakdown as any) || prev.employment_gender_breakdown,
-            ohs_gender_sensitive: ((existing as any).ohs_gender_sensitive as any) || prev.ohs_gender_sensitive,
-          }));
-          setTemplate(((existing as any).inspection_template as InspectionTemplate) || tpl);
-        } else {
-          // No existing inspection - create a new one
-          // Prefill allowed quantities from permit for authorization template
-          setForm(prev => ({
-            ...prev,
-            inspection_template: tpl as any,
-            allowed_quantity: data?.permit?.water_allowance,
-            allowed_unit: data?.permit?.allowance_unit,
-            authorized_abstraction_method: data?.prepopulatedData?.authorizedMethod,
-            activity_type: data?.prepopulatedData?.activityType,
-            activity_starting_date: data?.prepopulatedData?.activityStartingDate,
-          }));
         }
+
+        // New inspection -- prefill from prepopulated data
+        setForm(prev => ({
+          ...prev,
+          inspection_template: tpl as any,
+          allowed_quantity: data?.prepopulatedData?.allowedQuantity ?? data?.permit?.water_allowance,
+          allowed_unit: data?.prepopulatedData?.allowedUnit ?? data?.permit?.allowance_unit,
+          authorized_abstraction_method: data?.prepopulatedData?.authorizedMethod,
+          activity_type: data?.prepopulatedData?.activityType,
+          activity_starting_date: data?.prepopulatedData?.activityStartingDate,
+        }));
       } catch (e: any) {
         console.error("❌ Failed to load unified inspection:", e);
         setError(e?.message || "Failed to load inspection data");
@@ -276,7 +278,7 @@ export default function PermitInspectionUnifiedPage() {
 
   const save = async (mode: "draft" | "submit") => {
     if (!inspectionData?.application?.id) {
-      alert("⚠️ Application data not loaded.");
+      alert("⚠️ Permit data not loaded.");
       return;
     }
 
@@ -293,9 +295,56 @@ export default function PermitInspectionUnifiedPage() {
     try {
       setSaving(true);
 
+      let applicationId = inspectionData.application.id;
+
+      // For registry-only permits we need a real applications row to satisfy the FK.
+      if (inspectionData.source === "permit_registry") {
+        const reg = inspectionData.registryEntry;
+        const regPermitNumber = reg?.permit_number || applicationNumber || "";
+
+        // Check if a stub was already created for this registry permit
+        const { data: existingStub } = await supabase
+          .from("applications")
+          .select("id")
+          .eq("application_number", `REG-${regPermitNumber}`)
+          .maybeSingle();
+
+        if (existingStub?.id) {
+          applicationId = existingStub.id;
+        } else {
+          const { data: stubApp, error: stubErr } = await supabase
+            .from("applications")
+            .insert({
+              applicant_id: sessionUserId,
+              application_number: `REG-${regPermitNumber}`,
+              application_type: "new",
+              status: "approved",
+              project_title: `Registry Permit: ${regPermitNumber}`,
+              water_source: reg?.water_source || "other",
+              water_purpose: reg?.authorized_activity || "other",
+              district: reg?.location || "N/A",
+              sector: "N/A",
+              cell: "N/A",
+              province: "N/A",
+            })
+            .select("id")
+            .single();
+
+          if (stubErr) throw stubErr;
+          applicationId = stubApp.id;
+        }
+
+        // Update in-memory state so subsequent saves reuse the real application_id
+        setInspectionData((prev: any) => ({
+          ...prev,
+          application: { ...prev.application, id: applicationId },
+          source: "application",
+        }));
+      }
+
       const nowIso = new Date().toISOString();
       const base = {
-        application_id: inspectionData.application.id,
+        application_id: applicationId,
         // CRITICAL: use the session user id (same as auth.uid() in Postgres RLS)
         inspector_id: sessionUserId,
         type: "annual",
