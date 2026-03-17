@@ -6,6 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchInspectionData } from "@/lib/inspection-utils";
+import { sanitizeApplicationEnumPayload } from "@/lib/db/application-enum-sanitizer";
 
 import type { Inspection } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -223,21 +224,22 @@ export default function PermitInspectionUnifiedPage() {
             let realAppId = existingStub?.id;
 
             if (!realAppId) {
+              const stubPayload = sanitizeApplicationEnumPayload({
+                applicant_id: sessionUserId,
+                application_number: `REG-${regPermitNumber}`,
+                application_type: reg?.authorized_activity || "domestic",
+                status: "approved",
+                project_title: `Registry Permit: ${regPermitNumber}`,
+                water_source: reg?.water_source || "other",
+                water_purpose: reg?.authorized_activity || "other",
+                district: reg?.location || "N/A",
+                sector: "N/A",
+                cell: "N/A",
+                province: "N/A",
+              });
               const { data: stubApp, error: stubErr } = await supabase
                 .from("applications")
-                .insert({
-                  applicant_id: sessionUserId,
-                  application_number: `REG-${regPermitNumber}`,
-                  application_type: "new",
-                  status: "approved",
-                  project_title: `Registry Permit: ${regPermitNumber}`,
-                  water_source: reg?.water_source || "other",
-                  water_purpose: reg?.authorized_activity || "other",
-                  district: reg?.location || "N/A",
-                  sector: "N/A",
-                  cell: "N/A",
-                  province: "N/A",
-                })
+                .insert(stubPayload)
                 .select("id")
                 .single();
 
@@ -364,21 +366,22 @@ export default function PermitInspectionUnifiedPage() {
         if (existingStub?.id) {
           applicationId = existingStub.id;
         } else {
+          const stubPayload = sanitizeApplicationEnumPayload({
+            applicant_id: sessionUserId,
+            application_number: `REG-${regPermitNumber}`,
+            application_type: reg?.authorized_activity || "domestic",
+            status: "approved",
+            project_title: `Registry Permit: ${regPermitNumber}`,
+            water_source: reg?.water_source || "other",
+            water_purpose: reg?.authorized_activity || "other",
+            district: reg?.location || "N/A",
+            sector: "N/A",
+            cell: "N/A",
+            province: "N/A",
+          });
           const { data: stubApp, error: stubErr } = await supabase
             .from("applications")
-            .insert({
-              applicant_id: sessionUserId,
-              application_number: `REG-${regPermitNumber}`,
-              application_type: "new",
-              status: "approved",
-              project_title: `Registry Permit: ${regPermitNumber}`,
-              water_source: reg?.water_source || "other",
-              water_purpose: reg?.authorized_activity || "other",
-              district: reg?.location || "N/A",
-              sector: "N/A",
-              cell: "N/A",
-              province: "N/A",
-            })
+            .insert(stubPayload)
             .select("id")
             .single();
 
