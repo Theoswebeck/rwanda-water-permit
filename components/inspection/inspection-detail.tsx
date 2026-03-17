@@ -357,22 +357,6 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
         </div>
       </div>
 
-      {/* Basic Information */}
-      <SectionShell title="Basic Information">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ReadonlyField label="Assessment Name" value={`${inspection.inspector.first_name} ${inspection.inspector.last_name}`} />
-          <ReadonlyField label="Assessment Date" value={formatDate(inspection.completed_date || inspection.scheduled_date)} />
-          <ReadonlyField label="Applicant" value={getApplicantName(inspection.application?.applicant)} />
-          <ReadonlyField label="Location" value={getLocationString(inspection.application)} />
-          <ReadonlyField label="Water Source" value={getWaterSourceLabel(inspection.application?.water_source || "N/A")} />
-          <ReadonlyField label="Status" value={inspection.status?.replace('_', ' ')} />
-          <ReadonlyField label="Template" value={inspection.inspection_template?.replace('_', ' ') || "Authorization"} />
-          {inspection.completed_date && (
-            <ReadonlyField label="Completed Date" value={formatDate(inspection.completed_date)} />
-          )}
-        </div>
-      </SectionShell>
-
       {/* Permit holder / operator */}
       <SectionShell title="Permit holder / operator">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -216,13 +216,31 @@ export function StaffInspectionsTab() {
         for (const p of (permits || []) as any[]) {
           if (!map[p.application_id]) map[p.application_id] = p as PermitLite;
         }
+
+        // For registry-sourced inspections (stub applications with REG- prefix),
+        // create synthetic permit entries so the list shows the permit number.
+        for (const r of rows) {
+          const appNo = r.application?.application_number || "";
+          const appRowId = r.application?.id;
+          if (appRowId && appNo.startsWith("REG-") && !map[appRowId]) {
+            const realPermitNo = appNo.replace(/^REG-/, "");
+            map[appRowId] = {
+              id: appRowId,
+              application_id: appRowId,
+              permit_number: realPermitNo,
+              status: "active",
+            } as any;
+          }
+        }
+
         setPermitByAppId(map);
 
+        // Collect all permit numbers (from permits table + registry stubs)
         const permitNumbers = Array.from(
           new Set(
-            ((permits || []) as PermitLite[])
-              .map((p) => p.permit_number)
-              .filter((permitNumber): permitNumber is string => Boolean(permitNumber))
+            Object.values(map)
+              .map((p) => p?.permit_number)
+              .filter((pn): pn is string => Boolean(pn))
           )
         );
 
@@ -334,7 +352,7 @@ export function StaffInspectionsTab() {
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60">
             <div className="flex items-center gap-2 w-full md:w-[360px]">
               <Search className="h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search inspection id, permit #, applicant…" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input placeholder="Search inspection id, permit #, permit holder…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -345,7 +363,7 @@ export function StaffInspectionsTab() {
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[14%]">Inspection</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[18%]">Permit #</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[24%]">Applicant</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[24%]">Permit Holder</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[16%]">Workflow</TableHead>
                   <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium w-[8%]">Actions</TableHead>
                 </TableRow>
