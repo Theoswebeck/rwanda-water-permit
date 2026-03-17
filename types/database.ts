@@ -43,14 +43,16 @@ export type ApplicationStatus =
 export type { InspectionWorkflowStatus } from './inspection-workflow'
 
 export type ApplicationType = 
+  | 'new'
+  | 'renewal'
+  | 'transfer'
+  | 'modification'
   | 'domestic' 
   | 'industrial' 
   | 'agricultural' 
   | 'commercial'
   | 'municipal' 
   | 'mining_water_use'
-  | 'transfer'
-  | 'modification'
 
 export type WaterSourceType = 
   | 'borehole' 

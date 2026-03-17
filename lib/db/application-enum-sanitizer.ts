@@ -21,14 +21,16 @@ const APPLICATION_STATUS = new Set([
 ])
 
 const APPLICATION_TYPE = new Set([
+  'new',
+  'renewal',
+  'transfer',
+  'modification',
   'domestic',
   'industrial',
   'agricultural',
   'commercial',
   'municipal',
   'mining_water_use',
-  'transfer',
-  'modification',
 ])
 
 const WATER_SOURCE = new Set([

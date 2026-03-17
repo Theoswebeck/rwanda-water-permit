@@ -1194,217 +1194,242 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
                   <div className="space-y-4">
                     <h4 className="font-medium">Permit Location</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="permitLocationProvince"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Province / City of Kigali</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(value);
-                                  setSelectedPermitProvince(value);
-                                  form.setValue("permitLocationDistrict", "");
-                                  form.setValue("permitLocationSector", "");
-                                  form.setValue("permitLocationCell", "");
-                                  form.setValue("permitLocationVillage", "");
-                                  setSelectedPermitDistrict("");
-                                  setSelectedPermitSector("");
-                                  setSelectedPermitCell("");
-                                  setSelectedPermitVillage("");
-                                }}
-                                value={field.value || ""}
-                                disabled={readOnly}
-                              >
+                    {isManualPermit ? (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="permitLocationProvince"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Province / City of Kigali</FormLabel>
+                              {!readOnly ? (
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    setSelectedPermitProvince(value);
+                                    form.setValue("permitLocationDistrict", "");
+                                    form.setValue("permitLocationSector", "");
+                                    form.setValue("permitLocationCell", "");
+                                    form.setValue("permitLocationVillage", "");
+                                    setSelectedPermitDistrict("");
+                                    setSelectedPermitSector("");
+                                    setSelectedPermitCell("");
+                                    setSelectedPermitVillage("");
+                                  }}
+                                  value={field.value || ""}
+                                  disabled={readOnly}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select province" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {getFormattedProvinceOptions().map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select province" />
-                                  </SelectTrigger>
+                                  <Input {...field} disabled className="bg-gray-100" />
                                 </FormControl>
-                                <SelectContent>
-                                  {getFormattedProvinceOptions().map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <FormControl>
-                                <Input {...field} disabled className="bg-gray-100" />
-                              </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="permitLocationDistrict"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>District</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(value);
-                                  setSelectedPermitDistrict(value);
-                                  form.setValue("permitLocationSector", "");
-                                  form.setValue("permitLocationCell", "");
-                                  form.setValue("permitLocationVillage", "");
-                                  setSelectedPermitSector("");
-                                  setSelectedPermitCell("");
-                                  setSelectedPermitVillage("");
-                                }}
-                                value={field.value || ""}
-                                disabled={!selectedPermitProvince || readOnly}
-                              >
+                        <FormField
+                          control={form.control}
+                          name="permitLocationDistrict"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>District</FormLabel>
+                              {!readOnly ? (
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    setSelectedPermitDistrict(value);
+                                    form.setValue("permitLocationSector", "");
+                                    form.setValue("permitLocationCell", "");
+                                    form.setValue("permitLocationVillage", "");
+                                    setSelectedPermitSector("");
+                                    setSelectedPermitCell("");
+                                    setSelectedPermitVillage("");
+                                  }}
+                                  value={field.value || ""}
+                                  disabled={!selectedPermitProvince || readOnly}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={selectedPermitProvince ? "Select district" : "Select province first"} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {getPermitDistrictOptions().map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={selectedPermitProvince ? "Select district" : "Select province first"} />
-                                  </SelectTrigger>
+                                  <Input {...field} disabled className="bg-gray-100" />
                                 </FormControl>
-                                <SelectContent>
-                                  {getPermitDistrictOptions().map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <FormControl>
-                                <Input {...field} disabled className="bg-gray-100" />
-                              </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="permitLocationSector"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Sector</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(value);
-                                  setSelectedPermitSector(value);
-                                  form.setValue("permitLocationCell", "");
-                                  form.setValue("permitLocationVillage", "");
-                                  setSelectedPermitCell("");
-                                  setSelectedPermitVillage("");
-                                }}
-                                value={field.value || ""}
-                                disabled={!selectedPermitDistrict || readOnly}
-                              >
+                        <FormField
+                          control={form.control}
+                          name="permitLocationSector"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Sector</FormLabel>
+                              {!readOnly ? (
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    setSelectedPermitSector(value);
+                                    form.setValue("permitLocationCell", "");
+                                    form.setValue("permitLocationVillage", "");
+                                    setSelectedPermitCell("");
+                                    setSelectedPermitVillage("");
+                                  }}
+                                  value={field.value || ""}
+                                  disabled={!selectedPermitDistrict || readOnly}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={selectedPermitDistrict ? "Select sector" : "Select district first"} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {getPermitSectorOptions().map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={selectedPermitDistrict ? "Select sector" : "Select district first"} />
-                                  </SelectTrigger>
+                                  <Input {...field} disabled className="bg-gray-100" />
                                 </FormControl>
-                                <SelectContent>
-                                  {getPermitSectorOptions().map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <FormControl>
-                                <Input {...field} disabled className="bg-gray-100" />
-                              </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="permitLocationCell"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Cell</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(value);
-                                  setSelectedPermitCell(value);
-                                  form.setValue("permitLocationVillage", "");
-                                  setSelectedPermitVillage("");
-                                }}
-                                value={field.value || ""}
-                                disabled={!selectedPermitSector || readOnly}
-                              >
+                        <FormField
+                          control={form.control}
+                          name="permitLocationCell"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Cell</FormLabel>
+                              {!readOnly ? (
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    setSelectedPermitCell(value);
+                                    form.setValue("permitLocationVillage", "");
+                                    setSelectedPermitVillage("");
+                                  }}
+                                  value={field.value || ""}
+                                  disabled={!selectedPermitSector || readOnly}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={selectedPermitSector ? "Select cell" : "Select sector first"} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {getPermitCellOptions().map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={selectedPermitSector ? "Select cell" : "Select sector first"} />
-                                  </SelectTrigger>
+                                  <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
                                 </FormControl>
-                                <SelectContent>
-                                  {getPermitCellOptions().map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <FormControl>
-                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
-                              </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="permitLocationVillage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Village</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select
-                                onValueChange={(value) => {
-                                  field.onChange(value);
-                                  setSelectedPermitVillage(value);
-                                }}
-                                value={field.value || ""}
-                                disabled={!selectedPermitCell || readOnly}
-                              >
+                        <FormField
+                          control={form.control}
+                          name="permitLocationVillage"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Village</FormLabel>
+                              {!readOnly ? (
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    setSelectedPermitVillage(value);
+                                  }}
+                                  value={field.value || ""}
+                                  disabled={!selectedPermitCell || readOnly}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={selectedPermitCell ? "Select village (optional)" : "Select cell first"} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {getPermitVillageOptions().map((option) => (
+                                      <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={selectedPermitCell ? "Select village (optional)" : "Select cell first"} />
-                                  </SelectTrigger>
+                                  <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
                                 </FormControl>
-                                <SelectContent>
-                                  {getPermitVillageOptions().map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      {option.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <FormControl>
-                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
-                              </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <FormItem>
+                          <FormLabel>Location</FormLabel>
+                          <FormControl>
+                            <Input
+                              value={
+                                [
+                                  form.getValues("permitLocationProvince"),
+                                  form.getValues("permitLocationDistrict"),
+                                  form.getValues("permitLocationSector"),
+                                  form.getValues("permitLocationCell"),
+                                  form.getValues("permitLocationVillage"),
+                                ]
+                                  .filter((v) => v && v.trim() !== "" && v.trim().toLowerCase() !== "n/a")
+                                  .join(", ") || "N/A"
+                              }
+                              disabled
+                              className="bg-gray-100"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      </div>
+                    )}
                   </div>
 
                   {/* Water Source & Purpose */}
