@@ -2,10 +2,14 @@
 
 import { StaffInspectionsTab } from "@/components/inspection/staff-inspections-tab";
 
-export function InspectionsWorkbench() {
+interface InspectionsWorkbenchProps {
+  roleContext?: string;
+}
+
+export function InspectionsWorkbench({ roleContext }: InspectionsWorkbenchProps) {
   return (
     <div className="space-y-6">
-      <StaffInspectionsTab />
+      <StaffInspectionsTab roleContext={roleContext} />
     </div>
   );
 }

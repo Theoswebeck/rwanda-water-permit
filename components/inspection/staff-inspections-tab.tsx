@@ -142,9 +142,13 @@ const CHIP_DEFS: StatusChipDef[] = [
   },
 ];
 
-export function StaffInspectionsTab() {
+interface StaffInspectionsTabProps {
+  roleContext?: string;
+}
+
+export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const { userProfile } = useAuth();
-  const basePath = getInspectionBasePath(userProfile?.role);
+  const basePath = getInspectionBasePath(roleContext || userProfile?.role);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");

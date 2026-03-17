@@ -406,7 +406,7 @@ export default function VerificationDashboard() {
               </Card>
             ) : topTab === "inspections" ? (
               <div className="space-y-6">
-                <InspectionsWorkbench />
+                <InspectionsWorkbench roleContext="verifier" />
               </div>
             ) : topTab === "water-reports" ? (
               <WaterUseReportsList />

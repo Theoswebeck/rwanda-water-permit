@@ -1041,7 +1041,7 @@ export default function ReviewerDashboard() {
             </Card>
           ) : topTab === "inspections" ? (
             <div className="space-y-6">
-              <InspectionsWorkbench />
+              <InspectionsWorkbench roleContext="reviewer" />
             </div>
           ) : topTab === "water-reports" ? (
             <WaterUseReportsList />

@@ -50,7 +50,6 @@ const APPROVAL_TRANSITIONS: WorkflowTransition[] = [
     action: "approve",
     label: "Approve",
     variant: "default",
-    requiresNotes: true,
   },
   {
     target: "rejected",
