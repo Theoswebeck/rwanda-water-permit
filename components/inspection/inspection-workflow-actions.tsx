@@ -10,13 +10,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,14 +30,6 @@ import {
   getInspectionWorkflowClassName,
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
-
-type StaffMember = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  email: string;
-};
 
 interface StepComment {
   label: string;
@@ -133,47 +118,17 @@ export function InspectionWorkflowActions({
     transition: WorkflowTransition | null;
   }>({ open: false, transition: null });
 
-  const [assessors, setAssessors] = useState<StaffMember[]>([]);
-  const [selectedAssessorId, setSelectedAssessorId] = useState("");
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-
-  // Resolve user names for step comments
   const [userNames, setUserNames] = useState<Record<string, string>>({});
 
   const transitions = getAvailableTransitions(workflowStatus, role);
   const responsibleRole = getResponsibleRole(workflowStatus);
 
-  // Fetch assessors for assignment
-  useEffect(() => {
-    if (
-      (role === "reviewer" || role === "admin") &&
-      workflowStatus === "submitted"
-    ) {
-      const fetchAssessors = async () => {
-        const { data, error } = await supabase
-          .from("users")
-          .select("id, first_name, last_name, role, email")
-          .in("role", ["assessor"])
-          .eq("status", "active")
-          .order("first_name", { ascending: true });
-
-        if (error) {
-          console.error("❌ Error fetching assessors:", error);
-          return;
-        }
-        setAssessors(data || []);
-      };
-      fetchAssessors();
-    }
-  }, [role, workflowStatus]);
-
-  // Resolve user names for the step comments display
   useEffect(() => {
     const ids = [
       inspection?.reviewed_by,
       inspection?.verified_by,
       inspection?.approved_by,
-      inspection?.assigned_assessor_id,
+      inspection?.inspector_id,
     ].filter(Boolean) as string[];
 
     const uniqueIds = Array.from(new Set(ids));
@@ -200,11 +155,11 @@ export function InspectionWorkflowActions({
     inspection?.reviewed_by,
     inspection?.verified_by,
     inspection?.approved_by,
-    inspection?.assigned_assessor_id,
+    inspection?.inspector_id,
   ]);
 
   const handleTransition = useCallback(
-    async (transition: WorkflowTransition, assigneeId?: string) => {
+    async (transition: WorkflowTransition) => {
       if (!userId) return;
 
       try {
@@ -215,11 +170,7 @@ export function InspectionWorkflowActions({
           updated_at: new Date().toISOString(),
         };
 
-        if (transition.action === "assign_assessor" && assigneeId) {
-          updatePayload.assigned_assessor_id = assigneeId;
-        }
-
-        if (transition.action === "forward_to_review" && notes) {
+        if (transition.action === "submit_for_review" && notes) {
           updatePayload.assessment_notes = notes;
           updatePayload.assessment_completed_at = new Date().toISOString();
         }
@@ -263,15 +214,6 @@ export function InspectionWorkflowActions({
 
         if (updateError) throw updateError;
 
-        const selectedAssessor = assigneeId
-          ? assessors.find((a) => a.id === assigneeId)
-          : null;
-
-        const comment =
-          transition.action === "assign_assessor" && selectedAssessor
-            ? `Assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`
-            : notes || null;
-
         const { error: historyError } = await supabase
           .from("inspection_workflow_history")
           .insert({
@@ -280,7 +222,7 @@ export function InspectionWorkflowActions({
             from_status: workflowStatus,
             to_status: transition.target,
             action: transition.action,
-            comment,
+            comment: notes || null,
           });
 
         if (historyError) {
@@ -289,8 +231,6 @@ export function InspectionWorkflowActions({
 
         setNotes("");
         setConfirmDialog({ open: false, transition: null });
-        setAssignDialogOpen(false);
-        setSelectedAssessorId("");
         onStatusChange?.(transition.target as InspectionWorkflowStatus);
       } catch (err: unknown) {
         const message =
@@ -301,10 +241,9 @@ export function InspectionWorkflowActions({
         setLoading(false);
       }
     },
-    [inspectionId, userId, workflowStatus, notes, assessors, onStatusChange]
+    [inspectionId, userId, workflowStatus, notes, onStatusChange]
   );
 
-  // Build step comments from inspection data
   const stepComments: StepComment[] = [];
 
   if (inspection?.assessment_notes) {
@@ -313,8 +252,8 @@ export function InspectionWorkflowActions({
       role: "Assessor",
       notes: inspection.assessment_notes,
       date: inspection.assessment_completed_at,
-      userName: inspection.assigned_assessor_id
-        ? userNames[inspection.assigned_assessor_id]
+      userName: inspection.inspector_id
+        ? userNames[inspection.inspector_id]
         : null,
     });
   }
@@ -379,7 +318,6 @@ export function InspectionWorkflowActions({
     return null;
   }
 
-  // Terminal status -- view-only with step comments
   if (isTerminalStatus(workflowStatus)) {
     return (
       <div className="space-y-4">
@@ -404,7 +342,6 @@ export function InspectionWorkflowActions({
     );
   }
 
-  // No available actions for this role -- view-only with step comments
   if (transitions.length === 0) {
     const waitingFor = responsibleRole
       ? `Waiting for ${responsibleRole}`
@@ -430,14 +367,7 @@ export function InspectionWorkflowActions({
     );
   }
 
-  // Active role -- action buttons + step comments
-  const hasAssignAction = transitions.some(
-    (t) => t.action === "assign_assessor"
-  );
-  const otherTransitions = transitions.filter(
-    (t) => t.action !== "assign_assessor"
-  );
-  const anyRequiresNotes = otherTransitions.some((t) => t.requiresNotes);
+  const anyRequiresNotes = transitions.some((t) => t.requiresNotes);
 
   return (
     <>
@@ -465,18 +395,7 @@ export function InspectionWorkflowActions({
             )}
 
             <div className="flex flex-wrap items-center gap-2">
-              {hasAssignAction && (
-                <Button
-                  type="button"
-                  variant="default"
-                  disabled={loading}
-                  onClick={() => setAssignDialogOpen(true)}
-                >
-                  Assign Assessor
-                </Button>
-              )}
-
-              {otherTransitions.map((t) => (
+              {transitions.map((t) => (
                 <Button
                   key={t.action}
                   type="button"
@@ -503,60 +422,6 @@ export function InspectionWorkflowActions({
         <StepCommentsCard comments={stepComments} />
       </div>
 
-      {/* Assign Assessor Dialog */}
-      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Assessor</DialogTitle>
-            <DialogDescription>
-              Select an assessor to review this inspection report.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Select
-              value={selectedAssessorId}
-              onValueChange={setSelectedAssessorId}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select an assessor..." />
-              </SelectTrigger>
-              <SelectContent>
-                {assessors.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.first_name} {a.last_name} ({a.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setAssignDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!selectedAssessorId || loading}
-              onClick={() => {
-                const assignTransition = transitions.find(
-                  (t) => t.action === "assign_assessor"
-                );
-                if (assignTransition) {
-                  handleTransition(assignTransition, selectedAssessorId);
-                }
-              }}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              Assign
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Approve/Reject Dialog */}
       <Dialog
         open={confirmDialog.open}
         onOpenChange={(open) => {

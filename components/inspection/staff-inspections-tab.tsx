@@ -93,7 +93,7 @@ function statusPill(status: InspectionWorkflowStatus | string) {
 
 function getDisplayStatus(row: InspectionRow): string {
   if (row.status !== "completed") return row.status;
-  return row.workflow_status || "submitted";
+  return row.workflow_status || "pending_review";
 }
 
 
@@ -111,15 +111,9 @@ const CHIP_DEFS: StatusChipDef[] = [
     priority: "secondary",
   },
   {
-    id: "submitted",
-    label: "Submitted",
-    statuses: ["submitted"],
-    priority: "primary",
-  },
-  {
-    id: "assessment",
-    label: "Assessment",
-    statuses: ["pending_assessment", "under_assessment", "returned_to_assessment"],
+    id: "returned",
+    label: "Returned to Assessor",
+    statuses: ["returned_to_assessment"],
     priority: "primary",
   },
   {

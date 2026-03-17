@@ -252,7 +252,7 @@ export default function PermitInspectionPage() {
           inspector_id: user.id,
           type: 'annual', // or 'follow_up', 'initial', etc.
           status: 'completed',
-          workflow_status: 'submitted',
+          workflow_status: 'pending_review',
           scheduled_date: new Date().toISOString(),
           completed_date: new Date().toISOString(),
           
