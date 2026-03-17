@@ -690,21 +690,25 @@ function computeModificationChanges(
   
   const changes: Record<string, { previous: any; current: any }> = {};
   
-  // Fields to compare (excluding files and computed fields)
+  // Fields to compare (excluding files, computed fields, and nested array fields handled separately below)
   const fieldsToCompare: (keyof FormValues)[] = [
+    // Applicant details
     'fullNameApplicant',
     'categoryApplicant',
     'nameRepresentative',
     'representativePosition',
+    // Office address
     'officeProvince',
     'officeDistrict',
     'officeSector',
     'officeCell',
     'officeVillage',
+    // Contact
     'telephoneContact',
     'telephoneContactOffice',
     'emailAddress',
     'nationalIdNumber',
+    // Water source
     'waterSourceType',
     'nameSourceWater',
     'tributaryToMain',
@@ -716,39 +720,117 @@ function computeModificationChanges(
     'waterSourceLatitude',
     'waterSourceLongitude',
     'waterReliability',
+    // Permit
     'permitLengthYears',
     'intendedActivities',
+    'intendedActivityOther',
+    // Concession
     'concessionArea',
-    'recreationConcessionAreaM2',
+    'concessionAreaUnit',
+    'permitPeriod',
+    // Land
     'ownsAllLand',
     'hasLandAccess',
+    // Water supply
     'waterSupplyPopulation',
     'waterSupplyPerCapitaDemand',
     'waterSupplyTotalDailyDemand',
     'waterSupplyDailyAbstraction',
     'waterSupplyStorageCapacity',
+    // Irrigation
     'irrigationTotalArea',
     'irrigationCropType',
     'irrigationWaterDemand',
     'irrigationMethod',
     'irrigationStorageCapacity',
+    'irrigationGrowingSeasonFrom',
+    'irrigationGrowingSeasonTo',
+    'irrigationProductionSystem',
+    'irrigationStorageFacilities',
+    // Hydropower / Electricity
+    'hydropowerQuantityPerYear',
+    'hydropowerIntakeToPowerhouseDistanceM',
+    'hydropowerHasDownstreamUsers',
+    'hydropowerPlantCapacityMw',
+    // Fish farming
+    'fishLakeAreaHectares',
+    'fishLakeNumberOfCages',
+    'fishLakeCageCapacity',
+    'fishPondsSurfaceAreaM2',
+    'fishPondsCapacityM3',
+    'fishPondsRefillFrequency',
+    'fishPondsDiscardWaterQuantityM3PerDay',
+    // Coffee washing
+    'coffeeWashingQuantityPerDay',
+    'coffeeWashingQuantityPerMonth',
+    'coffeeWashingCapacityTonsPerYear',
+    // Mining
+    'miningQuantityPerDay',
+    'miningQuantityPerMonth',
+    'miningMineralsType',
+    'miningProductionCapacityTonsPerYear',
+    // Construction of dam
+    'constructionDamPurpose',
+    'constructionDamDescription',
+    'constructionDamExpectedDuration',
+    'constructionDamAlterationPlans',
+    // Construction of infrastructure
+    'infrastructurePurpose',
+    'infrastructureDescription',
+    'infrastructureExpectedDuration',
+    'infrastructureAlterationPlans',
+    // Recreation
+    'recreationType',
+    'recreationProjectDescription',
+    'recreationConcessionAreaM2',
   ];
   
   for (const field of fieldsToCompare) {
     const originalValue = originalData[field];
     const currentValue = currentData[field];
     
-    // Deep comparison for arrays and objects
     const originalStr = JSON.stringify(originalValue ?? '');
     const currentStr = JSON.stringify(currentValue ?? '');
     
     if (originalStr !== currentStr) {
       changes[field] = {
-        // Use null instead of undefined so JSON.stringify preserves the "previous" key.
-        // (undefined is silently dropped by JSON.stringify, losing the original value.)
         previous: originalValue !== undefined ? originalValue : null,
         current: currentValue !== undefined ? currentValue : null,
       };
+    }
+  }
+
+  // Flatten waterAbstractionDetails (array of objects) into individual sub-field comparisons
+  const abstractionSubFields = ['flowRate', 'maxAverageYearly', 'abstractionMethod'] as const;
+  const origAbstraction = ((originalData.waterAbstractionDetails as any[]) || [])[0] || {};
+  const currAbstraction = ((currentData.waterAbstractionDetails as any[]) || [])[0] || {};
+  for (const subField of abstractionSubFields) {
+    const origVal = origAbstraction[subField];
+    const currVal = currAbstraction[subField];
+    if (JSON.stringify(origVal ?? '') !== JSON.stringify(currVal ?? '')) {
+      changes[`waterAbstraction_${subField}`] = {
+        previous: origVal ?? null,
+        current: currVal ?? null,
+      };
+    }
+  }
+
+  // Flatten industryDetails (array of objects) – compare row-by-row
+  const origIndustry = (originalData.industryDetails as any[]) || [];
+  const currIndustry = (currentData.industryDetails as any[]) || [];
+  const industryLen = Math.max(origIndustry.length, currIndustry.length);
+  for (let i = 0; i < industryLen; i++) {
+    const origRow = origIndustry[i] || {};
+    const currRow = currIndustry[i] || {};
+    for (const key of ['industryType', 'dailyQuantity', 'monthlyQuantity'] as const) {
+      const origVal = origRow[key];
+      const currVal = currRow[key];
+      if (JSON.stringify(origVal ?? '') !== JSON.stringify(currVal ?? '')) {
+        changes[`industry_${key}_${i}`] = {
+          previous: origVal ?? null,
+          current: currVal ?? null,
+        };
+      }
     }
   }
   
@@ -757,19 +839,23 @@ function computeModificationChanges(
 
 // Field labels for display in modification markers
 const FIELD_LABELS: Record<string, string> = {
+  // Applicant
   fullNameApplicant: 'Full Name',
   categoryApplicant: 'Applicant Category',
   nameRepresentative: 'Representative Name',
   representativePosition: 'Representative Position/Title',
+  // Office address
   officeProvince: 'Office Province',
   officeDistrict: 'Office District',
   officeSector: 'Office Sector',
   officeCell: 'Office Cell',
   officeVillage: 'Office Village',
+  // Contact
   telephoneContact: 'Telephone',
   telephoneContactOffice: 'Office Telephone',
   emailAddress: 'Email Address',
   nationalIdNumber: 'National ID',
+  // Water source
   waterSourceType: 'Water Source Type',
   nameSourceWater: 'Water Source Name',
   tributaryToMain: 'Tributary',
@@ -781,23 +867,92 @@ const FIELD_LABELS: Record<string, string> = {
   waterSourceLatitude: 'Latitude',
   waterSourceLongitude: 'Longitude',
   waterReliability: 'Water Reliability',
+  // Permit
   permitLengthYears: 'Permit Duration',
   intendedActivities: 'Intended Activities',
+  intendedActivityOther: 'Other Activity Details',
+  // Concession
   concessionArea: 'Concession Area',
-  recreationConcessionAreaM2: 'Recreation Concession Area (m²)',
+  concessionAreaUnit: 'Concession Area Unit',
+  permitPeriod: 'Permit Period',
+  // Land
   ownsAllLand: 'Owns All Land',
   hasLandAccess: 'Has Land Access',
+  // Water supply
   waterSupplyPopulation: 'Population Served',
   waterSupplyPerCapitaDemand: 'Per Capita Demand',
   waterSupplyTotalDailyDemand: 'Total Daily Demand',
   waterSupplyDailyAbstraction: 'Daily Abstraction',
-  waterSupplyStorageCapacity: 'Storage Capacity',
+  waterSupplyStorageCapacity: 'Water Supply Storage Capacity',
+  // Irrigation
   irrigationTotalArea: 'Total Irrigation Area',
   irrigationCropType: 'Crop Type',
-  irrigationWaterDemand: 'Water Demand',
+  irrigationWaterDemand: 'Irrigation Water Demand',
   irrigationMethod: 'Irrigation Method',
-  irrigationStorageCapacity: 'Storage Capacity',
+  irrigationStorageCapacity: 'Irrigation Storage Capacity',
+  irrigationGrowingSeasonFrom: 'Growing Season From',
+  irrigationGrowingSeasonTo: 'Growing Season To',
+  irrigationProductionSystem: 'Production System',
+  irrigationStorageFacilities: 'Storage Facilities',
+  // Water abstraction (flattened sub-fields)
+  waterAbstraction_flowRate: 'Flow Rate (m³/s)',
+  waterAbstraction_maxAverageYearly: 'Maximum Average Yearly (m³/year)',
+  waterAbstraction_abstractionMethod: 'Method of Water Abstraction',
+  // Hydropower / Electricity
+  hydropowerQuantityPerYear: 'Quantity of Abstracted Water (m³/year)',
+  hydropowerIntakeToPowerhouseDistanceM: 'Distance Intake to Powerhouse (m)',
+  hydropowerHasDownstreamUsers: 'Downstream Water Users',
+  hydropowerPlantCapacityMw: 'Power Plant Capacity (MW)',
+  // Fish farming
+  fishLakeAreaHectares: 'Lake Area (ha)',
+  fishLakeNumberOfCages: 'Number of Cages',
+  fishLakeCageCapacity: 'Cage Capacity',
+  fishPondsSurfaceAreaM2: 'Ponds Surface Area (m²)',
+  fishPondsCapacityM3: 'Ponds Capacity (m³)',
+  fishPondsRefillFrequency: 'Ponds Refill Frequency',
+  fishPondsDiscardWaterQuantityM3PerDay: 'Discard Water Quantity (m³/day)',
+  // Coffee washing
+  coffeeWashingQuantityPerDay: 'Coffee Washing Quantity/Day',
+  coffeeWashingQuantityPerMonth: 'Coffee Washing Quantity/Month',
+  coffeeWashingCapacityTonsPerYear: 'Coffee Washing Capacity (tons/year)',
+  // Mining
+  miningQuantityPerDay: 'Mining Water Quantity/Day',
+  miningQuantityPerMonth: 'Mining Water Quantity/Month',
+  miningMineralsType: 'Minerals Type',
+  miningProductionCapacityTonsPerYear: 'Mining Production Capacity (tons/year)',
+  // Construction of dam
+  constructionDamPurpose: 'Dam Purpose',
+  constructionDamDescription: 'Dam Description',
+  constructionDamExpectedDuration: 'Dam Expected Duration',
+  constructionDamAlterationPlans: 'Dam Alteration Plans',
+  // Construction of infrastructure
+  infrastructurePurpose: 'Infrastructure Purpose',
+  infrastructureDescription: 'Infrastructure Description',
+  infrastructureExpectedDuration: 'Infrastructure Expected Duration',
+  infrastructureAlterationPlans: 'Infrastructure Alteration Plans',
+  // Recreation
+  recreationType: 'Recreation Type',
+  recreationProjectDescription: 'Recreation Project Description',
+  recreationConcessionAreaM2: 'Recreation Concession Area (m²)',
 };
+
+// Industry sub-field base labels (row index is dynamic)
+const INDUSTRY_SUB_LABELS: Record<string, string> = {
+  industryType: 'Industry Type',
+  dailyQuantity: 'Industry Daily Quantity',
+  monthlyQuantity: 'Industry Monthly Quantity',
+};
+
+function getFieldLabel(fieldName: string): string {
+  if (FIELD_LABELS[fieldName]) return FIELD_LABELS[fieldName];
+  const industryMatch = fieldName.match(/^industry_(\w+)_(\d+)$/);
+  if (industryMatch) {
+    const [, subKey, rowIdx] = industryMatch;
+    const base = INDUSTRY_SUB_LABELS[subKey] || subKey;
+    return Number(rowIdx) > 0 ? `${base} (Row ${Number(rowIdx) + 1})` : base;
+  }
+  return fieldName;
+}
 
 interface ApplicationFormProps {
   userData: any;
@@ -855,13 +1010,19 @@ export function ApplicationForm({
     (value: string) => localizeText(value, locale, translationMaps.literal, translationMaps.words),
     [locale, translationMaps.literal, translationMaps.words]
   );
-  const localizedFieldLabels = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(FIELD_LABELS).map(([field, label]) => [field, tx(label)])
-      ) as Record<string, string>,
-    [tx]
-  );
+  const localizedFieldLabels = useMemo(() => {
+    const base = Object.fromEntries(
+      Object.entries(FIELD_LABELS).map(([field, label]) => [field, tx(label)])
+    ) as Record<string, string>;
+    if (modificationChanges) {
+      for (const key of Object.keys(modificationChanges)) {
+        if (!base[key]) {
+          base[key] = tx(getFieldLabel(key));
+        }
+      }
+    }
+    return base;
+  }, [tx, modificationChanges]);
 
   const localizeNode = useCallback(
     (node: React.ReactNode): React.ReactNode => {

@@ -41,17 +41,25 @@ function formatValueForDisplay(value: any): string {
   
   if (Array.isArray(value)) {
     if (value.length === 0) return '(none)';
-    // Handle array of strings (e.g., intended activities)
     return value.map(v => {
       if (typeof v === 'string') {
-        // Format activity codes to readable text
         return v.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       }
+      if (typeof v === 'object' && v !== null) {
+        return Object.entries(v)
+          .filter(([, val]) => val !== undefined && val !== null && val !== '')
+          .map(([key, val]) => `${key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim()}: ${val}`)
+          .join(', ');
+      }
       return String(v);
-    }).join(', ');
+    }).join('; ');
   }
   
   if (typeof value === 'object') {
+    const entries = Object.entries(value).filter(([, val]) => val !== undefined && val !== null && val !== '');
+    if (entries.length > 0) {
+      return entries.map(([key, val]) => `${key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim()}: ${val}`).join(', ');
+    }
     return JSON.stringify(value, null, 2);
   }
   

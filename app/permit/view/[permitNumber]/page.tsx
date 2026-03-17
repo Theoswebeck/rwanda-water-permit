@@ -40,6 +40,27 @@ function getCanonicalIssueDate(permit: Record<string, unknown>): string | null {
   return acceptedAt || null;
 }
 
+function computePermitDuration(issueDateStr: string | null, expiryDateStr: string | null): string | null {
+  if (!issueDateStr || !expiryDateStr) return null;
+  const issue = new Date(issueDateStr);
+  const expiry = new Date(expiryDateStr);
+  if (Number.isNaN(issue.getTime()) || Number.isNaN(expiry.getTime())) return null;
+
+  let years = expiry.getFullYear() - issue.getFullYear();
+  let months = expiry.getMonth() - issue.getMonth();
+  if (expiry.getDate() < issue.getDate()) months -= 1;
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  if (years <= 0 && months <= 0) return null;
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} ${years === 1 ? "year" : "years"}`);
+  if (months > 0) parts.push(`${months} ${months === 1 ? "month" : "months"}`);
+  return parts.join(", ");
+}
+
 function parsePositiveNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
   if (typeof value === "string") {
@@ -246,6 +267,21 @@ export default async function PublicPermitViewPage({
     return "N/A";
   })();
 
+  const permitDuration = (() => {
+    const fromDates = computePermitDuration(issueDate, typeof permit.expiry_date === "string" ? permit.expiry_date : null);
+    if (fromDates) return fromDates;
+
+    const assessorYears = parsePositiveNumber(
+      (internalNotes?._assessorAdjustments as Record<string, unknown> | undefined)?.permitLengthYears
+    );
+    if (assessorYears) return `${assessorYears} ${assessorYears === 1 ? "year" : "years"}`;
+
+    const proposedYears = parsePositiveNumber(application?.proposed_duration_years);
+    if (proposedYears) return `${proposedYears} ${proposedYears === 1 ? "year" : "years"}`;
+
+    return "N/A";
+  })();
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 py-8">
@@ -322,13 +358,17 @@ export default async function PublicPermitViewPage({
                   <div className="text-xs text-slate-500">Intended water activity</div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{intendedWaterActivity}</div>
                 </div>
-                <div className="rounded-xl border p-4 md:col-span-2">
+                <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500">
                     {isConcessionPermit ? "Surface concession area" : "Authorized volume"}
                   </div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
                     {isConcessionPermit ? concessionAreaValue : abstractionValue}
                   </div>
+                </div>
+                <div className="rounded-xl border p-4">
+                  <div className="text-xs text-slate-500">Permit duration</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{permitDuration}</div>
                 </div>
                 <div className="rounded-xl border p-4 md:col-span-2">
                   <div className="text-xs text-slate-500">Location</div>

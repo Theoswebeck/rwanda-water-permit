@@ -325,10 +325,9 @@ export function AssessmentReportForm({
                   <Label>Intended abstraction method</Label>
                   <Input
                     value={localData.abstractionMethod || ''}
-                    onChange={(e) => updateField('abstractionMethod', e.target.value)}
-                    placeholder="e.g., Pump, Gravity, etc."
-                    disabled={readOnly}
-                    className={readOnlyClass}
+                    readOnly
+                    disabled
+                    className={prefilledClass}
                   />
                 </div>
                 <div>
@@ -375,6 +374,7 @@ export function AssessmentReportForm({
                   <div>
                     <Label className="text-sm text-muted-foreground">Available water (Q)</Label>
                     <Input
+                      type="number"
                       value={localData.availableWaterQ || ''}
                       onChange={(e) => updateField('availableWaterQ', e.target.value)}
                       placeholder="L/sec equivalent to m³/day"
@@ -385,6 +385,7 @@ export function AssessmentReportForm({
                   <div>
                     <Label className="text-sm text-muted-foreground">Water demand (D)</Label>
                     <Input
+                      type="number"
                       value={localData.waterDemandD || ''}
                       onChange={(e) => updateField('waterDemandD', e.target.value)}
                       placeholder="m³/day"
@@ -395,6 +396,7 @@ export function AssessmentReportForm({
                   <div>
                     <Label className="text-sm text-muted-foreground">Existing demand (ED)</Label>
                     <Input
+                      type="number"
                       value={localData.existingDemandED || ''}
                       onChange={(e) => updateField('existingDemandED', e.target.value)}
                       placeholder="m³/day"
@@ -405,6 +407,7 @@ export function AssessmentReportForm({
                   <div>
                     <Label className="text-sm text-muted-foreground">Remaining Water (Q-D-ED)</Label>
                     <Input
+                      type="number"
                       value={localData.remainingWater || ''}
                       onChange={(e) => updateField('remainingWater', e.target.value)}
                       placeholder="m³/day"
@@ -415,6 +418,7 @@ export function AssessmentReportForm({
                   <div>
                     <Label className="text-sm text-muted-foreground">Water Storage</Label>
                     <Input
+                      type="number"
                       value={localData.waterStorage || ''}
                       onChange={(e) => updateField('waterStorage', e.target.value)}
                       placeholder="m³"

@@ -632,6 +632,15 @@ export function enrichModificationChanges(
   const columnFallbacks: Record<string, string> = {
     permitLengthYears: 'proposed_duration_years',
     intendedActivities: 'intended_activities',
+    waterAbstraction_maxAverageYearly: 'estimated_usage_volume',
+    waterAbstraction_abstractionMethod: 'water_taking_method',
+  };
+
+  // Map of flattened waterAbstraction sub-field keys → paths inside internal_notes
+  const nestedLookups: Record<string, (formData: Record<string, any>) => any> = {
+    waterAbstraction_flowRate: (fd) => (fd.waterAbstractionDetails || [])[0]?.flowRate,
+    waterAbstraction_maxAverageYearly: (fd) => (fd.waterAbstractionDetails || [])[0]?.maxAverageYearly,
+    waterAbstraction_abstractionMethod: (fd) => (fd.waterAbstractionDetails || [])[0]?.abstractionMethod,
   };
 
   const enriched: Record<string, { previous: any; current: any }> = {};
@@ -640,18 +649,23 @@ export function enrichModificationChanges(
     const hasPrevious = change && ('previous' in change) && change.previous !== undefined && change.previous !== null;
 
     if (hasPrevious) {
-      // Previous value exists, keep as-is
       enriched[fieldName] = { previous: change.previous, current: change.current };
     } else {
-      // Previous value is missing – try to reconstruct from original application
       let reconstructedPrevious: any = null;
 
-      // 1. Try internal_notes form data
-      if (originalFormData[fieldName] !== undefined && originalFormData[fieldName] !== null) {
+      // 1. Try nested lookup (for flattened waterAbstraction / industry sub-fields)
+      if (nestedLookups[fieldName]) {
+        const val = nestedLookups[fieldName](originalFormData);
+        if (val !== undefined && val !== null) {
+          reconstructedPrevious = val;
+        }
+      }
+      // 2. Try direct internal_notes form data
+      if (reconstructedPrevious === null && originalFormData[fieldName] !== undefined && originalFormData[fieldName] !== null) {
         reconstructedPrevious = originalFormData[fieldName];
       }
-      // 2. Try application-level column fallback
-      else if (columnFallbacks[fieldName] && originalApplication) {
+      // 3. Try application-level column fallback
+      if (reconstructedPrevious === null && columnFallbacks[fieldName] && originalApplication) {
         const colName = columnFallbacks[fieldName];
         const colValue = originalApplication[colName];
         if (colValue !== undefined && colValue !== null) {
