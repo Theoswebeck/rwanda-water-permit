@@ -342,7 +342,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             <span>Inspections</span>
             <div className="flex items-center gap-2">
               <Badge variant="secondary">{filtered.length}</Badge>
-              <CreateInspectionDialog />
+              {roleContext === "assessor" && <CreateInspectionDialog />}
             </div>
           </CardTitle>
         </CardHeader>

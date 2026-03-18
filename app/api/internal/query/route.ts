@@ -162,6 +162,29 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
       left join public.users u on u.id = a.applicant_id
     `
   }
+  if (table === 'water_use_reports') {
+    const wantsRelations = requestedSelect?.includes('permit') || requestedSelect?.includes('application') || requestedSelect?.includes('applicant')
+    if (wantsRelations) {
+      return `
+        select
+          wur.*,
+          row_to_json(p) as permit,
+          row_to_json(a) as application,
+          jsonb_build_object(
+            'id', u.id,
+            'first_name', u.first_name,
+            'last_name', u.last_name,
+            'company_name', u.company_name,
+            'email', u.email
+          ) as applicant
+        from public.water_use_reports wur
+        left join public.permits p on p.id = wur.permit_id
+        left join public.applications a on a.id = wur.application_id
+        left join public.users u on u.id = wur.applicant_id
+      `
+    }
+    return `select wur.* from public.water_use_reports wur`
+  }
   return `select t.* from public.${quoteIdent(table)} t`
 }
 
@@ -169,6 +192,7 @@ function tableAlias(table: string) {
   if (table === 'applications') return 'a'
   if (table === 'inspections') return 'i'
   if (table === 'permits') return 'p'
+  if (table === 'water_use_reports') return 'wur'
   return 't'
 }
 

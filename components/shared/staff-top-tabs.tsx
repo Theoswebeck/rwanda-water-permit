@@ -18,20 +18,20 @@ export function StaffTopTabs({
   return (
     <div className={cn("w-full", className)}>
       <Tabs value={value} onValueChange={onValueChange} className="w-full">
-        <div className="border-b">
+        <div className="border-b-2 border-border">
           <div className="overflow-x-auto">
-            <TabsList className="bg-transparent p-0 h-auto rounded-none inline-flex w-max justify-start gap-8">
+            <TabsList className="bg-transparent p-0 h-auto rounded-none inline-flex w-max justify-start gap-10">
               {tabs.map((t) => (
                 <TabsTrigger
                   key={t.value}
                   value={t.value}
                   className={cn(
-                    // override shadcn TabsTrigger flex-1 so tabs do NOT stretch full width
                     "flex-none",
-                    "relative h-auto rounded-none bg-transparent px-0 pb-3 pt-3 text-sm font-medium text-muted-foreground shadow-none border-0",
+                    "relative h-auto rounded-none bg-transparent px-1 pb-4 pt-4 text-base font-semibold text-muted-foreground shadow-none border-0 transition-colors duration-150",
+                    "hover:text-foreground/80",
                     "data-[state=active]:text-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none",
-                    "after:absolute after:left-0 after:right-0 after:-bottom-[1px] after:h-[2px] after:bg-transparent",
-                    "data-[state=active]:after:bg-foreground"
+                    "after:absolute after:left-0 after:right-0 after:-bottom-[2px] after:h-[3px] after:rounded-full after:bg-transparent after:transition-colors after:duration-150",
+                    "data-[state=active]:after:bg-primary"
                   )}
                 >
                   {t.label}

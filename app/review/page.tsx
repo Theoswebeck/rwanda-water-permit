@@ -962,14 +962,30 @@ export default function ReviewerDashboard() {
           className="container mx-auto px-4 py-6"
         >
         <div className="space-y-6">
-          {/* Header */}
+          <StaffTopTabs
+            value={topTab}
+            onValueChange={(v) => setTopTab(v as any)}
+            tabs={[
+              { value: "review", label: "Permitting" },
+              { value: "inspections", label: "Inspections" },
+              { value: "water-reports", label: "Water Use Reports" },
+              { value: "permit-registry", label: "Permit Registry" },
+            ]}
+          />
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-                Application Review Dashboard
+                {topTab === "review" ? "Application Review Dashboard"
+                  : topTab === "inspections" ? "Inspections"
+                  : topTab === "water-reports" ? "Water Use Reports"
+                  : "Permit Registry"}
               </h1>
               <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
-                Review and assess water permit applications for technical compliance
+                {topTab === "review" ? "Review and assess water permit applications for technical compliance"
+                  : topTab === "inspections" ? "Manage and track field inspections"
+                  : topTab === "water-reports" ? "Monitor and review water usage reports"
+                  : "View and manage issued permits"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -979,27 +995,14 @@ export default function ReviewerDashboard() {
             </div>
           </div>
 
-            {/* Status Filter Chips */}
+          {topTab === "review" ? (
+            <>
             <StatusFilterChips
               chips={REVIEWER_CHIPS}
               activeChipIds={activeChipIds}
               onChipIdsChange={setActiveChipIds}
               applications={reviewApplications}
-          />
-
-          {/* Main Content */}
-          <StaffTopTabs
-            value={topTab}
-            onValueChange={(v) => setTopTab(v as any)}
-            tabs={[
-              { value: "review", label: "Review" },
-              { value: "inspections", label: "Inspections" },
-              { value: "water-reports", label: "Water Use Reports" },
-              { value: "permit-registry", label: "Permit Registry" },
-            ]}
-          />
-
-          {topTab === "review" ? (
+            />
             <Card>
                 <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
@@ -1039,6 +1042,7 @@ export default function ReviewerDashboard() {
                 </div>
               </CardContent>
             </Card>
+            </>
           ) : topTab === "inspections" ? (
             <div className="space-y-6">
               <InspectionsWorkbench roleContext="reviewer" />

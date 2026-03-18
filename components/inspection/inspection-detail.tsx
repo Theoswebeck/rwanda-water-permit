@@ -19,6 +19,12 @@ interface InspectionDetailProps {
 
 type EmploymentRow = { male?: number | null; female?: number | null; total?: number | null };
 type EmploymentBreakdown = {
+  skilledPermanentWorkers?: EmploymentRow;
+  unskilledPermanentWorkers?: EmploymentRow;
+  skilledTemporaryWorkers?: EmploymentRow;
+  unskilledTemporaryWorkers?: EmploymentRow;
+  totalWorkers?: EmploymentRow;
+  // Legacy keys for reading old inspection records
   permanentEmployees?: EmploymentRow;
   temporarySeasonalWorkers?: EmploymentRow;
   technicalSkilledStaff?: EmploymentRow;
@@ -100,6 +106,7 @@ interface Inspection {
   overall_score?: number
   follow_up_required?: boolean
   follow_up_date?: string
+  locked_field_overrides?: Record<string, string>
   inspection_documents?: Array<{
     id?: string
     name?: string
@@ -136,12 +143,38 @@ interface Inspection {
   }
 }
 
-// Readonly field component for consistent styling
 function ReadonlyField({ label, value }: { label: string; value?: string | number | null }) {
   return (
     <div className="space-y-2">
       <Label className="text-sm text-muted-foreground">{label}</Label>
       <Input disabled value={value ?? "N/A"} className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" />
+    </div>
+  );
+}
+
+function OverridableReadonlyField({
+  label,
+  value,
+  overrideKey,
+  overrides,
+}: {
+  label: string;
+  value?: string | number | null;
+  overrideKey: string;
+  overrides?: Record<string, string>;
+}) {
+  const isEmpty = value === null || value === undefined || (typeof value === "string" && (value.trim() === "" || value.trim().toLowerCase() === "n/a"));
+  const overrideValue = overrides?.[overrideKey];
+  const displayValue = isEmpty && overrideValue ? overrideValue : value;
+  const isOverridden = isEmpty && !!overrideValue;
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm text-muted-foreground">
+        {label}
+        {isOverridden && <span className="ml-1.5 text-xs text-amber-600 dark:text-amber-400">(inspector-provided)</span>}
+      </Label>
+      <Input disabled value={displayValue ?? "N/A"} className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" />
     </div>
   );
 }
@@ -294,13 +327,15 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
 
   // Get employment data
   const getEmploymentData = () => {
-    const breakdown = inspection?.employment_gender_breakdown || {};
+    const b = inspection?.employment_gender_breakdown || {};
     return {
-      permanentEmployees: breakdown.permanentEmployees || {},
-      temporarySeasonalWorkers: breakdown.temporarySeasonalWorkers || {},
-      technicalSkilledStaff: breakdown.technicalSkilledStaff || {},
-      unskilledSupportStaff: breakdown.unskilledSupportStaff || {},
-      totalWorkforce: breakdown.totalWorkforce || {},
+      skilledPermanentWorkers: b.skilledPermanentWorkers || b.technicalSkilledStaff || {},
+      unskilledPermanentWorkers: b.unskilledPermanentWorkers || b.unskilledSupportStaff || {},
+      skilledTemporaryWorkers: b.skilledTemporaryWorkers || b.temporarySeasonalWorkers || {},
+      unskilledTemporaryWorkers: b.unskilledTemporaryWorkers || {},
+      totalWorkers: b.totalWorkers || b.totalWorkforce || {},
+      // Legacy fallback: if old record has permanentEmployees but no new keys, show it
+      permanentEmployees: b.permanentEmployees || {},
     };
   };
 
@@ -360,11 +395,11 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
       {/* Permit holder / operator */}
       <SectionShell title="Permit holder / operator">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ReadonlyField label="Operator name" value={inspection.operator_name} />
-          <ReadonlyField label="Operator ID/TIN" value={inspection.operator_id_tin} />
-          <ReadonlyField label="Operator residence" value={inspection.operator_residence} />
-          <ReadonlyField label="Catchment Level I" value={inspection.catchment_level1} />
-          <ReadonlyField label="Catchment Level II" value={inspection.catchment_level2} />
+          <OverridableReadonlyField label="Operator name" value={inspection.operator_name} overrideKey="permitHolderName" overrides={inspection.locked_field_overrides} />
+          <OverridableReadonlyField label="Operator ID/TIN" value={inspection.operator_id_tin} overrideKey="permitHolderId" overrides={inspection.locked_field_overrides} />
+          <OverridableReadonlyField label="Operator residence" value={inspection.operator_residence} overrideKey="residence" overrides={inspection.locked_field_overrides} />
+          <OverridableReadonlyField label="Catchment Level I" value={inspection.catchment_level1} overrideKey="catchmentLevel1" overrides={inspection.locked_field_overrides} />
+          <OverridableReadonlyField label="Catchment Level II" value={inspection.catchment_level2} overrideKey="catchmentLevel2" overrides={inspection.locked_field_overrides} />
         </div>
       </SectionShell>
 
@@ -501,17 +536,17 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
 
                 {(
                   [
-                    ["permanentEmployees", "Permanent Employees"],
-                    ["temporarySeasonalWorkers", "Temporary / Seasonal Workers"],
-                    ["technicalSkilledStaff", "Technical / Skilled Staff"],
-                    ["unskilledSupportStaff", "Unskilled / Support Staff"],
-                    ["totalWorkforce", "Total Workforce"],
+                    ["skilledPermanentWorkers", "Skilled Permanent Workers"],
+                    ["unskilledPermanentWorkers", "Unskilled Permanent Workers"],
+                    ["skilledTemporaryWorkers", "Skilled Temporary Workers"],
+                    ["unskilledTemporaryWorkers", "Unskilled Temporary Workers"],
+                    ["totalWorkers", "Total Workers"],
                   ] as const
                 ).map(([key, label]) => {
-                  const row = employment[key] || {};
+                  const row = (employment as any)[key] || {};
                   return (
                     <div key={key} className="grid grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-3 border-b last:border-b-0 border-slate-200 dark:border-slate-800">
-                      <div className={`text-sm font-medium ${key === "totalWorkforce" ? "font-semibold" : ""}`}>{label}</div>
+                      <div className={`text-sm font-medium ${key === "totalWorkers" ? "font-semibold" : ""}`}>{label}</div>
                       <Input disabled value={row.male ?? ""} className="h-10 bg-muted/30" />
                       <Input disabled value={row.female ?? ""} className="h-10 bg-muted/30" />
                       <Input disabled value={row.total ?? ""} className="h-10 bg-muted/30" />

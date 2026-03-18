@@ -73,6 +73,10 @@ export interface PrepopulatedInspectionData {
   allowedUnit?: string;
   authorizedMethod?: string;
   flowRate?: number;
+
+  // Concession-specific (surface area & boundary points from application)
+  concessionAreaHa?: number;
+  concessionBoundaries?: { beacon: string; latitude: number | null; longitude: number | null }[];
   
   // Section 8: Payment Information
   totalPaymentAmount?: number;
@@ -294,6 +298,34 @@ function normalizeIntendedActivities(value: unknown): string[] {
   return [];
 }
 
+function parsePositiveNumber(v: unknown): number | undefined {
+  if (v === null || v === undefined) return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function polygonGeometryToBoundaryRows(
+  geometry: any
+): { beacon: string; latitude: number | null; longitude: number | null }[] {
+  try {
+    const polygons = geometryToCoordinatePolygons(geometry);
+    if (!polygons || polygons.length === 0) return [];
+    const points = polygons[0];
+    if (!points || points.length <= 1) return [];
+    return points.map((p, idx) => {
+      const lat = Number(p.latitude);
+      const lng = Number(p.longitude);
+      return {
+        beacon: `B${idx + 1}`,
+        latitude: Number.isFinite(lat) ? lat : null,
+        longitude: Number.isFinite(lng) ? lng : null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 function getPrimaryLatLngFromGeometry(geometry: any): { lat: number; lng: number } | null {
   try {
     const polygons = geometryToCoordinatePolygons(geometry);
@@ -390,9 +422,9 @@ function prepareInspectionData(
   
   const isOrganizationAccount = typeof applicant?.account_type === "string" && applicant.account_type !== "individual";
   const permitHolderId = pickFirstNonEmptyString(
-    isOrganizationAccount ? applicant?.company_tin : undefined,
+    isOrganizationAccount ? applicant?.company_tin : applicant?.id_number,
     applicant?.id_number,
-    'N/A'
+    applicant?.company_tin,
   ) || 'N/A';
 
   const permitDetails = internal?.permitDetails && typeof internal.permitDetails === "object"
@@ -429,14 +461,18 @@ function prepareInspectionData(
     application.village
   );
 
-  // Residence should reflect the office location from permit location chain.
-  const residence = [
+  const locationChain = [
     locationDistrict,
     locationSector,
     locationCell,
     locationVillage,
     locationProvince,
-  ].filter(Boolean).join(", ") || 'N/A';
+  ].filter(Boolean).join(", ");
+  const residence = pickFirstNonEmptyString(
+    locationChain || undefined,
+    applicant?.address,
+    (applicant as any)?.company_address
+  ) || 'N/A';
   
   // Representative - for companies, might be a contact person
   const representative = applicant?.account_type && applicant?.account_type !== 'individual'
@@ -505,6 +541,16 @@ function prepareInspectionData(
   const savedAbstraction = Array.isArray(internal?.waterAbstractionDetails) ? internal.waterAbstractionDetails[0] : null;
   const authorizedMethod = application.water_taking_method || application.abstraction_method || savedAbstraction?.abstractionMethod || 'As per technical drawings';
   const flowRate = application.flow_rate_m3_per_second ?? undefined;
+
+  // Concession-specific: surface area and boundary polygon from application
+  const assessorAdj = internal?._assessorAdjustments;
+  const concessionAreaHa = parsePositiveNumber(
+    assessorAdj?.recommendedVolumeM3
+  ) ?? parsePositiveNumber(application.concession_area)
+    ?? parsePositiveNumber(internal?.concessionArea)
+    ?? parsePositiveNumber(internal?.fishLakeAreaHectares);
+
+  const concessionBoundaries = polygonGeometryToBoundaryRows(application.coordinates);
   
   // Section 8: Payment Information
   const completedPayments = paymentHistory.filter(p => p.status === 'completed' || p.status === 'success');
@@ -545,6 +591,8 @@ function prepareInspectionData(
     allowedUnit,
     authorizedMethod,
     flowRate,
+    concessionAreaHa,
+    concessionBoundaries: concessionBoundaries.length > 0 ? concessionBoundaries : undefined,
     totalPaymentAmount,
     lastPaymentDate,
     paymentStatus
@@ -604,6 +652,8 @@ function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionDat
     allowedUnit: parsed.allowedUnit ?? undefined,
     authorizedMethod,
     flowRate: undefined,
+    concessionAreaHa: undefined,
+    concessionBoundaries: undefined,
     totalPaymentAmount: undefined,
     lastPaymentDate: undefined,
     paymentStatus: undefined,

@@ -311,43 +311,47 @@ export default function VerificationDashboard() {
           className="container mx-auto px-4 py-6"
         >
           <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-                  Application Verification Dashboard
-              </h1>
-                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
-                  Verify completeness and consistency before final approval
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/management">
-                <Button variant="outline">Management Dashboard</Button>
-              </Link>
-            </div>
-          </div>
-
-            {/* Status Filter Chips */}
-            <StatusFilterChips
-              chips={VERIFIER_CHIPS}
-              activeChipId={activeChipId}
-              onChipChange={setActiveChipId}
-              applications={applications}
-            />
-
             <StaffTopTabs
               value={topTab}
               onValueChange={(v) => setTopTab(v as any)}
               tabs={[
-                { value: "verification", label: "Verification" },
+                { value: "verification", label: "Permitting" },
                 { value: "inspections", label: "Inspections" },
                 { value: "water-reports", label: "Water Use Reports" },
                 { value: "permit-registry", label: "Permit Registry" },
               ]}
             />
 
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                  {topTab === "verification" ? "Application Verification Dashboard"
+                    : topTab === "inspections" ? "Inspections"
+                    : topTab === "water-reports" ? "Water Use Reports"
+                    : "Permit Registry"}
+                </h1>
+                <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
+                  {topTab === "verification" ? "Verify completeness and consistency before final approval"
+                    : topTab === "inspections" ? "Manage and track field inspections"
+                    : topTab === "water-reports" ? "Monitor and review water usage reports"
+                    : "View and manage issued permits"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link href="/management">
+                  <Button variant="outline">Management Dashboard</Button>
+                </Link>
+              </div>
+            </div>
+
             {topTab === "verification" ? (
+              <>
+              <StatusFilterChips
+                chips={VERIFIER_CHIPS}
+                activeChipId={activeChipId}
+                onChipChange={setActiveChipId}
+                applications={applications}
+              />
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2">
@@ -404,6 +408,7 @@ export default function VerificationDashboard() {
                   </Tabs>
                 </CardContent>
               </Card>
+              </>
             ) : topTab === "inspections" ? (
               <div className="space-y-6">
                 <InspectionsWorkbench roleContext="verifier" />

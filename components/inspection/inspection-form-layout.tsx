@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { InspectionDocumentsUpload, type InspectionDocumentFile } from "@/components/inspection/inspection-documents-upload";
 import {
   INSPECTION_RECOMMENDATION_OPTIONS,
+  RECOMMENDATION_DETAIL_HINTS,
   normalizeInspectionRecommendation,
 } from "@/lib/inspection-recommendations";
 
@@ -25,11 +26,11 @@ type InspectionTemplate = "authorization" | "concession";
 type BoundaryRow = { beacon: string; latitude?: number | null; longitude?: number | null };
 type EmploymentRow = { male?: number | null; female?: number | null; total?: number | null };
 type EmploymentBreakdown = {
-  permanentEmployees?: EmploymentRow;
-  temporarySeasonalWorkers?: EmploymentRow;
-  technicalSkilledStaff?: EmploymentRow;
-  unskilledSupportStaff?: EmploymentRow;
-  totalWorkforce?: EmploymentRow;
+  skilledPermanentWorkers?: EmploymentRow;
+  unskilledPermanentWorkers?: EmploymentRow;
+  skilledTemporaryWorkers?: EmploymentRow;
+  unskilledTemporaryWorkers?: EmploymentRow;
+  totalWorkers?: EmploymentRow;
 };
 type OhsItem = { value?: boolean | null; remarks?: string | null };
 type OhsGenderSensitive = {
@@ -47,10 +48,6 @@ export interface InspectionLockedData {
   facilityProjectName?: string;
   issuanceDate?: string;
   expirationDate?: string;
-
-  operatorName?: string;
-  operatorIdTin?: string;
-  operatorResidence?: string;
 
   permitLocationProvince?: string;
   permitLocationDistrict?: string;
@@ -71,6 +68,9 @@ export interface InspectionLockedData {
   activityStartingDate?: string;
   catchmentLevel1?: string;
   catchmentLevel2?: string;
+
+  concessionAreaHa?: number;
+  concessionBoundaries?: BoundaryRow[];
 }
 
 export interface InspectionFormState {
@@ -98,6 +98,7 @@ export interface InspectionFormState {
   ohs_gender_sensitive?: OhsGenderSensitive;
 
   fees_payment_amount?: number;
+  fees_payment_details?: string;
   fees_payment_proof?: string;
 
   reports_submission_date?: string;
@@ -108,9 +109,13 @@ export interface InspectionFormState {
   catchment_protection_initiatives?: string;
   general_conclusion?: string;
   recommendations?: string;
+  recommendation_details?: string;
 
   // Documents
   inspection_documents?: InspectionDocumentFile[];
+
+  // Inspector-provided overrides for locked fields that are N/A
+  locked_field_overrides?: Record<string, string>;
 }
 
 function toNumberOrNull(v: string): number | null {
@@ -157,6 +162,58 @@ function ReadonlyField({ label, value }: { label: string; value?: string | null 
     <div className="space-y-2">
       <Label className="text-sm">{label}</Label>
       <Input disabled value={value || "N/A"} className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" />
+    </div>
+  );
+}
+
+function isFieldEmpty(value?: string | number | null): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string" && (value.trim() === "" || value.trim().toLowerCase() === "n/a")) return true;
+  return false;
+}
+
+function EditableLockedField({
+  label,
+  lockedValue,
+  overrideKey,
+  overrides,
+  canEdit,
+  onOverride,
+}: {
+  label: string;
+  lockedValue?: string | null;
+  overrideKey: string;
+  overrides?: Record<string, string>;
+  canEdit: boolean;
+  onOverride: (key: string, value: string) => void;
+}) {
+  const hasRealValue = !isFieldEmpty(lockedValue);
+  const overrideValue = overrides?.[overrideKey];
+
+  if (hasRealValue) {
+    return <ReadonlyField label={label} value={lockedValue} />;
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-sm">
+        {label}
+        {canEdit && (
+          <span className="ml-1.5 text-xs text-amber-600 dark:text-amber-400 font-normal">(missing — editable)</span>
+        )}
+      </Label>
+      <Input
+        disabled={!canEdit}
+        value={overrideValue ?? ""}
+        placeholder={canEdit ? `Enter ${label.toLowerCase()}…` : "N/A"}
+        className={cn(
+          "h-11 border-slate-200 dark:border-slate-800",
+          canEdit
+            ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-300 dark:border-amber-800 focus:border-amber-500 focus:ring-amber-500/20"
+            : "bg-muted/30"
+        )}
+        onChange={(e) => onOverride(overrideKey, e.target.value)}
+      />
     </div>
   );
 }
@@ -299,17 +356,14 @@ function ReportsSection({
       touched.reports_reference_number && !form.reports_reference_number?.trim()
         ? "Reference number is required"
         : null,
-    reports_proof:
-      touched.reports_proof && !form.reports_proof?.trim()
-        ? "Proof of reception is required"
-        : null,
+    reports_proof: null,
   };
 
   return (
-    <SectionShell title="11. Reports">
+    <SectionShell title="11. Water User Annual Report">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
-          <Label className="text-sm">Submission date</Label>
+          <Label className="text-sm">Recent Submission Date</Label>
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -367,22 +421,22 @@ function ReportsSection({
           )}
         </div>
 
-        <div className="md:col-span-2 space-y-2">
-          <Label className="text-sm">Proof of reception</Label>
-          <Input
-            value={form.reports_proof ?? ""}
-            disabled={!canEdit}
-            placeholder="URL or reference"
-            className={cn(
-              "h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800",
-              errors.reports_proof && "border-red-500 ring-1 ring-red-500"
-            )}
-            onChange={(e) => setField("reports_proof", e.target.value)}
-            onBlur={() => markTouched("reports_proof")}
-          />
-          {errors.reports_proof && (
-            <p className="text-sm text-red-500 mt-1">{errors.reports_proof}</p>
-          )}
+        <div className="space-y-2">
+          <Label className="text-sm">Report Submitted</Label>
+          <RadioGroup
+            value={form.reports_proof === "Yes" ? "yes" : form.reports_proof === "No" ? "no" : ""}
+            onValueChange={(v) => setField("reports_proof", v === "yes" ? "Yes" : "No")}
+            className="flex items-center gap-6 h-11"
+          >
+            <div className="flex items-center gap-2">
+              <RadioGroupItem disabled={!canEdit} value="yes" id="report-submitted-yes" />
+              <Label htmlFor="report-submitted-yes" className="text-sm">Yes</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem disabled={!canEdit} value="no" id="report-submitted-no" />
+              <Label htmlFor="report-submitted-no" className="text-sm">No</Label>
+            </div>
+          </RadioGroup>
         </div>
       </div>
     </SectionShell>
@@ -406,10 +460,26 @@ export function InspectionFormLayout({
 }) {
   const employment = form.employment_gender_breakdown || {};
   const ohs = form.ohs_gender_sensitive || {};
+  const overrides = form.locked_field_overrides || {};
+
+  const handleOverride = useCallback(
+    (key: string, value: string) => {
+      setField("locked_field_overrides", { ...overrides, [key]: value } as any);
+    },
+    [overrides, setField]
+  );
 
   const authBoundaries = useMemo<BoundaryRow[]>(
-    () => (Array.isArray(form.authorized_concession_boundaries) && form.authorized_concession_boundaries.length > 0 ? form.authorized_concession_boundaries : [{ beacon: "B1", latitude: null, longitude: null }]),
-    [form.authorized_concession_boundaries]
+    () => {
+      if (Array.isArray(locked.concessionBoundaries) && locked.concessionBoundaries.length > 0) {
+        return locked.concessionBoundaries;
+      }
+      if (Array.isArray(form.authorized_concession_boundaries) && form.authorized_concession_boundaries.length > 0) {
+        return form.authorized_concession_boundaries;
+      }
+      return [{ beacon: "B1", latitude: null, longitude: null }];
+    },
+    [locked.concessionBoundaries, form.authorized_concession_boundaries]
   );
   const actualBoundaries = useMemo<BoundaryRow[]>(
     () => (Array.isArray(form.actual_concession_boundaries) && form.actual_concession_boundaries.length > 0 ? form.actual_concession_boundaries : [{ beacon: "B1", latitude: null, longitude: null }]),
@@ -452,16 +522,16 @@ export function InspectionFormLayout({
           <TabsContent value="identification" className="pt-6 space-y-6">
             <SectionShell title="1. Permit Holder Identification">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ReadonlyField label="Name" value={locked.permitHolderName} />
-                <ReadonlyField label="ID/TIN" value={locked.permitHolderId} />
-                <ReadonlyField label="Residence" value={locked.residence} />
+                <EditableLockedField label="Name" lockedValue={locked.permitHolderName} overrideKey="permitHolderName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="ID/TIN" lockedValue={locked.permitHolderId} overrideKey="permitHolderId" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Residence" lockedValue={locked.residence} overrideKey="residence" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
               </div>
             </SectionShell>
 
             <SectionShell title="2. Permit Particulars">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <ReadonlyField label="Number" value={locked.permitNumber} />
-                <ReadonlyField label="Name of Facility/Project" value={locked.facilityProjectName} />
+                <EditableLockedField label="Name of Facility/Project" lockedValue={locked.facilityProjectName} overrideKey="facilityProjectName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <ReadonlyField label="Issuance date" value={locked.issuanceDate || ""} />
                 <ReadonlyField label="Expiration date" value={locked.expirationDate || ""} />
               </div>
@@ -469,53 +539,47 @@ export function InspectionFormLayout({
 
             <SectionShell title="2.1 Permit Location">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <ReadonlyField label="Province / City of Kigali" value={locked.permitLocationProvince} />
-                <ReadonlyField label="District" value={locked.permitLocationDistrict} />
-                <ReadonlyField label="Sector" value={locked.permitLocationSector} />
-                <ReadonlyField label="Cell" value={locked.permitLocationCell} />
-                <ReadonlyField label="Village" value={locked.permitLocationVillage} />
+                <EditableLockedField label="Province / City of Kigali" lockedValue={locked.permitLocationProvince} overrideKey="permitLocationProvince" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="District" lockedValue={locked.permitLocationDistrict} overrideKey="permitLocationDistrict" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Sector" lockedValue={locked.permitLocationSector} overrideKey="permitLocationSector" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Cell" lockedValue={locked.permitLocationCell} overrideKey="permitLocationCell" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Village" lockedValue={locked.permitLocationVillage} overrideKey="permitLocationVillage" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
               </div>
             </SectionShell>
 
             <SectionShell title="2.2 Water Source & Purpose">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ReadonlyField label="Water Source Type" value={locked.waterSourceType} />
-                <ReadonlyField label="Water Source Name" value={locked.waterSourceName} />
-                <ReadonlyField label="Water Use / Purpose" value={locked.waterPurpose} />
-                <ReadonlyField label="Location" value={locked.waterSourceLocation} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <EditableLockedField label="Water Source Type" lockedValue={locked.waterSourceType} overrideKey="waterSourceType" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Water Source Name" lockedValue={locked.waterSourceName} overrideKey="waterSourceName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Water Use / Purpose" lockedValue={locked.waterPurpose} overrideKey="waterPurpose" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Location" lockedValue={locked.waterSourceLocation} overrideKey="waterSourceLocation" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Level I Catchment" lockedValue={locked.catchmentLevel1} overrideKey="catchmentLevel1" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Level II Catchment" lockedValue={locked.catchmentLevel2} overrideKey="catchmentLevel2" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
               </div>
             </SectionShell>
 
-            <SectionShell title="2.3 Abstraction & Volume">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <ReadonlyField label="Water Allowance" value={locked.waterAllowance !== undefined ? String(locked.waterAllowance) : undefined} />
-                <ReadonlyField label="Allowance Unit" value={locked.allowanceUnit} />
-                <ReadonlyField label="Method of Abstraction" value={locked.abstractionMethod} />
-                <ReadonlyField label="Flow Rate (m³/s)" value={locked.flowRate !== undefined ? String(locked.flowRate) : undefined} />
-              </div>
-            </SectionShell>
+            {template === "concession" ? (
+              <SectionShell title="2.3 Concession Area">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <EditableLockedField label="Concession Area (Ha)" lockedValue={locked.concessionAreaHa !== undefined ? String(locked.concessionAreaHa) : undefined} overrideKey="concessionAreaHa" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Boundary Points" lockedValue={locked.concessionBoundaries && locked.concessionBoundaries.length > 0 ? `${locked.concessionBoundaries.length} points defined` : undefined} overrideKey="concessionBoundaryPoints" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                </div>
+              </SectionShell>
+            ) : (
+              <SectionShell title="2.3 Abstraction & Volume">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <EditableLockedField label="Water Allowance" lockedValue={locked.waterAllowance !== undefined ? String(locked.waterAllowance) : undefined} overrideKey="waterAllowance" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Allowance Unit" lockedValue={locked.allowanceUnit} overrideKey="allowanceUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Method of Abstraction" lockedValue={locked.abstractionMethod} overrideKey="abstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Flow Rate (m³/s)" lockedValue={locked.flowRate !== undefined ? String(locked.flowRate) : undefined} overrideKey="flowRate" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                </div>
+              </SectionShell>
+            )}
 
             <SectionShell title="2.4 Water Source Coordinates">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ReadonlyField label="Latitude" value={locked.waterSourceLatitude} />
-                <ReadonlyField label="Longitude" value={locked.waterSourceLongitude} />
-              </div>
-            </SectionShell>
-
-            <SectionShell title="3. Operator">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ReadonlyField label="Name" value={locked.operatorName} />
-                <ReadonlyField label="ID/TIN" value={locked.operatorIdTin} />
-                <ReadonlyField label="Residence" value={locked.operatorResidence} />
-              </div>
-            </SectionShell>
-
-            <SectionShell title="4. Water source">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ReadonlyField label="Name" value={locked.waterSourceName} />
-                <ReadonlyField label="Location" value={locked.waterSourceLocation} />
-                <ReadonlyField label="Level I Catchment" value={locked.catchmentLevel1} />
-                <ReadonlyField label="Level II Catchment" value={locked.catchmentLevel2} />
+                <EditableLockedField label="Latitude" lockedValue={locked.waterSourceLatitude} overrideKey="waterSourceLatitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Longitude" lockedValue={locked.waterSourceLongitude} overrideKey="waterSourceLongitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
               </div>
             </SectionShell>
           </TabsContent>
@@ -524,9 +588,9 @@ export function InspectionFormLayout({
             {template === "authorization" ? (
               <SectionShell title="5–6. Water abstraction (Authorization)" description="As per the official RWB checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <ReadonlyField label="Allowed quantity" value={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} />
-                  <ReadonlyField label="Allowed unit" value={form.allowed_unit ?? ""} />
-                  <ReadonlyField label="Authorized abstraction method" value={form.authorized_abstraction_method ?? ""} />
+                  <EditableLockedField label="Allowed quantity" lockedValue={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} overrideKey="allowedQuantity" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Allowed unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Authorized abstraction method" lockedValue={form.authorized_abstraction_method} overrideKey="authorizedAbstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -577,7 +641,7 @@ export function InspectionFormLayout({
             ) : (
               <SectionShell title="5–6. Concession (Surface area & boundaries)" description="As per the official RWB concession checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <NumberField label="Authorized surface area" value={form.authorized_surface_area_ha ?? null} disabled={!canEdit} onChange={(v) => setField("authorized_surface_area_ha", (v ?? undefined) as any)} suffix="Ha" />
+                  <EditableLockedField label="Authorized surface area" lockedValue={locked.concessionAreaHa !== undefined ? `${locked.concessionAreaHa} Ha` : undefined} overrideKey="authorizedSurfaceArea" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                   <NumberField label="Actual surface area covered" value={form.actual_surface_area_ha ?? null} disabled={!canEdit} onChange={(v) => setField("actual_surface_area_ha", (v ?? undefined) as any)} suffix="Ha" />
                 </div>
 
@@ -585,7 +649,7 @@ export function InspectionFormLayout({
                   <Card className="border-slate-200 dark:border-slate-800">
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base">Authorized concession boundaries</CardTitle>
-                      <CardDescription>Beacon / Latitude / Longitude</CardDescription>
+                      <CardDescription>Beacon / Latitude / Longitude (from application)</CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-3">
                       <div className="grid grid-cols-3 gap-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -595,20 +659,11 @@ export function InspectionFormLayout({
                       </div>
                       {authBoundaries.map((r, idx) => (
                         <div key={`ab-${idx}`} className="grid grid-cols-3 gap-3">
-                          <Input disabled={!canEdit} className="h-11" value={r.beacon} onChange={(e) => setBoundary("authorized_concession_boundaries", idx, { beacon: e.target.value })} />
-                          <Input disabled={!canEdit} className="h-11" value={r.latitude ?? ""} onChange={(e) => setBoundary("authorized_concession_boundaries", idx, { latitude: toNumberOrNull(e.target.value) })} />
-                          <Input disabled={!canEdit} className="h-11" value={r.longitude ?? ""} onChange={(e) => setBoundary("authorized_concession_boundaries", idx, { longitude: toNumberOrNull(e.target.value) })} />
+                          <Input disabled className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" value={r.beacon} />
+                          <Input disabled className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" value={r.latitude ?? ""} />
+                          <Input disabled className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" value={r.longitude ?? ""} />
                         </div>
                       ))}
-                      {canEdit ? (
-                        <button
-                          type="button"
-                          className="text-sm text-primary hover:underline"
-                          onClick={() => setField("authorized_concession_boundaries", [...authBoundaries, { beacon: `B${authBoundaries.length + 1}`, latitude: null, longitude: null }] as any)}
-                        >
-                          + Add others (if any)
-                        </button>
-                      ) : null}
                     </CardContent>
                   </Card>
 
@@ -647,8 +702,8 @@ export function InspectionFormLayout({
 
             <SectionShell title="7. Activity in which water is used">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ReadonlyField label="Type of activity" value={locked.activityType} />
-                <ReadonlyField label="Starting date" value={locked.activityStartingDate} />
+                <EditableLockedField label="Type of activity" lockedValue={locked.activityType} overrideKey="activityType" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Starting date" lockedValue={locked.activityStartingDate} overrideKey="activityStartingDate" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
               </div>
             </SectionShell>
 
@@ -676,18 +731,18 @@ export function InspectionFormLayout({
 
                   {(
                     [
-                      ["permanentEmployees", "Permanent Employees"],
-                      ["temporarySeasonalWorkers", "Temporary / Seasonal Workers"],
-                      ["technicalSkilledStaff", "Technical / Skilled Staff"],
-                      ["unskilledSupportStaff", "Unskilled / Support Staff"],
-                      ["totalWorkforce", "Total Workforce"],
+                      ["skilledPermanentWorkers", "Skilled Permanent Workers"],
+                      ["unskilledPermanentWorkers", "Unskilled Permanent Workers"],
+                      ["skilledTemporaryWorkers", "Skilled Temporary Workers"],
+                      ["unskilledTemporaryWorkers", "Unskilled Temporary Workers"],
+                      ["totalWorkers", "Total Workers"],
                     ] as const
                   ).map(([key, label]) => {
                     const row = (employment as any)[key] || {};
                     const computedTotal = computeEmploymentTotal(row.male, row.female);
                     return (
                       <div key={key} className="grid grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-3 border-b last:border-b-0 border-slate-200 dark:border-slate-800">
-                        <div className={cn("text-sm font-medium", key === "totalWorkforce" ? "font-semibold" : "")}>{label}</div>
+                        <div className={cn("text-sm font-medium", key === "totalWorkers" ? "font-semibold" : "")}>{label}</div>
                         <Input
                           disabled={!canEdit}
                           value={row.male ?? ""}
@@ -761,8 +816,18 @@ export function InspectionFormLayout({
 
           <TabsContent value="fees" className="pt-6 space-y-6">
             <SectionShell title="10. Pending fees">
-              <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NumberField label="Amount" value={form.fees_payment_amount ?? null} disabled={!canEdit} onChange={(v) => setField("fees_payment_amount", (v ?? undefined) as any)} />
+              </div>
+              <div className="mt-4 space-y-2">
+                <Label className="text-sm">Details and relevance of pending fees</Label>
+                <Textarea
+                  disabled={!canEdit}
+                  className="min-h-[100px] bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                  placeholder="Describe the nature of the pending fees, payment history, and relevance..."
+                  value={form.fees_payment_details ?? ""}
+                  onChange={(e) => setField("fees_payment_details", e.target.value as any)}
+                />
               </div>
             </SectionShell>
 
@@ -816,7 +881,7 @@ export function InspectionFormLayout({
             </SectionShell>
 
             <SectionShell title="14. Conclusion and recommendations">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <Label>General conclusion</Label>
                   <Textarea
@@ -850,6 +915,18 @@ export function InspectionFormLayout({
                     </div>
                   )}
                 </div>
+                {form.recommendations && (
+                  <div className="space-y-2">
+                    <Label>Details</Label>
+                    <Textarea
+                      disabled={!canEdit}
+                      className="min-h-[120px] bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                      placeholder={RECOMMENDATION_DETAIL_HINTS[form.recommendations] || "Provide details..."}
+                      value={form.recommendation_details ?? ""}
+                      onChange={(e) => setField("recommendation_details", e.target.value as any)}
+                    />
+                  </div>
+                )}
               </div>
             </SectionShell>
           </TabsContent>

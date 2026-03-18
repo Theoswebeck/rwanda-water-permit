@@ -19,11 +19,11 @@ type InspectionTemplate = "authorization" | "concession";
 type BoundaryRow = { beacon: string; latitude?: number | null; longitude?: number | null };
 type EmploymentRow = { male?: number | null; female?: number | null; total?: number | null };
 type EmploymentBreakdown = {
-  permanentEmployees?: EmploymentRow;
-  temporarySeasonalWorkers?: EmploymentRow;
-  technicalSkilledStaff?: EmploymentRow;
-  unskilledSupportStaff?: EmploymentRow;
-  totalWorkforce?: EmploymentRow;
+  skilledPermanentWorkers?: EmploymentRow;
+  unskilledPermanentWorkers?: EmploymentRow;
+  skilledTemporaryWorkers?: EmploymentRow;
+  unskilledTemporaryWorkers?: EmploymentRow;
+  totalWorkers?: EmploymentRow;
 };
 type OhsItem = { value?: boolean | null; remarks?: string | null };
 type OhsGenderSensitive = {
@@ -499,11 +499,11 @@ export function RwbInspectionChecklist({
               </div>
               {(
                 [
-                  ["permanentEmployees", "Permanent Employees"],
-                  ["temporarySeasonalWorkers", "Temporary / Seasonal Workers"],
-                  ["technicalSkilledStaff", "Technical / Skilled Staff"],
-                  ["unskilledSupportStaff", "Unskilled / Support Staff"],
-                  ["totalWorkforce", "Total Workforce"],
+                  ["skilledPermanentWorkers", "Skilled Permanent Workers"],
+                  ["unskilledPermanentWorkers", "Unskilled Permanent Workers"],
+                  ["skilledTemporaryWorkers", "Skilled Temporary Workers"],
+                  ["unskilledTemporaryWorkers", "Unskilled Temporary Workers"],
+                  ["totalWorkers", "Total Workers"],
                 ] as const
               ).map(([key, label]) => {
                 const row = (employment as any)[key] || {};

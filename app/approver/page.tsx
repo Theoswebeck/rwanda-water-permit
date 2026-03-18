@@ -90,14 +90,32 @@ export default function ApproverDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-        {/* Header */}
+        <StaffTopTabs
+          value={topTab}
+          onValueChange={(v) => {
+            if (isTopTab(v)) setTopTab(v);
+          }}
+          tabs={[
+            { value: "approval", label: "Permitting" },
+            { value: "inspections", label: "Inspections" },
+            { value: "water-reports", label: "Water Use Reports" },
+            { value: "permit-registry", label: "Permit Registry" },
+          ]}
+        />
+
         <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0 mb-6">
           <div>
             <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-              Executive Approver Dashboard
+              {topTab === "approval" ? "Executive Approver Dashboard"
+                : topTab === "inspections" ? "Inspections"
+                : topTab === "water-reports" ? "Water Use Reports"
+                : "Permit Registry"}
             </h1>
             <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
-              Strategic oversight and final decision-making for water permit applications
+              {topTab === "approval" ? "Strategic oversight and final decision-making for water permit applications"
+                : topTab === "inspections" ? "Manage and track field inspections"
+                : topTab === "water-reports" ? "Monitor and review water usage reports"
+                : "View and manage issued permits"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -107,29 +125,15 @@ export default function ApproverDashboard() {
           </div>
         </div>
 
-        {/* Status Filter Chips */}
-        <StatusFilterChips
-          chips={APPROVER_CHIPS}
-          activeChipId={activeChipId}
-          onChipChange={setActiveChipId}
-          applications={allApplications}
-          className="mb-6"
-        />
-
-        <StaffTopTabs
-          value={topTab}
-          onValueChange={(v) => {
-            if (isTopTab(v)) setTopTab(v);
-          }}
-          tabs={[
-            { value: "approval", label: "Application Approval" },
-            { value: "inspections", label: "Inspections" },
-            { value: "water-reports", label: "Water Use Reports" },
-            { value: "permit-registry", label: "Permit Registry" },
-          ]}
-        />
-
         {topTab === "approval" ? (
+          <>
+          <StatusFilterChips
+            chips={APPROVER_CHIPS}
+            activeChipId={activeChipId}
+            onChipChange={setActiveChipId}
+            applications={allApplications}
+            className="mb-6"
+          />
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2">
@@ -160,6 +164,7 @@ export default function ApproverDashboard() {
               </Tabs>
             </CardContent>
           </Card>
+          </>
         ) : topTab === "inspections" ? (
           <div className="space-y-6">
             <InspectionsWorkbench roleContext="approver" />

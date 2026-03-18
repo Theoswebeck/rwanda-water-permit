@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, AlertCircle, Save, Send, Eye } from "lucide-react";
+import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 
 type InspectionTemplate = "authorization" | "concession";
@@ -26,11 +26,11 @@ type BoundaryRow = { beacon: string; latitude?: number | null; longitude?: numbe
 type EmploymentRow = { male?: number | null; female?: number | null; total?: number | null };
 
 type EmploymentBreakdown = {
-  permanentEmployees?: EmploymentRow;
-  temporarySeasonalWorkers?: EmploymentRow;
-  technicalSkilledStaff?: EmploymentRow;
-  unskilledSupportStaff?: EmploymentRow;
-  totalWorkforce?: EmploymentRow;
+  skilledPermanentWorkers?: EmploymentRow;
+  unskilledPermanentWorkers?: EmploymentRow;
+  skilledTemporaryWorkers?: EmploymentRow;
+  unskilledTemporaryWorkers?: EmploymentRow;
+  totalWorkers?: EmploymentRow;
 };
 
 type OhsItem = { value?: boolean | null; remarks?: string | null };
@@ -49,6 +49,7 @@ interface FormState {
   wastewater_system_effectiveness?: string;
 
   fees_payment_amount?: number;
+  fees_payment_details?: string;
   fees_payment_proof?: string;
 
   reports_submission_date?: string;
@@ -59,6 +60,7 @@ interface FormState {
   catchment_protection_initiatives?: string;
   general_conclusion?: string;
   recommendations?: string;
+  recommendation_details?: string;
 
   // Authorization-specific
   allowed_quantity?: number;
@@ -81,6 +83,9 @@ interface FormState {
 
   // Documents (stored as JSONB in DB)
   inspection_documents?: any[];
+
+  // Inspector-provided overrides for locked fields that are N/A
+  locked_field_overrides?: Record<string, string>;
 }
 
 function toNumberOrUndefined(v: string): number | undefined {
@@ -109,11 +114,11 @@ function normalizeBoundaryRows(value: any): BoundaryRow[] {
 
 function defaultEmployment(): EmploymentBreakdown {
   return {
-    permanentEmployees: { male: null, female: null, total: null },
-    temporarySeasonalWorkers: { male: null, female: null, total: null },
-    technicalSkilledStaff: { male: null, female: null, total: null },
-    unskilledSupportStaff: { male: null, female: null, total: null },
-    totalWorkforce: { male: null, female: null, total: null },
+    skilledPermanentWorkers: { male: null, female: null, total: null },
+    unskilledPermanentWorkers: { male: null, female: null, total: null },
+    skilledTemporaryWorkers: { male: null, female: null, total: null },
+    unskilledTemporaryWorkers: { male: null, female: null, total: null },
+    totalWorkers: { male: null, female: null, total: null },
   };
 }
 
@@ -181,6 +186,7 @@ export default function PermitInspectionUnifiedPage() {
     employment_gender_breakdown: defaultEmployment(),
     ohs_gender_sensitive: defaultOhs(),
     inspection_documents: [],
+    locked_field_overrides: {},
   });
 
   useEffect(() => {
@@ -295,10 +301,14 @@ export default function PermitInspectionUnifiedPage() {
               allowed_unit: (existing as any).allowed_unit ?? data?.permit?.allowance_unit ?? prev.allowed_unit,
               authorized_abstraction_method:
                 (existing as any).authorized_abstraction_method ?? data?.prepopulatedData?.authorizedMethod ?? prev.authorized_abstraction_method,
-              authorized_concession_boundaries: normalizeBoundaryRows((existing as any).authorized_concession_boundaries),
+              authorized_surface_area_ha: (existing as any).authorized_surface_area_ha ?? data?.prepopulatedData?.concessionAreaHa ?? prev.authorized_surface_area_ha,
+              authorized_concession_boundaries: normalizeBoundaryRows((existing as any).authorized_concession_boundaries).length > 0
+                ? normalizeBoundaryRows((existing as any).authorized_concession_boundaries)
+                : data?.prepopulatedData?.concessionBoundaries ?? normalizeBoundaryRows((existing as any).authorized_concession_boundaries),
               actual_concession_boundaries: normalizeBoundaryRows((existing as any).actual_concession_boundaries),
               employment_gender_breakdown: ((existing as any).employment_gender_breakdown as any) || prev.employment_gender_breakdown,
               ohs_gender_sensitive: ((existing as any).ohs_gender_sensitive as any) || prev.ohs_gender_sensitive,
+              locked_field_overrides: ((existing as any).locked_field_overrides as Record<string, string>) || prev.locked_field_overrides,
             }));
             setTemplate(((existing as any).inspection_template as InspectionTemplate) || tpl);
             return;
@@ -314,6 +324,8 @@ export default function PermitInspectionUnifiedPage() {
           authorized_abstraction_method: data?.prepopulatedData?.authorizedMethod,
           activity_type: data?.prepopulatedData?.activityType,
           activity_starting_date: data?.prepopulatedData?.activityStartingDate,
+          authorized_surface_area_ha: data?.prepopulatedData?.concessionAreaHa,
+          authorized_concession_boundaries: data?.prepopulatedData?.concessionBoundaries ?? prev.authorized_concession_boundaries,
         }));
       } catch (e: any) {
         console.error("❌ Failed to load unified inspection:", e);
@@ -414,9 +426,6 @@ export default function PermitInspectionUnifiedPage() {
         reviewed_at: null,
 
         // Locked fields (stored but not editable)
-        operator_name: locked?.operatorName ?? null,
-        operator_id_tin: locked?.operatorIdTin ?? null,
-        operator_residence: locked?.operatorResidence ?? null,
         catchment_level1: locked?.catchmentLevel1 ?? null,
         catchment_level2: locked?.catchmentLevel2 ?? null,
       };
@@ -431,6 +440,7 @@ export default function PermitInspectionUnifiedPage() {
         wastewater_system_effectiveness: form.wastewater_system_effectiveness ?? null,
 
         fees_payment_amount: form.fees_payment_amount ?? null,
+        fees_payment_details: form.fees_payment_details ?? null,
         fees_payment_proof: null,
 
         reports_submission_date: form.reports_submission_date ?? null,
@@ -441,6 +451,7 @@ export default function PermitInspectionUnifiedPage() {
         catchment_protection_initiatives: form.catchment_protection_initiatives ?? null,
         general_conclusion: form.general_conclusion ?? null,
         recommendations: form.recommendations ?? null,
+        recommendation_details: form.recommendation_details ?? null,
 
         // Social/OHS
         employment_gender_breakdown: form.employment_gender_breakdown ?? null,
@@ -448,6 +459,9 @@ export default function PermitInspectionUnifiedPage() {
 
         // Documents
         inspection_documents: form.inspection_documents ?? null,
+
+        // Inspector-provided overrides for locked fields that were N/A
+        locked_field_overrides: form.locked_field_overrides ?? null,
       };
 
       if (template === "authorization") {
@@ -462,9 +476,9 @@ export default function PermitInspectionUnifiedPage() {
         });
       } else {
         Object.assign(payload, {
-          authorized_surface_area_ha: form.authorized_surface_area_ha ?? null,
+          authorized_surface_area_ha: locked?.concessionAreaHa ?? form.authorized_surface_area_ha ?? null,
           actual_surface_area_ha: form.actual_surface_area_ha ?? null,
-          authorized_concession_boundaries: form.authorized_concession_boundaries ?? null,
+          authorized_concession_boundaries: locked?.concessionBoundaries ?? form.authorized_concession_boundaries ?? null,
           actual_concession_boundaries: form.actual_concession_boundaries ?? null,
         });
       }
@@ -592,6 +606,16 @@ export default function PermitInspectionUnifiedPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
+        onClick={() => router.back()}
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
+
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Permit inspection</h1>
@@ -640,9 +664,6 @@ export default function PermitInspectionUnifiedPage() {
             facilityProjectName: locked?.facilityProjectName,
             issuanceDate: locked?.issuanceDate,
             expirationDate: locked?.expirationDate,
-            operatorName: locked?.operatorName,
-            operatorIdTin: locked?.operatorIdTin,
-            operatorResidence: locked?.operatorResidence,
             permitLocationProvince: locked?.province,
             permitLocationDistrict: locked?.district,
             permitLocationSector: locked?.sector,
@@ -662,6 +683,8 @@ export default function PermitInspectionUnifiedPage() {
             activityStartingDate: locked?.activityStartingDate,
             catchmentLevel1: locked?.catchmentLevel1,
             catchmentLevel2: locked?.catchmentLevel2,
+            concessionAreaHa: locked?.concessionAreaHa,
+            concessionBoundaries: locked?.concessionBoundaries,
           }}
           form={form as any}
           canEdit={canEdit}

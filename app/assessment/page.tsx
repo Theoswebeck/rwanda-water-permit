@@ -411,14 +411,30 @@ export default function AssessmentDashboard() {
         className="container mx-auto px-4 py-6"
       >
         <div className="space-y-6">
-          {/* Header */}
+          <StaffTopTabs
+            value={topTab}
+            onValueChange={(v) => setTopTab(v as any)}
+            tabs={[
+              { value: "assessment", label: "Permitting" },
+              { value: "inspections", label: "Inspections" },
+              { value: "water-reports", label: "Water Use Reports" },
+              { value: "permit-registry", label: "Permit Registry" },
+            ]}
+          />
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-                Application Assessment Dashboard
+                {topTab === "assessment" ? "Application Assessment Dashboard"
+                  : topTab === "inspections" ? "Inspections"
+                  : topTab === "water-reports" ? "Water Use Reports"
+                  : "Permit Registry"}
               </h1>
               <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
-                Assess and review water permit applications for technical compliance and field verification
+                {topTab === "assessment" ? "Assess and review water permit applications for technical compliance and field verification"
+                  : topTab === "inspections" ? "Manage and track field inspections"
+                  : topTab === "water-reports" ? "Monitor and review water usage reports"
+                  : "View and manage issued permits"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -428,26 +444,14 @@ export default function AssessmentDashboard() {
             </div>
           </div>
 
-          {/* Status Filter Chips — replaces old stats grid */}
-          <StatusFilterChips
-            chips={ASSESSOR_CHIPS}
-            activeChipId={activeChipId}
-            onChipChange={setActiveChipId}
-            applications={allApplications}
-          />
-
-          <StaffTopTabs
-            value={topTab}
-            onValueChange={(v) => setTopTab(v as any)}
-            tabs={[
-              { value: "assessment", label: "Assessment" },
-              { value: "inspections", label: "Inspections" },
-              { value: "water-reports", label: "Water Use Reports" },
-              { value: "permit-registry", label: "Permit Registry" },
-            ]}
-          />
-
           {topTab === "assessment" ? (
+            <>
+            <StatusFilterChips
+              chips={ASSESSOR_CHIPS}
+              activeChipId={activeChipId}
+              onChipChange={setActiveChipId}
+              applications={allApplications}
+            />
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
@@ -501,6 +505,7 @@ export default function AssessmentDashboard() {
                 </Tabs>
               </CardContent>
             </Card>
+            </>
           ) : topTab === "inspections" ? (
             <div className="space-y-6">
               <InspectionsWorkbench roleContext="assessor" />
