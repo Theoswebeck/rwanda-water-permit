@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight, RefreshCw } from "lucide-react";
+import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight, RefreshCw, BarChart3 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -27,6 +27,8 @@ import { PermitSelectModal } from "@/components/dashboard/permit-select-modal";
 import { useApplicationsQuery, useDeleteApplicationMutation } from "@/hooks/useApplicationsQuery";
 import { usePermitsQuery, PermitWithApplication } from "@/hooks/usePermitsQuery";
 import { useIncomingTransfersQuery, type IncomingTransferRequest } from "@/hooks/useIncomingTransfersQuery";
+import { useWaterUseReportsQuery, type WaterUseReportWithRelations } from "@/hooks/useWaterUseReports";
+import { WaterUseReportStatus, type ReportStatusFilter } from "@/components/dashboard/water-use-report-status";
 import { useAuth } from "@/contexts/AuthContext";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import type { Permit as DatabasePermit } from "@/types/database";
@@ -62,6 +64,21 @@ const PermitsList = dynamic(
         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
         <span className="ml-3 text-sm text-muted-foreground">
           {translateText("Loading permits…", getPreferredLanguage())}
+        </span>
+      </div>
+    ),
+  }
+);
+
+const ApplicantWaterUseReportsList = dynamic(
+  () => import("@/components/dashboard/applicant-water-use-reports-list").then((mod) => mod.ApplicantWaterUseReportsList),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <span className="ml-3 text-sm text-muted-foreground">
+          {translateText("Loading reports…", getPreferredLanguage())}
         </span>
       </div>
     ),
@@ -114,13 +131,15 @@ function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
-  const initialTab = searchParams.get('tab') === 'permits' ? 'permits' : 'applications';
-  const [activeTab, setActiveTab] = useState<"applications" | "permits">(initialTab);
+  const tabParam = searchParams.get('tab');
+  const initialTab = tabParam === 'permits' ? 'permits' : tabParam === 'reports' ? 'reports' : 'applications';
+  const [activeTab, setActiveTab] = useState<"applications" | "permits" | "reports">(initialTab);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [showPermitSelectModal, setShowPermitSelectModal] = useState(false);
   const [activeApplicationStatusPanel, setActiveApplicationStatusPanel] = useState<DashboardStatusPanelFilter>("all");
   const [applicationsStatusFilter, setApplicationsStatusFilter] = useState<ApplicantListStatusFilter>("all");
+  const [reportsStatusFilter, setReportsStatusFilter] = useState<ReportStatusFilter>("all");
   const [language, setLanguage] = useState<AppLanguage>("en");
   const tx = useCallback((value: string) => translateText(value, language), [language]);
 
@@ -148,12 +167,18 @@ function DashboardContent() {
       setSuccessMessage(tx('✅ Application Resubmitted Successfully! Your corrections have been submitted and sent back to the assigned assessor for review.'));
       setShowSuccessAlert(true);
       timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
+    } else if (success === 'report-submitted') {
+      setSuccessMessage(tx('✅ Water Use Report Submitted Successfully! Your annual water use report has been submitted for review.'));
+      setShowSuccessAlert(true);
+      timeoutId = setTimeout(() => setShowSuccessAlert(false), 5000);
     }
     
     if (tab === 'applications') {
       setActiveTab('applications');
     } else if (tab === 'permits') {
       setActiveTab('permits');
+    } else if (tab === 'reports') {
+      setActiveTab('reports');
     }
 
     return () => {
@@ -185,12 +210,19 @@ function DashboardContent() {
     refetch: refetchIncomingTransfers,
   } = useIncomingTransfersQuery(!!user?.id);
 
+  const {
+    data: waterUseReports = [],
+    isLoading: reportsLoading,
+    error: reportsQueryError,
+  } = useWaterUseReportsQuery(user?.id, !!user?.id);
+
   // ⚡ PERFORMANCE: Use mutation for deleting applications
   const deleteApplicationMutation = useDeleteApplicationMutation();
   
   // Convert React Query errors to strings for display
   const applicationsError = applicationsQueryError?.message || null;
   const permitsError = permitsQueryError?.message || null;
+  const reportsError = reportsQueryError?.message || null;
 
   const applicantDashboardApplications = useMemo((): ApplicantDashboardApplication[] => {
     return applications.map((app) => ({
@@ -273,7 +305,7 @@ function DashboardContent() {
 
   // ⚡ FIX: Better loading state detection - only show loading when actually fetching
   const isLoading = (applicationsLoading || permitsLoading) && !!user?.id;
-  const hasError = applicationsError || permitsError;
+  const hasError = applicationsError || permitsError || reportsError;
 
   const [approvingTransferId, setApprovingTransferId] = useState<string | null>(null);
   const [incomingTransferActionError, setIncomingTransferActionError] = useState<string | null>(null);
@@ -360,6 +392,10 @@ function DashboardContent() {
       return;
     }
     setActiveApplicationStatusPanel("all");
+  }, []);
+
+  const handleReportsStatusFilterChange = useCallback((filter: ReportStatusFilter) => {
+    setReportsStatusFilter(filter);
   }, []);
 
   return (
@@ -454,13 +490,13 @@ function DashboardContent() {
               <Alert variant="destructive" className="mb-6">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  {applicationsError || permitsError}
+                  {applicationsError || permitsError || reportsError}
                 </AlertDescription>
               </Alert>
             )}
 
             {/* Main Content */}
-            <Tabs defaultValue="applications" value={activeTab} onValueChange={(value) => setActiveTab(value as "applications" | "permits")} className="space-y-4">
+            <Tabs defaultValue="applications" value={activeTab} onValueChange={(value) => setActiveTab(value as "applications" | "permits" | "reports")} className="space-y-4">
               <TabsList>
                 <TabsTrigger value="applications" className="flex items-center gap-2">
                   <FileText className="h-4 w-4" />
@@ -469,6 +505,10 @@ function DashboardContent() {
                 <TabsTrigger value="permits" className="flex items-center gap-2">
                   <FileCheck className="h-4 w-4" />
                   {tx("Permits")} ({permits.length})
+                </TabsTrigger>
+                <TabsTrigger value="reports" className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4" />
+                  {tx("Water Use Reports")} ({waterUseReports.length})
                 </TabsTrigger>
               </TabsList>
               
@@ -591,6 +631,45 @@ function DashboardContent() {
                     </CardHeader>
                     <CardContent>
                       <PermitsList permits={permits} />
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="reports" className="space-y-4">
+                {/* Reports Status Overview */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <WaterUseReportStatus
+                    reports={waterUseReports}
+                    loading={reportsLoading}
+                    activeFilter={reportsStatusFilter}
+                    onFilterChange={handleReportsStatusFilterChange}
+                  />
+                </motion.div>
+
+                {/* Reports List */}
+                <div className="grid gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5" />
+                        {tx("Your Water Use Reports")}
+                      </CardTitle>
+                      <CardDescription>
+                        {tx("View and manage your annual water use reports")}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ApplicantWaterUseReportsList
+                        reports={waterUseReports}
+                        loading={reportsLoading}
+                        statusFilter={reportsStatusFilter}
+                        onStatusFilterChange={handleReportsStatusFilterChange}
+                      />
                     </CardContent>
                   </Card>
                 </div>

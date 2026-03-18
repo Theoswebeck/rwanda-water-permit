@@ -143,7 +143,7 @@ export type DelegatableRole = 'reviewer' | 'verifier' | 'approver' | 'assessor' 
 // =============================================
 
 export type WaterUseReportTemplate = 'abstraction' | 'concession'
-export type WaterUseReportStatus = 'draft' | 'submitted'
+export type WaterUseReportStatus = 'draft' | 'submitted' | 'under_review' | 'completed'
 
 // =============================================
 // MAIN INTERFACES

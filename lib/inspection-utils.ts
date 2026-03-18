@@ -201,11 +201,17 @@ export async function fetchInspectionData(
       permitData = permitError ? null : permit;
     }
 
+    // Fetch linked applications (modifications, renewals, transfers) for this permit
+    const linkedApplications = await fetchLinkedApplications(
+      application.id,
+      permitData?.id ?? null
+    );
+
     // Fetch payment history (if payment integration exists)
     const paymentHistory = await fetchPaymentHistory(application.id);
 
     // Prepare pre-populated data
-    const prepopulatedData = prepareInspectionData(application, permitData, paymentHistory);
+    const prepopulatedData = prepareInspectionData(application, permitData, paymentHistory, linkedApplications);
 
     return {
       application: {
@@ -243,6 +249,60 @@ async function fetchPaymentHistory(applicationId: string): Promise<PaymentRecord
     return payments || [];
   } catch (error) {
     console.log('Payment table not available or error fetching:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch all applications linked to the same permit (modifications, renewals, transfers).
+ * Results are ordered most-recent-first so callers can pick the freshest non-null value.
+ */
+async function fetchLinkedApplications(
+  originalAppId: string,
+  permitId: string | null | undefined
+): Promise<any[]> {
+  try {
+    const linked: any[] = [];
+
+    // Modifications that reference the original application
+    const { data: modifications } = await supabase
+      .from('applications')
+      .select('*, applicant:users!applicant_id(id, id_number, company_tin, account_type)')
+      .eq('modified_from_application_id', originalAppId)
+      .order('created_at', { ascending: false });
+
+    if (Array.isArray(modifications)) linked.push(...modifications);
+
+    // Renewals that reference the permit
+    if (permitId) {
+      const { data: renewals } = await supabase
+        .from('applications')
+        .select('*, applicant:users!applicant_id(id, id_number, company_tin, account_type)')
+        .eq('renewed_from_permit_id', permitId)
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(renewals)) linked.push(...renewals);
+
+      // Transfers stored via internal_notes.originalPermitId
+      const { data: transfers } = await supabase
+        .from('applications')
+        .select('*, applicant:users!applicant_id(id, id_number, company_tin, account_type)')
+        .eq('application_type', 'transfer')
+        .ilike('internal_notes', `%"originalPermitId":"${permitId}"%`)
+        .order('created_at', { ascending: false });
+
+      if (Array.isArray(transfers)) linked.push(...transfers);
+    }
+
+    // Deduplicate by id, keep most-recent-first order
+    const seen = new Set<string>();
+    return linked.filter(app => {
+      if (seen.has(app.id)) return false;
+      seen.add(app.id);
+      return true;
+    });
+  } catch (err) {
+    console.log('⚠️ Could not fetch linked applications:', err);
     return [];
   }
 }
@@ -401,12 +461,113 @@ function extractLockedFieldsFromNotes(internal: Record<string, any> | null): {
 }
 
 /**
+ * Resolve the permit holder's ID/TIN by checking the users table join,
+ * the application's internal_notes (where the form stores nationalIdNumber),
+ * and linked applications as fallbacks.
+ */
+function resolvePermitHolderId(
+  applicant: any,
+  isOrganization: boolean,
+  primaryInternal: Record<string, any> | null,
+  linkedApps: any[]
+): string {
+  // Direct from the users table (primary source)
+  const fromUser = pickFirstNonEmptyString(
+    isOrganization ? applicant?.company_tin : applicant?.id_number,
+    applicant?.id_number,
+    applicant?.company_tin,
+  );
+  if (fromUser) return fromUser;
+
+  // From primary application's internal_notes (nationalIdNumber for individuals,
+  // companyTin / registrationId for organizations)
+  const fromNotes = isOrganization
+    ? pickFirstNonEmptyString(
+        primaryInternal?.companyTin,
+        primaryInternal?.registrationId,
+        primaryInternal?.companyRegistrationId,
+        primaryInternal?.nationalIdNumber,
+      )
+    : pickFirstNonEmptyString(
+        primaryInternal?.nationalIdNumber,
+        primaryInternal?.companyTin,
+      );
+  if (fromNotes) return fromNotes;
+
+  // From linked applications' internal_notes and applicant joins
+  for (const app of linkedApps) {
+    const linkedApplicant = app.applicant;
+    const fromLinkedUser = pickFirstNonEmptyString(
+      isOrganization ? linkedApplicant?.company_tin : linkedApplicant?.id_number,
+      linkedApplicant?.id_number,
+      linkedApplicant?.company_tin,
+    );
+    if (fromLinkedUser) return fromLinkedUser;
+
+    const linkedNotes = safeParseInternalNotes(app.internal_notes);
+    const fromLinkedNotes = isOrganization
+      ? pickFirstNonEmptyString(
+          linkedNotes?.companyTin,
+          linkedNotes?.registrationId,
+          linkedNotes?.companyRegistrationId,
+          linkedNotes?.nationalIdNumber,
+        )
+      : pickFirstNonEmptyString(
+          linkedNotes?.nationalIdNumber,
+          linkedNotes?.companyTin,
+        );
+    if (fromLinkedNotes) return fromLinkedNotes;
+  }
+
+  return 'N/A';
+}
+
+/**
+ * Resolve flow rate by checking the primary application, its internal_notes,
+ * and all linked applications (most-recent-first).
+ */
+function resolveFlowRateFromApplications(
+  primaryApp: any,
+  primaryInternal: Record<string, any> | null,
+  linkedApps: any[]
+): number | undefined {
+  // 1. Primary application column
+  const fromPrimary = parsePositiveNumber(primaryApp.flow_rate_m3_per_second);
+  if (fromPrimary !== undefined) return fromPrimary;
+
+  // 2. Primary application internal_notes (waterAbstractionDetails)
+  const abstraction = Array.isArray(primaryInternal?.waterAbstractionDetails)
+    ? primaryInternal!.waterAbstractionDetails[0]
+    : null;
+  const fromPrimaryNotes = parsePositiveNumber(abstraction?.flowRate ?? abstraction?.flowRateM3PerSecond);
+  if (fromPrimaryNotes !== undefined) return fromPrimaryNotes;
+
+  // 3. Linked applications (already sorted most-recent-first)
+  for (const app of linkedApps) {
+    const fromCol = parsePositiveNumber(app.flow_rate_m3_per_second);
+    if (fromCol !== undefined) return fromCol;
+
+    const notes = safeParseInternalNotes(app.internal_notes);
+    const linkedAbstraction = Array.isArray(notes?.waterAbstractionDetails)
+      ? notes!.waterAbstractionDetails[0]
+      : null;
+    const fromLinkedNotes = parsePositiveNumber(
+      linkedAbstraction?.flowRate ?? linkedAbstraction?.flowRateM3PerSecond
+    );
+    if (fromLinkedNotes !== undefined) return fromLinkedNotes;
+  }
+
+  return undefined;
+}
+
+/**
  * Prepare pre-populated inspection data from application and permit records
  */
 function prepareInspectionData(
   application: any,
   permit: Permit | null,
-  paymentHistory: PaymentRecord[]
+  paymentHistory: PaymentRecord[],
+  linkedApplications: any[] = []
 ): PrepopulatedInspectionData {
   const applicant = application.applicant;
   const internal = safeParseInternalNotes(application.internal_notes);
@@ -421,11 +582,9 @@ function prepareInspectionData(
   ) || 'N/A';
   
   const isOrganizationAccount = typeof applicant?.account_type === "string" && applicant.account_type !== "individual";
-  const permitHolderId = pickFirstNonEmptyString(
-    isOrganizationAccount ? applicant?.company_tin : applicant?.id_number,
-    applicant?.id_number,
-    applicant?.company_tin,
-  ) || 'N/A';
+  const permitHolderId = resolvePermitHolderId(
+    applicant, isOrganizationAccount, internal, linkedApplications
+  );
 
   const permitDetails = internal?.permitDetails && typeof internal.permitDetails === "object"
     ? internal.permitDetails
@@ -540,7 +699,10 @@ function prepareInspectionData(
   const allowedUnit = permit?.allowance_unit;
   const savedAbstraction = Array.isArray(internal?.waterAbstractionDetails) ? internal.waterAbstractionDetails[0] : null;
   const authorizedMethod = application.water_taking_method || application.abstraction_method || savedAbstraction?.abstractionMethod || 'As per technical drawings';
-  const flowRate = application.flow_rate_m3_per_second ?? undefined;
+
+  // Resolve flow rate: check the primary application first, then scan linked
+  // applications (most-recent-first) for the freshest non-null value.
+  const flowRate = resolveFlowRateFromApplications(application, internal, linkedApplications);
 
   // Concession-specific: surface area and boundary polygon from application
   const assessorAdj = internal?._assessorAdjustments;

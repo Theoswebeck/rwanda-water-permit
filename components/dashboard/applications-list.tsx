@@ -621,22 +621,22 @@ export function ApplicationsList({
 
       {/* Desktop Applications Table */}
       <div className="hidden rounded-lg border bg-white shadow-sm overflow-hidden md:block">
-        <Table>
+        <Table className="table-fixed w-full">
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-gray-50/50">
-              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-12">
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[40px]">
                 <Checkbox
                   checked={isAllPageSelected}
                   onCheckedChange={handleSelectAll}
                   aria-label="Select all applications"
                 />
               </TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Last Action</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Application ID</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Type</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Status</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4">Location</TableHead>
-              <TableHead className="font-semibold text-gray-700 px-6 py-4 text-right">Actions</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[16%]">Last Action</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[15%]">Application ID</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[17%]">Type</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[17%]">Status</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[17%]">Location</TableHead>
+              <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[18%] text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -657,30 +657,30 @@ export function ApplicationsList({
                       aria-label={`Select application ${application.application_number || application.id}`}
                     />
                   </TableCell>
-                  <TableCell className="font-medium text-gray-900 px-6 py-4">
-                    <div className="text-sm">
+                  <TableCell className="font-medium text-gray-900 px-4 py-4">
+                    <div className="text-sm truncate">
                       {formatTimestamp(getLastActionTimestamp(application))}
                     </div>
                   </TableCell>
-                  <TableCell className="text-gray-600 px-6 py-4">
-                    <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-md font-medium">
+                  <TableCell className="text-gray-600 px-4 py-4">
+                    <span className="font-mono text-xs bg-blue-50 text-blue-700 px-2.5 py-1.5 rounded-md font-medium truncate inline-block max-w-full">
                       {application.application_number || `RWB-${application.id.slice(-6)}`}
                     </span>
                   </TableCell>
-                  <TableCell className="text-gray-600 px-6 py-4">
-                    <div className="text-sm">
+                  <TableCell className="text-gray-600 px-4 py-4">
+                    <div className="text-sm truncate">
                       {formatApplicationType(application.application_type, application)}
                     </div>
                   </TableCell>
-                  <TableCell className="px-6 py-4">
+                  <TableCell className="px-4 py-4">
                     {getStatusBadge(getDisplayStatus(application))}
                   </TableCell>
-                  <TableCell className="text-gray-600 px-6 py-4">
-                    <div className="text-sm">
+                  <TableCell className="text-gray-600 px-4 py-4">
+                    <div className="text-sm truncate" title={getLocationDisplay(application)}>
                       {getLocationDisplay(application)}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right px-6 py-4" data-row-click-ignore="true">
+                  <TableCell className="text-right px-4 py-4" data-row-click-ignore="true">
                     <div className="flex justify-end gap-1.5">
                       {(application.status === 'draft' || application.status === 'revision_required') && (
                         <Link href={
