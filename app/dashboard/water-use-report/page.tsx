@@ -50,7 +50,7 @@ function WaterUseReportContent() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
 
-  const currentYear = new Date().getFullYear();
+  const reportingYear = new Date().getFullYear() - 1;
 
   // Mutations
   const createMutation = useCreateWaterUseReportMutation();
@@ -60,7 +60,7 @@ function WaterUseReportContent() {
   // Check for existing report for this permit and year
   const { data: existingReportForYear } = useExistingReportCheck(
     permitId || '', 
-    currentYear, 
+    reportingYear, 
     !!permitId && !reportId
   );
 
@@ -145,7 +145,7 @@ function WaterUseReportContent() {
         permit_id: permit.id,
         application_id: permit.application_id,
         applicant_id: userProfile.id,
-        reporting_year: formData.reportingYear || currentYear,
+        reporting_year: formData.reportingYear || reportingYear,
         template,
         status: 'draft' as const,
         section3: formData.section3 || null,
@@ -326,7 +326,7 @@ function WaterUseReportContent() {
               <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-800">
                   <span className="font-medium">Permit:</span> {permit.permit_number} • 
-                  <span className="font-medium ml-2">Reporting Year:</span> {currentYear} • 
+                  <span className="font-medium ml-2">Reporting Year:</span> {reportingYear} • 
                   <span className="font-medium ml-2">Template:</span> {template === 'abstraction' ? 'Abstraction Uses' : 'Concession Uses'}
                 </p>
               </div>
@@ -363,7 +363,7 @@ function WaterUseReportContent() {
             <WaterUseReportForm
               permit={permit}
               template={template}
-              reportingYear={currentYear}
+              reportingYear={reportingYear}
               existingReport={existingReport}
               onSaveAsDraft={handleSaveAsDraft}
               onSubmit={handleSubmit}

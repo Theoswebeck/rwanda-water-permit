@@ -49,15 +49,20 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
 
   const { data: reports = [], isLoading, error } = useAllWaterUseReportsQuery();
 
-  // Get unique years from reports
-  const availableYears = useMemo(() => {
-    const years = new Set(reports.map(r => r.reporting_year));
-    return Array.from(years).sort((a, b) => b - a);
+  // Staff should only see submitted (non-draft) reports
+  const nonDraftReports = useMemo(() => {
+    return reports.filter(r => r.status !== 'draft');
   }, [reports]);
+
+  // Get unique years from non-draft reports
+  const availableYears = useMemo(() => {
+    const years = new Set(nonDraftReports.map(r => r.reporting_year));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [nonDraftReports]);
 
   // Filtered reports
   const filteredReports = useMemo(() => {
-    return reports.filter(report => {
+    return nonDraftReports.filter(report => {
       const matchesSearch = 
         report.permit?.permit_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         report.applicant?.company_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -71,7 +76,7 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
 
       return matchesSearch && matchesStatus && matchesTemplate && matchesYear;
     });
-  }, [reports, searchTerm, statusFilter, templateFilter, yearFilter]);
+  }, [nonDraftReports, searchTerm, statusFilter, templateFilter, yearFilter]);
 
   const getApplicantName = (report: WaterUseReportWithRelations) => {
     if (report.applicant?.company_name) {
@@ -132,7 +137,8 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="under_review">Under Review</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
             </SelectContent>
           </Select>
           <Select value={templateFilter} onValueChange={setTemplateFilter}>
@@ -180,12 +186,12 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
           <p className="text-muted-foreground font-medium">
-            {reports.length === 0 
-              ? "No water use reports found" 
+            {nonDraftReports.length === 0 
+              ? "No submitted water use reports found" 
               : "No reports match your filters"}
           </p>
           <p className="text-sm text-muted-foreground/70 mt-1">
-            {reports.length === 0 
+            {nonDraftReports.length === 0 
               ? "Reports will appear here when applicants submit them" 
               : "Try adjusting your search or filter criteria"}
           </p>

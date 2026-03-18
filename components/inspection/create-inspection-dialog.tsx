@@ -86,7 +86,7 @@ export function CreateInspectionDialog({
         setLoading(true);
         setError(null);
 
-        const [permitsResult, registryResult] = await Promise.all([
+        const [permitsResult, registryResult, inspectionsResult] = await Promise.all([
           supabase
             .from("permits")
             .select(
@@ -117,10 +117,25 @@ export function CreateInspectionDialog({
             .from("permit_registry")
             .select("id, permit_number, permit_holder, location, issuance_date, expiration_date, status")
             .order("issuance_date", { ascending: false }),
+          supabase
+            .from("inspections")
+            .select("application_id, workflow_status, status")
+            .neq("status", "cancelled"),
         ]);
 
         if (permitsResult.error) throw permitsResult.error;
         if (registryResult.error) throw registryResult.error;
+        if (inspectionsResult.error) throw inspectionsResult.error;
+
+        // Build set of application_ids that have ongoing inspections
+        const ongoingAppIds = new Set<string>();
+        for (const insp of inspectionsResult.data || []) {
+          const ws = (insp as any).workflow_status as string | null;
+          const st = (insp as any).status as string;
+          if (ws === "approved" || ws === "rejected") continue;
+          if (!ws && st === "completed") continue;
+          ongoingAppIds.add((insp as any).application_id);
+        }
 
         const permitRows: PermitPickRow[] = ((permitsResult.data || []) as any[]).map((row) => ({
           ...row,
@@ -160,17 +175,28 @@ export function CreateInspectionDialog({
             },
           }));
 
-        // Deduplicate: prefer `permits` table rows over registry rows with the same permit number
+        // Build set of blocked permit-number keys (for filtering registry rows)
+        const blockedPermitKeys = new Set<string>();
+        for (const row of permitRows) {
+          if (row.application?.id && ongoingAppIds.has(row.application.id)) {
+            const key = (row.permit_number || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+            if (key) blockedPermitKeys.add(key);
+          }
+        }
+
+        // Deduplicate and exclude permits with ongoing inspections
         const seen = new Set<string>();
         const merged: PermitPickRow[] = [];
         for (const row of permitRows) {
           const key = (row.permit_number || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (row.application?.id && ongoingAppIds.has(row.application.id)) continue;
           if (key) seen.add(key);
           merged.push(row);
         }
         for (const row of registryRows) {
           const key = (row.permit_number || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
           if (key && seen.has(key)) continue;
+          if (key && blockedPermitKeys.has(key)) continue;
           if (key) seen.add(key);
           merged.push(row);
         }
