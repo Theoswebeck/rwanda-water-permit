@@ -703,15 +703,18 @@ function prepareInspectionData(
     locked.operatorResidence
   );
   
-  // Section 2: Activity Details
+  // Section 2: Activity Details - prefer permit.purpose (authoritative) over application data
   const intendedActivities = normalizeIntendedActivities(application.intended_activities);
   const primaryActivity = pickFirstNonEmptyString(intendedActivities[0], application.water_purpose) || 'other';
   const activitiesLabel = intendedActivities.length > 1
     ? intendedActivities.map(getActivityLabel).join(", ")
     : getActivityLabel(primaryActivity);
+  const permitActivityLabel = permit?.purpose ? getActivityLabel(permit.purpose) : undefined;
+  const appActivityLabel = primaryActivity ? getActivityLabel(primaryActivity) : undefined;
   const activityType = pickFirstNonEmptyString(
-    activitiesLabel,
-    toDisplayLabel(permit?.purpose)
+    permitActivityLabel,
+    appActivityLabel,
+    activitiesLabel
   ) || "N/A";
   const activityStartingDate = toDateOnly(permit?.issued_date);
   
@@ -728,9 +731,9 @@ function prepareInspectionData(
   );
   const waterSourceName = pickFirstNonEmptyString(application.water_body_name, application.water_source?.replace(/_/g, ' '), 'N/A') || 'N/A';
   const waterPurpose = pickFirstNonEmptyString(
+    permit?.purpose ? getActivityLabel(permit.purpose) : undefined,
     getActivityLabel(primaryActivity),
-    toDisplayLabel(application.water_purpose),
-    toDisplayLabel(permit?.purpose)
+    toDisplayLabel(application.water_purpose)
   );
   const primary = getPrimaryLatLngFromGeometry(application.coordinates)
     ?? getPrimaryLatLngFromGeometry(permit?.coordinates);
@@ -830,7 +833,7 @@ function prepareInspectionData(
 function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionData {
   const permitHolderName = registry.permit_holder || 'N/A';
   const permitNumber = registry.permit_number || 'N/A';
-  const activityType = registry.authorized_activity || 'N/A';
+  const activityType = registry.authorized_activity ? getActivityLabel(registry.authorized_activity) : 'N/A';
   const issuanceDate = registry.issuance_date || undefined;
   const expirationDate = registry.expiration_date || undefined;
   const waterSourceName = registry.water_source || 'N/A';

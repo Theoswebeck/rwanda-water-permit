@@ -174,7 +174,7 @@ export function ApplicationsTab() {
 
   const getWaterPurposeLabel = (purpose: string) => {
     const labels: Record<string, string> = {
-      'domestic': 'Domestic Use',
+      'domestic': 'Water Supply',
       'industrial': 'Industrial Use',
       'agricultural': 'Agricultural Use',
       'irrigation': 'Irrigation',

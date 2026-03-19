@@ -256,7 +256,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   recreation: "Recreational Activities",
   gaz_extraction: "Gaz Extraction",
   livestock: "Livestock",
-  domestic: "Domestic Use",
+  domestic: "Water Supply",
   municipal_supply: "Municipal Supply",
   aquaculture: "Aquaculture",
   other: "Other",
@@ -264,12 +264,52 @@ export const ACTIVITY_LABELS: Record<string, string> = {
 
 export const ALL_WATER_ACTIVITY_CODES: string[] = Object.keys(ACTIVITY_LABELS);
 
+/**
+ * Normalizes activity strings (enum codes, CSV values, human-readable) to canonical codes
+ * for consistent lookup. Handles permit_registry CSV imports and legacy formats.
+ */
+export function normalizeActivityCode(value: string | null | undefined): string {
+  if (value == null || typeof value !== "string") return "";
+  let key = value.trim().toLowerCase();
+  if (!key) return "";
+
+  // For compound values like "Industrial (tea processing) & residential", take the primary activity
+  key = key.split(/\s+(&|and)\s+/i)[0]?.trim() || key;
+  // Strip parenthetical suffixes e.g. "Industrial (tea processing)" -> "industrial"
+  key = key.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  // Normalize spaces to underscores for alias lookup
+  key = key.replace(/\s+/g, "_");
+
+  const aliases: Record<string, string> = {
+    industry: "industrial",
+    coffee_washing_station: "coffee_washing",
+    electricity: "electricity_generation",
+    construction: "industrial",
+    recreation_activities: "recreation",
+    gas_extraction: "gaz_extraction",
+    aquaculture: "fish_farming_lakes",
+    fish_farming: "fish_farming_lakes",
+    hydropower: "electricity_generation",
+    municipal: "municipal_supply",
+    residential: "water_supply",
+  };
+  return aliases[key] || key || "";
+}
+
 export function getActivityLabel(activity: string): string {
+  const normalized = normalizeActivityCode(activity);
+  if (normalized) {
+    const directLabel = ACTIVITY_LABELS[normalized];
+    if (directLabel) return directLabel;
+  }
+
+  // Try original value as-is (e.g. already a valid code)
   const directLabel = ACTIVITY_LABELS[activity];
   if (directLabel) return directLabel;
 
   // Fallback for unknown/legacy codes to keep UI readable.
-  return activity
+  const fallback = activity || normalized;
+  return fallback
     .split("_")
     .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
     .join(" ");

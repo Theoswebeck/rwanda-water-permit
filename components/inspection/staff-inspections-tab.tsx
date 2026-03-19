@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -192,7 +193,9 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const [assignLoading, setAssignLoading] = useState(false);
 
   // Only show Assign Assessor when on /review (reviewer or admin context)
-  const canAssign = roleContext === "reviewer" || roleContext === "admin";
+  const pathname = usePathname();
+  const isOnReviewPage = pathname?.startsWith("/review") ?? false;
+  const canAssign = isOnReviewPage && (roleContext === "reviewer" || roleContext === "admin");
 
   useEffect(() => {
     if (!canAssign) return;

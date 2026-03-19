@@ -2400,7 +2400,7 @@ export function ApplicationForm({
                                   <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
                                   <SelectItem value="industrial">Industrial Use</SelectItem>
                                   <SelectItem value="mining">Mining</SelectItem>
-                                  <SelectItem value="domestic">Domestic Use</SelectItem>
+                                  <SelectItem value="domestic">Water Supply</SelectItem>
                                   <SelectItem value="commercial">Commercial Use</SelectItem>
                                   <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
