@@ -21,6 +21,13 @@ import {
 } from "@/types/inspection-workflow";
 import { getInspectionBasePath } from "@/lib/inspection-workflow";
 
+type ApplicantInfo = {
+  first_name?: string;
+  last_name?: string;
+  company_name?: string;
+  account_type?: string;
+};
+
 type InspectionRow = {
   id: string;
   status: "scheduled" | "in_progress" | "completed" | "cancelled" | string;
@@ -37,13 +44,8 @@ type InspectionRow = {
     id: string;
     application_number?: string;
     project_title?: string;
-    applicant?: {
-      first_name?: string;
-      last_name?: string;
-      company_name?: string;
-      account_type?: string;
-    } | null;
   } | null;
+  applicant?: ApplicantInfo | null;
 };
 
 type PermitLite = {
@@ -71,8 +73,7 @@ function fmtDate(dateString?: string | null): string {
   return d.toLocaleDateString();
 }
 
-function applicantName(app: InspectionRow["application"]): string {
-  const a = app?.applicant;
+function applicantName(a: ApplicantInfo | null | undefined): string {
   if (!a) return "—";
   const fullName = `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim();
   if (a.account_type === "individual") return fullName || "—";
@@ -248,14 +249,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
               .in("permit_number", permitNumbers),
             supabase
               .from("permits")
-              .select(
-                `permit_number,
-                 application:applications!application_id(
-                   applicant:users!applicant_id(
-                     first_name, last_name, company_name, account_type
-                   )
-                 )`
-              )
+              .select("permit_number, applicant")
               .in("permit_number", permitNumbers),
           ]);
 
@@ -264,7 +258,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           if (!permitsResult.error) {
             for (const row of (permitsResult.data || []) as any[]) {
               if (!row.permit_number) continue;
-              const u = row.application?.applicant;
+              const u = row.applicant;
               if (!u) continue;
               const name =
                 u.account_type === "individual"
@@ -322,7 +316,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
         const appNo = (r.application?.application_number || "").toLowerCase();
         const permitNo = r.application?.id ? (permitByAppId[r.application.id]?.permit_number || "").toLowerCase() : "";
         const permitNumber = r.application?.id ? permitByAppId[r.application.id]?.permit_number : undefined;
-        const permitHolder = (permitNumber ? permitHolderByNumber[permitNumber] : null) || applicantName(r.application);
+        const permitHolder = (permitNumber ? permitHolderByNumber[permitNumber] : null) || applicantName(r.applicant);
         return id.includes(q) || appNo.includes(q) || permitNo.includes(q) || permitHolder.toLowerCase().includes(q);
       });
     }
@@ -404,8 +398,8 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                     const permit = appId ? permitByAppId[appId] : undefined;
                     const date = r.completed_date || r.scheduled_date || r.created_at || null;
                     const holderName = permit?.permit_number
-                      ? (permitHolderByNumber[permit.permit_number] || applicantName(r.application))
-                      : applicantName(r.application);
+                      ? (permitHolderByNumber[permit.permit_number] || applicantName(r.applicant))
+                      : applicantName(r.applicant);
                     const displayStatus = getDisplayStatus(r);
                     return (
                       <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">

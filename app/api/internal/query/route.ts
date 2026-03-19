@@ -126,7 +126,8 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
             'last_name', au.last_name,
             'company_name', au.company_name,
             'email', au.email,
-            'phone', au.phone
+            'phone', au.phone,
+            'account_type', au.account_type
           ) as applicant,
           jsonb_build_object(
             'first_name', iu.first_name,

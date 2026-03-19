@@ -401,6 +401,9 @@ export interface Permit {
   last_modified_at?: string | null
   last_modified_by?: string | null
   
+  // PostGIS geometry (copied from approved application via trigger)
+  coordinates?: Json
+
   // Monitoring requirements
   monitoring_frequency?: string
   reporting_requirements?: string
@@ -427,6 +430,7 @@ export interface PermitRegistryEntry {
   location: string | null
   latitude: number | null
   longitude: number | null
+  coordinates_geojson?: string | null
   issuance_date: string | null
   duration: string | null
   expiration_date: string | null

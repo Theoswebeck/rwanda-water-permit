@@ -73,6 +73,7 @@ function buildRegistrySelect(hasDocColumns: boolean): string {
       pr.location,
       pr.latitude,
       pr.longitude,
+      null::text as coordinates_geojson,
       pr.issuance_date,
       pr.duration,
       pr.expiration_date,
@@ -107,6 +108,13 @@ function buildPermitsSelect(hasApplications: boolean, hasPostGIS: boolean): stri
        end`
     : `null::double precision`;
 
+  const geojsonExpr = hasPostGIS
+    ? `case
+         when coalesce(p.coordinates, a.coordinates) is null then null
+         else st_asgeojson(coalesce(p.coordinates, a.coordinates))
+       end`
+    : `null::text`;
+
   if (!hasApplications) {
     return `
     select
@@ -116,14 +124,27 @@ function buildPermitsSelect(hasApplications: boolean, hasPostGIS: boolean): stri
       p.permit_number::text as permit_number,
       'Authorization' as regime,
       p.water_source::text as water_source,
-      null::text as volume_or_area,
+      coalesce(
+        nullif(trim(concat_ws(' ', p.water_allowance::text, p.allowance_unit)), ''),
+        nullif(trim(concat_ws(' ', p.water_body_surface_area::text, p.surface_area_unit)), '')
+      ) as volume_or_area,
       null::text as method_of_water_taking,
-      null::text as authorized_activity,
+      p.purpose::text as authorized_activity,
       null::text as location,
       null::double precision as latitude,
       null::double precision as longitude,
+      null::text as coordinates_geojson,
       p.issued_date as issuance_date,
-      null::text as duration,
+      case
+        when p.issued_date is not null and p.expiry_date is not null then
+          trim(concat_ws(' ',
+            case when extract(year from age(p.expiry_date, p.issued_date))::int > 0
+              then extract(year from age(p.expiry_date, p.issued_date))::int || ' years' end,
+            case when extract(month from age(p.expiry_date, p.issued_date))::int % 12 > 0
+              then (extract(month from age(p.expiry_date, p.issued_date))::int % 12) || ' months' end
+          ))
+        else null
+      end as duration,
       p.expiry_date as expiration_date,
       case
         when p.status = 'expired'::permit_status then 'EXPIRED'
@@ -156,14 +177,28 @@ function buildPermitsSelect(hasApplications: boolean, hasPostGIS: boolean): stri
       p.permit_number::text as permit_number,
       ${regimeExpr} as regime,
       p.water_source::text as water_source,
-      null::text as volume_or_area,
-      null::text as method_of_water_taking,
-      coalesce(a.project_description, null) as authorized_activity,
+      coalesce(
+        nullif(trim(concat_ws(' ', p.water_allowance::text, p.allowance_unit)), ''),
+        nullif(trim(concat_ws(' ', p.water_body_surface_area::text, p.surface_area_unit)), '')
+      ) as volume_or_area,
+      a.water_taking_method::text as method_of_water_taking,
+      coalesce(p.purpose::text, a.water_purpose::text) as authorized_activity,
       case when a.id is not null then concat_ws(', ', a.district, a.province::text) else null end as location,
       ${latExpr} as latitude,
       ${lngExpr} as longitude,
+      ${geojsonExpr} as coordinates_geojson,
       p.issued_date as issuance_date,
-      null::text as duration,
+      case
+        when p.issued_date is not null and p.expiry_date is not null then
+          trim(concat_ws(' ',
+            case when extract(year from age(p.expiry_date, p.issued_date))::int > 0
+              then extract(year from age(p.expiry_date, p.issued_date))::int || ' years' end,
+            case when extract(month from age(p.expiry_date, p.issued_date))::int % 12 > 0
+              then (extract(month from age(p.expiry_date, p.issued_date))::int % 12) || ' months' end
+          ))
+        when a.proposed_duration_years is not null then a.proposed_duration_years || ' years'
+        else null
+      end as duration,
       p.expiry_date as expiration_date,
       case
         when p.status = 'expired'::permit_status then 'EXPIRED'
@@ -231,6 +266,7 @@ const MERGED_CTE = `
         max(u.longitude) filter (where u.source_kind = 'registry'),
         max(u.longitude) filter (where u.source_kind = 'permit')
       ) as longitude,
+      max(u.coordinates_geojson) filter (where u.source_kind = 'permit') as coordinates_geojson,
       coalesce(
         max(u.issuance_date) filter (where u.source_kind = 'registry'),
         max(u.issuance_date) filter (where u.source_kind = 'permit')
@@ -411,6 +447,7 @@ export async function GET(req: NextRequest) {
         location,
         latitude,
         longitude,
+        coordinates_geojson,
         issuance_date,
         duration,
         expiration_date,

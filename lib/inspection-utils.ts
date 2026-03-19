@@ -210,8 +210,25 @@ export async function fetchInspectionData(
     // Fetch payment history (if payment integration exists)
     const paymentHistory = await fetchPaymentHistory(application.id);
 
+    // Fetch permit_registry entry as a coordinate fallback (best-effort, non-blocking)
+    let registryCoordFallback: { latitude?: number | null; longitude?: number | null } | undefined;
+    const registryPermitNumber = permitData?.permit_number || applicationNumber;
+    try {
+      const { data: regEntry } = await supabase
+        .from('permit_registry')
+        .select('latitude, longitude')
+        .eq('permit_number', registryPermitNumber)
+        .maybeSingle();
+      const reg = regEntry as { latitude?: number | null; longitude?: number | null } | null;
+      if (reg?.latitude != null || reg?.longitude != null) {
+        registryCoordFallback = { latitude: reg.latitude, longitude: reg.longitude };
+      }
+    } catch {
+      // permit_registry may not exist or have no matching entry -- ignore
+    }
+
     // Prepare pre-populated data
-    const prepopulatedData = prepareInspectionData(application, permitData, paymentHistory, linkedApplications);
+    const prepopulatedData = prepareInspectionData(application, permitData, paymentHistory, linkedApplications, registryCoordFallback);
 
     return {
       application: {
@@ -567,7 +584,8 @@ function prepareInspectionData(
   application: any,
   permit: Permit | null,
   paymentHistory: PaymentRecord[],
-  linkedApplications: any[] = []
+  linkedApplications: any[] = [],
+  registryFallback?: { latitude?: number | null; longitude?: number | null }
 ): PrepopulatedInspectionData {
   const applicant = application.applicant;
   const internal = safeParseInternalNotes(application.internal_notes);
@@ -681,10 +699,19 @@ function prepareInspectionData(
     toDisplayLabel(application.water_purpose),
     toDisplayLabel(permit?.purpose)
   );
-  const primary = getPrimaryLatLngFromGeometry(application.coordinates);
+  const primary = getPrimaryLatLngFromGeometry(application.coordinates)
+    ?? getPrimaryLatLngFromGeometry(permit?.coordinates);
   const coordinates = primary ? `Lat: ${primary.lat}, Lng: ${primary.lng}` : 'N/A';
-  const waterSourceLatitude = pickFirstNonEmptyString(internal?.waterSourceLatitude, primary?.lat !== undefined ? String(primary.lat) : undefined);
-  const waterSourceLongitude = pickFirstNonEmptyString(internal?.waterSourceLongitude, primary?.lng !== undefined ? String(primary.lng) : undefined);
+  const waterSourceLatitude = pickFirstNonEmptyString(
+    internal?.waterSourceLatitude,
+    primary?.lat !== undefined ? String(primary.lat) : undefined,
+    registryFallback?.latitude != null ? String(registryFallback.latitude) : undefined,
+  );
+  const waterSourceLongitude = pickFirstNonEmptyString(
+    internal?.waterSourceLongitude,
+    primary?.lng !== undefined ? String(primary.lng) : undefined,
+    registryFallback?.longitude != null ? String(registryFallback.longitude) : undefined,
+  );
   
   const waterSourceLocation = [
     locationVillage,
@@ -712,7 +739,10 @@ function prepareInspectionData(
     ?? parsePositiveNumber(internal?.concessionArea)
     ?? parsePositiveNumber(internal?.fishLakeAreaHectares);
 
-  const concessionBoundaries = polygonGeometryToBoundaryRows(application.coordinates);
+  let concessionBoundaries = polygonGeometryToBoundaryRows(application.coordinates);
+  if (concessionBoundaries.length === 0 && permit?.coordinates) {
+    concessionBoundaries = polygonGeometryToBoundaryRows(permit.coordinates);
+  }
   
   // Section 8: Payment Information
   const completedPayments = paymentHistory.filter(p => p.status === 'completed' || p.status === 'success');

@@ -19,15 +19,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
+import { cn } from "@/lib/utils";
 import { 
   ArrowLeft, 
   Check, 
   X, 
   Send, 
   AlertTriangle,
+  CheckCircle,
   Clock,
   Loader2,
   XCircle,
@@ -35,7 +37,8 @@ import {
   FileCheck,
   MapPin,
   ClipboardCheck,
-  Save
+  Save,
+  User2
 } from "lucide-react";
 import Link from "next/link";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
@@ -48,6 +51,7 @@ import { ApplicationComments } from "@/components/shared/ApplicationComments";
 import { VerificationStatus } from "@/components/inspection/document-verification";
 import { FieldReportUpload, FieldReportFile } from "@/components/inspection/field-report-upload";
 import { VerificationSummary, VerificationChecklist, RecommendationData } from "@/components/inspection/verification-summary";
+import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 
 // Lazy load the ApplicationForm component
@@ -825,22 +829,66 @@ export default function InspectorApplicationView() {
     }
   };
 
+  const getApplicationTypeBadge = () => {
+    if (!application) return null;
+    
+    const workflowKind = getApplicationWorkflowKind(application as any);
+
+    let displayType: 'new' | 'modification' | 'transfer' | 'renewal' = 'new';
+    if (workflowKind === "renewal") displayType = "renewal";
+    else if (workflowKind === "modification") displayType = "modification";
+    else if (workflowKind === "transfer") displayType = "transfer";
+    
+    const typeConfig = {
+      'new': { 
+        label: 'New Application', 
+        className: 'bg-blue-100 text-blue-700 border-blue-300' 
+      },
+      'modification': { 
+        label: 'Modification', 
+        className: 'bg-amber-100 text-amber-700 border-amber-300' 
+      },
+      'transfer': { 
+        label: 'Transfer', 
+        className: 'bg-purple-100 text-purple-700 border-purple-300' 
+      },
+      'renewal': { 
+        label: 'Renewal', 
+        className: 'bg-green-100 text-green-700 border-green-300' 
+      },
+    };
+    
+    const config = typeConfig[displayType];
+    
+    return (
+      <Badge variant="outline" className={`${config.className} text-xs font-medium px-2 py-0.5 rounded-full border`}>
+        {config.label}
+      </Badge>
+    );
+  };
+
   const getStatusBadge = (status: ApplicationStatus) => {
     const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
       under_review: { label: "Under Review", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
+      pending_review: { label: "Pending Review", variant: "default" },
+      pending_verification: { label: "Pending Verification", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       pending_payment: { label: "Pending Payment", variant: "secondary" },
       approved: { label: "Approved", variant: "default" },
       approved_pending_permit: { label: "Approved - Permit Pending", variant: "default" },
+      expired: { label: "Expired", variant: "outline" },
       rejected: { label: "Rejected", variant: "destructive" },
       revision_required: { label: "Needs Revision", variant: "secondary" },
       cancelled: { label: "Cancelled", variant: "outline" },
+      returned_to_assessment: { label: "🔄 Returned to Assessor", variant: "secondary" },
+      returned_to_review: { label: "🔄 Returned to Reviewer", variant: "secondary" },
+      returned_to_verification: { label: "🔄 Returned to Verifier", variant: "secondary" },
     };
     
-    const config = statusConfig[status] || { label: status, variant: "outline" };
+    const config = statusConfig[status] || { label: status, variant: "outline" as const };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -903,19 +951,19 @@ export default function InspectorApplicationView() {
                 </Button>
               </Link>
             </div>
-      
+            
             <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <h1 className="text-primary text-3xl font-semibold tracking-tight">
-                  Assessment: {application.application_number}
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                  Application Review: {application.application_number}
                 </h1>
+                {getApplicationTypeBadge()}
                 {getStatusBadge(application.status)}
               </div>
 
-              <p className="text-muted-foreground">
-                Perform field assessment and verification for water permit application
+              <p className="text-muted-foreground text-[1.05rem] text-balance sm:text-base leading-relaxed [&:not(:first-child)]:mt-6">
+                Technical review and assessment of water permit application
               </p>
-              
               {(application as any)?.assigned_to_user && (
                 <p className="text-sm text-muted-foreground">
                   Assigned to: {(application as any).assigned_to_user.first_name} {(application as any).assigned_to_user.last_name}
@@ -924,61 +972,151 @@ export default function InspectorApplicationView() {
             </div>
           </div>
 
+          {/* Revision Requirements - Prominent Notice */}
+          {application.status === 'revision_required' && application.revision_notes && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="mb-6"
+            >
+              <Alert className="border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 shadow-md">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+                <AlertDescription>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-orange-900 text-lg">⚠️ Revision Required</h3>
+                      <Badge className="border border-orange-300 text-orange-700 bg-orange-100">
+                        Action Needed
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="font-medium text-orange-800">Required Changes:</p>
+                      <div className="bg-white/50 rounded-md p-3 border border-orange-200">
+                        <p className="text-orange-900 leading-relaxed whitespace-pre-wrap">{application.revision_notes}</p>
+                      </div>
+                      <p className="text-sm text-orange-700 mt-2">
+                        <strong>Note:</strong> Please review the specific requirements above and make the necessary changes before resubmitting your application.
+                      </p>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {/* Rejection Reason Alert */}
+          {application.status === 'rejected' && (
+            <Alert className={cn(
+              "border shadow-sm",
+              (application as any).terms_status === 'rejected'
+                ? "border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50"
+                : "border-red-200 bg-red-50"
+            )}>
+              {(application as any).terms_status === 'rejected' ? (
+                <User2 className="h-5 w-5 text-orange-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              )}
+              <AlertDescription>
+                <div className="space-y-2">
+                  {(application as any).terms_status === 'rejected' ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-orange-900 text-base">Rejected by Applicant</p>
+                        <Badge variant="outline" className="border-orange-300 text-orange-700 bg-orange-100 text-xs">
+                          Terms Declined
+                        </Badge>
+                      </div>
+                      <p className="text-orange-800">
+                        The applicant declined the Terms and Conditions for this approved application. The application has been moved to rejected status.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-red-900 text-base">Rejected by RWB</p>
+                        <Badge variant="destructive" className="text-xs">
+                          RWB Decision
+                        </Badge>
+                      </div>
+                      {application.rejection_reason && (
+                        <p className="text-red-700">{application.rejection_reason}</p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Action Buttons Bar — only in assessment mode */}
           {isAssessable && (
-            <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
-              <div className="flex items-center gap-2 mr-auto">
-                <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-blue-50 text-blue-700 border-blue-200">
-                  <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
-                  Assessment Mode
-                </Badge>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="space-y-4"
+            >
+              <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
+                <div className="flex items-center gap-2 mr-auto">
+                  <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-gray-50 text-gray-700 border-gray-200">
+                    <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                    Assessment Actions
+                  </Badge>
+                </div>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => saveAssessment('draft')}
+                  disabled={submitLoading}
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  Save Draft
+                </Button>
+
+                <Button 
+                  size="sm" 
+                  onClick={handleOpenSendToApproverDialog}
+                  disabled={submitLoading || !recommendation.recommendation}
+                  className="bg-black hover:bg-gray-800 text-white gap-2"
+                >
+                  {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Submit to Approver
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowRevisionDialog(true)}
+                  disabled={submitLoading} 
+                  className="gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Return for Revision
+                </Button>
               </div>
-              
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => saveAssessment('draft')}
-                disabled={submitLoading}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                Save Draft
-              </Button>
-              
-              <Button 
-                variant="destructive" 
-                size="sm"
-                onClick={() => setShowRevisionDialog(true)}
-                disabled={submitLoading} 
-                className="gap-2"
-              >
-                <X className="h-4 w-4" />
-                Return for Revision
-              </Button>
-              
-              <Button 
-                size="sm" 
-                onClick={handleOpenSendToApproverDialog}
-                disabled={submitLoading || !recommendation.recommendation}
-                className="gap-2 bg-green-600 hover:bg-green-700"
-              >
-                {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Submit to Approver
-              </Button>
-            </div>
+            </motion.div>
           )}
 
           {/* Main Content with Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
-              <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
-              <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
-              <TabsTrigger value="summary" className="py-2.5">Final Recommendation</TabsTrigger>
-              <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
+            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-2' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
+              <TabsTrigger value="application_details">Application Details</TabsTrigger>
+              {!isTransferApp && (
+                <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
+              )}
+              {!isTransferApp && (
+                <TabsTrigger value="summary">Final Recommendation</TabsTrigger>
+              )}
+              <TabsTrigger value="internal_notes">History & Notes</TabsTrigger>
             </TabsList>
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
+              {application && <RegistryPermitComparisonCard application={application} />}
               {/* Show Transfer Form for transfer applications */}
               {isTransferApp ? (
                 loadingTransferPermit ? (
@@ -1094,7 +1232,8 @@ export default function InspectorApplicationView() {
               ) : null}
             </TabsContent>
 
-            {/* Assessment Report Tab */}
+            {/* Assessment Report Tab - Hidden for transfer applications */}
+            {!isTransferApp && (
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               <FieldReportUpload
                 applicationId={application.id}
@@ -1108,8 +1247,10 @@ export default function InspectorApplicationView() {
                 onInspectionDateChange={setInspectionDate}
               />
             </TabsContent>
+            )}
             
-            {/* Verification Summary Tab */}
+            {/* Verification Summary Tab - Hidden for transfer applications */}
+            {!isTransferApp && (
             <TabsContent value="summary" className="space-y-6 focus-visible:outline-none">
               <VerificationSummary
                 checklist={checklist}
@@ -1118,6 +1259,7 @@ export default function InspectorApplicationView() {
                 onRecommendationChange={setRecommendation}
               />
             </TabsContent>
+            )}
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">

@@ -54,10 +54,12 @@ import {
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
+import { getActivityLabel } from "@/lib/assessment-report-utils";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
+const LeafletPolygon = dynamic(() => import("react-leaflet").then((m) => m.Polygon), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
 
 type SortField =
@@ -825,7 +827,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                   />
                                   <DetailField
                                     label="Authorized Activity"
-                                    value={entry.authorized_activity}
+                                    value={formatActivityLabel(entry.authorized_activity)}
                                   />
                                   <DetailField
                                     icon={<MapPin className="h-3.5 w-3.5" />}
@@ -833,11 +835,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                     value={entry.location}
                                     wide
                                   />
-                                  {(entry.latitude || entry.longitude) && (
-                                    <DetailField
-                                      label="Coordinates"
-                                      value={`${entry.latitude ?? "N/A"}, ${entry.longitude ?? "N/A"}`}
-                                    />
+                                  {(entry.latitude || entry.longitude || entry.coordinates_geojson) && (
+                                    <CoordinatesField entry={entry} />
                                   )}
                                   <DetailField
                                     icon={<Calendar className="h-3.5 w-3.5" />}
@@ -862,31 +861,6 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                 </div>
                                 <SourceComparison entry={entry} />
                                 {hasRegistrySource(entry) && <UploadedDocSection entry={entry} />}
-                                {isPermitOnly(entry) && entry.id && (
-                                  <div className="rounded-xl border border-indigo-200/70 dark:border-indigo-900/70 p-4 bg-gradient-to-r from-indigo-50/80 to-blue-50/70 dark:from-indigo-950/30 dark:to-blue-950/20">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <div className="h-6 w-6 rounded-md bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center">
-                                          <Database className="h-3.5 w-3.5 text-indigo-700 dark:text-indigo-300" />
-                                        </div>
-                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                          System-issued permit
-                                        </p>
-                                      </div>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        asChild
-                                        className="border-indigo-300/80 text-indigo-800 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
-                                      >
-                                        <a href={`/permit/view/${encodeURIComponent(entry.permit_number)}`} target="_blank" rel="noopener noreferrer">
-                                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                                          View permit details
-                                        </a>
-                                      </Button>
-                                    </div>
-                                  </div>
-                                )}
                                 <PermitLocationMap entry={entry} />
                               </div>
                             </TableCell>
@@ -975,6 +949,66 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   );
 }
 
+function formatActivityLabel(raw: string | null | undefined): string {
+  if (!raw) return "N/A";
+  const prefixPattern = /^.*?(?:water permit application|permit application)\s+(?:for\s+)?/i;
+  const stripped = raw.replace(prefixPattern, "");
+  const codes = stripped.split(/\s*,\s*/);
+  return codes.map((c) => getActivityLabel(c.trim())).join(", ");
+}
+
+function extractGeoJsonCoords(geojson: string | null | undefined): [number, number][] {
+  if (!geojson) return [];
+  try {
+    const geo = JSON.parse(geojson);
+    if (geo.type === "Point" && Array.isArray(geo.coordinates)) {
+      return [[geo.coordinates[1], geo.coordinates[0]]];
+    }
+    if (geo.type === "Polygon" && Array.isArray(geo.coordinates?.[0])) {
+      return geo.coordinates[0].map((c: number[]) => [c[1], c[0]] as [number, number]);
+    }
+    if (geo.type === "MultiPolygon" && Array.isArray(geo.coordinates)) {
+      return geo.coordinates.flatMap((poly: number[][][]) =>
+        (poly[0] || []).map((c: number[]) => [c[1], c[0]] as [number, number])
+      );
+    }
+  } catch {
+    // invalid GeoJSON
+  }
+  return [];
+}
+
+function CoordinatesField({ entry }: { entry: PermitRegistryEntry }) {
+  const coords = extractGeoJsonCoords(entry.coordinates_geojson);
+  if (coords.length > 1) {
+    return (
+      <div className="md:col-span-2">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Coordinates ({coords.length} points)
+          </span>
+        </div>
+        <div className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed space-y-0.5 max-h-[120px] overflow-y-auto">
+          {coords.map((c, i) => (
+            <p key={i} className="font-mono text-xs">
+              {c[0].toFixed(6)}, {c[1].toFixed(6)}
+            </p>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const lat = coords.length === 1 ? coords[0][0] : entry.latitude;
+  const lng = coords.length === 1 ? coords[0][1] : entry.longitude;
+  return (
+    <DetailField
+      label="Coordinates"
+      value={lat != null && lng != null ? `${lat}, ${lng}` : "N/A"}
+    />
+  );
+}
+
 function DetailField({
   icon,
   label,
@@ -1023,7 +1057,7 @@ function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
           <p><span className="text-muted-foreground">Regime:</span> {values.regime || "N/A"}</p>
           <p><span className="text-muted-foreground">Status:</span> {values.status || "N/A"}</p>
           <p><span className="text-muted-foreground">Water Source:</span> {values.water_source || "N/A"}</p>
-          <p><span className="text-muted-foreground">Activity:</span> {values.authorized_activity || "N/A"}</p>
+          <p><span className="text-muted-foreground">Activity:</span> {formatActivityLabel(values.authorized_activity)}</p>
           <p><span className="text-muted-foreground">Location:</span> {values.location || "N/A"}</p>
           <p><span className="text-muted-foreground">Coordinates:</span> {formatCoord(values.latitude, values.longitude)}</p>
           <p><span className="text-muted-foreground">Issued:</span> {values.issuance_date ? new Date(values.issuance_date).toLocaleDateString() : "N/A"}</p>
@@ -1082,7 +1116,10 @@ function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
 }
 
 function PermitLocationMap({ entry }: { entry: PermitRegistryEntry }) {
-  if (typeof entry.latitude !== "number" || typeof entry.longitude !== "number") {
+  const polyCoords = extractGeoJsonCoords(entry.coordinates_geojson);
+  const isPolygon = polyCoords.length > 2;
+
+  if (!isPolygon && (typeof entry.latitude !== "number" || typeof entry.longitude !== "number")) {
     return (
       <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-700 px-4 py-3">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Permit map location</p>
@@ -1093,13 +1130,20 @@ function PermitLocationMap({ entry }: { entry: PermitRegistryEntry }) {
     );
   }
 
+  const center: [number, number] = isPolygon
+    ? [
+        polyCoords.reduce((s, c) => s + c[0], 0) / polyCoords.length,
+        polyCoords.reduce((s, c) => s + c[1], 0) / polyCoords.length,
+      ]
+    : [entry.latitude!, entry.longitude!];
+
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Permit map location</p>
       <div className="h-[260px] w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
         <MapContainer
-          center={[entry.latitude, entry.longitude]}
-          zoom={13}
+          center={center}
+          zoom={isPolygon ? 12 : 13}
           style={{ height: "100%", width: "100%" }}
           className="z-0"
         >
@@ -1107,27 +1151,48 @@ function PermitLocationMap({ entry }: { entry: PermitRegistryEntry }) {
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-          <CircleMarker
-            center={[entry.latitude, entry.longitude]}
-            radius={8}
-            pathOptions={{
-              fillColor: "#2563eb",
-              color: "#ffffff",
-              weight: 2,
-              opacity: 0.95,
-              fillOpacity: 0.8,
-            }}
-          >
-            <Popup>
-              <div className="min-w-[220px] space-y-1">
-                <p className="font-semibold">{entry.permit_holder}</p>
-                <p className="text-xs text-muted-foreground">{entry.permit_number}</p>
-                <p className="text-xs text-muted-foreground">
-                  {entry.latitude.toFixed(6)}, {entry.longitude.toFixed(6)}
-                </p>
-              </div>
-            </Popup>
-          </CircleMarker>
+          {isPolygon ? (
+            <LeafletPolygon
+              positions={polyCoords}
+              pathOptions={{
+                fillColor: "#2563eb",
+                color: "#1d4ed8",
+                weight: 2,
+                opacity: 0.9,
+                fillOpacity: 0.25,
+              }}
+            >
+              <Popup>
+                <div className="min-w-[220px] space-y-1">
+                  <p className="font-semibold">{entry.permit_holder}</p>
+                  <p className="text-xs text-muted-foreground">{entry.permit_number}</p>
+                  <p className="text-xs text-muted-foreground">{polyCoords.length} boundary points</p>
+                </div>
+              </Popup>
+            </LeafletPolygon>
+          ) : (
+            <CircleMarker
+              center={center}
+              radius={8}
+              pathOptions={{
+                fillColor: "#2563eb",
+                color: "#ffffff",
+                weight: 2,
+                opacity: 0.95,
+                fillOpacity: 0.8,
+              }}
+            >
+              <Popup>
+                <div className="min-w-[220px] space-y-1">
+                  <p className="font-semibold">{entry.permit_holder}</p>
+                  <p className="text-xs text-muted-foreground">{entry.permit_number}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {center[0].toFixed(6)}, {center[1].toFixed(6)}
+                  </p>
+                </div>
+              </Popup>
+            </CircleMarker>
+          )}
         </MapContainer>
       </div>
     </div>
