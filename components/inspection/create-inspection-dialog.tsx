@@ -232,7 +232,7 @@ export function CreateInspectionDialog({
       return;
     }
     setOpen(false);
-    router.push(`/inspection/permit/${encodeURIComponent(identifier)}`);
+    router.push(`/staffrole/inspection/permit/${encodeURIComponent(identifier)}`);
   };
 
   return (
