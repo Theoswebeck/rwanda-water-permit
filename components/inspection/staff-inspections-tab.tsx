@@ -191,7 +191,8 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const [selectedAssessorId, setSelectedAssessorId] = useState("");
   const [assignLoading, setAssignLoading] = useState(false);
 
-  const canAssign = roleContext === "reviewer" || roleContext === "admin" || userProfile?.role === "reviewer" || userProfile?.role === "admin";
+  // Only show Assign Assessor when on /review (reviewer or admin context)
+  const canAssign = roleContext === "reviewer" || roleContext === "admin";
 
   useEffect(() => {
     if (!canAssign) return;
