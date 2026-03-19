@@ -74,11 +74,9 @@ function fmtDate(dateString?: string | null): string {
 function applicantName(app: InspectionRow["application"]): string {
   const a = app?.applicant;
   if (!a) return "—";
-  if (a.account_type === "individual") {
-    const n = `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim();
-    return n || "—";
-  }
-  return a.company_name || "—";
+  const fullName = `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim();
+  if (a.account_type === "individual") return fullName || "—";
+  return a.company_name || fullName || "—";
 }
 
 function statusPill(status: InspectionWorkflowStatus | string) {
@@ -243,21 +241,48 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
         );
 
         if (permitNumbers.length > 0) {
-          const { data: registryRows, error: holderErr } = await supabase
-            .from("permit_registry")
-            .select("permit_number, permit_holder")
-            .in("permit_number", permitNumbers);
+          const [registryResult, permitsResult] = await Promise.all([
+            supabase
+              .from("permit_registry")
+              .select("permit_number, permit_holder")
+              .in("permit_number", permitNumbers),
+            supabase
+              .from("permits")
+              .select(
+                `permit_number,
+                 application:applications!application_id(
+                   applicant:users!applicant_id(
+                     first_name, last_name, company_name, account_type
+                   )
+                 )`
+              )
+              .in("permit_number", permitNumbers),
+          ]);
 
-          if (holderErr) {
-            console.warn("⚠️ Failed to load permit holder names, falling back to applicant names:", holderErr);
-            setPermitHolderByNumber({});
-          } else {
-            const holderMap: Record<string, string> = {};
-            for (const row of (registryRows || []) as PermitRegistryHolder[]) {
+          const holderMap: Record<string, string> = {};
+
+          if (!permitsResult.error) {
+            for (const row of (permitsResult.data || []) as any[]) {
+              if (!row.permit_number) continue;
+              const u = row.application?.applicant;
+              if (!u) continue;
+              const name =
+                u.account_type === "individual"
+                  ? `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim()
+                  : u.company_name || `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim();
+              if (name) holderMap[row.permit_number] = name;
+            }
+          }
+
+          if (!registryResult.error) {
+            for (const row of (registryResult.data || []) as PermitRegistryHolder[]) {
               if (row.permit_number && row.permit_holder) holderMap[row.permit_number] = row.permit_holder;
             }
-            setPermitHolderByNumber(holderMap);
+          } else {
+            console.warn("⚠️ Failed to load permit holder names from registry:", registryResult.error);
           }
+
+          setPermitHolderByNumber(holderMap);
         } else {
           setPermitHolderByNumber({});
         }

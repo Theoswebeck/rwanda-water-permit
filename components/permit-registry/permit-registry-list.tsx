@@ -786,7 +786,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                 className="h-8 rounded-md text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 onClick={(event) => event.stopPropagation()}
                               >
-                                <a href={`/dashboard/permit/${entry.id}`} target="_blank" rel="noopener noreferrer">
+                                <a href={`/permit/view/${encodeURIComponent(entry.permit_number)}`} target="_blank" rel="noopener noreferrer">
                                   <Eye className="h-3.5 w-3.5 mr-1.5" />
                                   View
                                 </a>
@@ -879,7 +879,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                         asChild
                                         className="border-indigo-300/80 text-indigo-800 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/40"
                                       >
-                                        <a href={`/dashboard/permit/${entry.id}`} target="_blank" rel="noopener noreferrer">
+                                        <a href={`/permit/view/${encodeURIComponent(entry.permit_number)}`} target="_blank" rel="noopener noreferrer">
                                           <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                                           View permit details
                                         </a>

@@ -468,6 +468,7 @@ export interface WaterUseReport {
 
   // Workflow
   workflow_status?: string
+  assigned_assessor_id?: string | null
   assigned_reviewer_id?: string | null
   assigned_verifier_id?: string | null
   assigned_approver_id?: string | null

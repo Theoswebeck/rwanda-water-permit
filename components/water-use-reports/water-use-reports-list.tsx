@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -29,14 +29,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Eye,
   Search,
   FileText,
   Loader2,
   AlertCircle,
+  MoreHorizontal,
+  UserPlus,
+  Send,
 } from "lucide-react";
 import { useAllWaterUseReportsQuery, type WaterUseReportWithRelations } from "@/hooks/useWaterUseReports";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import { getWaterUseReportBasePath } from "@/lib/water-use-report-workflow";
 import {
   getWaterUseReportWorkflowLabel,
@@ -48,6 +68,14 @@ interface WaterUseReportsListProps {
   roleContext?: string;
 }
 
+interface StaffMember {
+  id: string;
+  first_name: string;
+  last_name: string;
+  role: string;
+  email: string;
+}
+
 export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseReportsListProps) {
   const router = useRouter();
   const { userProfile } = useAuth();
@@ -56,10 +84,100 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
   const [templateFilter, setTemplateFilter] = useState<string>("all");
   const [yearFilter, setYearFilter] = useState<string>("all");
 
-  const { data: reports = [], isLoading, error } = useAllWaterUseReportsQuery();
+  const { data: reports = [], isLoading, error, refetch } = useAllWaterUseReportsQuery();
 
   const effectiveRole = roleContext || userProfile?.role;
   const basePath = getWaterUseReportBasePath(effectiveRole);
+
+  const canAssign = effectiveRole === "reviewer" || effectiveRole === "admin";
+
+  const [assessors, setAssessors] = useState<StaffMember[]>([]);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<WaterUseReportWithRelations | null>(null);
+  const [selectedAssessorId, setSelectedAssessorId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+
+  useEffect(() => {
+    if (!canAssign) return;
+    const fetchAssessors = async () => {
+      try {
+        const { data, error: fetchErr } = await supabase
+          .from("users")
+          .select("id, first_name, last_name, role, email")
+          .in("role", ["assessor"])
+          .eq("status", "active")
+          .order("first_name", { ascending: true });
+        if (fetchErr) {
+          console.error("❌ Failed to fetch assessors:", fetchErr);
+          return;
+        }
+        setAssessors((data || []) as StaffMember[]);
+      } catch (err) {
+        console.error("❌ Error fetching assessors:", err);
+      }
+    };
+    fetchAssessors();
+  }, [canAssign]);
+
+  const openAssignDialog = useCallback((report: WaterUseReportWithRelations) => {
+    setSelectedReport(report);
+    setSelectedAssessorId((report as Record<string, unknown>).assigned_assessor_id as string || "");
+    setAssignDialogOpen(true);
+  }, []);
+
+  const handleAssignToAssessor = useCallback(async () => {
+    if (!selectedReport || !selectedAssessorId) return;
+    const assessor = assessors.find((a) => a.id === selectedAssessorId);
+    if (!assessor) return;
+
+    const currentAssessorId = (selectedReport as Record<string, unknown>).assigned_assessor_id as string | null;
+    if (currentAssessorId === selectedAssessorId) {
+      alert("Please choose a different assessor.");
+      return;
+    }
+
+    try {
+      setAssignLoading(true);
+
+      const resp = await fetch(`/api/water-use-reports/${selectedReport.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assigned_assessor_id: selectedAssessorId,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      const json = await resp.json().catch(() => null);
+      if (!resp.ok || !json?.success) {
+        throw new Error(json?.message || "Failed to assign assessor");
+      }
+
+      const isReassign = !!currentAssessorId;
+      const comment = isReassign
+        ? `Assessor reassigned to ${assessor.first_name} ${assessor.last_name}`
+        : `Report assigned to ${assessor.first_name} ${assessor.last_name} for assessment`;
+
+      await supabase.from("water_use_report_workflow_history").insert({
+        water_use_report_id: selectedReport.id,
+        from_status: (selectedReport as Record<string, unknown>).workflow_status || selectedReport.status,
+        to_status: (selectedReport as Record<string, unknown>).workflow_status || selectedReport.status,
+        action: isReassign ? "reassigned_assessor" : "assigned_to_assessor",
+        comment,
+      });
+
+      console.log(`✅ Water use report assigned to ${assessor.first_name} ${assessor.last_name}`);
+
+      setAssignDialogOpen(false);
+      setSelectedReport(null);
+      setSelectedAssessorId("");
+      refetch();
+    } catch (err) {
+      console.error("❌ Error assigning report:", err);
+      alert("Failed to assign report. Please try again.");
+    } finally {
+      setAssignLoading(false);
+    }
+  }, [selectedReport, selectedAssessorId, assessors, refetch]);
 
   const nonDraftReports = useMemo(() => {
     return reports.filter(r => r.status !== 'draft');
@@ -258,17 +376,47 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
                   <TableCell>{getWorkflowStatusBadge(report)}</TableCell>
                   <TableCell>{formatDate(report.submitted_at)}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleViewReport(report.id);
-                      }}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
+                    {canAssign && ((report as Record<string, unknown>).workflow_status || report.status) === "submitted" ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" onClick={(e) => e.stopPropagation()}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); handleViewReport(report.id); }}
+                            className="cursor-pointer"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Report
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); openAssignDialog(report); }}
+                            className="cursor-pointer"
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            {(report as Record<string, unknown>).assigned_assessor_id
+                              ? "Reassign Assessor"
+                              : "Assign to Assessor"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewReport(report.id);
+                        }}
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        View
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -279,24 +427,130 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
     </>
   );
 
+  const assignDialog = (
+    <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5 text-blue-600" />
+            {(selectedReport as Record<string, unknown> | null)?.assigned_assessor_id
+              ? "Reassign Assessor"
+              : "Assign to Assessor"}
+          </DialogTitle>
+          <DialogDescription>
+            {(selectedReport as Record<string, unknown> | null)?.assigned_assessor_id ? (
+              <>Reassign water use report for permit{" "}
+                <span className="font-medium">{selectedReport?.permit?.permit_number}</span>{" "}
+                to another assessor.
+              </>
+            ) : (
+              <>Assign water use report for permit{" "}
+                <span className="font-medium">{selectedReport?.permit?.permit_number}</span>{" "}
+                to an assessor for review.
+              </>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Assessor</label>
+            <Select value={selectedAssessorId} onValueChange={setSelectedAssessorId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose an assessor..." />
+              </SelectTrigger>
+              <SelectContent>
+                {assessors.length === 0 ? (
+                  <SelectItem value="no-assessors" disabled>
+                    No assessors available
+                  </SelectItem>
+                ) : (
+                  assessors.map((assessor) => (
+                    <SelectItem key={assessor.id} value={assessor.id}>
+                      {assessor.first_name} {assessor.last_name}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          {selectedAssessorId && assessors.find((a) => a.id === selectedAssessorId) && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {assessors.find((a) => a.id === selectedAssessorId)?.first_name}{" "}
+                  {assessors.find((a) => a.id === selectedAssessorId)?.last_name}
+                </span>{" "}
+                will be notified and the report will appear in their assessment queue.
+              </p>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setAssignDialogOpen(false);
+              setSelectedReport(null);
+              setSelectedAssessorId("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAssignToAssessor}
+            disabled={
+              !selectedAssessorId ||
+              assignLoading ||
+              selectedAssessorId === "no-assessors" ||
+              ((selectedReport as Record<string, unknown> | null)?.assigned_assessor_id
+                ? selectedAssessorId === (selectedReport as Record<string, unknown>).assigned_assessor_id
+                : false)
+            }
+            className="gap-2"
+          >
+            {assignLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Assigning...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                {(selectedReport as Record<string, unknown> | null)?.assigned_assessor_id ? "Reassign" : "Assign"}
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   if (!showCard) {
-    return content;
+    return (
+      <>
+        {content}
+        {assignDialog}
+      </>
+    );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Water Use Reports
-        </CardTitle>
-        <CardDescription>
-          View and manage annual water use reports submitted by permit holders
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {content}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Water Use Reports
+          </CardTitle>
+          <CardDescription>
+            View and manage annual water use reports submitted by permit holders
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {content}
+        </CardContent>
+      </Card>
+      {assignDialog}
+    </>
   );
 }

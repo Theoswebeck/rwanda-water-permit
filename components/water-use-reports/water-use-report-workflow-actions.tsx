@@ -61,44 +61,48 @@ function fmtDateTime(dateString?: string | null): string {
 }
 
 function StepCommentsCard({ comments }: { comments: StepComment[] }) {
-  if (comments.length === 0) return null;
-
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          Step Comments
+          Review Comments
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-0">
-        {comments.map((c, idx) => (
-          <div key={c.label}>
-            {idx > 0 && <Separator className="my-3" />}
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm font-medium">{c.label}</span>
-                <Badge variant="outline" className="text-[11px] px-1.5 py-0">
-                  {c.role}
-                </Badge>
-                {c.userName && (
-                  <span className="text-xs text-muted-foreground">
-                    by {c.userName}
-                  </span>
-                )}
-                {c.date && (
-                  <span className="text-xs text-muted-foreground">
-                    {fmtDateTime(c.date)}
-                  </span>
-                )}
+        {comments.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">
+            No comments yet.
+          </p>
+        ) : (
+          comments.map((c, idx) => (
+            <div key={`${c.label}-${idx}`}>
+              {idx > 0 && <Separator className="my-3" />}
+              <div className="space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm font-medium">{c.label}</span>
+                  <Badge variant="outline" className="text-[11px] px-1.5 py-0">
+                    {c.role}
+                  </Badge>
+                  {c.userName && (
+                    <span className="text-xs text-muted-foreground">
+                      by {c.userName}
+                    </span>
+                  )}
+                  {c.date && (
+                    <span className="text-xs text-muted-foreground">
+                      {fmtDateTime(c.date)}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-5">
+                  {c.notes}
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-5">
-                {c.notes}
-              </p>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </CardContent>
     </Card>
   );
@@ -373,7 +377,7 @@ export function WaterUseReportWorkflowActions({
     );
   }
 
-  const anyRequiresNotes = transitions.some((t) => t.requiresNotes);
+  const someRequireNotes = transitions.some((t) => t.requiresNotes);
 
   return (
     <>
@@ -391,14 +395,16 @@ export function WaterUseReportWorkflowActions({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {anyRequiresNotes && (
-              <Textarea
-                placeholder="Notes (required for some actions)..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            )}
+            <Textarea
+              placeholder={
+                someRequireNotes
+                  ? "Add a comment (required for some actions)..."
+                  : "Add a comment (optional)..."
+              }
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               {transitions.map((t) => (

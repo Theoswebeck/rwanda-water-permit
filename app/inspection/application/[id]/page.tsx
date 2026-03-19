@@ -335,8 +335,16 @@ export default function InspectorApplicationView() {
     explanationText: ""
   });
 
+  // Tab navigation state
+  const [activeTab, setActiveTab] = useState("application_details");
+  const tabTouchedRef = useRef(false);
+
   // Prevent accidental double-submits / re-entrancy (fast double-clicks, etc.)
   const actionInFlightRef = useRef(false);
+
+  const isAssessable = application
+    ? ['pending_assessment', 'under_review'].includes(application.status)
+    : false;
   
   useEffect(() => {
     const fetchApplicationDetails = async () => {
@@ -916,50 +924,52 @@ export default function InspectorApplicationView() {
             </div>
           </div>
 
-          {/* Action Buttons Bar */}
-          <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
-            <div className="flex items-center gap-2 mr-auto">
-              <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-blue-50 text-blue-700 border-blue-200">
-                <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
-                Assessment Mode
-              </Badge>
+          {/* Action Buttons Bar — only in assessment mode */}
+          {isAssessable && (
+            <div className="flex flex-wrap items-center gap-3 p-4 bg-background border rounded-lg shadow-sm">
+              <div className="flex items-center gap-2 mr-auto">
+                <Badge variant="outline" className="h-7 px-3 text-sm font-normal bg-blue-50 text-blue-700 border-blue-200">
+                  <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                  Assessment Mode
+                </Badge>
+              </div>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => saveAssessment('draft')}
+                disabled={submitLoading}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                Save Draft
+              </Button>
+              
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => setShowRevisionDialog(true)}
+                disabled={submitLoading} 
+                className="gap-2"
+              >
+                <X className="h-4 w-4" />
+                Return for Revision
+              </Button>
+              
+              <Button 
+                size="sm" 
+                onClick={handleOpenSendToApproverDialog}
+                disabled={submitLoading || !recommendation.recommendation}
+                className="gap-2 bg-green-600 hover:bg-green-700"
+              >
+                {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Submit to Approver
+              </Button>
             </div>
-            
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => saveAssessment('draft')}
-              disabled={submitLoading}
-              className="gap-2"
-            >
-              <Save className="h-4 w-4" />
-              Save Draft
-            </Button>
-            
-            <Button 
-              variant="destructive" 
-              size="sm"
-              onClick={() => setShowRevisionDialog(true)}
-              disabled={submitLoading} 
-              className="gap-2"
-            >
-              <X className="h-4 w-4" />
-              Return for Revision
-            </Button>
-            
-            <Button 
-              size="sm" 
-              onClick={handleOpenSendToApproverDialog}
-              disabled={submitLoading || !recommendation.recommendation}
-              className="gap-2 bg-green-600 hover:bg-green-700"
-            >
-              {submitLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit to Approver
-            </Button>
-          </div>
+          )}
 
           {/* Main Content with Tabs */}
-          <Tabs defaultValue="application_details" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/80">
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>

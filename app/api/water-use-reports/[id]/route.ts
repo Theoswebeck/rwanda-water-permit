@@ -16,7 +16,7 @@ const WORKFLOW_ONLY_FIELDS = new Set([
   'verification_notes', 'verified_by', 'verified_at',
   'approval_notes', 'approved_by', 'approved_at',
   'rejection_reason', 'internal_notes',
-  'assigned_reviewer_id', 'assigned_verifier_id', 'assigned_approver_id',
+  'assigned_assessor_id', 'assigned_reviewer_id', 'assigned_verifier_id', 'assigned_approver_id',
 ])
 
 async function getClaims(req: NextRequest) {

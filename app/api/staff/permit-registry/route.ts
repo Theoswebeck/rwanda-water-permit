@@ -148,7 +148,11 @@ function buildPermitsSelect(hasApplications: boolean, hasPostGIS: boolean): stri
     select
       p.id,
       null::integer as serial_number,
-      coalesce(a.project_title, 'Unknown Permit Holder') as permit_holder,
+      coalesce(
+        nullif(trim(concat_ws(' ', appu.first_name, appu.last_name)), ''),
+        appu.company_name,
+        'Unknown Permit Holder'
+      ) as permit_holder,
       p.permit_number::text as permit_number,
       ${regimeExpr} as regime,
       p.water_source::text as water_source,
@@ -178,6 +182,7 @@ function buildPermitsSelect(hasApplications: boolean, hasPostGIS: boolean): stri
       'permit'::text as source_kind
     from public.permits p
     left join public.applications a on a.id = p.application_id
+    left join public.users appu on appu.id = a.applicant_id
     where p.permit_number is not null`;
 }
 
