@@ -23,18 +23,17 @@ const PROTECTED_ROUTES = [
   '/technical-assessment',
   '/management',
   '/apply',
-  '/staffrole',
 ]
 
 const AUTH_PAGES = ['/login', '/register']
 
 const ROLE_ROUTES: Record<string, string[]> = {
   admin: PROTECTED_ROUTES,
-  approver: ['/approver', '/staffrole', '/dashboard/profile', '/dashboard/settings', '/management'],
-  inspector: ['/inspection', '/inspector', '/staffrole', '/dashboard/profile', '/dashboard/settings', '/management'],
-  reviewer: ['/review', '/staffrole', '/dashboard/profile', '/dashboard/settings', '/management'],
-  assessor: ['/assessment', '/technical-assessment', '/inspection', '/staffrole', '/dashboard/profile', '/dashboard/settings', '/management'],
-  verifier: ['/verification', '/verifier', '/staffrole', '/dashboard/profile', '/dashboard/settings', '/management'],
+  approver: ['/approver', '/dashboard/profile', '/dashboard/settings', '/management'],
+  inspector: ['/inspection', '/inspector', '/dashboard/profile', '/dashboard/settings', '/management'],
+  reviewer: ['/review', '/dashboard/profile', '/dashboard/settings', '/management'],
+  assessor: ['/assessment', '/technical-assessment', '/inspection', '/dashboard/profile', '/dashboard/settings', '/management'],
+  verifier: ['/verification', '/verifier', '/dashboard/profile', '/dashboard/settings', '/management'],
   applicant: ['/dashboard', '/apply'],
 }
 
@@ -176,7 +175,5 @@ export const config = {
     '/apply/:path*',
     '/login',
     '/register',
-    '/staffrole',
-    '/staffrole/:path*',
   ],
 }

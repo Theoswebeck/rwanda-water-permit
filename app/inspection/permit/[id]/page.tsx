@@ -6,5 +6,5 @@ export default async function InspectionPermitRedirectPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/staffrole/inspection/permit/${encodeURIComponent(id)}`);
+  redirect(`/assessment/inspection/permit/${encodeURIComponent(id)}`);
 }

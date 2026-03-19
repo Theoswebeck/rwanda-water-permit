@@ -201,6 +201,7 @@ export function useSubmitWaterUseReportMutation() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'submitted',
+          workflow_status: 'submitted',
           submitted_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }),

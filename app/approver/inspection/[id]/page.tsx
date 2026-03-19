@@ -1,21 +1,27 @@
-import { redirect } from "next/navigation";
-import { resolveInspectionIdentifier } from "@/lib/inspection/resolve-inspection-identifier";
+"use client";
 
-export default async function ApproverInspectionRedirectPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+import { useParams } from "next/navigation";
+import { ProtectedRoute } from "@/components/auth/protected-route";
+import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import { UserProfileButton } from "@/components/dashboard/user-profile-button";
+import { BackButton } from "@/components/ui/back-button";
+import { InspectionDetailTabs } from "@/components/inspection/inspection-detail-tabs";
 
-  try {
-    const identifier = await resolveInspectionIdentifier(id);
-    if (!identifier) {
-      redirect("/approver?inspectionRedirect=unresolved");
-    }
-    redirect(`/staffrole/inspection/permit/${encodeURIComponent(identifier)}`);
-  } catch (e) {
-    console.error("Failed to resolve approver inspection redirect:", e);
-    redirect("/approver?inspectionRedirect=error");
-  }
+export default function ApproverInspectionDetailPage() {
+  const params = useParams();
+  const id = params.id as string;
+
+  return (
+    <ProtectedRoute allowedRoles={["approver", "admin"]} requireProfile={true}>
+      <DashboardLayout>
+        <div className="flex justify-end p-6">
+          <UserProfileButton />
+        </div>
+        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12 space-y-6">
+          <BackButton />
+          <InspectionDetailTabs inspectionId={id} roleContext="approver" />
+        </div>
+      </DashboardLayout>
+    </ProtectedRoute>
+  );
 }
