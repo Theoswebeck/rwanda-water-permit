@@ -1048,7 +1048,7 @@ export default function ReviewerDashboard() {
               <InspectionsWorkbench roleContext="reviewer" />
             </div>
           ) : topTab === "water-reports" ? (
-            <WaterUseReportsList />
+            <WaterUseReportsList roleContext="reviewer" />
           ) : (
             <PermitRegistryList />
           )}

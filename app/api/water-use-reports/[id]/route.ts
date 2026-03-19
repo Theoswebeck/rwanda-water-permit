@@ -4,18 +4,34 @@ import { buildWaterUseReportUpdateParts } from '@/lib/db/water-use-report-payloa
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { isEffectiveStaffUser, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
+const VALID_WORKFLOW_STATUSES = new Set([
+  'draft', 'submitted', 'pending_review', 'pending_verification',
+  'pending_approval', 'approved', 'rejected',
+  'returned_to_assessment', 'returned_to_review', 'returned_to_verification',
+])
+
+const WORKFLOW_ONLY_FIELDS = new Set([
+  'workflow_status', 'assessment_notes', 'assessment_completed_at',
+  'review_notes', 'reviewed_by', 'reviewed_at',
+  'verification_notes', 'verified_by', 'verified_at',
+  'approval_notes', 'approved_by', 'approved_at',
+  'rejection_reason', 'internal_notes',
+  'assigned_reviewer_id', 'assigned_verifier_id', 'assigned_approver_id',
+])
+
 async function getClaims(req: NextRequest) {
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
   return verifySessionToken(token)
 }
 
-function pickPayload(input: Record<string, unknown>): Record<string, unknown> {
+function pickPayload(input: Record<string, unknown>, isStaff: boolean): Record<string, unknown> {
   const blocked = new Set(['id', 'applicant_id', 'created_at'])
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(input)) {
     if (!/^[a-zA-Z][a-zA-Z0-9_]*$/.test(k)) continue
     if (blocked.has(k)) continue
+    if (!isStaff && WORKFLOW_ONLY_FIELDS.has(k)) continue
     out[k] = v
   }
   return out
@@ -87,8 +103,16 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ success: false, message: 'Invalid body' }, { status: 400 })
     }
 
-    const payload = pickPayload(body)
+    const payload = pickPayload(body, isStaff)
     payload.updated_at = new Date().toISOString()
+
+    if (payload.workflow_status && !VALID_WORKFLOW_STATUSES.has(payload.workflow_status as string)) {
+      return NextResponse.json({ success: false, message: 'Invalid workflow status' }, { status: 400 })
+    }
+    if (payload.status && !VALID_WORKFLOW_STATUSES.has(payload.status as string)) {
+      return NextResponse.json({ success: false, message: 'Invalid status' }, { status: 400 })
+    }
+
     const keys = Object.keys(payload)
     if (!keys.length) {
       return NextResponse.json({ success: false, message: 'No update fields provided' }, { status: 400 })

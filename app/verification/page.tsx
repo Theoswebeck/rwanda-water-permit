@@ -414,7 +414,7 @@ export default function VerificationDashboard() {
                 <InspectionsWorkbench roleContext="verifier" />
               </div>
             ) : topTab === "water-reports" ? (
-              <WaterUseReportsList />
+              <WaterUseReportsList roleContext="verifier" />
             ) : (
               <PermitRegistryList />
             )}

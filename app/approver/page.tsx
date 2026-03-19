@@ -170,7 +170,7 @@ export default function ApproverDashboard() {
             <InspectionsWorkbench roleContext="approver" />
           </div>
         ) : topTab === "water-reports" ? (
-          <WaterUseReportsList />
+          <WaterUseReportsList roleContext="approver" />
         ) : (
           <PermitRegistryList />
         )}

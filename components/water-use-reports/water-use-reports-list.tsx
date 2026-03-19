@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -35,13 +36,21 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useAllWaterUseReportsQuery, type WaterUseReportWithRelations } from "@/hooks/useWaterUseReports";
+import { useAuth } from "@/contexts/AuthContext";
+import { getWaterUseReportBasePath } from "@/lib/water-use-report-workflow";
+import {
+  getWaterUseReportWorkflowLabel,
+  getWaterUseReportWorkflowClassName,
+} from "@/types/water-use-report-workflow";
 
 interface WaterUseReportsListProps {
   showCard?: boolean;
+  roleContext?: string;
 }
 
-export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProps) {
+export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseReportsListProps) {
   const router = useRouter();
+  const { userProfile } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [templateFilter, setTemplateFilter] = useState<string>("all");
@@ -49,18 +58,18 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
 
   const { data: reports = [], isLoading, error } = useAllWaterUseReportsQuery();
 
-  // Staff should only see submitted (non-draft) reports
+  const effectiveRole = roleContext || userProfile?.role;
+  const basePath = getWaterUseReportBasePath(effectiveRole);
+
   const nonDraftReports = useMemo(() => {
     return reports.filter(r => r.status !== 'draft');
   }, [reports]);
 
-  // Get unique years from non-draft reports
   const availableYears = useMemo(() => {
     const years = new Set(nonDraftReports.map(r => r.reporting_year));
     return Array.from(years).sort((a, b) => b - a);
   }, [nonDraftReports]);
 
-  // Filtered reports
   const filteredReports = useMemo(() => {
     return nonDraftReports.filter(report => {
       const matchesSearch = 
@@ -70,7 +79,8 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
         report.applicant?.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         report.application?.project_title?.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesStatus = statusFilter === "all" || report.status === statusFilter;
+      const workflowStatus = (report as Record<string, unknown>).workflow_status as string || report.status;
+      const matchesStatus = statusFilter === "all" || workflowStatus === statusFilter;
       const matchesTemplate = templateFilter === "all" || report.template === templateFilter;
       const matchesYear = yearFilter === "all" || report.reporting_year.toString() === yearFilter;
 
@@ -97,11 +107,16 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
     });
   };
 
-  const getStatusBadge = (status: string) => {
-    if (status === 'submitted') {
-      return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Submitted</Badge>;
-    }
-    return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Draft</Badge>;
+  const getWorkflowStatusBadge = (report: WaterUseReportWithRelations) => {
+    const workflowStatus = (report as Record<string, unknown>).workflow_status as string || report.status;
+    return (
+      <Badge
+        variant="outline"
+        className={`${getWaterUseReportWorkflowClassName(workflowStatus)} text-xs font-medium px-2 py-0.5 rounded-full border`}
+      >
+        {getWaterUseReportWorkflowLabel(workflowStatus)}
+      </Badge>
+    );
   };
 
   const getTemplateBadge = (template: string) => {
@@ -111,9 +126,8 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
     return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Abstraction</Badge>;
   };
 
-  // Navigate to full page view
   const handleViewReport = (reportId: string) => {
-    router.push(`/water-use-report/${reportId}`);
+    router.push(`${basePath}/${reportId}`);
   };
 
   const content = (
@@ -131,14 +145,20 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
         </div>
         <div className="flex gap-2">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-44">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="under_review">Under Review</SelectItem>
+              <SelectItem value="pending_review">Pending Review</SelectItem>
+              <SelectItem value="pending_verification">Pending Verification</SelectItem>
+              <SelectItem value="pending_approval">Pending Approval</SelectItem>
               <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="returned_to_assessment">Returned to Assessment</SelectItem>
+              <SelectItem value="returned_to_review">Returned to Review</SelectItem>
+              <SelectItem value="returned_to_verification">Returned to Verification</SelectItem>
             </SelectContent>
           </Select>
           <Select value={templateFilter} onValueChange={setTemplateFilter}>
@@ -208,7 +228,7 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
                 <TableHead>Permit Number</TableHead>
                 <TableHead>Applicant</TableHead>
                 <TableHead>Template</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Workflow Status</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -222,7 +242,9 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
                 >
                   <TableCell className="font-medium">{report.reporting_year}</TableCell>
                   <TableCell>
-                    <span className="font-mono text-sm">{report.permit?.permit_number || 'N/A'}</span>
+                    <Link href={`${basePath}/${report.id}`} className="hover:underline">
+                      <span className="font-mono text-sm">{report.permit?.permit_number || 'N/A'}</span>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div>
@@ -233,7 +255,7 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
                     </div>
                   </TableCell>
                   <TableCell>{getTemplateBadge(report.template)}</TableCell>
-                  <TableCell>{getStatusBadge(report.status)}</TableCell>
+                  <TableCell>{getWorkflowStatusBadge(report)}</TableCell>
                   <TableCell>{formatDate(report.submitted_at)}</TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -269,7 +291,7 @@ export function WaterUseReportsList({ showCard = true }: WaterUseReportsListProp
           Water Use Reports
         </CardTitle>
         <CardDescription>
-          View annual water use reports submitted by permit holders
+          View and manage annual water use reports submitted by permit holders
         </CardDescription>
       </CardHeader>
       <CardContent>

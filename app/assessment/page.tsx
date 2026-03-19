@@ -511,7 +511,7 @@ export default function AssessmentDashboard() {
               <InspectionsWorkbench roleContext="assessor" />
             </div>
           ) : topTab === "water-reports" ? (
-            <WaterUseReportsList />
+            <WaterUseReportsList roleContext="assessor" />
           ) : (
             <PermitRegistryList />
           )}

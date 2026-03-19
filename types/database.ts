@@ -143,7 +143,19 @@ export type DelegatableRole = 'reviewer' | 'verifier' | 'approver' | 'assessor' 
 // =============================================
 
 export type WaterUseReportTemplate = 'abstraction' | 'concession'
-export type WaterUseReportStatus = 'draft' | 'submitted' | 'under_review' | 'completed'
+export type WaterUseReportStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'completed'
+  | 'pending_review'
+  | 'pending_verification'
+  | 'pending_approval'
+  | 'approved'
+  | 'rejected'
+  | 'returned_to_assessment'
+  | 'returned_to_review'
+  | 'returned_to_verification'
 
 // =============================================
 // MAIN INTERFACES
@@ -453,6 +465,25 @@ export interface WaterUseReport {
   section7?: Json
   section8?: Json
   section9_declaration?: Json
+
+  // Workflow
+  workflow_status?: string
+  assigned_reviewer_id?: string | null
+  assigned_verifier_id?: string | null
+  assigned_approver_id?: string | null
+  assessment_notes?: string | null
+  assessment_completed_at?: string | null
+  review_notes?: string | null
+  reviewed_by?: string | null
+  reviewed_at?: string | null
+  verification_notes?: string | null
+  verified_by?: string | null
+  verified_at?: string | null
+  approval_notes?: string | null
+  approved_by?: string | null
+  approved_at?: string | null
+  rejection_reason?: string | null
+  internal_notes?: string | null
 
   // Audit
   submitted_at?: string | null

@@ -223,7 +223,7 @@ export default function AdminDashboard() {
             </TabsContent>
             
             <TabsContent value="water-reports" className="space-y-4">
-              <WaterUseReportsList />
+              <WaterUseReportsList roleContext="admin" />
             </TabsContent>
             
             <TabsContent value="map" className="space-y-4">
