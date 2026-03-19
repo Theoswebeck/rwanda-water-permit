@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyNationalId } from '@/lib/nida/gesb'
+import { verifyTin } from '@/lib/rra/client'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
 
@@ -34,6 +35,26 @@ export async function POST(req: NextRequest) {
           { success: false, message: `Missing required company fields: ${missing.join(', ')}` },
           { status: 400 }
         )
+      }
+    }
+
+    // RRA verification for company signups (before creating any auth user/profile)
+    const rraVerificationEnabled = process.env.RRA_VERIFICATION_ENABLED === 'true'
+    if (accountType !== 'individual' && rraVerificationEnabled) {
+      const companyTIN = String(rest?.companyTIN ?? '').trim().replace(/\D/g, '')
+      try {
+        const v = await verifyTin(companyTIN)
+        if (v.status && v.status.toLowerCase() !== 'active') {
+          return NextResponse.json(
+            { success: false, message: `This taxpayer is not active (status: ${v.status})` },
+            { status: 400 }
+          )
+        }
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'TIN could not be verified'
+        const safeMessage =
+          process.env.NODE_ENV === 'production' ? 'TIN could not be verified' : `TIN verification failed: ${message}`
+        return NextResponse.json({ success: false, message: safeMessage }, { status: 400 })
       }
     }
 

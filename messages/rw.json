@@ -6,6 +6,8 @@
       "kinyarwanda": "Ikinyarwanda"
     },
     "literal": {
+      "• Please upload a copy of your National ID (NID)": "• Shyiraho kopi y'indangamuntu yawe",
+      "• Please upload a copy of your registration certificate": "• Shyiraho kopi y'icyemezo cy'irangisha ry'ikigo cyawe",
       "Loading payment…": "Gutegura ubwishyu…",
       "Loading payment info…": "Gutegura amakuru y'ubwishyu…",
       "Loading map…": "Gutegura ikarita…",
@@ -111,6 +113,12 @@
       "Approved - Pending Terms": "Byemejwe - Hategerejwe amabwiriza",
       "Approving…": "Birimo kwemezwa…",
       "Approve Transfer & Continue": "Emeza ihererekanya ukomeze",
+      "Dismiss": "Hagarika",
+      "Dismissing…": "Birimo guhagarikwa…",
+      "Dismiss Transfer Request?": "Hagarika ubusabe bwo guhererekanya?",
+      "This action cannot be undone. The transfer request will be permanently dismissed and will no longer appear in your notifications.": "Iki gikorwa ntigishobora gusubirwaho. Ubusabe bwo guhererekanya buzakurwa burundu kandi ntibuzongera kugaragara mu butumwa bwawe.",
+      "Cancel": "Hagarika",
+      "Confirm Dismiss": "Emeza guhagarika",
       "Your Applications": "Ubusabe bwawe",
       "View and manage your water permit applications": "Reba kandi ucunge ubusabe bwawe bw'impushya z'amazi",
       "Your Permits": "Impushya zawe",

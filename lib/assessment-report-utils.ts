@@ -306,22 +306,15 @@ export function prefillAssessmentReportFromApplication(
     typeof applicantFromJoin?.account_type === "string" ? applicantFromJoin.account_type : undefined
   );
   const isIndividualApplicant = applicantCategory === "individual";
-  const applicantIdTin =
-    (isIndividualApplicant
-      ? pickFirstString(
-          getString(formData, "nationalIdNumber"),
-          typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined,
-          typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined
-        )
-      : pickFirstString(
-          getString(formData, "companyTin"),
-          typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined,
-          getString(formData, "registrationId"),
-          getString(formData, "companyRegistrationId"),
-          typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined,
-          getString(formData, "nationalIdNumber")
-        )) ||
-    "Not provided";
+  const applicantIdTin = pickFirstString(
+    getString(formData, "nationalIdNumber"),
+    getString(formData, "companyTin"),
+    isIndividualApplicant
+      ? (typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined)
+      : (typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined),
+    typeof applicantFromJoin?.company_tin === "string" ? applicantFromJoin.company_tin : undefined,
+    typeof applicantFromJoin?.id_number === "string" ? applicantFromJoin.id_number : undefined,
+  ) || "Not provided";
   
   // Extract residence from office address
   const residence = formatLocationString(

@@ -12,7 +12,17 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight, RefreshCw, BarChart3 } from "lucide-react";
+import { FileCheck, Loader2, AlertCircle, FileText, CheckCircle, ClipboardList, ChevronDown, FilePlus, FileEdit, ArrowLeftRight, RefreshCw, BarChart3, X } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -308,6 +318,8 @@ function DashboardContent() {
   const hasError = applicationsError || permitsError || reportsError;
 
   const [approvingTransferId, setApprovingTransferId] = useState<string | null>(null);
+  const [dismissingTransferId, setDismissingTransferId] = useState<string | null>(null);
+  const [confirmDismissTransferId, setConfirmDismissTransferId] = useState<string | null>(null);
   const [incomingTransferActionError, setIncomingTransferActionError] = useState<string | null>(null);
 
   const approveIncomingTransfer = useCallback(
@@ -343,6 +355,33 @@ function DashboardContent() {
       }
     },
     [refreshApplications, refetchIncomingTransfers, router]
+  );
+
+  const dismissIncomingTransfer = useCallback(
+    async (transferRequestId: string) => {
+      try {
+        setIncomingTransferActionError(null);
+        setDismissingTransferId(transferRequestId);
+        const resp = await fetch('/api/transfers/dismiss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transferRequestId }),
+        });
+        const json = await resp.json().catch(() => null);
+        if (!resp.ok || !json?.success) {
+          throw new Error(json?.message || 'Failed to dismiss transfer request');
+        }
+        await refetchIncomingTransfers();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error('❌ Failed to dismiss incoming transfer:', e);
+        setIncomingTransferActionError(msg);
+      } finally {
+        setDismissingTransferId(null);
+        setConfirmDismissTransferId(null);
+      }
+    },
+    [refetchIncomingTransfers]
   );
 
   const handleApplicationStatusPanelChange = useCallback((panel: DashboardStatusPanelFilter) => {
@@ -560,9 +599,27 @@ function DashboardContent() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setConfirmDismissTransferId(tr.id)}
+                                  disabled={dismissingTransferId === tr.id || approvingTransferId === tr.id}
+                                >
+                                  {dismissingTransferId === tr.id ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                      {tx("Dismissing…")}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <X className="h-4 w-4 mr-1" />
+                                      {tx("Dismiss")}
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
                                   size="sm"
                                   onClick={() => approveIncomingTransfer(tr.id)}
-                                  disabled={approvingTransferId === tr.id}
+                                  disabled={approvingTransferId === tr.id || dismissingTransferId === tr.id}
                                 >
                                   {approvingTransferId === tr.id ? (
                                     <>
@@ -581,6 +638,31 @@ function DashboardContent() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Dismiss transfer confirmation dialog */}
+                <AlertDialog
+                  open={!!confirmDismissTransferId}
+                  onOpenChange={(open) => { if (!open) setConfirmDismissTransferId(null); }}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{tx("Dismiss Transfer Request?")}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {tx("This action cannot be undone. The transfer request will be permanently dismissed and will no longer appear in your notifications.")}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{tx("Cancel")}</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          if (confirmDismissTransferId) dismissIncomingTransfer(confirmDismissTransferId);
+                        }}
+                      >
+                        {tx("Confirm Dismiss")}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 
                 {/* Applications List */}
                 <div className="grid gap-4">

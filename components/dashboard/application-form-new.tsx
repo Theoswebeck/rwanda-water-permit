@@ -1440,11 +1440,11 @@ export function ApplicationForm({
       defaults.emailAddress = userProfile.email || "";
       defaults.telephoneContact = userProfile.phone || userProfile.company_phone || "";
       
-      // Set ID information
-      if (userProfile.id_type && userProfile.id_number) {
-        if (userProfile.id_type === 'national_id') {
-          defaults.nationalIdNumber = userProfile.id_number;
-        }
+      // Set ID information (national ID or TIN, for both individuals and companies)
+      if (userProfile.id_number) {
+        defaults.nationalIdNumber = userProfile.id_number;
+      } else if (userProfile.company_tin) {
+        defaults.nationalIdNumber = userProfile.company_tin;
       }
     }
 
@@ -3446,8 +3446,11 @@ export function ApplicationForm({
                       {tx("4. Documents *")}
                     </Label>
                     <div className="text-sm text-muted-foreground space-y-1">
-                      <p>{tx("• For Individual: copy of National ID (NID)")}</p>
-                      <p>{tx("• For Company/Cooperative/Organization: copy of registration certificate")}</p>
+                      {watchedCategoryApplicant === "individual" ? (
+                        <p>{tx("• Please upload a copy of your National ID (NID)")}</p>
+                      ) : (
+                        <p>{tx("• Please upload a copy of your registration certificate")}</p>
+                      )}
                     </div>
                     
                     <FormField

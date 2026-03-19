@@ -74,18 +74,29 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const [nidaVerified, setNidaVerified] = useState<boolean>(false);
   const [nidaError, setNidaError] = useState<string>("");
 
+  // RRA verification state for organisation tab
+  const [rraEnabled, setRraEnabled] = useState<boolean>(false);
+  const [rraChecking, setRraChecking] = useState<boolean>(false);
+  const [rraVerified, setRraVerified] = useState<boolean>(false);
+  const [rraError, setRraError] = useState<string>("");
+
   useEffect(() => {
     let isMounted = true;
     (async () => {
       try {
-        const res = await fetch('/api/nida/status', { method: 'GET' });
-        const json = await res.json().catch(() => null);
+        const [nidaRes, rraRes] = await Promise.all([
+          fetch('/api/nida/status', { method: 'GET' }),
+          fetch('/api/rra/status', { method: 'GET' }),
+        ]);
+        const nidaJson = await nidaRes.json().catch(() => null);
+        const rraJson = await rraRes.json().catch(() => null);
         if (!isMounted) return;
-        setNidaEnabled(Boolean(json?.enabled));
+        setNidaEnabled(Boolean(nidaJson?.enabled));
+        setRraEnabled(Boolean(rraJson?.enabled));
       } catch {
-        // If the status endpoint fails, keep feature off in UI.
         if (!isMounted) return;
         setNidaEnabled(false);
+        setRraEnabled(false);
       }
     })();
     return () => {
@@ -155,6 +166,49 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       setNidaError(e instanceof Error ? e.message : 'National ID could not be verified');
     } finally {
       setNidaChecking(false);
+    }
+  };
+
+  const verifyWithRra = async (tinDigits: string) => {
+    if (!/^\d{9}$/.test(tinDigits)) return;
+    setRraError("");
+    setRraChecking(true);
+    setRraVerified(false);
+    try {
+      const res = await fetch('/api/rra/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tin: tinDigits }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        setRraError(json?.message || 'TIN could not be verified');
+        return;
+      }
+
+      const data = json?.data as {
+        taxpayerName?: string;
+        status?: string;
+        address?: string;
+        district?: string;
+        sector?: string;
+      } | undefined;
+
+      if (data?.status && data.status.toLowerCase() !== 'active') {
+        setRraError(`This taxpayer is not active (status: ${data.status})`);
+        return;
+      }
+
+      setCompanyName(String(data?.taxpayerName || '').trim());
+      const addressParts = [data?.address, data?.district, data?.sector]
+        .map(p => String(p || '').trim())
+        .filter(Boolean);
+      setCompanyAddress(addressParts.join(', '));
+      setRraVerified(true);
+    } catch (e: unknown) {
+      setRraError(e instanceof Error ? e.message : 'TIN could not be verified');
+    } finally {
+      setRraChecking(false);
     }
   };
 
@@ -398,6 +452,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   };
 
   const companyFormReady =
+    (!rraEnabled || rraVerified) &&
     !!companyName.trim() &&
     !!companyTIN.trim() &&
     companyTIN.replace(/\D/g, "").length === 9 &&
@@ -453,12 +508,17 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     
     setCompanyTIN(digits);
     if (error) onClearError?.();
+    if (rraError) setRraError("");
+    if (rraVerified) {
+      setRraVerified(false);
+      setCompanyName("");
+      setCompanyAddress("");
+    }
     
     // Validate if the field is complete (9 digits)
     if (digits.length === 9) {
       validateCompanyTIN(digits);
     } else if (companyTINError) {
-      // Clear error if user is still typing
       setCompanyTINError("");
     }
   };
@@ -466,6 +526,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const showNidaFirstStep = accountType === "individual" && nidaEnabled;
   const showIndividualDetails = !showNidaFirstStep || nidaVerified;
   const showIndividualCredentials = !showNidaFirstStep || nidaVerified;
+
+  const showRraFirstStep = accountType === "company" && rraEnabled;
+  const showCompanyDetails = !showRraFirstStep || rraVerified;
 
   return (
     <motion.div
@@ -519,137 +582,223 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             
             <TabsContent value="company">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">Organisation Name</Label>
-                  <Input 
-                    id="companyName" 
-                    type="text" 
-                    placeholder="" 
-                    required 
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    disabled={isLoading}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="companyTIN">Tax Identification Number (TIN)</Label>
-                  <Input 
-                    id="companyTIN" 
-                    type="text" 
-                    placeholder="123456789" 
-                    required 
-                    value={companyTIN}
-                    onChange={handleCompanyTINChange}
-                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
-                      companyTINError ? 'border-red-500 focus:ring-red-500' : ''
-                    }`}
-                    disabled={isLoading}
-                  />
-                  {companyTINError && (
-                    <p className="text-xs text-red-500 mt-1">{companyTINError}</p>
-                  )}
-                  {!companyTINError && (
-                    <p className="text-xs text-muted-foreground mt-1">Format: 9 digits (e.g., 123456789)</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="companyPhone">Organisation Phone Number</Label>
-                  <Input
-                    id="companyPhone"
-                    type="tel"
-                    placeholder="07XXXXXXXX"
-                    required
-                    value={companyPhone}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setCompanyPhone(v);
-                      // Live-validate once the user starts typing
-                      if (companyPhoneError) validateRwandaPhone(v, setCompanyPhoneError);
-                      else if (v.trim()) validateRwandaPhone(v, setCompanyPhoneError);
-                      if (error) onClearError?.();
-                    }}
-                    className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
-                      companyPhoneError ? 'border-red-500 focus:ring-red-500' : ''
-                    }`}
-                    disabled={isLoading}
-                  />
-                  {companyPhoneError && (
-                    <p className="text-xs text-red-500 mt-1">{companyPhoneError}</p>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="companyAddress">Organisation Address</Label>
-                  <Input 
-                    id="companyAddress" 
-                    type="text" 
-                    placeholder="KN 3 AV Avenue" 
-                    required
-                    value={companyAddress}
-                    onChange={(e) => setCompanyAddress(e.target.value)}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    disabled={isLoading}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="" 
-                    required 
-                    value={email}
-                    onChange={handleEmailChange}
-                    className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                    disabled={isLoading}
-                  />
-                  {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <div className="relative">
-                    <Input 
-                      id="password" 
-                      type={showPassword ? "text" : "password"}
-                      required 
-                      value={password}
-                      onChange={handlePasswordChange}
-                      className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
-                      disabled={isLoading}
-                    />
-                    <button 
-                      type="button" 
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                      onClick={() => setShowPassword(!showPassword)}
-                      disabled={isLoading}
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
+                {showRraFirstStep && !rraVerified ? (
+                  <div className="rounded-xl border bg-muted/30 p-4">
+                    <div className="mb-3">
+                      <p className="text-sm font-semibold text-foreground">Verify TIN to continue</p>
+                      <p className="text-xs text-muted-foreground">
+                        Enter your 9-digit TIN. We will fetch your organisation details automatically.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="companyTIN">Tax Identification Number (TIN)</Label>
+                      <Input
+                        id="companyTIN"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="\d*"
+                        maxLength={9}
+                        placeholder="123456789"
+                        required
+                        value={companyTIN}
+                        onChange={handleCompanyTINChange}
+                        onBlur={() => {
+                          if (companyTIN.trim()) validateCompanyTIN(companyTIN);
+                          if (rraEnabled && companyTIN.replace(/\D/g, "").length === 9) {
+                            void verifyWithRra(companyTIN.replace(/\D/g, ""));
+                          }
+                        }}
+                        className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                          companyTINError ? 'border-red-500 focus:ring-red-500' : ''
+                        }`}
+                        disabled={isLoading}
+                      />
+                      {companyTINError && (
+                        <p className="text-xs text-red-500 mt-1">{companyTINError}</p>
                       )}
-                    </button>
+                      {rraEnabled && rraError && (
+                        <p className="text-xs text-red-500 mt-1">{rraError}</p>
+                      )}
+                      {rraEnabled && !rraError && rraChecking && (
+                        <p className="text-xs text-muted-foreground mt-1">Verifying TIN with RRA…</p>
+                      )}
+                      {!companyTINError && !rraError && !rraChecking && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Format: 9 digits ({companyTIN.length}/9).
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
-                </div>
+                ) : null}
 
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={isLoading || !companyFormReady}
-                >
-                  {isLoading ? "Please wait..." : (
-                    <>
-                      Continue
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </>
+                <AnimatePresence initial={false}>
+                  {showCompanyDetails && (
+                    <motion.div
+                      key="company-details"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.25, ease: "easeOut" }}
+                      className="space-y-4"
+                    >
+                      {rraEnabled && rraVerified && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ duration: 0.28, ease: "easeOut" }}
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
+                          aria-live="polite"
+                        >
+                          <div className="flex items-center gap-2 text-emerald-800">
+                            <motion.span
+                              initial={{ scale: 0.8, rotate: -12 }}
+                              animate={{ scale: [0.8, 1.12, 1], rotate: [0, 8, 0] }}
+                              transition={{ duration: 0.4, ease: "easeOut" }}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </motion.span>
+                            <span className="text-xs font-medium">TIN verified successfully</span>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {!showRraFirstStep && (
+                        <div className="space-y-2">
+                          <Label htmlFor="companyTIN">Tax Identification Number (TIN)</Label>
+                          <Input
+                            id="companyTIN"
+                            type="text"
+                            placeholder="123456789"
+                            required
+                            value={companyTIN}
+                            onChange={handleCompanyTINChange}
+                            className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                              companyTINError ? 'border-red-500 focus:ring-red-500' : ''
+                            }`}
+                            disabled={isLoading}
+                          />
+                          {companyTINError && (
+                            <p className="text-xs text-red-500 mt-1">{companyTINError}</p>
+                          )}
+                          {!companyTINError && (
+                            <p className="text-xs text-muted-foreground mt-1">Format: 9 digits (e.g., 123456789)</p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="space-y-2">
+                        <Label htmlFor="companyName">Organisation Name</Label>
+                        <Input
+                          id="companyName"
+                          type="text"
+                          placeholder={rraEnabled ? "Auto-filled after TIN verification" : ""}
+                          required
+                          value={companyName}
+                          onChange={(e) => setCompanyName(e.target.value)}
+                          className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                          disabled={isLoading || (rraEnabled && rraVerified)}
+                          readOnly={rraEnabled && rraVerified}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="companyAddress">Organisation Address</Label>
+                        <Input
+                          id="companyAddress"
+                          type="text"
+                          placeholder={rraEnabled ? "Auto-filled after TIN verification" : "KN 3 AV Avenue"}
+                          required
+                          value={companyAddress}
+                          onChange={(e) => setCompanyAddress(e.target.value)}
+                          className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                          disabled={isLoading || (rraEnabled && rraVerified)}
+                          readOnly={rraEnabled && rraVerified}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="companyPhone">Organisation Phone Number</Label>
+                        <Input
+                          id="companyPhone"
+                          type="tel"
+                          placeholder="07XXXXXXXX"
+                          required
+                          value={companyPhone}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setCompanyPhone(v);
+                            if (companyPhoneError) validateRwandaPhone(v, setCompanyPhoneError);
+                            else if (v.trim()) validateRwandaPhone(v, setCompanyPhoneError);
+                            if (error) onClearError?.();
+                          }}
+                          className={`transition-all duration-200 focus:ring-2 focus:ring-primary ${
+                            companyPhoneError ? 'border-red-500 focus:ring-red-500' : ''
+                          }`}
+                          disabled={isLoading}
+                        />
+                        {companyPhoneError && (
+                          <p className="text-xs text-red-500 mt-1">{companyPhoneError}</p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder=""
+                          required
+                          value={email}
+                          onChange={handleEmailChange}
+                          className="transition-all duration-200 focus:ring-2 focus:ring-primary"
+                          disabled={isLoading}
+                        />
+                        {emailError && <p className="text-xs text-red-500 mt-1">{emailError}</p>}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="password">Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="password"
+                            type={showPassword ? "text" : "password"}
+                            required
+                            value={password}
+                            onChange={handlePasswordChange}
+                            className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary"
+                            disabled={isLoading}
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                            onClick={() => setShowPassword(!showPassword)}
+                            disabled={isLoading}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                        {passwordError && <p className="text-xs text-red-500 mt-1">{passwordError}</p>}
+                      </div>
+
+                      <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={isLoading || !companyFormReady}
+                      >
+                        {isLoading ? "Please wait..." : (
+                          <>
+                            Continue
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </>
+                        )}
+                      </Button>
+                    </motion.div>
                   )}
-                </Button>
+                </AnimatePresence>
               </form>
             </TabsContent>
             
