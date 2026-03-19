@@ -12,6 +12,23 @@ interface WorkflowTransition {
   requiresNotes?: boolean;
 }
 
+const INSPECTION_WORKFLOW_ROLES: ReadonlySet<UserRole> = new Set([
+  "admin",
+  "approver",
+  "assessor",
+  "reviewer",
+  "verifier",
+]);
+
+export function normalizeInspectionWorkflowRole(
+  role: UserRole | string | null | undefined
+): UserRole | "" {
+  const normalized = String(role ?? "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (!INSPECTION_WORKFLOW_ROLES.has(normalized as UserRole)) return "";
+  return normalized as UserRole;
+}
+
 const REVIEW_TRANSITIONS: WorkflowTransition[] = [
   {
     target: "pending_verification",
@@ -126,7 +143,9 @@ export function getAvailableTransitions(
 ): WorkflowTransition[] {
   const statusTransitions = TRANSITION_MAP[workflowStatus];
   if (!statusTransitions) return [];
-  return statusTransitions[role] ?? [];
+  const normalizedRole = normalizeInspectionWorkflowRole(role);
+  if (!normalizedRole) return [];
+  return statusTransitions[normalizedRole] ?? [];
 }
 
 export function canActOnInspection(

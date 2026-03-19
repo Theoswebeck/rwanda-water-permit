@@ -693,7 +693,7 @@ export default function PermitInspectionUnifiedPage() {
           workflowStatus={currentWorkflowStatus}
           inspectionStatus={currentInspectionStatus}
           inspection={inspectionRecord as unknown as Record<string, unknown>}
-          roleContext={effectiveRole}
+          roleContext="approver"
           onStatusChange={handleWorkflowStatusChange}
         />
       ) : null}

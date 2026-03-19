@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -17,12 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertCircle, CheckCircle2, ClipboardList, Loader2, MessageSquare } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Loader2, MessageSquare } from "lucide-react";
 
 import {
   getAvailableTransitions,
   isTerminalStatus,
   getResponsibleRole,
+  normalizeInspectionWorkflowRole,
   type WorkflowTransition,
 } from "@/lib/inspection-workflow";
 import {
@@ -31,12 +31,15 @@ import {
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
 
-interface StepComment {
-  label: string;
-  role: string;
-  notes: string;
-  date?: string | null;
-  userName?: string | null;
+interface HistoryEntry {
+  id: string;
+  from_status: string;
+  to_status: string;
+  action: string;
+  comment: string | null;
+  created_at: string;
+  user_id: string;
+  userName?: string;
 }
 
 interface InspectionWorkflowActionsProps {
@@ -55,45 +58,79 @@ function fmtDateTime(dateString?: string | null): string {
   return d.toLocaleString();
 }
 
-function StepCommentsCard({ comments }: { comments: StepComment[] }) {
-  if (comments.length === 0) return null;
+const ACTION_LABELS: Record<string, string> = {
+  submit_for_review: "Submitted for Review",
+  forward_to_verification: "Forwarded to Verification",
+  forward_to_approval: "Forwarded to Approval",
+  approve: "Approved",
+  reject: "Rejected",
+  return_to_assessment: "Returned to Assessment",
+  return_to_review: "Returned to Review",
+  return_to_verification: "Returned to Verification",
+};
+
+function WorkflowHistoryCard({ entries, loading: histLoading }: { entries: HistoryEntry[]; loading: boolean }) {
+  if (histLoading) {
+    return (
+      <Card>
+        <CardContent className="py-6 flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Loading workflow history…</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (entries.length === 0) return null;
 
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          Step Comments
+          <Clock className="h-4 w-4 text-muted-foreground" />
+          Workflow History
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-0">
-        {comments.map((c, idx) => (
-          <div key={c.label}>
-            {idx > 0 && <Separator className="my-3" />}
-            <div className="space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-sm font-medium">{c.label}</span>
-                <Badge variant="outline" className="text-[11px] px-1.5 py-0">
-                  {c.role}
-                </Badge>
-                {c.userName && (
-                  <span className="text-xs text-muted-foreground">
-                    by {c.userName}
+      <CardContent>
+        <div className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-4">
+          {entries.map((entry) => (
+            <div key={entry.id} className="relative">
+              <div className="absolute -left-[calc(1rem+5px)] top-1.5 h-2.5 w-2.5 rounded-full bg-slate-400 dark:bg-slate-500 border-2 border-white dark:border-slate-900" />
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium">
+                    {ACTION_LABELS[entry.action] || entry.action}
                   </span>
-                )}
-                {c.date && (
+                  {entry.userName && (
+                    <span className="text-xs text-muted-foreground">
+                      by {entry.userName}
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">
-                    {fmtDateTime(c.date)}
+                    {fmtDateTime(entry.created_at)}
                   </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {getInspectionWorkflowLabel(entry.from_status)}
+                  </Badge>
+                  <span>→</span>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {getInspectionWorkflowLabel(entry.to_status)}
+                  </Badge>
+                </div>
+                {entry.comment && (
+                  <div className="flex items-start gap-1.5 mt-1">
+                    <MessageSquare className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {entry.comment}
+                    </p>
+                  </div>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap pl-5">
-                {c.notes}
-              </p>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
@@ -108,7 +145,9 @@ export function InspectionWorkflowActions({
   onStatusChange,
 }: InspectionWorkflowActionsProps) {
   const { userProfile } = useAuth();
-  const role = roleContext || userProfile?.role || "";
+  const role = normalizeInspectionWorkflowRole(
+    roleContext !== undefined ? roleContext : userProfile?.role
+  );
   const userId = userProfile?.id;
 
   const [loading, setLoading] = useState(false);
@@ -118,45 +157,57 @@ export function InspectionWorkflowActions({
     transition: WorkflowTransition | null;
   }>({ open: false, transition: null });
 
-  const [userNames, setUserNames] = useState<Record<string, string>>({});
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   const transitions = getAvailableTransitions(workflowStatus, role);
   const responsibleRole = getResponsibleRole(workflowStatus);
 
-  useEffect(() => {
-    const ids = [
-      inspection?.reviewed_by,
-      inspection?.verified_by,
-      inspection?.approved_by,
-      inspection?.inspector_id,
-    ].filter(Boolean) as string[];
-
-    const uniqueIds = Array.from(new Set(ids));
-    if (uniqueIds.length === 0) return;
-
-    const fetchNames = async () => {
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
       const { data, error } = await supabase
-        .from("users")
-        .select("id, first_name, last_name")
-        .in("id", uniqueIds);
+        .from("inspection_workflow_history")
+        .select("id, from_status, to_status, action, comment, created_at, user_id")
+        .eq("inspection_id", inspectionId)
+        .order("created_at", { ascending: true });
 
       if (error) {
-        console.error("❌ Error fetching user names:", error);
+        console.error("❌ Error fetching workflow history:", error);
+        setHistoryEntries([]);
         return;
       }
-      const map: Record<string, string> = {};
-      for (const u of (data || []) as any[]) {
-        map[u.id] = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "Unknown";
+
+      const entries = (data || []) as HistoryEntry[];
+      const userIds = Array.from(new Set(entries.map((e) => e.user_id).filter(Boolean)));
+
+      if (userIds.length > 0) {
+        const { data: users } = await supabase
+          .from("users")
+          .select("id, first_name, last_name")
+          .in("id", userIds);
+
+        const nameMap: Record<string, string> = {};
+        for (const u of (users || []) as any[]) {
+          nameMap[u.id] = `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || "Unknown";
+        }
+        for (const entry of entries) {
+          entry.userName = nameMap[entry.user_id];
+        }
       }
-      setUserNames(map);
-    };
-    fetchNames();
-  }, [
-    inspection?.reviewed_by,
-    inspection?.verified_by,
-    inspection?.approved_by,
-    inspection?.inspector_id,
-  ]);
+
+      setHistoryEntries(entries);
+    } catch (err) {
+      console.error("❌ Error fetching workflow history:", err);
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [inspectionId]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const handleTransition = useCallback(
     async (transition: WorkflowTransition) => {
@@ -232,6 +283,7 @@ export function InspectionWorkflowActions({
         setNotes("");
         setConfirmDialog({ open: false, transition: null });
         onStatusChange?.(transition.target as InspectionWorkflowStatus);
+        fetchHistory();
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : "Failed to update status";
@@ -241,78 +293,8 @@ export function InspectionWorkflowActions({
         setLoading(false);
       }
     },
-    [inspectionId, userId, workflowStatus, notes, onStatusChange]
+    [inspectionId, userId, workflowStatus, notes, onStatusChange, fetchHistory]
   );
-
-  const stepComments: StepComment[] = [];
-
-  if (inspection?.assessment_notes) {
-    stepComments.push({
-      label: "Assessment",
-      role: "Assessor",
-      notes: inspection.assessment_notes,
-      date: inspection.assessment_completed_at,
-      userName: inspection.inspector_id
-        ? userNames[inspection.inspector_id]
-        : null,
-    });
-  }
-
-  if (inspection?.review_notes) {
-    stepComments.push({
-      label: "Review",
-      role: "Reviewer",
-      notes: inspection.review_notes,
-      date: inspection.reviewed_at,
-      userName: inspection.reviewed_by
-        ? userNames[inspection.reviewed_by]
-        : null,
-    });
-  }
-
-  if (inspection?.verification_notes) {
-    stepComments.push({
-      label: "Verification",
-      role: "Verifier",
-      notes: inspection.verification_notes,
-      date: inspection.verified_at,
-      userName: inspection.verified_by
-        ? userNames[inspection.verified_by]
-        : null,
-    });
-  }
-
-  if (inspection?.approval_notes) {
-    stepComments.push({
-      label: "Approval",
-      role: "Approver",
-      notes: inspection.approval_notes,
-      date: inspection.approved_at,
-      userName: inspection.approved_by
-        ? userNames[inspection.approved_by]
-        : null,
-    });
-  }
-
-  if (inspection?.rejection_reason) {
-    stepComments.push({
-      label: "Rejection Reason",
-      role: "Approver",
-      notes: inspection.rejection_reason,
-      date: inspection.approved_at,
-      userName: inspection.approved_by
-        ? userNames[inspection.approved_by]
-        : null,
-    });
-  }
-
-  if (inspection?.internal_notes) {
-    stepComments.push({
-      label: "Return Notes",
-      role: "Staff",
-      notes: inspection.internal_notes,
-    });
-  }
 
   if (inspectionStatus !== "completed") {
     return null;
@@ -337,7 +319,7 @@ export function InspectionWorkflowActions({
             </div>
           </CardContent>
         </Card>
-        <StepCommentsCard comments={stepComments} />
+        <WorkflowHistoryCard entries={historyEntries} loading={historyLoading} />
       </div>
     );
   }
@@ -362,7 +344,7 @@ export function InspectionWorkflowActions({
             </div>
           </CardContent>
         </Card>
-        <StepCommentsCard comments={stepComments} />
+        <WorkflowHistoryCard entries={historyEntries} loading={historyLoading} />
       </div>
     );
   }
@@ -415,7 +397,7 @@ export function InspectionWorkflowActions({
           </CardContent>
         </Card>
 
-        <StepCommentsCard comments={stepComments} />
+        <WorkflowHistoryCard entries={historyEntries} loading={historyLoading} />
       </div>
 
       <Dialog
