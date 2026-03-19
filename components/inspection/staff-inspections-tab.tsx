@@ -523,10 +523,14 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                       ? (permitHolderByNumber[permit.permit_number] || applicantName(r.applicant))
                       : applicantName(r.applicant);
                     const displayStatus = getDisplayStatus(r);
+                    const viewIdentifier = permit?.permit_number || r.application?.application_number;
+                    const viewHref = viewIdentifier
+                      ? `${basePath}/permit/${encodeURIComponent(viewIdentifier)}`
+                      : `${basePath}/${r.id}`;
                     return (
                       <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">
                         <TableCell className="font-medium">
-                          <Link href={`${basePath}/${r.id}`} className="hover:underline">
+                          <Link href={viewHref} className="hover:underline">
                             {shortId(r.id)}
                           </Link>
                         </TableCell>
@@ -546,7 +550,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
-                                <Link href={`${basePath}/${r.id}`} className="flex items-center gap-2">
+                                <Link href={viewHref} className="flex items-center gap-2">
                                   <Eye className="h-4 w-4" />
                                   View inspection
                                 </Link>
