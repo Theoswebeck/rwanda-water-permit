@@ -3,6 +3,9 @@
 -- Adds multi-stage approval workflow to water_use_reports, mirroring
 -- the inspection approval chain:
 --   submitted -> assessor -> reviewer -> verifier -> approver
+--
+-- Uses plain PostgreSQL (no Supabase auth).
+-- Authorization is handled at the application/API level.
 -- =====================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -179,79 +182,6 @@ CREATE TRIGGER trg_wur_workflow_status_change
 AFTER UPDATE OF workflow_status ON public.water_use_reports
 FOR EACH ROW
 EXECUTE FUNCTION public.log_wur_workflow_status_change();
-
--- =====================================================================
--- 13) Staff UPDATE RLS policy for water_use_reports
--- =====================================================================
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'water_use_reports'
-      AND policyname = 'Staff can update water use reports workflow'
-  ) THEN
-    CREATE POLICY "Staff can update water use reports workflow"
-      ON public.water_use_reports
-      FOR UPDATE
-      USING (
-        EXISTS (
-          SELECT 1 FROM public.users u
-          WHERE u.id = auth.uid()
-            AND u.role IN ('admin', 'assessor', 'reviewer', 'verifier', 'approver', 'inspector')
-        )
-      )
-      WITH CHECK (
-        EXISTS (
-          SELECT 1 FROM public.users u
-          WHERE u.id = auth.uid()
-            AND u.role IN ('admin', 'assessor', 'reviewer', 'verifier', 'approver', 'inspector')
-        )
-      );
-  END IF;
-END $$;
-
--- RLS for workflow history table
-ALTER TABLE public.water_use_report_workflow_history ENABLE ROW LEVEL SECURITY;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'water_use_report_workflow_history'
-      AND policyname = 'Staff can view water use report workflow history'
-  ) THEN
-    CREATE POLICY "Staff can view water use report workflow history"
-      ON public.water_use_report_workflow_history
-      FOR SELECT
-      USING (
-        EXISTS (
-          SELECT 1 FROM public.users u
-          WHERE u.id = auth.uid()
-            AND u.role IN ('admin', 'assessor', 'reviewer', 'verifier', 'approver', 'inspector')
-        )
-      );
-  END IF;
-END $$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'water_use_report_workflow_history'
-      AND policyname = 'Staff can insert water use report workflow history'
-  ) THEN
-    CREATE POLICY "Staff can insert water use report workflow history"
-      ON public.water_use_report_workflow_history
-      FOR INSERT
-      WITH CHECK (
-        EXISTS (
-          SELECT 1 FROM public.users u
-          WHERE u.id = auth.uid()
-            AND u.role IN ('admin', 'assessor', 'reviewer', 'verifier', 'approver', 'inspector')
-        )
-      );
-  END IF;
-END $$;
 
 COMMIT;
 
