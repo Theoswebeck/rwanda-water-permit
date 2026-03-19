@@ -36,8 +36,8 @@ export default async function AssessmentInspectionRedirectPage({
           redirect(`/staffrole/inspection/permit/${encodeURIComponent(permit.permit_number)}`);
         }
       }
-      // Cannot resolve - redirect to generic inspection view
-      redirect(`/inspection/${id}`);
+      // Cannot resolve - return to assessment dashboard
+      redirect("/assessment");
     }
 
     // Use permit number for registry (fetchInspectionData accepts it), or application_number for normal
@@ -48,6 +48,6 @@ export default async function AssessmentInspectionRedirectPage({
     redirect(`/staffrole/inspection/permit/${encodeURIComponent(identifier)}`);
   } catch (e) {
     console.error("❌ Failed to resolve inspection for redirect:", e);
-    redirect(`/inspection/${id}`);
+    redirect("/assessment");
   }
 }

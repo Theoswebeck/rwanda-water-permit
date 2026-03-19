@@ -19,6 +19,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
+import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
+import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
 
 type InspectionTemplate = "authorization" | "concession";
 
@@ -171,9 +173,11 @@ export default function PermitInspectionUnifiedPage() {
   const [saving, setSaving] = useState(false);
 
   const [inspectionId, setInspectionId] = useState<string | null>(null);
+  const [inspectionRecord, setInspectionRecord] = useState<Inspection | null>(null);
   const [inspectionData, setInspectionData] = useState<any>(null);
   const [template, setTemplate] = useState<InspectionTemplate>("authorization");
   const [activeTab, setActiveTab] = useState("locked");
+  const [canEditForm, setCanEditForm] = useState(false);
 
   const locked = useMemo(() => {
     if (!inspectionData) return null;
@@ -279,18 +283,10 @@ export default function PermitInspectionUnifiedPage() {
 
           if (existing) {
             setInspectionId(existing.id);
-
-            if (!canCreateInspection) {
-              router.replace(`/inspection/${existing.id}`);
-              return;
-            }
-
             const isDraft = existing.status === "scheduled" || existing.status === "in_progress";
             const isOwner = existing.inspector_id === user?.id;
-            if (!isOwner || !isDraft) {
-              router.replace(`/inspection/${existing.id}`);
-              return;
-            }
+            setCanEditForm(canCreateInspection && isOwner && isDraft);
+            setInspectionRecord(existing);
 
             setForm(prev => ({
               ...prev,
@@ -327,6 +323,7 @@ export default function PermitInspectionUnifiedPage() {
           authorized_surface_area_ha: data?.prepopulatedData?.concessionAreaHa,
           authorized_concession_boundaries: data?.prepopulatedData?.concessionBoundaries ?? prev.authorized_concession_boundaries,
         }));
+        setCanEditForm(canCreateInspection);
       } catch (e: any) {
         console.error("❌ Failed to load unified inspection:", e);
         setError(e?.message || "Failed to load inspection data");
@@ -336,13 +333,18 @@ export default function PermitInspectionUnifiedPage() {
     };
 
     load();
-  }, [applicationNumber, canCreateInspection, userProfile?.id, authLoading, router]);
+  }, [applicationNumber, canCreateInspection, userProfile?.id, authLoading, router, user?.id]);
 
-  const canEdit = !!userProfile?.id;
+  const canEdit = !!userProfile?.id && canEditForm;
 
   const setField = (key: keyof FormState, value: any) => setForm(prev => ({ ...prev, [key]: value }));
 
   const save = async (mode: "draft" | "submit") => {
+    if (!canEdit) {
+      alert("You do not have permission to edit this inspection.");
+      return;
+    }
+
     if (!inspectionData?.application?.id) {
       alert("⚠️ Permit data not loaded.");
       return;
@@ -562,8 +564,17 @@ export default function PermitInspectionUnifiedPage() {
           payload
         );
         if (upErr) throw upErr;
-        if (mode === "submit") router.push(`/inspection/${data.id}`);
-        else alert("✅ Draft saved");
+        setInspectionRecord((prev) => ({
+          ...(prev || ({} as Inspection)),
+          ...(payload as Partial<Inspection>),
+          id: data.id,
+        }));
+        if (mode === "submit") {
+          setCanEditForm(false);
+          alert("✅ Inspection submitted. You can now use workflow actions below.");
+        } else {
+          alert("✅ Draft saved");
+        }
       } else {
         const { data, error: insErr } = await runWithMissingColumnRetries<{ id: string }>(
           p => supabase.from("inspections").insert(p).select("id").single(),
@@ -571,8 +582,16 @@ export default function PermitInspectionUnifiedPage() {
         );
         if (insErr) throw insErr;
         setInspectionId(data.id);
-        if (mode === "submit") router.push(`/inspection/${data.id}`);
-        else alert("✅ Draft created");
+        setInspectionRecord({
+          ...(payload as Partial<Inspection>),
+          id: data.id,
+        } as Inspection);
+        if (mode === "submit") {
+          setCanEditForm(false);
+          alert("✅ Inspection submitted. You can now use workflow actions below.");
+        } else {
+          alert("✅ Draft created");
+        }
       }
     } catch (e: any) {
       console.error("❌ Failed to save inspection:", e);
@@ -603,6 +622,21 @@ export default function PermitInspectionUnifiedPage() {
       </div>
     );
   }
+
+  const currentWorkflowStatus: InspectionWorkflowStatus =
+    ((inspectionRecord?.workflow_status as InspectionWorkflowStatus | undefined) || "draft");
+  const currentInspectionStatus = inspectionRecord?.status || (inspectionId ? "in_progress" : "scheduled");
+
+  const handleWorkflowStatusChange = (newStatus: InspectionWorkflowStatus) => {
+    setInspectionRecord((prev) =>
+      prev
+        ? ({
+            ...prev,
+            workflow_status: newStatus,
+          } as Inspection)
+        : prev
+    );
+  };
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -652,6 +686,17 @@ export default function PermitInspectionUnifiedPage() {
           ) : null}
         </div>
       </div>
+
+      {inspectionId && inspectionRecord ? (
+        <InspectionWorkflowActions
+          inspectionId={inspectionId}
+          workflowStatus={currentWorkflowStatus}
+          inspectionStatus={currentInspectionStatus}
+          inspection={inspectionRecord as unknown as Record<string, unknown>}
+          roleContext={effectiveRole}
+          onStatusChange={handleWorkflowStatusChange}
+        />
+      ) : null}
 
       <div className="mt-6">
         <InspectionFormLayout

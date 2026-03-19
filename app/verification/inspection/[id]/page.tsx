@@ -1,27 +1,50 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getInspectionById } from "@/lib/supabase";
 
-import { useParams } from "next/navigation";
-import { ProtectedRoute } from "@/components/auth/protected-route";
-import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
-import { UserProfileButton } from "@/components/dashboard/user-profile-button";
-import { BackButton } from "@/components/ui/back-button";
-import { InspectionDetailTabs } from "@/components/inspection/inspection-detail-tabs";
+function isRegistryApplication(applicationNumber?: string): boolean {
+  return Boolean(applicationNumber && applicationNumber.startsWith("REG-"));
+}
 
-export default function VerificationInspectionDetailPage() {
-  const params = useParams();
-  const id = params.id as string;
+function extractPermitNumber(applicationNumber: string): string {
+  return applicationNumber.replace(/^REG-/, "");
+}
 
-  return (
-    <ProtectedRoute allowedRoles={["verifier", "admin"]} requireProfile={true}>
-      <DashboardLayout>
-        <div className="flex justify-end p-6">
-          <UserProfileButton />
-        </div>
-        <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-12 space-y-6">
-          <BackButton />
-          <InspectionDetailTabs inspectionId={id} roleContext="verifier" />
-        </div>
-      </DashboardLayout>
-    </ProtectedRoute>
-  );
+export default async function VerificationInspectionRedirectPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  try {
+    const inspection = await getInspectionById(id);
+    const app = inspection?.application as { application_number?: string } | undefined;
+    const applicationNumber = app?.application_number;
+
+    if (!applicationNumber) {
+      const applicationId = (inspection as { application_id?: string })?.application_id;
+      if (applicationId) {
+        const { supabase } = await import("@/lib/supabase");
+        const { data: permit } = await supabase
+          .from("permits")
+          .select("permit_number")
+          .eq("application_id", applicationId)
+          .maybeSingle();
+
+        if (permit?.permit_number) {
+          redirect(`/staffrole/inspection/permit/${encodeURIComponent(permit.permit_number)}`);
+        }
+      }
+      redirect("/verification");
+    }
+
+    const identifier = isRegistryApplication(applicationNumber)
+      ? extractPermitNumber(applicationNumber)
+      : applicationNumber;
+
+    redirect(`/staffrole/inspection/permit/${encodeURIComponent(identifier)}`);
+  } catch (e) {
+    console.error("Failed to resolve verification inspection redirect:", e);
+    redirect("/verification");
+  }
 }

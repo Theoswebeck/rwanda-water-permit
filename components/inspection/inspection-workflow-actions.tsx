@@ -367,8 +367,6 @@ export function InspectionWorkflowActions({
     );
   }
 
-  const anyRequiresNotes = transitions.some((t) => t.requiresNotes);
-
   return (
     <>
       <div className="space-y-4">
@@ -385,14 +383,12 @@ export function InspectionWorkflowActions({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {anyRequiresNotes && (
-              <Textarea
-                placeholder="Notes (required for some actions)..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-              />
-            )}
+            <Textarea
+              placeholder="Notes for forwarding/returns (required where applicable)..."
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={3}
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               {transitions.map((t) => (
