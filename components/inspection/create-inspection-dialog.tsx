@@ -140,6 +140,12 @@ export function CreateInspectionDialog({
         const permitRows: PermitPickRow[] = ((permitsResult.data || []) as any[]).map((row) => ({
           ...row,
           source: "permits" as const,
+          application: row.application
+            ? {
+                ...row.application,
+                applicant: row.applicant || row.application?.applicant || null,
+              }
+            : null,
         }));
 
         const ACTIVE_STATUSES = new Set(["active", "operational", "approved", "valid"]);
