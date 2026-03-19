@@ -351,7 +351,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
                 <TableHead>Permit Number</TableHead>
                 <TableHead>Applicant</TableHead>
                 <TableHead>Template</TableHead>
-                <TableHead>Workflow Status</TableHead>
+                <TableHead>Water Use Report Status</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
