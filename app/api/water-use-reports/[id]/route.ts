@@ -5,8 +5,8 @@ import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } f
 import { isEffectiveStaffUser, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
 
 const VALID_WORKFLOW_STATUSES = new Set([
-  'draft', 'submitted', 'pending_review', 'pending_verification',
-  'pending_approval', 'approved', 'rejected',
+  'draft', 'submitted', 'pending_assessment', 'pending_review',
+  'pending_verification', 'pending_approval', 'approved', 'rejected',
   'returned_to_assessment', 'returned_to_review', 'returned_to_verification',
 ])
 

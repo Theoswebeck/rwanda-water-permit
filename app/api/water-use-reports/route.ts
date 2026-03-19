@@ -29,8 +29,13 @@ export async function GET(req: NextRequest) {
       userId: claims.sub,
       claimsRole: claims.role,
     })
-    if (!isEffectiveStaffUser(resolvedRoles.effectiveRoles)) {
+    const isStaff = isEffectiveStaffUser(resolvedRoles.effectiveRoles)
+    if (!isStaff) {
       where.push(`wur.applicant_id = $${idx}`)
+      params.push(claims.sub)
+      idx += 1
+    } else if (resolvedRoles.effectiveRoles.includes('assessor') && !resolvedRoles.effectiveRoles.includes('admin') && !resolvedRoles.effectiveRoles.includes('reviewer')) {
+      where.push(`wur.assigned_assessor_id = $${idx}`)
       params.push(claims.sub)
       idx += 1
     }

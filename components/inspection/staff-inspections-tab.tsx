@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,7 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertCircle, Eye, Loader2, MoreHorizontal, Search } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AlertCircle, Eye, Loader2, MoreHorizontal, Search, UserPlus } from "lucide-react";
 import { CreateInspectionDialog } from "@/components/inspection/create-inspection-dialog";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import {
@@ -90,9 +99,17 @@ function statusPill(status: InspectionWorkflowStatus | string) {
   );
 }
 
+type AssessorUser = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  role: string;
+};
+
 function getDisplayStatus(row: InspectionRow): string {
   if (row.status !== "completed") return row.status;
-  return row.workflow_status || "pending_review";
+  return row.workflow_status || "submitted";
 }
 
 
@@ -107,6 +124,18 @@ const CHIP_DEFS: StatusChipDef[] = [
     id: "in_field",
     label: "In Field",
     statuses: ["scheduled", "in_progress"],
+    priority: "secondary",
+  },
+  {
+    id: "new_submissions",
+    label: "New Submissions",
+    statuses: ["submitted"],
+    priority: "primary",
+  },
+  {
+    id: "with_assessors",
+    label: "With Assessors",
+    statuses: ["pending_assessment"],
     priority: "secondary",
   },
   {
@@ -155,6 +184,94 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const [permitByAppId, setPermitByAppId] = useState<Record<string, PermitLite | undefined>>({});
   const [permitHolderByNumber, setPermitHolderByNumber] = useState<Record<string, string>>({});
   const [activeChipId, setActiveChipId] = useState("all");
+
+  const [assessors, setAssessors] = useState<AssessorUser[]>([]);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedInspection, setSelectedInspection] = useState<InspectionRow | null>(null);
+  const [selectedAssessorId, setSelectedAssessorId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+
+  const canAssign = roleContext === "reviewer" || roleContext === "admin" || userProfile?.role === "reviewer" || userProfile?.role === "admin";
+
+  useEffect(() => {
+    if (!canAssign) return;
+    const fetchAssessors = async () => {
+      const { data, error: err } = await supabase
+        .from("users")
+        .select("id, first_name, last_name, role, email")
+        .in("role", ["assessor"])
+        .eq("status", "active")
+        .order("first_name", { ascending: true });
+      if (!err) setAssessors(data || []);
+    };
+    fetchAssessors();
+  }, [canAssign]);
+
+  const openAssignDialog = useCallback((inspection: InspectionRow) => {
+    setSelectedInspection(inspection);
+    setSelectedAssessorId("");
+    setAssignDialogOpen(true);
+  }, []);
+
+  const handleAssignToAssessor = useCallback(async () => {
+    if (!selectedInspection || !selectedAssessorId) return;
+    try {
+      setAssignLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const assessor = assessors.find(a => a.id === selectedAssessorId);
+      if (!assessor) {
+        alert("Please select a valid assessor");
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from("inspections")
+        .update({
+          assigned_assessor_id: selectedAssessorId,
+          workflow_status: "pending_assessment",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedInspection.id);
+
+      if (updateError) throw updateError;
+
+      const { error: historyError } = await supabase
+        .from("inspection_workflow_history")
+        .insert({
+          inspection_id: selectedInspection.id,
+          user_id: user.id,
+          from_status: selectedInspection.workflow_status || "submitted",
+          to_status: "pending_assessment",
+          action: "assign_to_assessor",
+          comment: `Assigned to ${assessor.first_name} ${assessor.last_name} for assessment`,
+        });
+
+      if (historyError) {
+        console.error("⚠️ Failed to log workflow history:", historyError);
+      }
+
+      console.log(`✅ Inspection ${selectedInspection.id.slice(0, 8)} assigned to ${assessor.first_name} ${assessor.last_name}`);
+
+      setInspections(prev =>
+        prev.map(ins =>
+          ins.id === selectedInspection.id
+            ? { ...ins, workflow_status: "pending_assessment" }
+            : ins
+        )
+      );
+
+      setAssignDialogOpen(false);
+      setSelectedInspection(null);
+      setSelectedAssessorId("");
+    } catch (err: any) {
+      console.error("❌ Error assigning assessor:", err);
+      alert(err?.message || "Failed to assign assessor. Please try again.");
+    } finally {
+      setAssignLoading(false);
+    }
+  }, [selectedInspection, selectedAssessorId, assessors]);
 
   useEffect(() => {
     const load = async () => {
@@ -347,6 +464,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   }
 
   return (
+    <>
     <div className="space-y-4">
       <StatusFilterChips
         chips={CHIP_DEFS}
@@ -448,6 +566,15 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                                   </Link>
                                 </DropdownMenuItem>
                               ) : null}
+                              {canAssign && displayStatus === "submitted" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => openAssignDialog(r)} className="flex items-center gap-2">
+                                    <UserPlus className="h-4 w-4" />
+                                    Assign Assessor
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -461,5 +588,40 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
         </CardContent>
       </Card>
     </div>
+
+    <Dialog open={assignDialogOpen} onOpenChange={(open) => { if (!open) { setAssignDialogOpen(false); setSelectedInspection(null); } }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Assign Assessor</DialogTitle>
+          <DialogDescription>
+            Assign an assessor to review inspection {selectedInspection ? shortId(selectedInspection.id) : ""}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <Select value={selectedAssessorId} onValueChange={setSelectedAssessorId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select an assessor…" />
+            </SelectTrigger>
+            <SelectContent>
+              {assessors.map((a) => (
+                <SelectItem key={a.id} value={a.id}>
+                  {a.first_name} {a.last_name} ({a.email})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setAssignDialogOpen(false); setSelectedInspection(null); }}>
+            Cancel
+          </Button>
+          <Button disabled={!selectedAssessorId || assignLoading} onClick={handleAssignToAssessor}>
+            {assignLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Assign
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

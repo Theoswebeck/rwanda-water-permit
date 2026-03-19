@@ -67,6 +67,15 @@ const APPROVAL_TRANSITIONS: WorkflowTransition[] = [
   },
 ];
 
+const ASSESSMENT_TRANSITIONS: WorkflowTransition[] = [
+  {
+    target: "pending_review",
+    action: "forward_to_review",
+    label: "Forward to Reviewer",
+    variant: "default",
+  },
+];
+
 const RESUBMIT_TRANSITION: WorkflowTransition[] = [
   {
     target: "pending_review",
@@ -81,6 +90,10 @@ const TRANSITION_MAP: Record<
   string,
   Record<string, WorkflowTransition[]>
 > = {
+  pending_assessment: {
+    assessor: ASSESSMENT_TRANSITIONS,
+    admin: ASSESSMENT_TRANSITIONS,
+  },
   returned_to_assessment: {
     assessor: RESUBMIT_TRANSITION,
     admin: RESUBMIT_TRANSITION,
@@ -127,11 +140,14 @@ export function getResponsibleRole(
   workflowStatus: InspectionWorkflowStatus | string
 ): UserRole | null {
   switch (workflowStatus) {
+    case "submitted":
+      return "reviewer";
+    case "pending_assessment":
+    case "returned_to_assessment":
+      return "assessor";
     case "pending_review":
     case "returned_to_review":
       return "reviewer";
-    case "returned_to_assessment":
-      return "assessor";
     case "pending_verification":
     case "returned_to_verification":
       return "verifier";

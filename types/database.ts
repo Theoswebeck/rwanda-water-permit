@@ -146,6 +146,7 @@ export type WaterUseReportTemplate = 'abstraction' | 'concession'
 export type WaterUseReportStatus =
   | 'draft'
   | 'submitted'
+  | 'pending_assessment'
   | 'under_review'
   | 'completed'
   | 'pending_review'

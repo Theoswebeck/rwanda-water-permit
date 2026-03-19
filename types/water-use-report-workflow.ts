@@ -3,6 +3,7 @@ import type { UserRole } from "./database";
 export type WaterUseReportWorkflowStatus =
   | "draft"
   | "submitted"
+  | "pending_assessment"
   | "pending_review"
   | "pending_verification"
   | "pending_approval"
@@ -30,6 +31,11 @@ export const WATER_USE_REPORT_WORKFLOW_STATUS_CONFIG: Record<
     label: "Submitted",
     className:
       "bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-300 dark:border-green-800",
+  },
+  pending_assessment: {
+    label: "Pending Assessment",
+    className:
+      "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800",
   },
   pending_review: {
     label: "Pending Review",

@@ -90,7 +90,7 @@ const TRANSITION_MAP: Record<
   string,
   Record<string, WorkflowTransition[]>
 > = {
-  submitted: {
+  pending_assessment: {
     assessor: SUBMIT_FOR_REVIEW_TRANSITION,
     admin: SUBMIT_FOR_REVIEW_TRANSITION,
   },
@@ -140,7 +140,7 @@ export function getResponsibleRole(
   workflowStatus: WaterUseReportWorkflowStatus | string
 ): UserRole | null {
   switch (workflowStatus) {
-    case "submitted":
+    case "pending_assessment":
     case "returned_to_assessment":
       return "assessor";
     case "pending_review":

@@ -2,6 +2,8 @@ import type { UserRole } from "./database";
 
 export type InspectionWorkflowStatus =
   | "draft"
+  | "submitted"
+  | "pending_assessment"
   | "pending_review"
   | "pending_verification"
   | "pending_approval"
@@ -24,6 +26,16 @@ export const INSPECTION_WORKFLOW_STATUS_CONFIG: Record<
     label: "Draft",
     className:
       "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950/50 dark:text-slate-300 dark:border-slate-800",
+  },
+  submitted: {
+    label: "Submitted",
+    className:
+      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800",
+  },
+  pending_assessment: {
+    label: "Pending Assessment",
+    className:
+      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800",
   },
   pending_review: {
     label: "Pending Review",
@@ -103,6 +115,8 @@ export interface InspectionWorkflowHistoryEntry {
 }
 
 export type InspectionWorkflowAction =
+  | "assign_to_assessor"
+  | "forward_to_review"
   | "submit_for_review"
   | "forward_to_verification"
   | "forward_to_approval"

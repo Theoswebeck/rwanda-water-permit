@@ -381,11 +381,44 @@ function parsePositiveNumber(v: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+/**
+ * Normalize a geometry value into a plain GeoJSON geometry object that
+ * `geometryToCoordinatePolygons` can handle.  Handles:
+ *  - JSON strings (from PostgREST / Supabase returning geometry as text)
+ *  - Feature wrappers  (`{ type: "Feature", geometry: { ... } }`)
+ *  - FeatureCollection  (takes the first feature)
+ *  - Already-plain geometry objects (pass-through)
+ */
+function normalizeGeometryInput(raw: any): any {
+  if (!raw) return null;
+
+  let geo = raw;
+
+  // If it's a JSON string, parse it
+  if (typeof geo === 'string') {
+    try { geo = JSON.parse(geo); } catch { return null; }
+  }
+
+  if (!geo || typeof geo !== 'object') return null;
+
+  // Unwrap FeatureCollection -> first Feature
+  if (geo.type === 'FeatureCollection' && Array.isArray(geo.features) && geo.features.length > 0) {
+    geo = geo.features[0];
+  }
+
+  // Unwrap Feature -> inner geometry
+  if (geo.type === 'Feature' && geo.geometry) {
+    geo = geo.geometry;
+  }
+
+  return geo;
+}
+
 function polygonGeometryToBoundaryRows(
   geometry: any
 ): { beacon: string; latitude: number | null; longitude: number | null }[] {
   try {
-    const polygons = geometryToCoordinatePolygons(geometry);
+    const polygons = geometryToCoordinatePolygons(normalizeGeometryInput(geometry));
     if (!polygons || polygons.length === 0) return [];
     const points = polygons[0];
     if (!points || points.length <= 1) return [];
@@ -405,7 +438,7 @@ function polygonGeometryToBoundaryRows(
 
 function getPrimaryLatLngFromGeometry(geometry: any): { lat: number; lng: number } | null {
   try {
-    const polygons = geometryToCoordinatePolygons(geometry);
+    const polygons = geometryToCoordinatePolygons(normalizeGeometryInput(geometry));
     if (!polygons || polygons.length === 0) return null;
 
     // If it's a single point, use it
@@ -807,8 +840,19 @@ function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionDat
 
   const parsed = parseVolumeOrArea(registry.volume_or_area);
 
-  const lat = registry.latitude != null ? String(registry.latitude) : undefined;
-  const lng = registry.longitude != null ? String(registry.longitude) : undefined;
+  let lat = registry.latitude != null ? String(registry.latitude) : undefined;
+  let lng = registry.longitude != null ? String(registry.longitude) : undefined;
+
+  // For concession permits the registry may only have coordinates_geojson (polygon).
+  // Extract centroid so section 2.4 is populated.
+  if (!lat && !lng && registry.coordinates_geojson) {
+    const fromGeoJson = getPrimaryLatLngFromGeometry(registry.coordinates_geojson);
+    if (fromGeoJson) {
+      lat = String(fromGeoJson.lat);
+      lng = String(fromGeoJson.lng);
+    }
+  }
+
   const coordinates = lat && lng ? `Lat: ${lat}, Lng: ${lng}` : undefined;
 
   return {

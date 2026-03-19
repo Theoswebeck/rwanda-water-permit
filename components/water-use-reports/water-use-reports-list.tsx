@@ -139,11 +139,16 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
     try {
       setAssignLoading(true);
 
+      const isReassign = !!currentAssessorId;
+      const fromStatus = (selectedReport as Record<string, unknown>).workflow_status || selectedReport.status;
+      const toStatus = "pending_assessment";
+
       const resp = await fetch(`/api/water-use-reports/${selectedReport.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           assigned_assessor_id: selectedAssessorId,
+          workflow_status: toStatus,
           updated_at: new Date().toISOString(),
         }),
       });
@@ -152,15 +157,14 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
         throw new Error(json?.message || "Failed to assign assessor");
       }
 
-      const isReassign = !!currentAssessorId;
       const comment = isReassign
         ? `Assessor reassigned to ${assessor.first_name} ${assessor.last_name}`
         : `Report assigned to ${assessor.first_name} ${assessor.last_name} for assessment`;
 
       await supabase.from("water_use_report_workflow_history").insert({
         water_use_report_id: selectedReport.id,
-        from_status: (selectedReport as Record<string, unknown>).workflow_status || selectedReport.status,
-        to_status: (selectedReport as Record<string, unknown>).workflow_status || selectedReport.status,
+        from_status: fromStatus,
+        to_status: toStatus,
         action: isReassign ? "reassigned_assessor" : "assigned_to_assessor",
         comment,
       });
@@ -269,6 +273,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="submitted">Submitted</SelectItem>
+              <SelectItem value="pending_assessment">Pending Assessment</SelectItem>
               <SelectItem value="pending_review">Pending Review</SelectItem>
               <SelectItem value="pending_verification">Pending Verification</SelectItem>
               <SelectItem value="pending_approval">Pending Approval</SelectItem>
@@ -376,7 +381,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
                   <TableCell>{getWorkflowStatusBadge(report)}</TableCell>
                   <TableCell>{formatDate(report.submitted_at)}</TableCell>
                   <TableCell className="text-right">
-                    {canAssign && ((report as Record<string, unknown>).workflow_status || report.status) === "submitted" ? (
+                    {canAssign && ["submitted", "pending_assessment"].includes(((report as Record<string, unknown>).workflow_status || report.status) as string) ? (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="sm" onClick={(e) => e.stopPropagation()}>
