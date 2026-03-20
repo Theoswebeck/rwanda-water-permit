@@ -9,6 +9,7 @@ import { PermitPublicActions } from "@/components/public/permit-public-actions";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { isConcessionApplication } from "@/lib/permit-variant";
 import { PermitLocationMap } from "@/components/public/permit-location-map";
+import { Tx } from "@/components/ui/tx";
 
 function formatDate(dateString: string): string {
   const raw = dateString.trim();
@@ -118,20 +119,20 @@ export default async function PublicPermitViewPage({
       <div className="container mx-auto px-4 py-10">
         <Card>
           <CardHeader>
-            <CardTitle>Permit verification</CardTitle>
+            <CardTitle><Tx>Permit verification</Tx></CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              We couldn’t load this permit. It may not exist yet, may be inactive, or the permit number format may be invalid.
+              <Tx>We couldn&apos;t load this permit. It may not exist yet, may be inactive, or the permit number format may be invalid.</Tx>
             </p>
             <p className="text-sm">
-              Permit number: <span className="font-mono">{inputPermitNumber}</span>
+              <Tx>Permit number:</Tx> <span className="font-mono">{inputPermitNumber}</span>
             </p>
             <p className="text-sm text-muted-foreground">
-              If you believe this is an error, please contact support from the portal.
+              <Tx>If you believe this is an error, please contact support from the portal.</Tx>
             </p>
             <Link className="text-sm underline" href="/">
-              Back to portal
+              <Tx>Back to portal</Tx>
             </Link>
           </CardContent>
         </Card>
@@ -301,14 +302,14 @@ export default async function PublicPermitViewPage({
                   </div>
                   <div>
                     <div className="text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
-                      Rwanda Water Resources Board
+                      <Tx>Rwanda Water Resources Board</Tx>
                     </div>
-                    <div className="mt-1 text-lg font-medium text-slate-600 md:text-2xl">Permit verification</div>
+                    <div className="mt-1 text-lg font-medium text-slate-600 md:text-2xl"><Tx>Permit verification</Tx></div>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <div className="text-sm font-medium text-slate-500">Permit number</div>
+                  <div className="text-sm font-medium text-slate-500"><Tx>Permit number</Tx></div>
                   <div className="mt-2 rounded-lg border bg-slate-50 px-4 py-2 font-mono text-base">
                     {permit.permit_number}
                   </div>
@@ -318,12 +319,12 @@ export default async function PublicPermitViewPage({
               <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-8">
                 <div>
                   <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-                    Water Permit Certificate
+                    <Tx>Water Permit Certificate</Tx>
                   </h1>
-                  <p className="mt-2 text-base text-slate-600">This page is a read-only verification view.</p>
+                  <p className="mt-2 text-base text-slate-600"><Tx>This page is a read-only verification view.</Tx></p>
                 </div>
                 <Badge variant="outline" className={badge.className}>
-                  {badge.label}
+                  <Tx>{badge.label}</Tx>
                 </Badge>
               </div>
             </div>
@@ -331,23 +332,23 @@ export default async function PublicPermitViewPage({
             <div className="px-8 pb-10 pt-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Permit holder</div>
+                  <div className="text-xs text-slate-500"><Tx>Permit holder</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{applicantName}</div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Issuing authority</div>
+                  <div className="text-xs text-slate-500"><Tx>Issuing authority</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{permit.issuing_authority}</div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Issue date</div>
+                  <div className="text-xs text-slate-500"><Tx>Issue date</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{issueDate ? formatDate(issueDate) : "N/A"}</div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Expiry date</div>
+                  <div className="text-xs text-slate-500"><Tx>Expiry date</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{formatDate(permit.expiry_date)}</div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Water source</div>
+                  <div className="text-xs text-slate-500"><Tx>Water source</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
                     {typeof permit.water_source === "string"
                       ? permit.water_source.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
@@ -355,28 +356,28 @@ export default async function PublicPermitViewPage({
                   </div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Intended water activity</div>
+                  <div className="text-xs text-slate-500"><Tx>Intended water activity</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{intendedWaterActivity}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500">
-                    {isConcessionPermit ? "Surface concession area" : "Authorized volume"}
+                    {isConcessionPermit ? <Tx>Surface concession area</Tx> : <Tx>Authorized volume</Tx>}
                   </div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
                     {isConcessionPermit ? concessionAreaValue : abstractionValue}
                   </div>
                 </div>
                 <div className="rounded-xl border p-4">
-                  <div className="text-xs text-slate-500">Permit duration</div>
+                  <div className="text-xs text-slate-500"><Tx>Permit duration</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{permitDuration}</div>
                 </div>
                 <div className="rounded-xl border p-4 md:col-span-2">
-                  <div className="text-xs text-slate-500">Location</div>
+                  <div className="text-xs text-slate-500"><Tx>Location</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">{location}</div>
                 </div>
                 {permit.application?.project_title ? (
                   <div className="rounded-xl border p-4 md:col-span-2">
-                    <div className="text-xs text-slate-500">Project title</div>
+                    <div className="text-xs text-slate-500"><Tx>Project title</Tx></div>
                     <div className="mt-1 text-sm font-medium text-slate-900">{permit.application.project_title}</div>
                   </div>
                 ) : null}
@@ -388,8 +389,7 @@ export default async function PublicPermitViewPage({
               />
 
               <div className="mt-8 border-t pt-6 text-xs text-slate-500">
-                If you received this link from a QR code on a permit, compare the permit number above with the printed
-                certificate.
+                <Tx>If you received this link from a QR code on a permit, compare the permit number above with the printed certificate.</Tx>
               </div>
               <PermitPublicActions
                 permitNumber={String(permit.permit_number || inputPermitNumber)}

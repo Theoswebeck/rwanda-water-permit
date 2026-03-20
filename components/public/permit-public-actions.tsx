@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type { AppLanguage } from "@/lib/i18n/language";
+import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 type PermitPublicActionsProps = {
   permitNumber: string;
@@ -26,6 +29,13 @@ function openBlobInNewTab(blob: Blob, fallbackFilename: string) {
 export function PermitPublicActions({ permitNumber, canViewPdf }: PermitPublicActionsProps) {
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
 
   const handleViewPdf = async () => {
     if (isLoadingPdf || !canViewPdf) return;
@@ -51,18 +61,18 @@ export function PermitPublicActions({ permitNumber, canViewPdf }: PermitPublicAc
     <div className="mt-6 rounded-xl border bg-slate-50 p-4">
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={handleViewPdf} disabled={!canViewPdf || isLoadingPdf}>
-          {isLoadingPdf ? "Generating PDF..." : "View official permit PDF"}
+          {isLoadingPdf ? tx("Generating PDF...") : tx("View official permit PDF")}
         </Button>
         <Link
           className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground"
           href={`/contract/terms/${encodeURIComponent(permitNumber)}`}
         >
-          View hosted terms
+          {tx("View hosted terms")}
         </Link>
       </div>
       {!canViewPdf ? (
         <p className="mt-2 text-xs text-slate-600">
-          This permit exists in the public registry, but a system-issued PDF is not available for this record.
+          {tx("This permit exists in the public registry, but a system-issued PDF is not available for this record.")}
         </p>
       ) : null}
       {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}

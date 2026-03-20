@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,6 +30,9 @@ import { contractTermsByVariant, splitContractSectionsByLanguage, parseSectionHe
 import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
+import type { AppLanguage } from "@/lib/i18n/language";
+import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 function parseInternalNotes(input: unknown): Record<string, any> | null {
   if (typeof input !== "string" || !input.trim()) return null;
@@ -143,6 +146,13 @@ export default function TermsConditionsPage() {
 
   const [applicationNumber, setApplicationNumber] = useState<string>("");
   const [projectTitle, setProjectTitle] = useState<string>("");
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
 
   useEffect(() => {
     if (!applicationId) return;
@@ -1236,7 +1246,7 @@ export default function TermsConditionsPage() {
                   )}
                   <div>
                     <h1 className="text-lg font-semibold text-foreground sm:text-xl">
-                      Terms &amp; Conditions
+                      {tx("Terms & Conditions")}
                     </h1>
                     {applicationNumber && (
                       <p className="text-sm text-muted-foreground">
@@ -1247,7 +1257,7 @@ export default function TermsConditionsPage() {
                 </div>
                 <Badge variant="outline" className="border-green-200 bg-green-50 text-green-700">
                   <CheckCircle className="mr-1.5 h-3 w-3" />
-                  Approved
+                  {tx("Approved")}
                 </Badge>
               </div>
             </div>
@@ -1264,10 +1274,10 @@ export default function TermsConditionsPage() {
                       <FileCheck className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
                       <div>
                         <p className="text-sm font-medium text-green-800">
-                          Your water permit application has been approved!
+                          {tx("Your water permit application has been approved!")}
                         </p>
                         <p className="mt-1 text-sm text-green-700/80">
-                          Please review and accept the terms and conditions below to receive your digital water permit.
+                          {tx("Please review and accept the terms and conditions below to receive your digital water permit.")}
                         </p>
                       </div>
                     </CardContent>
@@ -1279,7 +1289,7 @@ export default function TermsConditionsPage() {
                       <div className="flex items-center gap-2 border-b px-5 py-4">
                         <Shield className="h-5 w-5 text-primary" />
                         <h2 className="text-base font-semibold text-foreground">
-                          {resolvedTerms?.heading ?? "Terms and Conditions for Water Permit"}
+                          {resolvedTerms?.heading ?? tx("Terms and Conditions for Water Permit")}
                         </h2>
                       </div>
 
@@ -1287,14 +1297,14 @@ export default function TermsConditionsPage() {
                         {isLoadingTerms ? (
                           <div className="flex items-center gap-2 py-12 justify-center text-muted-foreground">
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm">Loading contract terms...</span>
+                            <span className="text-sm">{tx("Loading contract terms...")}</span>
                           </div>
                         ) : termsLoadError ? (
                           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
                             <div className="flex items-start gap-2">
                               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                               <div>
-                                <p className="text-sm font-medium text-amber-800">Could not load terms</p>
+                                <p className="text-sm font-medium text-amber-800">{tx("Could not load terms")}</p>
                                 <p className="mt-1 text-sm text-amber-700">{termsLoadError}</p>
                               </div>
                             </div>
@@ -1345,9 +1355,9 @@ export default function TermsConditionsPage() {
                             <div className="flex items-start gap-2">
                               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                               <div>
-                                <p className="text-sm font-medium text-amber-800">Terms not available</p>
+                                <p className="text-sm font-medium text-amber-800">{tx("Terms not available")}</p>
                                 <p className="mt-1 text-sm text-amber-700">
-                                  We don&apos;t have contract terms configured for this application type yet.
+                                  {tx("We don't have contract terms configured for this application type yet.")}
                                 </p>
                               </div>
                             </div>
@@ -1371,7 +1381,7 @@ export default function TermsConditionsPage() {
                           htmlFor="accept-terms"
                           className="text-sm font-medium leading-snug cursor-pointer select-none"
                         >
-                          I have read, understood, and accept the terms and conditions above, and I agree to comply with all stated requirements
+                          {tx("I have read, understood, and accept the terms and conditions above, and I agree to comply with all stated requirements")}
                         </label>
                       </div>
                     </CardContent>
@@ -1385,15 +1395,15 @@ export default function TermsConditionsPage() {
                       <CheckCircle className="mt-0.5 h-6 w-6 shrink-0 text-green-600" />
                       <div>
                         <p className="text-base font-semibold text-green-800">
-                          Thank you! Your permit has been issued.
+                          {tx("Thank you! Your permit has been issued.")}
                         </p>
                         {issuedPermit?.permitNumber && (
                           <p className="mt-1 text-sm text-green-700/80">
-                            Permit Number: <span className="font-medium">{issuedPermit.permitNumber}</span>
+                            {tx("Permit Number:")} <span className="font-medium">{issuedPermit.permitNumber}</span>
                           </p>
                         )}
                         <p className="mt-2 text-sm text-green-700/80">
-                          Your feedback has been recorded. You can now view your permit or return to the dashboard.
+                          {tx("Your feedback has been recorded. You can now view your permit or return to the dashboard.")}
                         </p>
                       </div>
                     </CardContent>
@@ -1404,14 +1414,14 @@ export default function TermsConditionsPage() {
                       <Link href={`/permit/view/${encodeURIComponent(issuedPermit.permitNumber)}`}>
                         <Button className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
                           <ExternalLink className="mr-2 h-4 w-4" />
-                          View Permit
+                          {tx("View Permit")}
                         </Button>
                       </Link>
                     )}
                     <Link href="/dashboard">
                       <Button variant="outline" className="w-full sm:w-auto">
                         <Home className="mr-2 h-4 w-4" />
-                        Back to Dashboard
+                        {tx("Back to Dashboard")}
                       </Button>
                     </Link>
                   </div>
@@ -1422,10 +1432,10 @@ export default function TermsConditionsPage() {
                   <Card className="border-green-200 bg-green-50/50">
                     <CardContent className="p-4">
                       <p className="text-sm font-medium text-green-800">
-                        Permit issued successfully{issuedPermit?.permitNumber ? ` (${issuedPermit.permitNumber})` : ""}.
+                        {tx("Permit issued successfully")}{issuedPermit?.permitNumber ? ` (${issuedPermit.permitNumber})` : ""}.
                       </p>
                       <p className="mt-1 text-sm text-green-700/80">
-                        Your permit has been issued. Please share your feedback to continue.
+                        {tx("Your permit has been issued. Please share your feedback to continue.")}
                       </p>
                     </CardContent>
                   </Card>
@@ -1433,7 +1443,7 @@ export default function TermsConditionsPage() {
                   <Card>
                     <CardContent className="space-y-5 p-5">
                       <h3 className="text-base font-semibold text-foreground">
-                        How was your experience using the water permit system?
+                        {tx("How was your experience using the water permit system?")}
                       </h3>
 
                       <div className="flex items-center gap-1.5">
@@ -1453,12 +1463,12 @@ export default function TermsConditionsPage() {
                           </button>
                         ))}
                         <span className="ml-2 text-xs text-muted-foreground">
-                          {rating === 0 ? "Select a rating" : `${rating}/5`}
+                          {rating === 0 ? tx("Select a rating") : `${rating}/5`}
                         </span>
                       </div>
 
                       <Textarea
-                        placeholder="Share any feedback to help us improve..."
+                        placeholder={tx("Share any feedback to help us improve...")}
                         rows={4}
                         value={feedback}
                         onChange={(e) => setFeedback(e.target.value)}
@@ -1479,10 +1489,10 @@ export default function TermsConditionsPage() {
                           {isSubmittingFeedback ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Submitting...
+                              {tx("Submitting...")}
                             </>
                           ) : (
-                            "Submit Feedback"
+                            tx("Submit Feedback")
                           )}
                         </Button>
                       </div>
@@ -1507,7 +1517,7 @@ export default function TermsConditionsPage() {
                   ) : (
                     <AlertTriangle className="mr-2 h-4 w-4" />
                   )}
-                  Reject Terms
+                  {tx("Reject Terms")}
                 </Button>
 
                 <Button
@@ -1520,7 +1530,7 @@ export default function TermsConditionsPage() {
                   ) : (
                     <CheckCircle className="mr-2 h-4 w-4" />
                   )}
-                  Accept Terms &amp; Issue Permit
+                  {tx("Accept Terms & Issue Permit")}
                 </Button>
               </div>
             </div>
