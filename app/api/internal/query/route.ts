@@ -89,7 +89,11 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
           'company_name', u.company_name,
           'email', u.email,
           'phone', u.phone,
-          'account_type', u.account_type
+          'account_type', u.account_type,
+          'id_number', u.id_number,
+          'id_type', u.id_type,
+          'company_tin', u.company_tin,
+          'address', u.address
         ) as applicant
         ${wantsDocuments ? `,
         coalesce(
@@ -127,7 +131,11 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
             'company_name', au.company_name,
             'email', au.email,
             'phone', au.phone,
-            'account_type', au.account_type
+            'account_type', au.account_type,
+            'id_number', au.id_number,
+            'id_type', au.id_type,
+            'company_tin', au.company_tin,
+            'address', au.address
           ) as applicant,
           jsonb_build_object(
             'first_name', iu.first_name,
@@ -156,7 +164,11 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
           'mobile_phone', u.mobile_phone,
           'landline_phone', u.landline_phone,
           'company_phone', u.company_phone,
-          'account_type', u.account_type
+          'account_type', u.account_type,
+          'id_number', u.id_number,
+          'id_type', u.id_type,
+          'company_tin', u.company_tin,
+          'address', u.address
         ) as applicant
       from public.permits p
       left join public.applications a on a.id = p.application_id
