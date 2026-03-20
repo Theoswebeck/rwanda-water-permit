@@ -287,9 +287,9 @@ export function ApplicationsList({
   const getStatusBadge = (status: string) => {
     const config = getStatusConfig(status);
     return (
-      <div className={`inline-flex items-center gap-2 text-sm ${config.className}`}>
-        {config.icon}
-        {config.label}
+      <div className={`inline-flex items-center gap-2 text-sm min-w-0 max-w-full ${config.className}`}>
+        <span className="shrink-0">{config.icon}</span>
+        <span className="truncate">{config.label}</span>
       </div>
     );
   };
@@ -672,8 +672,10 @@ export function ApplicationsList({
                       {formatApplicationType(application.application_type, application)}
                     </div>
                   </TableCell>
-                  <TableCell className="px-4 py-4">
-                    {getStatusBadge(getDisplayStatus(application))}
+                  <TableCell className="px-4 py-4 overflow-hidden">
+                    <div className="truncate">
+                      {getStatusBadge(getDisplayStatus(application))}
+                    </div>
                   </TableCell>
                   <TableCell className="text-gray-600 px-4 py-4">
                     <div className="text-sm truncate" title={getLocationDisplay(application)}>
