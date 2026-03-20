@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import type { AppLanguage } from "@/lib/i18n/language";
+import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,9 @@ import { MyDelegations } from "@/components/shared/my-delegations";
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"applications">("applications");
   const { userProfile } = useAuth();
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+  useEffect(() => { setLanguage(getPreferredLanguage()); return subscribeToLanguageChanges(setLanguage); }, []);
 
   const roleDashboards: Record<string, string> = {
     admin: "/admin",
@@ -47,25 +53,25 @@ export default function SettingsPage() {
           <Link href={backHref}>
             <Button variant="ghost" className="gap-1">
               <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              {tx("Back to Dashboard")}
             </Button>
           </Link>
         </div>
         
         <div className="space-y-6">
-          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">Account Settings</h1>
-          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">Manage your account preferences and settings</p>
+          <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">{tx("Account Settings")}</h1>
+          <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">{tx("Manage your account preferences and settings")}</p>
           
           <Tabs defaultValue="general" className="w-full">
             <TabsList className={`w-full max-w-xl grid ${isStaffUser ? 'grid-cols-5' : 'grid-cols-4'}`}>
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-              <TabsTrigger value="security">Security</TabsTrigger>
-              <TabsTrigger value="privacy">Privacy</TabsTrigger>
+              <TabsTrigger value="general">{tx("General")}</TabsTrigger>
+              <TabsTrigger value="notifications">{tx("Notifications")}</TabsTrigger>
+              <TabsTrigger value="security">{tx("Security")}</TabsTrigger>
+              <TabsTrigger value="privacy">{tx("Privacy")}</TabsTrigger>
               {isStaffUser && (
                 <TabsTrigger value="delegations" className="flex items-center gap-1">
                   <UserCheck className="h-3.5 w-3.5" />
-                  Delegations
+                  {tx("Delegations")}
                 </TabsTrigger>
               )}
             </TabsList>
@@ -74,15 +80,15 @@ export default function SettingsPage() {
             <TabsContent value="general" className="space-y-6 pt-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Language & Region</CardTitle>
-                  <CardDescription>Customize your language and regional preferences</CardDescription>
+                  <CardTitle>{tx("Language & Region")}</CardTitle>
+                  <CardDescription>{tx("Customize your language and regional preferences")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="language">Language</Label>
+                    <Label htmlFor="language">{tx("Language")}</Label>
                     <Select defaultValue="en">
                       <SelectTrigger id="language">
-                        <SelectValue placeholder="Select language" />
+                        <SelectValue placeholder={tx("Select language")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="en">English</SelectItem>
@@ -92,10 +98,10 @@ export default function SettingsPage() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="timezone">Time Zone</Label>
+                    <Label htmlFor="timezone">{tx("Time Zone")}</Label>
                     <Select defaultValue="africa-kigali">
                       <SelectTrigger id="timezone">
-                        <SelectValue placeholder="Select timezone" />
+                        <SelectValue placeholder={tx("Select timezone")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="africa-kigali">Africa/Kigali (GMT+2)</SelectItem>
@@ -109,15 +115,15 @@ export default function SettingsPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle>Appearance</CardTitle>
-                  <CardDescription>Customize the application appearance</CardDescription>
+                  <CardTitle>{tx("Appearance")}</CardTitle>
+                  <CardDescription>{tx("Customize the application appearance")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label htmlFor="darkMode">Dark Mode</Label>
+                      <Label htmlFor="darkMode">{tx("Dark Mode")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Switch between light and dark themes
+                        {tx("Switch between light and dark themes")}
                       </p>
                     </div>
                     <Switch id="darkMode" />
@@ -133,35 +139,35 @@ export default function SettingsPage() {
                   <div className="flex items-center">
                     <Bell className="mr-2 h-5 w-5 text-primary" />
                     <div>
-                      <CardTitle>Notification Preferences</CardTitle>
-                      <CardDescription>Manage how you receive notifications</CardDescription>
+                      <CardTitle>{tx("Notification Preferences")}</CardTitle>
+                      <CardDescription>{tx("Manage how you receive notifications")}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label htmlFor="emailNotifications">Email Notifications</Label>
+                      <Label htmlFor="emailNotifications">{tx("Email Notifications")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Receive application updates via email
+                        {tx("Receive application updates via email")}
                       </p>
                     </div>
                     <Switch id="emailNotifications" defaultChecked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label htmlFor="smsNotifications">SMS Notifications</Label>
+                      <Label htmlFor="smsNotifications">{tx("SMS Notifications")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Receive important updates via SMS
+                        {tx("Receive important updates via SMS")}
                       </p>
                     </div>
                     <Switch id="smsNotifications" />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label htmlFor="appNotifications">In-App Notifications</Label>
+                      <Label htmlFor="appNotifications">{tx("In-App Notifications")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Show notifications within the application
+                        {tx("Show notifications within the application")}
                       </p>
                     </div>
                     <Switch id="appNotifications" defaultChecked />
@@ -171,33 +177,33 @@ export default function SettingsPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle>Notification Types</CardTitle>
-                  <CardDescription>Choose what types of notifications you receive</CardDescription>
+                  <CardTitle>{tx("Notification Types")}</CardTitle>
+                  <CardDescription>{tx("Choose what types of notifications you receive")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Application Status Updates</Label>
+                      <Label>{tx("Application Status Updates")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Notifications when your application status changes
+                        {tx("Notifications when your application status changes")}
                       </p>
                     </div>
                     <Switch defaultChecked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Reminders</Label>
+                      <Label>{tx("Reminders")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Reminders for pending actions and deadlines
+                        {tx("Reminders for pending actions and deadlines")}
                       </p>
                     </div>
                     <Switch defaultChecked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Marketing & Announcements</Label>
+                      <Label>{tx("Marketing & Announcements")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        News, updates, and marketing information
+                        {tx("News, updates, and marketing information")}
                       </p>
                     </div>
                     <Switch />
@@ -213,25 +219,25 @@ export default function SettingsPage() {
                   <div className="flex items-center">
                     <Lock className="mr-2 h-5 w-5 text-primary" />
                     <div>
-                      <CardTitle>Password</CardTitle>
-                      <CardDescription>Update your password</CardDescription>
+                      <CardTitle>{tx("Password")}</CardTitle>
+                      <CardDescription>{tx("Update your password")}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="currentPwd">Current Password</Label>
+                    <Label htmlFor="currentPwd">{tx("Current Password")}</Label>
                     <Input id="currentPwd" type="password" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="newPwd">New Password</Label>
+                    <Label htmlFor="newPwd">{tx("New Password")}</Label>
                     <Input id="newPwd" type="password" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPwd">Confirm New Password</Label>
+                    <Label htmlFor="confirmPwd">{tx("Confirm New Password")}</Label>
                     <Input id="confirmPwd" type="password" />
                   </div>
-                  <Button className="mt-2">Update Password</Button>
+                  <Button className="mt-2">{tx("Update Password")}</Button>
                 </CardContent>
               </Card>
               
@@ -240,23 +246,23 @@ export default function SettingsPage() {
                   <div className="flex items-center">
                     <Smartphone className="mr-2 h-5 w-5 text-primary" />
                     <div>
-                      <CardTitle>Two-Factor Authentication</CardTitle>
-                      <CardDescription>Enhance your account security</CardDescription>
+                      <CardTitle>{tx("Two-Factor Authentication")}</CardTitle>
+                      <CardDescription>{tx("Enhance your account security")}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Enable 2FA</Label>
+                      <Label>{tx("Enable 2FA")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Add an extra layer of security to your account
+                        {tx("Add an extra layer of security to your account")}
                       </p>
                     </div>
                     <Switch />
                   </div>
                   <div className="pt-2">
-                    <Button variant="outline">Setup Two-Factor Authentication</Button>
+                    <Button variant="outline">{tx("Setup Two-Factor Authentication")}</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -266,8 +272,8 @@ export default function SettingsPage() {
                   <div className="flex items-center">
                     <Mail className="mr-2 h-5 w-5 text-primary" />
                     <div>
-                      <CardTitle>Email Verification</CardTitle>
-                      <CardDescription>Verify your email address</CardDescription>
+                      <CardTitle>{tx("Email Verification")}</CardTitle>
+                      <CardDescription>{tx("Verify your email address")}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -275,9 +281,9 @@ export default function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">jane.doe@example.com</p>
-                      <p className="text-sm text-green-600">Verified</p>
+                      <p className="text-sm text-green-600">{tx("Verified")}</p>
                     </div>
-                    <Button variant="outline">Change Email</Button>
+                    <Button variant="outline">{tx("Change Email")}</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -290,26 +296,26 @@ export default function SettingsPage() {
                   <div className="flex items-center">
                     <Shield className="mr-2 h-5 w-5 text-primary" />
                     <div>
-                      <CardTitle>Privacy Settings</CardTitle>
-                      <CardDescription>Manage your privacy preferences</CardDescription>
+                      <CardTitle>{tx("Privacy Settings")}</CardTitle>
+                      <CardDescription>{tx("Manage your privacy preferences")}</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Data Sharing</Label>
+                      <Label>{tx("Data Sharing")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Allow sharing anonymized data for service improvement
+                        {tx("Allow sharing anonymized data for service improvement")}
                       </p>
                     </div>
                     <Switch defaultChecked />
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                      <Label>Analytics Cookies</Label>
+                      <Label>{tx("Analytics Cookies")}</Label>
                       <p className="text-sm text-muted-foreground">
-                        Allow analytics cookies to improve our services
+                        {tx("Allow analytics cookies to improve our services")}
                       </p>
                     </div>
                     <Switch defaultChecked />
@@ -319,17 +325,17 @@ export default function SettingsPage() {
               
               <Card>
                 <CardHeader>
-                  <CardTitle>Data Management</CardTitle>
-                  <CardDescription>Manage your personal data</CardDescription>
+                  <CardTitle>{tx("Data Management")}</CardTitle>
+                  <CardDescription>{tx("Manage your personal data")}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <p className="text-sm">
-                      You can request a copy of your personal data or delete your account at any time.
+                      {tx("You can request a copy of your personal data or delete your account at any time.")}
                     </p>
                     <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
-                      <Button variant="outline">Download My Data</Button>
-                      <Button variant="destructive">Delete Account</Button>
+                      <Button variant="outline">{tx("Download My Data")}</Button>
+                      <Button variant="destructive">{tx("Delete Account")}</Button>
                     </div>
                   </div>
                 </CardContent>

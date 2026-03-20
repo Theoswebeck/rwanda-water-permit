@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import type { AppLanguage } from "@/lib/i18n/language";
+import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import { motion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -42,6 +45,9 @@ function WaterUseReportContent() {
   const permitId = searchParams.get('permit_id');
   const reportId = searchParams.get('id');
   const { userProfile } = useAuth();
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+  useEffect(() => { setLanguage(getPreferredLanguage()); return subscribeToLanguageChanges(setLanguage); }, []);
 
   const [permit, setPermit] = useState<PermitWithApplication | null>(null);
   const [existingReport, setExistingReport] = useState<WaterUseReportWithRelations | null>(null);
@@ -257,13 +263,13 @@ function WaterUseReportContent() {
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
-              <h2 className="text-2xl font-medium text-green-900 mb-2">Report Submitted!</h2>
+              <h2 className="text-2xl font-medium text-green-900 mb-2">{tx("Report Submitted!")}</h2>
               <p className="text-green-700 mb-4">
-                Your annual water use report has been submitted successfully.
+                {tx("Your annual water use report has been submitted successfully.")}
               </p>
               <p className="text-sm text-muted-foreground flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Redirecting to dashboard...
+                {tx("Redirecting to dashboard...")}
               </p>
             </motion.div>
           </div>
@@ -280,13 +286,13 @@ function WaterUseReportContent() {
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                {error || 'Permit not found. Please select a valid permit.'}
+                {error || tx('Permit not found. Please select a valid permit.')}
               </AlertDescription>
             </Alert>
             <Link href="/dashboard" className="mt-4 inline-block">
               <Button variant="outline">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
+                {tx("Back to Dashboard")}
               </Button>
             </Link>
           </div>
@@ -305,7 +311,7 @@ function WaterUseReportContent() {
             <Link href="/dashboard">
               <Button variant="ghost" className="gap-1">
                 <ArrowLeft className="h-4 w-4" />
-                Back to Dashboard
+                {tx("Back to Dashboard")}
               </Button>
             </Link>
           </div>
@@ -318,16 +324,16 @@ function WaterUseReportContent() {
           >
             <div>
               <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
-                Annual Water Use Report
+                {tx("Annual Water Use Report")}
               </h1>
               <p className="text-muted-foreground mt-2">
-                Submit your annual water resources use report as required by Ministerial Order No 001/MoE/24 of 02/04/2024.
+                {tx("Submit your annual water resources use report as required by Ministerial Order No 001/MoE/24 of 02/04/2024.")}
               </p>
               <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-800">
-                  <span className="font-medium">Permit:</span> {permit.permit_number} • 
-                  <span className="font-medium ml-2">Reporting Year:</span> {reportingYear} • 
-                  <span className="font-medium ml-2">Template:</span> {template === 'abstraction' ? 'Abstraction Uses' : 'Concession Uses'}
+                  <span className="font-medium">{tx("Permit:")}</span> {permit.permit_number} •
+                  <span className="font-medium ml-2">{tx("Reporting Year:")}</span> {reportingYear} •
+                  <span className="font-medium ml-2">{tx("Template:")}</span> {template === 'abstraction' ? tx('Abstraction Uses') : tx('Concession Uses')}
                 </p>
               </div>
             </div>
@@ -345,7 +351,7 @@ function WaterUseReportContent() {
               <Alert className="border-green-200 bg-green-50">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <AlertDescription className="text-green-800">
-                  Draft saved successfully.
+                  {tx("Draft saved successfully.")}
                 </AlertDescription>
               </Alert>
             )}
@@ -355,7 +361,7 @@ function WaterUseReportContent() {
               <Alert className="border-amber-200 bg-amber-50">
                 <AlertCircle className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800">
-                  This report has already been submitted. You can view it but cannot make changes.
+                  {tx("This report has already been submitted. You can view it but cannot make changes.")}
                 </AlertDescription>
               </Alert>
             )}
@@ -385,7 +391,7 @@ function WaterUseReportLoading() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            <span className="ml-3">Loading report form...</span>
+            <span className="ml-3">{translateText("Loading report form...", getPreferredLanguage())}</span>
           </div>
         </div>
       </DashboardLayout>

@@ -1,5 +1,9 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
+import type { AppLanguage } from "@/lib/i18n/language";
+import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -28,6 +32,10 @@ export function WaterUseReportStatus({
   activeFilter = "all",
   onFilterChange,
 }: WaterUseReportStatusProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+  useEffect(() => { setLanguage(getPreferredLanguage()); return subscribeToLanguageChanges(setLanguage); }, []);
+
   const stats = {
     total: reports.length,
     draft: reports.filter((r) => r.status === "draft").length,
@@ -48,50 +56,50 @@ export function WaterUseReportStatus({
   const statusCards = [
     {
       key: "all" as const,
-      title: "Total Reports",
+      title: tx("Total Reports"),
       value: stats.total,
-      description: "All water use reports",
+      description: tx("All water use reports"),
       change: thisYearReports > 0 ? `+${thisYearReports}` : "0",
-      changeLabel: "This year",
+      changeLabel: tx("This year"),
       trend: thisYearReports > 0 ? ("up" as const) : ("neutral" as const),
       icon: ClipboardList,
       color: "text-blue-600",
     },
     {
       key: "draft" as const,
-      title: "Draft",
+      title: tx("Draft"),
       value: stats.draft,
-      description: "Reports in progress",
+      description: tx("Reports in progress"),
       change:
         stats.total > 0
           ? `${Math.round((stats.draft / stats.total) * 100)}%`
           : "0%",
-      changeLabel: "Of total reports",
+      changeLabel: tx("Of total reports"),
       trend: stats.draft > 0 ? ("neutral" as const) : ("up" as const),
       icon: FileEdit,
       color: "text-amber-600",
     },
     {
       key: "submitted" as const,
-      title: "Submitted",
+      title: tx("Submitted"),
       value: stats.submitted,
-      description: "Submitted & under review",
+      description: tx("Submitted & under review"),
       change:
         stats.total > 0
           ? `${Math.round((stats.submitted / stats.total) * 100)}%`
           : "0%",
-      changeLabel: "Of total reports",
+      changeLabel: tx("Of total reports"),
       trend: stats.submitted > 0 ? ("neutral" as const) : ("up" as const),
       icon: Send,
       color: "text-indigo-600",
     },
     {
       key: "completed" as const,
-      title: "Completed",
+      title: tx("Completed"),
       value: stats.completed,
-      description: "Reports reviewed & completed",
+      description: tx("Reports reviewed & completed"),
       change: completionRate > 0 ? `${completionRate}%` : "0%",
-      changeLabel: "Completion rate",
+      changeLabel: tx("Completion rate"),
       trend:
         completionRate > 60
           ? ("up" as const)

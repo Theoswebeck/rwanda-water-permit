@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import type { AppLanguage } from "@/lib/i18n/language";
+import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import {
   Table,
   TableBody,
@@ -55,6 +58,9 @@ export function ApplicantWaterUseReportsList({
   const [searchQuery, setSearchQuery] = useState("");
   const [templateFilter, setTemplateFilter] = useState("all");
   const [localStatusFilter, setLocalStatusFilter] = useState<ReportListStatusFilter>("all");
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  const tx = useCallback((value: string) => translateText(value, language), [language]);
+  useEffect(() => { setLanguage(getPreferredLanguage()); return subscribeToLanguageChanges(setLanguage); }, []);
 
   const effectiveStatusFilter = controlledStatusFilter ?? localStatusFilter;
 
@@ -113,28 +119,28 @@ export function ApplicantWaterUseReportsList({
     switch (status) {
       case "draft":
         return {
-          label: "Draft",
+          label: tx("Draft"),
           icon: <Circle className="h-4 w-4" />,
           className:
             "bg-gray-100 text-gray-700 border-0 hover:bg-gray-100 px-3 py-2 rounded-full font-medium",
         };
       case "submitted":
         return {
-          label: "Submitted",
+          label: tx("Submitted"),
           icon: <Send className="h-4 w-4" />,
           className:
             "bg-blue-100 text-blue-700 border-0 hover:bg-blue-100 px-3 py-2 rounded-full font-medium",
         };
       case "under_review":
         return {
-          label: "Under Review",
+          label: tx("Under Review"),
           icon: <Clock className="h-4 w-4" />,
           className:
             "bg-purple-100 text-purple-700 border-0 hover:bg-purple-100 px-3 py-2 rounded-full font-medium",
         };
       case "completed":
         return {
-          label: "Completed",
+          label: tx("Completed"),
           icon: <CheckCircle2 className="h-4 w-4" />,
           className:
             "bg-green-100 text-green-700 border-0 hover:bg-green-100 px-3 py-2 rounded-full font-medium",
@@ -181,7 +187,7 @@ export function ApplicantWaterUseReportsList({
             : "bg-teal-50 text-teal-700 border-teal-200"
         }
       >
-        {isAbstraction ? "Abstraction" : "Concession"}
+        {isAbstraction ? tx("Abstraction") : tx("Concession")}
       </Badge>
     );
   };
@@ -202,7 +208,7 @@ export function ApplicantWaterUseReportsList({
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading reports...</span>
+        <span className="ml-2">{tx("Loading reports...")}</span>
       </div>
     );
   }
@@ -214,7 +220,7 @@ export function ApplicantWaterUseReportsList({
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by permit number, year, or project..."
+            placeholder={tx("Search by permit number, year, or project...")}
             className="pl-10"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -222,15 +228,15 @@ export function ApplicantWaterUseReportsList({
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-          <Label className="text-sm whitespace-nowrap">Filter by:</Label>
+          <Label className="text-sm whitespace-nowrap">{tx("Filter by:")}</Label>
           <Select value={templateFilter} onValueChange={setTemplateFilter}>
             <SelectTrigger className="w-full sm:w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Templates</SelectItem>
-              <SelectItem value="abstraction">Abstraction</SelectItem>
-              <SelectItem value="concession">Concession</SelectItem>
+              <SelectItem value="all">{tx("All Templates")}</SelectItem>
+              <SelectItem value="abstraction">{tx("Abstraction")}</SelectItem>
+              <SelectItem value="concession">{tx("Concession")}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -248,11 +254,11 @@ export function ApplicantWaterUseReportsList({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="under_review">Under Review</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="all">{tx("All Status")}</SelectItem>
+              <SelectItem value="draft">{tx("Draft")}</SelectItem>
+              <SelectItem value="submitted">{tx("Submitted")}</SelectItem>
+              <SelectItem value="under_review">{tx("Under Review")}</SelectItem>
+              <SelectItem value="completed">{tx("Completed")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -269,7 +275,7 @@ export function ApplicantWaterUseReportsList({
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-900">
-                    {report.reporting_year} Report
+                    {report.reporting_year} {tx("Report")}
                   </p>
                   <p className="text-xs text-gray-500 font-mono">
                     {report.permit?.permit_number ?? "—"}
@@ -285,7 +291,7 @@ export function ApplicantWaterUseReportsList({
                   {getTemplateBadge(report.template)}
                   {report.submitted_at && (
                     <span className="text-xs text-gray-500">
-                      Submitted {formatDate(report.submitted_at)}
+                      {tx("Submitted")} {formatDate(report.submitted_at)}
                     </span>
                   )}
                 </div>
@@ -297,7 +303,7 @@ export function ApplicantWaterUseReportsList({
                       variant="ghost"
                       size="sm"
                       className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                      title="Edit Report"
+                      title={tx("Edit Report")}
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -325,13 +331,13 @@ export function ApplicantWaterUseReportsList({
               <div>
                 <p className="font-medium text-gray-900 mb-1">
                   {reports.length === 0
-                    ? "No water use reports yet"
-                    : "No matches found"}
+                    ? tx("No water use reports yet")
+                    : tx("No matches found")}
                 </p>
                 <p className="text-sm text-gray-500">
                   {reports.length === 0
-                    ? 'Use the "Water Use Reporting" button above to create your first report.'
-                    : "Try adjusting your search or filter criteria."}
+                    ? tx('Use the "Water Use Reporting" button above to create your first report.')
+                    : tx("Try adjusting your search or filter criteria.")}
                 </p>
               </div>
             </div>
@@ -345,25 +351,25 @@ export function ApplicantWaterUseReportsList({
           <TableHeader>
             <TableRow className="hover:bg-transparent bg-gray-50/50">
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[12%]">
-                Year
+                {tx("Year")}
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[18%]">
-                Permit Number
+                {tx("Permit Number")}
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[20%]">
-                Project
+                {tx("Project")}
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[13%]">
-                Template
+                {tx("Template")}
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[15%]">
-                Status
+                {tx("Status")}
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[12%]">
-                Submitted
+                {tx("Submitted")}
               </TableHead>
               <TableHead className="font-semibold text-gray-700 px-4 py-4 w-[10%] text-right">
-                Actions
+                {tx("Actions")}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -418,7 +424,7 @@ export function ApplicantWaterUseReportsList({
                             variant="ghost"
                             size="sm"
                             className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-700 transition-colors"
-                            title="Edit Report"
+                            title={tx("Edit Report")}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -429,7 +435,7 @@ export function ApplicantWaterUseReportsList({
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-                          title="View Report"
+                          title={tx("View Report")}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -451,13 +457,13 @@ export function ApplicantWaterUseReportsList({
                     <div>
                       <p className="font-medium text-gray-900 mb-1">
                         {reports.length === 0
-                          ? "No water use reports yet"
-                          : "No matches found"}
+                          ? tx("No water use reports yet")
+                          : tx("No matches found")}
                       </p>
                       <p className="text-sm text-gray-500">
                         {reports.length === 0
-                          ? 'Use the "Water Use Reporting" button above to create your first report.'
-                          : "Try adjusting your search or filter criteria."}
+                          ? tx('Use the "Water Use Reporting" button above to create your first report.')
+                          : tx("Try adjusting your search or filter criteria.")}
                       </p>
                     </div>
                   </div>
@@ -471,8 +477,8 @@ export function ApplicantWaterUseReportsList({
       {/* Pagination */}
       <div className="flex flex-col gap-3 py-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
-          Page {currentPage} of {totalPages} &bull; Showing{" "}
-          {pagedReports.length} of {filteredReports.length}
+          {tx("Page")} {currentPage} {tx("of")} {totalPages} &bull; {tx("Showing")}{" "}
+          {pagedReports.length} {tx("of")} {filteredReports.length}
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -481,7 +487,7 @@ export function ApplicantWaterUseReportsList({
             disabled={currentPage === 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            Previous
+            {tx("Previous")}
           </Button>
           <Button
             variant="outline"
@@ -489,7 +495,7 @@ export function ApplicantWaterUseReportsList({
             disabled={currentPage === totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            Next
+            {tx("Next")}
           </Button>
         </div>
       </div>
