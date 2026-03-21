@@ -439,11 +439,23 @@ export default function AssessmentApplicationPage() {
   const defaultTabValue = "application_details";
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
   const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
-  const reportTypeForAssessment: ReportType = determineReportType(
-    ((application as any)?.intended_activities as string[] | null | undefined) || null,
-    application?.water_purpose || null,
-    (formData as any)?.waterUseCategory ?? null
-  );
+  const reportTypeForAssessment: ReportType = (() => {
+    let wuc: string | null = null;
+    try {
+      const notes = application?.internal_notes;
+      if (typeof notes === "string") {
+        const parsed = JSON.parse(notes);
+        wuc = parsed?.waterUseCategory ?? null;
+      } else if (notes && typeof notes === "object") {
+        wuc = (notes as any)?.waterUseCategory ?? null;
+      }
+    } catch {}
+    return determineReportType(
+      ((application as any)?.intended_activities as string[] | null | undefined) || null,
+      application?.water_purpose || null,
+      wuc
+    );
+  })();
   const missingFieldReportRequirements = (() => {
     if (isReadOnly || isTransferApp) return [] as string[];
     const missing: string[] = [];
@@ -1983,8 +1995,7 @@ export default function AssessmentApplicationPage() {
                   </Card>
                 ) : (
                 (() => {
-                  const intended = (application as any)?.intended_activities as string[] | null | undefined;
-                  const rt: ReportType = determineReportType(intended || null, application.water_purpose || null, (formData as any)?.waterUseCategory ?? null);
+                  const rt: ReportType = reportTypeForAssessment;
                   return (
                     <FieldReportUpload
                       applicationId={application.id}

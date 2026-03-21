@@ -1018,7 +1018,13 @@ export default function ApproverApplicationPage() {
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               {(() => {
                 const intended = (application as any)?.intended_activities as string[] | null | undefined;
-                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null, formData?.waterUseCategory ?? null);
+                let wuc: string | null = null;
+                try {
+                  const notes = application?.internal_notes;
+                  if (typeof notes === "string") { const p = JSON.parse(notes); wuc = p?.waterUseCategory ?? null; }
+                  else if (notes && typeof notes === "object") { wuc = (notes as any)?.waterUseCategory ?? null; }
+                } catch {}
+                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null, wuc);
                 return (
                   <FieldReportUpload
                     applicationId={application.id}
