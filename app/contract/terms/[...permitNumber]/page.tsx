@@ -20,10 +20,11 @@ export default async function PublicContractTermsPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ permitNumber: string }>;
+  params: Promise<{ permitNumber: string[] }>;
   searchParams?: Promise<{ variant?: string }>;
 }) {
-  const { permitNumber: permitNumberParam } = await params;
+  const { permitNumber: segments } = await params;
+  const permitNumberParam = decodeURIComponent(segments.join("/"));
   const { inputPermitNumber, permit } = await findPublicPermitByNumber(permitNumberParam, {
     includeRegistryFallback: false,
   });

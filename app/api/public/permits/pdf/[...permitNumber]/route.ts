@@ -122,9 +122,10 @@ function applyPermitAllowanceToApplication(
   return next;
 }
 
-export async function GET(req: NextRequest, context: { params: Promise<{ permitNumber: string }> }) {
+export async function GET(req: NextRequest, context: { params: Promise<{ permitNumber: string[] }> }) {
   try {
-    const { permitNumber } = await context.params;
+    const { permitNumber: segments } = await context.params;
+    const permitNumber = decodeURIComponent(segments.join("/"));
     const ip = getClientIp(req);
     const throttleKey = `${ip}:${permitNumber.toUpperCase()}`;
     if (!checkRateLimit(throttleKey)) {

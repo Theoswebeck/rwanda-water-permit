@@ -103,9 +103,13 @@ function statusBadgeVariant(status: PermitStatus): { label: string; className: s
 export default async function PublicPermitViewPage({
   params,
 }: {
-  params: Promise<{ permitNumber: string }>;
+  params: Promise<{ permitNumber: string[] }>;
 }) {
-  const { permitNumber: permitNumberParam } = await params;
+  const { permitNumber: segments } = await params;
+  // Permit numbers contain slashes (e.g. "000022/RWB/2026"). When %2F is
+  // decoded by the server the single segment becomes multiple path parts.
+  // The catch-all route collects them so we can rejoin here.
+  const permitNumberParam = decodeURIComponent(segments.join("/"));
   const { inputPermitNumber, permit } = await findPublicPermitByNumber(permitNumberParam, {
     includeRegistryFallback: true,
   });

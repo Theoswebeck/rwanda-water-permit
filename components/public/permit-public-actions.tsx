@@ -42,7 +42,7 @@ export function PermitPublicActions({ permitNumber, canViewPdf }: PermitPublicAc
     setError(null);
     setIsLoadingPdf(true);
     try {
-      const url = `/api/public/permits/${encodeURIComponent(permitNumber)}/pdf`;
+      const url = `/api/public/permits/pdf/${encodeURIComponent(permitNumber)}`;
       const res = await fetch(url, { method: "GET" });
       if (!res.ok) {
         const json = (await res.json().catch(() => null)) as { message?: string } | null;

@@ -154,12 +154,12 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Section 3: Water Source */}
+      {/* Section 2: Water Source */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Droplet className="h-5 w-5" />
-            3. Water Source
+            2. Water Source
           </CardTitle>
           <CardDescription>
             Water source information (prefilled from application)
@@ -288,7 +288,7 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Section 4: Activity-Specific Fields */}
+      {/* Section 3: Activity-Specific Fields */}
       {reportType === 'abstraction' ? (
         <>
           {/* Amount of water to be abstracted */}
@@ -296,7 +296,7 @@ export function AssessmentReportForm({
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Droplet className="h-5 w-5" />
-                4. Amount of water to be abstracted
+                3. Amount of water to be abstracted
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -356,7 +356,7 @@ export function AssessmentReportForm({
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Droplet className="h-5 w-5" />
-                5. Water balance assessment <span className="text-destructive">*</span>
+                4. Water balance assessment <span className="text-destructive">*</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -449,7 +449,7 @@ export function AssessmentReportForm({
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPin className="h-5 w-5" />
-                4. Surface area to be covered
+                3. Surface area to be covered
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -472,7 +472,7 @@ export function AssessmentReportForm({
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <AlertCircle className="h-5 w-5" />
-                5. Other people's rights <span className="text-destructive">*</span>
+                4. Other people's rights <span className="text-destructive">*</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -503,12 +503,12 @@ export function AssessmentReportForm({
         </>
       )}
 
-      {/* Section 6: Planned wastewater management system */}
+      {/* Section 5: Planned wastewater management system */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Factory className="h-5 w-5" />
-            {reportType === 'abstraction' ? '6' : '6'}. Planned wastewater management system <span className="text-destructive">*</span>
+            5. Planned wastewater management system <span className="text-destructive">*</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -537,12 +537,12 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Section 7: Assessment Report Summary */}
+      {/* Section 6: Assessment Report Summary */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            {reportType === 'abstraction' ? '7' : '7'}. Assessment Report Completion
+            6. Assessment Report Completion
           </CardTitle>
           <CardDescription>
             Report completion details
@@ -565,13 +565,13 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Section 8: Assessor Recommendation */}
+      {/* Section 7: Assessor Recommendation */}
       {recommendation !== undefined && onRecommendationChange && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ThumbsUp className="h-5 w-5" />
-              8. Assessor Recommendation <span className="text-destructive">*</span>
+              7. Assessor Recommendation <span className="text-destructive">*</span>
             </CardTitle>
             <CardDescription>
               Based on your field assessment, provide your recommendation
