@@ -488,7 +488,7 @@ const applicationFormSchema = z.object({
     }
   }
 
-  const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "construction_of_infrastructures"];
+  const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities"];
   const hasNonFishActivity = selectedActivities.some((a) => a && !nonAbstractionActivities.includes(a));
   if (hasNonFishActivity) {
     // Tab-specific validation will handle the requirement
@@ -1761,7 +1761,7 @@ export function ApplicationForm({
     const intended = form.getValues('intendedActivities') || [];
     const selectedActivity = intended[0];
     const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
-    const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities', 'construction_of_infrastructures'];
+    const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities'];
     const requiresConcessionPolygons = intended.some((a: string) => concessionActivities.includes(a));
     const requiresAbstractionDetails = intended.some((a: string) => a && !nonAbstractionActivities.includes(a));
     const requiresRecreationDetails = intended.includes('recreation_activities');
@@ -2299,7 +2299,7 @@ export function ApplicationForm({
         if (!hasActivityFields) return true;
         
         const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
-        const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities', 'construction_of_infrastructures'];
+        const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities'];
         const isConcessionActivity = intendedActivities.some((a: string) => concessionActivities.includes(a));
         const isAbstractionActivity = intendedActivities.some((a: string) => a && !nonAbstractionActivities.includes(a));
         
@@ -5932,7 +5932,7 @@ export function ApplicationForm({
                   {/* 9. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "construction_of_infrastructures", "other"];
+                    const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "other"];
                     const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && !nonAbstractionActivities.includes(a));
                     return hasAbstractionActivity ? (
                       <div className="space-y-4">

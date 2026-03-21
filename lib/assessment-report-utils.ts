@@ -171,7 +171,6 @@ export function determineReportType(
     const nonAbstractionActivities = new Set([
       "fish_farming_lakes",
       "recreation_activities",
-      "construction_of_infrastructures",
       "other",
     ]);
     const hasConcessionActivity = cleaned.includes("fish_farming_lakes") || cleaned.includes("recreation_activities");
