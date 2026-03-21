@@ -441,7 +441,8 @@ export default function AssessmentApplicationPage() {
   const hasText = (value: unknown) => typeof value === "string" && value.trim().length > 0;
   const reportTypeForAssessment: ReportType = determineReportType(
     ((application as any)?.intended_activities as string[] | null | undefined) || null,
-    application?.water_purpose || null
+    application?.water_purpose || null,
+    (formData as any)?.waterUseCategory ?? null
   );
   const missingFieldReportRequirements = (() => {
     if (isReadOnly || isTransferApp) return [] as string[];
@@ -784,7 +785,8 @@ export default function AssessmentApplicationPage() {
         
         const isConcessionApp = determineReportType(
           appData.intended_activities as string[] | null,
-          appData.water_purpose || null
+          appData.water_purpose || null,
+          formData?.waterUseCategory ?? null
         ) === "concession";
         const currentRequestedVolume = (() => {
           if (isConcessionApp) {
@@ -1982,7 +1984,7 @@ export default function AssessmentApplicationPage() {
                 ) : (
                 (() => {
                   const intended = (application as any)?.intended_activities as string[] | null | undefined;
-                  const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
+                  const rt: ReportType = determineReportType(intended || null, application.water_purpose || null, (formData as any)?.waterUseCategory ?? null);
                   return (
                     <FieldReportUpload
                       applicationId={application.id}

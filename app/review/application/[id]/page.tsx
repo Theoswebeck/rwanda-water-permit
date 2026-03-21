@@ -535,7 +535,7 @@ export default function ReviewApplicationPage() {
         }
 
         // Prefill assessment report template from current application + merge saved assessor inputs
-        const rt: ReportType = determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null);
+        const rt: ReportType = determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null, formData?.waterUseCategory ?? null);
         setReportType(rt);
         const prefilledReport = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
         const mergedReport = mergeAssessmentReportData(prefilledReport, savedAssessmentReportData || null);

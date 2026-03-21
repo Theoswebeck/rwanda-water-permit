@@ -400,7 +400,8 @@ export default function VerificationApplicationPage() {
 
           const rt: ReportType = determineReportType(
             (appData as any)?.intended_activities as string[] | null,
-            appData.water_purpose || null
+            appData.water_purpose || null,
+            formData?.waterUseCategory ?? null
           );
           setReportType(rt);
           const prefilled = prefillAssessmentReportFromApplication(appData, formData, appData.documents || []);
@@ -454,7 +455,7 @@ export default function VerificationApplicationPage() {
         } else {
           setAssessmentSubmittedDate("");
           // Still set report type for rendering
-          setReportType(determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null));
+          setReportType(determineReportType((appData as any)?.intended_activities as string[] | null, appData.water_purpose || null, formData?.waterUseCategory ?? null));
         }
       } catch (e) {
         console.error("❌ Error fetching verification application:", e);

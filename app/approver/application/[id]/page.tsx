@@ -460,7 +460,8 @@ export default function ApproverApplicationPage() {
         }
         const isConcessionApp = determineReportType(
           (appData as any)?.intended_activities as string[] | null,
-          appData.water_purpose || null
+          appData.water_purpose || null,
+          formData?.waterUseCategory ?? null
         ) === "concession";
         const currentRequestedVolume = (() => {
           if (isConcessionApp) {
@@ -1017,7 +1018,7 @@ export default function ApproverApplicationPage() {
             <TabsContent value="field_report" className="space-y-6 focus-visible:outline-none">
               {(() => {
                 const intended = (application as any)?.intended_activities as string[] | null | undefined;
-                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null);
+                const rt: ReportType = determineReportType(intended || null, application.water_purpose || null, formData?.waterUseCategory ?? null);
                 return (
                   <FieldReportUpload
                     applicationId={application.id}

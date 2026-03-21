@@ -225,6 +225,11 @@ const applicationFormSchema = z.object({
     abstractionMethod: z.string().optional(),
   })).optional(),
   
+  // Water use category – "abstraction" or "concession".
+  // Fish farming in lakes and recreational activities are always concession;
+  // all other activities let the user choose (default: abstraction).
+  waterUseCategory: z.enum(["abstraction", "concession"]).optional(),
+
   // Water Concession (for Aquaculture)
   concessionArea: optionalNumberField,
   concessionAreaUnit: z.string().optional(),
@@ -462,10 +467,11 @@ const applicationFormSchema = z.object({
   // Single activity selection is enforced by schema (.max(1))
   // No need to check for mixing concession and abstraction activities
 
-  const concessionActivities = ["fish_farming_lakes", "recreation_activities"];
-  const hasConcessionActivity = selectedActivities.some((a) => concessionActivities.includes(a));
-  
-  if (hasConcessionActivity) {
+  const pureConcessionActs = ["fish_farming_lakes", "recreation_activities"];
+  const isPureConcessionAct = selectedActivities.some((a) => pureConcessionActs.includes(a));
+  const effectiveCategory = isPureConcessionAct ? "concession" : (data.waterUseCategory ?? "abstraction");
+
+  if (effectiveCategory === "concession") {
     if (data.waterSourcePolygons && data.waterSourcePolygons.length > 0) {
       const hasValidPolygons = data.waterSourcePolygons.every((poly: any) => {
         return (
@@ -488,9 +494,7 @@ const applicationFormSchema = z.object({
     }
   }
 
-  const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities"];
-  const hasNonFishActivity = selectedActivities.some((a) => a && !nonAbstractionActivities.includes(a));
-  if (hasNonFishActivity) {
+  if (effectiveCategory === "abstraction") {
     // Tab-specific validation will handle the requirement
     const latitude = String(data.waterSourceLatitude ?? "").trim();
     const longitude = String(data.waterSourceLongitude ?? "").trim();
@@ -1603,9 +1607,19 @@ export function ApplicationForm({
   const watchedCategoryApplicant = form.watch("categoryApplicant");
   const watchedWaterSourceType = form.watch("waterSourceType");
   const watchedIntendedActivities = form.watch("intendedActivities");
+  const watchedWaterUseCategory = form.watch("waterUseCategory");
   const watchedOwnsAllLand = form.watch("ownsAllLand");
   const watchedCertificationAgreement = form.watch("certificationAgreement");
   const watchedIrrigationTotalArea = form.watch("irrigationTotalArea");
+
+  // Derived: effective water use category.
+  // Fish farming in lakes & recreational activities → always concession.
+  // All other activities → user-selectable, defaulting to abstraction.
+  const pureConcessionActivities = ["fish_farming_lakes", "recreation_activities"];
+  const isPureConcession = watchedIntendedActivities?.some((a: string) => pureConcessionActivities.includes(a)) ?? false;
+  const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcession
+    ? "concession"
+    : (watchedWaterUseCategory ?? "abstraction");
   const [additionalDocuments, setAdditionalDocuments] = useState<Array<{
     id: string;
     name: string;
@@ -1760,10 +1774,12 @@ export function ApplicationForm({
 
     const intended = form.getValues('intendedActivities') || [];
     const selectedActivity = intended[0];
-    const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
-    const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities'];
-    const requiresConcessionPolygons = intended.some((a: string) => concessionActivities.includes(a));
-    const requiresAbstractionDetails = intended.some((a: string) => a && !nonAbstractionActivities.includes(a));
+    const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities'];
+    const isPureConcessionAct = intended.some((a: string) => pureConcessionActs.includes(a));
+    const savedCategory = form.getValues('waterUseCategory');
+    const effectiveCat = isPureConcessionAct ? 'concession' : (savedCategory ?? 'abstraction');
+    const requiresConcessionPolygons = effectiveCat === 'concession';
+    const requiresAbstractionDetails = effectiveCat === 'abstraction';
     const requiresRecreationDetails = intended.includes('recreation_activities');
 
     const hasText = (value: unknown) => String(value ?? '').trim() !== '';
@@ -2298,10 +2314,12 @@ export function ApplicationForm({
         
         if (!hasActivityFields) return true;
         
-        const concessionActivities = ['fish_farming_lakes', 'recreation_activities'];
-        const nonAbstractionActivities = ['fish_farming_lakes', 'recreation_activities'];
-        const isConcessionActivity = intendedActivities.some((a: string) => concessionActivities.includes(a));
-        const isAbstractionActivity = intendedActivities.some((a: string) => a && !nonAbstractionActivities.includes(a));
+        const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities'];
+        const isPureConcessionAct = intendedActivities.some((a: string) => pureConcessionActs.includes(a));
+        const savedCat = form.getValues('waterUseCategory');
+        const effectiveCat = isPureConcessionAct ? 'concession' : (savedCat ?? 'abstraction');
+        const isConcessionActivity = effectiveCat === 'concession';
+        const isAbstractionActivity = effectiveCat === 'abstraction';
         
         if (isConcessionActivity) {
           const polygons = form.watch('waterSourcePolygons') || form.getValues('waterSourcePolygons') || [];
@@ -4197,8 +4215,47 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Abstraction Point (LAT, LONG) - hidden for concession activities (fish farming in lakes, recreational activities) */}
-                  {!(watchedIntendedActivities?.includes("fish_farming_lakes") || watchedIntendedActivities?.includes("recreation_activities")) && (
+                  {/* Water Use Category selector – shown for activities that are not pure-concession */}
+                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isPureConcession && (
+                    <FormField
+                      control={form.control}
+                      name="waterUseCategory"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-medium">
+                            {tx("Water Use Category *")}
+                          </FormLabel>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            {tx("Select whether this activity involves water abstraction or a water concession.")}
+                          </p>
+                          <FormControl>
+                            <RadioGroup
+                              value={field.value || "abstraction"}
+                              onValueChange={(value) => {
+                                if (readOnly) return;
+                                field.onChange(value);
+                              }}
+                              disabled={readOnly}
+                              className={`flex gap-6 ${readOnly ? "cursor-default opacity-60" : ""}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <RadioGroupItem value="abstraction" id="wuc-abstraction" />
+                                <Label htmlFor="wuc-abstraction" className="cursor-pointer">{tx("Abstraction")}</Label>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <RadioGroupItem value="concession" id="wuc-concession" />
+                                <Label htmlFor="wuc-concession" className="cursor-pointer">{tx("Concession")}</Label>
+                              </div>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {/* Water Abstraction Point (LAT, LONG) - shown for abstraction water use category */}
+                  {effectiveWaterUseCategory === "abstraction" && watchedIntendedActivities && watchedIntendedActivities.length > 0 && (
                   <div className="space-y-4">
                         <Label className="text-base font-medium">
                           {tx("8. Water Abstraction Point * (LAT, LONG)")}
@@ -4364,9 +4421,9 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* Water Concession Area - for concession activities (fish farming in lakes, recreational activities) */}
-                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && 
-                   (watchedIntendedActivities.includes("fish_farming_lakes") || watchedIntendedActivities.includes("recreation_activities")) && (
+                  {/* Water Concession Area - shown for concession water use category */}
+                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 &&
+                   effectiveWaterUseCategory === "concession" && (
                     <FormField
                       control={form.control}
                       name="waterSourcePolygons"
@@ -5929,12 +5986,11 @@ export function ApplicationForm({
                     </div>
                   )}
 
-                  {/* 9. Water Abstraction Details - show for abstraction activities (including fish_farming_ponds) */}
+                  {/* 9. Water Abstraction Details - show when effective category is abstraction */}
                   {(() => {
                     const selected = watchedIntendedActivities || [];
-                    const nonAbstractionActivities = ["fish_farming_lakes", "recreation_activities", "other"];
-                    const hasAbstractionActivity = selected.some((a) => a && a.trim() !== "" && !nonAbstractionActivities.includes(a));
-                    return hasAbstractionActivity ? (
+                    const hasActivity = selected.some((a) => a && a.trim() !== "");
+                    return hasActivity && effectiveWaterUseCategory === "abstraction" ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           9. Water Abstraction Details *

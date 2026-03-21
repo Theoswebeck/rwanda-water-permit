@@ -161,31 +161,34 @@ export interface AssessmentReportData {
  */
 export function determineReportType(
   activities?: string[] | null,
-  waterPurpose?: string | null
+  waterPurpose?: string | null,
+  waterUseCategory?: string | null
 ): ReportType {
   // Check intended_activities first (new format)
   if (activities && Array.isArray(activities) && activities.length > 0) {
     const cleaned = activities
       .map((a) => (typeof a === "string" ? a.trim() : ""))
       .filter((a) => a.length > 0);
-    const nonAbstractionActivities = new Set([
+    const pureConcessionActivities = new Set([
       "fish_farming_lakes",
       "recreation_activities",
-      "other",
     ]);
-    const hasConcessionActivity = cleaned.includes("fish_farming_lakes") || cleaned.includes("recreation_activities");
-    const hasAbstractionActivity = cleaned.some((a) => !nonAbstractionActivities.has(a));
-    if (hasConcessionActivity && !hasAbstractionActivity) {
+    const hasPureConcessionActivity = cleaned.some((a) => pureConcessionActivities.has(a));
+    if (hasPureConcessionActivity) {
+      return "concession";
+    }
+    // For all other activities, use the user-selected waterUseCategory
+    if (waterUseCategory === "concession") {
       return "concession";
     }
     return "abstraction";
   }
-  
+
   // Fallback to water_purpose (legacy format)
   if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities') {
     return 'concession';
   }
-  
+
   return 'abstraction';
 }
 
@@ -325,7 +328,8 @@ export function prefillAssessmentReportFromApplication(
   // Determine report type
   const reportType = determineReportType(
     application.intended_activities as string[] | null,
-    application.water_purpose || null
+    application.water_purpose || null,
+    (formData as any)?.waterUseCategory ?? null
   );
   
   // Get activities
