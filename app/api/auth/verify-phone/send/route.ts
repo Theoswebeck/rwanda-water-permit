@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       await query(
         `
         update public.phone_verification_logs
-        set status = 'superseded', updated_at = now()
+        set status = 'expired', updated_at = now()
         where status = 'sent' and user_id = $1
         `,
         [userId]
@@ -152,8 +152,8 @@ export async function POST(request: NextRequest) {
     await query(
       `
       update public.phone_verification_logs
-      set status = 'superseded', updated_at = now()
-      where status = 'sent' and phone_number = $1
+        set status = 'expired', updated_at = now()
+        where status = 'sent' and phone_number = $1
       `,
       [normalizedPhone]
     );
