@@ -47,21 +47,44 @@ export default function RegisterPage() {
     setIsLoading(true);
     
     try {
-      // DEBUG v2: Log ALL formData keys immediately
-      console.log("🔄 Starting registration for:", formData.email);
-      console.log("📋 formData keys:", Object.keys(formData));
-      console.log("📋 formData.companyPhone:", formData.companyPhone);
-      
       const formDataRecord = formData as unknown as Record<string, unknown>;
       const rawCompanyPhone =
         formData.companyPhone ||
         readStringProp(formDataRecord, "companyPhoneNumber") ||
         readStringProp(formDataRecord, "company_phone") ||
         readStringProp(formDataRecord, "company_phone_number");
-      
-      console.log("📞 rawCompanyPhone after fallbacks:", rawCompanyPhone);
-      
-      // Prepare signup data based on account type
+
+      const phoneNumber = normalizeRwandaPhone(
+        formData.accountType === 'company' ? rawCompanyPhone : formData.phone
+      );
+
+      if (!phoneNumber) {
+        setError("Phone number is required for verification.");
+        return;
+      }
+
+      // ── Step 1: Send SMS BEFORE creating the account ──
+      // If SMS delivery fails the user can fix the number and retry
+      // without leaving an orphaned account in the database.
+      const sendRes = await fetch('/api/auth/verify-phone/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber })
+      });
+      const sendJson = await sendRes.json().catch(() => null);
+
+      if (!sendRes.ok || !sendJson?.success) {
+        const detail = sendJson?.error || sendJson?.message || '';
+        const isPhoneFormat = detail.toLowerCase().includes('invalid phone');
+        setError(
+          isPhoneFormat
+            ? `The phone number ${phoneNumber} is not valid. Please enter a Rwandan mobile number in the format 07XXXXXXXX.`
+            : `We could not send a verification code to ${phoneNumber}. Please check the number and try again. (${detail})`
+        );
+        return;
+      }
+
+      // ── Step 2: SMS succeeded — now create the account ──
       const signUpData: Parameters<typeof signUp>[0] = {
         email: formData.email,
         password: formData.password,
@@ -72,37 +95,26 @@ export default function RegisterPage() {
           dateOfBirth: formData.dateOfBirth,
           idNumber: formData.idNumber,
           idType: formData.idType,
-          phone: normalizeRwandaPhone(formData.phone),
+          phone: phoneNumber,
           province: formData.province,
         } : {
           companyName: formData.companyName,
           companyTIN: formData.companyTIN,
           companyAddress: formData.companyAddress,
-          companyPhone: normalizeRwandaPhone(rawCompanyPhone),
+          companyPhone: phoneNumber,
         })
       };
-      // Debug (safe): confirm payload includes companyPhone
-      console.log('🧾 signup payload (masked):', {
-        accountType: signUpData.accountType,
-        email: signUpData.email,
-        companyPhone: signUpData.companyPhone,
-        normalizedPhone: normalizeRwandaPhone(rawCompanyPhone),
-        hasPassword: !!signUpData.password,
-      });
 
       const result = await signUp(signUpData);
-      
+
       if (result.error) {
         console.error("❌ Registration failed:", result.error);
         setError(result.error);
         return;
       }
-      
-      const phoneNumber = normalizeRwandaPhone(
-        formData.accountType === 'company' ? formData.companyPhone : formData.phone
-      );
 
-      // Store the user data for later use
+      console.log("✅ Registration successful");
+
       setUserData({
         email: formData.email,
         accountType: formData.accountType,
@@ -110,38 +122,6 @@ export default function RegisterPage() {
         phoneNumber,
         userId: result.userId
       });
-      
-      console.log("✅ Registration successful");
-
-      if (!phoneNumber) {
-        setError("Phone number is required for verification.");
-        return;
-      }
-
-      // Move to phone step regardless of SMS send outcome — the account
-      // is already created, so staying on the signup form is misleading.
-      let phoneSendError = "";
-      try {
-        const sendRes = await fetch('/api/auth/verify-phone/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phoneNumber, userId: result.userId })
-        });
-        const sendJson = await sendRes.json().catch(() => null);
-        if (!sendRes.ok || !sendJson?.success) {
-          phoneSendError = sendJson?.error || sendJson?.message || 'Failed to send verification code';
-        }
-      } catch {
-        phoneSendError = 'Could not reach the server to send the verification code.';
-      }
-
-      if (phoneSendError) {
-        console.warn("⚠️ Account created but phone SMS failed:", phoneSendError);
-        setError(
-          `Your account was created, but we couldn't send the verification code to ${phoneNumber}. ` +
-          `Please use "Resend Code" below to try again.`
-        );
-      }
 
       setStep("phone");
       
