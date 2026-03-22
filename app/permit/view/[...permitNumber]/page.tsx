@@ -349,7 +349,7 @@ export default async function PublicPermitViewPage({
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Expiry date</Tx></div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{formatDate(permit.expiry_date)}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.expiry_date ? formatDate(permit.expiry_date) : "N/A"}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Water source</Tx></div>
