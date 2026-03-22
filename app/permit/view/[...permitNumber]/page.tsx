@@ -106,13 +106,30 @@ export default async function PublicPermitViewPage({
   params: Promise<{ permitNumber: string[] }>;
 }) {
   const { permitNumber: segments } = await params;
+  if (!Array.isArray(segments) || segments.length === 0) notFound();
   // Permit numbers contain slashes (e.g. "000022/RWB/2026"). When %2F is
   // decoded by the server the single segment becomes multiple path parts.
   // The catch-all route collects them so we can rejoin here.
-  const permitNumberParam = decodeURIComponent(segments.join("/"));
-  const { inputPermitNumber, permit } = await findPublicPermitByNumber(permitNumberParam, {
-    includeRegistryFallback: true,
-  });
+  const permitNumberJoined = segments.join("/");
+  let permitNumberParam = permitNumberJoined;
+  try {
+    permitNumberParam = decodeURIComponent(permitNumberJoined);
+  } catch {
+    // Keep original value when URL decoding fails.
+    permitNumberParam = permitNumberJoined;
+  }
+
+  let inputPermitNumber: string | null = permitNumberParam;
+  let permit: Awaited<ReturnType<typeof findPublicPermitByNumber>>["permit"] = null;
+  try {
+    const result = await findPublicPermitByNumber(permitNumberParam, {
+      includeRegistryFallback: true,
+    });
+    inputPermitNumber = result.inputPermitNumber ?? permitNumberParam;
+    permit = result.permit;
+  } catch (error) {
+    console.error(`[PublicPermitViewPage] Failed to load permit "${permitNumberParam}"`, error);
+  }
   if (!inputPermitNumber) notFound();
 
   const error = !permit;

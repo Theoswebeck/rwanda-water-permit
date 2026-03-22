@@ -16,6 +16,20 @@ export type PublicPermitRecord = JsonRecord & {
   longitude: number | null;
 };
 
+async function safeQuery<T extends JsonRecord = JsonRecord>(
+  sql: string,
+  params: unknown[],
+  context: string
+): Promise<{ rows: T[] } | null> {
+  try {
+    const result = await query<T>(sql, params);
+    return { rows: result.rows };
+  } catch (error) {
+    console.error(`[public-permit-query] ${context}`, error);
+    return null;
+  }
+}
+
 function extractCoordinateFromNotes(
   application: JsonRecord | null | undefined,
   key: "waterSourceLatitude" | "waterSourceLongitude"
@@ -44,7 +58,7 @@ export async function findPublicPermitByNumber(
   }
 
   const lookup = buildPermitLookupCandidates(normalizedInput);
-  const permitRes = await query(
+  const permitRes = await safeQuery(
     `
     select
       p.id,
@@ -88,10 +102,11 @@ export async function findPublicPermitByNumber(
       p.created_at desc nulls last
     limit 1
     `,
-    [lookup.candidateKeys, lookup.raw]
+    [lookup.candidateKeys, lookup.raw],
+    `Primary permit lookup failed for "${lookup.raw}"`
   );
 
-  const permitRow = permitRes.rows[0] as (JsonRecord & { application?: JsonRecord | null; applicant?: JsonRecord | null }) | undefined;
+  const permitRow = permitRes?.rows[0] as (JsonRecord & { application?: JsonRecord | null; applicant?: JsonRecord | null }) | undefined;
   if (permitRow) {
     const application = permitRow.application
       ? {
@@ -121,7 +136,7 @@ export async function findPublicPermitByNumber(
     return { inputPermitNumber: lookup.raw, permit: null };
   }
 
-  const registryRes = await query(
+  const registryRes = await safeQuery(
     `
     select
       pr.id as registry_id,
@@ -150,10 +165,11 @@ export async function findPublicPermitByNumber(
       pr.created_at desc nulls last
     limit 1
     `,
-    [lookup.candidateKeys, lookup.raw]
+    [lookup.candidateKeys, lookup.raw],
+    `Registry permit lookup failed for "${lookup.raw}"`
   );
 
-  const registryRow = registryRes.rows[0] as JsonRecord | undefined;
+  const registryRow = registryRes?.rows[0] as JsonRecord | undefined;
   if (!registryRow) {
     return { inputPermitNumber: lookup.raw, permit: null };
   }
