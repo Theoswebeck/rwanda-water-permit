@@ -3,28 +3,35 @@
 import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import type { AbstractionPointMapProps } from "@/components/maps/AbstractionPointMap";
+import type { MultiPolygonMapProps } from "@/components/maps/MultiPolygonMap";
+import type { CoordinatePoint } from "@/lib/geoUtils";
 import type { AppLanguage } from "@/lib/i18n/language";
 import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 
+const mapLoader = () => (
+  <div className="flex h-[350px] w-full items-center justify-center rounded-lg border bg-slate-50">
+    <span className="text-sm text-slate-400">Loading map…</span>
+  </div>
+);
+
 const AbstractionPointMap = dynamic<AbstractionPointMapProps>(
   () => import("@/components/maps/AbstractionPointMap").then((m) => m.AbstractionPointMap),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-[350px] w-full items-center justify-center rounded-lg border bg-slate-50">
-        <span className="text-sm text-slate-400">Loading map…</span>
-      </div>
-    ),
-  }
+  { ssr: false, loading: mapLoader }
+);
+
+const MultiPolygonMap = dynamic<MultiPolygonMapProps>(
+  () => import("@/components/maps/MultiPolygonMap").then((m) => m.MultiPolygonMap),
+  { ssr: false, loading: mapLoader }
 );
 
 interface PermitLocationMapProps {
   latitude: number | null;
   longitude: number | null;
+  polygons?: CoordinatePoint[][];
 }
 
-export function PermitLocationMap({ latitude, longitude }: PermitLocationMapProps) {
+export function PermitLocationMap({ latitude, longitude, polygons }: PermitLocationMapProps) {
   const [language, setLanguage] = useState<AppLanguage>("en");
   const tx = useCallback((value: string) => translateText(value, language), [language]);
 
@@ -39,7 +46,9 @@ export function PermitLocationMap({ latitude, longitude }: PermitLocationMapProp
     typeof longitude === "number" &&
     Number.isFinite(longitude);
 
-  if (!hasCoordinates) {
+  const hasPolygons = Array.isArray(polygons) && polygons.length > 0 && polygons[0].length >= 3;
+
+  if (!hasCoordinates && !hasPolygons) {
     return null;
   }
 
@@ -48,15 +57,25 @@ export function PermitLocationMap({ latitude, longitude }: PermitLocationMapProp
       <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
         {tx("Permit Map Location")}
       </h3>
-      <div className="text-sm text-slate-700">
-        {tx("Coordinates:")} {latitude.toFixed(6)}, {longitude.toFixed(6)}
-      </div>
-      <AbstractionPointMap
-        latitude={latitude}
-        longitude={longitude}
-        readOnly
-        height="350px"
-      />
+      {hasCoordinates && (
+        <div className="text-sm text-slate-700">
+          {tx("Coordinates:")} {latitude.toFixed(6)}, {longitude.toFixed(6)}
+        </div>
+      )}
+      {hasPolygons ? (
+        <MultiPolygonMap
+          polygons={polygons}
+          activePolygonIndex={0}
+          height="350px"
+        />
+      ) : (
+        <AbstractionPointMap
+          latitude={latitude}
+          longitude={longitude}
+          readOnly
+          height="350px"
+        />
+      )}
     </div>
   );
 }

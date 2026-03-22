@@ -10,6 +10,7 @@ import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { isConcessionApplication } from "@/lib/permit-variant";
 import { PermitLocationMap } from "@/components/public/permit-location-map";
 import { Tx } from "@/components/ui/tx";
+import { geometryToCoordinatePolygons, type CoordinatePoint } from "@/lib/geoUtils";
 
 function formatDate(dateString: string): string {
   const raw = dateString.trim();
@@ -304,6 +305,17 @@ export default async function PublicPermitViewPage({
     return "N/A";
   })();
 
+  const concessionPolygons: CoordinatePoint[][] = (() => {
+    if (!isConcessionPermit || !application) return [];
+    const geom = application.coordinates;
+    if (!geom) return [];
+    try {
+      return geometryToCoordinatePolygons(geom);
+    } catch {
+      return [];
+    }
+  })();
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 py-8">
@@ -407,6 +419,7 @@ export default async function PublicPermitViewPage({
               <PermitLocationMap
                 latitude={permit.latitude}
                 longitude={permit.longitude}
+                polygons={concessionPolygons}
               />
 
               <div className="mt-8 border-t pt-6 text-xs text-slate-500">

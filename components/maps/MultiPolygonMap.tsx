@@ -5,8 +5,9 @@
 // Rwanda Water Resources Board - Water Permit System
 // =============================================
 
-import { MapContainer, TileLayer, Marker, Polygon, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Polygon, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
+import { useEffect } from "react";
 import type { Feature, Polygon as GeoPolygon } from "geojson";
 import {
   coordinatesToGeoJSON,
@@ -14,6 +15,24 @@ import {
   getPolygonSummary,
   type CoordinatePoint,
 } from "@/lib/geoUtils";
+
+function FitBounds({ coords }: { coords: CoordinatePoint[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (coords.length < 2) return;
+    const valid = coords
+      .map((c) => {
+        const lat = typeof c.latitude === "string" ? parseFloat(c.latitude) : c.latitude;
+        const lng = typeof c.longitude === "string" ? parseFloat(c.longitude) : c.longitude;
+        return Number.isFinite(lat) && Number.isFinite(lng) ? ([lat, lng] as [number, number]) : null;
+      })
+      .filter((p): p is [number, number] => p !== null);
+    if (valid.length >= 2) {
+      map.fitBounds(L.latLngBounds(valid), { padding: [30, 30] });
+    }
+  }, [map, coords]);
+  return null;
+}
 
 export interface MultiPolygonMapProps {
   polygons: CoordinatePoint[][];
@@ -44,6 +63,8 @@ export function MultiPolygonMap({ polygons, activePolygonIndex, height }: MultiP
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        <FitBounds coords={active} />
 
         {/* Markers for active polygon */}
         {active.map((coord, index) => {
