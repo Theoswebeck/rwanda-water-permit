@@ -481,7 +481,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   doc.font("Times-Bold").text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 14;
-  doc.font("Times-Roman").text("Director General/", leftX, y);
+  doc.font("Times-Roman").text("Director General", leftX, y);
   doc.text(`Done at Kigali, On ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
   await drawQrFooter(doc, permitNumber);
@@ -639,7 +639,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   y += 30;
   doc.font("Times-Bold").text("Dr. Emmanuel RUKUNDO", leftX, y);
   y += 14;
-  doc.font("Times-Roman").text("Director General/", leftX, y);
+  doc.font("Times-Roman").text("Director General", leftX, y);
   doc.text(`Done at Kigali, On ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
   await drawQrFooter(doc, permitNumber);
