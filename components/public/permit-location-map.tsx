@@ -67,6 +67,8 @@ export function PermitLocationMap({ latitude, longitude, polygons }: PermitLocat
           polygons={polygons}
           activePolygonIndex={0}
           height="350px"
+          fitAllPolygons
+          showMarkersForAll
         />
       ) : (
         <AbstractionPointMap
