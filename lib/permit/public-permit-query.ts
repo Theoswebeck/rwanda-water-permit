@@ -16,20 +16,6 @@ export type PublicPermitRecord = JsonRecord & {
   longitude: number | null;
 };
 
-async function safeQuery<T extends JsonRecord = JsonRecord>(
-  sql: string,
-  params: unknown[],
-  context: string
-): Promise<{ rows: T[] } | null> {
-  try {
-    const result = await query<T>(sql, params);
-    return { rows: result.rows };
-  } catch (error) {
-    console.error(`[public-permit-query] ${context}`, error);
-    return null;
-  }
-}
-
 function extractCoordinateFromNotes(
   application: JsonRecord | null | undefined,
   key: "waterSourceLatitude" | "waterSourceLongitude"
@@ -58,7 +44,7 @@ export async function findPublicPermitByNumber(
   }
 
   const lookup = buildPermitLookupCandidates(normalizedInput);
-  const permitRes = await safeQuery(
+  const permitRes = await query(
     `
     select
       p.id,
@@ -79,12 +65,12 @@ export async function findPublicPermitByNumber(
       row_to_json(a) as application,
       row_to_json(u) as applicant,
       coalesce(
-        case when a.coordinates is not null then st_y(a.coordinates) end,
-        case when oa.coordinates is not null then st_y(oa.coordinates) end
+        case when a.coordinates is not null then st_y(st_centroid(a.coordinates)) end,
+        case when oa.coordinates is not null then st_y(st_centroid(oa.coordinates)) end
       ) as latitude,
       coalesce(
-        case when a.coordinates is not null then st_x(a.coordinates) end,
-        case when oa.coordinates is not null then st_x(oa.coordinates) end
+        case when a.coordinates is not null then st_x(st_centroid(a.coordinates)) end,
+        case when oa.coordinates is not null then st_x(st_centroid(oa.coordinates)) end
       ) as longitude
     from public.permits p
     left join public.applications a on a.id = p.application_id
@@ -102,11 +88,10 @@ export async function findPublicPermitByNumber(
       p.created_at desc nulls last
     limit 1
     `,
-    [lookup.candidateKeys, lookup.raw],
-    `Primary permit lookup failed for "${lookup.raw}"`
+    [lookup.candidateKeys, lookup.raw]
   );
 
-  const permitRow = permitRes?.rows[0] as (JsonRecord & { application?: JsonRecord | null; applicant?: JsonRecord | null }) | undefined;
+  const permitRow = permitRes.rows[0] as (JsonRecord & { application?: JsonRecord | null; applicant?: JsonRecord | null }) | undefined;
   if (permitRow) {
     const application = permitRow.application
       ? {
@@ -136,7 +121,7 @@ export async function findPublicPermitByNumber(
     return { inputPermitNumber: lookup.raw, permit: null };
   }
 
-  const registryRes = await safeQuery(
+  const registryRes = await query(
     `
     select
       pr.id as registry_id,
@@ -165,11 +150,10 @@ export async function findPublicPermitByNumber(
       pr.created_at desc nulls last
     limit 1
     `,
-    [lookup.candidateKeys, lookup.raw],
-    `Registry permit lookup failed for "${lookup.raw}"`
+    [lookup.candidateKeys, lookup.raw]
   );
 
-  const registryRow = registryRes?.rows[0] as JsonRecord | undefined;
+  const registryRow = registryRes.rows[0] as JsonRecord | undefined;
   if (!registryRow) {
     return { inputPermitNumber: lookup.raw, permit: null };
   }
