@@ -221,7 +221,6 @@ export function PermitsList({ permits }: PermitsListProps) {
           <TableHeader className="bg-gray-50">
             <TableRow className="border-b border-gray-200">
               <TableHead className="font-semibold text-gray-900 py-4 px-6">Permit Number</TableHead>
-              <TableHead className="font-semibold text-gray-900 py-4 px-6">Title</TableHead>
               <TableHead className="font-semibold text-gray-900 py-4 px-6">Type</TableHead>
               <TableHead className="font-semibold text-gray-900 py-4 px-6">Issue Date</TableHead>
               <TableHead className="font-semibold text-gray-900 py-4 px-6">Expiration</TableHead>
@@ -246,7 +245,6 @@ export function PermitsList({ permits }: PermitsListProps) {
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell className="text-gray-700 py-4 px-6">{permit.title}</TableCell>
                   <TableCell className="text-gray-700 py-4 px-6">{permit.type}</TableCell>
                   <TableCell className="text-gray-700 py-4 px-6">{formatDate(permit.issueDate)}</TableCell>
                   <TableCell className="py-4 px-6">
@@ -320,7 +318,7 @@ export function PermitsList({ permits }: PermitsListProps) {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                   {permits.length === 0 
                     ? "No permits found in this category."
                     : "No permits match your current filters. Try adjusting your search or filters."
