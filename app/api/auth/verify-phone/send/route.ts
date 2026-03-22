@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
       console.error('❌ Pindo API Error:', smsResult);
       
       // Check for specific sender ID error
-      if (smsResult.message && smsResult.message.includes('Unknown sender id')) {
+      if (smsResult?.message?.includes('Unknown sender id')) {
         console.warn('⚠️ HINT: The Sender ID (PINDO_SENDER_NAME) is not registered. Try using "Pindo" for testing.');
       }
 
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: 'Failed to send SMS',
-          message: smsResult.message || 'SMS service error',
+          message: smsResult?.message || 'SMS service error',
         },
         { status: 400 }
       );
@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'SMS sent successfully',
       requestId: undefined,
-      smsId: smsResult.sms_id,
+      smsId: smsResult?.sms_id,
     });
 
   } catch (error) {

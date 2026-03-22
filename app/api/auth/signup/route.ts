@@ -110,23 +110,69 @@ export async function POST(req: NextRequest) {
     const emailLower = String(email).trim().toLowerCase()
     const passwordHash = await hashPassword(String(password))
 
-    const existing = await query<{ id: string }>(
-      `select id from public.users where lower(trim(email)) = $1 limit 1`,
-      [emailLower]
-    )
-    if (existing.rows[0]?.id) {
-      return NextResponse.json(
-        {
-          success: false,
-          message:
-            'An account with this email already exists. Please log in instead, or delete the existing user before signing up again.',
-        },
-        { status: 409 }
-      )
-    }
-
     const isIndividual = accountType === 'individual'
     const idDigits = String(rest?.identification?.number || rest?.idNumber || '').replace(/\D/g, '')
+
+    const existing = await query<{ id: string; phone_verified: boolean; email_verified: boolean }>(
+      `select id, coalesce(phone_verified, false) as phone_verified, coalesce(email_verified, false) as email_verified
+       from public.users where lower(trim(email)) = $1 limit 1`,
+      [emailLower]
+    )
+
+    if (existing.rows[0]?.id) {
+      const row = existing.rows[0]
+      if (row.phone_verified || row.email_verified) {
+        return NextResponse.json(
+          {
+            success: false,
+            message:
+              'An account with this email already exists. Please log in instead, or delete the existing user before signing up again.',
+          },
+          { status: 409 }
+        )
+      }
+
+      // Orphaned account: user was created but never completed verification.
+      // Update the existing record so the user can retry.
+      await query(
+        `
+        update public.users set
+          password_hash = $2,
+          account_type  = $3::public.account_type,
+          id_type       = $4::public.id_type,
+          id_number     = $5,
+          first_name    = $6,
+          last_name     = $7,
+          date_of_birth = $8::date,
+          phone         = $9,
+          province      = $10::public.province_type,
+          company_name  = $11,
+          company_tin   = $12,
+          company_address = $13,
+          company_phone = $14,
+          updated_at    = now()
+        where id = $15
+        `,
+        [
+          passwordHash,
+          isIndividual ? 'individual' : 'company',
+          isIndividual ? 'national_id' : 'tin',
+          isIndividual ? idDigits : String(rest?.companyTIN || ''),
+          isIndividual ? String(rest?.firstName || 'User') : null,
+          isIndividual ? String(rest?.lastName || 'Profile') : null,
+          isIndividual ? String(rest?.dateOfBirth || '') : null,
+          isIndividual ? String(rest?.phone || '') : null,
+          isIndividual ? (rest?.province || null) : null,
+          isIndividual ? null : String(rest?.companyName || ''),
+          isIndividual ? null : String(rest?.companyTIN || ''),
+          isIndividual ? null : String(rest?.companyAddress || ''),
+          isIndividual ? null : String(rest?.companyPhone || ''),
+          row.id,
+        ]
+      )
+      console.log('♻️ Orphaned account updated for re-registration:', row.id)
+      return NextResponse.json({ success: true, userId: row.id })
+    }
 
     const inserted = await query<{ id: string }>(
       `

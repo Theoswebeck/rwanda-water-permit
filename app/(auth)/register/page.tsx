@@ -113,25 +113,34 @@ export default function RegisterPage() {
       
       console.log("✅ Registration successful");
 
-      // ✅ Phone verification: send code then show verify step
       if (!phoneNumber) {
         setError("Phone number is required for verification.");
         return;
       }
 
-      // #region agent log
-      // Disabled: writing debug logs during dev can create rebuild loops.
-      // #endregion
+      // Move to phone step regardless of SMS send outcome — the account
+      // is already created, so staying on the signup form is misleading.
+      let phoneSendError = "";
+      try {
+        const sendRes = await fetch('/api/auth/verify-phone/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phoneNumber, userId: result.userId })
+        });
+        const sendJson = await sendRes.json().catch(() => null);
+        if (!sendRes.ok || !sendJson?.success) {
+          phoneSendError = sendJson?.error || sendJson?.message || 'Failed to send verification code';
+        }
+      } catch {
+        phoneSendError = 'Could not reach the server to send the verification code.';
+      }
 
-      const sendRes = await fetch('/api/auth/verify-phone/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber, userId: result.userId })
-      });
-      const sendJson = await sendRes.json().catch(() => null);
-      if (!sendRes.ok || !sendJson?.success) {
-        setError(sendJson?.error || sendJson?.message || 'Failed to send phone verification code');
-        return;
+      if (phoneSendError) {
+        console.warn("⚠️ Account created but phone SMS failed:", phoneSendError);
+        setError(
+          `Your account was created, but we couldn't send the verification code to ${phoneNumber}. ` +
+          `Please use "Resend Code" below to try again.`
+        );
       }
 
       setStep("phone");

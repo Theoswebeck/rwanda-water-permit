@@ -545,23 +545,34 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {error && (
-            <div
-              className="mb-4 p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
-              role="alert"
-              aria-live="polite"
-            >
-              <div className="font-medium mb-1">Registration failed</div>
-              <div className="text-red-700/90">{error}</div>
-              {error.toLowerCase().includes("already exists") && (
-                <div className="mt-2">
-                  <Link href="/login" className="text-primary underline underline-offset-2 font-medium">
-                    Go to login
-                  </Link>
-                </div>
-              )}
-            </div>
-          )}
+          {error && (() => {
+            const lower = error.toLowerCase();
+            const isPhoneIssue = lower.includes("phone") || lower.includes("verification code") || lower.includes("sms");
+            const isDuplicate = lower.includes("already exists");
+            const heading = isPhoneIssue
+              ? "Phone verification failed"
+              : isDuplicate
+                ? "Account already exists"
+                : "Registration failed";
+
+            return (
+              <div
+                className="mb-4 p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md"
+                role="alert"
+                aria-live="polite"
+              >
+                <div className="font-medium mb-1">{heading}</div>
+                <div className="text-red-700/90">{error}</div>
+                {isDuplicate && (
+                  <div className="mt-2">
+                    <Link href="/login" className="text-primary underline underline-offset-2 font-medium">
+                      Go to login
+                    </Link>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {localError && (
             <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
               {localError}
