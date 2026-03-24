@@ -93,8 +93,8 @@ export function HeroSection() {
           className="h-full w-full"
         >
           <img 
-            src="/assets/serrah-galos-bVMnhNOfFCo-unsplash.jpg" 
-            alt="Rwanda water scene" 
+            src="/assets/DJI_0123_1.JPG" 
+            alt="Aerial view of boat on Rwanda lake" 
             className="h-full w-full object-cover"
             style={{ position: "absolute" }}
           />
