@@ -260,8 +260,8 @@ export async function GET(req: NextRequest) {
       trendMap[k] = (trendMap[k] || 0) + 1;
     }
     const trend = Object.entries(trendMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-24)
+      .sort(([a], [b]) => b.localeCompare(a)) // newest first
+      .slice(0, 24)
       .map(([month, count]) => ({ month, permitsIssued: count }));
 
     // Month-over-month issuance delta (for "increased from last month" UI chips)
