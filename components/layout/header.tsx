@@ -21,7 +21,7 @@ import { translateText } from "@/lib/i18n/translator";
 
 const navItems = [
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
-  { label: "Resources", href: "/resources" },
+  { label: "Water Use Dashboard", href: "/water-use-dashboard" },
   { label: "Contact", href: "https://rwandawaterpermit.com/contact" },
 ];
 
