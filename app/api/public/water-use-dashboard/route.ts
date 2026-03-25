@@ -270,6 +270,45 @@ export async function GET(req: NextRequest) {
     const permitsIssuedMoMPercent =
       permitsIssuedLastMonth > 0 ? ((permitsIssuedThisMonth - permitsIssuedLastMonth) / permitsIssuedLastMonth) * 100 : null;
 
+    // Year-over-year: same month last year
+    const sameMonthLastYearDate = new Date();
+    sameMonthLastYearDate.setFullYear(sameMonthLastYearDate.getFullYear() - 1);
+    const sameMonthLastYear = monthKey(sameMonthLastYearDate);
+    const permitsIssuedSameMonthLastYear = trendMap[sameMonthLastYear] || 0;
+    const permitsIssuedYoYPercent =
+      permitsIssuedSameMonthLastYear > 0 ? ((permitsIssuedThisMonth - permitsIssuedSameMonthLastYear) / permitsIssuedSameMonthLastYear) * 100 : null;
+
+    // Permits by province
+    const provinceCounts = filtered.reduce((acc: Record<string, number>, p) => {
+      const k = String(p.province ?? "Unknown").trim() || "Unknown";
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+    const provinceTotal = Object.values(provinceCounts).reduce((s, n) => s + n, 0) || 1;
+    const permitsByProvince = Object.entries(provinceCounts)
+      .map(([key, count]) => ({ key, label: key, count, percentage: (count / provinceTotal) * 100 }))
+      .sort((a, b) => b.count - a.count);
+
+    // Permits by catchment basin (level 1), top 8 + "Other"
+    const catchmentCounts = filtered.reduce((acc: Record<string, number>, p) => {
+      const k = String(p.catchment1 ?? "").trim() || "Unknown";
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
+    const catchmentTotal = Object.values(catchmentCounts).reduce((s, n) => s + n, 0) || 1;
+    const catchmentSorted = Object.entries(catchmentCounts).sort((a, b) => b[1] - a[1]);
+    const topCatchments = catchmentSorted.slice(0, 8).map(([key, count]) => ({
+      key,
+      label: key,
+      count,
+      percentage: (count / catchmentTotal) * 100,
+    }));
+    const otherCatchmentCount = catchmentSorted.slice(8).reduce((s, [, n]) => s + n, 0);
+    if (otherCatchmentCount > 0) {
+      topCatchments.push({ key: "other", label: "Other", count: otherCatchmentCount, percentage: (otherCatchmentCount / catchmentTotal) * 100 });
+    }
+    const permitsByCatchment = topCatchments;
+
     const purposeTotal = Object.values(purposeCounts).reduce((s, n) => s + n, 0) || 1;
     const waterSourceTotal = Object.values(waterSourceCounts).reduce((s, n) => s + n, 0) || 1;
 
@@ -323,10 +362,13 @@ export async function GET(req: NextRequest) {
         statusCounts,
         waterUseBySector,
         permitsByWaterSource,
+        permitsByProvince,
+        permitsByCatchment,
         trend,
         permitsIssuedThisMonth,
         permitsIssuedLastMonth,
         permitsIssuedMoMPercent,
+        permitsIssuedYoYPercent,
       },
       map: {
         points,

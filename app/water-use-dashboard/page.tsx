@@ -20,6 +20,10 @@ import {
   ArrowRight,
   AlertTriangle,
   ArrowUpRight,
+  TrendingUp,
+  TrendingDown,
+  MapPin,
+  Waves,
 } from "lucide-react";
 
 function formatNumber(n: number) {
@@ -240,11 +244,11 @@ export default function WaterUseDashboardPage() {
             </Alert>
           ) : null}
 
-          {/* Analytics + Map */}
+          {/* Analytics row 1: sector + water source */}
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="shadow-sm bg-background/70 backdrop-blur rounded-2xl">
               <CardHeader>
-                <CardTitle>Water use by sector (percentages)</CardTitle>
+                <CardTitle>Water use by sector</CardTitle>
                 <CardDescription>Based on permit purpose categories</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -281,37 +285,195 @@ export default function WaterUseDashboardPage() {
 
             <Card className="shadow-sm bg-background/70 backdrop-blur rounded-2xl">
               <CardHeader>
-                <CardTitle>Trends over time</CardTitle>
-                <CardDescription>Permits issued in the last 12 months</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Waves className="h-4 w-4 text-muted-foreground" />
+                  Permits by water source
+                </CardTitle>
+                <CardDescription>Distribution across water source types</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-3">
                 {isLoading ? (
                   <>
                     <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-4/6" />
-                    <Skeleton className="h-4 w-3/6" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-2/3" />
                   </>
                 ) : (
-                  (snapshot?.trend ?? [])
-                    .map((t, idx, arr) => {
-                      const max = Math.max(...arr.map((x) => x.permitsIssued), 1);
-                      const pct = (t.permitsIssued / max) * 100;
-                      return (
-                        <div key={t.month} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="text-muted-foreground w-24">{t.month}</span>
-                          <div className="flex-1">
-                            <div className="h-2 rounded-full bg-muted">
-                              <div className="h-2 rounded-full bg-emerald-600/70" style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                          <span className="font-medium w-8 text-right">{formatNumber(t.permitsIssued)}</span>
+                  (snapshot?.permitsByWaterSource ?? []).slice(0, 8).map((row, idx) => (
+                    <div key={row.key} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={[
+                              "inline-block h-2.5 w-2.5 rounded-full",
+                              idx === 0 ? "bg-emerald-600" : idx === 1 ? "bg-emerald-400" : idx === 2 ? "bg-emerald-300" : "bg-slate-300",
+                            ].join(" ")}
+                          />
+                          <div className="font-medium truncate">{row.label}</div>
                         </div>
-                      );
-                    })
+                        <div className="text-xs text-muted-foreground">{formatNumber(row.count)} permits</div>
+                      </div>
+                      <div className="w-52 flex items-center gap-2">
+                        <Progress value={row.percentage} className="h-2 bg-muted" />
+                        <div className="text-xs text-muted-foreground w-12 text-right">{row.percentage.toFixed(0)}%</div>
+                      </div>
+                    </div>
+                  ))
                 )}
               </CardContent>
             </Card>
           </div>
+
+          {/* Analytics row 2: province + catchment */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card className="shadow-sm bg-background/70 backdrop-blur rounded-2xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  Permits by province
+                </CardTitle>
+                <CardDescription>Geographic distribution across Rwanda</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isLoading ? (
+                  <>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-4/5" />
+                    <Skeleton className="h-4 w-3/5" />
+                  </>
+                ) : (
+                  (snapshot?.permitsByProvince ?? []).map((row, idx) => (
+                    <div key={row.key} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={[
+                              "inline-block h-2.5 w-2.5 rounded-full",
+                              idx === 0 ? "bg-emerald-600" : idx === 1 ? "bg-emerald-400" : idx === 2 ? "bg-emerald-300" : idx === 3 ? "bg-emerald-200" : "bg-slate-300",
+                            ].join(" ")}
+                          />
+                          <div className="font-medium truncate">{row.label}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{formatNumber(row.count)} permits</div>
+                      </div>
+                      <div className="w-52 flex items-center gap-2">
+                        <Progress value={row.percentage} className="h-2 bg-muted" />
+                        <div className="text-xs text-muted-foreground w-12 text-right">{row.percentage.toFixed(0)}%</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm bg-background/70 backdrop-blur rounded-2xl">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Droplets className="h-4 w-4 text-muted-foreground" />
+                  Permits by catchment basin
+                </CardTitle>
+                <CardDescription>Distribution by primary catchment area</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isLoading ? (
+                  <>
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </>
+                ) : (
+                  (snapshot?.permitsByCatchment ?? []).map((row, idx) => (
+                    <div key={row.key} className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={[
+                              "inline-block h-2.5 w-2.5 rounded-full",
+                              idx === 0 ? "bg-emerald-600" : idx === 1 ? "bg-emerald-400" : idx === 2 ? "bg-emerald-300" : "bg-slate-300",
+                            ].join(" ")}
+                          />
+                          <div className="font-medium truncate">{row.label}</div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{formatNumber(row.count)} permits</div>
+                      </div>
+                      <div className="w-52 flex items-center gap-2">
+                        <Progress value={row.percentage} className="h-2 bg-muted" />
+                        <div className="text-xs text-muted-foreground w-12 text-right">{row.percentage.toFixed(0)}%</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Trends (extended to 24 months) */}
+          <Card className="shadow-sm bg-background/70 backdrop-blur rounded-2xl">
+            <CardHeader>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <CardTitle>Trends over time</CardTitle>
+                  <CardDescription>Permits issued over the last 24 months</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {snapshot?.permitsIssuedMoMPercent != null && (
+                    <span className={[
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                      snapshot.permitsIssuedMoMPercent >= 0
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-red-50 text-red-700",
+                    ].join(" ")}>
+                      {snapshot.permitsIssuedMoMPercent >= 0
+                        ? <TrendingUp className="h-3 w-3" />
+                        : <TrendingDown className="h-3 w-3" />}
+                      {snapshot.permitsIssuedMoMPercent >= 0 ? "+" : ""}
+                      {snapshot.permitsIssuedMoMPercent.toFixed(0)}% vs last month
+                    </span>
+                  )}
+                  {snapshot?.permitsIssuedYoYPercent != null && (
+                    <span className={[
+                      "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium",
+                      snapshot.permitsIssuedYoYPercent >= 0
+                        ? "bg-slate-100 text-slate-600"
+                        : "bg-red-50 text-red-700",
+                    ].join(" ")}>
+                      {snapshot.permitsIssuedYoYPercent >= 0
+                        ? <TrendingUp className="h-3 w-3" />
+                        : <TrendingDown className="h-3 w-3" />}
+                      {snapshot.permitsIssuedYoYPercent >= 0 ? "+" : ""}
+                      {snapshot.permitsIssuedYoYPercent.toFixed(0)}% vs last year
+                    </span>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {isLoading ? (
+                <>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/6" />
+                  <Skeleton className="h-4 w-3/6" />
+                </>
+              ) : (
+                (snapshot?.trend ?? [])
+                  .map((t, idx, arr) => {
+                    const max = Math.max(...arr.map((x) => x.permitsIssued), 1);
+                    const pct = (t.permitsIssued / max) * 100;
+                    return (
+                      <div key={t.month} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-muted-foreground w-24">{t.month}</span>
+                        <div className="flex-1">
+                          <div className="h-2 rounded-full bg-muted">
+                            <div className="h-2 rounded-full bg-emerald-600/70" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                        <span className="font-medium w-8 text-right">{formatNumber(t.permitsIssued)}</span>
+                      </div>
+                    );
+                  })
+              )}
+            </CardContent>
+          </Card>
 
           <div data-public-map>
             <PublicPermitsMap points={points} />

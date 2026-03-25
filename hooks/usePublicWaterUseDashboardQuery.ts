@@ -21,10 +21,13 @@ export type PublicWaterUseDashboardResponse = {
     statusCounts: Record<string, number>;
     waterUseBySector: Array<{ key: string; label: string; percentage: number; count: number }>;
     permitsByWaterSource: Array<{ key: string; label: string; percentage: number; count: number }>;
+    permitsByProvince: Array<{ key: string; label: string; count: number; percentage: number }>;
+    permitsByCatchment: Array<{ key: string; label: string; count: number; percentage: number }>;
     trend: Array<{ month: string; permitsIssued: number }>;
     permitsIssuedThisMonth: number;
     permitsIssuedLastMonth: number;
     permitsIssuedMoMPercent: number | null;
+    permitsIssuedYoYPercent: number | null;
   };
   map: {
     points: Array<{
