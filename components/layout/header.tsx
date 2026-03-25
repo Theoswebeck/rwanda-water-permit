@@ -72,27 +72,29 @@ export function Header() {
     <header className="py-4 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between">
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }} 
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5 }}
+            className="min-w-0 flex-1"
           >
-            <Link href="/" className="flex items-center">
+            <Link href="/" className="flex items-center gap-3">
               <Image
                 src="/assets/rwanda_water_board_Logo.png"
                 alt="Rwanda Water Resources Board"
                 width={48}
                 height={48}
-                className="mr-3"
+                className="shrink-0"
               />
-              
-              <span className="text-foreground font-semibold tracking-tight">{tx("Rwanda Water Permit Portal")}</span>
+              <span className="text-foreground font-semibold tracking-tight truncate text-sm sm:text-base">
+                {tx("Rwanda Water Permit Portal")}
+              </span>
             </Link>
           </motion.div>
 
           {/* Desktop Navigation */}
           {shouldShowMinimalHeaderForStaff ? null : (
-            <nav className="hidden md:flex space-x-10">
+            <nav className="hidden md:flex shrink-0 space-x-10">
               {navItems.map((item, index) => (
                 <motion.div
                   key={item.label}
@@ -123,7 +125,7 @@ export function Header() {
             </nav>
           )}
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex shrink-0 items-center gap-3">
             {isDashboardPage && (
               <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
             )}
@@ -190,7 +192,7 @@ export function Header() {
           </div>
 
           {/* Mobile Navigation */}
-          <div className="md:hidden flex items-center gap-2">
+          <div className="md:hidden flex shrink-0 items-center gap-2">
             {isDashboardPage && (
               <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
             )}

@@ -321,10 +321,10 @@ export default async function PublicPermitViewPage({
       <div className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-4xl">
           <div className="rounded-xl border bg-white shadow-sm">
-            <div className="px-8 pt-10">
-              <div className="flex items-start justify-between gap-6">
-                <div className="flex items-center gap-5">
-                  <div className="relative h-20 w-20 overflow-hidden rounded-full border-2 bg-white shadow-sm">
+            <div className="px-4 pt-6 md:px-8 md:pt-10">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-center gap-3 sm:gap-5">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 bg-white shadow-sm sm:h-20 sm:w-20">
                     <Image
                       src="/assets/rwanda_water_board_Logo.png"
                       alt="Rwanda Water Resources Board"
@@ -333,28 +333,28 @@ export default async function PublicPermitViewPage({
                       className="object-contain p-2"
                     />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
+                  <div className="min-w-0">
+                    <div className="text-xl font-bold leading-tight text-slate-900 sm:text-2xl md:text-3xl">
                       <Tx>Rwanda Water Resources Board</Tx>
                     </div>
-                    <div className="mt-1 text-lg font-medium text-slate-600 md:text-2xl"><Tx>Permit verification</Tx></div>
+                    <div className="mt-1 text-base font-medium text-slate-600 sm:text-lg md:text-2xl"><Tx>Permit verification</Tx></div>
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="sm:text-right">
                   <div className="text-sm font-medium text-slate-500"><Tx>Permit number</Tx></div>
-                  <div className="mt-2 rounded-lg border bg-slate-50 px-4 py-2 font-mono text-base">
+                  <div className="mt-2 rounded-lg border bg-slate-50 px-4 py-2 font-mono text-base break-all">
                     {permit.permit_number}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-8">
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-6 md:mt-8 md:pt-8">
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+                  <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl md:text-3xl">
                     <Tx>Water Permit Certificate</Tx>
                   </h1>
-                  <p className="mt-2 text-base text-slate-600"><Tx>This page is a read-only verification view.</Tx></p>
+                  <p className="mt-2 text-sm text-slate-600 sm:text-base"><Tx>This page is a read-only verification view.</Tx></p>
                 </div>
                 <Badge variant="outline" className={badge.className}>
                   <Tx>{badge.label}</Tx>
@@ -362,7 +362,7 @@ export default async function PublicPermitViewPage({
               </div>
             </div>
 
-            <div className="px-8 pb-10 pt-6">
+            <div className="px-4 pb-6 pt-4 md:px-8 md:pb-10 md:pt-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Permit holder</Tx></div>
