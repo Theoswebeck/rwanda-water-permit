@@ -483,9 +483,7 @@ export default function WaterUseDashboardPage() {
             </CardContent>
           </Card>
 
-          <div data-public-map>
-            <PublicPermitsMap catchments={catchments} />
-          </div>
+          {/* Map temporarily hidden — under development */}
         </motion.div>
       </div>
     </div>
