@@ -183,10 +183,6 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       infrastructureEIA: 'environmental_impact_doc',
       infrastructureEngineeringPlans: 'technical_drawings',
       infrastructureFeasibilityStudy: 'other',
-      // Navigation documents
-      navigationGeneralRequirements: 'other',
-      navigationEIA: 'environmental_impact_doc',
-      navigationManagementPlan: 'other',
       // Recreation documents
       recreationGeneralRequirements: 'other',
       recreationEIA: 'environmental_impact_doc',
@@ -425,7 +421,6 @@ function buildInitialDocumentMapFromRecords(documents: Document[]): Record<strin
 
 function inferAdditionalDocumentCategoryFromId(id?: string): string {
   if (!id || typeof id !== "string") return "additional";
-  if (id.startsWith("navigation_")) return "navigation";
   if (id.startsWith("recreation_activities_")) return "recreation_activities";
   if (id.startsWith("construction_of_infrastructures_")) return "construction_of_infrastructures";
   if (id.startsWith("gaz_extraction_")) return "gaz_extraction";

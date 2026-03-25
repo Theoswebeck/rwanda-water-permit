@@ -1526,7 +1526,6 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                   <SelectItem value="livestock">Livestock</SelectItem>
                                   <SelectItem value="mining">Mining</SelectItem>
                                   <SelectItem value="municipal_supply">Municipal Supply</SelectItem>
-                                  <SelectItem value="navigation">Navigation</SelectItem>
                                   <SelectItem value="recreation">Recreation</SelectItem>
                                   <SelectItem value="water_supply">Water Supply</SelectItem>
                                   <SelectItem value="other">Other</SelectItem>

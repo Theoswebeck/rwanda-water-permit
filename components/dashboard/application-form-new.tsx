@@ -4196,7 +4196,6 @@ export function ApplicationForm({
                               { value: "irrigation", label: tx("Irrigation") },
                               { value: "livestock", label: tx("Livestock") },
                               { value: "mining", label: tx("Mining") },
-                              { value: "navigation", label: tx("Navigation") },
                               { value: "recreation_activities", label: tx("Recreational activities") },
                               { value: "water_supply", label: tx("Water supply") },
                               { value: "other", label: tx("Other (specify)") },
@@ -5842,21 +5841,6 @@ export function ApplicationForm({
                             category="infrastructure" 
                             activityType="construction_of_infrastructures" 
                           />
-                        </div>
-                      )}
-
-                      {/* Navigation Details */}
-                      {watchedIntendedActivities?.includes("navigation") && (
-                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
-                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
-                            Navigation Details
-                          </h4>
-
-                          <p className="text-sm text-muted-foreground mb-4">
-                            Upload navigation plans or any supporting documents related to the proposed navigation activity.
-                          </p>
-
-                          <AdditionalDocumentsSection category="navigation" activityType="navigation" />
                         </div>
                       )}
 

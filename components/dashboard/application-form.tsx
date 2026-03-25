@@ -97,8 +97,8 @@ const formSchema = z.object({
   // SECTION 3: INTENDED ACTIVITY
   // Activity Types (multiple selection possible)
   intendedActivities: z.array(z.enum([
-    "irrigation", "construction_of_dam", "aquaculture", "mining", "industry", 
-    "water_supply", "coffee_washing", "electricity_generation", "navigation", 
+    "irrigation", "construction_of_dam", "aquaculture", "mining", "industry",
+    "water_supply", "coffee_washing", "electricity_generation",
     "recreation_activities", "construction_of_infrastructures", "other"
   ])).min(1, { message: "Please select at least one intended activity" }),
   intendedActivityOther: z.string().optional(), // If "Other" is selected

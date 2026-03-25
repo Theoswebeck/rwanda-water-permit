@@ -227,7 +227,6 @@ export function getReportTemplate(intendedActivities: string[] | null | undefine
     'fish_farming_lakes',
     'gas_extraction',
     'port',
-    'navigation',
   ]
 
   if (!intendedActivities || intendedActivities.length === 0) {
