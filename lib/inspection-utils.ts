@@ -8,6 +8,7 @@ import { supabase } from './supabase';
 import type { Application, Permit, User } from '@/types/database';
 import { geometryToCoordinatePolygons } from '@/lib/geoUtils';
 import { getActivityLabel } from '@/lib/assessment-report-utils';
+import { rwandaAdministrativeData } from '@/lib/rwanda-administrative-data';
 
 export interface PermitInspectionData {
   application: Application & {
@@ -827,6 +828,144 @@ function prepareInspectionData(
   };
 }
 
+interface ParsedLocation {
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
+}
+
+const PROVINCE_ALIAS_MAP: Record<string, string> = {
+  eastern: 'East',
+  western: 'West',
+  northern: 'North',
+  southern: 'South',
+  east: 'East',
+  west: 'West',
+  north: 'North',
+  south: 'South',
+  kigali: 'Kigali',
+};
+
+/**
+ * Parse a free-text location string (e.g. "Eastern Province, Kirehe District, Nasho Sector,")
+ * and match each token against the Rwanda administrative hierarchy to fill in
+ * province / district / sector / cell / village.
+ */
+function parseLocationString(raw: string | null | undefined): ParsedLocation {
+  if (!raw || typeof raw !== 'string') return {};
+
+  const tokens = raw
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean)
+    .map(t =>
+      t.replace(/\s+(province|district|sector|cell|village)$/i, '').trim()
+    )
+    .filter(Boolean);
+
+  if (tokens.length === 0) return {};
+
+  const result: ParsedLocation = {};
+  const remaining = new Set(tokens);
+
+  // 1. Identify province
+  for (const token of tokens) {
+    const key = PROVINCE_ALIAS_MAP[token.toLowerCase()];
+    if (key && rwandaAdministrativeData[key]) {
+      result.province = key;
+      remaining.delete(token);
+      break;
+    }
+  }
+
+  // If no province matched via alias, try matching any token directly as a province key
+  if (!result.province) {
+    for (const token of tokens) {
+      if (rwandaAdministrativeData[token]) {
+        result.province = token;
+        remaining.delete(token);
+        break;
+      }
+    }
+  }
+
+  // Build a flat lookup of all districts (and which province they belong to)
+  // so we can still resolve district even if province wasn't found.
+  const districtToProvince: Record<string, string> = {};
+  for (const prov of Object.keys(rwandaAdministrativeData)) {
+    for (const dist of Object.keys(rwandaAdministrativeData[prov])) {
+      districtToProvince[dist.toLowerCase()] = prov;
+    }
+  }
+
+  // 2. Identify district
+  for (const token of remaining) {
+    const lower = token.toLowerCase();
+    if (result.province) {
+      const districts = rwandaAdministrativeData[result.province];
+      const match = Object.keys(districts).find(d => d.toLowerCase() === lower);
+      if (match) {
+        result.district = match;
+        remaining.delete(token);
+        break;
+      }
+    } else if (districtToProvince[lower]) {
+      result.province = districtToProvince[lower];
+      const districts = rwandaAdministrativeData[result.province];
+      result.district = Object.keys(districts).find(d => d.toLowerCase() === lower) || token;
+      remaining.delete(token);
+      break;
+    }
+  }
+
+  // 3. Identify sector
+  if (result.province && result.district) {
+    const sectors = rwandaAdministrativeData[result.province]?.[result.district];
+    if (sectors) {
+      for (const token of remaining) {
+        const match = Object.keys(sectors).find(s => s.toLowerCase() === token.toLowerCase());
+        if (match) {
+          result.sector = match;
+          remaining.delete(token);
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Identify cell
+  if (result.province && result.district && result.sector) {
+    const cells = rwandaAdministrativeData[result.province]?.[result.district]?.[result.sector];
+    if (cells) {
+      for (const token of remaining) {
+        const match = Object.keys(cells).find(c => c.toLowerCase() === token.toLowerCase());
+        if (match) {
+          result.cell = match;
+          remaining.delete(token);
+          break;
+        }
+      }
+    }
+  }
+
+  // 5. Identify village
+  if (result.province && result.district && result.sector && result.cell) {
+    const villages = rwandaAdministrativeData[result.province]?.[result.district]?.[result.sector]?.[result.cell];
+    if (villages) {
+      for (const token of remaining) {
+        if (villages.some(v => v.toLowerCase() === token.toLowerCase())) {
+          result.village = villages.find(v => v.toLowerCase() === token.toLowerCase());
+          break;
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 /**
  * Prepare pre-populated inspection data from a permit_registry entry (no application/permit records).
  */
@@ -838,6 +977,7 @@ function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionDat
   const expirationDate = registry.expiration_date || undefined;
   const waterSourceName = registry.water_source || 'N/A';
   const location = registry.location || '';
+  const parsedLocation = parseLocationString(location);
   const contacts = registry.contact ? `Contact: ${registry.contact}` : 'N/A';
   const authorizedMethod = registry.method_of_water_taking || undefined;
 
@@ -876,17 +1016,23 @@ function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionDat
     waterSourceName,
     waterSourceType: undefined,
     waterPurpose: activityType !== 'N/A' ? activityType : undefined,
-    waterSourceLocation: location || 'N/A',
+    waterSourceLocation: [
+      parsedLocation.village,
+      parsedLocation.cell,
+      parsedLocation.sector,
+      parsedLocation.district,
+      parsedLocation.province,
+    ].filter(Boolean).join(', ') || location || 'N/A',
     coordinates,
     waterSourceLatitude: lat,
     waterSourceLongitude: lng,
     catchmentLevel1: undefined,
     catchmentLevel2: undefined,
-    province: undefined,
-    district: location || '',
-    sector: '',
-    cell: '',
-    village: undefined,
+    province: parsedLocation.province,
+    district: parsedLocation.district || location || '',
+    sector: parsedLocation.sector || '',
+    cell: parsedLocation.cell || '',
+    village: parsedLocation.village,
     allowedQuantity: parsed.allowedQuantity ?? undefined,
     allowedUnit: parsed.allowedUnit ?? undefined,
     authorizedMethod,
