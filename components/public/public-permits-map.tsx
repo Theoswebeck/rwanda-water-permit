@@ -8,7 +8,6 @@ import type { PublicWaterUseDashboardResponse } from "@/hooks/usePublicWaterUseD
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
-const Tooltip = dynamic(() => import("react-leaflet").then((m) => m.Tooltip), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
 
 type CatchmentPoint = PublicWaterUseDashboardResponse["map"]["catchments"][number];
@@ -96,11 +95,6 @@ export function PublicPermitsMap({
                   fillOpacity: 0.7,
                 }}
               >
-                <Tooltip direction="top" offset={[0, -4]} opacity={0.95}>
-                  <span className="font-medium">{c.catchment}</span>
-                  {" — "}
-                  {c.count} permit{c.count !== 1 ? "s" : ""}
-                </Tooltip>
                 <Popup>
                   <div className="min-w-[220px] space-y-2">
                     <div>
