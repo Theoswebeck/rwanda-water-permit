@@ -10,7 +10,11 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PublicPermitsMap } from "@/components/public/public-permits-map";
+import dynamic from "next/dynamic";
+const PublicPermitsMap = dynamic(
+  () => import("@/components/public/public-permits-map").then((m) => m.PublicPermitsMap),
+  { ssr: false }
+);
 import { getDistricts, getSectors } from "@/lib/rwanda-administrative-data";
 import { usePublicWaterUseDashboardQuery } from "@/hooks/usePublicWaterUseDashboardQuery";
 import {

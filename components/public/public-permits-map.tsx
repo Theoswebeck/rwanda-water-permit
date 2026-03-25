@@ -1,14 +1,9 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MapPin } from "lucide-react";
 import type { PublicWaterUseDashboardResponse } from "@/hooks/usePublicWaterUseDashboardQuery";
-
-const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
-const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
-const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
 
 type CatchmentPoint = PublicWaterUseDashboardResponse["map"]["catchments"][number];
 
@@ -42,16 +37,15 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 function bubbleRadius(count: number, maxCount: number): number {
-  // Scale from 8px (1 permit) to 36px (maxCount permits)
   const normalized = maxCount > 1 ? count / maxCount : 1;
   return 8 + Math.round(normalized * 28);
 }
 
 function bubbleColor(count: number, maxCount: number): string {
   const normalized = maxCount > 1 ? count / maxCount : 1;
-  if (normalized > 0.66) return "#059669"; // emerald-600
-  if (normalized > 0.33) return "#34d399"; // emerald-400
-  return "#6ee7b7";                         // emerald-300
+  if (normalized > 0.66) return "#059669";
+  if (normalized > 0.33) return "#34d399";
+  return "#6ee7b7";
 }
 
 export function PublicPermitsMap({
@@ -72,7 +66,7 @@ export function PublicPermitsMap({
           Water use map — by catchment
         </CardTitle>
         <CardDescription>
-          Each bubble represents one catchment basin. Size reflects permit count.
+          Each bubble represents one catchment basin. Size reflects permit count. Click a bubble for details.
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
@@ -96,21 +90,19 @@ export function PublicPermitsMap({
                 }}
               >
                 <Popup>
-                  <div className="min-w-[220px] space-y-2">
-                    <div>
-                      <div className="font-semibold text-base">{c.catchment}</div>
-                      <div className="text-xs text-muted-foreground">Catchment basin</div>
-                    </div>
-                    <div className="text-sm">
-                      <span className="font-medium">{c.count}</span> permit{c.count !== 1 ? "s" : ""}
+                  <div style={{ minWidth: 200 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{c.catchment}</div>
+                    <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Catchment basin</div>
+                    <div style={{ fontSize: 13, marginBottom: 4 }}>
+                      <strong>{c.count}</strong> permit{c.count !== 1 ? "s" : ""}
                     </div>
                     {c.topPurpose && (
-                      <div className="text-xs text-muted-foreground">
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
                         Top use: {PURPOSE_LABELS[c.topPurpose] ?? c.topPurpose}
                       </div>
                     )}
                     {c.topWaterSource && (
-                      <div className="text-xs text-muted-foreground">
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
                         Top source: {SOURCE_LABELS[c.topWaterSource] ?? c.topWaterSource}
                       </div>
                     )}
