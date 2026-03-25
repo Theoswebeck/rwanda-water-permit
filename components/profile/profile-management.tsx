@@ -197,23 +197,23 @@ export function ProfileManagement() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Profile Header */}
       <Card>
         <CardHeader>
-          <div className="flex items-center space-x-4">
-            <Avatar className="h-16 w-16">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:space-x-4">
+            <Avatar className="h-14 w-14 sm:h-16 sm:w-16 shrink-0">
               <AvatarFallback className="text-lg font-semibold">
                 {getInitials()}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
-              <CardTitle className="text-2xl">{getDisplayName()}</CardTitle>
-              <CardDescription className="flex items-center space-x-2 mt-1">
-                <Mail className="h-4 w-4" />
-                <span>{user?.email}</span>
+            <div className="flex-1 min-w-0">
+              <CardTitle className="text-xl sm:text-2xl truncate">{getDisplayName()}</CardTitle>
+              <CardDescription className="flex items-center space-x-2 mt-1 min-w-0">
+                <Mail className="h-4 w-4 shrink-0" />
+                <span className="truncate">{user?.email}</span>
               </CardDescription>
-              <div className="flex items-center space-x-2 mt-2">
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 <Badge className={getRoleColor(userProfile.role)}>
                   <Shield className="h-3 w-3 mr-1" />
                   {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
@@ -223,14 +223,13 @@ export function ProfileManagement() {
                 </Badge>
               </div>
             </div>
-            <div className="flex flex-col items-end space-y-3">
-              <div className="text-right text-sm text-gray-500">
+            <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:space-y-3">
+              <div className="text-sm text-gray-500">
                 <div className="flex items-center">
-                  <Calendar className="h-4 w-4 mr-1" />
+                  <Calendar className="h-4 w-4 mr-1 shrink-0" />
                   Joined {new Date(userProfile.created_at).toLocaleDateString()}
                 </div>
               </div>
-              
               <div className="flex space-x-2">
                 {/* Logout Button */}
                 <LogoutButton size="sm" />
@@ -254,13 +253,13 @@ export function ProfileManagement() {
 
       {/* Profile Management Tabs */}
       <Tabs defaultValue="profile" className="space-y-4">
-        <TabsList className={`grid w-full ${isStaffUser ? 'grid-cols-4' : 'grid-cols-3'}`}>
-          <TabsTrigger value="profile">Profile Information</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="account">Account Details</TabsTrigger>
+        <TabsList className={`grid w-full ${isStaffUser ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+          <TabsTrigger value="profile" className="text-xs sm:text-sm">Profile</TabsTrigger>
+          <TabsTrigger value="security" className="text-xs sm:text-sm">Security</TabsTrigger>
+          <TabsTrigger value="account" className="text-xs sm:text-sm">Account</TabsTrigger>
           {isStaffUser && (
-            <TabsTrigger value="delegations" className="flex items-center gap-1">
-              <UserCheck className="h-3.5 w-3.5" />
+            <TabsTrigger value="delegations" className="flex items-center gap-1 text-xs sm:text-sm">
+              <UserCheck className="h-3.5 w-3.5 shrink-0" />
               Delegations
             </TabsTrigger>
           )}
@@ -270,7 +269,7 @@ export function ProfileManagement() {
         <TabsContent value="profile">
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-4">
                 <div>
                   <CardTitle>Profile Information</CardTitle>
                   <CardDescription>
@@ -278,7 +277,7 @@ export function ProfileManagement() {
                   </CardDescription>
                 </div>
                 {!isEditing && (
-                  <Button onClick={() => setIsEditing(true)} variant="outline">
+                  <Button onClick={() => setIsEditing(true)} variant="outline" className="shrink-0">
                     Edit Profile
                   </Button>
                 )}
@@ -290,7 +289,7 @@ export function ProfileManagement() {
                 <div className="space-y-6">
                   {userProfile.account_type === 'individual' ? (
                     <>
-                      <div className="grid grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <h3 className="text-sm font-medium text-gray-900">First Name</h3>
                           <p className="mt-1 text-sm text-gray-600">{userProfile.first_name || "Not provided"}</p>
@@ -311,7 +310,7 @@ export function ProfileManagement() {
                         <h3 className="text-sm font-medium text-gray-900">Company Name</h3>
                         <p className="mt-1 text-sm text-gray-600">{userProfile.company_name || "Not provided"}</p>
                       </div>
-                      <div className="grid grid-cols-2 gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                           <h3 className="text-sm font-medium text-gray-900">Company Phone</h3>
                           <p className="mt-1 text-sm text-gray-600">{userProfile.company_phone || "Not provided"}</p>
@@ -341,7 +340,7 @@ export function ProfileManagement() {
                 <form onSubmit={handleProfileSubmit} className="space-y-4">
                   {userProfile.account_type === 'individual' ? (
                     <>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="first_name">First Name</Label>
                           <Input
@@ -565,9 +564,9 @@ export function ProfileManagement() {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Account ID</Label>
-                  <div className="flex items-center space-x-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <span className="font-mono text-sm">{userProfile.id}</span>
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <User className="h-4 w-4 text-gray-500 shrink-0" />
+                    <span className="font-mono text-sm break-all">{userProfile.id}</span>
                   </div>
                 </div>
 

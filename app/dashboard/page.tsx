@@ -447,16 +447,16 @@ function DashboardContent() {
             transition={{ duration: 0.3 }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between space-y-2 mb-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
               <div>
-                <h1 className="text-primary leading-tighter max-w-2xl text-4xl font-semibold tracking-tight text-balance lg:leading-[1.1] lg:font-semibold xl:text-5xl xl:tracking-tighter">
+                <h1 className="text-primary leading-tight text-2xl sm:text-4xl font-semibold tracking-tight xl:text-5xl xl:tracking-tighter">
                   {tx("Water Permit Dashboard")}
                 </h1>
-                <p className="leading-relaxed [&:not(:first-child)]:mt-6 text-muted-foreground">
+                <p className="mt-1 text-sm sm:text-base text-muted-foreground">
                   {tx("Manage your water permit applications and view your permits")}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button className="gap-2">
@@ -503,7 +503,8 @@ function DashboardContent() {
                   disabled={databasePermits.length === 0}
                 >
                   <ClipboardList className="h-4 w-4" />
-                  {tx("Water Use Reporting")}
+                  <span className="hidden sm:inline">{tx("Water Use Reporting")}</span>
+                  <span className="sm:hidden">{tx("Reports")}</span>
                 </Button>
               </div>
             </div>
@@ -536,18 +537,19 @@ function DashboardContent() {
 
             {/* Main Content */}
             <Tabs defaultValue="applications" value={activeTab} onValueChange={(value) => setActiveTab(value as "applications" | "permits" | "reports")} className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="applications" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  {tx("Applications")} ({applicantDashboardApplications.length})
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="applications" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span>{tx("Applications")} ({applicantDashboardApplications.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="permits" className="flex items-center gap-2">
-                  <FileCheck className="h-4 w-4" />
-                  {tx("Permits")} ({permits.length})
+                <TabsTrigger value="permits" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+                  <FileCheck className="h-4 w-4 shrink-0" />
+                  <span>{tx("Permits")} ({permits.length})</span>
                 </TabsTrigger>
-                <TabsTrigger value="reports" className="flex items-center gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  {tx("Water Use Reports")} ({waterUseReports.length})
+                <TabsTrigger value="reports" className="flex items-center gap-1 text-xs sm:text-sm sm:gap-2">
+                  <BarChart3 className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">{tx("Water Use Reports")} ({waterUseReports.length})</span>
+                  <span className="sm:hidden">{tx("Reports")} ({waterUseReports.length})</span>
                 </TabsTrigger>
               </TabsList>
               
