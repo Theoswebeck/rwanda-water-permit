@@ -1,53 +1,80 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MapPin } from "lucide-react";
 import type { PublicWaterUseDashboardResponse } from "@/hooks/usePublicWaterUseDashboardQuery";
 
-// Dynamic Leaflet imports (avoid SSR)
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
+const Tooltip = dynamic(() => import("react-leaflet").then((m) => m.Tooltip), { ssr: false });
 const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
 
-type Point = PublicWaterUseDashboardResponse["map"]["points"][number];
+type CatchmentPoint = PublicWaterUseDashboardResponse["map"]["catchments"][number];
 
-const INTENSITY_STYLE: Record<Point["intensity"], { label: string; color: string }> = {
-  very_low: { label: "Very low", color: "#cbd5e1" }, // slate-300
-  low: { label: "Low", color: "#94a3b8" }, // slate-400
-  medium: { label: "Medium", color: "#60a5fa" }, // blue-400
-  high: { label: "High", color: "#f59e0b" }, // amber-500
-  very_high: { label: "Very high", color: "#ef4444" }, // red-500
+const PURPOSE_LABELS: Record<string, string> = {
+  domestic: "Domestic supply",
+  irrigation: "Irrigation",
+  industrial: "Industry",
+  electricity_generation: "Hydropower",
+  mining: "Mining",
+  aquaculture: "Fish farming",
+  fish_farming_lakes: "Fish farming (lakes)",
+  fish_farming_ponds: "Fish farming (ponds)",
+  recreation: "Recreation",
+  municipal_supply: "Municipal supply",
+  livestock: "Livestock",
+  other: "Other",
 };
 
-function radiusFromIntensity(i: Point["intensity"]) {
-  switch (i) {
-    case "very_low":
-      return 4;
-    case "low":
-      return 6;
-    case "medium":
-      return 8;
-    case "high":
-      return 10;
-    case "very_high":
-      return 12;
-  }
+const SOURCE_LABELS: Record<string, string> = {
+  river: "Stream/River",
+  stream: "Stream/River",
+  lake: "Lake",
+  groundwater: "Groundwater",
+  borehole: "Groundwater (Borehole)",
+  surface_water: "Dam/Reservoir",
+  dam: "Dam/Reservoir",
+  reservoir: "Dam/Reservoir",
+  spring: "Spring",
+  wetland: "Wetland",
+  other: "Other",
+};
+
+function bubbleRadius(count: number, maxCount: number): number {
+  // Scale from 8px (1 permit) to 36px (maxCount permits)
+  const normalized = maxCount > 1 ? count / maxCount : 1;
+  return 8 + Math.round(normalized * 28);
 }
 
-export function PublicPermitsMap({ points, height = "520px" }: { points: Point[]; height?: string }) {
+function bubbleColor(count: number, maxCount: number): string {
+  const normalized = maxCount > 1 ? count / maxCount : 1;
+  if (normalized > 0.66) return "#059669"; // emerald-600
+  if (normalized > 0.33) return "#34d399"; // emerald-400
+  return "#6ee7b7";                         // emerald-300
+}
+
+export function PublicPermitsMap({
+  catchments,
+  height = "520px",
+}: {
+  catchments: CatchmentPoint[];
+  height?: string;
+}) {
   const rwandaCenter: [number, number] = [-1.9403, 29.8739];
-  const plotted = points.filter((p) => typeof p.lat === "number" && typeof p.lng === "number") as Array<Point & { lat: number; lng: number }>;
+  const maxCount = Math.max(...catchments.map((c) => c.count), 1);
 
   return (
     <Card className="shadow-sm rounded-2xl bg-background/70 backdrop-blur">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <MapPin className="h-4 w-4 text-muted-foreground" />
-          Water use map (public)
+          Water use map — by catchment
         </CardTitle>
+        <CardDescription>
+          Each bubble represents one catchment basin. Size reflects permit count.
+        </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div style={{ height }} className="w-full overflow-hidden rounded-b-2xl">
@@ -56,47 +83,50 @@ export function PublicPermitsMap({ points, height = "520px" }: { points: Point[]
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {plotted.map((p) => {
-              const style = INTENSITY_STYLE[p.intensity];
-              return (
-                <CircleMarker
-                  key={p.permitId}
-                  center={[p.lat, p.lng]}
-                  radius={radiusFromIntensity(p.intensity)}
-                  pathOptions={{
-                    fillColor: style.color,
-                    color: "#ffffff",
-                    weight: 2,
-                    opacity: 0.9,
-                    fillOpacity: 0.75,
-                  }}
-                >
-                  <Popup>
-                    <div className="min-w-[260px] space-y-2">
-                      <div>
-                        <div className="font-semibold">{p.permitNumber}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {p.district ?? "N/A"}, {p.province ?? "N/A"} • {p.sector ?? "N/A"}
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline">{p.useType}</Badge>
-                        <Badge variant="outline">{p.waterSource}</Badge>
-                        <Badge variant="outline">{INTENSITY_STYLE[p.intensity].label} intensity</Badge>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Catchment: {p.catchment1 ?? "N/A"}
-                      </div>
+            {catchments.map((c) => (
+              <CircleMarker
+                key={c.catchment}
+                center={[c.lat, c.lng]}
+                radius={bubbleRadius(c.count, maxCount)}
+                pathOptions={{
+                  fillColor: bubbleColor(c.count, maxCount),
+                  color: "#ffffff",
+                  weight: 2,
+                  opacity: 0.9,
+                  fillOpacity: 0.7,
+                }}
+              >
+                <Tooltip direction="top" offset={[0, -4]} opacity={0.95}>
+                  <span className="font-medium">{c.catchment}</span>
+                  {" — "}
+                  {c.count} permit{c.count !== 1 ? "s" : ""}
+                </Tooltip>
+                <Popup>
+                  <div className="min-w-[220px] space-y-2">
+                    <div>
+                      <div className="font-semibold text-base">{c.catchment}</div>
+                      <div className="text-xs text-muted-foreground">Catchment basin</div>
                     </div>
-                  </Popup>
-                </CircleMarker>
-              );
-            })}
+                    <div className="text-sm">
+                      <span className="font-medium">{c.count}</span> permit{c.count !== 1 ? "s" : ""}
+                    </div>
+                    {c.topPurpose && (
+                      <div className="text-xs text-muted-foreground">
+                        Top use: {PURPOSE_LABELS[c.topPurpose] ?? c.topPurpose}
+                      </div>
+                    )}
+                    {c.topWaterSource && (
+                      <div className="text-xs text-muted-foreground">
+                        Top source: {SOURCE_LABELS[c.topWaterSource] ?? c.topWaterSource}
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </CircleMarker>
+            ))}
           </MapContainer>
         </div>
       </CardContent>
     </Card>
   );
 }
-
-

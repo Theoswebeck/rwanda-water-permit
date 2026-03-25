@@ -30,22 +30,13 @@ export type PublicWaterUseDashboardResponse = {
     permitsIssuedYoYPercent: number | null;
   };
   map: {
-    points: Array<{
-      permitId: string;
-      permitNumber: string;
-      status: string;
-      waterSource: string;
-      useType: string;
-      province: string | null;
-      district: string | null;
-      sector: string | null;
-      catchment1: string | null;
-      catchment2: string | null;
-      lat: number | null;
-      lng: number | null;
-      intensity: "very_low" | "low" | "medium" | "high" | "very_high";
-      issuedDate: string;
-      expiryDate: string;
+    catchments: Array<{
+      catchment: string;
+      count: number;
+      lat: number;
+      lng: number;
+      topWaterSource: string | null;
+      topPurpose: string | null;
     }>;
   };
   generatedAt: string;

@@ -53,7 +53,7 @@ export default function WaterUseDashboardPage() {
   });
 
   const snapshot = data?.snapshot;
-  const points = data?.map.points ?? [];
+  const catchments = data?.map.catchments ?? [];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-muted/20 to-muted/40">
@@ -476,7 +476,7 @@ export default function WaterUseDashboardPage() {
           </Card>
 
           <div data-public-map>
-            <PublicPermitsMap points={points} />
+            <PublicPermitsMap catchments={catchments} />
           </div>
         </motion.div>
       </div>

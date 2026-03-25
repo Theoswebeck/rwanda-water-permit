@@ -330,31 +330,37 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => b.count - a.count);
 
-    // Map points (public-safe, no volumes)
-    const points = filtered
-      .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-      .map((p) => {
-        const m3Day = convertAllowanceToM3PerDay(Number(p.waterAllowance || 0), p.allowanceUnit);
-        const intensity = bucketFromM3PerDay(m3Day);
-
-        return {
-          permitId: p.permitId,
-          permitNumber: p.permitNumber,
-          status: p.status,
-          waterSource: p.waterSource,
-          useType: p.purpose,
-          province: p.province ?? null,
-          district: p.district ?? null,
-          sector: p.sector ?? null,
-          catchment1: p.catchment1 ?? null,
-          catchment2: p.catchment2 ?? null,
-          lat: p.lat,
-          lng: p.lng,
-          intensity,
-          issuedDate: p.issuedDate,
-          expiryDate: p.expiryDate,
-        };
-      });
+    // Map: aggregate by catchment (no per-permit data exposed)
+    type CatchmentAccum = {
+      lats: number[];
+      lngs: number[];
+      waterSources: Record<string, number>;
+      purposes: Record<string, number>;
+    };
+    const catchmentMap = new Map<string, CatchmentAccum>();
+    for (const p of filtered) {
+      const key = (p.catchment1 ?? "").trim() || "Unknown";
+      if (!catchmentMap.has(key)) catchmentMap.set(key, { lats: [], lngs: [], waterSources: {}, purposes: {} });
+      const acc = catchmentMap.get(key)!;
+      if (Number.isFinite(p.lat) && Number.isFinite(p.lng)) {
+        acc.lats.push(p.lat as number);
+        acc.lngs.push(p.lng as number);
+      }
+      const ws = String(p.waterSource || "other");
+      acc.waterSources[ws] = (acc.waterSources[ws] || 0) + 1;
+      const pu = String(p.purpose || "other");
+      acc.purposes[pu] = (acc.purposes[pu] || 0) + 1;
+    }
+    const catchments = Array.from(catchmentMap.entries())
+      .filter(([, acc]) => acc.lats.length > 0)
+      .map(([catchment, acc]) => {
+        const lat = acc.lats.reduce((s, v) => s + v, 0) / acc.lats.length;
+        const lng = acc.lngs.reduce((s, v) => s + v, 0) / acc.lngs.length;
+        const topWaterSource = Object.entries(acc.waterSources).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+        const topPurpose = Object.entries(acc.purposes).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+        return { catchment, count: acc.lats.length, lat, lng, topWaterSource, topPurpose };
+      })
+      .sort((a, b) => b.count - a.count);
 
     return NextResponse.json({
       snapshot: {
@@ -371,7 +377,7 @@ export async function GET(req: NextRequest) {
         permitsIssuedYoYPercent,
       },
       map: {
-        points,
+        catchments,
       },
       generatedAt: new Date().toISOString(),
     });
