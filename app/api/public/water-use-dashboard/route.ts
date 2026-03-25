@@ -249,9 +249,13 @@ export async function GET(req: NextRequest) {
     }, {});
 
     const trendMap: Record<string, number> = {};
+    const trendFloor = new Date("2000-01-01").getTime();
+    const trendCeiling = today.getTime();
     for (const p of filtered) {
       const issued = p.issuedDate ? new Date(p.issuedDate) : p.createdAt ? new Date(p.createdAt) : undefined;
-      if (!issued) continue;
+      if (!issued || !Number.isFinite(issued.getTime())) continue;
+      const t = issued.getTime();
+      if (t < trendFloor || t > trendCeiling) continue; // reject corrupt/future dates
       const k = monthKey(issued);
       trendMap[k] = (trendMap[k] || 0) + 1;
     }
@@ -278,9 +282,10 @@ export async function GET(req: NextRequest) {
     const permitsIssuedYoYPercent =
       permitsIssuedSameMonthLastYear > 0 ? ((permitsIssuedThisMonth - permitsIssuedSameMonthLastYear) / permitsIssuedSameMonthLastYear) * 100 : null;
 
-    // Permits by province
+    // Permits by province (exclude records with no province data)
     const provinceCounts = filtered.reduce((acc: Record<string, number>, p) => {
-      const k = String(p.province ?? "Unknown").trim() || "Unknown";
+      const k = (p.province ?? "").trim();
+      if (!k) return acc;
       acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});
@@ -289,9 +294,10 @@ export async function GET(req: NextRequest) {
       .map(([key, count]) => ({ key, label: key, count, percentage: (count / provinceTotal) * 100 }))
       .sort((a, b) => b.count - a.count);
 
-    // Permits by catchment basin (level 1), top 8 + "Other"
+    // Permits by catchment basin (level 1), top 8 + "Other" (exclude records with no catchment data)
     const catchmentCounts = filtered.reduce((acc: Record<string, number>, p) => {
-      const k = String(p.catchment1 ?? "").trim() || "Unknown";
+      const k = (p.catchment1 ?? "").trim();
+      if (!k) return acc;
       acc[k] = (acc[k] || 0) + 1;
       return acc;
     }, {});

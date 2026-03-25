@@ -341,6 +341,8 @@ export default function WaterUseDashboardPage() {
                     <Skeleton className="h-4 w-4/5" />
                     <Skeleton className="h-4 w-3/5" />
                   </>
+                ) : (snapshot?.permitsByProvince ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No geographic data available for the current selection.</p>
                 ) : (
                   (snapshot?.permitsByProvince ?? []).map((row, idx) => (
                     <div key={row.key} className="flex items-center justify-between gap-3">
@@ -381,6 +383,8 @@ export default function WaterUseDashboardPage() {
                     <Skeleton className="h-4 w-5/6" />
                     <Skeleton className="h-4 w-2/3" />
                   </>
+                ) : (snapshot?.permitsByCatchment ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No catchment data available for the current selection.</p>
                 ) : (
                   (snapshot?.permitsByCatchment ?? []).map((row, idx) => (
                     <div key={row.key} className="flex items-center justify-between gap-3">
