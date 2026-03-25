@@ -4,8 +4,10 @@ import { query } from "@/lib/db/postgres";
 import {
   consolidatePermitRecords,
   createConsolidatedPermitFromPermit,
+  createConsolidatedPermitFromRegistry,
   type ConsolidatedPermitRecord,
   type PermitDashboardPermitRow,
+  type PermitDashboardRegistryRow,
 } from "@/lib/permit/consolidated-permit-records";
 
 const QuerySchema = z.object({
@@ -122,46 +124,72 @@ export async function GET(req: NextRequest) {
     const to = parseDate(toRaw);
     const today = new Date();
 
-    const permitsRes = await query<PermitDashboardPermitRow>(
-      `
-      select
-        p.id,
-        p.application_id,
-        p.permit_number,
-        p.status::text as status,
-        p.water_source::text as water_source,
-        p.purpose::text as purpose,
-        p.water_allowance,
-        p.allowance_unit,
-        p.issued_date::text as issued_date,
-        p.expiry_date::text as expiry_date,
-        p.created_at::text as created_at,
-        p.updated_at::text as updated_at,
-        a.province::text as province,
-        a.district,
-        a.sector,
-        a.catchment_name_level_1,
-        a.catchment_name_level_2,
-        coalesce(a.project_title, '') as permit_holder,
-        concat_ws(', ', a.district, a.sector, a.province::text) as location,
-        case
-          when coalesce(p.coordinates, a.coordinates) is null then null
-          else st_y(st_centroid(coalesce(p.coordinates, a.coordinates)))
-        end as lat,
-        case
-          when coalesce(p.coordinates, a.coordinates) is null then null
-          else st_x(st_centroid(coalesce(p.coordinates, a.coordinates)))
-        end as lng
-      from public.permits p
-      left join public.applications a on a.id = p.application_id
-      `
-    );
+    const [permitsRes, registryRes] = await Promise.all([
+      query<PermitDashboardPermitRow>(
+        `
+        select
+          p.id,
+          p.application_id,
+          p.permit_number,
+          p.status::text as status,
+          p.water_source::text as water_source,
+          p.purpose::text as purpose,
+          p.water_allowance,
+          p.allowance_unit,
+          p.issued_date::text as issued_date,
+          p.expiry_date::text as expiry_date,
+          p.created_at::text as created_at,
+          p.updated_at::text as updated_at,
+          a.province::text as province,
+          a.district,
+          a.sector,
+          a.catchment_name_level_1,
+          a.catchment_name_level_2,
+          coalesce(a.project_title, '') as permit_holder,
+          concat_ws(', ', a.district, a.sector, a.province::text) as location,
+          case
+            when coalesce(p.coordinates, a.coordinates) is null then null
+            else st_y(st_centroid(coalesce(p.coordinates, a.coordinates)))
+          end as lat,
+          case
+            when coalesce(p.coordinates, a.coordinates) is null then null
+            else st_x(st_centroid(coalesce(p.coordinates, a.coordinates)))
+          end as lng
+        from public.permits p
+        left join public.applications a on a.id = p.application_id
+        `
+      ),
+      query<PermitDashboardRegistryRow>(
+        `
+        select
+          id::text as id,
+          permit_number,
+          status::text as status,
+          water_source,
+          authorized_activity,
+          volume_or_area,
+          issuance_date::text as issuance_date,
+          expiration_date::text as expiration_date,
+          created_at::text as created_at,
+          updated_at::text as updated_at,
+          latitude,
+          longitude,
+          permit_holder,
+          location
+        from public.permit_registry
+        `
+      ).catch(() => ({ rows: [] as PermitDashboardRegistryRow[] })),
+    ]);
 
-    const consolidated = consolidatePermitRecords(
-      permitsRes.rows
-        .map(createConsolidatedPermitFromPermit)
-        .filter((record): record is ConsolidatedPermitRecord => Boolean(record))
-    );
+    const systemPermits = permitsRes.rows
+      .map(createConsolidatedPermitFromPermit)
+      .filter((record): record is ConsolidatedPermitRecord => Boolean(record));
+
+    const registryPermits = registryRes.rows
+      .map(createConsolidatedPermitFromRegistry)
+      .filter((record): record is ConsolidatedPermitRecord => Boolean(record));
+
+    const consolidated = consolidatePermitRecords([...systemPermits, ...registryPermits]);
 
     const qLower = q?.toLowerCase().trim();
 
