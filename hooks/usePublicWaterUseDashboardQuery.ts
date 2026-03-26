@@ -23,6 +23,10 @@ export type PublicWaterUseDashboardResponse = {
     permitsByWaterSource: Array<{ key: string; label: string; percentage: number; count: number }>;
     permitsByProvince: Array<{ key: string; label: string; count: number; percentage: number }>;
     permitsByCatchment: Array<{ key: string; label: string; count: number; percentage: number }>;
+    permitsByDistrict: Array<{
+      province: string;
+      districts: Array<{ key: string; label: string; count: number; percentage: number }>;
+    }>;
     trend: Array<{ month: string; permitsIssued: number }>;
     permitsIssuedThisMonth: number;
     permitsIssuedLastMonth: number;
