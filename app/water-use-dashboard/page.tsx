@@ -28,6 +28,7 @@ import {
   TrendingDown,
   MapPin,
   Waves,
+  ChevronRight,
 } from "lucide-react";
 
 function formatNumber(n: number) {
@@ -41,6 +42,12 @@ export default function WaterUseDashboardPage() {
   const [sector, setSector] = useState<string>("all");
   const [waterSource, setWaterSource] = useState<string>("all");
   const [purpose, setPurpose] = useState<string>("all");
+
+  const [expandedProvince, setExpandedProvince] = useState<string | null>(null);
+
+  function toggleProvince(key: string) {
+    setExpandedProvince(prev => (prev === key ? null : key));
+  }
 
   const districtOptions = useMemo(() => (province === "all" ? [] : getDistricts(province)), [province]);
   const sectorOptions = useMemo(() => (province === "all" || district === "all" ? [] : getSectors(province, district)), [province, district]);
@@ -336,38 +343,94 @@ export default function WaterUseDashboardPage() {
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   Permits by province
                 </CardTitle>
-                <CardDescription>Geographic distribution across Rwanda</CardDescription>
+                <CardDescription>Click a province to see district breakdown</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2">
                 {isLoading ? (
                   <>
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-4 w-4/5" />
-                    <Skeleton className="h-4 w-3/5" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
                   </>
                 ) : (snapshot?.permitsByProvince ?? []).length === 0 ? (
                   <p className="text-sm text-muted-foreground">No geographic data available for the current selection.</p>
                 ) : (
-                  (snapshot?.permitsByProvince ?? []).map((row, idx) => (
-                    <div key={row.key} className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={[
-                              "inline-block h-2.5 w-2.5 rounded-full",
-                              idx === 0 ? "bg-emerald-600" : idx === 1 ? "bg-emerald-400" : idx === 2 ? "bg-emerald-300" : idx === 3 ? "bg-emerald-200" : "bg-slate-300",
-                            ].join(" ")}
-                          />
-                          <div className="font-medium truncate">{row.label}</div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">{formatNumber(row.count)} permits</div>
+                  (snapshot?.permitsByProvince ?? []).map((row, idx) => {
+                    const isExpanded = expandedProvince === row.key;
+                    const districtData = (snapshot?.permitsByDistrict ?? []).find(d => d.province === row.key);
+                    const dotColor =
+                      idx === 0 ? "bg-emerald-600" :
+                      idx === 1 ? "bg-emerald-400" :
+                      idx === 2 ? "bg-emerald-300" :
+                      idx === 3 ? "bg-emerald-200" : "bg-slate-300";
+                    return (
+                      <div
+                        key={row.key}
+                        className={[
+                          "rounded-lg border overflow-hidden",
+                          isExpanded ? "border-emerald-200" : "border-border",
+                        ].join(" ")}
+                      >
+                        <button
+                          className={[
+                            "w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 cursor-pointer",
+                            isExpanded ? "bg-emerald-50/50" : "",
+                          ].join(" ")}
+                          onClick={() => toggleProvince(row.key)}
+                          aria-expanded={isExpanded}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dotColor}`} />
+                            <span className="font-medium truncate">{row.label}</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <div className="hidden sm:flex items-center gap-2">
+                              <Progress value={row.percentage} className="h-1.5 w-20 bg-muted" />
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatNumber(row.count)} · {row.percentage.toFixed(0)}%
+                            </span>
+                            <ChevronRight
+                              className={[
+                                "h-4 w-4 text-muted-foreground transition-transform duration-150",
+                                isExpanded ? "rotate-90 text-emerald-600" : "",
+                              ].join(" ")}
+                            />
+                          </div>
+                        </button>
+
+                        {isExpanded && (
+                          <div className="border-t border-emerald-100 bg-white px-3 pb-3 pt-2.5 pl-6">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">
+                              Districts — % of province total
+                            </p>
+                            {!districtData || districtData.districts.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">No district data available.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {districtData.districts.map((d, dIdx) => (
+                                  <div key={d.key} className="flex items-center gap-3">
+                                    <span className="text-sm text-foreground w-28 truncate shrink-0">{d.label}</span>
+                                    <div className="flex-1 flex items-center gap-2 min-w-0">
+                                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full ${dIdx < 3 ? "bg-emerald-300" : "bg-emerald-200"}`}
+                                          style={{ width: `${d.percentage}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-xs text-muted-foreground shrink-0 w-20 text-right">
+                                        {formatNumber(d.count)} · {d.percentage.toFixed(0)}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="w-52 flex items-center gap-2">
-                        <Progress value={row.percentage} className="h-2 bg-muted" />
-                        <div className="text-xs text-muted-foreground w-12 text-right">{row.percentage.toFixed(0)}%</div>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </CardContent>
             </Card>
