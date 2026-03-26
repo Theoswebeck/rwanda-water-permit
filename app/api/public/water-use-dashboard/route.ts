@@ -315,6 +315,32 @@ export async function GET(req: NextRequest) {
     }
     const permitsByCatchment = topCatchments;
 
+    // Permits by district, grouped under province (system permits only — registry has no district field)
+    const districtsByProvince = new Map<string, Map<string, number>>();
+    for (const p of filtered) {
+      const prov = (p.province ?? "").trim();
+      const dist = (p.district ?? "").trim();
+      if (!prov || !dist) continue;
+      if (!districtsByProvince.has(prov)) districtsByProvince.set(prov, new Map());
+      const dm = districtsByProvince.get(prov)!;
+      dm.set(dist, (dm.get(dist) ?? 0) + 1);
+    }
+
+    const permitsByDistrict = permitsByProvince.map(({ key: province }) => {
+      const dm = districtsByProvince.get(province);
+      if (!dm) return { province, districts: [] as Array<{ key: string; label: string; count: number; percentage: number }> };
+      const provTotal = Array.from(dm.values()).reduce((s, n) => s + n, 0) || 1;
+      const districts = Array.from(dm.entries())
+        .map(([key, count]) => ({
+          key,
+          label: key,
+          count,
+          percentage: (count / provTotal) * 100,
+        }))
+        .sort((a, b) => b.count - a.count);
+      return { province, districts };
+    });
+
     const purposeTotal = Object.values(purposeCounts).reduce((s, n) => s + n, 0) || 1;
     const waterSourceTotal = Object.values(waterSourceCounts).reduce((s, n) => s + n, 0) || 1;
 
@@ -376,6 +402,7 @@ export async function GET(req: NextRequest) {
         permitsByWaterSource,
         permitsByProvince,
         permitsByCatchment,
+        permitsByDistrict,
         trend,
         permitsIssuedThisMonth,
         permitsIssuedLastMonth,
