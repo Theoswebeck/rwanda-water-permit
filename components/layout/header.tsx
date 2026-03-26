@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Menu, X, User } from "lucide-react";
+import { Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -126,9 +126,7 @@ export function Header() {
           )}
 
           <div className="hidden md:flex shrink-0 items-center gap-3">
-            {isDashboardPage && (
-              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-            )}
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
             {/* CTA Button */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -176,9 +174,9 @@ export function Header() {
                   </Avatar>
                 </Link>
               ) : isAuthenticated ? (
-                <Link href="/dashboard">
+                <Link href="/dashboard/profile">
                   <Button variant="outline" className="rounded-full px-6">
-                    {tx("DASHBOARD")}
+                    {tx("MY PROFILE")}
                   </Button>
                 </Link>
               ) : (
@@ -193,9 +191,7 @@ export function Header() {
 
           {/* Mobile Navigation */}
           <div className="md:hidden flex shrink-0 items-center gap-2">
-            {isDashboardPage && (
-              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
-            )}
+            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
             {shouldShowMinimalHeaderForStaff ? (
               isAuthenticated ? (
                 <Link href="/dashboard/profile">
@@ -216,7 +212,7 @@ export function Header() {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="right" className="border-l border-border">
-                <div className="flex items-center justify-between mb-8 mt-2">
+                <div className="flex items-center mb-8 mt-2">
                   <Link href="/" className="flex items-center" onClick={() => setIsOpen(false)}>
                     <Image
                       src="/assets/rwanda_water_board_Logo.png"
@@ -227,9 +223,6 @@ export function Header() {
                     />
                     <span className="text-foreground font-semibold text-sm">{tx("Rwanda Water Permit Portal")}</span>
                   </Link>
-                  <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-muted-foreground">
-                    <X className="h-5 w-5" />
-                  </Button>
                 </div>
 
                 <nav className="flex flex-col space-y-6 mt-8">
@@ -283,9 +276,9 @@ export function Header() {
                       /* Hide button on inspection, review, and admin pages */
                       null
                     ) : isAuthenticated ? (
-                      <Link href="/dashboard" onClick={() => setIsOpen(false)}>
+                      <Link href="/dashboard/profile" onClick={() => setIsOpen(false)}>
                         <Button variant="outline" className="w-full rounded-full mt-4">
-                          {tx("DASHBOARD")}
+                          {tx("MY PROFILE")}
                         </Button>
                       </Link>
                     ) : (
