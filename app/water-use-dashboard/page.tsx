@@ -373,11 +373,12 @@ export default function WaterUseDashboardPage() {
                       >
                         <button
                           className={[
-                            "w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/40 cursor-pointer",
+                            "w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors duration-150 hover:bg-muted/40 cursor-pointer",
                             isExpanded ? "bg-emerald-50/50" : "",
                           ].join(" ")}
                           onClick={() => toggleProvince(row.key)}
                           aria-expanded={isExpanded}
+                          aria-controls={`province-districts-${row.key}`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${dotColor}`} />
@@ -400,7 +401,7 @@ export default function WaterUseDashboardPage() {
                         </button>
 
                         {isExpanded && (
-                          <div className="border-t border-emerald-100 bg-white px-3 pb-3 pt-2.5 pl-6">
+                          <div id={`province-districts-${row.key}`} className="border-t border-emerald-100 bg-white pr-3 pb-3 pt-2.5 pl-6">
                             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">
                               Districts — % of province total
                             </p>
