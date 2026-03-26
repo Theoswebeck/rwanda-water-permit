@@ -60,7 +60,7 @@ export default function WaterUseDashboardPage() {
     water_source: waterSource,
     purpose,
     status: "all",
-    includeExpired: false,
+    includeExpired: true,
   });
 
   const snapshot = data?.snapshot;
