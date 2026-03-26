@@ -339,7 +339,7 @@ export default function ReviewerDashboard() {
     if (busyAction) return;
     setBusyAction({ appId: app.id, kind: "permit_pdf" });
     try {
-      const verificationUrl = `https://rwandawaterpermit.com/permit/view/${encodeURIComponent(permit.permit_number)}`;
+      const verificationUrl = `https://waterpermit.rwb.rw/permit/view/${encodeURIComponent(permit.permit_number)}`;
       window.open(verificationUrl, "_blank", "noopener,noreferrer");
     } catch (e) {
       console.error("❌ Failed to open permit page:", e);

@@ -292,7 +292,7 @@ export function PermitsList({ permits }: PermitsListProps) {
                           <DropdownMenuLabel>View</DropdownMenuLabel>
                           <DropdownMenuItem asChild>
                             <Link
-                              href={`https://rwandawaterpermit.com/permit/view/${encodeURIComponent(permit.permitNumber)}`}
+                              href={`https://waterpermit.rwb.rw/permit/view/${encodeURIComponent(permit.permitNumber)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                             >
@@ -302,7 +302,7 @@ export function PermitsList({ permits }: PermitsListProps) {
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link
-                              href={`https://rwandawaterpermit.com/contract/terms/${encodeURIComponent(permit.permitNumber)}`}
+                              href={`https://waterpermit.rwb.rw/contract/terms/${encodeURIComponent(permit.permitNumber)}`}
                               target="_blank"
                               rel="noopener noreferrer"
                             >

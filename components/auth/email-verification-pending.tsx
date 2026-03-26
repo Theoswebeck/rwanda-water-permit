@@ -178,7 +178,7 @@ export function EmailVerificationPending({
           <div className="text-center">
             <p className="text-xs text-muted-foreground">
               Need help?{" "}
-              <a href="https://rwandawaterpermit.com/contact" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              <a href="https://waterpermit.rwb.rw/contact" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                 Contact support
               </a>
             </p>

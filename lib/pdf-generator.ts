@@ -308,7 +308,7 @@ type Application = {
 
 // Production URL for QR codes - ALWAYS use production URL since QR codes are printed
 // and scanned externally by phones that cannot access localhost
-const PRODUCTION_URL = "https://rwandawaterpermit.com";
+const PRODUCTION_URL = "https://waterpermit.rwb.rw";
 
 /**
  * Build the permit verification URL for QR codes.

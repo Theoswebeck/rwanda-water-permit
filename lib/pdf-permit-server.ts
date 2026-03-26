@@ -16,7 +16,7 @@ const LOGO_PATH = path.join(ASSETS_DIR, "rwanda_water_board_Logo.png");
 // Cropped watermark asset to avoid transparent margins that cause blur/offset.
 const WATERMARK_PATH = path.join(ASSETS_DIR, "rwanda_logo_watermark.png");
 
-const PRODUCTION_URL = "https://rwandawaterpermit.com";
+const PRODUCTION_URL = "https://waterpermit.rwb.rw";
 
 const PT = 2.83465; // 1mm in points
 

@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
     // Send invite email via Resend
     const resendKey = process.env.RESEND_API_KEY
     const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
-    const loginUrl = 'https://rwandawaterpermit.com/'
+    const loginUrl = 'https://waterpermit.rwb.rw/'
     const isDev = process.env.NODE_ENV !== 'production'
 
     let emailSent = false

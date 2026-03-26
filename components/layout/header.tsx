@@ -22,7 +22,7 @@ import { translateText } from "@/lib/i18n/translator";
 const navItems = [
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
   { label: "Water Use Dashboard", href: "/water-use-dashboard" },
-  { label: "Contact", href: "https://rwandawaterpermit.com/contact" },
+  { label: "Contact", href: "https://waterpermit.rwb.rw/contact" },
 ];
 
 export function Header() {

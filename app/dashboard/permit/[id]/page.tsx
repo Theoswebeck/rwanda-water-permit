@@ -302,7 +302,7 @@ export default function PermitDetailPage() {
 
     try {
       setIsDownloading(true);
-      const verificationUrl = `https://rwandawaterpermit.com/permit/view/${encodeURIComponent(String(permit.permitNumber ?? ""))}`;
+      const verificationUrl = `https://waterpermit.rwb.rw/permit/view/${encodeURIComponent(String(permit.permitNumber ?? ""))}`;
       window.open(verificationUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
       console.error("❌ Failed to open permit page:", error);
@@ -795,7 +795,7 @@ export default function PermitDetailPage() {
                   <p className="text-sm text-muted-foreground mb-4">
                     If you have any questions about your permit, please contact our support team.
                   </p>
-                  <a href={`https://rwandawaterpermit.com/contact?permit=${permit?.permitNumber || params.id}&category=permit`} target="_blank" rel="noopener noreferrer">
+                  <a href={`https://waterpermit.rwb.rw/contact?permit=${permit?.permitNumber || params.id}&category=permit`} target="_blank" rel="noopener noreferrer">
                     <Button className="w-full">Contact Support</Button>
                   </a>
                 </CardContent>

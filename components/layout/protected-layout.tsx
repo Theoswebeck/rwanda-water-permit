@@ -26,7 +26,7 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
 
   const handleContactSupport = () => {
     // Open production contact page in new tab
-    window.open('https://rwandawaterpermit.com/contact', '_blank');
+    window.open('https://waterpermit.rwb.rw/contact', '_blank');
   };
 
   return (
