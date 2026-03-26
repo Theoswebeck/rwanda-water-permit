@@ -126,7 +126,9 @@ export function Header() {
           )}
 
           <div className="hidden md:flex shrink-0 items-center gap-3">
-            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            {isDashboardPage && (
+              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            )}
             {/* CTA Button */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -191,7 +193,9 @@ export function Header() {
 
           {/* Mobile Navigation */}
           <div className="md:hidden flex shrink-0 items-center gap-2">
-            <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            {isDashboardPage && (
+              <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
+            )}
             {shouldShowMinimalHeaderForStaff ? (
               isAuthenticated ? (
                 <Link href="/dashboard/profile">
