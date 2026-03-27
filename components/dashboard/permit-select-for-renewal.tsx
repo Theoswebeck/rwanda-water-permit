@@ -27,6 +27,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { getApplicationFee } from "@/lib/payment-utils";
 import type { Permit, Application } from "@/types/database";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { ManualPermitEntryCard } from "@/components/dashboard/manual-permit-entry-card";
@@ -396,6 +397,7 @@ export function PermitSelectForRenewal({
   };
 
   const selectedPermitConflict = selectedPermitId ? permitConflicts[selectedPermitId] : undefined;
+  const renewalFeeText = `${getApplicationFee().toLocaleString()} RWF`;
 
   return (
     <motion.div
@@ -420,7 +422,7 @@ export function PermitSelectForRenewal({
             <RefreshCw className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
               <strong>Permit Renewal:</strong> Renewing your permit will extend its validity for another 5 years. 
-              You will need to submit a water use report, a letter requesting renewal, and pay the renewal fee of <strong>35,000 RWF</strong>.
+              You will need to submit a water use report, a letter requesting renewal, and pay the renewal fee of <strong>{renewalFeeText}</strong>.
               All existing permit details will remain unchanged.
             </AlertDescription>
           </Alert>

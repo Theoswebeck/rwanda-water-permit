@@ -23,7 +23,7 @@ IREMBOPAY_SANDBOX=false
 IREMBOPAY_WEBHOOK_URL=https://webhook.site/cfa1c7cd-1a14-45e1-a0f1-3e07def69c51
 
 # Application Fee
-NEXT_PUBLIC_APPLICATION_FEE=35000
+NEXT_PUBLIC_APPLICATION_FEE=50
 ```
 
 ---
@@ -63,7 +63,7 @@ You should see:
    - Backend calls IremboPay API with:
      - Product Code: `PC-c174f56001`
      - Account: `FONERWA-RWF`
-     - Amount: 35,000 RWF
+     - Amount: 50 RWF
 
 2. **IremboPay Response**
    - Returns payment link

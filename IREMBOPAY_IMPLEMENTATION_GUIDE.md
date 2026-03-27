@@ -133,7 +133,7 @@ NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=your_public_key_here
 IREMBOPAY_WEBHOOK_SECRET=your_webhook_secret_here
 
 # Application Fee
-NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=50
 NEXT_PUBLIC_APPLICATION_FEE_CURRENCY=RWF
 
 # Callback URLs
@@ -280,7 +280,7 @@ router.push(`/dashboard/payment/${applicationId}`);
 ┌─────────────────────────────────────────────────┐
 │ 3. Navigate to Payment Tab                      │
 │    - Show application summary                   │
-│    - Display payment amount (35,000 RWF)        │
+│    - Display payment amount (50 RWF)        │
 └────────────────┬────────────────────────────────┘
                  │
                  v
@@ -496,7 +496,7 @@ WHERE id = 'payment-id';
 ```json
 {
   "application_id": "uuid",
-  "amount": 35000,
+  "amount": 50,
   "currency": "RWF",
   "customer": {
     "email": "user@example.com",
@@ -513,7 +513,7 @@ WHERE id = 'payment-id';
   "payment": {
     "id": "uuid",
     "status": "pending",
-    "amount": 35000,
+    "amount": 50,
     "currency": "RWF",
     "irembo_payment_ref": "IPY_REF_12345",
     "payment_url": "https://checkout.irembopay.com/..."
@@ -531,7 +531,7 @@ WHERE id = 'payment-id';
   "data": {
     "reference": "IPY_REF_12345",
     "status": "SUCCESS",
-    "amount": 35000,
+    "amount": 50,
     "currency": "RWF",
     "transaction_id": "IPY_TXN_67890",
     "payment_method": "mobile_money",
@@ -550,7 +550,7 @@ WHERE id = 'payment-id';
   "payment": {
     "id": "uuid",
     "status": "completed",
-    "amount": 35000,
+    "amount": 50,
     "currency": "RWF",
     "completed_at": "2025-10-11T12:00:00Z"
   }

@@ -84,7 +84,7 @@ into our Water Permit Application System to collect application fees.
 
 Project Details:
 - Organization: Rwanda Water Resources Board
-- Purpose: Water permit application fees (35,000 RWF per application)
+- Purpose: Water permit application fees (50 RWF per application)
 - Expected Volume: [Your estimate] applications per month
 - Integration Type: API Integration with webhook callbacks
 
@@ -177,7 +177,7 @@ NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=paste_your_public_key_here
 IREMBOPAY_WEBHOOK_SECRET=paste_your_webhook_secret_here
 
 # Application Fee Configuration
-NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=50
 NEXT_PUBLIC_APPLICATION_FEE_CURRENCY=RWF
 
 # Callback URLs (update 'yourdomain.com' with your actual domain)

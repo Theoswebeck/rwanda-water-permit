@@ -4,7 +4,7 @@
     {
       "name": "Water Permit Application Fee",
       "quantity": 1,
-      "unitAmount": 35000
+      "unitAmount": 50
     }
   ],
   "paymentAccountIdentifier": "RWANDA_WATER_BOARD",

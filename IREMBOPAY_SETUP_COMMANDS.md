@@ -26,7 +26,7 @@ NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=pk_live_e554eff2d06c4c95b621dd99d6e4cf40
 IREMBOPAY_WEBHOOK_SECRET=rwb_webhook_2025_secure_${Math.random().toString(36)}
 
 # Application Fee
-NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=50
 NEXT_PUBLIC_APPLICATION_FEE_CURRENCY=RWF
 
 # Webhook Callback URL (webhook.site for testing)
@@ -375,7 +375,7 @@ GROUP BY status;
 - ✅ Public Key: `pk_live_e554eff2d06c4c95b621dd99d6e4cf40`
 - ✅ Secret Key: `sk_live_37dc025062934cf9809cd90ea1c89614`
 - ✅ Webhook URL: `https://webhook.site/cfa1c7cd-1a14-45e1-a0f1-3e07def69c51`
-- ✅ Application Fee: 35,000 RWF
+- ✅ Application Fee: 50 RWF
 - ✅ Payment Tab: Integrated & Working
 
 **Next:** Follow the steps above to complete setup and test!

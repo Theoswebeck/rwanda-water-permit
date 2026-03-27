@@ -10,7 +10,7 @@ import type { Payment, PaymentStatus, PaymentReceipt } from '@/types/payment';
 // =============================================
 
 export const PAYMENT_CONFIG = {
-  DEFAULT_FEE: 35000,
+  DEFAULT_FEE: 50,
   CURRENCY: 'RWF',
   PAYMENT_TIMEOUT_MINUTES: 3 * 24 * 60,
   RECEIPT_PREFIX: 'RWB-RCPT',
@@ -102,8 +102,12 @@ export const formatPaymentAmount = (amount: number, currency: string = 'RWF'): s
  * Get application fee
  */
 export const getApplicationFee = (): number => {
-  const envFee = process.env.NEXT_PUBLIC_APPLICATION_FEE_AMOUNT;
-  return envFee ? parseFloat(envFee) : PAYMENT_CONFIG.DEFAULT_FEE;
+  // Support both env keys to avoid stale configs across environments.
+  const envFee =
+    process.env.NEXT_PUBLIC_APPLICATION_FEE ||
+    process.env.NEXT_PUBLIC_APPLICATION_FEE_AMOUNT;
+  const parsedFee = envFee ? parseFloat(envFee) : NaN;
+  return Number.isFinite(parsedFee) && parsedFee > 0 ? parsedFee : PAYMENT_CONFIG.DEFAULT_FEE;
 };
 
 /**
@@ -171,10 +175,6 @@ export const formatReceiptData = (
 export const validatePaymentAmount = (amount: number): { valid: boolean; error?: string } => {
   if (amount <= 0) {
     return { valid: false, error: 'Payment amount must be greater than zero' };
-  }
-  
-  if (amount < 100) {
-    return { valid: false, error: 'Payment amount is too small' };
   }
   
   if (amount > 10000000) {

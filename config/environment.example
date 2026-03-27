@@ -115,7 +115,7 @@ IREMBOPAY_WEBHOOK_SECRET=your_webhook_secret_here
 IREMBOPAY_API_URL=https://api.sandbox.irembopay.com
 
 # Application Fee Configuration
-NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=50
 NEXT_PUBLIC_APPLICATION_FEE_CURRENCY=RWF
 
 # Payment Callback URL (update with your domain)

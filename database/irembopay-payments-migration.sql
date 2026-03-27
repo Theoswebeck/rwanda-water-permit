@@ -102,7 +102,7 @@ CREATE TABLE payments (
     merchant_id UUID REFERENCES merchants(id),
     
     -- Payment details
-    amount DECIMAL(15,2) NOT NULL DEFAULT 35000.00,
+    amount DECIMAL(15,2) NOT NULL DEFAULT 50.00,
     currency VARCHAR(3) NOT NULL DEFAULT 'RWF',
     description TEXT,
     

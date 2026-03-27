@@ -162,7 +162,7 @@ NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY=your_public_key_from_irembopay
 IREMBOPAY_WEBHOOK_SECRET=your_webhook_secret
 
 # Application Fee
-NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=50
 NEXT_PUBLIC_APPLICATION_FEE_CURRENCY=RWF
 
 # Callback URL (update with your domain)
@@ -459,11 +459,11 @@ Before going to production:
 
 ## 💰 Pricing Structure
 
-**Application Fee:** 35,000 RWF (non-refundable)
+**Application Fee:** 50 RWF (non-refundable)
 
 This is configurable via:
 ```bash
-NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=35000
+NEXT_PUBLIC_APPLICATION_FEE_AMOUNT=50
 ```
 
 **IremboPay Fees:**

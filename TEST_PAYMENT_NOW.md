@@ -25,7 +25,7 @@ IREMBOPAY_API_URL=https://api.irembopay.com/v1
 IREMBOPAY_WEBHOOK_URL=https://webhook.site/cfa1c7cd-1a14-45e1-a0f1-3e07def69c51
 
 # Application Fee
-NEXT_PUBLIC_APPLICATION_FEE=35000
+NEXT_PUBLIC_APPLICATION_FEE=50
 
 # ============================================
 # SUPABASE CONFIGURATION
@@ -98,7 +98,7 @@ http://localhost:3000/dashboard/new-application
 
 2. **IremboPay Widget Appears:**
    - Modal/iframe with payment form
-   - Shows 35,000 RWF amount
+   - Shows 50 RWF amount
    - Payment methods: Mobile Money, Cards, Bank Transfer
 
 3. **Database Records Created:**

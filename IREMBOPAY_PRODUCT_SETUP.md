@@ -24,7 +24,7 @@ Click "Add Product" or "Create Service" and fill in:
 ```
 Product Code: WATER_PERMIT_FEE
 Product Name: Water Permit Application Fee
-Price: 35,000 RWF
+Price: 50 RWF
 Currency: RWF
 Description: Water permit application processing fee (non-refundable)
 Category: Government Services / Permits
@@ -92,7 +92,7 @@ X-API-Version: 2
       "code": "YOUR_PRODUCT_CODE_HERE",
       "name": "Water Permit Application Fee",
       "quantity": 1,
-      "unitAmount": 35000
+      "unitAmount": 50
     }
   ],
   "paymentAccountIdentifier": "RWANDA_WATER_BOARD",

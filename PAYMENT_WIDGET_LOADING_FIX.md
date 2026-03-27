@@ -136,7 +136,7 @@ console.log('📊 IremboPay Widget mounted:', {
 ### Before:
 ```
 🔄 Loading payment system...
-Amount: 35,000 RWF
+Amount: 50 RWF
 
 [Just spinner, no action possible]
 ```
@@ -144,7 +144,7 @@ Amount: 35,000 RWF
 ### After:
 ```
 🔄 Loading payment system...
-Amount: 35,000 RWF
+Amount: 50 RWF
 
 [Open Payment Page] ← Immediate action!
 

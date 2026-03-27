@@ -993,7 +993,7 @@ alter table public.payment_transactions alter column initiated_at set default no
 alter table public.payment_transactions alter column created_at set default now();
 alter table public.payment_transactions alter column updated_at set default now();
 alter table public.payments alter column id set default gen_random_uuid();
-alter table public.payments alter column amount set default 35000.00;
+alter table public.payments alter column amount set default 50.00;
 alter table public.payments alter column currency set default 'RWF'::character varying;
 alter table public.payments alter column status set default 'pending'::payment_status;
 alter table public.payments alter column initiated_at set default now();

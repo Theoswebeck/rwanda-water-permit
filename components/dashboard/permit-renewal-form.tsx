@@ -54,6 +54,7 @@ import type { PermitWithApplication } from "@/components/dashboard/permit-select
 import type { Application, WaterUseReportTemplate, WaterUseReport } from "@/types/database";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
+import { getApplicationFee } from "@/lib/payment-utils";
 import {
   getProvinces,
   getDistricts,
@@ -90,7 +91,7 @@ const formatDate = (dateString?: string) => {
   });
 };
 
-const RENEWAL_FEE = 35000;
+const RENEWAL_FEE = getApplicationFee();
 
 const WATER_SOURCE_OPTIONS = [
   { value: "lake", label: "Lake" },

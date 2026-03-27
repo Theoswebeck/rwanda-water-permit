@@ -129,7 +129,7 @@
 
 ### DETAILS
 
-**A non-refundable application fee of thirty-five thousand (35,000) Rwandan francs to be paid through IREMBO, via the following link:** https://www.waterpermit.rwb.rw/payment
+**A non-refundable application fee of fifty (50) Rwandan francs to be paid through IREMBO, via the following link:** https://www.waterpermit.rwb.rw/payment
 
 **Attach proof of payment** _[File upload]_
 

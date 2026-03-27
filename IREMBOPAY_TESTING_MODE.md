@@ -83,7 +83,7 @@ IREMBOPAY_WEBHOOK_URL=https://webhook.site/cfa1c7cd-1a14-45e1-a0f1-3e07def69c51
 IREMBOPAY_WEBHOOK_SECRET=your_webhook_secret_here
 
 # Application Fee
-NEXT_PUBLIC_APPLICATION_FEE=35000
+NEXT_PUBLIC_APPLICATION_FEE=50
 
 # Supabase (for payment storage)
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
