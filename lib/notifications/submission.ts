@@ -1,7 +1,7 @@
 import { query } from '@/lib/db/postgres'
 import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
-import { sendResendEmail } from '@/lib/notifications/resend-email'
+import { sendSmtpEmail } from '@/lib/notifications/smtp-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
 
 const isNonEmptyString = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
@@ -144,7 +144,7 @@ export async function notifyOnApplicationSubmitted(applicationId: string): Promi
 
     let emailSent = Boolean(currentNotif?.email_sent)
     if (needEmail) {
-      const res = await sendResendEmail({
+      const res = await sendSmtpEmail({
         to: applicantEmail,
         subject: copy.email.subject,
         title: copy.email.title,

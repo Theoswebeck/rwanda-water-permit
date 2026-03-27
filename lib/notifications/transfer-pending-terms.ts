@@ -1,6 +1,6 @@
 import { query } from '@/lib/db/postgres'
 import { PindoClient } from '@/lib/pindo-client'
-import { sendResendEmail } from '@/lib/notifications/resend-email'
+import { sendSmtpEmail } from '@/lib/notifications/smtp-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
 
 const NOTIFICATION_TITLE = 'Transfer Pending Terms (Transferee)'
@@ -36,6 +36,7 @@ type ParsedTransferNotes = {
   transferFormData?: {
     transfereeEmail?: string
     transfereePhone?: string
+    transfereeName?: string
   }
 }
 
@@ -351,7 +352,7 @@ export async function notifyOnTransferPendingTerms(
         logTransferNotification('log', traceId, applicationId, 'sending transferee email', {
           to: maskEmail(transfereeEmail),
         })
-        const emailRes = await sendResendEmail({ to: transfereeEmail, subject, title, text })
+        const emailRes = await sendSmtpEmail({ to: transfereeEmail, subject, title, text })
         emailSent = Boolean(emailRes.delivered) || emailSent
         logTransferNotification('log', traceId, applicationId, 'transferee email send completed', {
           delivered: Boolean(emailRes.delivered),

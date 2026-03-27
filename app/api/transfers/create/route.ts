@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PindoClient } from '@/lib/pindo-client'
-import { sendResendEmail } from '@/lib/notifications/resend-email'
+import { sendSmtpEmail } from '@/lib/notifications/smtp-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { query } from '@/lib/db/postgres'
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
         ].join('\n')
 
         if (transferorEmail.includes('@')) {
-          await sendResendEmail({ to: transferorEmail, subject, title, text })
+          await sendSmtpEmail({ to: transferorEmail, subject, title, text })
         }
 
         if (transferorPhone) {

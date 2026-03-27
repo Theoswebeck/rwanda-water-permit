@@ -1,4 +1,6 @@
-type SendResendEmailParams = {
+import nodemailer from 'nodemailer'
+
+type SendSmtpEmailParams = {
   to: string
   subject: string
   title: string
@@ -29,40 +31,39 @@ export function renderAppEmailHtml(params: { title: string; text: string }) {
   `
 }
 
-export async function sendResendEmail(params: SendResendEmailParams) {
-  const resendKey = process.env.RESEND_API_KEY
-  const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
+export async function sendSmtpEmail(params: SendSmtpEmailParams) {
+  const smtpHost = process.env.SMTP_HOST
+  const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10)
+  const smtpUser = process.env.SMTP_USER
+  const smtpPass = process.env.SMTP_PASS
+  const fromEmail = process.env.EMAIL_FROM || smtpUser || ''
+  const replyTo = process.env.EMAIL_REPLY_TO
   const isDev = process.env.NODE_ENV !== 'production' || process.env.EMAIL_DEV_MODE === 'true'
 
-  if (!resendKey) {
+  if (!smtpUser || !smtpPass) {
     if (isDev) {
-      console.warn('⚠️ RESEND_API_KEY not configured; skipping email send in dev mode.')
+      console.warn('⚠️ SMTP not configured; skipping email send in dev mode.')
       return { delivered: false as const, skipped: true as const }
     }
-    throw new Error('Email provider not configured. Set RESEND_API_KEY.')
+    throw new Error('Email provider not configured. Set SMTP_USER and SMTP_PASS.')
   }
 
-  const html = renderAppEmailHtml({ title: params.title, text: params.text })
-  const resp = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: fromEmail,
-      to: params.to,
-      subject: params.subject,
-      html,
-    }),
+  const transporter = nodemailer.createTransport({
+    host: smtpHost || 'smtp.gmail.com',
+    port: smtpPort,
+    secure: false,
+    auth: { user: smtpUser, pass: smtpPass },
   })
 
-  const responseText = await resp.text()
-  if (!resp.ok) {
-    throw new Error(`Resend API error: status=${resp.status}, body=${responseText}`)
-  }
+  const html = renderAppEmailHtml({ title: params.title, text: params.text })
+
+  await transporter.sendMail({
+    from: fromEmail,
+    replyTo: replyTo || undefined,
+    to: params.to,
+    subject: params.subject,
+    html,
+  })
 
   return { delivered: true as const, skipped: false as const }
 }
-
-

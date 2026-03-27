@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
-import { sendResendEmail } from '@/lib/notifications/resend-email'
+import { sendSmtpEmail } from '@/lib/notifications/smtp-email'
 import { getPortalUrl } from '@/lib/notifications/portal-url'
 import { notifyOnTransferPendingTerms } from '@/lib/notifications/transfer-pending-terms'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
         applicationId,
         smsTo: maskPhone(applicantPhone),
       })
-      await sendResendEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
+      await sendSmtpEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
       logFinalDecision('log', traceId, 'applicant email sent successfully', {
         applicationId,
         emailTo: maskEmail(applicantEmail),

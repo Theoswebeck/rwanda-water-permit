@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
+import nodemailer from 'nodemailer'
 
 // Generate a secure random password
 function generateTempPassword(length = 16): string {
@@ -154,32 +155,32 @@ export async function POST(req: NextRequest) {
       console.warn('⚠️ Failed to create audit log:', auditErr)
     }
 
-    // Send invite email via Resend
-    const resendKey = process.env.RESEND_API_KEY
-    const fromEmail = process.env.EMAIL_FROM || 'nouru@menlohq.com'
-    const loginUrl = 'https://waterpermit.rwb.rw/'
+    const loginUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://waterpermit.rwb.rw/'
     const isDev = process.env.NODE_ENV !== 'production'
 
     let emailSent = false
     let emailError: string | null = null
 
-    if (resendKey) {
+    const smtpUser = process.env.SMTP_USER
+    const smtpPass = process.env.SMTP_PASS
+    if (!smtpUser || !smtpPass) {
+      emailError = 'SMTP not configured'
+      console.warn('⚠️ SMTP_USER/SMTP_PASS not configured, skipping invite email')
+    } else {
       const displayName = first_name ? `${first_name}` : 'Staff Member'
       const rolePretty = role.charAt(0).toUpperCase() + role.slice(1)
-      
+      const orgName = process.env.ORG_NAME || 'Rwanda Water Resources Board'
+
       const html = `
         <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:600px;margin:0 auto;padding:20px">
           <div style="text-align:center;margin-bottom:30px">
-            <h1 style="color:#1f2937;margin:0">Rwanda Water Resources Board</h1>
+            <h1 style="color:#1f2937;margin:0">${orgName}</h1>
             <h2 style="color:#4b5563;margin:10px 0">Staff Account Created</h2>
           </div>
-          
           <p style="font-size:16px;color:#374151">Hello ${displayName},</p>
-          
           <p style="font-size:16px;color:#374151">
             An account has been created for you on the Rwanda Water Permit Portal as a <strong>${rolePretty}</strong>.
           </p>
-          
           <div style="background:#f3f4f6;border-radius:12px;padding:20px;margin:20px 0;border:2px solid #e5e7eb">
             <p style="margin:0 0 10px 0;font-size:14px;color:#6b7280"><strong>Your Login Credentials:</strong></p>
             <p style="margin:5px 0;font-size:16px;color:#1f2937"><strong>Email:</strong> ${emailLower}</p>
@@ -188,63 +189,44 @@ export async function POST(req: NextRequest) {
               ${tempPassword}
             </div>
           </div>
-          
           <div style="text-align:center;margin:30px 0">
             <a href="${loginUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:16px">
               Login to Portal
             </a>
           </div>
-          
           <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:15px;margin:20px 0">
             <p style="margin:0;font-size:14px;color:#92400e">
               ⚠️ <strong>Important:</strong> You will be required to change your password on first login. Please choose a strong, unique password.
             </p>
           </div>
-          
           <p style="color:#6b7280;font-size:14px">
             If you did not expect this account, please contact the RWB administrator.
           </p>
-          
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:30px 0">
-          <p style="color:#9ca3af;font-size:12px;text-align:center">
-            Rwanda Water Resources Board - Water Permit Application System
-          </p>
+          <p style="color:#9ca3af;font-size:12px;text-align:center">${orgName} - Water Permit Application System</p>
         </div>`
 
       console.log('📤 Sending invite email to:', emailLower)
-
       try {
-        const resp = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${resendKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            from: fromEmail,
-            to: emailLower,
-            subject: 'Your Rwanda Water Resources Board Staff Account',
-            html,
-          }),
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST || 'smtp.gmail.com',
+          port: parseInt(process.env.SMTP_PORT || '587', 10),
+          secure: false,
+          auth: { user: smtpUser, pass: smtpPass },
         })
-
-        const responseText = await resp.text()
-        console.log('📬 Resend response:', resp.status, responseText)
-
-        if (resp.ok) {
-          emailSent = true
-          console.log('✅ Invite email sent successfully')
-        } else {
-          emailError = responseText
-          console.error('❌ Resend API error:', responseText)
-        }
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || smtpUser,
+          replyTo: process.env.EMAIL_REPLY_TO || undefined,
+          to: emailLower,
+          subject: `Your ${orgName} Staff Account`,
+          html,
+        })
+        emailSent = true
+        console.log('✅ Invite email sent successfully')
       } catch (fetchErr) {
         emailError = String(fetchErr)
-        console.error('❌ Resend fetch failed:', fetchErr)
+        console.error('❌ SMTP send failed:', fetchErr)
       }
-    } else {
-      emailError = 'RESEND_API_KEY not configured'
-      console.warn('⚠️ RESEND_API_KEY not configured, skipping email')
     }
 
     // Return success with email status
