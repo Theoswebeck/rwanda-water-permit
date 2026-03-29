@@ -78,6 +78,12 @@ export interface EnhancedWaterConcessionMapProps {
   height?: string;
   className?: string;
   onPermitSelect?: (permit: WaterPermit | PermitPolygon) => void;
+  registryStats?: {
+    total: number;
+    operational: number;
+    expired: number;
+    expiringSoon: number;
+  };
 }
 
 // =============================================
@@ -139,7 +145,8 @@ export function EnhancedWaterConcessionMap({
   showPointMarkers = true,
   height = "600px",
   className = "",
-  onPermitSelect
+  onPermitSelect,
+  registryStats
 }: EnhancedWaterConcessionMapProps) {
   // State management
   const [permits, setPermits] = useState<WaterPermit[]>([]);
@@ -176,8 +183,8 @@ export function EnhancedWaterConcessionMap({
   }, []);
 
   useEffect(() => {
-    updateStats();
-  }, [permits, permitPolygons]);
+    if (!registryStats) updateStats();
+  }, [permits, permitPolygons, registryStats]);
 
   // =============================================
   // DATA LOADING
@@ -447,43 +454,43 @@ export function EnhancedWaterConcessionMap({
               <Droplets className="h-5 w-5 text-blue-500" />
               <div>
                 <p className="text-sm font-medium">Total Permits</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
+                <p className="text-2xl font-bold">{registryStats ? registryStats.total : stats.total}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
               <div>
                 <p className="text-sm font-medium">Active</p>
-                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+                <p className="text-2xl font-bold text-green-600">{registryStats ? registryStats.operational : stats.active}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <Calendar className="h-5 w-5 text-amber-500" />
               <div>
                 <p className="text-sm font-medium">Expiring Soon</p>
-                <p className="text-2xl font-bold text-amber-600">{stats.expiring}</p>
+                <p className="text-2xl font-bold text-amber-600">{registryStats ? registryStats.expiringSoon : stats.expiring}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
               <div>
                 <p className="text-sm font-medium">Expired</p>
-                <p className="text-2xl font-bold text-red-600">{stats.expired}</p>
+                <p className="text-2xl font-bold text-red-600">{registryStats ? registryStats.expired : stats.expired}</p>
               </div>
             </div>
           </CardContent>

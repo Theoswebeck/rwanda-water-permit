@@ -56,9 +56,8 @@ const getUsageIntensityColor = (usage: number) => {
   return '#e0f2fe';                     // Very low - Pale blue
 };
 
-export function WaterConcessionMap() {
-  // Redirect to enhanced map component
-  return <EnhancedWaterConcessionMap />;
+export function WaterConcessionMap({ registryStats }: { registryStats?: { total: number; operational: number; expired: number; expiringSoon: number } }) {
+  return <EnhancedWaterConcessionMap registryStats={registryStats} />;
 }
 
 // Legacy component - keeping for backward compatibility

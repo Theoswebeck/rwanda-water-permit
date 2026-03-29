@@ -922,7 +922,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       </TabsContent>
 
       <TabsContent value="map" className="mt-4">
-        <WaterConcessionMap />
+        <WaterConcessionMap registryStats={data?.summary ? { total: data.summary.total, operational: data.summary.operational, expired: data.summary.expired, expiringSoon: data.summary.expiringSoon } : undefined} />
       </TabsContent>
     </Tabs>
   );
