@@ -730,9 +730,13 @@ function ReportSections({
                             label: "Dissolved Oxygen (mg/L)",
                           },
                           { key: "turbidity", label: "Turbidity (NTU)" },
-                          { key: "ph", label: "pH" },
-                          { key: "nutrients", label: "Nutrients (N/P)" },
-                          { key: "bod", label: "BOD (mg/L)" },
+                          ...(report.template === "concession"
+                            ? [
+                                { key: "ph", label: "pH" },
+                                { key: "nutrients", label: "Nutrients (N/P)" },
+                                { key: "bod", label: "BOD (mg/L)" },
+                              ]
+                            : []),
                         ].map((param) => {
                           const data = section5_monitoring[param.key] || {};
                           return (
