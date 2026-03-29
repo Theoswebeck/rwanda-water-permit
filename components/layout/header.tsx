@@ -126,7 +126,7 @@ export function Header() {
           )}
 
           <div className="hidden md:flex shrink-0 items-center gap-3">
-            {isDashboardPage && (
+            {!shouldShowMinimalHeaderForStaff && (
               <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
             )}
             {/* CTA Button */}
@@ -193,7 +193,7 @@ export function Header() {
 
           {/* Mobile Navigation */}
           <div className="md:hidden flex shrink-0 items-center gap-2">
-            {isDashboardPage && (
+            {!shouldShowMinimalHeaderForStaff && (
               <LanguageSwitcher language={language} onChange={setPreferredLanguage} compact />
             )}
             {shouldShowMinimalHeaderForStaff ? (
