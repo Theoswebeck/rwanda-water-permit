@@ -76,7 +76,7 @@ export function LoginForm() {
     const errorParam = searchParams.get('error');
     
     if (message) {
-      setSuccess(message);
+      setSuccess(tx(message));
     }
     
     if (errorParam) {
