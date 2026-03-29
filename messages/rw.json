@@ -514,7 +514,12 @@
       "Email address": "Aderesi ya imeyili",
       "Resend code": "Ohereza kode bundi",
       "Enter the 6-digit code sent to": "Injiza kode y'imibare 6 yoherejwe kuri",
-      "Login": "Injira"
+      "Login": "Injira",
+      "Hide password": "Hisha ijambo ry'ibanga",
+      "Show password": "Erekana ijambo ry'ibanga",
+      "Hide confirm password": "Hisha emeza ijambo ry'ibanga",
+      "Show confirm password": "Erekana emeza ijambo ry'ibanga",
+      "Failed to resend code. Please try again.": "Kohereza kode bundi bushye byanze. Nyamuneka ongera ugerageze."
     },
     "words": {
       "Applicant": "Usaba",

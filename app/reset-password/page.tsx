@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -18,13 +20,22 @@ function ResetPasswordContent() {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("en");
   const searchParams = useSearchParams();
   const resetToken = searchParams.get("resetToken") || "";
 
   useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
+
+  useEffect(() => {
     if (!resetToken) {
-      setError('Invalid reset password link. Missing reset token.');
+      setError(tx("Invalid reset password link. Missing reset token."));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetToken]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,17 +44,17 @@ function ResetPasswordContent() {
     setSuccess("");
 
     if (!password || !confirmPassword) {
-      setError("Please fill in all fields");
+      setError(tx("Please fill in all fields"));
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match");
+      setError(tx("Passwords do not match"));
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
+      setError(tx("Password must be at least 6 characters long"));
       return;
     }
 
@@ -60,15 +71,15 @@ function ResetPasswordContent() {
       });
       const json = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string };
       if (!res.ok || !json.success) {
-        setError(json.message || "Failed to update password");
+        setError(json.message || tx("Failed to update password"));
       } else {
-        setSuccess("Password updated successfully! Redirecting to login...");
+        setSuccess(tx("Password updated successfully! Redirecting to login..."));
         setTimeout(() => {
           router.push("/login?message=Password updated successfully! Please sign in with your new password.");
         }, 2000);
       }
     } catch {
-      setError("An unexpected error occurred");
+      setError(tx("An unexpected error occurred"));
     } finally {
       setIsLoading(false);
     }
@@ -82,9 +93,9 @@ function ResetPasswordContent() {
             <div className="mx-auto h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
               <KeyRound className="h-6 w-6 text-blue-600" />
             </div>
-            <CardTitle className="text-2xl">Reset Your Password</CardTitle>
+            <CardTitle className="text-2xl">{tx("Reset Your Password")}</CardTitle>
             <CardDescription>
-              Enter your new password below
+              {tx("Enter your new password below")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -101,14 +112,14 @@ function ResetPasswordContent() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="password">New Password</Label>
+                <Label htmlFor="password">{tx("New Password")}</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter new password"
+                    placeholder={tx("Enter new password")}
                     required
                     disabled={isLoading}
                     className="pr-10"
@@ -119,6 +130,7 @@ function ResetPasswordContent() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? tx("Hide password") : tx("Show password")}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
@@ -126,14 +138,14 @@ function ResetPasswordContent() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Label htmlFor="confirmPassword">{tx("Confirm New Password")}</Label>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
                     type={showConfirmPassword ? "text" : "password"}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
+                    placeholder={tx("Confirm new password")}
                     required
                     disabled={isLoading}
                     className="pr-10"
@@ -144,28 +156,29 @@ function ResetPasswordContent() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? tx("Hide confirm password") : tx("Show confirm password")}
                   >
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full"
                 disabled={isLoading || !password || !confirmPassword}
               >
-                {isLoading ? "Updating Password..." : "Update Password"}
+                {isLoading ? tx("Updating Password...") : tx("Update Password")}
               </Button>
             </form>
 
             <div className="mt-6 text-center">
-              <Button 
-                variant="link" 
+              <Button
+                variant="link"
                 onClick={() => router.push("/login")}
                 className="text-sm"
               >
-                Back to Login
+                {tx("Back to Login")}
               </Button>
             </div>
           </CardContent>

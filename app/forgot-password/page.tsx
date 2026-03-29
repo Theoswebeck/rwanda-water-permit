@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, KeyRound, Loader2, Mail } from "lucide-react";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -22,6 +24,14 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
 
   const trimmedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
 
@@ -31,7 +41,7 @@ export default function ForgotPasswordPage() {
     setSuccess("");
 
     if (!trimmedEmail) {
-      setError("Please enter your email address.");
+      setError(tx("Please enter your email address."));
       return;
     }
 
@@ -44,17 +54,17 @@ export default function ForgotPasswordPage() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        setError(json?.message || "Failed to send reset code. Please try again.");
+        setError(json?.message || tx("Failed to send reset code. Please try again."));
         return;
       }
 
       // Security/UX: don't reveal whether an email exists.
       setSuccess(
-        "If an account exists for this email, you'll receive a password reset code shortly. Please check your inbox (and spam)."
+        tx("If an account exists for this email, you'll receive a password reset code shortly. Please check your inbox (and spam).")
       );
       setStep("verify");
     } catch {
-      setError("Failed to send reset code. Please try again.");
+      setError(tx("Failed to send reset code. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -66,14 +76,14 @@ export default function ForgotPasswordPage() {
     setSuccess("");
 
     if (!trimmedEmail) {
-      setError("Please enter your email address.");
+      setError(tx("Please enter your email address."));
       setStep("request");
       return;
     }
 
     const c = code.trim();
     if (!c) {
-      setError("Please enter the code we sent to your email.");
+      setError(tx("Please enter the code we sent to your email."));
       return;
     }
 
@@ -86,20 +96,20 @@ export default function ForgotPasswordPage() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        setError(json?.message || "Invalid or expired code. Please try again.");
+        setError(json?.message || tx("Invalid or expired code. Please try again."));
         return;
       }
 
       const token = String(json?.resetToken ?? "").trim();
       if (!token) {
-        setError("Server error: missing reset token. Please resend the code and try again.");
+        setError(tx("Server error: missing reset token. Please resend the code and try again."));
         return;
       }
       setResetToken(token);
-      setSuccess("Code verified. Please set your new password.");
+      setSuccess(tx("Code verified. Please set your new password."));
       setStep("set_password");
     } catch {
-      setError("Could not verify code. Please try again.");
+      setError(tx("Could not verify code. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -111,23 +121,23 @@ export default function ForgotPasswordPage() {
     setSuccess("");
 
     if (!resetToken) {
-      setError("Your reset session expired. Please verify the code again.");
+      setError(tx("Your reset session expired. Please verify the code again."));
       setStep("verify");
       return;
     }
 
     if (!password || !confirmPassword) {
-      setError("Please fill in all fields.");
+      setError(tx("Please fill in all fields."));
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError(tx("Passwords do not match."));
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters long.");
+      setError(tx("Password must be at least 6 characters long."));
       return;
     }
 
@@ -140,16 +150,16 @@ export default function ForgotPasswordPage() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        setError(json?.message || "Could not update password. Please try again.");
+        setError(json?.message || tx("Could not update password. Please try again."));
         return;
       }
 
-      setSuccess(json?.message || "Password updated successfully! Redirecting to login…");
+      setSuccess(json?.message || tx("Password updated successfully! Redirecting to login…"));
       setTimeout(() => {
         router.push("/login?message=Password updated successfully! Please sign in with your new password.");
       }, 1500);
     } catch {
-      setError("Could not update password. Please try again.");
+      setError(tx("Could not update password. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -163,13 +173,13 @@ export default function ForgotPasswordPage() {
             <div className="mx-auto h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
               <KeyRound className="h-6 w-6 text-blue-600" />
             </div>
-            <CardTitle className="text-2xl">Forgot password</CardTitle>
+            <CardTitle className="text-2xl">{tx("Forgot password")}</CardTitle>
             <CardDescription>
               {step === "request"
-                ? "Enter your email and we’ll send you a reset code."
+                ? tx("Enter your email and we'll send you a reset code.")
                 : step === "verify"
-                  ? "Enter the code from your email to verify your request."
-                  : "Code verified. Choose a new password."}
+                  ? tx("Enter the code from your email to verify your request.")
+                  : tx("Code verified. Choose a new password.")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -191,7 +201,7 @@ export default function ForgotPasswordPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{tx("Email")}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -211,12 +221,12 @@ export default function ForgotPasswordPage() {
               {step !== "request" && step !== "set_password" && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="code">Code</Label>
+                    <Label htmlFor="code">{tx("Code")}</Label>
                     <Input
                       id="code"
                       inputMode="numeric"
                       autoComplete="one-time-code"
-                      placeholder="6-digit code"
+                      placeholder={tx("6-digit code")}
                       value={code}
                       onChange={(e) => setCode(e.target.value)}
                       disabled={isLoading}
@@ -229,14 +239,14 @@ export default function ForgotPasswordPage() {
               {step === "set_password" && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="password">New Password</Label>
+                    <Label htmlFor="password">{tx("New Password")}</Label>
                     <div className="relative">
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Enter new password"
+                        placeholder={tx("Enter new password")}
                         required
                         disabled={isLoading}
                         className="pr-10"
@@ -248,7 +258,7 @@ export default function ForgotPasswordPage() {
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3"
                         onClick={() => setShowPassword((v) => !v)}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-label={showPassword ? tx("Hide password") : tx("Show password")}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
@@ -256,14 +266,14 @@ export default function ForgotPasswordPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Label htmlFor="confirmPassword">{tx("Confirm New Password")}</Label>
                     <div className="relative">
                       <Input
                         id="confirmPassword"
                         type={showConfirmPassword ? "text" : "password"}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm new password"
+                        placeholder={tx("Confirm new password")}
                         required
                         disabled={isLoading}
                         className="pr-10"
@@ -275,7 +285,7 @@ export default function ForgotPasswordPage() {
                         size="sm"
                         className="absolute right-0 top-0 h-full px-3"
                         onClick={() => setShowConfirmPassword((v) => !v)}
-                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        aria-label={showConfirmPassword ? tx("Hide confirm password") : tx("Show confirm password")}
                       >
                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
@@ -297,9 +307,9 @@ export default function ForgotPasswordPage() {
                 {isLoading ? (
                   <span className="inline-flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {step === "request" ? "Sending…" : step === "verify" ? "Verifying…" : "Updating…"}
+                    {step === "request" ? tx("Sending…") : step === "verify" ? tx("Verifying…") : tx("Updating…")}
                   </span>
-                ) : step === "request" ? "Send reset code" : step === "verify" ? "Verify code" : "Update password"}
+                ) : step === "request" ? tx("Send reset code") : step === "verify" ? tx("Verify code") : tx("Update password")}
               </Button>
 
               {step === "verify" && (
@@ -318,7 +328,7 @@ export default function ForgotPasswordPage() {
                     }}
                     disabled={isLoading}
                   >
-                    Change email
+                    {tx("Change email")}
                   </button>
                   <button
                     type="button"
@@ -335,19 +345,19 @@ export default function ForgotPasswordPage() {
                         });
                         const json = await res.json().catch(() => null);
                         if (!res.ok || !json?.success) {
-                          setError(json?.message || "Failed to resend code. Please try again.");
+                          setError(json?.message || tx("Failed to resend code. Please try again."));
                           return;
                         }
-                        setSuccess("Code resent. Please check your email.");
+                        setSuccess(tx("Code resent. Please check your email."));
                       } catch {
-                        setError("Failed to resend code. Please try again.");
+                        setError(tx("Failed to resend code. Please try again."));
                       } finally {
                         setIsLoading(false);
                       }
                     }}
                     disabled={isLoading || !trimmedEmail}
                   >
-                    Resend code
+                    {tx("Resend code")}
                   </button>
                 </div>
               )}
@@ -355,11 +365,11 @@ export default function ForgotPasswordPage() {
 
             <div className="mt-6 text-center text-sm">
               <Link href="/login" className="underline">
-                Back to login
+                {tx("Back to login")}
               </Link>
               <span className="mx-2 text-muted-foreground">·</span>
               <Link href="/register" className="underline">
-                Create an account
+                {tx("Create an account")}
               </Link>
             </div>
           </CardContent>
