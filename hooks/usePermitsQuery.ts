@@ -27,6 +27,7 @@ export interface PermitWithApplication extends Permit {
       first_name?: string
       last_name?: string
       company_name?: string
+      email?: string
     }
     intended_activities: string[] | null
     province: string

@@ -96,9 +96,9 @@ export function WaterUseReportForm({
     if (applicant?.company_name) return applicant.company_name;
     const individualName = `${applicant?.first_name || ''} ${applicant?.last_name || ''}`.trim();
     if (individualName) return individualName;
-    // Fallback for legacy rows where applicant relation was not joined.
-    return permit.application?.project_title || 'N/A';
-  }, [permit.application?.applicant, permit.application?.project_title]);
+    if (applicant?.email) return applicant.email;
+    return 'N/A';
+  }, [permit.application?.applicant]);
 
   const buildInitialFormData = useCallback(() => ({
     reportingYear,

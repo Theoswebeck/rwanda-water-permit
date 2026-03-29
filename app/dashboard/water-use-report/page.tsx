@@ -94,7 +94,7 @@ function WaterUseReportContent() {
               max_daily_volume_m3, max_yearly_volume_m3, concession_area,
               water_source, water_purpose,
               applicant:users!applicant_id(
-                id, first_name, last_name, company_name
+                id, first_name, last_name, company_name, email
               )
             )
           `)
