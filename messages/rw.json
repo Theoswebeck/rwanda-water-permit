@@ -239,6 +239,8 @@
       "Your email address needs to be verified before you can log in.": "Aderesi ya imeyili yawe igomba kwemezwa mbere yo kwinjira.",
       "Resend Verification Email": "Ohereza bundi imeyili yo kwemeza",
       "Verification email sent successfully! Please check your inbox.": "Imeyili yo kwemeza yoherejwe neza! Nyamuneka reba uturaniro rwawe.",
+      "Please enter your email address first.": "Nyamuneka injiza aderesi ya imeyili yawe mbere.",
+      "Failed to send verification email. Please try again.": "Kohereza imeyili yo kwemeza byanze. Nyamuneka ongera ugerageze.",
       "Create an account": "Fungura konti",
       "Enter your details below to get started": "Injiza amakuru yawe hepfo kugira ngo utangire",
       "Organisation": "Ikigo",

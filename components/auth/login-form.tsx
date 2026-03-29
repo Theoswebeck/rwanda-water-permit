@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, RefreshCw } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 export function LoginForm() {
   const router = useRouter();
@@ -24,6 +26,12 @@ export function LoginForm() {
   const [resendingEmail, setResendingEmail] = useState(false);
   const [isClearingSession, setIsClearingSession] = useState(false);
   const [shouldRedirect, setShouldRedirect] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   const normalizeRole = (role: unknown): string => String(role ?? "").trim().toLowerCase();
 
@@ -74,16 +82,16 @@ export function LoginForm() {
     if (errorParam) {
       switch (errorParam) {
         case 'suspended':
-          setError('Your account has been suspended. Please contact support.');
+          setError(tx('Your account has been suspended. Please contact support.'));
           break;
         case 'inactive':
-          setError('Your account is inactive. Please contact support to reactivate.');
+          setError(tx('Your account is inactive. Please contact support to reactivate.'));
           break;
         case 'session_timeout':
-          setError('Your session has expired. Please sign in again.');
+          setError(tx('Your session has expired. Please sign in again.'));
           break;
         default:
-          setError('An authentication error occurred.');
+          setError(tx('An authentication error occurred.'));
       }
       
       // Clear the URL parameters after showing the error
@@ -170,7 +178,7 @@ export function LoginForm() {
       setShouldRedirect(true);
     } catch (error) {
       console.error("❌ Login error:", error);
-      setError("An unexpected error occurred. Please try again.");
+      setError(tx("An unexpected error occurred. Please try again."));
     } finally {
       setIsLoading(false);
     }
@@ -178,7 +186,7 @@ export function LoginForm() {
 
   const handleResendVerification = async () => {
     if (!email) {
-      setError("Please enter your email address first.");
+      setError(tx("Please enter your email address first."));
       return;
     }
 
@@ -193,13 +201,13 @@ export function LoginForm() {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.success) {
-        setError(json?.message || json?.error || 'Failed to send verification email. Please try again.');
+        setError(json?.message || json?.error || tx('Failed to send verification email. Please try again.'));
         return;
       }
-      setSuccess("Verification email sent successfully! Please check your inbox.");
+      setSuccess(tx("Verification email sent successfully! Please check your inbox."));
       setShowEmailVerificationHelp(false);
     } catch (error) {
-      setError("Failed to send verification email. Please try again.");
+      setError(tx("Failed to send verification email. Please try again."));
     } finally {
       setResendingEmail(false);
     }
@@ -208,9 +216,9 @@ export function LoginForm() {
   return (
     <Card className="mx-auto max-w-sm">
       <CardHeader>
-        <CardTitle className="text-2xl">Login to your account</CardTitle>
+        <CardTitle className="text-2xl">{tx("Login to your account")}</CardTitle>
         <CardDescription>
-          Enter your email below to login to your account
+          {tx("Enter your email below to login to your account")}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -230,7 +238,7 @@ export function LoginForm() {
               <Mail className="h-4 w-4 text-blue-600" />
               <AlertDescription className="text-blue-700">
                 <div className="space-y-2">
-                  <p>Your email address needs to be verified before you can log in.</p>
+                  <p>{tx("Your email address needs to be verified before you can log in.")}</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -241,12 +249,12 @@ export function LoginForm() {
                     {resendingEmail ? (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Sending...
+                        {tx("Sending...")}
                       </>
                     ) : (
                       <>
                         <Mail className="mr-2 h-4 w-4" />
-                        Resend Verification Email
+                        {tx("Resend Verification Email")}
                       </>
                     )}
                   </Button>
@@ -255,7 +263,7 @@ export function LoginForm() {
             </Alert>
           )}
           <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{tx("Email")}</Label>
             <Input
               id="email"
               type="email"
@@ -268,12 +276,12 @@ export function LoginForm() {
           </div>
           <div className="grid gap-2">
             <div className="flex items-center">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{tx("Password")}</Label>
               <Link
                 href="/forgot-password"
                 className="ml-auto inline-block text-sm underline"
               >
-                Forgot your password?
+                {tx("Forgot your password?")}
               </Link>
             </div>
             <Input
@@ -290,24 +298,24 @@ export function LoginForm() {
             className="w-full"
             disabled={isLoading || !email || !password}
           >
-            {isLoading ? "Signing in..." : "Login"}
+            {isLoading ? tx("Signing in...") : tx("Login")}
           </Button>
         </form>
         <div className="mt-4 text-center text-sm">
-          Don&apos;t have an account?{" "}
+          {tx("Don't have an account?")}{" "}
           <Link href="/register" className="underline">
-            Sign up
+            {tx("Sign up")}
           </Link>
         </div>
         <div className="mt-3 text-center text-xs text-muted-foreground">
-          Having trouble in a regular browser window?{" "}
+          {tx("Having trouble in a regular browser window?")}{" "}
           <button
             type="button"
             onClick={clearSavedSession}
             disabled={isClearingSession || isLoading}
             className="underline"
           >
-            {isClearingSession ? "Clearing saved session…" : "Clear saved session"}
+            {isClearingSession ? tx("Clearing saved session…") : tx("Clear saved session")}
           </button>
         </div>
       </CardContent>
