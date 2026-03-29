@@ -95,7 +95,7 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
       }, 100);
 
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      const errorMessage = err instanceof Error ? err.message : tx('An unexpected error occurred');
       setError(errorMessage);
     } finally {
       setIsSending(false);
@@ -183,7 +183,7 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
     if (code.length === 6) {
       handleVerifyCode(code);
     } else {
-      setError("Please enter all 6 digits");
+      setError(tx("Please enter all 6 digits"));
     }
   };
 

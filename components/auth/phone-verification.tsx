@@ -114,13 +114,13 @@ export function PhoneVerification({
     const v = phoneDraft.trim();
     setPhoneEditError("");
     if (!v) {
-      setPhoneEditError("Please enter a phone number.");
+      setPhoneEditError(tx("Please enter a phone number."));
       return;
     }
     // Basic sanity check; full normalization/validation is handled by parent
     const digits = v.replace(/\D/g, "");
     if (digits.length !== 10 || !digits.startsWith("07")) {
-      setPhoneEditError("Invalid phone number format. Use 07XXXXXXXX (10 digits).");
+      setPhoneEditError(tx("Invalid phone number format. Use 07XXXXXXXX (10 digits)."));
       return;
     }
     try {

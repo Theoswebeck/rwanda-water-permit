@@ -557,7 +557,11 @@
       "Submit": "Ohereza",
       "Review": "Genzura",
       "Modification": "Ihindurwa",
-      "Reason": "Impamvu"
+      "Reason": "Impamvu",
+      "Organisation name is required.": "Izina ry'ikigo rirakenewe.",
+      "Organisation address is required.": "Aderesi y'ikigo irakenewe.",
+      "First name and last name are required.": "Amazina y'ibanze n'ay'umuryango birakenewe.",
+      "Your account has been successfully created and your email has been verified.": "Konti yawe yashyizweho neza kandi imeyili yawe yemejwe."
     }
   }
 }

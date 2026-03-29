@@ -39,6 +39,8 @@ export function SuccessConfirmation({
   }, []);
   const tx = (value: string) => translateText(value, language);
 
+  const translatedMessage = tx(message);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -63,9 +65,9 @@ export function SuccessConfirmation({
           </div>
           <CardTitle className="text-2xl font-bold text-center">{tx(title)}</CardTitle>
           <CardDescription className="text-center">
-            {message.includes("{email}") 
-              ? message.replace("{email}", `<span class="font-medium">${email}</span>`) 
-              : message}
+            {translatedMessage.includes("{email}")
+              ? translatedMessage.replace("{email}", `<span class="font-medium">${email}</span>`)
+              : translatedMessage}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

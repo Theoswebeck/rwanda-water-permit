@@ -259,11 +259,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validateDateOfBirth = (dobStr: string) => {
     if (!dobStr) {
-      setDateOfBirthError("Date of birth is required.");
+      setDateOfBirthError(tx("Date of birth is required."));
       return false;
     }
     if (!isAtLeast18(dobStr)) {
-      setDateOfBirthError("You must be at least 18 years old to register.");
+      setDateOfBirthError(tx("You must be at least 18 years old to register."));
       return false;
     }
     setDateOfBirthError("");
@@ -272,12 +272,12 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validateEmail = (email: string) => {
     if (!email) {
-      setEmailError("Email is required.");
+      setEmailError(tx("Email is required."));
       return false;
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setEmailError("Invalid email address.");
+      setEmailError(tx("Invalid email address."));
       return false;
     }
     setEmailError("");
@@ -286,11 +286,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validatePassword = (password: string) => {
     if (!password) {
-      setPasswordError("Password is required.");
+      setPasswordError(tx("Password is required."));
       return false;
     }
     if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters long.");
+      setPasswordError(tx("Password must be at least 6 characters long."));
       return false;
     }
     setPasswordError("");
@@ -299,14 +299,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validateNationalId = (idNumber: string) => {
     if (!idNumber) {
-      setIdNumberError("National ID is required.");
+      setIdNumberError(tx("National ID is required."));
       return false;
     }
 
     // Validate that the ID contains exactly 16 digits
     const digits = idNumber.replace(/\D/g, "");
     if (!/^\d{16}$/.test(digits)) {
-      setIdNumberError("ID number must be exactly 16 digits.");
+      setIdNumberError(tx("ID number must be exactly 16 digits."));
       return false;
     }
 
@@ -316,7 +316,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validateCompanyTIN = (tin: string) => {
     if (!tin) {
-      setCompanyTINError("TIN is required for organisation registration.");
+      setCompanyTINError(tx("TIN is required for organisation registration."));
       return false;
     }
 
@@ -325,13 +325,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     
     // Rwanda TIN format: 9 digits
     if (digits.length !== 9) {
-      setCompanyTINError("TIN must be exactly 9 digits.");
+      setCompanyTINError(tx("TIN must be exactly 9 digits."));
       return false;
     }
 
     // Check if all characters are digits
     if (!/^\d{9}$/.test(digits)) {
-      setCompanyTINError("TIN must contain only numbers.");
+      setCompanyTINError(tx("TIN must contain only numbers."));
       return false;
     }
 
@@ -351,11 +351,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const validateRwandaPhone = (raw: string, setErr: (msg: string) => void) => {
     if (!raw?.trim()) {
-      setErr("Phone number is required.");
+      setErr(tx("Phone number is required."));
       return false;
     }
     if (!isValidRwandaPhone(raw)) {
-      setErr("Invalid phone number format. Use 07XXXXXXXX (10 digits).");
+      setErr(tx("Invalid phone number format. Use 07XXXXXXXX (10 digits)."));
       return false;
     }
     setErr("");
@@ -391,7 +391,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     // Validate account-specific fields
     if (accountType === 'company') {
       if (!companyName.trim()) {
-        setLocalError("Organisation name is required.");
+        setLocalError(tx("Organisation name is required."));
         return;
       }
       if (!validateCompanyTIN(companyTIN)) {
@@ -399,16 +399,16 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       }
       if (!validateRwandaPhone(companyPhone, setCompanyPhoneError)) return;
       if (!companyAddress.trim()) {
-        setLocalError("Organisation address is required.");
+        setLocalError(tx("Organisation address is required."));
         return;
       }
     } else {
       if (!firstName.trim() || !lastName.trim()) {
-        setLocalError("First name and last name are required.");
+        setLocalError(tx("First name and last name are required."));
         return;
       }
       if (!validateDateOfBirth(dateOfBirth)) {
-        setLocalError(dateOfBirthError || "You must be at least 18 years old to register.");
+        setLocalError(dateOfBirthError || tx("You must be at least 18 years old to register."));
         return;
       }
       if (!validateRwandaPhone(phone, setPhoneError)) return;
