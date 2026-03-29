@@ -194,7 +194,7 @@ function ResetPasswordLoading() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="flex items-center gap-2">
         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-        <span>Loading...</span>
+        <span>...</span>
       </div>
     </div>
   );
