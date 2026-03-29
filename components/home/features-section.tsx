@@ -2,42 +2,54 @@
 
 import { motion } from "framer-motion";
 import { CheckCircle } from "lucide-react";
-
-const featuresData = [
-  {
-    title: "Application Tracking",
-    description: "Monitor your water permit application status in real-time through our Rwanda Water Resources Board online dashboard.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bar-chart-3">
-        <path d="M3 3v18h18" />
-        <path d="M18 17V9" />
-        <path d="M13 17V5" />
-        <path d="M8 17v-3" />
-      </svg>
-    ),
-  },
-  {
-    title: "Secure Processing",
-    description: "The Rwanda Water Resources Board ensures your application data is protected with advanced security measures compliant with national regulations.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shield-check">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
-        <path d="m9 12 2 2 4-4" />
-      </svg>
-    ),
-  },
-  {
-    title: "Efficient Service",
-    description: "The Rwanda Water Resources Board digital system streamlines the water permit process to reduce processing time and administrative barriers.",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-zap">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-      </svg>
-    ),
-  },
-];
+import { useEffect, useState } from "react";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 export function FeaturesSection() {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
+
+  const featuresData = [
+    {
+      title: tx("Application Tracking"),
+      description: tx("Monitor your water permit application status in real-time through our Rwanda Water Resources Board online dashboard."),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-bar-chart-3">
+          <path d="M3 3v18h18" />
+          <path d="M18 17V9" />
+          <path d="M13 17V5" />
+          <path d="M8 17v-3" />
+        </svg>
+      ),
+    },
+    {
+      title: tx("Secure Processing"),
+      description: tx("The Rwanda Water Resources Board ensures your application data is protected with advanced security measures compliant with national regulations."),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shield-check">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" />
+          <path d="m9 12 2 2 4-4" />
+        </svg>
+      ),
+    },
+    {
+      title: tx("Efficient Service"),
+      description: tx("The Rwanda Water Resources Board digital system streamlines the water permit process to reduce processing time and administrative barriers."),
+      icon: (
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-zap">
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+        </svg>
+      ),
+    },
+  ];
+
   return (
     <section className="py-24 bg-muted">
       <div className="container mx-auto px-4">
@@ -48,11 +60,10 @@ export function FeaturesSection() {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <div className="text-sm font-medium text-primary mb-3">SERVICE FEATURES</div>
-          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl mb-6">Rwanda Water Resources Board Portal Services</h2>
+          <div className="text-sm font-medium text-primary mb-3">{tx("SERVICE FEATURES")}</div>
+          <h2 className="font-heading mt-12 scroll-m-28 text-2xl font-medium tracking-tight first:mt-0 lg:mt-20 [&+p]:!mt-4 *:[code]:text-2xl mb-6">{tx("Rwanda Water Resources Board Portal Services")}</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            The official Rwanda Water Resources Board portal provides essential services for managing water resources. 
-            Our platform ensures compliance with Rwanda's water regulations while offering a transparent process.
+            {tx("The official Rwanda Water Resources Board portal provides essential services for managing water resources. Our platform ensures compliance with Rwanda's water regulations while offering a transparent process.")}
           </p>
         </motion.div>
 
@@ -74,45 +85,45 @@ export function FeaturesSection() {
                   <>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Real-time application status updates</span>
+                      <span>{tx("Real-time application status updates")}</span>
                     </li>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Notification system for progress</span>
+                      <span>{tx("Notification system for progress")}</span>
                     </li>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Complete application history</span>
+                      <span>{tx("Complete application history")}</span>
                     </li>
                   </>
                 ) : index === 1 ? (
                   <>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>National data protection standards</span>
+                      <span>{tx("National data protection standards")}</span>
                     </li>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Secure document storage</span>
+                      <span>{tx("Secure document storage")}</span>
                     </li>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Government-verified processing</span>
+                      <span>{tx("Government-verified processing")}</span>
                     </li>
                   </>
                 ) : (
                   <>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Streamlined application submissions</span>
+                      <span>{tx("Streamlined application submissions")}</span>
                     </li>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Available 24/7 for applications</span>
+                      <span>{tx("Available 24/7 for applications")}</span>
                     </li>
                     <li className="flex items-center text-sm text-muted-foreground">
                       <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                      <span>Reduced processing time</span>
+                      <span>{tx("Reduced processing time")}</span>
                     </li>
                   </>
                 )}
@@ -123,4 +134,4 @@ export function FeaturesSection() {
       </div>
     </section>
   );
-} 
+}

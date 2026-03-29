@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 // Define a deterministic set of values for the floating dots
 // This will ensure the same values are used on both server and client
@@ -34,6 +36,14 @@ const floatingDots = [
 export function HeroSection() {
   const [isHovered, setIsHovered] = useState(false);
   const [isInView, setIsInView] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
 
   useEffect(() => {
     // Set in view after a small delay to trigger animations once loaded
@@ -60,23 +70,23 @@ export function HeroSection() {
   };
 
   const buttonVariants = {
-    hover: { 
+    hover: {
       scale: 1.05,
       boxShadow: "0 10px 15px rgba(0, 0, 0, 0.1)",
-      transition: { 
-        type: "spring", 
-        stiffness: 400, 
-        damping: 10 
+      transition: {
+        type: "spring",
+        stiffness: 400,
+        damping: 10
       }
     },
-    tap: { 
+    tap: {
       scale: 0.95,
       boxShadow: "0 5px 10px rgba(0, 0, 0, 0.1)"
     }
   };
 
   const featureIconVariants = {
-    hover: { 
+    hover: {
       rotate: [0, 10, -10, 0],
       transition: { duration: 0.5 }
     }
@@ -92,9 +102,9 @@ export function HeroSection() {
           transition={{ duration: 0.8, delay: 0.2 }}
           className="h-full w-full"
         >
-          <img 
-            src="/assets/DJI_0123_1.JPG" 
-            alt="Aerial view of boat on Rwanda lake" 
+          <img
+            src="/assets/DJI_0123_1.JPG"
+            alt="Aerial view of boat on Rwanda lake"
             className="h-full w-full object-cover"
             style={{ position: "absolute" }}
           />
@@ -122,19 +132,19 @@ export function HeroSection() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.7, delay: 0.3 }}
               >
-                Rwanda Water Permit Portal
+                {tx("Rwanda Water Permit Portal")}
               </motion.span>
             </motion.h1>
-            
+
             <motion.p
               className="text-white/90 mb-8 text-lg"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.7 }}
             >
-              Welcome to the official Rwanda Water Resources Board permit application portal. Apply, track, and manage your water concession permits through our secure digital platform for sustainable water resource management in Rwanda.
+              {tx("Welcome to the official Rwanda Water Resources Board permit application portal. Apply, track, and manage your water concession permits through our secure digital platform for sustainable water resource management in Rwanda.")}
             </motion.p>
-            
+
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center mb-8">
               <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
@@ -150,24 +160,24 @@ export function HeroSection() {
                     <Button size="lg" className="bg-white text-primary hover:bg-white/90 rounded-full px-8 h-12 font-medium relative overflow-hidden group">
                       <motion.span
                         className="relative z-10"
-                        animate={{ 
-                          y: [0, -2, 0], 
-                          transition: { 
-                            repeat: Infinity, 
-                            repeatType: "reverse", 
-                            duration: 1.5 
-                          } 
+                        animate={{
+                          y: [0, -2, 0],
+                          transition: {
+                            repeat: Infinity,
+                            repeatType: "reverse",
+                            duration: 1.5
+                          }
                         }}
                       >
-                        APPLY NOW
+                        {tx("APPLY NOW")}
                       </motion.span>
-                      <motion.div 
+                      <motion.div
                         className="absolute top-0 left-0 w-full h-full bg-white/20"
                         initial={{ x: "-100%" }}
-                        animate={{ 
+                        animate={{
                           x: isHovered ? "100%" : "-100%",
                         }}
-                        transition={{ 
+                        transition={{
                           duration: 0.8,
                           ease: "easeInOut"
                         }}
@@ -176,19 +186,19 @@ export function HeroSection() {
                   </motion.div>
                 </Link>
               </motion.div>
-              
+
               <motion.div
                 className="flex items-center gap-4 mt-6 sm:mt-0"
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
               >
-                <motion.div 
-                  className="flex items-center gap-2" 
+                <motion.div
+                  className="flex items-center gap-2"
                   variants={fadeInUp}
                   whileHover="hover"
                 >
-                  <motion.div 
+                  <motion.div
                     className="bg-white/20 rounded-full p-2"
                     variants={featureIconVariants}
                   >
@@ -196,14 +206,14 @@ export function HeroSection() {
                       <path fillRule="evenodd" d="M12.516 2.17a.75.75 0 00-1.032 0 11.209 11.209 0 01-7.877 3.08.75.75 0 00-.722.515A12.74 12.74 0 002.25 9.75c0 5.942 4.064 10.933 9.563 12.348a.75.75 0 00.674 0c5.499-1.415 9.563-6.406 9.563-12.348 0-1.39-.223-2.73-.635-3.985a.75.75 0 00-.722-.516l-.143.001c-2.996 0-5.717-1.17-7.734-3.08z" clipRule="evenodd" />
                     </svg>
                   </motion.div>
-                  <span className="text-sm font-medium text-white">SECURITY</span>
+                  <span className="text-sm font-medium text-white">{tx("SECURITY")}</span>
                 </motion.div>
-                <motion.div 
-                  className="flex items-center gap-2" 
+                <motion.div
+                  className="flex items-center gap-2"
                   variants={fadeInUp}
                   whileHover="hover"
                 >
-                  <motion.div 
+                  <motion.div
                     className="bg-white/20 rounded-full p-2"
                     variants={featureIconVariants}
                   >
@@ -211,14 +221,14 @@ export function HeroSection() {
                       <path fillRule="evenodd" d="M15.75 1.5a6.75 6.75 0 00-6.651 7.906c.067.39-.032.717-.221.906l-6.5 6.499a3 3 0 00-.878 2.121v2.818c0 .414.336.75.75.75H6a.75.75 0 00.75-.75v-1.5h1.5A.75.75 0 009 19.5V18h1.5a.75.75 0 00.75-.75V15h1.5a.75.75 0 00.75-.75v-1.5h1.5a.75.75 0 00.75-.75V9.81a8.998 8.998 0 002.987-.238c.39-.067.717.032.906.221a6.75 6.75 0 00-3.937-8.293z" clipRule="evenodd" />
                     </svg>
                   </motion.div>
-                  <span className="text-sm font-medium text-white">PRIVACY</span>
+                  <span className="text-sm font-medium text-white">{tx("PRIVACY")}</span>
                 </motion.div>
               </motion.div>
             </div>
           </motion.div>
         </div>
       </div>
-      
+
       {/* Floating dots background */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
         {floatingDots.map((dot, i) => (
@@ -247,4 +257,4 @@ export function HeroSection() {
       </div>
     </section>
   );
-} 
+}
