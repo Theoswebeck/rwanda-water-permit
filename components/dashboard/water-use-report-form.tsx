@@ -1542,7 +1542,8 @@ export function WaterUseReportForm({
                         />
                       </TableCell>
                     </TableRow>
-                    <>
+                    {template === 'concession' && (
+                      <>
                         <TableRow>
                           <TableCell>pH</TableCell>
                           <TableCell>-</TableCell>
@@ -1648,7 +1649,8 @@ export function WaterUseReportForm({
                             />
                           </TableCell>
                         </TableRow>
-                    </>
+                      </>
+                    )}
                   </TableBody>
                 </Table>
               </div>
