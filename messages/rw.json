@@ -566,7 +566,16 @@
       "Organisation name is required.": "Izina ry'ikigo rirakenewe.",
       "Organisation address is required.": "Aderesi y'ikigo irakenewe.",
       "First name and last name are required.": "Amazina y'ibanze n'ay'umuryango birakenewe.",
-      "Your account has been successfully created and your email has been verified.": "Konti yawe yashyizweho neza kandi imeyili yawe yemejwe."
+      "Your account has been successfully created and your email has been verified.": "Konti yawe yashyizweho neza kandi imeyili yawe yemejwe.",
+      "Loading profile...": "Gutegura umwirondoro...",
+      "Joined": "Yinjiye",
+      "Account Details": "Ibisobanuro bya konti",
+      "Account Type": "Ubwoko bwa konti",
+      "Account ID": "Indangamuntu ya konti",
+      "Applications Submitted": "Ubusabe bwoherejwe",
+      "Reviews Completed": "Isuzuma ryarangiye",
+      "View your account information and statistics": "Reba amakuru n'imibare by'konti yawe",
+      "N/A": "Ntabwo bihari"
     }
   }
 }

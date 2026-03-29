@@ -10,12 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Building, 
-  MapPin, 
+import {
+  User,
+  Mail,
+  Phone,
+  Building,
+  MapPin,
   Calendar,
   Shield,
   Key,
@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { MyDelegations } from "@/components/shared/my-delegations";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 interface ProfileFormData {
   first_name?: string;
@@ -51,10 +53,18 @@ export function ProfileManagement() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
-  
+  const [language, setLanguage] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
+
   // Profile form state
   const [profileData, setProfileData] = useState<ProfileFormData>({});
-  
+
   // Password change state
   const [passwordData, setPasswordData] = useState<PasswordChangeData>({
     currentPassword: "",
@@ -96,15 +106,15 @@ export function ProfileManagement() {
 
     try {
       const result = await updateProfile(profileData);
-      
+
       if (result.error) {
         setError(result.error);
       } else {
-        setSuccess("Profile updated successfully!");
+        setSuccess(tx("Profile updated successfully!"));
         setIsEditing(false);
       }
     } catch (err) {
-      setError("An unexpected error occurred");
+      setError(tx("An unexpected error occurred"));
     } finally {
       setIsLoading(false);
     }
@@ -115,12 +125,12 @@ export function ProfileManagement() {
     clearMessages();
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError("New passwords do not match");
+      setError(tx("New passwords do not match"));
       return;
     }
 
     if (passwordData.newPassword.length < 6) {
-      setError("Password must be at least 6 characters long");
+      setError(tx("Password must be at least 6 characters long"));
       return;
     }
 
@@ -128,11 +138,11 @@ export function ProfileManagement() {
 
     try {
       const result = await changePassword(passwordData.newPassword);
-      
+
       if (result.error) {
         setError(result.error);
       } else {
-        setSuccess("Password updated successfully!");
+        setSuccess(tx("Password updated successfully!"));
         setPasswordData({
           currentPassword: "",
           newPassword: "",
@@ -140,7 +150,7 @@ export function ProfileManagement() {
         });
       }
     } catch (err) {
-      setError("An unexpected error occurred");
+      setError(tx("An unexpected error occurred"));
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +160,7 @@ export function ProfileManagement() {
     if (userProfile?.account_type === 'company' && userProfile?.company_name) {
       return userProfile.company_name.split(' ').map(word => word[0]).join('').slice(0, 2).toUpperCase();
     }
-    
+
     const firstName = userProfile?.first_name || "";
     const lastName = userProfile?.last_name || "";
     return `${firstName[0] || ""}${lastName[0] || ""}`.toUpperCase() || "U";
@@ -184,14 +194,14 @@ export function ProfileManagement() {
   };
 
   // Check if user is staff (can delegate roles)
-  const isStaffUser = userProfile?.role && 
+  const isStaffUser = userProfile?.role &&
     ['reviewer', 'verifier', 'approver', 'assessor', 'inspector', 'admin'].includes(userProfile.role);
 
   if (!userProfile) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-6 w-6 animate-spin" />
-        <span className="ml-2">Loading profile...</span>
+        <span className="ml-2">{tx("Loading profile...")}</span>
       </div>
     );
   }
@@ -227,7 +237,7 @@ export function ProfileManagement() {
               <div className="text-sm text-gray-500">
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-1 shrink-0" />
-                  Joined {new Date(userProfile.created_at).toLocaleDateString()}
+                  {tx("Joined")} {new Date(userProfile.created_at).toLocaleDateString()}
                 </div>
               </div>
               <div className="flex space-x-2">
@@ -254,13 +264,13 @@ export function ProfileManagement() {
       {/* Profile Management Tabs */}
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList className={`grid w-full ${isStaffUser ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
-          <TabsTrigger value="profile" className="text-xs sm:text-sm">Profile</TabsTrigger>
-          <TabsTrigger value="security" className="text-xs sm:text-sm">Security</TabsTrigger>
-          <TabsTrigger value="account" className="text-xs sm:text-sm">Account</TabsTrigger>
+          <TabsTrigger value="profile" className="text-xs sm:text-sm">{tx("Profile")}</TabsTrigger>
+          <TabsTrigger value="security" className="text-xs sm:text-sm">{tx("Security")}</TabsTrigger>
+          <TabsTrigger value="account" className="text-xs sm:text-sm">{tx("Account")}</TabsTrigger>
           {isStaffUser && (
             <TabsTrigger value="delegations" className="flex items-center gap-1 text-xs sm:text-sm">
               <UserCheck className="h-3.5 w-3.5 shrink-0" />
-              Delegations
+              {tx("Delegations")}
             </TabsTrigger>
           )}
         </TabsList>
@@ -271,14 +281,14 @@ export function ProfileManagement() {
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <CardTitle>Profile Information</CardTitle>
+                  <CardTitle>{tx("Profile Information")}</CardTitle>
                   <CardDescription>
-                    Update your personal or company information
+                    {tx("Update your personal or company information")}
                   </CardDescription>
                 </div>
                 {!isEditing && (
                   <Button onClick={() => setIsEditing(true)} variant="outline" className="shrink-0">
-                    Edit Profile
+                    {tx("Edit Profile")}
                   </Button>
                 )}
               </div>
@@ -291,47 +301,47 @@ export function ProfileManagement() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900">First Name</h3>
-                          <p className="mt-1 text-sm text-gray-600">{userProfile.first_name || "Not provided"}</p>
+                          <h3 className="text-sm font-medium text-gray-900">{tx("First Name")}</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.first_name || tx("Not provided")}</p>
                         </div>
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900">Last Name</h3>
-                          <p className="mt-1 text-sm text-gray-600">{userProfile.last_name || "Not provided"}</p>
+                          <h3 className="text-sm font-medium text-gray-900">{tx("Last Name")}</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.last_name || tx("Not provided")}</p>
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-sm font-medium text-gray-900">Phone Number</h3>
-                        <p className="mt-1 text-sm text-gray-600">{userProfile.phone || "Not provided"}</p>
+                        <h3 className="text-sm font-medium text-gray-900">{tx("Phone Number")}</h3>
+                        <p className="mt-1 text-sm text-gray-600">{userProfile.phone || tx("Not provided")}</p>
                       </div>
                     </>
                   ) : (
                     <>
                       <div>
-                        <h3 className="text-sm font-medium text-gray-900">Company Name</h3>
-                        <p className="mt-1 text-sm text-gray-600">{userProfile.company_name || "Not provided"}</p>
+                        <h3 className="text-sm font-medium text-gray-900">{tx("Company Name")}</h3>
+                        <p className="mt-1 text-sm text-gray-600">{userProfile.company_name || tx("Not provided")}</p>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900">Company Phone</h3>
-                          <p className="mt-1 text-sm text-gray-600">{userProfile.company_phone || "Not provided"}</p>
+                          <h3 className="text-sm font-medium text-gray-900">{tx("Company Phone")}</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.company_phone || tx("Not provided")}</p>
                         </div>
                         <div>
-                          <h3 className="text-sm font-medium text-gray-900">Tax ID (TIN)</h3>
-                          <p className="mt-1 text-sm text-gray-600">{userProfile.company_tin || "Not provided"}</p>
+                          <h3 className="text-sm font-medium text-gray-900">{tx("Tax ID (TIN)")}</h3>
+                          <p className="mt-1 text-sm text-gray-600">{userProfile.company_tin || tx("Not provided")}</p>
                         </div>
                       </div>
                       <div>
-                        <h3 className="text-sm font-medium text-gray-900">Company Address</h3>
-                        <p className="mt-1 text-sm text-gray-600">{userProfile.company_address || "Not provided"}</p>
+                        <h3 className="text-sm font-medium text-gray-900">{tx("Company Address")}</h3>
+                        <p className="mt-1 text-sm text-gray-600">{userProfile.company_address || tx("Not provided")}</p>
                       </div>
                     </>
                   )}
-                  
+
                   {/* Only show Address field for individual accounts */}
                   {userProfile.account_type === 'individual' && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900">Address</h3>
-                      <p className="mt-1 text-sm text-gray-600">{userProfile.address || "Not provided"}</p>
+                      <h3 className="text-sm font-medium text-gray-900">{tx("Address")}</h3>
+                      <p className="mt-1 text-sm text-gray-600">{userProfile.address || tx("Not provided")}</p>
                     </div>
                   )}
                 </div>
@@ -342,7 +352,7 @@ export function ProfileManagement() {
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="first_name">First Name</Label>
+                          <Label htmlFor="first_name">{tx("First Name")}</Label>
                           <Input
                             id="first_name"
                             value={profileData.first_name || ""}
@@ -352,7 +362,7 @@ export function ProfileManagement() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="last_name">Last Name</Label>
+                          <Label htmlFor="last_name">{tx("Last Name")}</Label>
                           <Input
                             id="last_name"
                             value={profileData.last_name || ""}
@@ -363,21 +373,21 @@ export function ProfileManagement() {
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="phone">Phone Number</Label>
+                        <Label htmlFor="phone">{tx("Phone Number")}</Label>
                         <Input
                           id="phone"
                           value={profileData.phone || ""}
                           disabled={true}
                           readOnly
                           className="mt-1 bg-gray-50 cursor-not-allowed"
-                          placeholder="Phone number cannot be changed"
+                          placeholder={tx("Phone number cannot be changed")}
                         />
                       </div>
                     </>
                   ) : (
                     <>
                       <div>
-                        <Label htmlFor="company_name">Company Name</Label>
+                        <Label htmlFor="company_name">{tx("Company Name")}</Label>
                         <Input
                           id="company_name"
                           value={profileData.company_name || ""}
@@ -387,18 +397,18 @@ export function ProfileManagement() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="company_phone">Company Phone</Label>
+                        <Label htmlFor="company_phone">{tx("Company Phone")}</Label>
                         <Input
                           id="company_phone"
                           value={profileData.company_phone || ""}
                           disabled={true}
                           readOnly
                           className="mt-1 bg-gray-50 cursor-not-allowed"
-                          placeholder="Phone number cannot be changed"
+                          placeholder={tx("Phone number cannot be changed")}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="company_address">Company Address</Label>
+                        <Label htmlFor="company_address">{tx("Company Address")}</Label>
                         <Input
                           id="company_address"
                           value={profileData.company_address || ""}
@@ -413,7 +423,7 @@ export function ProfileManagement() {
                   {/* Only show Address field for individual accounts */}
                   {userProfile.account_type === 'individual' && (
                     <div>
-                      <Label htmlFor="address">Address</Label>
+                      <Label htmlFor="address">{tx("Address")}</Label>
                       <Input
                         id="address"
                         value={profileData.address || ""}
@@ -430,18 +440,18 @@ export function ProfileManagement() {
                         {isLoading ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Saving...
+                            {tx("Saving...")}
                           </>
                         ) : (
                           <>
                             <Save className="h-4 w-4 mr-2" />
-                            Save Changes
+                            {tx("Save Changes")}
                           </>
                         )}
                       </Button>
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         onClick={() => {
                           setIsEditing(false);
                           clearMessages();
@@ -460,7 +470,7 @@ export function ProfileManagement() {
                           }
                         }}
                       >
-                        Cancel
+                        {tx("Cancel")}
                       </Button>
                     </div>
                   )}
@@ -474,22 +484,22 @@ export function ProfileManagement() {
         <TabsContent value="security">
           <Card>
             <CardHeader>
-              <CardTitle>Security Settings</CardTitle>
+              <CardTitle>{tx("Security Settings")}</CardTitle>
               <CardDescription>
-                Manage your password and security preferences
+                {tx("Manage your password and security preferences")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div>
-                  <Label htmlFor="new_password">New Password</Label>
+                  <Label htmlFor="new_password">{tx("New Password")}</Label>
                   <div className="relative mt-1">
                     <Input
                       id="new_password"
                       type={showPasswords.new ? "text" : "password"}
                       value={passwordData.newPassword}
                       onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                      placeholder="Enter new password"
+                      placeholder={tx("Enter new password")}
                     />
                     <Button
                       type="button"
@@ -504,14 +514,14 @@ export function ProfileManagement() {
                 </div>
 
                 <div>
-                  <Label htmlFor="confirm_password">Confirm New Password</Label>
+                  <Label htmlFor="confirm_password">{tx("Confirm New Password")}</Label>
                   <div className="relative mt-1">
                     <Input
                       id="confirm_password"
                       type={showPasswords.confirm ? "text" : "password"}
                       value={passwordData.confirmPassword}
                       onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                      placeholder="Confirm new password"
+                      placeholder={tx("Confirm new password")}
                     />
                     <Button
                       type="button"
@@ -529,12 +539,12 @@ export function ProfileManagement() {
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Updating Password...
+                      {tx("Updating Password...")}
                     </>
                   ) : (
                     <>
                       <Key className="h-4 w-4 mr-2" />
-                      Update Password
+                      {tx("Update Password")}
                     </>
                   )}
                 </Button>
@@ -547,15 +557,15 @@ export function ProfileManagement() {
         <TabsContent value="account">
           <Card>
             <CardHeader>
-              <CardTitle>Account Details</CardTitle>
+              <CardTitle>{tx("Account Details")}</CardTitle>
               <CardDescription>
-                View your account information and statistics
+                {tx("View your account information and statistics")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Account Type</Label>
+                  <Label className="text-sm font-medium">{tx("Account Type")}</Label>
                   <div className="flex items-center space-x-2">
                     <Building className="h-4 w-4 text-gray-500" />
                     <span className="capitalize">{userProfile.account_type}</span>
@@ -563,7 +573,7 @@ export function ProfileManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Account ID</Label>
+                  <Label className="text-sm font-medium">{tx("Account ID")}</Label>
                   <div className="flex items-center space-x-2 min-w-0">
                     <User className="h-4 w-4 text-gray-500 shrink-0" />
                     <span className="font-mono text-sm break-all">{userProfile.id}</span>
@@ -571,14 +581,14 @@ export function ProfileManagement() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Applications Submitted</Label>
+                  <Label className="text-sm font-medium">{tx("Applications Submitted")}</Label>
                   <div className="text-2xl font-bold text-blue-600">
                     {userProfile.applications_count || 0}
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Reviews Completed</Label>
+                  <Label className="text-sm font-medium">{tx("Reviews Completed")}</Label>
                   <div className="text-2xl font-bold text-green-600">
                     {userProfile.reviews_count || 0}
                   </div>
@@ -587,12 +597,12 @@ export function ProfileManagement() {
                 {userProfile.id_type && userProfile.id_number && (
                   <>
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium">ID Type</Label>
+                      <Label className="text-sm font-medium">{tx("ID Type")}</Label>
                       <div className="capitalize">{userProfile.id_type.replace('_', ' ')}</div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium">ID Number</Label>
+                      <Label className="text-sm font-medium">{tx("ID Number")}</Label>
                       <div className="font-mono">{userProfile.id_number}</div>
                     </div>
                   </>

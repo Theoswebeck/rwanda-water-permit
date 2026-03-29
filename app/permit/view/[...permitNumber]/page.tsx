@@ -374,18 +374,18 @@ export default async function PublicPermitViewPage({
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Issue date</Tx></div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{issueDate ? formatDate(issueDate) : "N/A"}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{issueDate ? formatDate(issueDate) : <Tx>N/A</Tx>}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Expiry date</Tx></div>
-                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.expiry_date ? formatDate(permit.expiry_date) : "N/A"}</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">{permit.expiry_date ? formatDate(permit.expiry_date) : <Tx>N/A</Tx>}</div>
                 </div>
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Water source</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
                     {typeof permit.water_source === "string"
                       ? permit.water_source.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
-                      : "N/A"}
+                      : <Tx>N/A</Tx>}
                   </div>
                 </div>
                 <div className="rounded-xl border p-4">
