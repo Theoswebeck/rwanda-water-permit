@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,22 +9,32 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Clock, 
-  CheckCircle, 
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  CheckCircle,
   AlertCircle,
   MessageSquare,
   FileText
 } from "lucide-react";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 export default function ContactPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [language, setLanguage] = useState<AppLanguage>("en");
+
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+
+  const tx = (value: string) => translateText(value, language);
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
@@ -49,10 +59,10 @@ export default function ContactPage() {
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       console.log('📧 Contact form submitted:', formData);
       setSuccess(true);
-      
+
       // Reset form
       setFormData({
         name: "",
@@ -64,11 +74,11 @@ export default function ContactPage() {
         message: "",
         priority: "normal"
       });
-      
+
       // Hide success message after 5 seconds
       setTimeout(() => setSuccess(false), 5000);
     } catch (err) {
-      setError('Failed to send message. Please try again.');
+      setError(tx('Failed to send message. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -76,19 +86,19 @@ export default function ContactPage() {
 
   const contactCard = {
     icon: MessageSquare,
-    title: "General Inquiries",
-    description: "Questions about water permits, applications, and general information",
+    title: tx("General Inquiries"),
+    description: tx("Questions about water permits, applications, and general information"),
     items: [
       { icon: Phone, label: "+250 782 985 880", href: "tel:+250782985880" },
       { icon: Mail, label: "info@rwb.rw", href: "mailto:info@rwb.rw" },
-      { icon: Clock, label: "Mon-Fri: 8:00 AM - 5:00 PM" }
+      { icon: Clock, label: tx("Mon-Fri: 8:00 AM - 5:00 PM") }
     ],
     color: "bg-blue-50 border-blue-200"
   };
 
   const officeLocations = [
     {
-      title: "Main Office - Kigali",
+      title: tx("Main Office - Kigali"),
       address: "KN 3 Ave, Kigali, Rwanda",
       phone: "+250 782 985 880",
       email: "info@rwb.rw"
@@ -107,11 +117,10 @@ export default function ContactPage() {
             className="text-center max-w-3xl mx-auto"
           >
             <h1 className="text-primary-foreground leading-tighter text-4xl font-semibold tracking-tight lg:text-5xl xl:text-6xl">
-              Contact Us
+              {tx("Contact Us")}
             </h1>
             <p className="mt-6 text-lg text-primary-foreground/90 leading-relaxed">
-              Get in touch with Rwanda Water Resources Board for permits, support, and inquiries. 
-              We're here to help you with all your water resource needs.
+              {tx("Get in touch with Rwanda Water Resources Board for permits, support, and inquiries. We're here to help you with all your water resource needs.")}
             </p>
           </motion.div>
         </div>
@@ -128,7 +137,7 @@ export default function ContactPage() {
             <Alert className="border-green-200 bg-green-50">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800">
-                ✅ <strong>Message sent successfully!</strong> We'll get back to you within 24 hours.
+                ✅ <strong>{tx("Message sent successfully! We'll get back to you within 24 hours.")}</strong>
               </AlertDescription>
             </Alert>
           </motion.div>
@@ -147,10 +156,10 @@ export default function ContactPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <FileText className="h-5 w-5" />
-                    Send us a message
+                    {tx("Send us a message")}
                   </CardTitle>
                   <CardDescription>
-                    Fill out the form below and we'll get back to you as soon as possible.
+                    {tx("Fill out the form below and we'll get back to you as soon as possible.")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -164,17 +173,17 @@ export default function ContactPage() {
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Full Name *</Label>
+                        <Label htmlFor="name">{tx("Full Name *")}</Label>
                         <Input
                           id="name"
                           required
                           value={formData.name}
                           onChange={(e) => handleInputChange('name', e.target.value)}
-                          placeholder="Enter your full name"
+                          placeholder={tx("Enter your full name")}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email Address *</Label>
+                        <Label htmlFor="email">{tx("Email Address *")}</Label>
                         <Input
                           id="email"
                           type="email"
@@ -188,7 +197,7 @@ export default function ContactPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
+                        <Label htmlFor="phone">{tx("Phone Number")}</Label>
                         <Input
                           id="phone"
                           type="tel"
@@ -198,76 +207,76 @@ export default function ContactPage() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="organization">Organization</Label>
+                        <Label htmlFor="organization">{tx("Organization")}</Label>
                         <Input
                           id="organization"
                           value={formData.organization}
                           onChange={(e) => handleInputChange('organization', e.target.value)}
-                          placeholder="Company or organization name"
+                          placeholder={tx("Company or organization name")}
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="category">Category *</Label>
+                        <Label htmlFor="category">{tx("Category *")}</Label>
                         <Select value={formData.category} onValueChange={(value) => handleInputChange('category', value)}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select inquiry type" />
+                            <SelectValue placeholder={tx("Select inquiry type")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="permit_application">Permit Application</SelectItem>
-                            <SelectItem value="permit_renewal">Permit Renewal</SelectItem>
-                            <SelectItem value="technical_support">Technical Support</SelectItem>
-                            <SelectItem value="billing_payment">Billing & Payment</SelectItem>
-                            <SelectItem value="inspection">Inspection Services</SelectItem>
-                            <SelectItem value="compliance">Compliance Issues</SelectItem>
-                            <SelectItem value="general_inquiry">General Inquiry</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="permit_application">{tx("Permit Application")}</SelectItem>
+                            <SelectItem value="permit_renewal">{tx("Permit Renewal")}</SelectItem>
+                            <SelectItem value="technical_support">{tx("Technical Support")}</SelectItem>
+                            <SelectItem value="billing_payment">{tx("Billing & Payment")}</SelectItem>
+                            <SelectItem value="inspection">{tx("Inspection Services")}</SelectItem>
+                            <SelectItem value="compliance">{tx("Compliance Issues")}</SelectItem>
+                            <SelectItem value="general_inquiry">{tx("General Inquiry")}</SelectItem>
+                            <SelectItem value="other">{tx("Other")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="priority">Priority</Label>
+                        <Label htmlFor="priority">{tx("Priority")}</Label>
                         <Select value={formData.priority} onValueChange={(value) => handleInputChange('priority', value)}>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select priority" />
+                            <SelectValue placeholder={tx("Select priority")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="low">Low</SelectItem>
-                            <SelectItem value="normal">Normal</SelectItem>
-                            <SelectItem value="high">High</SelectItem>
-                            <SelectItem value="urgent">Urgent</SelectItem>
+                            <SelectItem value="low">{tx("Low")}</SelectItem>
+                            <SelectItem value="normal">{tx("Normal")}</SelectItem>
+                            <SelectItem value="high">{tx("High")}</SelectItem>
+                            <SelectItem value="urgent">{tx("Urgent")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="subject">Subject *</Label>
+                      <Label htmlFor="subject">{tx("Subject *")}</Label>
                       <Input
                         id="subject"
                         required
                         value={formData.subject}
                         onChange={(e) => handleInputChange('subject', e.target.value)}
-                        placeholder="Brief description of your inquiry"
+                        placeholder={tx("Brief description of your inquiry")}
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="message">Message *</Label>
+                      <Label htmlFor="message">{tx("Message *")}</Label>
                       <Textarea
                         id="message"
                         required
                         value={formData.message}
                         onChange={(e) => handleInputChange('message', e.target.value)}
-                        placeholder="Please provide detailed information about your inquiry..."
+                        placeholder={tx("Please provide detailed information about your inquiry...")}
                         rows={6}
                       />
                     </div>
 
-                    <Button 
-                      type="submit" 
+                    <Button
+                      type="submit"
                       disabled={isLoading}
                       className="w-full"
                       size="lg"
@@ -275,12 +284,12 @@ export default function ContactPage() {
                       {isLoading ? (
                         <>
                           <div className="animate-spin h-4 w-4 border-2 border-background border-t-transparent rounded-full mr-2" />
-                          Sending Message...
+                          {tx("Sending Message...")}
                         </>
                       ) : (
                         <>
                           <MessageSquare className="h-4 w-4 mr-2" />
-                          Send Message
+                          {tx("Send Message")}
                         </>
                       )}
                     </Button>
@@ -315,7 +324,7 @@ export default function ContactPage() {
                       <div key={idx} className="flex items-center gap-3">
                         <item.icon className="h-4 w-4 text-muted-foreground" />
                         {item.href ? (
-                          <a 
+                          <a
                             href={item.href}
                             className="text-sm hover:text-primary transition-colors"
                           >
@@ -334,10 +343,10 @@ export default function ContactPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MapPin className="h-5 w-5" />
-                    Office Locations
+                    {tx("Office Locations")}
                   </CardTitle>
                   <CardDescription>
-                    Visit us at our offices across Rwanda
+                    {tx("Visit us at our offices across Rwanda")}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -376,4 +385,4 @@ export default function ContactPage() {
       </div>
     </div>
   );
-} 
+}
