@@ -1,11 +1,14 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle } from "lucide-react";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 
 interface SuccessConfirmationProps {
   email: string;
@@ -18,9 +21,9 @@ interface SuccessConfirmationProps {
   onComplete?: () => void;
 }
 
-export function SuccessConfirmation({ 
-  email, 
-  title = "Email Verified!", 
+export function SuccessConfirmation({
+  email,
+  title = "Email Verified!",
   message = "Your account has been successfully created and your email has been verified.",
   redirectUrl = "/dashboard",
   redirectLabel = "Go to Dashboard",
@@ -29,6 +32,12 @@ export function SuccessConfirmation({
   onComplete
 }: SuccessConfirmationProps) {
   const router = useRouter();
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   return (
     <motion.div
@@ -52,7 +61,7 @@ export function SuccessConfirmation({
               <CheckCircle className="h-16 w-16 text-green-500" />
             </motion.div>
           </div>
-          <CardTitle className="text-2xl font-bold text-center">{title}</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">{tx(title)}</CardTitle>
           <CardDescription className="text-center">
             {message.includes("{email}") 
               ? message.replace("{email}", `<span class="font-medium">${email}</span>`) 
@@ -61,19 +70,19 @@ export function SuccessConfirmation({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-muted p-4 rounded-lg border border-border">
-            <h3 className="font-medium mb-2">What's next?</h3>
+            <h3 className="font-medium mb-2">{tx("What's next?")}</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start">
                 <span className="mr-2">1.</span>
-                <span>Complete your profile and provide additional information</span>
+                <span>{tx("Complete your profile and provide additional information")}</span>
               </li>
               <li className="flex items-start">
                 <span className="mr-2">2.</span>
-                <span>Apply for a new water permit or manage existing ones</span>
+                <span>{tx("Apply for a new water permit or manage existing ones")}</span>
               </li>
               <li className="flex items-start">
                 <span className="mr-2">3.</span>
-                <span>Track application status through your dashboard</span>
+                <span>{tx("Track application status through your dashboard")}</span>
               </li>
             </ul>
           </div>
@@ -81,12 +90,12 @@ export function SuccessConfirmation({
             {showPrimaryButton && (
               onComplete ? (
                 <Button onClick={onComplete}>
-                  {redirectLabel}
+                  {tx(redirectLabel)}
                 </Button>
               ) : (
                 <Button asChild>
                   <Link href={redirectUrl}>
-                    {redirectLabel}
+                    {tx(redirectLabel)}
                   </Link>
                 </Button>
               )
@@ -94,14 +103,14 @@ export function SuccessConfirmation({
             {showApplyButton && (
               <Button variant="outline" asChild>
                 <Link href="/dashboard/new-application">
-                  Start New Application
+                  {tx("Start New Application")}
                 </Link>
               </Button>
             )}
           </div>
         </CardContent>
         <CardFooter className="text-xs text-center text-muted-foreground">
-          You can now access all the features of the Rwanda Water Resources Board permit application system.
+          {tx("You can now access all the features of the Rwanda Water Resources Board permit application system.")}
         </CardFooter>
       </Card>
     </motion.div>

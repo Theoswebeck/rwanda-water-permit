@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +18,13 @@ interface EmailVerificationStepProps {
 }
 
 export function EmailVerificationStep({ email, onContinue, onBack, isLoading = false }: EmailVerificationStepProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""]);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -193,11 +202,11 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
               <Mail className="h-8 w-8 text-primary" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold text-center">Verify Your Email</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">{tx("Verify Your Email")}</CardTitle>
           <CardDescription className="text-center">
-            {isSending 
-              ? "Sending verification code..."
-              : `Enter the 6-digit code sent to ${email}`
+            {isSending
+              ? tx("Sending verification code...")
+              : `${tx("Enter the 6-digit code sent to")} ${email}`
             }
           </CardDescription>
         </CardHeader>
@@ -227,19 +236,19 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
                   <CheckCircle className="h-12 w-12 text-green-600" />
                 </div>
               </motion.div>
-              <p className="mt-4 text-lg font-medium text-green-600">Email Verified!</p>
-              <p className="text-sm text-muted-foreground">Redirecting to dashboard...</p>
+              <p className="mt-4 text-lg font-medium text-green-600">{tx("Email Verified!")}</p>
+              <p className="text-sm text-muted-foreground">{tx("Redirecting to dashboard...")}</p>
             </div>
           ) : isSending ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-12 w-12 text-primary animate-spin" />
-              <p className="mt-4 text-muted-foreground">Sending verification code...</p>
+              <p className="mt-4 text-muted-foreground">{tx("Sending verification code...")}</p>
             </div>
           ) : (
             // Code verification stage
             <div className="space-y-6">
               <div className="space-y-4">
-                <Label className="text-center block">Enter verification code</Label>
+                <Label className="text-center block">{tx("Enter verification code")}</Label>
                 <div className="flex justify-center gap-2">
                   {verificationCode.map((digit, index) => (
                     <Input
@@ -269,12 +278,12 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
                   {isVerifying ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Verifying...
+                      {tx("Verifying...")}
                     </>
                   ) : (
                     <>
                       <Shield className="mr-2 h-4 w-4" />
-                      Verify & Create Account
+                      {tx("Verify & Create Account")}
                     </>
                   )}
                 </Button>
@@ -286,9 +295,9 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
                     disabled={resendCountdown > 0 || isSending || isVerifying || isLoading}
                     className={`${resendCountdown > 0 ? 'text-muted-foreground' : 'text-primary hover:underline'}`}
                   >
-                    {resendCountdown > 0 
-                      ? `Resend in ${resendCountdown}s` 
-                      : 'Resend code'
+                    {resendCountdown > 0
+                      ? `${tx("Resend code")} ${resendCountdown}s`
+                      : tx("Resend code")
                     }
                   </button>
                 </div>
@@ -302,7 +311,7 @@ export function EmailVerificationStep({ email, onContinue, onBack, isLoading = f
                 className="w-full"
               >
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to previous step
+                {tx("Back to previous step")}
               </Button>
             </div>
           )}

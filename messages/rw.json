@@ -498,7 +498,23 @@
       "Permit not found. Please select a valid permit.": "Uruhushya ntirwabonetse. Nyamuneka hitamo uruhushya rwemewe.",
       "Loading report form...": "Gutegura ifishi y'iraporo...",
       "Draft saved successfully.": "Inyandiko y'agateganyo yabitswe neza.",
-      "This report has already been submitted. You can view it but cannot make changes.": "Iyi raporo yamaze koherezwa. Ushobora kuyireba ariko ntushobora guhindura."
+      "This report has already been submitted. You can view it but cannot make changes.": "Iyi raporo yamaze koherezwa. Ushobora kuyireba ariko ntushobora guhindura.",
+
+      "Individual": "Umuntu ku giti cye",
+      "OR CONTINUE WITH": "CYANGWA KOMEZA NA",
+      "By registering, you agree to our terms and privacy practices.": "Mu kwiyandikisha, wemera amabwiriza n'imikorere yacu y'ibanga.",
+      "Phone number is required.": "Nomero ya telefoni irakenewe.",
+      "TIN must contain only numbers.": "TIN igomba gutunga imibare gusa.",
+      "Province could not be mapped from NIDA response.": "Intara ntishobotse gusobanurwa kuva mu gisubizo cya NIDA.",
+      "Format: 9 digits (e.g., 123456789)": "Uburyo: imibare 9 (urugero, 123456789)",
+      "Must be exactly 16 digits ({count}/16).": "Igomba kuba imibare 16 nzima ({count}/16).",
+      "Auto-filled after TIN verification": "Yuzurwa ku buryo bwikora nyuma yo kwemeza TIN",
+      "Auto-filled after NIDA verification": "Yuzurwa ku buryo bwikora nyuma yo kwemeza NIDA",
+      "Enter your ID number (16 digits)": "Injiza nomero y'irangamuntu (imibare 16)",
+      "Email address": "Aderesi ya imeyili",
+      "Resend code": "Ohereza kode bundi",
+      "Enter the 6-digit code sent to": "Injiza kode y'imibare 6 yoherejwe kuri",
+      "Login": "Injira"
     },
     "words": {
       "Applicant": "Usaba",

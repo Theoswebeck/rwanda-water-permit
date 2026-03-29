@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -33,6 +35,13 @@ export function PhoneVerification({
   error,
   onClearError,
 }: PhoneVerificationProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const CODE_LEN = 6;
   const [code, setCode] = useState<string[]>(Array.from({ length: CODE_LEN }, () => ""));
   const [isResending, setIsResending] = useState(false);
@@ -138,9 +147,9 @@ export function PhoneVerification({
     >
       <Card>
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Verify your phone</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">{tx("Verify your phone")}</CardTitle>
           <CardDescription className="text-center">
-            We&apos;ve sent a verification code to <span className="font-medium">{maskPhone(phoneNumber)}</span>
+            {tx("We've sent a verification code to")} <span className="font-medium">{maskPhone(phoneNumber)}</span>
             {onEditPhone && (
               <>
                 {" "}
@@ -153,7 +162,7 @@ export function PhoneVerification({
                   }}
                   disabled={isLoading || isUpdatingPhone}
                 >
-                  Edit
+                  {tx("Edit")}
                 </button>
               </>
             )}
@@ -167,7 +176,7 @@ export function PhoneVerification({
                   {phoneEditError}
                 </div>
               )}
-              <Label htmlFor="phoneEdit">Phone number</Label>
+              <Label htmlFor="phoneEdit">{tx("Phone Number")}</Label>
               <Input
                 id="phoneEdit"
                 type="tel"
@@ -186,10 +195,10 @@ export function PhoneVerification({
                   {isUpdatingPhone ? (
                     <span className="flex items-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Sending...
+                      {tx("Sending...")}
                     </span>
                   ) : (
-                    "Save & Send Code"
+                    tx("Save & Send Code")
                   )}
                 </Button>
                 <Button
@@ -202,7 +211,7 @@ export function PhoneVerification({
                   }}
                   disabled={isLoading || isUpdatingPhone}
                 >
-                  Cancel
+                  {tx("Cancel")}
                 </Button>
               </div>
             </div>
@@ -214,7 +223,7 @@ export function PhoneVerification({
           )}
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="code">Enter 6-digit code</Label>
+              <Label htmlFor="code">{tx("Enter 6-digit code")}</Label>
               <div className="flex justify-center gap-2">
                 {Array.from({ length: CODE_LEN }).map((_, index) => (
                   <Input
@@ -240,10 +249,10 @@ export function PhoneVerification({
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Verifying...
+                  {tx("Verifying...")}
                 </span>
               ) : (
-                "Verify Phone"
+                tx("Verify Phone")
               )}
             </Button>
           </div>
@@ -260,11 +269,11 @@ export function PhoneVerification({
               }}
               disabled={isLoading || isUpdatingPhone}
             >
-              Change phone number
+              {tx("Change phone number")}
             </Button>
           )}
           <div className="text-sm text-center text-muted-foreground">
-            Didn&apos;t receive the code?{" "}
+            {tx("Didn't receive the code?")}{" "}
             <button
               type="button"
               onClick={resend}
@@ -273,7 +282,7 @@ export function PhoneVerification({
                 countdown > 0 || isResending ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
-              {isResending ? "Resending..." : countdown > 0 ? `Resend in ${countdown}s` : "Resend Code"}
+              {isResending ? tx("Resending...") : countdown > 0 ? `${tx("Resend Code")} ${countdown}s` : tx("Resend Code")}
             </button>
           </div>
         </CardFooter>

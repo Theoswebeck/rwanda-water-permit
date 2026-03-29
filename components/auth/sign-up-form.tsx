@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { getPreferredLanguage, subscribeToLanguageChanges, type AppLanguage } from "@/lib/i18n/language";
+import { translateText } from "@/lib/i18n/translator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,6 +43,13 @@ interface SignUpFormProps {
 }
 
 export function SignUpForm({ onContinue, initialData, isLoading = false, error, onClearError }: SignUpFormProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   // #region agent log
   useEffect(() => {
     console.log('🔍 DEBUG SignUpForm mounted - onContinue type:', typeof onContinue, 'hasOnContinue:', !!onContinue);
@@ -539,9 +548,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     >
       <Card>
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">{tx("Create an account")}</CardTitle>
           <CardDescription className="text-center">
-            Enter your details below to get started
+            {tx("Enter your details below to get started")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -550,10 +559,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             const isPhoneIssue = lower.includes("phone") || lower.includes("verification code") || lower.includes("sms");
             const isDuplicate = lower.includes("already exists");
             const heading = isPhoneIssue
-              ? "Phone verification failed"
+              ? tx("Phone verification failed")
               : isDuplicate
-                ? "Account already exists"
-                : "Registration failed";
+                ? tx("Account already exists")
+                : tx("Registration failed");
 
             return (
               <div
@@ -566,7 +575,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                 {isDuplicate && (
                   <div className="mt-2">
                     <Link href="/login" className="text-primary underline underline-offset-2 font-medium">
-                      Go to login
+                      {tx("Go to login")}
                     </Link>
                   </div>
                 )}
@@ -587,8 +596,8 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="company">Organisation</TabsTrigger>
-              <TabsTrigger value="individual">Individual</TabsTrigger>
+              <TabsTrigger value="company">{tx("Organisation")}</TabsTrigger>
+              <TabsTrigger value="individual">{tx("Individual")}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="company">
@@ -596,13 +605,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                 {showRraFirstStep && !rraVerified ? (
                   <div className="rounded-xl border bg-muted/30 p-4">
                     <div className="mb-3">
-                      <p className="text-sm font-semibold text-foreground">Verify TIN to continue</p>
+                      <p className="text-sm font-semibold text-foreground">{tx("Verify TIN to continue")}</p>
                       <p className="text-xs text-muted-foreground">
-                        Enter your 9-digit TIN. We will fetch your organisation details automatically.
+                        {tx("Enter your 9-digit TIN. We will fetch your organisation details automatically.")}
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="companyTIN">Tax Identification Number (TIN)</Label>
+                      <Label htmlFor="companyTIN">{tx("Tax Identification Number (TIN)")}</Label>
                       <Input
                         id="companyTIN"
                         type="text"
@@ -631,11 +640,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         <p className="text-xs text-red-500 mt-1">{rraError}</p>
                       )}
                       {rraEnabled && !rraError && rraChecking && (
-                        <p className="text-xs text-muted-foreground mt-1">Verifying TIN with RRA…</p>
+                        <p className="text-xs text-muted-foreground mt-1">{tx("Verifying TIN with RRA…")}</p>
                       )}
                       {!companyTINError && !rraError && !rraChecking && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Format: 9 digits ({companyTIN.length}/9).
+                          {tx("Format: 9 digits (e.g., 123456789)")}
                         </p>
                       )}
                     </div>
@@ -668,14 +677,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                             >
                               <CheckCircle2 className="h-4 w-4" />
                             </motion.span>
-                            <span className="text-xs font-medium">TIN verified successfully</span>
+                            <span className="text-xs font-medium">{tx("TIN verified successfully")}</span>
                           </div>
                         </motion.div>
                       )}
 
                       {!showRraFirstStep && (
                         <div className="space-y-2">
-                          <Label htmlFor="companyTIN">Tax Identification Number (TIN)</Label>
+                          <Label htmlFor="companyTIN">{tx("Tax Identification Number (TIN)")}</Label>
                           <Input
                             id="companyTIN"
                             type="text"
@@ -692,17 +701,17 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                             <p className="text-xs text-red-500 mt-1">{companyTINError}</p>
                           )}
                           {!companyTINError && (
-                            <p className="text-xs text-muted-foreground mt-1">Format: 9 digits (e.g., 123456789)</p>
+                            <p className="text-xs text-muted-foreground mt-1">{tx("Format: 9 digits (e.g., 123456789)")}</p>
                           )}
                         </div>
                       )}
 
                       <div className="space-y-2">
-                        <Label htmlFor="companyName">Organisation Name</Label>
+                        <Label htmlFor="companyName">{tx("Organisation Name")}</Label>
                         <Input
                           id="companyName"
                           type="text"
-                          placeholder={rraEnabled ? "Auto-filled after TIN verification" : ""}
+                          placeholder={rraEnabled ? tx("Auto-filled after TIN verification") : ""}
                           required
                           value={companyName}
                           onChange={(e) => setCompanyName(e.target.value)}
@@ -713,11 +722,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="companyAddress">Organisation Address</Label>
+                        <Label htmlFor="companyAddress">{tx("Organisation Address")}</Label>
                         <Input
                           id="companyAddress"
                           type="text"
-                          placeholder={rraEnabled ? "Auto-filled after TIN verification" : "KN 3 AV Avenue"}
+                          placeholder={rraEnabled ? tx("Auto-filled after TIN verification") : "KN 3 AV Avenue"}
                           required
                           value={companyAddress}
                           onChange={(e) => setCompanyAddress(e.target.value)}
@@ -728,7 +737,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="companyPhone">Organisation Phone Number</Label>
+                        <Label htmlFor="companyPhone">{tx("Organisation Phone Number")}</Label>
                         <Input
                           id="companyPhone"
                           type="tel"
@@ -753,7 +762,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">{tx("Email")}</Label>
                         <Input
                           id="email"
                           type="email"
@@ -768,7 +777,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
+                        <Label htmlFor="password">{tx("Password")}</Label>
                         <div className="relative">
                           <Input
                             id="password"
@@ -800,9 +809,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         className="w-full"
                         disabled={isLoading || !companyFormReady}
                       >
-                        {isLoading ? "Please wait..." : (
+                        {isLoading ? tx("Please wait...") : (
                           <>
-                            Continue
+                            {tx("Continue")}
                             <ArrowRight className="ml-2 h-4 w-4" />
                           </>
                         )}
@@ -818,20 +827,20 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                 {showNidaFirstStep && !nidaVerified ? (
                   <div className="rounded-xl border bg-muted/30 p-4">
                     <div className="mb-3">
-                      <p className="text-sm font-semibold text-foreground">Verify National ID to continue</p>
+                      <p className="text-sm font-semibold text-foreground">{tx("Verify National ID to continue")}</p>
                       <p className="text-xs text-muted-foreground">
-                        Enter your 16-digit NIDA ID. We will fetch your details automatically.
+                        {tx("Enter your 16-digit NIDA ID. We will fetch your details automatically.")}
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="idNumber">NIDA ID Number</Label>
+                      <Label htmlFor="idNumber">{tx("NIDA ID Number")}</Label>
                       <Input
                         id="idNumber"
                         type="text"
                         inputMode="numeric"
                         pattern="\d*"
                         maxLength={16}
-                        placeholder="Enter your ID number (16 digits)"
+                        placeholder={tx("Enter your ID number (16 digits)")}
                         required
                         value={idNumber}
                         onChange={handleIdNumberChange}
@@ -853,14 +862,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         <p className="text-xs text-red-500 mt-1">{nidaError}</p>
                       )}
                       {nidaEnabled && !nidaError && nidaChecking && (
-                        <p className="text-xs text-muted-foreground mt-1">Verifying National ID with NIDA…</p>
+                        <p className="text-xs text-muted-foreground mt-1">{tx("Verifying National ID with NIDA…")}</p>
                       )}
                       {nidaEnabled && !nidaError && nidaVerified && (
-                        <p className="text-xs text-green-700 mt-1">National ID verified.</p>
+                        <p className="text-xs text-green-700 mt-1">{tx("National ID verified.")}</p>
                       )}
                       {!idNumberError && idType === "nationalId" && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Must be exactly 16 digits ({idNumber.length}/16).
+                          {tx("Must be exactly 16 digits ({count}/16).").replace("{count}", String(idNumber.length))}
                         </p>
                       )}
                     </div>
@@ -893,14 +902,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                             >
                               <CheckCircle2 className="h-4 w-4" />
                             </motion.span>
-                            <span className="text-xs font-medium">National ID verified successfully</span>
+                            <span className="text-xs font-medium">{tx("National ID verified successfully")}</span>
                           </div>
                         </motion.div>
                       )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="idType">ID Type</Label>
+                          <Label htmlFor="idType">{tx("ID Type")}</Label>
                           <Select
                             value={idType}
                             onValueChange={(v) => {
@@ -911,23 +920,23 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                             disabled={isLoading}
                           >
                             <SelectTrigger id="idType" className="w-full">
-                              <SelectValue placeholder="National ID" />
+                              <SelectValue placeholder={tx("National ID")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="nationalId">National ID</SelectItem>
+                              <SelectItem value="nationalId">{tx("National ID")}</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="idNumberExpanded">ID Number</Label>
+                          <Label htmlFor="idNumberExpanded">{tx("ID Number")}</Label>
                           <Input
                             id="idNumberExpanded"
                             type="text"
                             inputMode="numeric"
                             pattern="\d*"
                             maxLength={16}
-                            placeholder="Enter your ID number (16 digits)"
+                            placeholder={tx("Enter your ID number (16 digits)")}
                             required
                             value={idNumber}
                             onChange={handleIdNumberChange}
@@ -947,7 +956,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                           )}
                           {!idNumberError && idType === "nationalId" && (
                             <p className="text-xs text-muted-foreground mt-1">
-                              Must be exactly 16 digits ({idNumber.length}/16).
+                              {tx("Must be exactly 16 digits ({count}/16).").replace("{count}", String(idNumber.length))}
                             </p>
                           )}
                         </div>
@@ -955,11 +964,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="firstName">First Name</Label>
+                          <Label htmlFor="firstName">{tx("First Name")}</Label>
                           <Input
                             id="firstName"
                             type="text"
-                            placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                            placeholder={nidaEnabled ? tx("Auto-filled after NIDA verification") : ""}
                             required
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
@@ -970,11 +979,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="lastName">Last Name</Label>
+                          <Label htmlFor="lastName">{tx("Last Name")}</Label>
                           <Input
                             id="lastName"
                             type="text"
-                            placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                            placeholder={nidaEnabled ? tx("Auto-filled after NIDA verification") : ""}
                             required
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
@@ -986,11 +995,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="province">Province</Label>
+                        <Label htmlFor="province">{tx("Province")}</Label>
                         <Input
                           id="province"
                           type="text"
-                          placeholder={nidaEnabled ? "Auto-filled after NIDA verification" : ""}
+                          placeholder={nidaEnabled ? tx("Auto-filled after NIDA verification") : ""}
                           value={province}
                           className="transition-all duration-200 focus:ring-2 focus:ring-primary"
                           disabled={isLoading || nidaEnabled}
@@ -998,13 +1007,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         />
                         {nidaEnabled && nidaVerified && !province && (
                           <p className="text-xs text-muted-foreground mt-1">
-                            Province could not be mapped from NIDA response.
+                            {tx("Province could not be mapped from NIDA response.")}
                           </p>
                         )}
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                        <Label htmlFor="dateOfBirth">{tx("Date of Birth")}</Label>
                         <Input
                           id="dateOfBirth"
                           type="date"
@@ -1032,7 +1041,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="phone">Phone Number</Label>
+                        <Label htmlFor="phone">{tx("Phone Number")}</Label>
                         <Input
                           id="phone"
                           type="tel"
@@ -1059,7 +1068,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       {showIndividualCredentials && (
                         <>
                           <div className="space-y-2">
-                            <Label htmlFor="personEmail">Email</Label>
+                            <Label htmlFor="personEmail">{tx("Email")}</Label>
                             <Input
                               id="personEmail"
                               type="email"
@@ -1074,7 +1083,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="personPassword">Password</Label>
+                            <Label htmlFor="personPassword">{tx("Password")}</Label>
                             <div className="relative">
                               <Input
                                 id="personPassword"
@@ -1106,9 +1115,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                             className="w-full"
                             disabled={isLoading || !individualFormReady}
                           >
-                            {isLoading ? "Please wait..." : (
+                            {isLoading ? tx("Please wait...") : (
                               <>
-                                Continue
+                                {tx("Continue")}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                               </>
                             )}
@@ -1129,20 +1138,20 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">
-                OR CONTINUE WITH
+                {tx("OR CONTINUE WITH")}
               </span>
             </div>
           </div>
           <div className="flex items-center justify-center">
             <span className="text-sm text-muted-foreground">
-              Already have an account?{" "}
+              {tx("Already have an account?")}{" "}
               <Link href="/login" className="text-primary hover:underline font-medium">
-                Login
+                {tx("Login")}
               </Link>
             </span>
           </div>
           <div className="text-xs text-center text-muted-foreground">
-            By registering, you agree to our terms and privacy practices.
+            {tx("By registering, you agree to our terms and privacy practices.")}
           </div>
         </CardFooter>
       </Card>
