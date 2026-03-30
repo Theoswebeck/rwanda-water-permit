@@ -90,6 +90,17 @@ export async function POST(request: NextRequest) {
       if (isDevelopmentMode) {
         // Skip external SMS in development mode; proceed to DB storage.
         smsResponse = { ok: true } as any;
+      } else if (process.env.SMS_ENABLED !== 'true') {
+        // ─────────────────────────────────────────────────────────────────────
+        // SMS DISABLED — waiting for Pindo to register sender name "RWB"
+        // To re-enable SMS:
+        //   1. Confirm with Pindo support that "RWB" sender ID is approved
+        //   2. Set SMS_ENABLED=true in .env.local / .env.production
+        //   3. Set PINDO_SENDER_NAME=RWB
+        //   4. Set PINDO_DEVELOPMENT_MODE=false
+        // ─────────────────────────────────────────────────────────────────────
+        console.log('📵 [verify-phone] SMS disabled (SMS_ENABLED != true). Skipping Pindo call.');
+        smsResponse = { ok: true } as any;
       } else {
       smsResponse = await fetch('https://api.pindo.io/v1/sms/', {
         method: 'POST',
