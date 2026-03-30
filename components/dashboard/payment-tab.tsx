@@ -790,10 +790,10 @@ export function PaymentTab({
         <AlertTitle>Need Help?</AlertTitle>
         <AlertDescription className="text-xs">
           If you encounter any issues with payment, please contact support at{' '}
-          <a href="mailto:support@rwb.gov.rw" className="text-blue-600 hover:underline">
-            support@rwb.gov.rw
+          <a href="mailto:info@rwb.rw" className="text-blue-600 hover:underline">
+            info@rwb.rw
           </a>{' '}
-          or call <strong>+250 788 000 000</strong>
+          or call <strong>+250 782 985 880</strong>
         </AlertDescription>
       </Alert>
     </motion.div>
