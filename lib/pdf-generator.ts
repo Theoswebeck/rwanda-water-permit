@@ -1105,17 +1105,11 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
     y = 30;
   }
 
-  doc.text("Signature: …………………..", leftX, y);
-  y += 12;
-
-  doc.setFont(PERMIT_FONT_FAMILY, "bold");
-  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 6;
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
-  doc.text("Director General", leftX, y);
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
@@ -1236,17 +1230,11 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     y += 4;
   }
 
-  doc.text("Signature: …………………..", leftX, y);
-  y += 12;
-
-  doc.setFont(PERMIT_FONT_FAMILY, "bold");
-  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 6;
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
-  doc.text("Director General/", leftX, y);
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   doc.addPage();
   if (wm) stampWatermark(doc, wm);
@@ -1264,14 +1252,8 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     y = 30;
   }
 
-  doc.text("Umukono: …………………..", leftX, y);
-  y += 12;
-
-  doc.setFont(PERMIT_FONT_FAMILY, "bold");
-  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 6;
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
-  doc.text("Umuyobozi Mukuru", leftX, y);
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
@@ -1364,17 +1346,11 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
     y = 30;
   }
 
-  doc.text("Signature/Umukono: …………………..", leftX, y);
-  y += 12;
-
-  doc.setFont(PERMIT_FONT_FAMILY, "bold");
-  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 6;
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
-  doc.text("Director General/", leftX, y);
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 
@@ -1468,17 +1444,11 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
     y = 30;
   }
 
-  doc.text("Signature: …………………..", leftX, y);
-  y += 12;
-
-  doc.setFont(PERMIT_FONT_FAMILY, "bold");
-  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 6;
   doc.setFont(PERMIT_FONT_FAMILY, "normal");
-  doc.text("Director General", leftX, y);
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
 
   const rightX = 190;
-  doc.text(`Done at Kigali, On ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${formatDateDMY(issueDate)}`, rightX, y, { align: "right" });
 
   await drawPermitQrFooter({ doc, permitNumber });
 

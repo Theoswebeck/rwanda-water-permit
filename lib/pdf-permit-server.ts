@@ -476,13 +476,8 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   y += 4;
   doc.font("Times-Roman").fontSize(fontSize);
-  doc.text("Signature/Umukono: …………………..", leftX, y);
-  y += 30;
-
-  doc.font("Times-Bold").text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 14;
-  doc.font("Times-Roman").text("Director General", leftX, y);
-  doc.text(`Done at Kigali, On ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
   await drawQrFooter(doc, permitNumber);
 
@@ -558,12 +553,8 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
   y += 4;
   doc.font("Times-Roman").fontSize(fontSize);
-  doc.text("Signature: …………………..", leftX, y);
-  y += 30;
-  doc.font("Times-Bold").text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 14;
-  doc.font("Times-Roman").text("Director General", leftX, y);
-  doc.text(`Done at Kigali, On ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
   await drawQrFooter(doc, permitNumber);
   const total = doc.bufferedPageRange().count;
@@ -635,12 +626,8 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
   y += 4;
   doc.font("Times-Roman").fontSize(fontSize);
-  doc.text("Signature: …………………..", leftX, y);
-  y += 30;
-  doc.font("Times-Bold").text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 14;
-  doc.font("Times-Roman").text("Director General", leftX, y);
-  doc.text(`Done at Kigali, On ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
   await drawQrFooter(doc, permitNumber);
   const total = doc.bufferedPageRange().count;
@@ -719,12 +706,8 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
   y += 4;
   doc.font("Times-Roman").fontSize(fontSize);
-  doc.text("Signature: …………………..", leftX, y);
-  y += 30;
-  doc.font("Times-Bold").text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 14;
-  doc.font("Times-Roman").text("Director General", leftX, y);
-  doc.text(`Done at Kigali, On ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
   await drawQrFooter(doc, permitNumber);
   const total = doc.bufferedPageRange().count;

@@ -4,7 +4,8 @@ import { verifyTin } from '@/lib/rra/client'
 export async function POST(req: NextRequest) {
   const enabled = process.env.RRA_VERIFICATION_ENABLED === 'true'
   if (!enabled) {
-    return NextResponse.json({ success: false, message: 'RRA verification is disabled' }, { status: 400 })
+    console.warn('❌ RRA verify called but RRA_VERIFICATION_ENABLED is not true')
+    return NextResponse.json({ success: false, message: 'RRA verification is currently disabled' }, { status: 503 })
   }
 
   try {
@@ -22,9 +23,23 @@ export async function POST(req: NextRequest) {
     const data = await verifyTin(digits)
     return NextResponse.json({ success: true, data })
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : 'TIN could not be verified'
-    const safeMessage =
-      process.env.NODE_ENV === 'production' ? 'TIN could not be verified' : `TIN verification failed: ${message}`
-    return NextResponse.json({ success: false, message: safeMessage }, { status: 400 })
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    console.error(`❌ RRA TIN verification failed for request:`, message)
+
+    let userMessage = 'TIN could not be verified. Please try again later.'
+    if (message.includes('Missing required environment variable')) {
+      console.error('❌ RRA integration is misconfigured — check RRA_BASE_URL, RRA_USERNAME, RRA_PASSWORD env vars')
+      userMessage = 'TIN verification service is not configured. Please contact support.'
+    } else if (message.includes('RRA authentication failed')) {
+      console.error('❌ RRA authentication failed — credentials may be invalid')
+      userMessage = 'TIN verification service is temporarily unavailable. Please try again later.'
+    } else if (message.includes('No details found for tin')) {
+      userMessage = 'No taxpayer found for the provided TIN. Please verify and try again.'
+    } else if (message.includes('fetch failed') || message.includes('ECONNREFUSED') || message.includes('ETIMEDOUT')) {
+      console.error('❌ Cannot reach RRA API — check network connectivity to', process.env.RRA_BASE_URL)
+      userMessage = 'TIN verification service is unreachable. Please try again later.'
+    }
+
+    return NextResponse.json({ success: false, message: userMessage }, { status: 400 })
   }
 }

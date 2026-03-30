@@ -36,7 +36,7 @@ Resend (third-party SaaS) was removed due to **data sovereignty requirements** â
 ### Chosen Approach: Nodemailer + Gmail SMTP
 - **File:** `lib/notifications/smtp-email.ts` (replaces `resend-email.ts`)
 - **Transport:** `smtp.gmail.com:587` (STARTTLS)
-- **Sender account:** `nizzogentl1@gmail.com` (RWB-owned Gmail account)
+- **Sender account:** `rwandawaterresourcesboard@gmail.com` (RWB-owned Gmail account)
 - **Display name:** `Rwanda Water Resources Board`
 - **Reply-To:** `notification.permit@rwb.rw`
 - **App Password:** stored in `SMTP_PASS` env var
@@ -45,9 +45,9 @@ Resend (third-party SaaS) was removed due to **data sovereignty requirements** â
 ```
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=nizzogentl1@gmail.com
+SMTP_USER=rwandawaterresourcesboard@gmail.com
 SMTP_PASS=<google-app-password>
-EMAIL_FROM=Rwanda Water Resources Board <nizzogentl1@gmail.com>
+EMAIL_FROM=Rwanda Water Resources Board <rwandawaterresourcesboard@gmail.com>
 EMAIL_REPLY_TO=notification.permit@rwb.rw
 ```
 
