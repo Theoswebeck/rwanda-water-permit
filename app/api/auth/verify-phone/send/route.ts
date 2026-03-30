@@ -65,13 +65,13 @@ export async function POST(request: NextRequest) {
       console.log(`📟 Phone verification code (dev): code=${verificationCode} phoneSuffix=${String(phoneNumber || '').slice(-3)}`)
     }
 
-    // Production mode - send real SMS
-    if (!isDevelopmentMode) {
+    // Production mode - send real SMS (only required when SMS_ENABLED=true)
+    if (!isDevelopmentMode && process.env.SMS_ENABLED === 'true') {
       if (!apiKey) {
         return NextResponse.json(
-          { 
-            success: false, 
-            error: 'Pindo API key not configured' 
+          {
+            success: false,
+            error: 'Pindo API key not configured'
           },
           { status: 400 }
         );
