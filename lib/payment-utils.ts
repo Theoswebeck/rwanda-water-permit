@@ -102,12 +102,7 @@ export const formatPaymentAmount = (amount: number, currency: string = 'RWF'): s
  * Get application fee
  */
 export const getApplicationFee = (): number => {
-  // Support both env keys to avoid stale configs across environments.
-  const envFee =
-    process.env.NEXT_PUBLIC_APPLICATION_FEE ||
-    process.env.NEXT_PUBLIC_APPLICATION_FEE_AMOUNT;
-  const parsedFee = envFee ? parseFloat(envFee) : NaN;
-  return Number.isFinite(parsedFee) && parsedFee > 0 ? parsedFee : PAYMENT_CONFIG.DEFAULT_FEE;
+  return PAYMENT_CONFIG.DEFAULT_FEE;
 };
 
 /**
