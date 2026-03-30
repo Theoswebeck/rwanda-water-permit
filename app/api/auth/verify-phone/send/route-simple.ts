@@ -31,13 +31,30 @@ export async function POST(request: NextRequest) {
 
     if (isDevelopmentMode) {
       console.log('🔧 Development mode: Using test code 123456');
-      
+
       // In development mode, just return success
       return NextResponse.json({
         success: true,
         message: 'Development mode: Use code 123456 to verify',
         requestId: undefined,
       });
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SMS DISABLED — waiting for Pindo to register sender name "RWB"
+    // To re-enable SMS:
+    //   1. Confirm with Pindo support that "RWB" sender ID is approved
+    //   2. Set SMS_ENABLED=true in .env.local / .env.production
+    //   3. Set PINDO_SENDER_NAME=RWB
+    //   4. Set PINDO_DEVELOPMENT_MODE=false
+    // ─────────────────────────────────────────────────────────────────────────
+    if (process.env.SMS_ENABLED !== 'true') {
+      console.log('📵 [route-simple] SMS disabled (SMS_ENABLED != true). Skipping Pindo call.');
+      return NextResponse.json({
+        success: false,
+        disabled: true,
+        message: 'SMS is currently disabled (SMS_ENABLED != true).',
+      }, { status: 503 });
     }
 
     // Production mode - send real SMS
@@ -53,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     // Generate verification code
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const senderName = process.env.PINDO_SENDER_NAME || 'Pindo';
+    const senderName = process.env.PINDO_SENDER_NAME || 'RWB';
     const message = `Your Rwanda Water Resources Board verification code is: ${verificationCode}. Valid for 10 minutes. Do not share this code.`;
 
     console.log('📱 Sending SMS via Pindo API...');
