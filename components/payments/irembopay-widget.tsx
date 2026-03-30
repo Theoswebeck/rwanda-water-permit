@@ -311,11 +311,6 @@ export function IremboPayWidget({
           <p className="text-sm text-muted-foreground">
             Amount: {amount.toLocaleString()} {currency}
           </p>
-          {scriptLoaded && (
-            <p className="text-xs text-muted-foreground">
-              Environment: {isSandbox ? '🧪 Sandbox (Test Mode)' : '🔴 Production (Live)'}
-            </p>
-          )}
         </div>
         
         {/* Always show fallback option immediately */}
