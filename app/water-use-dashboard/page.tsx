@@ -1,5 +1,8 @@
 "use client";
 
+// Set to true to show the real dashboard. Currently showing "Coming Soon".
+const SHOW_WATER_DASHBOARD = false;
+
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -35,7 +38,33 @@ function formatNumber(n: number) {
   return new Intl.NumberFormat().format(Math.round(n));
 }
 
+function ComingSoon() {
+  return (
+    <div className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="max-w-md"
+      >
+        <div className="flex justify-center mb-6">
+          <div className="p-4 bg-primary/10 rounded-full">
+            <Waves className="h-12 w-12 text-primary" />
+          </div>
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight mb-3">Water Use Dashboard</h1>
+        <p className="text-muted-foreground text-lg mb-2">Coming Soon</p>
+        <p className="text-muted-foreground text-sm">
+          This page is under construction. Check back soon for water usage statistics and permit data across Rwanda.
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
 export default function WaterUseDashboardPage() {
+  if (!SHOW_WATER_DASHBOARD) return <ComingSoon />;
+
   const [q, setQ] = useState("");
   const [province, setProvince] = useState<string>("all");
   const [district, setDistrict] = useState<string>("all");
