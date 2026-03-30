@@ -65,16 +65,29 @@ export class PindoClient {
   }
 
   private async makeRequest<T = PindoResponse>(
-    endpoint: string, 
-    method: 'GET' | 'POST' | 'PUT' = 'POST', 
+    endpoint: string,
+    method: 'GET' | 'POST' | 'PUT' = 'POST',
     data?: any
   ): Promise<T> {
+    // ─────────────────────────────────────────────────────────────────────────
+    // SMS DISABLED — waiting for Pindo to register sender name "RWB"
+    // To re-enable SMS:
+    //   1. Confirm with Pindo support that "RWB" sender ID is approved
+    //   2. Set SMS_ENABLED=true in .env.local / .env.production
+    //   3. Set PINDO_SENDER_NAME=RWB
+    //   4. Set PINDO_DEVELOPMENT_MODE=false
+    // ─────────────────────────────────────────────────────────────────────────
+    if (process.env.SMS_ENABLED !== 'true') {
+      console.log(`📵 [PindoClient] SMS disabled (SMS_ENABLED != true). Skipping ${method} ${endpoint}`);
+      return {} as T;
+    }
+
     if (!this.apiKey) {
       throw new Error('Pindo API key is not configured');
     }
 
     const url = `${this.baseUrl}${endpoint}`;
-    
+
     const headers: Record<string, string> = {
       'Authorization': `Bearer ${this.apiKey}`,
       'Content-Type': 'application/json',
@@ -82,7 +95,7 @@ export class PindoClient {
 
     try {
       console.log(`📱 Making Pindo API request to: ${endpoint}`);
-      
+
       const response = await fetch(url, {
         method,
         headers,
@@ -97,7 +110,7 @@ export class PindoClient {
 
       const result = await response.json();
       console.log(`✅ Pindo API response:`, result);
-      
+
       return result as T;
     } catch (error) {
       console.error('❌ Error making Pindo API request:', error);
