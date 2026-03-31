@@ -16,6 +16,28 @@ const LOGO_PATH = path.join(ASSETS_DIR, "rwanda_water_board_Logo.png");
 // Cropped watermark asset to avoid transparent margins that cause blur/offset.
 const WATERMARK_PATH = path.join(ASSETS_DIR, "rwanda_logo_watermark.png");
 
+// ─── Fonts ────────────────────────────────────────────────────────────────────
+const FONTS_DIR = path.join(process.cwd(), "public", "assets", "fonts");
+const SEGOE_REGULAR = path.join(FONTS_DIR, "segoeui.ttf");
+const SEGOE_BOLD    = path.join(FONTS_DIR, "segoeuib.ttf");
+const SEGOE_ITALIC  = path.join(FONTS_DIR, "segoeuii.ttf");
+
+const hasSegoe = fs.existsSync(SEGOE_REGULAR) && fs.existsSync(SEGOE_BOLD);
+
+const FONT_REGULAR = hasSegoe ? "SegoeUI"        : "Times-Roman";
+const FONT_BOLD    = hasSegoe ? "SegoeUI-Bold"   : "Times-Bold";
+const FONT_ITALIC  = hasSegoe ? "SegoeUI-Italic" : "Times-Italic";
+
+function createDoc(): PDFKit.PDFDocument {
+  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+  if (hasSegoe) {
+    doc.registerFont("SegoeUI", SEGOE_REGULAR);
+    doc.registerFont("SegoeUI-Bold", SEGOE_BOLD);
+    doc.registerFont("SegoeUI-Italic", fs.existsSync(SEGOE_ITALIC) ? SEGOE_ITALIC : SEGOE_REGULAR);
+  }
+  return doc;
+}
+
 const PRODUCTION_URL = "https://waterpermit.rwb.rw";
 
 const PT = 2.83465; // 1mm in points
@@ -332,22 +354,22 @@ function drawWatermark(doc: PDFKit.PDFDocument): void {
   const x = (pw - wmSize) / 2 - 4 * PT;
   const y = (ph - wmSize) / 2 - 18 * PT;
   doc.save();
-  doc.opacity(0.50);
+  doc.opacity(0.18);
   doc.image(WATERMARK_PATH, x, y, { width: wmSize, height: wmSize });
   doc.restore();
 }
 
 function drawLogo(doc: PDFKit.PDFDocument): number {
   const pw = 595.28;
-  // Slightly taller/narrower box to avoid horizontal stretching.
-  const logoW = 52 * PT;
-  const logoH = 36 * PT;
+  // Natural aspect ratio of logo image (1450×1600px ≈ 0.906 w:h).
+  const logoW = 38 * PT;
+  const logoH = 42 * PT;
   const logoX = (pw - logoW) / 2;
   const logoY = 8 * PT;
   if (fs.existsSync(LOGO_PATH)) {
     doc.image(LOGO_PATH, logoX, logoY, { width: logoW, height: logoH });
   } else {
-    doc.font("Times-Bold").fontSize(13)
+    doc.font(FONT_BOLD).fontSize(13)
       .text("Rwanda Water Resources Board", 0, 23 * PT, { align: "center", width: pw });
   }
   return logoY + logoH + 10 * PT;
@@ -355,7 +377,7 @@ function drawLogo(doc: PDFKit.PDFDocument): number {
 
 function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number {
   const pw = 595.28;
-  doc.font("Times-Bold").fontSize(12);
+  doc.font(FONT_BOLD).fontSize(12);
   const titleW = doc.widthOfString(title);
   const titleX = (pw - titleW) / 2;
   doc.text(title, titleX, yPos);
@@ -392,7 +414,7 @@ async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Prom
   doc.image(qrPng, qrX + qrPad, qrY + qrPad, { width: qrBox - qrPad * 2, height: qrBox - qrPad * 2 });
 
   doc.save();
-  doc.font("Times-Italic").fontSize(8).fillColor("#646464");
+  doc.font(FONT_ITALIC).fontSize(8).fillColor("#646464");
   const disclaimerY = qrY + qrBox + 3 * PT;
   doc.text(
     "This digital permit is only valid if the information on it is the same as the information as the water use permit registry.",
@@ -404,7 +426,7 @@ async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Prom
 function drawPageFooter(doc: PDFKit.PDFDocument, permitNumber: string, page: number, total: number): void {
   const pw = 595.28;
   const y = 841.89 - 12 * PT;
-  doc.save().font("Times-Roman").fontSize(8).fillColor("#646464");
+  doc.save().font(FONT_REGULAR).fontSize(8).fillColor("#646464");
   doc.text(`Document ID: ${permitNumber}`, 0, y, { width: pw, align: "center" });
   doc.text(`Page ${page} of ${total}`, pw - 60 * PT, y, { width: 50 * PT, align: "right" });
   doc.restore();
@@ -421,7 +443,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
     return d;
   })();
 
-  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+  const doc = createDoc();
 
   drawWatermark(doc);
   drawLogo(doc);
@@ -434,7 +456,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
     doc.save();
     const bx = 595.28 - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
-    doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffffff")
+    doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
     doc.restore();
   }
@@ -464,7 +486,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   ];
 
   y += 8;
-  doc.font("Times-Roman").fontSize(fontSize).fillColor("#000000");
+  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
     if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
@@ -475,7 +497,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
 
   y += 4;
-  doc.font("Times-Roman").fontSize(fontSize);
+  doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
@@ -499,7 +521,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
     return d;
   })();
 
-  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+  const doc = createDoc();
   drawWatermark(doc);
   drawLogo(doc);
 
@@ -511,7 +533,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
     doc.save();
     const bx = 595.28 - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
-    doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffffff")
+    doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
     doc.restore();
   }
@@ -542,7 +564,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   ];
 
   y += 8;
-  doc.font("Times-Roman").fontSize(fontSize).fillColor("#000000");
+  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
     if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
@@ -552,7 +574,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
 
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
   y += 4;
-  doc.font("Times-Roman").fontSize(fontSize);
+  doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
@@ -571,7 +593,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     return d;
   })();
 
-  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+  const doc = createDoc();
   drawWatermark(doc);
   drawLogo(doc);
 
@@ -583,7 +605,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     doc.save();
     const bx = 595.28 - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
-    doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffffff")
+    doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
     doc.restore();
   }
@@ -615,7 +637,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   ];
 
   y += 8;
-  doc.font("Times-Roman").fontSize(fontSize).fillColor("#000000");
+  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
     if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
@@ -625,7 +647,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
 
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
   y += 4;
-  doc.font("Times-Roman").fontSize(fontSize);
+  doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
@@ -644,7 +666,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
     return d;
   })();
 
-  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+  const doc = createDoc();
   drawWatermark(doc);
   drawLogo(doc);
 
@@ -656,7 +678,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
     doc.save();
     const bx = 595.28 - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
-    doc.font("Helvetica-Bold").fontSize(8).fillColor("#ffffff")
+    doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
     doc.restore();
   }
@@ -695,7 +717,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   ];
 
   y += 8;
-  doc.font("Times-Roman").fontSize(fontSize).fillColor("#000000");
+  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
     if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
@@ -705,7 +727,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
 
   if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
   y += 4;
-  doc.font("Times-Roman").fontSize(fontSize);
+  doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
