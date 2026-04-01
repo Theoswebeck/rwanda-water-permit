@@ -994,23 +994,25 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         </div>
                       </div>
 
+                      {nidaEnabled && (
                       <div className="space-y-2">
                         <Label htmlFor="province">{tx("Province")}</Label>
                         <Input
                           id="province"
                           type="text"
-                          placeholder={nidaEnabled ? tx("Auto-filled after NIDA verification") : ""}
+                          placeholder={tx("Auto-filled after NIDA verification")}
                           value={province}
                           className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                          disabled={isLoading || nidaEnabled}
+                          disabled={isLoading}
                           readOnly
                         />
-                        {nidaEnabled && nidaVerified && !province && (
+                        {nidaVerified && !province && (
                           <p className="text-xs text-muted-foreground mt-1">
                             {tx("Province could not be mapped from NIDA response.")}
                           </p>
                         )}
                       </div>
+                      )}
 
                       <div className="space-y-2">
                         <Label htmlFor="dateOfBirth">{tx("Date of Birth")}</Label>
