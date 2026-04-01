@@ -137,21 +137,21 @@ export async function POST(req: NextRequest) {
       await query(
         `
         update public.users set
-          password_hash = $2,
-          account_type  = $3::public.account_type,
-          id_type       = $4::public.id_type,
-          id_number     = $5,
-          first_name    = $6,
-          last_name     = $7,
-          date_of_birth = $8::date,
-          phone         = $9,
-          province      = $10::public.province_type,
-          company_name  = $11,
-          company_tin   = $12,
-          company_address = $13,
-          company_phone = $14,
+          password_hash = $1,
+          account_type  = $2::public.account_type,
+          id_type       = $3::public.id_type,
+          id_number     = $4,
+          first_name    = $5,
+          last_name     = $6,
+          date_of_birth = $7::date,
+          phone         = $8,
+          province      = $9::public.province_type,
+          company_name  = $10,
+          company_tin   = $11,
+          company_address = $12,
+          company_phone = $13,
           updated_at    = now()
-        where id = $15
+        where id = $14
         `,
         [
           passwordHash,
