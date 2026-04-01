@@ -99,8 +99,12 @@ export async function POST(request: NextRequest) {
         //   3. Set PINDO_SENDER_NAME=RWB
         //   4. Set PINDO_DEVELOPMENT_MODE=false
         // ─────────────────────────────────────────────────────────────────────
-        console.log('📵 [verify-phone] SMS disabled (SMS_ENABLED != true). Skipping Pindo call.');
-        smsResponse = { ok: true } as any;
+        console.log('📵 [verify-phone] SMS disabled (SMS_ENABLED != true). Skipping phone verification step.');
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: 'Phone verification skipped (SMS disabled)',
+        });
       } else {
       smsResponse = await fetch('https://api.pindo.io/v1/sms/', {
         method: 'POST',

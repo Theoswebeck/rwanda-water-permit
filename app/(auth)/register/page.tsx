@@ -84,6 +84,8 @@ export default function RegisterPage() {
         return;
       }
 
+      const smsSkipped = sendJson?.skipped === true;
+
       // ── Step 2: SMS succeeded — now create the account ──
       const signUpData: Parameters<typeof signUp>[0] = {
         email: formData.email,
@@ -123,8 +125,8 @@ export default function RegisterPage() {
         userId: result.userId
       });
 
-      setStep("phone");
-      
+      setStep(smsSkipped ? "email" : "phone");
+
     } catch (err) {
       console.error("❌ Registration error:", err);
       setError("An unexpected error occurred during registration");

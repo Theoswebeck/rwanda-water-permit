@@ -147,7 +147,7 @@ export default function ApplyPage() {
         return;
       }
 
-      setStep("phone");
+      setStep(sendJson?.skipped ? "email" : "phone");
       
     } catch (err) {
       console.error("❌ Application registration error:", err);
