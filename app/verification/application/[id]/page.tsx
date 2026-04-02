@@ -212,6 +212,7 @@ export default function VerificationApplicationPage() {
           `
           )
           .neq("status", "draft")
+          .neq("status", "pending_payment")
           .eq("application_number", applicationNumber)
           .single();
 

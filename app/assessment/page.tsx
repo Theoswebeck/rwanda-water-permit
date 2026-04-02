@@ -122,6 +122,7 @@ export default function AssessmentDashboard() {
             applicant:users!applicant_id(first_name, last_name, company_name)
           `)
           .neq('status', 'draft')
+          .neq('status', 'pending_payment')
           .order("submitted_at", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
 
@@ -167,7 +168,7 @@ export default function AssessmentDashboard() {
       
       const { error } = await supabase
         .from('applications')
-        .update({ status: 'under_review' })
+        .update({ status: 'under_review', assigned_assessor_id: user!.id })
         .eq('id', application.id);
 
       if (error) {
@@ -178,7 +179,7 @@ export default function AssessmentDashboard() {
       }
 
       setAllApplications((prevApps) =>
-        prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus } : app))
+        prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus, assigned_assessor_id: user!.id } : app))
       );
 
       router.push(`/assessment/application/${application.application_number}`);
@@ -331,29 +332,38 @@ export default function AssessmentDashboard() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
                         <div className="flex justify-end">
-                          {app.status === "submitted" ? (
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleStartAssessment(app)}
-                              disabled={startingAssessment === app.id}
-                              className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                            >
-                              {startingAssessment === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-                              <span className="hidden sm:inline">{startingAssessment === app.id ? "Starting..." : "Assess"}</span>
-                              <span className="sm:hidden">Go</span>
-                            </Button>
-                          ) : (
-                            <Link href={`/assessment/application/${app.application_number}`}>
-                              <Button 
-                                size="sm" 
-                                className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                              >
-                                <Eye className="h-3 w-3" />
-                                <span className="hidden sm:inline">{app.status === "under_review" ? "Continue" : "View"}</span>
-                                <span className="sm:hidden">Go</span>
-                              </Button>
-                            </Link>
-                          )}
+                          {(() => {
+                            const isAssignedToMe = !!user?.id && app.assigned_assessor_id === user.id;
+                            const canContinue = isAssignedToMe && (app.status === "under_review" || app.status === "pending_assessment" || app.status === "returned_to_assessment");
+
+                            if (app.status === "submitted" && !app.assigned_assessor_id) {
+                              return (
+                                <Button 
+                                  size="sm" 
+                                  onClick={() => handleStartAssessment(app)}
+                                  disabled={startingAssessment === app.id}
+                                  className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                                >
+                                  {startingAssessment === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
+                                  <span className="hidden sm:inline">{startingAssessment === app.id ? "Starting..." : "Assess"}</span>
+                                  <span className="sm:hidden">Go</span>
+                                </Button>
+                              );
+                            }
+
+                            return (
+                              <Link href={`/assessment/application/${app.application_number}`}>
+                                <Button 
+                                  size="sm" 
+                                  className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  <span className="hidden sm:inline">{canContinue ? "Continue" : "View"}</span>
+                                  <span className="sm:hidden">Go</span>
+                                </Button>
+                              </Link>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                     </TableRow>

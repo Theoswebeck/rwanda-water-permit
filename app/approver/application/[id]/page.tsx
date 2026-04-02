@@ -281,6 +281,7 @@ export default function ApproverApplicationPage() {
             reviews:reviews!application_id(*)
           `)
           .neq('status', 'draft')
+          .neq('status', 'pending_payment')
           .eq('application_number', applicationNumber)
           .single();
 

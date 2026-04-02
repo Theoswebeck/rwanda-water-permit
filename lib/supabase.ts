@@ -83,6 +83,7 @@ export const getApplicationsForInspection = async () => {
         )
       `)
       .neq('status', 'draft')
+      .neq('status', 'pending_payment')
       .order('created_at', { ascending: false })
     
     if (error) {

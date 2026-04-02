@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
       select id::text as id, status::text as status
       from public.applications
       where status <> 'draft'
+        and status <> 'pending_payment'
       `
     )
 

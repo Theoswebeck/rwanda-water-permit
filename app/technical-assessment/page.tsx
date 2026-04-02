@@ -129,6 +129,7 @@ function TechnicalAssessmentContent() {
             applicant:users!applicant_id(*)
           `)
           .neq('status', 'draft')
+          .neq('status', 'pending_payment')
           .eq('id', applicationId)
           .single();
 

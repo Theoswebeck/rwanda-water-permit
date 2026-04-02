@@ -167,6 +167,7 @@ export default function ReviewerDashboard() {
              assigned_assessor:users!assigned_assessor_id(first_name, last_name, email)
            `)
            .neq('status', 'draft')
+           .neq('status', 'pending_payment')
            .order('submitted_at', { ascending: false, nullsFirst: false })
            .order('created_at', { ascending: false });
 
