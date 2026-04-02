@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,10 +17,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, XCircle, MapPin, Loader2, FileCheck } from "lucide-react";
+import { Eye, Search, XCircle, MapPin, FileCheck } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import type { Application, ApplicationStatus } from "@/types/database";
+import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
@@ -58,14 +57,12 @@ const ASSESSOR_CHIPS: StatusChipDef[] = [
 ];
 
 export default function AssessmentDashboard() {
-  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [allApplications, setAllApplications] = useState<AssessmentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [startingAssessment, setStartingAssessment] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports" | "permit-registry">("assessment");
   const [activeChipId, setActiveChipId] = useState("pending_assessment");
   const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
@@ -161,34 +158,6 @@ export default function AssessmentDashboard() {
 
     fetchAssessmentApplications();
   }, [user?.id, authLoading]);
-
-  const handleStartAssessment = async (application: AssessmentApplication) => {
-    try {
-      setStartingAssessment(application.id);
-      
-      const { error } = await supabase
-        .from('applications')
-        .update({ status: 'under_review', assigned_assessor_id: user!.id })
-        .eq('id', application.id);
-
-      if (error) {
-        console.error('Error updating application status:', error);
-        alert('Failed to start assessment. Please try again.');
-        setStartingAssessment(null);
-        return;
-      }
-
-      setAllApplications((prevApps) =>
-        prevApps.map((app) => (app.id === application.id ? { ...app, status: "under_review" as ApplicationStatus, assigned_assessor_id: user!.id } : app))
-      );
-
-      router.push(`/assessment/application/${application.application_number}`);
-    } catch (err) {
-      console.error('Error starting assessment:', err);
-      alert('Failed to start assessment. Please try again.');
-      setStartingAssessment(null);
-    }
-  };
 
   // Derive active statuses from chip selection
   const activeStatuses = useMemo(() => {
@@ -332,38 +301,18 @@ export default function AssessmentDashboard() {
                       </TableCell>
                       <TableCell className="p-2 sm:p-3 text-right">
                         <div className="flex justify-end">
-                          {(() => {
-                            const isAssignedToMe = !!user?.id && app.assigned_assessor_id === user.id;
-                            const canContinue = isAssignedToMe && (app.status === "under_review" || app.status === "pending_assessment" || app.status === "returned_to_assessment");
-
-                            if (app.status === "submitted" && !app.assigned_assessor_id) {
-                              return (
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => handleStartAssessment(app)}
-                                  disabled={startingAssessment === app.id}
-                                  className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                                >
-                                  {startingAssessment === app.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />}
-                                  <span className="hidden sm:inline">{startingAssessment === app.id ? "Starting..." : "Assess"}</span>
-                                  <span className="sm:hidden">Go</span>
-                                </Button>
-                              );
-                            }
-
-                            return (
-                              <Link href={`/assessment/application/${app.application_number}`}>
-                                <Button 
-                                  size="sm" 
-                                  className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
-                                >
-                                  <Eye className="h-3 w-3" />
-                                  <span className="hidden sm:inline">{canContinue ? "Continue" : "View"}</span>
-                                  <span className="sm:hidden">Go</span>
-                                </Button>
-                              </Link>
-                            );
-                          })()}
+                          <Link href={`/assessment/application/${app.application_number}`}>
+                            <Button 
+                              size="sm" 
+                              className="flex items-center gap-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white border-0 shadow-sm hover:shadow-md transition-all duration-200 rounded-lg px-2 py-1 text-xs font-medium"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span className="hidden sm:inline">
+                                {!!user?.id && app.assigned_assessor_id === user.id && (app.status === "under_review" || app.status === "pending_assessment" || app.status === "returned_to_assessment") ? "Continue" : "View"}
+                              </span>
+                              <span className="sm:hidden">Go</span>
+                            </Button>
+                          </Link>
                         </div>
                       </TableCell>
                     </TableRow>
