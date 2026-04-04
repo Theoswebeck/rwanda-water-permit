@@ -72,6 +72,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Not a transfer application' }, { status: 400 })
     }
 
+    // For legacy/manual permits the originalPermitId is a sentinel like "manual-0454/RWB/2021"
+    // and is NOT a real UUID row in the permits table.  We store NULL for original_permit_id in
+    // transfer_requests so the FK / type constraint is not violated.  The permit number is already
+    // persisted in internal_notes.originalPermitNumber and is used at issuance time.
+    const resolvedPermitId = originalPermitId?.startsWith('manual-') ? null : originalPermitId
+
     // Create or update transfer request (idempotent per application).
     let tr: Record<string, unknown> | undefined
     try {
@@ -96,7 +102,7 @@ export async function POST(req: NextRequest) {
           updated_at = now()
         returning *
         `,
-        [applicationId, originalPermitId, userId, transfereeEmail, transfereePhoneKey]
+        [applicationId, resolvedPermitId, userId, transfereeEmail, transfereePhoneKey]
       )
       tr = trRes.rows[0]
     } catch (trErr) {

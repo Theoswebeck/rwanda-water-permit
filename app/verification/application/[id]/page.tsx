@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
@@ -258,7 +259,12 @@ export default function VerificationApplicationPage() {
           const originalPermitId = parsedNotes?.originalPermitId;
           const originalPermitNumber = parsedNotes?.originalPermitNumber;
 
-          if (originalPermitId || originalPermitNumber) {
+          if (originalPermitId?.startsWith('manual-')) {
+            // Legacy permit not in the permits table — reconstruct from notes.
+            setTransferPermit(buildSyntheticPermitFromNotes(parsedNotes) as unknown as PermitWithApplication);
+            setLoadingTransferPermit(false);
+          } else if (originalPermitId || originalPermitNumber) {
+            const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
             setLoadingTransferPermit(true);
             try {
               let permitQuery = supabase
@@ -290,7 +296,7 @@ export default function VerificationApplicationPage() {
                   )
                 `);
 
-              if (originalPermitId) {
+              if (originalPermitId && UUID_RE.test(originalPermitId)) {
                 permitQuery = permitQuery.eq('id', originalPermitId);
               } else if (originalPermitNumber) {
                 permitQuery = permitQuery.eq('permit_number', originalPermitNumber);
@@ -298,7 +304,7 @@ export default function VerificationApplicationPage() {
 
               const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
               if (permitError) throw permitError;
-              setTransferPermit(permitData || null);
+              setTransferPermit((permitData as PermitWithApplication) || null);
             } catch (permitErr) {
               console.error('Error fetching original permit for transfer:', permitErr);
               setTransferPermit(null);

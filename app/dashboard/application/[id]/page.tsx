@@ -25,6 +25,7 @@ import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl, downloadFromDocumentsBucket } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
@@ -429,69 +430,83 @@ export default function ApplicationDetailPage() {
             setTransferFormData(parsedNotes?.transferFormData || null);
             const originalPermitId = parsedNotes?.originalPermitId;
             const originalPermitNumber = parsedNotes?.originalPermitNumber;
-            const transferPermitKey = originalPermitId
-              ? `id:${originalPermitId}`
-              : originalPermitNumber
-                ? `number:${originalPermitNumber}`
-                : null;
 
-            if (transferPermitKey) {
+            if (originalPermitId?.startsWith('manual-')) {
+              // Legacy permit not in the permits table — reconstruct from notes.
+              const transferPermitKey = `manual:${originalPermitId}`;
               const hasCurrentPermitLoaded =
                 loadedTransferPermitKeyRef.current === transferPermitKey && !!transferPermit;
-
-              if (hasCurrentPermitLoaded) {
-                setLoadingTransferPermit(false);
-              } else {
-                setLoadingTransferPermit(true);
-                try {
-                  let permitQuery = supabase
-                    .from("permits")
-                    .select(`
-                      *,
-                      application:applications!application_id (
-                        id,
-                        project_title,
-                        province,
-                        district,
-                        sector,
-                        cell,
-                        water_source,
-                        water_purpose,
-                        applicant:users!applicant_id (
-                          id,
-                          email,
-                          phone,
-                          first_name,
-                          last_name,
-                          company_name,
-                          company_address,
-                          company_phone,
-                          account_type
-                        )
-                      )
-                    `);
-
-                  if (originalPermitId) {
-                    permitQuery = permitQuery.eq("id", originalPermitId);
-                  } else if (originalPermitNumber) {
-                    permitQuery = permitQuery.eq("permit_number", originalPermitNumber);
-                  }
-
-                  const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
-                  if (permitError) throw permitError;
-                  setTransferPermit((permitData as PermitWithApplication) || null);
-                  loadedTransferPermitKeyRef.current = transferPermitKey;
-                } catch (permitErr) {
-                  console.error("Error fetching original permit for transfer:", permitErr);
-                  setTransferPermit(null);
-                  loadedTransferPermitKeyRef.current = null;
-                } finally {
-                  setLoadingTransferPermit(false);
-                }
+              if (!hasCurrentPermitLoaded) {
+                setTransferPermit(buildSyntheticPermitFromNotes(parsedNotes) as unknown as PermitWithApplication);
+                loadedTransferPermitKeyRef.current = transferPermitKey;
               }
+              setLoadingTransferPermit(false);
             } else {
-              setTransferPermit(null);
-              loadedTransferPermitKeyRef.current = null;
+              const transferPermitKey = originalPermitId
+                ? `id:${originalPermitId}`
+                : originalPermitNumber
+                  ? `number:${originalPermitNumber}`
+                  : null;
+
+              if (transferPermitKey) {
+                const hasCurrentPermitLoaded =
+                  loadedTransferPermitKeyRef.current === transferPermitKey && !!transferPermit;
+
+                if (hasCurrentPermitLoaded) {
+                  setLoadingTransferPermit(false);
+                } else {
+                  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                  setLoadingTransferPermit(true);
+                  try {
+                    let permitQuery = supabase
+                      .from("permits")
+                      .select(`
+                        *,
+                        application:applications!application_id (
+                          id,
+                          project_title,
+                          province,
+                          district,
+                          sector,
+                          cell,
+                          water_source,
+                          water_purpose,
+                          applicant:users!applicant_id (
+                            id,
+                            email,
+                            phone,
+                            first_name,
+                            last_name,
+                            company_name,
+                            company_address,
+                            company_phone,
+                            account_type
+                          )
+                        )
+                      `);
+
+                    if (originalPermitId && UUID_RE.test(originalPermitId)) {
+                      permitQuery = permitQuery.eq("id", originalPermitId);
+                    } else if (originalPermitNumber) {
+                      permitQuery = permitQuery.eq("permit_number", originalPermitNumber);
+                    }
+
+                    const { data: permitData, error: permitError } = await permitQuery.maybeSingle();
+                    if (permitError) throw permitError;
+                    setTransferPermit((permitData as PermitWithApplication) || null);
+                    loadedTransferPermitKeyRef.current = transferPermitKey;
+                  } catch (permitErr) {
+                    console.error("Error fetching original permit for transfer:", permitErr);
+                    setTransferPermit(null);
+                    loadedTransferPermitKeyRef.current = null;
+                  } finally {
+                    setLoadingTransferPermit(false);
+                  }
+                }
+              } else {
+                setTransferPermit(null);
+                loadedTransferPermitKeyRef.current = null;
+              }
             }
           } else {
             setTransferFormData(null);

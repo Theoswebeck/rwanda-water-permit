@@ -482,7 +482,7 @@ function NewApplicationContent() {
       water_allowance: 0,
       allowance_unit: "m³/year",
       issuing_authority: "Rwanda Water Resources Board",
-      issued_date: issuedDate,
+      issued_date: "",
       expiry_date: expiryDate,
       is_renewal: false,
       is_transfer: false,
@@ -491,7 +491,7 @@ function NewApplicationContent() {
       updated_at: nowIso,
       application: {
         id: "",
-        project_title: payload.permitReference.manualActivity || "Manual Permit Baseline",
+        project_title: payload.permitReference.manualActivity || "",
         province: "",
         district: "",
         sector: "",

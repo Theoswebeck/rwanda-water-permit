@@ -243,7 +243,13 @@ export default function TermsConditionsPage() {
           (data as any).application_type === "transfer" ||
           parsedNotes?.isTransfer === true;
 
-        if (isTransfer && parsedNotes?.originalPermitId) {
+        // Manual/legacy permits have a sentinel ID like "manual-0454/RWB/2021" that is not a
+        // real UUID in the permits table.  Skip the DB lookup for those; the relevant
+        // technical data was already captured in internal_notes.transferFormData at submission time.
+        const isManualPermit = typeof parsedNotes?.originalPermitId === 'string' &&
+          (parsedNotes.originalPermitId as string).startsWith('manual-');
+
+        if (isTransfer && parsedNotes?.originalPermitId && !isManualPermit) {
           try {
             const { data: originalPermit } = await supabase
               .from("permits")
@@ -909,7 +915,12 @@ export default function TermsConditionsPage() {
         console.log('✅ Permit renewed successfully:', permitData.permit_number, 
           '| New issued date:', newIssuedDate, 
           '| New expiry date:', newExpiryDate);
-      } else if (isTransferApplication && transferOriginalPermitId) {
+      } else if (
+        isTransferApplication &&
+        transferOriginalPermitId &&
+        !transferOriginalPermitId.startsWith('manual-')
+      ) {
+        // Real (digital) permit: reassign ownership to transferee.
         console.log('🔁 Processing TRANSFER - reassigning original permit ownership:', transferOriginalPermitId);
 
         const issueResp = await fetch('/api/transfers/issue', {
@@ -1045,7 +1056,12 @@ export default function TermsConditionsPage() {
         console.log('✅ Application status updated successfully');
       }
 
-      if (isTransferApplication && transferOriginalPermitId && !transferOwnershipReassigned) {
+      if (
+        isTransferApplication &&
+        transferOriginalPermitId &&
+        !transferOriginalPermitId.startsWith('manual-') &&
+        !transferOwnershipReassigned
+      ) {
         try {
           console.log('🧾 Revoking original permit after transfer issuance...');
           const resp = await fetch('/api/transfers/revoke-old-permit', {
