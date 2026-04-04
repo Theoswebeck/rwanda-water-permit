@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   TrendingUp, 
@@ -15,7 +13,6 @@ import {
   DollarSign,
   Loader2
 } from "lucide-react";
-import { getAdminReportsData } from "@/lib/supabase";
 
 interface ReportData {
   overview: {
@@ -24,18 +21,6 @@ interface ReportData {
     rejectedApplications: number;
     pendingApplications: number;
     totalValue: number;
-    avgProcessingTime: number;
-    userSatisfaction: number;
-    systemUptime: number;
-  };
-  byType: Record<string, { count: number; percentage: number; value: number }>;
-  byLocation: Record<string, { count: number; percentage: number }>;
-  performance: {
-    avgReviewTime: number;
-    avgInspectionTime: number;
-    overtimeApplications: number;
-    staffUtilization: number;
-    errorRate: number;
   };
 }
 
@@ -46,26 +31,30 @@ export function AdminReports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchReportData();
-  }, [timeRange]);
-
-  const fetchReportData = async () => {
+  const fetchReportData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getAdminReportsData();
-      if (data) {
-        setReportData(data);
-      } else {
-        setError('No report data available');
+      setError(null);
+      const res = await fetch(`/api/admin/reports?range=${timeRange}`, { credentials: 'include' });
+      if (!res.ok) {
+        throw new Error(`Request failed (${res.status})`);
       }
+      const data = await res.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      setReportData(data);
     } catch (err) {
       console.error('Failed to fetch report data:', err);
       setError('Failed to load report data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
+
+  useEffect(() => {
+    fetchReportData();
+  }, [fetchReportData]);
 
   const generateReport = (type: string) => {
     if (!reportData) {
@@ -86,13 +75,7 @@ export function AdminReports() {
         csvContent += `Approved Applications,${reportData.overview.approvedApplications}\n`;
         csvContent += `Rejected Applications,${reportData.overview.rejectedApplications}\n`;
         csvContent += `Pending Applications,${reportData.overview.pendingApplications}\n`;
-        csvContent += `Total Value (RWF),${reportData.overview.totalValue}\n`;
-        csvContent += `Average Processing Time (days),${reportData.overview.avgProcessingTime}\n\n`;
-        csvContent += `PERFORMANCE\n`;
-        csvContent += `Average Review Time (days),${reportData.performance.avgReviewTime}\n`;
-        csvContent += `Average Inspection Time (days),${reportData.performance.avgInspectionTime}\n`;
-        csvContent += `Overdue Applications,${reportData.performance.overtimeApplications}\n`;
-        csvContent += `Staff Utilization (%),${reportData.performance.staffUtilization}\n`;
+        csvContent += `Total Payments Collected (RWF),${reportData.overview.totalValue}\n`;
         break;
       default:
         csvContent = `${type.charAt(0).toUpperCase() + type.slice(1)} Report - ${currentDate}\n`;
@@ -215,12 +198,12 @@ export function AdminReports() {
               <CardContent>
                 <div className="text-2xl font-bold">
                   {reportData.overview.totalValue > 0 
-                    ? `${(reportData.overview.totalValue / 1000000).toFixed(0)}M RWF`
+                    ? `${reportData.overview.totalValue.toLocaleString()} RWF`
                     : '0 RWF'}
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-muted-foreground">
                   <DollarSign className="h-3 w-3 text-muted-foreground" />
-                  <span>Total project value</span>
+                  <span>Total payments collected</span>
                 </div>
               </CardContent>
             </Card>

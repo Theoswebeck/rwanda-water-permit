@@ -1684,7 +1684,7 @@ export default function AssessmentApplicationPage() {
     const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
-      under_review: { label: "Under Review", variant: "default" },
+      under_review: { label: "Under Assessment", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
       pending_final_approval: { label: "Pending Approval", variant: "default" },
       pending_payment: { label: "Pending Payment", variant: "secondary" },

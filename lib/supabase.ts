@@ -953,7 +953,7 @@ export const getApplicationStatusDistribution = async () => {
     
     return [
       { status: "Submitted", count: statusCounts['submitted'] || 0, color: "bg-blue-500" },
-      { status: "Under Review", count: statusCounts['under_review'] || 0, color: "bg-yellow-500" },
+      { status: "Under Assessment", count: statusCounts['under_review'] || 0, color: "bg-yellow-500" },
       { status: "Pending Inspection", count: statusCounts['pending_inspection'] || 0, color: "bg-orange-500" },
       { status: "Approved", count: statusCounts['approved'] || 0, color: "bg-green-500" },
       { status: "Rejected", count: statusCounts['rejected'] || 0, color: "bg-red-500" }
@@ -1088,8 +1088,8 @@ const getTimeAgo = (dateString: string) => {
   return `${diffInDays} day${diffInDays === 1 ? '' : 's'} ago`
 }
 
-// Get comprehensive admin reports data
-export const getAdminReportsData = async () => {
+// DEPRECATED: Admin reports data now served by /api/admin/reports (direct PostgreSQL).
+const _getAdminReportsData_UNUSED = async () => {
   try {
     // Get all applications for analysis with related data
     const { data: applications, error: appsError } = await supabase

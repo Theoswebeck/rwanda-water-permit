@@ -967,7 +967,7 @@ export default function ReviewApplicationPage() {
     const statusConfig: Record<string, { label: string; variant: "secondary" | "default" | "outline" | "destructive" }> = {
       draft: { label: "Draft", variant: "outline" },
       submitted: { label: "Submitted", variant: "secondary" },
-      under_review: { label: "Under Review", variant: "default" },
+      under_review: { label: "Under Assessment", variant: "default" },
       pending_assessment: { label: "Pending Assessment", variant: "outline" },
       pending_review: { label: "Pending Review", variant: "default" },
       pending_verification: { label: "Pending Verification", variant: "outline" },
