@@ -261,7 +261,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
       where
         id = $1
         and applicant_id = $2
-        and status not in ('approved', 'rejected', 'approved_pending_permit', 'expired')
+        and status not in ('approved', 'rejected', 'approved_pending_permit', 'expired', 'submitted', 'under_review', 'revision_required', 'pending_payment')
       `,
       [id, userId]
     )
