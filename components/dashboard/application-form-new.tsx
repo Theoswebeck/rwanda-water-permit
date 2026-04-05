@@ -6405,7 +6405,7 @@ export function ApplicationForm({
                 {/* PAYMENT TAB - For applicants: payment widget; For staff: payment confirmation panel */}
                 {shouldShowPaymentTab && (
                   <TabsContent value="payment" className="pt-6 space-y-6">
-                    {shouldShowStaffPaymentTab || shouldShowApplicantPaymentDetailsTab ? (
+                    {shouldShowStaffPaymentTab ? (
                       <PaymentConfirmationPanel
                         applicationId={(currentApplication as any)?.id ?? (initialData as any)?.id ?? ""}
                         applicationStatus={(currentApplication as any)?.status}
@@ -6413,7 +6413,23 @@ export function ApplicationForm({
                         applicantName={(userData as any)?.name}
                         applicantEmail={(userData as any)?.email}
                         applicantPhone={(userData as any)?.phone}
-                        viewerRole={shouldShowStaffPaymentTab ? "staff" : "applicant"}
+                        viewerRole="staff"
+                      />
+                    ) : shouldShowApplicantPaymentDetailsTab && currentApplication?.status === 'pending_payment' ? (
+                      <PaymentTab
+                        application={currentApplication}
+                        autoRedirectOnCompletion={true}
+                        completionRedirectPath="/dashboard?tab=applications"
+                      />
+                    ) : shouldShowApplicantPaymentDetailsTab ? (
+                      <PaymentConfirmationPanel
+                        applicationId={(currentApplication as any)?.id ?? (initialData as any)?.id ?? ""}
+                        applicationStatus={(currentApplication as any)?.status}
+                        applicationNumber={(currentApplication as any)?.application_number}
+                        applicantName={(userData as any)?.name}
+                        applicantEmail={(userData as any)?.email}
+                        applicantPhone={(userData as any)?.phone}
+                        viewerRole="applicant"
                       />
                     ) : (
                       <PaymentTab
