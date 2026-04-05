@@ -583,7 +583,7 @@ export function ApplicationsList({
                     <Eye className="h-4 w-4" />
                   </Button>
                 </Link>
-                {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && application.status !== 'expired' && onDeleteApplications && (
+                {application.status === 'draft' && onDeleteApplications && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -724,7 +724,7 @@ export function ApplicationsList({
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                      {application.status !== 'approved' && application.status !== 'rejected' && application.status !== 'approved_pending_permit' && application.status !== 'expired' && application.status !== 'submitted' && application.status !== 'under_review' && application.status !== 'revision_required' && application.status !== 'pending_payment' && onDeleteApplications && (
+                      {application.status === 'draft' && onDeleteApplications && (
                         <Button 
                           variant="ghost" 
                           size="sm" 
