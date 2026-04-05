@@ -884,6 +884,13 @@ export default function EditApplicationPage() {
       const applicationData = mapFormDataToApplication(formData, status, userProfile?.id);
       // Never attempt to update ownership fields from the client (can violate RLS/policies)
       const { applicant_id, ...updateData } = applicationData as any;
+
+      // Preserve revision_required status -- saving form data should not
+      // downgrade the workflow state, otherwise the user gets locked into
+      // a broken draft/payment loop on reload.
+      if (application?.status === 'revision_required') {
+        updateData.status = 'revision_required';
+      }
       
       console.log('📋 Mapped draft application data:', updateData);
       
@@ -899,6 +906,7 @@ export default function EditApplicationPage() {
 
       if (updatedApplication) {
         console.log('✅ Application updated as draft successfully:', updatedApplication);
+        setApplication(updatedApplication);
         
         // Upload documents and WAIT for completion (previously was fire-and-forget)
         console.log('🚀 Starting document upload process for draft...');
