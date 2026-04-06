@@ -280,6 +280,24 @@ export function InspectionWorkflowActions({
           console.error("❌ Failed to log workflow history:", historyError);
         }
 
+        const inspEventMap: Record<string, string> = {
+          'submit_for_review': 'inspection_forwarded_to_review',
+          'forward_to_review': 'inspection_forwarded_to_review',
+          'return_to_assessment': 'inspection_returned_to_assessment',
+        }
+        const staffEventType = inspEventMap[transition.action]
+        if (staffEventType) {
+          fetch('/api/notifications/staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: staffEventType,
+              entityType: 'inspection',
+              entityId: inspectionId,
+            }),
+          }).catch(() => null)
+        }
+
         setNotes("");
         setConfirmDialog({ open: false, transition: null });
         onStatusChange?.(transition.target as InspectionWorkflowStatus);

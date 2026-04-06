@@ -353,6 +353,13 @@ export async function POST(req: NextRequest) {
       logFinalDecision('log', traceId, 'application returned to verification', {
         applicationId,
       })
+
+      try {
+        const { notifyStaffOnEvent } = await import('@/lib/notifications/staff-notify')
+        await notifyStaffOnEvent('application_returned_to_verification', 'application', applicationId)
+      } catch (notifErr) {
+        console.warn('⚠️ [FINAL-DECISION] Failed to send staff notification:', notifErr)
+      }
     }
 
     await query(
