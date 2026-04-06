@@ -239,6 +239,28 @@ export function WaterUseReportWorkflowActions({
           console.error("❌ Failed to log workflow history:", historyError);
         }
 
+        const wurEventMap: Record<string, string> = {
+          'submit_for_review': 'wur_forwarded_to_review',
+          'forward_to_review': 'wur_forwarded_to_review',
+          'forward_to_verification': 'wur_forwarded_to_verification',
+          'forward_to_approval': 'wur_forwarded_to_approval',
+          'return_to_assessment': 'wur_returned_to_assessment',
+          'return_to_review': 'wur_returned_to_review',
+          'return_to_verification': 'wur_returned_to_verification',
+        }
+        const staffEventType = wurEventMap[transition.action]
+        if (staffEventType) {
+          fetch('/api/notifications/staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: staffEventType,
+              entityType: 'water_use_report',
+              entityId: reportId,
+            }),
+          }).catch(() => null)
+        }
+
         setNotes("");
         setConfirmDialog({ open: false, transition: null });
         onStatusChange?.(transition.target as WaterUseReportWorkflowStatus);

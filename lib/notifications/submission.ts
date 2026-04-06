@@ -162,6 +162,12 @@ export async function notifyOnApplicationSubmitted(applicationId: string): Promi
       [lockId, copy.email.text, smsSent, emailSent]
     )
 
+    import('@/lib/notifications/staff-notify')
+      .then(({ notifyStaffOnEvent }) =>
+        notifyStaffOnEvent('application_submitted', 'application', applicationId)
+      )
+      .catch(() => undefined)
+
     if (smsSent && emailSent) return { ok: true, status: 'sent', applicationId }
     return { ok: false, status: 'error', applicationId, message: `Partial delivery: sms_sent=${String(smsSent)} email_sent=${String(emailSent)}` }
   } catch (err) {

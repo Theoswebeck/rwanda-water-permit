@@ -624,6 +624,16 @@ export default function ReviewerDashboard() {
 
       console.log(`✅ Application ${selectedAppForAssignment.application_number} ${isReassign ? 'reassigned' : 'assigned'} to ${selectedAssessor.first_name} ${selectedAssessor.last_name}`);
 
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'application_assigned_to_assessor',
+          entityType: 'application',
+          entityId: selectedAppForAssignment.id,
+        }),
+      }).catch(() => null)
+
       setReviewApplications(prev =>
         prev.map(app =>
           app.id === selectedAppForAssignment.id

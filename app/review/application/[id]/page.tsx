@@ -846,6 +846,16 @@ export default function ReviewApplicationPage() {
         console.warn('⚠️ Failed to create audit log:', auditErr);
       }
 
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'application_forwarded_to_verification',
+          entityType: 'application',
+          entityId: application.id,
+        }),
+      }).catch(() => null)
+
       setShowSendToVerificationDialog(false);
       persistBanner({
         scope: params.id as string,
@@ -907,6 +917,16 @@ export default function ReviewApplicationPage() {
       } catch (auditErr) {
         console.warn('⚠️ Failed to create audit log:', auditErr);
       }
+
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'application_returned_to_assessment',
+          entityType: 'application',
+          entityId: application.id,
+        }),
+      }).catch(() => null)
 
       setShowRevisionDialog(false);
       setRevisionNotes("");

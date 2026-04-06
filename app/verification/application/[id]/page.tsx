@@ -635,6 +635,16 @@ export default function VerificationApplicationPage() {
         user_id: user?.id,
       });
 
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'application_forwarded_to_approval',
+          entityType: 'application',
+          entityId: application.id,
+        }),
+      }).catch(() => null)
+
       setShowSendToApproverDialog(false);
       const nextBanner: UIBanner = {
         scope: application.application_number,
@@ -677,6 +687,16 @@ export default function VerificationApplicationPage() {
         overall_comments: returnNotes.trim(),
         status: "returned",
       }]);
+
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'application_returned_to_review',
+          entityType: 'application',
+          entityId: application.id,
+        }),
+      }).catch(() => null)
 
       setShowReturnDialog(false);
       setReturnNotes("");

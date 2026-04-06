@@ -258,6 +258,16 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
 
       console.log(`✅ Inspection ${selectedInspection.id.slice(0, 8)} assigned to ${assessor.first_name} ${assessor.last_name}`);
 
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'inspection_assigned_to_assessor',
+          entityType: 'inspection',
+          entityId: selectedInspection.id,
+        }),
+      }).catch(() => null)
+
       setInspections(prev =>
         prev.map(ins =>
           ins.id === selectedInspection.id

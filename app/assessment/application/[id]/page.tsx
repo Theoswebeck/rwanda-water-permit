@@ -1596,6 +1596,16 @@ export default function AssessmentApplicationPage() {
       } catch (auditErr) {
         console.warn('⚠️ Failed to create audit log:', auditErr);
       }
+
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'application_forwarded_to_review',
+          entityType: 'application',
+          entityId: application.id,
+        }),
+      }).catch(() => null)
       
       setShowSendToReviewDialog(false);
       // Redirect to assessment dashboard

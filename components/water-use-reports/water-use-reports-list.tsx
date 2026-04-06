@@ -171,6 +171,16 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
 
       console.log(`✅ Water use report assigned to ${assessor.first_name} ${assessor.last_name}`);
 
+      fetch('/api/notifications/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventType: 'wur_assigned_to_assessor',
+          entityType: 'water_use_report',
+          entityId: selectedReport.id,
+        }),
+      }).catch(() => null)
+
       setAssignDialogOpen(false);
       setSelectedReport(null);
       setSelectedAssessorId("");
