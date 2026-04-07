@@ -30,6 +30,7 @@ import {
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
 import { getInspectionBasePath } from "@/lib/inspection-workflow";
+import { fetchAssessorOptions } from "@/lib/staff-assessors";
 
 type ApplicantInfo = {
   first_name?: string;
@@ -200,13 +201,12 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   useEffect(() => {
     if (!canAssign) return;
     const fetchAssessors = async () => {
-      const { data, error: err } = await supabase
-        .from("users")
-        .select("id, first_name, last_name, role, email")
-        .in("role", ["assessor"])
-        .eq("status", "active")
-        .order("first_name", { ascending: true });
-      if (!err) setAssessors(data || []);
+      try {
+        const assessorOptions = await fetchAssessorOptions();
+        setAssessors(assessorOptions);
+      } catch (err) {
+        console.error("❌ Failed to fetch assessors:", err);
+      }
     };
     fetchAssessors();
   }, [canAssign]);
