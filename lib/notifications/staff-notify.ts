@@ -203,10 +203,9 @@ async function fetchEntity(entityType: EntityType, entityId: string) {
       assigned_reviewer_id: string | null
       assigned_verifier_id: string | null
       assigned_approver_id: string | null
-      applicant_id: string | null
     }>(
       `select id, application_number, assigned_assessor_id, assigned_reviewer_id,
-              assigned_verifier_id, assigned_approver_id, applicant_id
+              assigned_verifier_id, assigned_approver_id
        from public.applications where id = $1 limit 1`,
       [entityId]
     )
@@ -216,15 +215,11 @@ async function fetchEntity(entityType: EntityType, entityId: string) {
   if (entityType === 'water_use_report') {
     const res = await query<{
       id: string
-      report_number: string | null
       assigned_assessor_id: string | null
       assigned_reviewer_id: string | null
       assigned_verifier_id: string | null
-      assigned_approver_id: string | null
-      permit_holder_id: string | null
     }>(
-      `select id, report_number, assigned_assessor_id, assigned_reviewer_id,
-              assigned_verifier_id, assigned_approver_id, permit_holder_id
+      `select id, assigned_assessor_id, assigned_reviewer_id, assigned_verifier_id
        from public.water_use_reports where id = $1 limit 1`,
       [entityId]
     )
@@ -237,10 +232,8 @@ async function fetchEntity(entityType: EntityType, entityId: string) {
       assigned_assessor_id: string | null
       assigned_reviewer_id: string | null
       assigned_verifier_id: string | null
-      assigned_approver_id: string | null
     }>(
-      `select id, assigned_assessor_id, assigned_reviewer_id,
-              assigned_verifier_id, assigned_approver_id
+      `select id, assigned_assessor_id, assigned_reviewer_id, assigned_verifier_id
        from public.inspections where id = $1 limit 1`,
       [entityId]
     )
@@ -286,9 +279,10 @@ async function resolveStaffUser(
 // ---------------------------------------------------------------------------
 
 function getEntityReference(entity: Record<string, unknown>): string {
-  return (entity.application_number as string)
-    || (entity.report_number as string)
-    || (entity.id as string).slice(0, 8)
+  if (typeof entity.application_number === 'string' && entity.application_number) {
+    return entity.application_number
+  }
+  return String(entity.id || '').slice(0, 8)
 }
 
 function buildStaffEmailCopy(
@@ -337,83 +331,123 @@ export async function notifyStaffOnEvent(
   entityType: string,
   entityId: string,
 ): Promise<StaffNotifyResult> {
-  const config = EVENT_REGISTRY[eventType as StaffEventType]
-  if (!config) {
-    return { ok: false, status: 'error', message: `Unknown event type: ${eventType}` }
-  }
-
-  if (config.entityType !== entityType) {
-    return { ok: false, status: 'error', message: `Event ${eventType} expects entity type ${config.entityType}, got ${entityType}` }
-  }
-
-  const entity = await fetchEntity(config.entityType, entityId)
-  if (!entity) {
-    return { ok: false, status: 'error', message: `Entity not found: ${entityType}/${entityId}` }
-  }
-
-  const staffUser = await resolveStaffUser(config.targetRole, entity as Record<string, unknown>)
-  if (!staffUser || !staffUser.email) {
-    console.warn(`⚠️ [STAFF-NOTIFY] No staff user found for role=${config.targetRole}, event=${eventType}`)
-    return { ok: true, status: 'skipped_no_staff' }
-  }
-
-  const notifIdCol = config.entityType === 'application' ? 'application_id' : 'assessment_id'
-
-  const existingRes = await query<{ id: string; email_sent: boolean | null }>(
-    `select id, email_sent from public.notifications
-     where ${notifIdCol} = $1 and title = $2 and user_id = $3
-     order by created_at desc limit 1`,
-    [entityId, config.title, staffUser.id],
-  )
-  const existing = existingRes.rows[0]
-  if (existing?.email_sent) {
-    return { ok: true, status: 'skipped_already_sent' }
-  }
-
-  let lockId = existing?.id || null
-  if (!lockId) {
-    const lockRes = await query<{ id: string }>(
-      `insert into public.notifications (
-        user_id, title, message, type, ${notifIdCol}, email_sent, sms_sent, created_at, updated_at
-      ) values ($1, $2, $3, 'info', $4, false, false, now(), now())
-      returning id`,
-      [staffUser.id, config.title, 'Staff notification dispatch started.', entityId],
-    )
-    lockId = lockRes.rows[0]?.id || null
-  }
-  if (!lockId) {
-    return { ok: false, status: 'error', message: 'Failed to create notification lock row' }
-  }
-
   try {
-    const copy = buildStaffEmailCopy(config, staffUser, entity as Record<string, unknown>, entityId)
-
-    const emailResult = await sendSmtpEmail({
-      to: staffUser.email,
-      subject: copy.subject,
-      title: copy.title,
-      text: copy.text,
-    })
-
-    const emailSent = Boolean(emailResult.delivered)
-
-    await query(
-      `update public.notifications
-       set message = $2, email_sent = $3, sms_sent = false, updated_at = now()
-       where id = $1`,
-      [lockId, copy.text, emailSent],
-    )
-
-    if (emailSent) {
-      console.log(`✅ [STAFF-NOTIFY] Email sent to ${staffUser.email} for ${eventType} on ${entityId}`)
-      return { ok: true, status: 'sent' }
+    const config = EVENT_REGISTRY[eventType as StaffEventType]
+    if (!config) {
+      return { ok: false, status: 'error', message: `Unknown event type: ${eventType}` }
     }
 
-    return { ok: false, status: 'error', message: 'Email delivery failed' }
+    if (config.entityType !== entityType) {
+      return { ok: false, status: 'error', message: `Event ${eventType} expects entity type ${config.entityType}, got ${entityType}` }
+    }
+
+    console.log(`📧 [STAFF-NOTIFY] Processing ${eventType} for ${entityType}/${entityId}`)
+
+    let entity: Record<string, unknown> | null = null
+    try {
+      entity = await fetchEntity(config.entityType, entityId) as Record<string, unknown> | null
+    } catch (dbErr) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+      console.error(`❌ [STAFF-NOTIFY] fetchEntity failed: ${msg}`)
+      return { ok: false, status: 'error', message: `DB error fetching entity: ${msg}` }
+    }
+
+    if (!entity) {
+      return { ok: false, status: 'error', message: `Entity not found: ${entityType}/${entityId}` }
+    }
+
+    let staffUser: StaffUser | null = null
+    try {
+      staffUser = await resolveStaffUser(config.targetRole, entity)
+    } catch (dbErr) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+      console.error(`❌ [STAFF-NOTIFY] resolveStaffUser failed: ${msg}`)
+      return { ok: false, status: 'error', message: `DB error resolving staff: ${msg}` }
+    }
+
+    if (!staffUser || !staffUser.email) {
+      console.warn(`⚠️ [STAFF-NOTIFY] No staff user found for role=${config.targetRole}, event=${eventType}`)
+      return { ok: true, status: 'skipped_no_staff' }
+    }
+
+    console.log(`📧 [STAFF-NOTIFY] Target: ${staffUser.email} (${staffUser.first_name} ${staffUser.last_name})`)
+
+    const notifIdCol = config.entityType === 'application' ? 'application_id' : 'assessment_id'
+
+    let existing: { id: string; email_sent: boolean | null } | undefined
+    try {
+      const existingRes = await query<{ id: string; email_sent: boolean | null }>(
+        `select id, email_sent from public.notifications
+         where ${notifIdCol} = $1 and title = $2 and user_id = $3
+         order by created_at desc limit 1`,
+        [entityId, config.title, staffUser.id],
+      )
+      existing = existingRes.rows[0]
+    } catch (dbErr) {
+      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+      console.error(`❌ [STAFF-NOTIFY] idempotency check failed: ${msg}`)
+      return { ok: false, status: 'error', message: `DB error checking existing: ${msg}` }
+    }
+
+    if (existing?.email_sent) {
+      return { ok: true, status: 'skipped_already_sent' }
+    }
+
+    let lockId = existing?.id || null
+    if (!lockId) {
+      try {
+        const lockRes = await query<{ id: string }>(
+          `insert into public.notifications (
+            user_id, title, message, type, ${notifIdCol}, email_sent, sms_sent, created_at, updated_at
+          ) values ($1, $2, $3, 'info', $4, false, false, now(), now())
+          returning id`,
+          [staffUser.id, config.title, 'Staff notification dispatch started.', entityId],
+        )
+        lockId = lockRes.rows[0]?.id || null
+      } catch (dbErr) {
+        const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+        console.error(`❌ [STAFF-NOTIFY] lock row insert failed: ${msg}`)
+        return { ok: false, status: 'error', message: `DB error creating lock: ${msg}` }
+      }
+    }
+    if (!lockId) {
+      return { ok: false, status: 'error', message: 'Failed to create notification lock row' }
+    }
+
+    try {
+      const copy = buildStaffEmailCopy(config, staffUser, entity, entityId)
+
+      const emailResult = await sendSmtpEmail({
+        to: staffUser.email,
+        subject: copy.subject,
+        title: copy.title,
+        text: copy.text,
+      })
+
+      const emailSent = Boolean(emailResult.delivered)
+
+      await query(
+        `update public.notifications
+         set message = $2, email_sent = $3, sms_sent = false, updated_at = now()
+         where id = $1`,
+        [lockId, copy.text, emailSent],
+      )
+
+      if (emailSent) {
+        console.log(`✅ [STAFF-NOTIFY] Email sent to ${staffUser.email} for ${eventType} on ${entityId}`)
+        return { ok: true, status: 'sent' }
+      }
+
+      return { ok: false, status: 'error', message: 'Email delivery failed (skipped or not delivered)' }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`❌ [STAFF-NOTIFY] Email send error: ${msg}`)
+      await query(`delete from public.notifications where id = $1`, [lockId]).catch(() => undefined)
+      return { ok: false, status: 'error', message: `Email error: ${msg}` }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error(`❌ [STAFF-NOTIFY] Error: ${message}`)
-    await query(`delete from public.notifications where id = $1`, [lockId]).catch(() => undefined)
-    return { ok: false, status: 'error', message }
+    console.error(`❌ [STAFF-NOTIFY] Unexpected error: ${message}`)
+    return { ok: false, status: 'error', message: `Unexpected error: ${message}` }
   }
 }
