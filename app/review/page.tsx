@@ -92,6 +92,14 @@ interface StaffMember {
   email: string;
 }
 
+const getAssessorDisplayLabel = (assessor: StaffMember): string => {
+  const fullName = `${assessor.first_name || ""} ${assessor.last_name || ""}`.trim();
+  if (fullName && assessor.email) return `${fullName} (${assessor.email})`;
+  if (fullName) return fullName;
+  if (assessor.email) return assessor.email;
+  return `Assessor (${assessor.id.slice(0, 8)})`;
+};
+
 // ─── Chip definitions per RWB spec ────────────────────────────────────────────
 const REVIEWER_CHIPS: StatusChipDef[] = [
   { id: "new_submissions", label: "New Submissions", statuses: ["submitted"], priority: "primary" },
@@ -575,9 +583,10 @@ export default function ReviewerDashboard() {
 
       const isReassign = !!previousAssessorId;
       const action = isReassign ? 'reassigned_assessor' : 'assigned_to_assessor';
+      const selectedAssessorLabel = getAssessorDisplayLabel(selectedAssessor);
       const comment = isReassign
-        ? `Assessor reassigned from ${previousAssessorLabel || 'Unknown assessor'} to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`
-        : `Application assigned to ${selectedAssessor.first_name} ${selectedAssessor.last_name} for assessment`;
+        ? `Assessor reassigned from ${previousAssessorLabel || 'Unknown assessor'} to ${selectedAssessorLabel} for assessment`
+        : `Application assigned to ${selectedAssessorLabel} for assessment`;
 
       const { error: workflowError } = await supabase
         .from('workflow_history')
@@ -1097,7 +1106,7 @@ export default function ReviewerDashboard() {
                     ) : (
                       assessors.map((assessor) => (
                         <SelectItem key={assessor.id} value={assessor.id}>
-                          {assessor.first_name} {assessor.last_name}
+                          {getAssessorDisplayLabel(assessor)}
                         </SelectItem>
                       ))
                     )}
@@ -1108,8 +1117,10 @@ export default function ReviewerDashboard() {
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-medium text-foreground">
-                      {assessors.find(a => a.id === selectedAssessorId)?.first_name}{" "}
-                      {assessors.find(a => a.id === selectedAssessorId)?.last_name}
+                      {(() => {
+                        const selected = assessors.find((a) => a.id === selectedAssessorId);
+                        return selected ? getAssessorDisplayLabel(selected) : "Selected assessor";
+                      })()}
                     </span>
                     {" "}will be notified and the application will appear in their assessment queue.
                   </p>
