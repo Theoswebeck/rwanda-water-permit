@@ -109,6 +109,14 @@ type AssessorUser = {
   role: string;
 };
 
+function getAssessorDisplayLabel(assessor: AssessorUser): string {
+  const fullName = `${assessor.first_name || ""} ${assessor.last_name || ""}`.trim();
+  if (fullName && assessor.email) return `${fullName} (${assessor.email})`;
+  if (fullName) return fullName;
+  if (assessor.email) return assessor.email;
+  return `Assessor (${assessor.id.slice(0, 8)})`;
+}
+
 function getDisplayStatus(row: InspectionRow): string {
   if (row.status !== "completed") return row.status;
   return row.workflow_status || "submitted";
@@ -249,14 +257,14 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           from_status: selectedInspection.workflow_status || "submitted",
           to_status: "pending_assessment",
           action: "assign_to_assessor",
-          comment: `Assigned to ${assessor.first_name} ${assessor.last_name} for assessment`,
+          comment: `Assigned to ${getAssessorDisplayLabel(assessor)} for assessment`,
         });
 
       if (historyError) {
         console.error("⚠️ Failed to log workflow history:", historyError);
       }
 
-      console.log(`✅ Inspection ${selectedInspection.id.slice(0, 8)} assigned to ${assessor.first_name} ${assessor.last_name}`);
+      console.log(`✅ Inspection ${selectedInspection.id.slice(0, 8)} assigned to ${getAssessorDisplayLabel(assessor)}`);
 
       fetch('/api/notifications/staff', {
         method: 'POST',
@@ -623,7 +631,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             <SelectContent>
               {assessors.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.first_name} {a.last_name} ({a.email})
+                  {getAssessorDisplayLabel(a)}
                 </SelectItem>
               ))}
             </SelectContent>

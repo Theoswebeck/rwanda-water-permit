@@ -89,6 +89,13 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
   const [selectedReport, setSelectedReport] = useState<WaterUseReportWithRelations | null>(null);
   const [selectedAssessorId, setSelectedAssessorId] = useState("");
   const [assignLoading, setAssignLoading] = useState(false);
+  const getAssessorDisplayLabel = useCallback((assessor: StaffAssessorOption): string => {
+    const fullName = `${assessor.first_name || ""} ${assessor.last_name || ""}`.trim();
+    if (fullName && assessor.email) return `${fullName} (${assessor.email})`;
+    if (fullName) return fullName;
+    if (assessor.email) return assessor.email;
+    return `Assessor (${assessor.id.slice(0, 8)})`;
+  }, []);
 
   useEffect(() => {
     if (!canAssign) return;
@@ -141,9 +148,10 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
         throw new Error(json?.message || "Failed to assign assessor");
       }
 
+      const assessorLabel = getAssessorDisplayLabel(assessor);
       const comment = isReassign
-        ? `Assessor reassigned to ${assessor.first_name} ${assessor.last_name}`
-        : `Report assigned to ${assessor.first_name} ${assessor.last_name} for assessment`;
+        ? `Assessor reassigned to ${assessorLabel}`
+        : `Report assigned to ${assessorLabel} for assessment`;
 
       await supabase.from("water_use_report_workflow_history").insert({
         water_use_report_id: selectedReport.id,
@@ -153,7 +161,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
         comment,
       });
 
-      console.log(`✅ Water use report assigned to ${assessor.first_name} ${assessor.last_name}`);
+      console.log(`✅ Water use report assigned to ${assessorLabel}`);
 
       fetch('/api/notifications/staff', {
         method: 'POST',
@@ -175,7 +183,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
     } finally {
       setAssignLoading(false);
     }
-  }, [selectedReport, selectedAssessorId, assessors, refetch]);
+  }, [selectedReport, selectedAssessorId, assessors, refetch, getAssessorDisplayLabel]);
 
   const nonDraftReports = useMemo(() => {
     return reports.filter(r => r.status !== 'draft');
@@ -465,7 +473,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
                 ) : (
                   assessors.map((assessor) => (
                     <SelectItem key={assessor.id} value={assessor.id}>
-                      {assessor.first_name} {assessor.last_name}
+                      {getAssessorDisplayLabel(assessor)}
                     </SelectItem>
                   ))
                 )}
@@ -476,8 +484,10 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
             <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
               <p className="text-sm text-muted-foreground">
                 <span className="font-medium text-foreground">
-                  {assessors.find((a) => a.id === selectedAssessorId)?.first_name}{" "}
-                  {assessors.find((a) => a.id === selectedAssessorId)?.last_name}
+                  {(() => {
+                    const selected = assessors.find((a) => a.id === selectedAssessorId);
+                    return selected ? getAssessorDisplayLabel(selected) : "Selected assessor";
+                  })()}
                 </span>{" "}
                 will be notified and the report will appear in their assessment queue.
               </p>
