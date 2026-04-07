@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
         email::text as email,
         role::text as role
       from public.users
-      where role::text = 'assessor'
-        and status::text = 'active'
+      where lower(btrim(coalesce(role::text, ''))) = 'assessor'
+        and lower(btrim(coalesce(status::text, ''))) = 'active'
       order by first_name asc nulls last, last_name asc nulls last
       `
     )
