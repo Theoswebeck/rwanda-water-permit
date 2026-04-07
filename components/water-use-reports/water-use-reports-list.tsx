@@ -58,6 +58,7 @@ import { useAllWaterUseReportsQuery, type WaterUseReportWithRelations } from "@/
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { getWaterUseReportBasePath } from "@/lib/water-use-report-workflow";
+import { fetchAssessorOptions, type StaffAssessorOption } from "@/lib/staff-assessors";
 import {
   getWaterUseReportWorkflowLabel,
   getWaterUseReportWorkflowClassName,
@@ -66,14 +67,6 @@ import {
 interface WaterUseReportsListProps {
   showCard?: boolean;
   roleContext?: string;
-}
-
-interface StaffMember {
-  id: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  email: string;
 }
 
 export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseReportsListProps) {
@@ -91,7 +84,7 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
 
   const canAssign = effectiveRole === "reviewer" || effectiveRole === "admin";
 
-  const [assessors, setAssessors] = useState<StaffMember[]>([]);
+  const [assessors, setAssessors] = useState<StaffAssessorOption[]>([]);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState<WaterUseReportWithRelations | null>(null);
   const [selectedAssessorId, setSelectedAssessorId] = useState("");
@@ -101,17 +94,8 @@ export function WaterUseReportsList({ showCard = true, roleContext }: WaterUseRe
     if (!canAssign) return;
     const fetchAssessors = async () => {
       try {
-        const { data, error: fetchErr } = await supabase
-          .from("users")
-          .select("id, first_name, last_name, role, email")
-          .in("role", ["assessor"])
-          .eq("status", "active")
-          .order("first_name", { ascending: true });
-        if (fetchErr) {
-          console.error("❌ Failed to fetch assessors:", fetchErr);
-          return;
-        }
-        setAssessors((data || []) as StaffMember[]);
+        const assessorOptions = await fetchAssessorOptions();
+        setAssessors(assessorOptions);
       } catch (err) {
         console.error("❌ Error fetching assessors:", err);
       }

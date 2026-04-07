@@ -64,6 +64,7 @@ import { selectPermitVariant } from "@/lib/permit-variant";
 import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
+import { fetchAssessorOptions } from "@/lib/staff-assessors";
 
 interface ReviewApplication extends Application {
   applicant_name?: string;
@@ -497,15 +498,8 @@ export default function ReviewerDashboard() {
   useEffect(() => {
     const fetchAssessors = async () => {
       try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('id, first_name, last_name, role, email')
-          .in('role', ['assessor'])
-          .eq('status', 'active')
-          .order('first_name', { ascending: true });
-
-        if (error) throw error;
-        setAssessors(data || []);
+        const assessorOptions = await fetchAssessorOptions();
+        setAssessors(assessorOptions);
       } catch (err) {
         console.error('❌ Error fetching assessors:', err);
       }
