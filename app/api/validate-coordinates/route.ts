@@ -47,7 +47,7 @@ const ValidationRequestSchema = z.object({
 });
 
 const MultiPolygonValidationRequestSchema = z.object({
-  polygons: z.array(z.array(CoordinateSchema).min(3, { message: 'Each polygon must have at least 3 points' })).min(1, {
+  polygons: z.array(z.array(CoordinateSchema).min(4, { message: 'Each polygon must have at least 4 points' })).min(1, {
     message: 'At least one polygon is required'
   }),
   applicationId: z.string().uuid().optional(),
@@ -277,17 +277,19 @@ export async function GET() {
       },
       polygons: {
         type: 'array',
-        description: 'New: array of polygons, each polygon is an array of coordinate points (>=3)',
+        description: 'New: array of polygons, each polygon is an array of coordinate points (>=4)',
         example: [
           [
             { latitude: "-1.9441", longitude: "30.0619" },
             { latitude: "-1.9451", longitude: "30.0629" },
-            { latitude: "-1.9461", longitude: "30.0639" }
+            { latitude: "-1.9461", longitude: "30.0639" },
+            { latitude: "-1.9471", longitude: "30.0649" }
           ],
           [
             { latitude: "-1.9501", longitude: "30.0709" },
             { latitude: "-1.9511", longitude: "30.0719" },
-            { latitude: "-1.9521", longitude: "30.0729" }
+            { latitude: "-1.9521", longitude: "30.0729" },
+            { latitude: "-1.9531", longitude: "30.0739" }
           ]
         ]
       },

@@ -18,6 +18,8 @@ import { MapPin, Map, Edit3, Trash2, Plus, RefreshCw, Loader2, AlertTriangle, Ch
 import type { CoordinatePoint } from "@/lib/geoUtils";
 import { validatePolygons, type ValidationResponse } from "@/lib/polygonValidation";
 
+const MIN_POLYGON_POINTS = 4;
+
 const MultiPolygonMap = dynamic(
   () => import("@/components/maps/MultiPolygonMap").then((mod) => ({ default: mod.MultiPolygonMap })),
   {
@@ -44,8 +46,8 @@ function emptyPoint(): CoordinatePoint {
 }
 
 function defaultPolygon(): CoordinatePoint[] {
-  // Start with 3 points minimum; user can add more.
-  return [emptyPoint(), emptyPoint(), emptyPoint()];
+  // Start with the minimum required points; user can add more.
+  return Array.from({ length: MIN_POLYGON_POINTS }, () => emptyPoint());
 }
 
 function countCompletePoints(poly: CoordinatePoint[]): number {
@@ -93,7 +95,7 @@ export function MultiPolygonInputWithValidation({
 
   const deletePoint = (pointIndex: number) => {
     if (disabled) return;
-    if (activePolygon.length <= 3) return;
+    if (activePolygon.length <= MIN_POLYGON_POINTS) return;
     const next = activePolygon.filter((_, idx) => idx !== pointIndex);
     setPolys([next]);
   };
@@ -137,10 +139,10 @@ export function MultiPolygonInputWithValidation({
 
     if (!validation) {
       const totals = safePolygons.map((p) => countCompletePoints(p));
-      const completePolys = totals.filter((n) => n >= 3).length;
+      const completePolys = totals.filter((n) => n >= MIN_POLYGON_POINTS).length;
       return (
         <Badge variant="outline">
-          {completePolys >= 1 ? "Polygon has" : "Needs"} ≥3 points
+          {completePolys >= 1 ? "Polygon has" : "Needs"} ≥{MIN_POLYGON_POINTS} points
         </Badge>
       );
     }
@@ -169,7 +171,7 @@ export function MultiPolygonInputWithValidation({
           {showValidation && getBadge()}
         </div>
         <div className="text-sm text-muted-foreground">
-          Define the polygon with at least <strong>3 points</strong> (more points = better accuracy).
+          Define the polygon with at least <strong>{MIN_POLYGON_POINTS} points</strong> (more points = better accuracy).
           The system validates the polygon is within Rwanda and not duplicated in another application.
         </div>
       </CardHeader>
@@ -221,7 +223,7 @@ export function MultiPolygonInputWithValidation({
                     />
                   </div>
 
-                  {!disabled && activePolygon.length > 3 && (
+                  {!disabled && activePolygon.length > MIN_POLYGON_POINTS && (
                     <div className="md:col-span-12 flex justify-end">
                       <Button
                         type="button"
