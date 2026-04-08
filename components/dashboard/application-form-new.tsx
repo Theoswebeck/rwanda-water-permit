@@ -1620,6 +1620,16 @@ export function ApplicationForm({
   const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcession
     ? "concession"
     : (watchedWaterUseCategory ?? "abstraction");
+
+  // Auto-reset waterUseCategory to abstraction when activities change away from concession types.
+  // This prevents "Coffee Washing" or other abstraction activities from showing concession UI
+  // after the user had previously selected "Concession" for a different activity.
+  useEffect(() => {
+    if (!isPureConcession && form.getValues('waterUseCategory') === 'concession') {
+      form.setValue('waterUseCategory', 'abstraction', { shouldDirty: false, shouldTouch: false, shouldValidate: false });
+    }
+  }, [isPureConcession, form]);
+
   const [additionalDocuments, setAdditionalDocuments] = useState<Array<{
     id: string;
     name: string;

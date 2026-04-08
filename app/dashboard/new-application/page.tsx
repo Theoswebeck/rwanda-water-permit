@@ -72,6 +72,7 @@ import { uploadDocument, getDocumentUrl } from "@/lib/supabase-storage";
 import { supabase } from "@/lib/supabase";
 import type { Application, Document } from "@/types/database";
 import { mapFormDataToApplication, formatProvinceForDB, formatWaterSourceForDB, formatWaterPurposeForDB, formatApplicationTypeForDB } from "@/lib/application-utils";
+import { polygonsToGeoJSON } from "@/lib/geoUtils";
 import { getRequiredAttachmentFieldNames } from "@/lib/annex-requirements";
 import { buildDocumentLookupPathPatterns, resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import type { ManualPermitSelectionPayload, PermitReference } from "@/lib/permit/permit-reference";
@@ -1143,6 +1144,13 @@ function NewApplicationContent() {
         ...(isConcessionTransfer && concessionAreaValue && !isNaN(concessionAreaValue) && concessionAreaValue > 0
           ? { concession_area: concessionAreaValue }
           : {}),
+        // Save polygon geometry to DB coordinates field for concession transfer permits
+        ...(isConcessionTransfer && Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0 ? (() => {
+          try {
+            const geoFeature = polygonsToGeoJSON(formData.waterSourcePolygons);
+            return geoFeature ? { coordinates: geoFeature.geometry } : {};
+          } catch { return {}; }
+        })() : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
@@ -1152,6 +1160,7 @@ function NewApplicationContent() {
           waterSourceLatitude: !isConcessionTransfer ? (formData.waterSourceLatitude || '') : '',
           waterSourceLongitude: !isConcessionTransfer ? (formData.waterSourceLongitude || '') : '',
           ...(isConcessionTransfer && concessionAreaValue ? { concessionArea: concessionAreaValue, concessionAreaUnit: formData.concessionAreaUnit || 'ha' } : {}),
+          ...(isConcessionTransfer && Array.isArray(formData.waterSourcePolygons) ? { waterSourcePolygons: formData.waterSourcePolygons } : {}),
           ...(permitReference ? { permitReference } : {}),
         }),
       };
@@ -1260,6 +1269,12 @@ function NewApplicationContent() {
         ...(isDraftConcession && draftConcessionArea && !isNaN(draftConcessionArea) && draftConcessionArea > 0
           ? { concession_area: draftConcessionArea }
           : {}),
+        ...(isDraftConcession && Array.isArray(formData.waterSourcePolygons) && formData.waterSourcePolygons.length > 0 ? (() => {
+          try {
+            const geoFeature = polygonsToGeoJSON(formData.waterSourcePolygons);
+            return geoFeature ? { coordinates: geoFeature.geometry } : {};
+          } catch { return {}; }
+        })() : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
@@ -1269,6 +1284,7 @@ function NewApplicationContent() {
           waterSourceLatitude: !isDraftConcession ? (formData.waterSourceLatitude || '') : '',
           waterSourceLongitude: !isDraftConcession ? (formData.waterSourceLongitude || '') : '',
           ...(isDraftConcession && draftConcessionArea ? { concessionArea: draftConcessionArea, concessionAreaUnit: formData.concessionAreaUnit || 'ha' } : {}),
+          ...(isDraftConcession && Array.isArray(formData.waterSourcePolygons) ? { waterSourcePolygons: formData.waterSourcePolygons } : {}),
           ...(permitReference ? { permitReference } : {}),
         }),
       };

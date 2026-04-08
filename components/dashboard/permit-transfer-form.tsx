@@ -1,9 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+
+const MultiPolygonInputWithValidation = dynamic(
+  () => import("@/components/forms/MultiPolygonInputWithValidation").then((mod) => ({
+    default: mod.MultiPolygonInputWithValidation,
+  })),
+  { ssr: false }
+);
 import { 
   Card,
   CardContent,
@@ -93,6 +101,9 @@ const transferFormSchema = z.object({
   // Concession fields (shown when effectiveWaterUseCategory === "concession")
   concessionArea: z.string().optional(),
   concessionAreaUnit: z.string().optional(),
+  waterSourcePolygons: z.array(
+    z.array(z.object({ latitude: z.string(), longitude: z.string() }))
+  ).optional(),
 
   // Abstraction & coordinates (shown when effectiveWaterUseCategory === "abstraction")
   abstractionMethod: z.string().optional(),
@@ -222,6 +233,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
+  const [coordinateValidation, setCoordinateValidation] = useState<any>(null);
   const isManualPermit = permit.id?.startsWith("manual-");
 
   const fileInputRefs = {
@@ -472,6 +484,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const waterPurpose = form.watch('waterPurpose');
   const watchedWaterUseCategory = form.watch('waterUseCategory');
   const concessionArea = form.watch('concessionArea');
+  const watchedPolygons = form.watch('waterSourcePolygons');
 
   // Mirror logic from new application: fish farming in lakes and recreation → always concession
   const PURE_CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities"];
@@ -479,6 +492,13 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcessionPurpose
     ? "concession"
     : (watchedWaterUseCategory ?? "abstraction");
+
+  // Auto-reset waterUseCategory to abstraction when purpose changes to a non-concession type
+  useEffect(() => {
+    if (!isPureConcessionPurpose && form.getValues('waterUseCategory') === 'concession') {
+      form.setValue('waterUseCategory', 'abstraction', { shouldDirty: false, shouldTouch: false, shouldValidate: false });
+    }
+  }, [waterPurpose, isPureConcessionPurpose, form]);
 
   const transferorName = form.watch('transferorName');
   const transferorCertification = form.watch('transferorCertification');
@@ -499,9 +519,14 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       hasValue(permitLocationDistrict) &&
       hasValue(permitLocationSector);
     const hasManualFields = !isManualPermit || (hasValue(waterSourceType) && hasValue(waterPurpose));
-    const hasConcessionFields = effectiveWaterUseCategory !== "concession" ||
+    const hasConcessionArea = effectiveWaterUseCategory !== "concession" ||
       (hasValue(concessionArea) && !isNaN(parseFloat(concessionArea || "")) && parseFloat(concessionArea || "") > 0);
-    return hasCoreFields && hasManualFields && hasConcessionFields;
+    // Polygons required for manual concession permits only
+    const hasPolygons = effectiveWaterUseCategory !== "concession" || !isManualPermit ||
+      (Array.isArray(watchedPolygons) && watchedPolygons.length > 0 &&
+        watchedPolygons[0]?.length >= 3 &&
+        watchedPolygons[0].every((p: any) => hasValue(p.latitude) && hasValue(p.longitude)));
+    return hasCoreFields && hasManualFields && hasConcessionArea && hasPolygons;
   }, [
     permitNumber,
     effectiveDate,
@@ -515,6 +540,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     waterPurpose,
     effectiveWaterUseCategory,
     concessionArea,
+    watchedPolygons,
   ]);
 
   const isTransferorStepComplete = useMemo(() => (
@@ -883,6 +909,17 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       if (!area || isNaN(areaNum) || areaNum <= 0) {
         setValidationError("Concession area must be a number greater than 0.");
         return false;
+      }
+      // Polygon validation for manual concession permits
+      if (isManualPermit) {
+        const polygons = form.getValues('waterSourcePolygons') || [];
+        const hasValidPolygons = Array.isArray(polygons) && polygons.length > 0 &&
+          polygons[0]?.length >= 3 &&
+          polygons[0].every((p: any) => hasValue(p.latitude) && hasValue(p.longitude));
+        if (!hasValidPolygons) {
+          setValidationError("Please provide at least one concession polygon with 3+ coordinate points.");
+          return false;
+        }
       }
     }
 
@@ -1679,6 +1716,42 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <strong>Note:</strong> For concession permits (fish farming in lakes, recreational activities), the authorized surface area is used instead of water volume.
                         </p>
                       </div>
+
+                      {/* Polygon points — only for manual permits (non-manual use the original permit's geometry) */}
+                      {isManualPermit && (
+                        <FormField
+                          control={form.control}
+                          name="waterSourcePolygons"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <MultiPolygonInputWithValidation
+                                  polygons={
+                                    field.value?.length
+                                      ? field.value
+                                      : [
+                                          [
+                                            { latitude: "", longitude: "" },
+                                            { latitude: "", longitude: "" },
+                                            { latitude: "", longitude: "" },
+                                          ],
+                                        ]
+                                  }
+                                  onPolygonsChange={(polygons) => field.onChange(polygons)}
+                                  onValidationChange={(validation) => {
+                                    setCoordinateValidation(validation);
+                                  }}
+                                  applicationId={currentApplication?.id}
+                                  excludeApplicationIds={[]}
+                                  disabled={Boolean(readOnly)}
+                                  showValidation={true}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                     </div>
                   )}
 
