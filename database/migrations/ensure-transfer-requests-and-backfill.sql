@@ -10,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS public.transfer_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   application_id UUID NOT NULL REFERENCES public.applications(id) ON DELETE CASCADE,
-  original_permit_id UUID NOT NULL REFERENCES public.permits(id) ON DELETE RESTRICT,
+  original_permit_id UUID REFERENCES public.permits(id) ON DELETE RESTRICT,
   transferor_user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE RESTRICT,
   transferee_email TEXT NOT NULL,
   transferee_phone TEXT NOT NULL,

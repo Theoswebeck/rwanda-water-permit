@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS transfer_requests (
   application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
 
   -- Permit being transferred (original permit)
-  original_permit_id UUID NOT NULL REFERENCES permits(id) ON DELETE RESTRICT,
+  original_permit_id UUID REFERENCES permits(id) ON DELETE RESTRICT,
 
   -- Transferor (current owner account who initiated the transfer)
   transferor_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
