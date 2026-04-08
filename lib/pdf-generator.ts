@@ -848,10 +848,10 @@ function resolvePermitDurationYears(application: Application, fallbackYears: num
 
 function resolveVolumes(application: Application): { yearly: number | null; daily: number | null } {
   const notes = getInternalNotes(application);
-  
+
   // Priority 1: Assessor recommended volume (from assessment adjustments)
   const assessorAdjustments = notes?._assessorAdjustments;
-  const assessorVolume = 
+  const assessorVolume =
     (typeof assessorAdjustments?.recommendedVolumeM3 === "number" && Number.isFinite(assessorAdjustments.recommendedVolumeM3)
       ? assessorAdjustments.recommendedVolumeM3
       : null) ??
@@ -860,7 +860,7 @@ function resolveVolumes(application: Application): { yearly: number | null; dail
       : null);
 
   // Priority 2: Fall back to applicant's requested values if no assessor recommendation
-  const yearlyCandidate =
+  let yearlyCandidate: number | null =
     assessorVolume ??
     (typeof application.max_yearly_volume_m3 === "number" && Number.isFinite(application.max_yearly_volume_m3)
       ? application.max_yearly_volume_m3
@@ -873,14 +873,30 @@ function resolveVolumes(application: Application): { yearly: number | null; dail
       ? notes.waterAbstractionDetails[0].maxAverageYearly
       : null);
 
-  const dailyCandidate =
+  // Priority 3: Transfer form data fallback (manual permit transfers store allowance in internal_notes)
+  if (yearlyCandidate == null) {
+    const tfData = notes?.transferFormData;
+    const tfVal = tfData?.waterAllowance ? parseFloat(String(tfData.waterAllowance)) : NaN;
+    const tfUnit = String(tfData?.allowanceUnit || '').toLowerCase();
+    if (Number.isFinite(tfVal) && tfVal > 0) {
+      yearlyCandidate = tfUnit.includes('day') ? tfVal * 365 : tfVal;
+    }
+  }
+
+  const dailyCandidate: number | null =
     (typeof application.max_daily_volume_m3 === "number" && Number.isFinite(application.max_daily_volume_m3)
       ? application.max_daily_volume_m3
       : null) ??
     (typeof notes?.waterSupplyDailyAbstraction === "number" && Number.isFinite(notes.waterSupplyDailyAbstraction)
       ? notes.waterSupplyDailyAbstraction
       : null) ??
-    (yearlyCandidate != null ? yearlyCandidate / 365 : null);
+    (() => {
+      const tfData = notes?.transferFormData;
+      const tfVal = tfData?.waterAllowance ? parseFloat(String(tfData.waterAllowance)) : NaN;
+      const tfUnit = String(tfData?.allowanceUnit || '').toLowerCase();
+      if (Number.isFinite(tfVal) && tfVal > 0 && tfUnit.includes('day')) return tfVal;
+      return yearlyCandidate != null ? yearlyCandidate / 365 : null;
+    })();
 
   return { yearly: yearlyCandidate, daily: dailyCandidate };
 }

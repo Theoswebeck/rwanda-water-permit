@@ -357,7 +357,15 @@ function resolveVolumeLabel(application: ApplicationForContract): string {
   if (typeof formVolume === "number" && Number.isFinite(formVolume)) {
     return `${formatNumber(formVolume)} m³/year`;
   }
-  
+
+  // Priority 4: Transfer form data fallback (manual permit transfers)
+  const tfData = notes?.transferFormData;
+  const tfVal = tfData?.waterAllowance ? parseFloat(String(tfData.waterAllowance)) : NaN;
+  const tfUnit = String(tfData?.allowanceUnit || '').trim() || 'm³';
+  if (Number.isFinite(tfVal) && tfVal > 0) {
+    return `${formatNumber(tfVal)} ${tfUnit}`;
+  }
+
   return "N/A";
 }
 

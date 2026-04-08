@@ -117,6 +117,12 @@ function resolveVolumeOrAreaFromAssessor(
   if (typeof formVolume === "number" && Number.isFinite(formVolume) && formVolume > 0) {
     return formVolume;
   }
+
+  // Fallback for manual permit transfers — data lives in transferFormData, not application columns
+  const tfData = parsedNotes?.transferFormData;
+  const tfAllowance = tfData?.waterAllowance ? parseFloat(String(tfData.waterAllowance)) : NaN;
+  if (Number.isFinite(tfAllowance) && tfAllowance > 0) return tfAllowance;
+
   return 0;
 }
 
@@ -617,7 +623,7 @@ export default function TermsConditionsPage() {
       const isConcession = isConcessionApplication(applicationData as any);
       const resolvedDurationYearsGlobal = resolveDurationFromAssessor(applicationData, parsedNotes);
       const resolvedVolumeM3 = resolveVolumeOrAreaFromAssessor(applicationData, parsedNotes, isConcession);
-      const resolvedAllowanceUnit = isConcession ? 'ha' : (applicationData.usage_unit || 'm³');
+      const resolvedAllowanceUnit = isConcession ? 'ha' : (applicationData.usage_unit || parsedNotes?.transferFormData?.allowanceUnit || 'm³');
 
       console.log('📊 Resolved assessor-approved terms:', {
         durationYears: resolvedDurationYearsGlobal,
