@@ -218,8 +218,10 @@ async function fetchEntity(entityType: EntityType, entityId: string) {
       assigned_assessor_id: string | null
       assigned_reviewer_id: string | null
       assigned_verifier_id: string | null
+      assigned_approver_id: string | null
     }>(
-      `select id, assigned_assessor_id, assigned_reviewer_id, assigned_verifier_id
+      `select id, assigned_assessor_id, assigned_reviewer_id,
+              assigned_verifier_id, assigned_approver_id
        from public.water_use_reports where id = $1 limit 1`,
       [entityId]
     )
@@ -232,8 +234,10 @@ async function fetchEntity(entityType: EntityType, entityId: string) {
       assigned_assessor_id: string | null
       assigned_reviewer_id: string | null
       assigned_verifier_id: string | null
+      assigned_approver_id: string | null
     }>(
-      `select id, assigned_assessor_id, assigned_reviewer_id, assigned_verifier_id
+      `select id, assigned_assessor_id, assigned_reviewer_id,
+              assigned_verifier_id, assigned_approver_id
        from public.inspections where id = $1 limit 1`,
       [entityId]
     )
@@ -268,7 +272,7 @@ async function resolveStaffUser(
 
   const res = await query<StaffUser>(
     `select id, email, first_name, last_name, role
-     from public.users where lower(role) = $1 limit 1`,
+     from public.users where lower(role::text) = $1 limit 1`,
     [targetRole],
   )
   return res.rows[0] || null
@@ -372,16 +376,28 @@ export async function notifyStaffOnEvent(
 
     console.log(`📧 [STAFF-NOTIFY] Target: ${staffUser.email} (${staffUser.first_name} ${staffUser.last_name})`)
 
-    const notifIdCol = config.entityType === 'application' ? 'application_id' : 'assessment_id'
+    // Only applications have a valid FK in notifications.application_id.
+    // For WUR/inspection we leave both FK columns NULL and use a
+    // stable marker in the `message` column for idempotency lookup.
+    const useAppFk = config.entityType === 'application'
+    const idempotencyMarker = `staff:${eventType}:${entityId}`
 
     let existing: { id: string; email_sent: boolean | null } | undefined
     try {
-      const existingRes = await query<{ id: string; email_sent: boolean | null }>(
-        `select id, email_sent from public.notifications
-         where ${notifIdCol} = $1 and title = $2 and user_id = $3
-         order by created_at desc limit 1`,
-        [entityId, config.title, staffUser.id],
-      )
+      const existingRes = useAppFk
+        ? await query<{ id: string; email_sent: boolean | null }>(
+            `select id, email_sent from public.notifications
+             where application_id = $1 and title = $2 and user_id = $3
+             order by created_at desc limit 1`,
+            [entityId, config.title, staffUser.id],
+          )
+        : await query<{ id: string; email_sent: boolean | null }>(
+            `select id, email_sent from public.notifications
+             where title = $1 and user_id = $2
+               and message like $3
+             order by created_at desc limit 1`,
+            [config.title, staffUser.id, `${idempotencyMarker}%`],
+          )
       existing = existingRes.rows[0]
     } catch (dbErr) {
       const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
@@ -396,13 +412,21 @@ export async function notifyStaffOnEvent(
     let lockId = existing?.id || null
     if (!lockId) {
       try {
-        const lockRes = await query<{ id: string }>(
-          `insert into public.notifications (
-            user_id, title, message, type, ${notifIdCol}, email_sent, sms_sent, created_at, updated_at
-          ) values ($1, $2, $3, 'info', $4, false, false, now(), now())
-          returning id`,
-          [staffUser.id, config.title, 'Staff notification dispatch started.', entityId],
-        )
+        const lockRes = useAppFk
+          ? await query<{ id: string }>(
+              `insert into public.notifications (
+                user_id, title, message, type, application_id, email_sent, sms_sent, created_at, updated_at
+              ) values ($1, $2, $3, 'info', $4, false, false, now(), now())
+              returning id`,
+              [staffUser.id, config.title, idempotencyMarker, entityId],
+            )
+          : await query<{ id: string }>(
+              `insert into public.notifications (
+                user_id, title, message, type, email_sent, sms_sent, created_at, updated_at
+              ) values ($1, $2, $3, 'info', false, false, now(), now())
+              returning id`,
+              [staffUser.id, config.title, idempotencyMarker],
+            )
         lockId = lockRes.rows[0]?.id || null
       } catch (dbErr) {
         const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)

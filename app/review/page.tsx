@@ -635,11 +635,6 @@ export default function ReviewerDashboard() {
           entityType: 'application',
           entityId: selectedAppForAssignment.id,
         }),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}))
-          console.error('❌ Staff notification error:', res.status, body)
-        }
       }).catch(() => null)
 
       setReviewApplications(prev =>

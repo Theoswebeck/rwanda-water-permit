@@ -354,12 +354,11 @@ export async function POST(req: NextRequest) {
         applicationId,
       })
 
-      try {
-        const { notifyStaffOnEvent } = await import('@/lib/notifications/staff-notify')
-        await notifyStaffOnEvent('application_returned_to_verification', 'application', applicationId)
-      } catch (notifErr) {
-        console.warn('⚠️ [FINAL-DECISION] Failed to send staff notification:', notifErr)
-      }
+      import('@/lib/notifications/staff-notify')
+        .then(({ notifyStaffOnEvent }) =>
+          notifyStaffOnEvent('application_returned_to_verification', 'application', applicationId)
+        )
+        .catch((err) => console.error('❌ [STAFF-NOTIFY] final-decision fire-and-forget failed:', err))
     }
 
     await query(

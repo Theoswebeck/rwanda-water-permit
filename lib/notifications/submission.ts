@@ -166,7 +166,7 @@ export async function notifyOnApplicationSubmitted(applicationId: string): Promi
       .then(({ notifyStaffOnEvent }) =>
         notifyStaffOnEvent('application_submitted', 'application', applicationId)
       )
-      .catch(() => undefined)
+      .catch((err) => console.error('❌ [STAFF-NOTIFY] submission fire-and-forget failed:', err))
 
     if (smsSent && emailSent) return { ok: true, status: 'sent', applicationId }
     return { ok: false, status: 'error', applicationId, message: `Partial delivery: sms_sent=${String(smsSent)} email_sent=${String(emailSent)}` }

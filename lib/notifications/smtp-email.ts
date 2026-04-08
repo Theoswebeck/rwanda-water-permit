@@ -7,20 +7,21 @@ type SendSmtpEmailParams = {
   text: string
 }
 
-export function renderAppEmailHtml(params: { title: string; text: string }) {
-  const escaped = params.text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br/>')
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
 
-  const orgName = process.env.ORG_NAME || 'Rwanda Water Resources Board'
+export function renderAppEmailHtml(params: { title: string; text: string }) {
+  const escaped = escapeHtml(params.text).replace(/\n/g, '<br/>')
+
+  const orgName = escapeHtml(process.env.ORG_NAME || 'Rwanda Water Resources Board')
+  const safeTitle = escapeHtml(params.title)
 
   return `
     <div style="font-family:Inter,system-ui,Arial,sans-serif;line-height:1.6;max-width:680px;margin:0 auto;padding:24px">
       <div style="text-align:center;margin-bottom:20px">
         <h1 style="color:#111827;margin:0">${orgName}</h1>
-        <h2 style="color:#374151;margin:10px 0">${params.title}</h2>
+        <h2 style="color:#374151;margin:10px 0">${safeTitle}</h2>
       </div>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:18px;color:#111827">
         ${escaped}
