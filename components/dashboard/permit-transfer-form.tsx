@@ -87,7 +87,14 @@ const transferFormSchema = z.object({
   waterAllowance: z.string().optional(),
   allowanceUnit: z.string().optional(),
 
-  // Abstraction & coordinates
+  // Water use category (abstraction vs concession) — for manual permits where user must choose
+  waterUseCategory: z.enum(["abstraction", "concession"]).optional(),
+
+  // Concession fields (shown when effectiveWaterUseCategory === "concession")
+  concessionArea: z.string().optional(),
+  concessionAreaUnit: z.string().optional(),
+
+  // Abstraction & coordinates (shown when effectiveWaterUseCategory === "abstraction")
   abstractionMethod: z.string().optional(),
   flowRate: z.string().optional(),
   flowRateUnit: z.string().optional(),
@@ -463,6 +470,16 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const facilityProjectName = form.watch('facilityProjectName');
   const waterSourceType = form.watch('waterSourceType');
   const waterPurpose = form.watch('waterPurpose');
+  const watchedWaterUseCategory = form.watch('waterUseCategory');
+  const concessionArea = form.watch('concessionArea');
+
+  // Mirror logic from new application: fish farming in lakes and recreation → always concession
+  const PURE_CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities"];
+  const isPureConcessionPurpose = PURE_CONCESSION_PURPOSES.includes(waterPurpose || "");
+  const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcessionPurpose
+    ? "concession"
+    : (watchedWaterUseCategory ?? "abstraction");
+
   const transferorName = form.watch('transferorName');
   const transferorCertification = form.watch('transferorCertification');
   const transferorSignatureDate = form.watch('transferorSignatureDate');
@@ -482,7 +499,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
       hasValue(permitLocationDistrict) &&
       hasValue(permitLocationSector);
     const hasManualFields = !isManualPermit || (hasValue(waterSourceType) && hasValue(waterPurpose));
-    return hasCoreFields && hasManualFields;
+    const hasConcessionFields = effectiveWaterUseCategory !== "concession" ||
+      (hasValue(concessionArea) && !isNaN(parseFloat(concessionArea || "")) && parseFloat(concessionArea || "") > 0);
+    return hasCoreFields && hasManualFields && hasConcessionFields;
   }, [
     permitNumber,
     effectiveDate,
@@ -494,6 +513,8 @@ export const PermitTransferForm = memo(function PermitTransferForm({
     isManualPermit,
     waterSourceType,
     waterPurpose,
+    effectiveWaterUseCategory,
+    concessionArea,
   ]);
 
   const isTransferorStepComplete = useMemo(() => (
@@ -854,6 +875,17 @@ export const PermitTransferForm = memo(function PermitTransferForm({
         return false;
       }
     }
+
+    // Concession area validation when concession is effective category
+    if (effectiveWaterUseCategory === "concession") {
+      const area = form.getValues('concessionArea');
+      const areaNum = parseFloat(area || "");
+      if (!area || isNaN(areaNum) || areaNum <= 0) {
+        setValidationError("Concession area must be a number greater than 0.");
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -1543,168 +1575,279 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     </div>
                   </div>
 
-                  {/* Abstraction & Volume */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Abstraction &amp; Volume</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="waterAllowance"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Water Allowance</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value || ""}
-                                type="number"
-                                step="0.01"
-                                placeholder="Permitted volume"
-                                disabled={readOnly || !isManualPermit}
-                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  {/* Water Use Category selector — only for manual permits where purpose is not pure-concession */}
+                  {isManualPermit && !isPureConcessionPurpose && hasValue(waterPurpose) && (
+                    <FormField
+                      control={form.control}
+                      name="waterUseCategory"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-medium">Water Use Category *</FormLabel>
+                          <p className="text-sm text-muted-foreground mb-2">
+                            Select whether this permit involves water abstraction or a water concession.
+                          </p>
+                          <FormControl>
+                            <div className="flex gap-6">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  value="abstraction"
+                                  checked={(field.value ?? "abstraction") === "abstraction"}
+                                  onChange={() => { if (!readOnly) field.onChange("abstraction"); }}
+                                  disabled={readOnly}
+                                  className="accent-blue-600"
+                                />
+                                <span>Abstraction</span>
+                              </label>
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  value="concession"
+                                  checked={field.value === "concession"}
+                                  onChange={() => { if (!readOnly) field.onChange("concession"); }}
+                                  disabled={readOnly}
+                                  className="accent-blue-600"
+                                />
+                                <span>Concession</span>
+                              </label>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
-                      <FormField
-                        control={form.control}
-                        name="allowanceUnit"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Allowance Unit</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select onValueChange={field.onChange} value={field.value || "m³/year"}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Unit" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="m³/year">m³/year</SelectItem>
-                                  <SelectItem value="m³/day">m³/day</SelectItem>
-                                  <SelectItem value="m³/month">m³/month</SelectItem>
-                                  <SelectItem value="l/s">l/s</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            ) : (
+                  {/* Concession Information — shown when effectiveWaterUseCategory is concession */}
+                  {effectiveWaterUseCategory === "concession" && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Concession Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="concessionArea"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Concession Area *</FormLabel>
                               <FormControl>
-                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                                <Input
+                                  {...field}
+                                  value={field.value || ""}
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Enter concession area"
+                                  disabled={readOnly || !isManualPermit}
+                                  className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                                />
                               </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="abstractionMethod"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Method of Abstraction</FormLabel>
-                            {isManualPermit && !readOnly ? (
-                              <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormField
+                          control={form.control}
+                          name="concessionAreaUnit"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Concession Area Unit</FormLabel>
+                              {isManualPermit && !readOnly ? (
+                                <Select onValueChange={field.onChange} value={field.value || "ha"}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select unit" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="ha">Hectares (ha)</SelectItem>
+                                    <SelectItem value="m²">Square meters (m²)</SelectItem>
+                                    <SelectItem value="acres">Acres</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
                                 <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select method" />
-                                  </SelectTrigger>
+                                  <Input {...field} value={field.value || "ha"} disabled className="bg-gray-100" />
                                 </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="Pumping">Pumping</SelectItem>
-                                  <SelectItem value="Gravity">Gravity</SelectItem>
-                                  <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
-                                  <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
-                                  <SelectItem value="Borehole">Borehole</SelectItem>
-                                  <SelectItem value="Spring Capture">Spring Capture</SelectItem>
-                                  <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
-                                  <SelectItem value="Other">Other</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            ) : (
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                          <strong>Note:</strong> For concession permits (fish farming in lakes, recreational activities), the authorized surface area is used instead of water volume.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Abstraction & Volume — shown when effectiveWaterUseCategory is abstraction */}
+                  {effectiveWaterUseCategory === "abstraction" && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Abstraction &amp; Volume</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="waterAllowance"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Water Allowance</FormLabel>
                               <FormControl>
-                                <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                                <Input
+                                  {...field}
+                                  value={field.value || ""}
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Permitted volume"
+                                  disabled={readOnly || !isManualPermit}
+                                  className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                                />
                               </FormControl>
-                            )}
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="flowRate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Flow Rate (m³/s)</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value || ""}
-                                type="number"
-                                step="0.001"
-                                placeholder="Enter flow rate"
-                                disabled={readOnly || !isManualPermit}
-                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                        <FormField
+                          control={form.control}
+                          name="allowanceUnit"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Allowance Unit</FormLabel>
+                              {isManualPermit && !readOnly ? (
+                                <Select onValueChange={field.onChange} value={field.value || "m³/year"}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Unit" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="m³/year">m³/year</SelectItem>
+                                    <SelectItem value="m³/day">m³/day</SelectItem>
+                                    <SelectItem value="m³/month">m³/month</SelectItem>
+                                    <SelectItem value="l/s">l/s</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <FormControl>
+                                  <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                                </FormControl>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="abstractionMethod"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Method of Abstraction</FormLabel>
+                              {isManualPermit && !readOnly ? (
+                                <Select onValueChange={field.onChange} value={field.value || ""}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select method" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    <SelectItem value="Pumping">Pumping</SelectItem>
+                                    <SelectItem value="Gravity">Gravity</SelectItem>
+                                    <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
+                                    <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
+                                    <SelectItem value="Borehole">Borehole</SelectItem>
+                                    <SelectItem value="Spring Capture">Spring Capture</SelectItem>
+                                    <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <FormControl>
+                                  <Input {...field} value={field.value || ""} disabled className="bg-gray-100" />
+                                </FormControl>
+                              )}
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name="flowRate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Flow Rate (m³/s)</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value || ""}
+                                  type="number"
+                                  step="0.001"
+                                  placeholder="Enter flow rate"
+                                  disabled={readOnly || !isManualPermit}
+                                  className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Coordinates */}
-                  <div className="space-y-4">
-                    <h4 className="font-medium">Water Source Coordinates</h4>
-                    <p className="text-xs text-muted-foreground">
-                      For single-point abstraction, enter latitude and longitude of the water intake point.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="waterSourceLatitude"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Latitude</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value || ""}
-                                placeholder="e.g., -1.9403"
-                                disabled={readOnly || !isManualPermit}
-                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                  {/* Water Source Coordinates — only for abstraction permits */}
+                  {effectiveWaterUseCategory === "abstraction" && (
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Water Source Coordinates</h4>
+                      <p className="text-xs text-muted-foreground">
+                        For single-point abstraction, enter latitude and longitude of the water intake point.
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="waterSourceLatitude"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Latitude</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value || ""}
+                                  placeholder="e.g., -1.9403"
+                                  disabled={readOnly || !isManualPermit}
+                                  className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
 
-                      <FormField
-                        control={form.control}
-                        name="waterSourceLongitude"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Longitude</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                value={field.value || ""}
-                                placeholder="e.g., 29.8739"
-                                disabled={readOnly || !isManualPermit}
-                                className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                        <FormField
+                          control={form.control}
+                          name="waterSourceLongitude"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Longitude</FormLabel>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  value={field.value || ""}
+                                  placeholder="e.g., 29.8739"
+                                  disabled={readOnly || !isManualPermit}
+                                  className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Navigation */}
                   <div className="flex justify-between pt-6 border-t">
@@ -1747,9 +1890,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Your Name *</FormLabel>
                           <FormControl>
-                            <Input {...field} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
+                            <Input {...field} disabled className="bg-gray-100" />
                           </FormControl>
-                          <FormDescription>Pre-filled from your account profile (editable)</FormDescription>
+                          <FormDescription>Pre-filled from your account profile (not editable)</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}

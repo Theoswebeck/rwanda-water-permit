@@ -1110,6 +1110,18 @@ function NewApplicationContent() {
       const originalActivities = Array.isArray(selectedPermit?.application?.intended_activities)
         ? selectedPermit.application.intended_activities
         : [];
+      // For manual permits, derive intended_activities from the form's waterPurpose so that
+      // isConcessionApplication() works correctly on the terms/permit pages.
+      const isManualSelectedPermit = typeof selectedPermit?.id === 'string' && selectedPermit.id.startsWith('manual-');
+      const manualActivities = isManualSelectedPermit && formData.waterPurpose ? [formData.waterPurpose] : [];
+      const resolvedActivities = originalActivities.length > 0 ? originalActivities : manualActivities;
+
+      // Concession area from form (used for concession permits: fish farming in lakes, recreation)
+      const pureConcessionPurposes = ["fish_farming_lakes", "recreation_activities"];
+      const isConcessionTransfer = pureConcessionPurposes.includes(formData.waterPurpose || "") ||
+        formData.waterUseCategory === "concession";
+      const concessionAreaValue = formData.concessionArea ? parseFloat(formData.concessionArea) : undefined;
+
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'pending_payment',
@@ -1125,17 +1137,21 @@ function NewApplicationContent() {
         project_title: `Transfer: ${formData.transfereeName} Water Permit Application`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
-        water_taking_method: formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '',
-        flow_rate_m3_per_second: formData.flowRate ? parseFloat(formData.flowRate) : (selectedPermit?.application?.flow_rate_m3_per_second ?? undefined),
-        ...(originalActivities.length > 0 ? { intended_activities: originalActivities } : {}),
+        water_taking_method: !isConcessionTransfer ? (formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '') : '',
+        flow_rate_m3_per_second: !isConcessionTransfer && formData.flowRate ? parseFloat(formData.flowRate) : (selectedPermit?.application?.flow_rate_m3_per_second ?? undefined),
+        ...(resolvedActivities.length > 0 ? { intended_activities: resolvedActivities } : {}),
+        ...(isConcessionTransfer && concessionAreaValue && !isNaN(concessionAreaValue) && concessionAreaValue > 0
+          ? { concession_area: concessionAreaValue }
+          : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
           originalPermitNumber: selectedPermit?.permit_number,
           transferFormData: formData,
           customerSnapshot,
-          waterSourceLatitude: formData.waterSourceLatitude || '',
-          waterSourceLongitude: formData.waterSourceLongitude || '',
+          waterSourceLatitude: !isConcessionTransfer ? (formData.waterSourceLatitude || '') : '',
+          waterSourceLongitude: !isConcessionTransfer ? (formData.waterSourceLongitude || '') : '',
+          ...(isConcessionTransfer && concessionAreaValue ? { concessionArea: concessionAreaValue, concessionAreaUnit: formData.concessionAreaUnit || 'ha' } : {}),
           ...(permitReference ? { permitReference } : {}),
         }),
       };
@@ -1213,6 +1229,16 @@ function NewApplicationContent() {
       const draftOriginalActivities = Array.isArray(selectedPermit?.application?.intended_activities)
         ? selectedPermit.application.intended_activities
         : [];
+      // For manual permits, derive intended_activities from waterPurpose so isConcessionApplication() works
+      const isDraftManualPermit = typeof selectedPermit?.id === 'string' && selectedPermit.id.startsWith('manual-');
+      const draftManualActivities = isDraftManualPermit && formData.waterPurpose ? [formData.waterPurpose] : [];
+      const draftResolvedActivities = draftOriginalActivities.length > 0 ? draftOriginalActivities : draftManualActivities;
+
+      const draftPureConcessionPurposes = ["fish_farming_lakes", "recreation_activities"];
+      const isDraftConcession = draftPureConcessionPurposes.includes(formData.waterPurpose || "") ||
+        formData.waterUseCategory === "concession";
+      const draftConcessionArea = formData.concessionArea ? parseFloat(formData.concessionArea) : undefined;
+
       const transferApplicationData: Partial<Application> = {
         applicant_id: userProfile?.id,
         status: 'draft',
@@ -1228,17 +1254,21 @@ function NewApplicationContent() {
         project_title: `Transfer: ${formData.transfereeName || formData.facilityProjectName || selectedPermit?.permit_number} Water Permit Application`,
         project_description: `Permit transfer request for permit ${formData.permitNumber || selectedPermit?.permit_number}`,
         sla_status: 'on_time',
-        water_taking_method: formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '',
-        flow_rate_m3_per_second: formData.flowRate ? parseFloat(formData.flowRate) : (selectedPermit?.application?.flow_rate_m3_per_second ?? undefined),
-        ...(draftOriginalActivities.length > 0 ? { intended_activities: draftOriginalActivities } : {}),
+        water_taking_method: !isDraftConcession ? (formData.abstractionMethod || selectedPermit?.application?.water_taking_method || '') : '',
+        flow_rate_m3_per_second: !isDraftConcession && formData.flowRate ? parseFloat(formData.flowRate) : (selectedPermit?.application?.flow_rate_m3_per_second ?? undefined),
+        ...(draftResolvedActivities.length > 0 ? { intended_activities: draftResolvedActivities } : {}),
+        ...(isDraftConcession && draftConcessionArea && !isNaN(draftConcessionArea) && draftConcessionArea > 0
+          ? { concession_area: draftConcessionArea }
+          : {}),
         internal_notes: JSON.stringify({
           isTransfer: true,
           originalPermitId: selectedPermit?.id,
           originalPermitNumber: selectedPermit?.permit_number,
           transferFormData: formData,
           customerSnapshot,
-          waterSourceLatitude: formData.waterSourceLatitude || '',
-          waterSourceLongitude: formData.waterSourceLongitude || '',
+          waterSourceLatitude: !isDraftConcession ? (formData.waterSourceLatitude || '') : '',
+          waterSourceLongitude: !isDraftConcession ? (formData.waterSourceLongitude || '') : '',
+          ...(isDraftConcession && draftConcessionArea ? { concessionArea: draftConcessionArea, concessionAreaUnit: formData.concessionAreaUnit || 'ha' } : {}),
           ...(permitReference ? { permitReference } : {}),
         }),
       };
