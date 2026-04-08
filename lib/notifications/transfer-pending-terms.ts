@@ -258,7 +258,7 @@ export async function notifyOnTransferPendingTerms(
           `,
           [
             applicationId,
-            notesContact.originalPermitId,
+            notesContact.originalPermitId.startsWith('manual-') ? null : notesContact.originalPermitId,
             app.applicant_id,
             notesContact.transfereeEmail,
             notesContact.transfereePhoneKey,
