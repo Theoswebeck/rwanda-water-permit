@@ -946,6 +946,65 @@ export default function TermsConditionsPage() {
         transferOwnershipReassigned = true;
         console.log('✅ Transfer permit ownership reassigned successfully:', permitData.permit_number);
 
+      } else if (isTransferApplication && transferOriginalPermitId?.startsWith('manual-')) {
+        // Manual (legacy) permit transfer: the original permit has no DB row.
+        // Insert a new permit row preserving the original permit number so no new
+        // RWB number is issued. The DB trigger generate_permit_number() only fires
+        // when permit_number IS NULL — passing it explicitly skips auto-generation.
+        const originalPermitNumber = (parsedNotes?.originalPermitNumber as string | undefined) || null;
+        console.log('🔁 Processing MANUAL TRANSFER — preserving original permit number:', originalPermitNumber);
+
+        const newIssuedDate = acceptedDateOnly;
+        const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
+
+        const { data: newPermit, error: permitError } = await supabase
+          .from('permits')
+          .insert({
+            application_id: applicationId,
+            status: 'active',
+            water_source: applicationData.water_source,
+            purpose: applicationData.water_purpose,
+            water_allowance: resolvedVolumeM3,
+            allowance_unit: resolvedAllowanceUnit || 'm³',
+            issuing_authority: 'Rwanda Water Resources Board',
+            issued_date: newIssuedDate,
+            expiry_date: newExpiryDate,
+            is_transfer: true,
+            transfer_reason: `Transferred via application ${(applicationData as any).application_number || applicationId}`,
+            ...(originalPermitNumber ? { permit_number: originalPermitNumber } : {}),
+            conditions: {
+              conditions: [
+                'Comply with all environmental regulations',
+                'Submit quarterly usage reports',
+                'Allow inspections as required',
+                ...(applicationData.approval_conditions ? [applicationData.approval_conditions] : []),
+              ],
+              location: {
+                province: applicationData.province,
+                district: applicationData.district,
+                sector: applicationData.sector,
+                cell: applicationData.cell,
+                village: applicationData.village,
+                coordinates: applicationData.coordinates,
+                description: applicationData.location_description,
+              },
+              project: {
+                title: applicationData.project_title,
+                description: applicationData.project_description,
+                value: applicationData.project_value,
+              },
+            },
+          } as any)
+          .select()
+          .single() as { data: any; error: any };
+
+        if (permitError) {
+          console.error('❌ Error creating manual transfer permit:', permitError);
+          throw permitError;
+        }
+        permitData = newPermit;
+        console.log('✅ Manual transfer permit created:', permitData.permit_number);
+
       } else {
         console.log('📝 Creating NEW permit in database...');
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
