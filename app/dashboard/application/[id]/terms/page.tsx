@@ -648,6 +648,50 @@ export default function TermsConditionsPage() {
       let permitData: any;
       let transferOwnershipReassigned = false;
 
+      // Resolved fields for registry sync — used by all branches below.
+      const permitHolder: string | undefined =
+        applicationData.applicant?.company_name?.trim() ||
+        [applicationData.applicant?.first_name, applicationData.applicant?.last_name]
+          .filter(Boolean).join(' ').trim() ||
+        undefined;
+
+      const registrySyncContact: string | undefined =
+        applicationData.applicant?.email?.trim() ||
+        applicationData.applicant?.phone?.trim() ||
+        undefined;
+
+      // Extract lat/lng from GeoJSON Point or internal_notes waterSource fields.
+      const _geom = applicationData.coordinates as any;
+      let _registryLat: number | undefined;
+      let _registryLng: number | undefined;
+      if (_geom?.type === 'Point' && Array.isArray(_geom.coordinates) && _geom.coordinates.length >= 2) {
+        const [_lng, _lat] = _geom.coordinates;
+        if (Number.isFinite(Number(_lat)) && Number.isFinite(Number(_lng))) {
+          _registryLat = Number(_lat);
+          _registryLng = Number(_lng);
+        }
+      }
+      if (_registryLat == null) {
+        const _latRaw = parsedNotes?.waterSourceLatitude;
+        const _lngRaw = parsedNotes?.waterSourceLongitude;
+        if (_latRaw != null && _lngRaw != null) {
+          const _latN = parseFloat(String(_latRaw));
+          const _lngN = parseFloat(String(_lngRaw));
+          if (Number.isFinite(_latN) && Number.isFinite(_lngN)) {
+            _registryLat = _latN;
+            _registryLng = _lngN;
+          }
+        }
+      }
+
+      const registrySyncLocationParts = [
+        applicationData.province, applicationData.district,
+        applicationData.sector, applicationData.cell, applicationData.village,
+      ].filter(Boolean);
+      const registrySyncLocation = registrySyncLocationParts.length > 0
+        ? registrySyncLocationParts.join(', ')
+        : undefined;
+
       if (isModificationApplication) {
         const permitRef = parsedNotes?.permitReference as { normalizedPermitNumber?: string; registrySnapshot?: { registry_id?: string; permit_number?: string } } | undefined;
         const isRegistryOnly = !modificationOriginalPermitId ||
@@ -782,7 +826,6 @@ export default function TermsConditionsPage() {
 
           const permitNumForSync = currentPermit.permit_number || permitRef?.normalizedPermitNumber;
           if (permitNumForSync) {
-            const locationParts = [applicationData.province, applicationData.district, applicationData.sector, applicationData.cell, applicationData.village].filter(Boolean);
             const syncResult = await syncPermitToRegistry(supabase, permitNumForSync, {
               status: 'active',
               water_source: (permitUpdatePayload.water_source as string) || undefined,
@@ -790,7 +833,13 @@ export default function TermsConditionsPage() {
               volume_or_area: permitUpdatePayload.water_allowance != null ? String(permitUpdatePayload.water_allowance) : undefined,
               issuance_date: newIssuedDate,
               expiration_date: newExpiryDate || undefined,
-              location: locationParts.length > 0 ? locationParts.join(', ') : undefined,
+              location: registrySyncLocation,
+              permit_holder: permitHolder,
+              latitude: _registryLat,
+              longitude: _registryLng,
+              duration: `${resolvedDurationYearsGlobal} years`,
+              contact: registrySyncContact,
+              method_of_water_taking: applicationData.water_taking_method || undefined,
             });
             if (syncResult.synced) {
               console.log('✅ Forward-synced modification to permit_registry');
@@ -811,7 +860,6 @@ export default function TermsConditionsPage() {
 
           console.log('📝 Registry-only modification for permit:', registryPermitNumber);
 
-          const locationParts = [applicationData.province, applicationData.district, applicationData.sector, applicationData.cell, applicationData.village].filter(Boolean);
           const registrySyncResult = await syncPermitToRegistry(supabase, registryPermitNumber, {
             status: 'active',
             water_source: applicationData.water_source || undefined,
@@ -819,7 +867,13 @@ export default function TermsConditionsPage() {
             volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : (applicationData.estimated_usage_volume ? String(applicationData.estimated_usage_volume) : undefined),
             issuance_date: newIssuedDate,
             expiration_date: newExpiryDate || undefined,
-            location: locationParts.length > 0 ? locationParts.join(', ') : undefined,
+            location: registrySyncLocation,
+            permit_holder: permitHolder,
+            latitude: _registryLat,
+            longitude: _registryLng,
+            duration: `${resolvedDurationYearsGlobal} years`,
+            contact: registrySyncContact,
+            method_of_water_taking: applicationData.water_taking_method || undefined,
           });
 
           if (registrySyncResult.synced) {
@@ -918,9 +972,29 @@ export default function TermsConditionsPage() {
         }
         
         permitData = updatedPermit;
-        console.log('✅ Permit renewed successfully:', permitData.permit_number, 
-          '| New issued date:', newIssuedDate, 
+        console.log('✅ Permit renewed successfully:', permitData.permit_number,
+          '| New issued date:', newIssuedDate,
           '| New expiry date:', newExpiryDate);
+
+        // Forward-sync renewal to permit_registry (non-blocking)
+        if (permitData?.permit_number) {
+          syncPermitToRegistry(supabase, permitData.permit_number, {
+            status: 'active',
+            issuance_date: newIssuedDate,
+            expiration_date: newExpiryDate || undefined,
+            permit_holder: permitHolder,
+            location: registrySyncLocation,
+            latitude: _registryLat,
+            longitude: _registryLng,
+            duration: `${resolvedDurationYearsGlobal} years`,
+            contact: registrySyncContact,
+            water_source: applicationData.water_source || undefined,
+            authorized_activity: applicationData.water_purpose || undefined,
+            volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : undefined,
+            method_of_water_taking: applicationData.water_taking_method || undefined,
+          }).catch(err => console.warn('⚠️ registry-sync (renewal) failed:', err));
+        }
+
       } else if (
         isTransferApplication &&
         transferOriginalPermitId &&
@@ -945,6 +1019,23 @@ export default function TermsConditionsPage() {
         permitData = issueJson.permit;
         transferOwnershipReassigned = true;
         console.log('✅ Transfer permit ownership reassigned successfully:', permitData.permit_number);
+
+        // Forward-sync digital transfer to permit_registry (non-blocking)
+        if (permitData?.permit_number) {
+          syncPermitToRegistry(supabase, permitData.permit_number, {
+            status: 'active',
+            permit_holder: permitHolder,
+            location: registrySyncLocation,
+            latitude: _registryLat,
+            longitude: _registryLng,
+            water_source: applicationData.water_source || undefined,
+            authorized_activity: applicationData.water_purpose || undefined,
+            volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : undefined,
+            duration: `${resolvedDurationYearsGlobal} years`,
+            contact: registrySyncContact,
+            method_of_water_taking: applicationData.water_taking_method || undefined,
+          }).catch(err => console.warn('⚠️ registry-sync (digital transfer) failed:', err));
+        }
 
       } else if (isTransferApplication && (parsedNotes?.originalPermitId as string | undefined)?.startsWith('manual-')) {
         // Manual (legacy) permit transfer: the original permit has no DB row.
@@ -1005,6 +1096,25 @@ export default function TermsConditionsPage() {
         permitData = newPermit;
         transferOwnershipReassigned = true;
         console.log('✅ Manual transfer permit created:', permitData.permit_number);
+
+        // Forward-sync manual transfer to permit_registry (non-blocking)
+        if (permitData?.permit_number) {
+          syncPermitToRegistry(supabase, permitData.permit_number, {
+            status: 'active',
+            permit_holder: permitHolder,
+            location: registrySyncLocation,
+            latitude: _registryLat,
+            longitude: _registryLng,
+            water_source: applicationData.water_source || undefined,
+            authorized_activity: applicationData.water_purpose || undefined,
+            volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : undefined,
+            issuance_date: newIssuedDate,
+            expiration_date: newExpiryDate || undefined,
+            duration: `${resolvedDurationYearsGlobal} years`,
+            contact: registrySyncContact,
+            method_of_water_taking: applicationData.water_taking_method || undefined,
+          }).catch(err => console.warn('⚠️ registry-sync (manual transfer) failed:', err));
+        }
 
       } else {
         console.log('📝 Creating NEW permit in database...');

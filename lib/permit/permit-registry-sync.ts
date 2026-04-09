@@ -7,6 +7,12 @@ interface RegistrySyncUpdates {
   issuance_date?: string;
   expiration_date?: string;
   permit_holder?: string;
+  latitude?: number;
+  longitude?: number;
+  duration?: string;
+  contact?: string;
+  method_of_water_taking?: string;
+  regime?: string;
 }
 
 /**
@@ -66,6 +72,12 @@ export async function syncPermitToRegistry(
     if (updates.issuance_date) payload.issuance_date = updates.issuance_date;
     if (updates.expiration_date) payload.expiration_date = updates.expiration_date;
     if (updates.permit_holder) payload.permit_holder = updates.permit_holder;
+    if (updates.latitude != null && Number.isFinite(updates.latitude)) payload.latitude = updates.latitude;
+    if (updates.longitude != null && Number.isFinite(updates.longitude)) payload.longitude = updates.longitude;
+    if (updates.duration) payload.duration = updates.duration;
+    if (updates.contact) payload.contact = updates.contact;
+    if (updates.method_of_water_taking) payload.method_of_water_taking = updates.method_of_water_taking;
+    if (updates.regime) payload.regime = updates.regime;
 
     const { error: updateErr } = await supabaseClient
       .from("permit_registry")
