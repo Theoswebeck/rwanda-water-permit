@@ -297,7 +297,9 @@ function computeYearsBetween(a: Date, b: Date): number {
 function resolvePermitTitleNumber(permitNumber: string, headerYear: number): string {
   const n = permitNumber.trim();
   if (!n) return `N/A/RWB/${headerYear}`;
-  if (/\/rwb\/\d{4}$/i.test(n)) return n;
+  // If the number already contains a slash it is fully formed (e.g. "000025/RWB/2026"
+  // or a legacy ministry number like "0025/MINIRENA/IWRM/2015") — return as-is.
+  if (n.includes('/')) return n;
   return `${n}/RWB/${headerYear}`;
 }
 
