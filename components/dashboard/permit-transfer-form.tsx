@@ -482,23 +482,19 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const facilityProjectName = form.watch('facilityProjectName');
   const waterSourceType = form.watch('waterSourceType');
   const waterPurpose = form.watch('waterPurpose');
-  const watchedWaterUseCategory = form.watch('waterUseCategory');
   const concessionArea = form.watch('concessionArea');
   const watchedPolygons = form.watch('waterSourcePolygons');
 
-  // Mirror logic from new application: fish farming in lakes and recreation → always concession
-  const PURE_CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities"];
-  const isPureConcessionPurpose = PURE_CONCESSION_PURPOSES.includes(waterPurpose || "");
-  const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcessionPurpose
+  // Activity/purpose automatically determines abstraction vs concession — no manual choice
+  const CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities"];
+  const effectiveWaterUseCategory: "abstraction" | "concession" = CONCESSION_PURPOSES.includes(waterPurpose || "")
     ? "concession"
-    : (watchedWaterUseCategory ?? "abstraction");
+    : "abstraction";
 
-  // Auto-reset waterUseCategory to abstraction when purpose changes to a non-concession type
+  // Keep form field in sync with the auto-determined category
   useEffect(() => {
-    if (!isPureConcessionPurpose && form.getValues('waterUseCategory') === 'concession') {
-      form.setValue('waterUseCategory', 'abstraction', { shouldDirty: false, shouldTouch: false, shouldValidate: false });
-    }
-  }, [waterPurpose, isPureConcessionPurpose, form]);
+    form.setValue('waterUseCategory', effectiveWaterUseCategory, { shouldDirty: false, shouldTouch: false, shouldValidate: false });
+  }, [waterPurpose, effectiveWaterUseCategory, form]);
 
   const transferorName = form.watch('transferorName');
   const transferorCertification = form.watch('transferorCertification');
@@ -1612,48 +1608,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     </div>
                   </div>
 
-                  {/* Water Use Category selector — only for manual permits where purpose is not pure-concession */}
-                  {isManualPermit && !isPureConcessionPurpose && hasValue(waterPurpose) && (
-                    <FormField
-                      control={form.control}
-                      name="waterUseCategory"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-base font-medium">Water Use Category *</FormLabel>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            Select whether this permit involves water abstraction or a water concession.
-                          </p>
-                          <FormControl>
-                            <div className="flex gap-6">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  value="abstraction"
-                                  checked={(field.value ?? "abstraction") === "abstraction"}
-                                  onChange={() => { if (!readOnly) field.onChange("abstraction"); }}
-                                  disabled={readOnly}
-                                  className="accent-blue-600"
-                                />
-                                <span>Abstraction</span>
-                              </label>
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  value="concession"
-                                  checked={field.value === "concession"}
-                                  onChange={() => { if (!readOnly) field.onChange("concession"); }}
-                                  disabled={readOnly}
-                                  className="accent-blue-600"
-                                />
-                                <span>Concession</span>
-                              </label>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
+                  {/* Water Use Category is auto-determined by the selected water purpose — no manual selector */}
 
                   {/* Concession Information — shown when effectiveWaterUseCategory is concession */}
                   {effectiveWaterUseCategory === "concession" && (
