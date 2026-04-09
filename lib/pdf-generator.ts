@@ -496,9 +496,10 @@ function resolvePermitTitleLine(application: Application, permitNumber: string, 
   // We must NOT derive/override it from `application.application_number` (modifications/renewals can diverge).
   const normalized = typeof permitNumber === "string" ? permitNumber.trim() : "";
   if (!normalized) return `N/A/RWB/${headerYear}`;
-  // If the number already contains the expected suffix, keep it exactly (no additional formatting).
-  if (/\/rwb\/\d{4}$/i.test(normalized) || normalized.toLowerCase().includes("/rwb/")) return normalized;
-  // Legacy fallback: if only a sequence is provided, append `/RWB/<year>` without extra spaces.
+  // If the number already contains a slash it is fully formed (e.g. "000025/RWB/2026"
+  // or a legacy ministry number like "0025/MINIRENA/IWRM/2015") — return as-is.
+  if (normalized.includes("/")) return normalized;
+  // Legacy fallback: bare sequence — append /RWB/<year>.
   return `${normalized}/RWB/${headerYear}`;
 }
 
