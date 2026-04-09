@@ -946,12 +946,12 @@ export default function TermsConditionsPage() {
         transferOwnershipReassigned = true;
         console.log('✅ Transfer permit ownership reassigned successfully:', permitData.permit_number);
 
-      } else if (isTransferApplication && transferOriginalPermitId?.startsWith('manual-')) {
+      } else if (isTransferApplication && (parsedNotes?.originalPermitId as string | undefined)?.startsWith('manual-')) {
         // Manual (legacy) permit transfer: the original permit has no DB row.
         // Insert a new permit row preserving the original permit number so no new
         // RWB number is issued. The DB trigger generate_permit_number() only fires
         // when permit_number IS NULL — passing it explicitly skips auto-generation.
-        const originalPermitNumber = (parsedNotes?.originalPermitNumber as string | undefined) || null;
+        const originalPermitNumber = ((parsedNotes?.originalPermitNumber as string | undefined) || '').trim() || null;
         console.log('🔁 Processing MANUAL TRANSFER — preserving original permit number:', originalPermitNumber);
 
         const newIssuedDate = acceptedDateOnly;
@@ -1003,6 +1003,7 @@ export default function TermsConditionsPage() {
           throw permitError;
         }
         permitData = newPermit;
+        transferOwnershipReassigned = true;
         console.log('✅ Manual transfer permit created:', permitData.permit_number);
 
       } else {
