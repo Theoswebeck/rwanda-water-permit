@@ -309,15 +309,19 @@ export async function POST(request: NextRequest) {
         const existingPayment = existingPaymentRes.rows[0];
 
         if (existingPayment) {
-          console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
-          return NextResponse.json(
-            {
-              success: false,
-              error: 'Payment already completed for this application',
-              payment: existingPayment,
-            },
-            { status: 400 }
-          );
+          const hasOverride = application?.payment_override_amount != null;
+          if (!hasOverride) {
+            console.warn('⚠️  [PAYMENT INITIATE] Payment already completed');
+            return NextResponse.json(
+              {
+                success: false,
+                error: 'Payment already completed for this application',
+                payment: existingPayment,
+              },
+              { status: 400 }
+            );
+          }
+          console.log('ℹ️  [PAYMENT INITIATE] Existing completed payment found but override amount is set — allowing correction payment');
         }
       }
     }
