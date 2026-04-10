@@ -133,13 +133,24 @@ export function PaymentTab({
     pollInterval: pauseAutoPolling ? undefined : 5000,
   });
 
-  const applicationFee = getApplicationFee();
+  const applicationFee =
+    (application as any)?.payment_override_amount != null
+      ? Number((application as any).payment_override_amount)
+      : getApplicationFee();
 
   /**
    * Auto-detect when payment is completed via polling
    */
   useEffect(() => {
     if (payment && payment.status === 'completed' && !paymentCompleted && !isCompletingPayment) {
+      // If a correction override is active and this completed payment covers less than
+      // the override amount, the balance is not yet settled — don't trigger success screen.
+      const overrideAmount =
+        (application as any)?.payment_override_amount != null
+          ? Number((application as any).payment_override_amount)
+          : null;
+      if (overrideAmount !== null && Number(payment.amount) < overrideAmount) return;
+
       console.log('✅ Payment completed detected via polling');
       setAwaitingGatewayConfirmation(false);
 
