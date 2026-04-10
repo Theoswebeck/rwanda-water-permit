@@ -475,7 +475,16 @@ export function PaymentTab({
   };
 
   // Payment should be considered complete only when payment confirmation is explicit.
-  const isPaymentCompleted = paymentCompleted || payment?.status === 'completed';
+  // If a correction override is active and the existing completed payment is for less than
+  // the override amount, the balance is not yet settled — treat as not completed.
+  const _overrideAmountForRender =
+    (application as any)?.payment_override_amount != null
+      ? Number((application as any).payment_override_amount)
+      : null;
+  const _existingPaymentCoversOverride =
+    _overrideAmountForRender === null || Number(payment?.amount) >= _overrideAmountForRender;
+  const isPaymentCompleted =
+    _existingPaymentCoversOverride && (paymentCompleted || payment?.status === 'completed');
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
 
