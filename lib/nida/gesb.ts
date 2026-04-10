@@ -118,7 +118,7 @@ export async function fetchNidaCitizenInfo(documentNumberRaw: string): Promise<G
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        serviceName: 'rwbcitizeninfo',
+        serviceName: 'rwandawbcitezneauthenticate',
       },
       body: JSON.stringify({ args: { documentNumber } }),
       cache: 'no-store',
