@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { ProvinceType, User } from "@/types/database";
+import type { User } from "@/types/database";
 
 interface SignUpData {
   email: string;
@@ -10,7 +10,12 @@ interface SignUpData {
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;
-  province?: ProvinceType;
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
+  address?: string;
   companyName?: string;
   companyTIN?: string;
   companyAddress?: string;

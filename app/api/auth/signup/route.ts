@@ -3,6 +3,7 @@ import { verifyNationalId } from '@/lib/nida/gesb'
 import { verifyTin } from '@/lib/rra/client'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
+import { formatProvinceForDB } from '@/lib/application-utils'
 
 export async function POST(req: NextRequest) {
   try {
@@ -112,6 +113,16 @@ export async function POST(req: NextRequest) {
 
     const isIndividual = accountType === 'individual'
     const idDigits = String(rest?.identification?.number || rest?.idNumber || '').replace(/\D/g, '')
+    // Address fields for individual signups. Client sends province as the
+    // rwanda-administrative-data key (Kigali/North/South/East/West); translate
+    // to the province_type enum (Kigali/Northern/Southern/Eastern/Western).
+    const rawProvince = isIndividual ? String(rest?.province || '').trim() : ''
+    const provinceEnum = rawProvince ? (formatProvinceForDB(rawProvince) || null) : null
+    const districtVal = isIndividual ? (String(rest?.district || '').trim() || null) : null
+    const sectorVal = isIndividual ? (String(rest?.sector || '').trim() || null) : null
+    const cellVal = isIndividual ? (String(rest?.cell || '').trim() || null) : null
+    const villageVal = isIndividual ? (String(rest?.village || '').trim() || null) : null
+    const addressVal = isIndividual ? (String(rest?.address || '').trim() || null) : null
 
     const existing = await query<{ id: string; phone_verified: boolean; email_verified: boolean }>(
       `select id, coalesce(phone_verified, false) as phone_verified, coalesce(email_verified, false) as email_verified
@@ -146,12 +157,17 @@ export async function POST(req: NextRequest) {
           date_of_birth = $7::date,
           phone         = $8,
           province      = $9::public.province_type,
-          company_name  = $10,
-          company_tin   = $11,
-          company_address = $12,
-          company_phone = $13,
+          district      = $10,
+          sector        = $11,
+          cell          = $12,
+          village       = $13,
+          address       = $14,
+          company_name  = $15,
+          company_tin   = $16,
+          company_address = $17,
+          company_phone = $18,
           updated_at    = now()
-        where id = $14
+        where id = $19
         `,
         [
           passwordHash,
@@ -162,7 +178,12 @@ export async function POST(req: NextRequest) {
           isIndividual ? String(rest?.lastName || 'Profile') : null,
           isIndividual ? String(rest?.dateOfBirth || '') : null,
           isIndividual ? String(rest?.phone || '') : null,
-          isIndividual ? (rest?.province || null) : null,
+          provinceEnum,
+          districtVal,
+          sectorVal,
+          cellVal,
+          villageVal,
+          addressVal,
           isIndividual ? null : String(rest?.companyName || ''),
           isIndividual ? null : String(rest?.companyTIN || ''),
           isIndividual ? null : String(rest?.companyAddress || ''),
@@ -189,6 +210,11 @@ export async function POST(req: NextRequest) {
         date_of_birth,
         phone,
         province,
+        district,
+        sector,
+        cell,
+        village,
+        address,
         company_name,
         company_tin,
         company_address,
@@ -202,7 +228,8 @@ export async function POST(req: NextRequest) {
       ) values (
         $1, $2, 'applicant', 'active', $3::public.account_type, $4::public.id_type, $5,
         $6, $7, $8::date, $9, $10::public.province_type,
-        $11, $12, $13, $14,
+        $11, $12, $13, $14, $15,
+        $16, $17, $18, $19,
         0, 0, 0, false, false, false
       )
       returning id
@@ -217,7 +244,12 @@ export async function POST(req: NextRequest) {
         isIndividual ? String(rest?.lastName || 'Profile') : null,
         isIndividual ? String(rest?.dateOfBirth || '') : null,
         isIndividual ? String(rest?.phone || '') : null,
-        isIndividual ? (rest?.province || null) : null,
+        provinceEnum,
+        districtVal,
+        sectorVal,
+        cellVal,
+        villageVal,
+        addressVal,
         isIndividual ? null : String(rest?.companyName || ''),
         isIndividual ? null : String(rest?.companyTIN || ''),
         isIndividual ? null : String(rest?.companyAddress || ''),

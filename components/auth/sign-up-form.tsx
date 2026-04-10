@@ -12,7 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { ProvinceType } from "@/types/database";
+import {
+  getFormattedProvinceOptions,
+  getFormattedDistrictOptions,
+  getFormattedSectorOptions,
+  getFormattedCellOptions,
+  getFormattedVillageOptions,
+} from "@/lib/rwanda-administrative-data";
 
 // Form data interface for passing to parent
 export interface SignUpFormData {
@@ -31,7 +37,13 @@ export interface SignUpFormData {
   idNumber?: string;
   idType?: string;
   phone?: string;
-  province?: ProvinceType;
+  // Address (cascading Rwanda admin dropdowns — matches application form keys)
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
+  address?: string;
 }
 
 interface SignUpFormProps {
@@ -77,7 +89,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const [idNumber, setIdNumber] = useState(initialData?.idNumber || "");
   const [idType, setIdType] = useState(initialData?.idType || "nationalId");
   const [phone, setPhone] = useState(initialData?.phone || "");
-  const [province, setProvince] = useState<ProvinceType | "">(initialData?.province || "");
+  const [province, setProvince] = useState<string>(initialData?.province || "");
+  const [district, setDistrict] = useState<string>(initialData?.district || "");
+  const [sector, setSector] = useState<string>(initialData?.sector || "");
+  const [cell, setCell] = useState<string>(initialData?.cell || "");
+  const [village, setVillage] = useState<string>(initialData?.village || "");
   const [nidaEnabled, setNidaEnabled] = useState<boolean>(false);
   const [nidaChecking, setNidaChecking] = useState<boolean>(false);
   const [nidaVerified, setNidaVerified] = useState<boolean>(false);
@@ -124,17 +140,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const mapNidaProvince = (raw?: string): ProvinceType | "" => {
-    const v = String(raw || "").trim().toLowerCase();
-    if (!v) return "";
-    if (v.includes("kigali") || v.includes("umujyi wa kigali")) return "Kigali";
-    if (v.includes("northern") || v.includes("amajyaruguru")) return "Northern";
-    if (v.includes("southern") || v.includes("amajyepfo")) return "Southern";
-    if (v.includes("eastern") || v.includes("iburasirazuba")) return "Eastern";
-    if (v.includes("western") || v.includes("iburengerazuba")) return "Western";
-    return "";
-  };
-
   const verifyWithNida = async (docDigits: string) => {
     if (!/^\d{16}$/.test(docDigits)) return;
     setNidaError("");
@@ -157,7 +162,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
         surnames?: string;
         dateOfBirth?: string;
         documentNumber?: string;
-        province?: string;
       } | undefined;
       const dobIso = parseNidaDobToIso(data?.dateOfBirth);
       if (!dobIso) {
@@ -168,7 +172,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       setFirstName(String(data?.foreName || '').trim());
       setLastName(String(data?.surnames || '').trim());
       setDateOfBirth(dobIso);
-      setProvince(mapNidaProvince(data?.province));
       validateDateOfBirth(dobIso);
       setNidaVerified(true);
     } catch (e: unknown) {
@@ -429,14 +432,19 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             companyPhone,
             companyAddress,
           }
-        : { 
-            firstName, 
-            lastName, 
+        : {
+            firstName,
+            lastName,
             dateOfBirth,
             idNumber,
             idType,
             phone,
             province: province || undefined,
+            district: district || undefined,
+            sector: sector || undefined,
+            cell: cell || undefined,
+            village: village || undefined,
+            address: [village, cell, sector, district, province].filter(Boolean).join(', ') || undefined,
           }
       )
     };
@@ -481,7 +489,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     !!lastName.trim() &&
     !!dateOfBirth &&
     !dateOfBirthError &&
-    (!nidaEnabled || !!province) &&
+    !!province &&
+    !!district &&
+    !!sector &&
+    !!cell &&
     !!phone.trim() &&
     !phoneError &&
     !!idNumber.trim() &&
@@ -502,7 +513,6 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     if (error) onClearError?.();
     if (nidaError) setNidaError("");
     if (nidaVerified) setNidaVerified(false);
-    if (province) setProvince("");
 
     // Don't show an "invalid" error while the user is still typing.
     // We validate on blur and on submit.
@@ -994,25 +1004,117 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                         </div>
                       </div>
 
-                      {nidaEnabled && (
-                      <div className="space-y-2">
-                        <Label htmlFor="province">{tx("Province")}</Label>
-                        <Input
-                          id="province"
-                          type="text"
-                          placeholder={tx("Auto-filled after NIDA verification")}
-                          value={province}
-                          className="transition-all duration-200 focus:ring-2 focus:ring-primary"
-                          disabled={isLoading}
-                          readOnly
-                        />
-                        {nidaVerified && !province && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {tx("Province could not be mapped from NIDA response.")}
-                          </p>
-                        )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="province">{tx("Province")}</Label>
+                          <Select
+                            value={province}
+                            onValueChange={(v) => {
+                              setProvince(v);
+                              setDistrict("");
+                              setSector("");
+                              setCell("");
+                              setVillage("");
+                            }}
+                            disabled={isLoading}
+                          >
+                            <SelectTrigger id="province" className="w-full">
+                              <SelectValue placeholder={tx("Select province")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getFormattedProvinceOptions().map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="district">{tx("District")}</Label>
+                          <Select
+                            value={district}
+                            onValueChange={(v) => {
+                              setDistrict(v);
+                              setSector("");
+                              setCell("");
+                              setVillage("");
+                            }}
+                            disabled={isLoading || !province}
+                          >
+                            <SelectTrigger id="district" className="w-full">
+                              <SelectValue placeholder={tx("Select district")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getFormattedDistrictOptions(province).map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sector">{tx("Sector")}</Label>
+                          <Select
+                            value={sector}
+                            onValueChange={(v) => {
+                              setSector(v);
+                              setCell("");
+                              setVillage("");
+                            }}
+                            disabled={isLoading || !district}
+                          >
+                            <SelectTrigger id="sector" className="w-full">
+                              <SelectValue placeholder={tx("Select sector")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getFormattedSectorOptions(province, district).map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="cell">{tx("Cell")}</Label>
+                          <Select
+                            value={cell}
+                            onValueChange={(v) => {
+                              setCell(v);
+                              setVillage("");
+                            }}
+                            disabled={isLoading || !sector}
+                          >
+                            <SelectTrigger id="cell" className="w-full">
+                              <SelectValue placeholder={tx("Select cell")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getFormattedCellOptions(province, district, sector).map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="village">{tx("Village")} <span className="text-muted-foreground text-xs">({tx("optional")})</span></Label>
+                        <Select
+                          value={village}
+                          onValueChange={setVillage}
+                          disabled={isLoading || !cell}
+                        >
+                          <SelectTrigger id="village" className="w-full">
+                            <SelectValue placeholder={tx("Select village")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getFormattedVillageOptions(province, district, sector, cell).map((o) => (
+                              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="dateOfBirth">{tx("Date of Birth")}</Label>

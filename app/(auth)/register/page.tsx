@@ -99,6 +99,11 @@ export default function RegisterPage() {
           idType: formData.idType,
           phone: phoneNumber,
           province: formData.province,
+          district: formData.district,
+          sector: formData.sector,
+          cell: formData.cell,
+          village: formData.village,
+          address: formData.address,
         } : {
           companyName: formData.companyName,
           companyTIN: formData.companyTIN,
