@@ -584,9 +584,10 @@ export default function ReviewerDashboard() {
       const isReassign = !!previousAssessorId;
       const action = isReassign ? 'reassigned_assessor' : 'assigned_to_assessor';
       const selectedAssessorLabel = getAssessorDisplayLabel(selectedAssessor);
+      const appRef = selectedAppForAssignment.application_number || selectedAppForAssignment.id;
       const comment = isReassign
-        ? `Assessor reassigned from ${previousAssessorLabel || 'Unknown assessor'} to ${selectedAssessorLabel} for assessment`
-        : `Application assigned to ${selectedAssessorLabel} for assessment`;
+        ? `Application ${appRef} reassigned from ${previousAssessorLabel || 'Unknown assessor'} to ${selectedAssessorLabel} for assessment`
+        : `Application ${appRef} assigned to ${selectedAssessorLabel} for assessment`;
 
       const { error: workflowError } = await supabase
         .from('workflow_history')
