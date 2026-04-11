@@ -79,6 +79,7 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
   if (table === 'applications') {
     const wantsDocuments = requestedSelect?.includes('documents(') ?? false
     const wantsReviews = requestedSelect?.includes('reviews:') || requestedSelect?.includes('reviews(') || false
+    const wantsAssignedAssessor = requestedSelect?.includes('assigned_assessor:') ?? false
     return `
       select
         a.*,
@@ -95,6 +96,14 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
           'company_tin', u.company_tin,
           'address', u.address
         ) as applicant
+        ${wantsAssignedAssessor ? `,
+        case when au.id is null then null else jsonb_build_object(
+          'id', au.id,
+          'first_name', au.first_name,
+          'last_name', au.last_name,
+          'email', au.email
+        ) end as assigned_assessor
+        ` : ''}
         ${wantsDocuments ? `,
         coalesce(
           (
@@ -117,6 +126,7 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
         ` : ''}
       from public.applications a
       left join public.users u on u.id = a.applicant_id
+      ${wantsAssignedAssessor ? 'left join public.users au on au.id = a.assigned_assessor_id' : ''}
     `
   }
   if (table === 'inspections') {
