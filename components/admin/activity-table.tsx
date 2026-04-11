@@ -250,7 +250,7 @@ export function ActivityTable({ logs, loading }: ActivityTableProps) {
             <TableHead className="w-[200px]">User</TableHead>
             <TableHead className="w-[200px]">Action</TableHead>
             <TableHead className="w-[120px]">Entity</TableHead>
-            <TableHead className="w-[320px] max-w-[320px]">Description</TableHead>
+            <TableHead className="w-[420px] max-w-[420px]">Description</TableHead>
             <TableHead className="w-[100px]">Status</TableHead>
             <TableHead className="w-[100px]">Severity</TableHead>
           </TableRow>
@@ -316,8 +316,8 @@ export function ActivityTable({ logs, loading }: ActivityTableProps) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="max-w-[320px] align-top">
-                    <p className="text-sm text-gray-600 line-clamp-2 whitespace-normal break-words">
+                  <TableCell className="max-w-[420px] align-top">
+                    <p className="text-sm text-gray-600 whitespace-normal break-words">
                       {log.description || 'No description'}
                     </p>
                   </TableCell>
