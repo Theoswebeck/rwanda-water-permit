@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
+import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import nodemailer from 'nodemailer'
 
 // Generate a secure random password
@@ -32,6 +33,10 @@ const STAFF_ROLES = ['assessor', 'reviewer', 'verifier', 'inspector', 'admin', '
 
 export async function POST(req: NextRequest) {
   try {
+    const token = readSessionTokenFromRequest(req)
+    const claims = token ? await verifySessionToken(token) : null
+    const actorUserId = claims?.sub || null
+
     const body = await req.json().catch(() => null)
     
     if (!body) {
@@ -135,14 +140,15 @@ export async function POST(req: NextRequest) {
       await query(
         `
         insert into public.audit_logs (
-          action, entity_type, table_name, record_id, new_values, description, severity, status, request_id, created_at
-        ) values ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, now())
+          action, entity_type, table_name, record_id, user_id, new_values, description, severity, status, request_id, created_at
+        ) values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, now())
         `,
         [
           'user.created',
           'user',
           'users',
           userId,
+          actorUserId,
           JSON.stringify({ email: emailLower, role, status, account_type }),
           `Created new staff account for ${emailLower} with role ${role}`,
           'info',
