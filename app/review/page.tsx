@@ -173,7 +173,7 @@ export default function ReviewerDashboard() {
            .select(`
              *,
              applicant:users!applicant_id(first_name, last_name, company_name),
-             assigned_assessor:users!assigned_assessor_id(first_name, last_name, email)
+             assigned_assessor:users!applications_assigned_inspector_id_fkey(first_name, last_name, email)
            `)
            .neq('status', 'draft')
            .neq('status', 'pending_payment')
