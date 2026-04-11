@@ -198,6 +198,22 @@ function buildBaseSelect(table: string, requestedSelect?: string) {
     }
     return `select wur.* from public.water_use_reports wur`
   }
+  if (table === 'audit_logs') {
+    return `
+      select
+        t.*,
+        case when u.id is null then null else jsonb_build_object(
+          'id', u.id,
+          'first_name', u.first_name,
+          'last_name', u.last_name,
+          'company_name', u.company_name,
+          'email', u.email,
+          'role', u.role
+        ) end as user
+      from public.audit_logs t
+      left join public.users u on u.id = t.user_id
+    `
+  }
   return `select t.* from public.${quoteIdent(table)} t`
 }
 
