@@ -183,7 +183,8 @@ export default function ReviewerDashboard() {
 
         if (error) throw error;
 
-        const processedApplications: ReviewApplication[] = data.map(app => {
+        const filteredData = (data || []).filter((a: any) => !(a.application_number || '').toUpperCase().startsWith('REG-'));
+        const processedApplications: ReviewApplication[] = filteredData.map(app => {
            const applicant = app.applicant as any;
            const applicantName = applicant?.company_name || 
                                 (applicant?.first_name && applicant?.last_name ? 

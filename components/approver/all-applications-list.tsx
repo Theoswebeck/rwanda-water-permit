@@ -74,7 +74,8 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
       if (error) throw error;
 
       // Process applications with calculated fields
-      const rows = (data ?? []) as ApplicationWithApplicant[];
+      const rows = ((data ?? []) as ApplicationWithApplicant[])
+        .filter((a) => !(a.application_number || '').toUpperCase().startsWith('REG-'));
       const processedApplications: ApplicationWithApplicant[] = rows.map((app) => {
         // Calculate SLA days remaining
         let slaRemaining: number | null = null;

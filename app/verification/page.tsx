@@ -77,7 +77,9 @@ export default function VerificationDashboard() {
 
         if (error) throw error;
 
-        const processed: VerificationApplication[] = (data || []).map((app: any) => {
+        const processed: VerificationApplication[] = (data || [])
+          .filter((a: any) => !(a.application_number || '').toUpperCase().startsWith('REG-'))
+          .map((app: any) => {
           const applicant = app.applicant as any;
           const applicantName =
             applicant?.company_name ||

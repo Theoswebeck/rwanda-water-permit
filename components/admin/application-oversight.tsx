@@ -98,7 +98,9 @@ export function ApplicationOversight() {
       console.log('Fetched applications:', data?.length || 0, 'applications');
       
       // Transform database data to component format
-      const transformedApps: Application[] = (data || []).map((app) => {
+      const transformedApps: Application[] = (data || [])
+        .filter((app: any) => !(app?.application_number || '').toUpperCase().startsWith('REG-'))
+        .map((app) => {
         const applicant = Array.isArray(app.applicant) ? app.applicant[0] : app.applicant;
         
         const applicantName = applicant?.company_name || 

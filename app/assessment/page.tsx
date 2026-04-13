@@ -69,7 +69,9 @@ export default function AssessmentDashboard() {
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
 
   const processApplications = (data: any[] | null | undefined): AssessmentApplication[] => {
-    return (data ?? []).map((app) => {
+    return (data ?? [])
+      .filter((a) => !(a?.application_number || '').toUpperCase().startsWith('REG-'))
+      .map((app) => {
       const applicant = app.applicant as any;
       const applicantName =
         applicant?.company_name ||
