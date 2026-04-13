@@ -55,11 +55,13 @@ function formatFileSize(bytes: number) {
 
 export function InspectionDocumentsUpload({
   applicationId,
+  owner,
   files,
   onFilesChange,
   readOnly = false,
 }: {
   applicationId: string;
+  owner?: { kind: "permit_registry"; id: string };
   files: InspectionDocumentFile[];
   onFilesChange: (files: InspectionDocumentFile[]) => void;
   readOnly?: boolean;
@@ -112,7 +114,7 @@ export function InspectionDocumentsUpload({
     try {
       const uploaded: InspectionDocumentFile[] = [];
       for (const file of valid) {
-        const uploadResult = await uploadDocument(file, applicationId, "inspectionDocument");
+        const uploadResult = await uploadDocument(file, applicationId, "inspectionDocument", owner);
         if (!uploadResult) {
           setUploadError(`Failed to upload "${file.name}"`);
           continue;

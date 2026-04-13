@@ -6,7 +6,6 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { fetchInspectionData } from "@/lib/inspection-utils";
-import { sanitizeApplicationEnumPayload } from "@/lib/db/application-enum-sanitizer";
 
 import type { Inspection } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -213,69 +212,26 @@ export default function PermitInspectionUnifiedPage() {
         const tpl = templateFromPermit(data?.application?.intended_activities, data?.permit?.purpose);
         setTemplate(tpl);
 
-        const isRegistry = data.source === "permit_registry";
-
-        // For registry permits, eagerly create the stub application so document
-        // uploads (which go through /api/dashboard/applications/[id]/documents)
-        // have a valid FK target in the applications table.
-        if (isRegistry) {
-          const reg = data.registryEntry;
-          const regPermitNumber = reg?.permit_number || applicationNumber || "";
-          const { data: sessionData } = await supabase.auth.getSession();
-          const sessionUserId = sessionData?.session?.user?.id;
-
-          if (sessionUserId) {
-            const { data: existingStub } = await supabase
-              .from("applications")
-              .select("id")
-              .eq("application_number", `REG-${regPermitNumber}`)
-              .maybeSingle();
-
-            let realAppId = existingStub?.id;
-
-            if (!realAppId) {
-              const stubPayload = sanitizeApplicationEnumPayload({
-                applicant_id: sessionUserId,
-                application_number: `REG-${regPermitNumber}`,
-                application_type: reg?.authorized_activity || "domestic",
-                status: "approved",
-                project_title: `Registry Permit: ${regPermitNumber}`,
-                water_source: reg?.water_source || "other",
-                water_purpose: reg?.authorized_activity || "other",
-                district: reg?.location || "N/A",
-                sector: "N/A",
-                cell: "N/A",
-                province: "N/A",
-              });
-              const { data: stubApp, error: stubErr } = await supabase
-                .from("applications")
-                .insert(stubPayload)
-                .select("id")
-                .single();
-
-              if (!stubErr && stubApp?.id) realAppId = stubApp.id;
-            }
-
-            if (realAppId) {
-              data.application = { ...data.application, id: realAppId };
-              data.source = "application" as any;
-            }
-          }
-        }
-
-        // Set state AFTER the stub is resolved so the real application ID
-        // is available for document uploads and other downstream operations.
+        // Registry permits keep data.source === "permit_registry" and
+        // data.registryEntry.id as their owner reference. No stub applications
+        // row is created — inspections and documents attach to the registry
+        // row via the polymorphic (owner_kind, owner_id) pair.
         setInspectionData(data);
 
-        // For registry permits the application.id is now the real stub, or for normal
-        // permits it was always real. Skip existing-inspection lookup only if we
-        // never resolved a real application row.
-        if (data.source !== "permit_registry") {
-          const { data: latest, error: latestError } = await supabase
+        // Look up the most recent inspection for this subject. Real applications
+        // use application_id; legacy permit_registry inspections use the
+        // polymorphic (owner_kind, owner_id) pair.
+        {
+          const lookup = supabase
             .from("inspections")
             .select("*")
-            .eq("application_id", data.application.id)
-            .order("created_at", { ascending: false })
+            .order("created_at", { ascending: false });
+
+          const scoped = data.source === "permit_registry"
+            ? lookup.eq("owner_kind", "permit_registry").eq("owner_id", data.registryEntry?.id as string)
+            : lookup.eq("application_id", data.application.id);
+
+          const { data: latest, error: latestError } = await scoped
             .limit(1);
 
           if (latestError) throw latestError;
@@ -363,57 +319,25 @@ export default function PermitInspectionUnifiedPage() {
     try {
       setSaving(true);
 
-      let applicationId = inspectionData.application.id;
+      // Real applications attach via application_id. Legacy permit_registry
+      // inspections leave application_id NULL and attach via the polymorphic
+      // (owner_kind, owner_id) pair — no stub `applications` row is created.
+      const isRegistrySource = inspectionData.source === "permit_registry";
+      const registryOwnerId = isRegistrySource
+        ? (inspectionData.registryEntry?.id as string | undefined)
+        : undefined;
 
-      // For registry-only permits we need a real applications row to satisfy the FK.
-      if (inspectionData.source === "permit_registry") {
-        const reg = inspectionData.registryEntry;
-        const regPermitNumber = reg?.permit_number || applicationNumber || "";
-
-        // Check if a stub was already created for this registry permit
-        const { data: existingStub } = await supabase
-          .from("applications")
-          .select("id")
-          .eq("application_number", `REG-${regPermitNumber}`)
-          .maybeSingle();
-
-        if (existingStub?.id) {
-          applicationId = existingStub.id;
-        } else {
-          const stubPayload = sanitizeApplicationEnumPayload({
-            applicant_id: sessionUserId,
-            application_number: `REG-${regPermitNumber}`,
-            application_type: reg?.authorized_activity || "domestic",
-            status: "approved",
-            project_title: `Registry Permit: ${regPermitNumber}`,
-            water_source: reg?.water_source || "other",
-            water_purpose: reg?.authorized_activity || "other",
-            district: reg?.location || "N/A",
-            sector: "N/A",
-            cell: "N/A",
-            province: "N/A",
-          });
-          const { data: stubApp, error: stubErr } = await supabase
-            .from("applications")
-            .insert(stubPayload)
-            .select("id")
-            .single();
-
-          if (stubErr) throw stubErr;
-          applicationId = stubApp.id;
-        }
-
-        // Update in-memory state so subsequent saves reuse the real application_id
-        setInspectionData((prev: any) => ({
-          ...prev,
-          application: { ...prev.application, id: applicationId },
-          source: "application",
-        }));
+      if (isRegistrySource && !registryOwnerId) {
+        throw new Error("Registry permit is missing an internal id; cannot save inspection.");
       }
+
+      const applicationId = isRegistrySource ? null : inspectionData.application.id;
 
       const nowIso = new Date().toISOString();
       const base = {
         application_id: applicationId,
+        owner_kind: isRegistrySource ? "permit_registry" : null,
+        owner_id: isRegistrySource ? registryOwnerId : null,
         // CRITICAL: use the session user id (same as auth.uid() in Postgres RLS)
         inspector_id: sessionUserId,
         type: "annual",
@@ -734,6 +658,11 @@ export default function PermitInspectionUnifiedPage() {
           form={form as any}
           canEdit={canEdit}
           applicationId={inspectionData?.application?.id}
+          documentOwner={
+            inspectionData?.source === "permit_registry" && inspectionData?.registryEntry?.id
+              ? { kind: "permit_registry", id: inspectionData.registryEntry.id as string }
+              : undefined
+          }
           setField={(k, v) => setField(k as any, v as any)}
                 />
               </div>

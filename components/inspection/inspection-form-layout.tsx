@@ -449,6 +449,7 @@ export function InspectionFormLayout({
   form,
   canEdit,
   applicationId,
+  documentOwner,
   setField,
 }: {
   template: InspectionTemplate;
@@ -456,6 +457,7 @@ export function InspectionFormLayout({
   form: InspectionFormState;
   canEdit: boolean;
   applicationId: string;
+  documentOwner?: { kind: "permit_registry"; id: string };
   setField: <K extends keyof InspectionFormState>(key: K, value: InspectionFormState[K]) => void;
 }) {
   const employment = form.employment_gender_breakdown || {};
@@ -841,6 +843,7 @@ export function InspectionFormLayout({
           <TabsContent value="documents" className="pt-6 space-y-6">
             <InspectionDocumentsUpload
               applicationId={applicationId}
+              owner={documentOwner}
               readOnly={!canEdit}
               files={(form.inspection_documents || []) as InspectionDocumentFile[]}
               onFilesChange={(next) => setField("inspection_documents", next as any)}

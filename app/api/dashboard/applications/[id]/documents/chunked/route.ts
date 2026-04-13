@@ -46,15 +46,26 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     }
 
     const { id: applicationId } = await context.params
-    const [owned, staff] = await Promise.all([
-      assertApplicationOwnership(applicationId, claims.sub),
-      isStaffUser(claims.sub),
-    ])
-    if (!owned && !staff) {
-      return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
-    }
 
     const form = await req.formData()
+    const ownerKindRaw = String(form.get('ownerKind') || '').trim()
+    const ownerIdRaw = String(form.get('ownerId') || '').trim()
+    const isRegistryOwner = ownerKindRaw === 'permit_registry' && ownerIdRaw.length > 0
+
+    if (isRegistryOwner) {
+      const staff = await isStaffUser(claims.sub)
+      if (!staff) {
+        return NextResponse.json({ success: false, message: 'Not authorized' }, { status: 403 })
+      }
+    } else {
+      const [owned, staff] = await Promise.all([
+        assertApplicationOwnership(applicationId, claims.sub),
+        isStaffUser(claims.sub),
+      ])
+      if (!owned && !staff) {
+        return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
+      }
+    }
     const chunk = form.get('chunk')
     const uploadId = safeSegment(String(form.get('uploadId') || '').trim())
     const chunkIndexRaw = Number.parseInt(String(form.get('chunkIndex') || ''), 10)
@@ -132,6 +143,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const insertSql = `
       insert into public.documents (
         application_id,
+        owner_kind,
+        owner_id,
         type,
         name,
         file_path,
@@ -142,14 +155,19 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         created_at,
         updated_at
       ) values (
-        $1, $2, $3, $4, $5, $6, $7, 'pending', now(), now()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', now(), now()
       )
       returning *
     `
+    const applicationIdParam = isRegistryOwner ? null : applicationId
+    const ownerKindParam = isRegistryOwner ? 'permit_registry' : null
+    const ownerIdParam = isRegistryOwner ? ownerIdRaw : null
     let insertRes
     try {
       insertRes = await query(insertSql, [
-        applicationId,
+        applicationIdParam,
+        ownerKindParam,
+        ownerIdParam,
         docType,
         fileName || diskName,
         filePath,
@@ -164,7 +182,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         : ''
       if (code === '22P02' && message.includes('enum document_type') && docType !== 'other') {
         insertRes = await query(insertSql, [
-          applicationId,
+          applicationIdParam,
+          ownerKindParam,
+          ownerIdParam,
           'other',
           fileName || diskName,
           filePath,

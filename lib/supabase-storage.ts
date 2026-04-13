@@ -44,15 +44,17 @@ export const getDocumentUrl = (filePath: string | null | undefined): string | nu
  * @returns Upload result with path and URL
  */
 export const uploadDocument = async (
-  file: File, 
-  applicationId: string, 
-  documentType: string
+  file: File,
+  applicationId: string,
+  documentType: string,
+  owner?: { kind: "permit_registry"; id: string }
 ): Promise<{ path: string; url: string } | null> => {
+  const pathSegment = owner ? owner.id : applicationId;
   const uploadInChunks = async (): Promise<{ path: string; url: string } | null> => {
     const CHUNK_SIZE_BYTES = 256 * 1024; // 256 KB per request to stay below strict proxy limits
     const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE_BYTES));
     const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const endpoint = `/api/dashboard/applications/${encodeURIComponent(applicationId)}/documents/chunked`;
+    const endpoint = `/api/dashboard/applications/${encodeURIComponent(pathSegment)}/documents/chunked`;
     let finalPath: string | null = null;
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
@@ -68,6 +70,10 @@ export const uploadDocument = async (
       form.set('mimeType', file.type || 'application/octet-stream');
       form.set('fileSize', String(file.size || 0));
       form.set('documentType', documentType);
+      if (owner) {
+        form.set('ownerKind', owner.kind);
+        form.set('ownerId', owner.id);
+      }
 
       const chunkRes = await fetch(endpoint, {
         method: 'POST',
@@ -94,7 +100,11 @@ export const uploadDocument = async (
     const form = new FormData();
     form.set('file', file);
     form.set('documentType', documentType);
-    const res = await fetch(`/api/dashboard/applications/${encodeURIComponent(applicationId)}/documents`, {
+    if (owner) {
+      form.set('ownerKind', owner.kind);
+      form.set('ownerId', owner.id);
+    }
+    const res = await fetch(`/api/dashboard/applications/${encodeURIComponent(pathSegment)}/documents`, {
       method: 'POST',
       body: form,
       credentials: 'include',
