@@ -66,6 +66,7 @@ export function AllApplicationsList({ externalStatusFilter = [], title = "All Ap
         `)
         .neq('status', 'draft')
         .neq('status', 'pending_payment')
+        .not('application_number', 'like', 'REG-%')
         // Always show latest submissions first (fallback to created_at when submitted_at is null).
         .order('submitted_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });

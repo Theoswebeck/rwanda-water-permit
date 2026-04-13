@@ -121,6 +121,7 @@ export default function AssessmentDashboard() {
           .eq('assigned_assessor_id', user.id)
           .neq('status', 'draft')
           .neq('status', 'pending_payment')
+          .not('application_number', 'like', 'REG-%')
           .order("submitted_at", { ascending: false, nullsFirst: false })
           .order("created_at", { ascending: false });
 
