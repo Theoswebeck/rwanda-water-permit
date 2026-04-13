@@ -30,7 +30,11 @@ export type ContractPlaceholderContext = {
   systemTypeKinyarwanda: string; // e.g. "gravity" or "gupompa"
 };
 
-type ApplicationForContract = {
+export type ApplicationForContract = {
+  application_type?: string | null;
+  application_number?: string | null;
+  project_title?: string | null;
+  terms_status?: string | null;
   province?: string | null;
   district?: string | null;
   sector?: string | null;
@@ -434,6 +438,51 @@ function resolveConcessionAreaLabel(application: ApplicationForContract): string
   return "N/A";
 }
 
+function isTransferApplication(application: ApplicationForContract): boolean {
+  const appType = application.application_type;
+  if (typeof appType === "string" && appType.toLowerCase() === "transfer") return true;
+  const notes = getInternalNotes(application);
+  return notes?.isTransfer === true;
+}
+
+function applyTransferOverlay(
+  ctx: ContractPlaceholderContext,
+  application: ApplicationForContract
+): ContractPlaceholderContext {
+  const notes = getInternalNotes(application);
+  const tfd = notes?.transferFormData;
+  if (!tfd || typeof tfd !== "object") return ctx;
+
+  const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+  const transfereeName = str(tfd.transfereeName);
+  const transfereeRepName = str(tfd.transfereeRepresentativeName);
+  const transfereeRepTitle = str(tfd.transfereeRepresentativePosition) || str(tfd.transfereeTitlePosition);
+  const transfereeProvince = str(tfd.transfereeAddressProvince);
+  const transfereeDistrict = str(tfd.transfereeAddressDistrict);
+  const transfereeSector = str(tfd.transfereeAddressSector);
+
+  // Heuristic: transferee is an organization if a representative name was provided,
+  // otherwise treat as an individual. The transfer form does not capture account_type.
+  const isIndividual = transfereeRepName.length === 0;
+
+  return {
+    ...ctx,
+    isIndividual,
+    applicantName: transfereeName || ctx.applicantName,
+    organizationName: transfereeName || ctx.organizationName,
+    representativeName: transfereeRepName || (isIndividual ? transfereeName : ctx.representativeName),
+    representativeTitle: transfereeRepTitle || (isIndividual ? "" : ctx.representativeTitle),
+    // Transfer form does not collect the transferee's national ID number.
+    applicantIdNumber: "N/A",
+    // Addresses intentionally fall back to "N/A" rather than the transferor values —
+    // the whole point of the overlay is to avoid leaking transferor data into the contract.
+    officeProvinceLabel: transfereeProvince ? provinceLabelForContract(transfereeProvince) : "N/A",
+    officeDistrict: transfereeDistrict || "N/A",
+    officeSector: transfereeSector || "N/A",
+  };
+}
+
 export function buildContractPlaceholderContext(
   application: ApplicationForContract,
   applicationNumber?: string
@@ -453,7 +502,7 @@ export function buildContractPlaceholderContext(
     const seq = m[2].padStart(6, "0");
     return `${seq}/RWB/${year}`;
   })();
-  return {
+  const baseCtx: ContractPlaceholderContext = {
     applicationNumber: (applicationNumber ?? "").trim() || "N/A",
     contractNumber,
     isIndividual,
@@ -480,6 +529,11 @@ export function buildContractPlaceholderContext(
     systemTypeEnglish: systemType.english,
     systemTypeKinyarwanda: systemType.kinyarwanda,
   };
+
+  if (isTransferApplication(application)) {
+    return applyTransferOverlay(baseCtx, application);
+  }
+  return baseCtx;
 }
 
 export function fillContractText(raw: string, ctx: ContractPlaceholderContext): string {

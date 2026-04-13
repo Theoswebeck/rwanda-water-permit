@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContractTermsPreview } from "@/components/contract/contract-terms-preview";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1846,7 +1847,7 @@ export default function AssessmentApplicationPage() {
             className="space-y-6"
           >
             <TabsList
-              className={`grid w-full ${isTransferApp ? "grid-cols-2" : "grid-cols-3"} h-auto p-1 bg-muted/80`}
+              className={`grid w-full ${isTransferApp ? "grid-cols-3" : "grid-cols-4"} h-auto p-1 bg-muted/80`}
             >
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               {!isTransferApp && (
@@ -1854,6 +1855,7 @@ export default function AssessmentApplicationPage() {
                   Assessment Report
                 </TabsTrigger>
               )}
+              <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -2086,10 +2088,19 @@ export default function AssessmentApplicationPage() {
 
             )}
 
+            {/* Contract Preview Tab */}
+            <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
+              <ContractTermsPreview
+                application={application}
+                mode="staff-preview"
+                showChrome
+              />
+            </TabsContent>
+
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               {application.id && (
-                <ApplicationComments 
+                <ApplicationComments
                   applicationId={application.id}
                   applicationStatus={application.status}
                   applicationSubmittedAt={application.submitted_at ?? undefined}

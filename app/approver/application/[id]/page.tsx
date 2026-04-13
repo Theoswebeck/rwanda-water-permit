@@ -8,6 +8,7 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContractTermsPreview } from "@/components/contract/contract-terms-preview";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -894,11 +895,12 @@ export default function ApproverApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-          <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-2' : 'grid-cols-3'} h-auto p-1 bg-muted/80`}>
+          <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               {!isTransferApp && (
                 <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
               )}
+              <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
         </TabsList>
 
@@ -1080,9 +1082,17 @@ export default function ApproverApplicationPage() {
             )}
 
 
+            <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
+              <ContractTermsPreview
+                application={application}
+                mode="staff-preview"
+                showChrome
+              />
+            </TabsContent>
+
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
           {application.id && (
-            <ApplicationComments 
+            <ApplicationComments
               applicationId={application.id}
               applicationStatus={application.status}
               applicationSubmittedAt={application.submitted_at ?? undefined}
