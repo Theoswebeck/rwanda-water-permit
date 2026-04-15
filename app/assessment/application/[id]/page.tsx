@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ContractTermsPreview } from "@/components/contract/contract-terms-preview";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -370,7 +371,17 @@ export default function AssessmentApplicationPage() {
   const [isTransferApp, setIsTransferApp] = useState(false);
   const [isModificationApp, setIsModificationApp] = useState(false);
   const [originalModificationApp, setOriginalModificationApp] = useState<any>(null);
-  
+
+  // Gate flag: did the type-specific permit-length seeder run yet?
+  const [permitLengthSeeded, setPermitLengthSeeded] = useState(false);
+  // Current permit dates for modification/transfer apps — used by the
+  // permit-length seeder to compute "remaining validity" defaults.
+  const [currentPermitDates, setCurrentPermitDates] = useState<{
+    issued_date: string | null;
+    expiry_date: string | null;
+  } | null>(null);
+  const [currentPermitLoaded, setCurrentPermitLoaded] = useState(false);
+
   // Assessment State
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [documentVerifications, setDocumentVerifications] = useState<Record<string, { status: VerificationStatus; notes: string }>>({});
@@ -493,13 +504,107 @@ export default function AssessmentApplicationPage() {
     }
     return missing;
   })();
+  // Send-for-review gate: non-modification apps must have an assessor-set
+  // permit duration. Modifications inherit their duration from the current
+  // permit so no explicit value is required.
+  const appTypeForGate = (application?.application_type || "").toLowerCase();
+  const durationRequired = appTypeForGate !== "" && appTypeForGate !== "modification";
+  const hasValidDuration =
+    typeof assessorPermitLength === "number" &&
+    Number.isFinite(assessorPermitLength) &&
+    assessorPermitLength >= 1 &&
+    assessorPermitLength <= 15;
+  const durationOk = !durationRequired || hasValidDuration;
   const canSendForReview =
-    isReadOnly || isTransferApp || missingFieldReportRequirements.length === 0;
+    isReadOnly ||
+    ((isTransferApp || missingFieldReportRequirements.length === 0) && durationOk);
 
   useEffect(() => {
     if (tabTouchedRef.current) return;
     setActiveTab(defaultTabValue);
   }, [defaultTabValue]);
+
+  // Seed `assessorPermitLength` with a type-specific default when the assessor
+  // has not yet set one. Runs once per application load; waits for old-permit
+  // context to arrive before computing renewal/transfer/modification defaults.
+  //
+  // Defaults:
+  //   new          → no seed; assessor must enter a value manually
+  //   renewal      → original term (expiry − issued, in years)
+  //   transfer     → remaining validity (old expiry − today, in years)
+  //   modification → original term from the current permit
+  useEffect(() => {
+    if (!application || permitLengthSeeded) return;
+    if (hasValidDuration) {
+      setPermitLengthSeeded(true);
+      return;
+    }
+
+    const appTypeLower = (application.application_type || "").toLowerCase();
+
+    if (appTypeLower === "new" || appTypeLower === "") {
+      setPermitLengthSeeded(true);
+      return;
+    }
+
+    // Wait for old-permit context to arrive.
+    if (appTypeLower === "transfer" && loadingTransferPermit) return;
+    if (appTypeLower === "renewal" && loadingRenewalPermit) return;
+    if (appTypeLower === "modification" && !currentPermitLoaded) return;
+
+    const yearsFromRange = (issued?: string | null, expiry?: string | null): number | null => {
+      if (!issued || !expiry) return null;
+      const s = new Date(`${issued}T00:00:00Z`);
+      const e = new Date(`${expiry}T00:00:00Z`);
+      if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime()) || e <= s) return null;
+      const years = Math.round((e.getTime() - s.getTime()) / (365.25 * 24 * 3600 * 1000));
+      return years >= 1 && years <= 15 ? years : null;
+    };
+
+    const yearsFromNowUntil = (expiry?: string | null): number | null => {
+      if (!expiry) return null;
+      const now = new Date();
+      const e = new Date(`${expiry}T00:00:00Z`);
+      if (Number.isNaN(e.getTime()) || e <= now) return null;
+      const years = Math.ceil((e.getTime() - now.getTime()) / (365.25 * 24 * 3600 * 1000));
+      return years >= 1 && years <= 15 ? years : null;
+    };
+
+    let seededYears: number | null = null;
+    if (appTypeLower === "renewal" && renewalPermit) {
+      seededYears = yearsFromRange(
+        (renewalPermit as any).issued_date,
+        (renewalPermit as any).expiry_date,
+      );
+    } else if (appTypeLower === "transfer" && transferPermit) {
+      seededYears = yearsFromNowUntil((transferPermit as any).expiry_date);
+    } else if (appTypeLower === "modification" && currentPermitDates) {
+      seededYears = yearsFromRange(
+        currentPermitDates.issued_date,
+        currentPermitDates.expiry_date,
+      );
+    }
+
+    setPermitLengthSeeded(true);
+    if (seededYears !== null) {
+      // Persist via the existing adjustment helper so the write path is
+      // consistent with manual edits (and keeps proposed_duration_years in sync).
+      void savePermitLengthAdjustment(seededYears);
+    }
+    // savePermitLengthAdjustment is declared later in this component and is
+    // stable across renders; intentionally not in the dep array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    application,
+    permitLengthSeeded,
+    hasValidDuration,
+    transferPermit,
+    renewalPermit,
+    currentPermitDates,
+    currentPermitLoaded,
+    loadingTransferPermit,
+    loadingRenewalPermit,
+  ]);
 
   // Transfer applications do not have an assessment report in staff workflows.
   // If a user somehow lands on the hidden tab (e.g. back/forward nav), force them back to details.
@@ -561,6 +666,9 @@ export default function AssessmentApplicationPage() {
         }
 
         setApplication(appData);
+        // Reset the permit-length seeder flag so a fresh load re-evaluates
+        // type-specific defaults.
+        setPermitLengthSeeded(false);
 
         // Fetch existing assessment if any
         const { data: existingAssessment } = await supabase
@@ -714,6 +822,9 @@ export default function AssessmentApplicationPage() {
         // For modification apps: fetch the original application to reconstruct missing previous values
         if (modificationDetected) {
           const origAppId = (appData as any).modified_from_application_id || parsedNotes?.originalApplicationId;
+          if (!origAppId) {
+            setCurrentPermitLoaded(true);
+          }
           if (origAppId) {
             try {
               const { data: origApp } = await supabase
@@ -724,6 +835,25 @@ export default function AssessmentApplicationPage() {
               setOriginalModificationApp(origApp || null);
             } catch (err) {
               console.error('⚠️ Could not fetch original application for modification enrichment:', err);
+            }
+            // Also fetch the current permit dates so the permit-length seeder
+            // can inherit the current permit's term for modifications.
+            try {
+              const { data: currentPermit } = await supabase
+                .from('permits')
+                .select('issued_date, expiry_date')
+                .eq('application_id', origAppId)
+                .maybeSingle();
+              if (currentPermit) {
+                setCurrentPermitDates({
+                  issued_date: (currentPermit as any).issued_date ?? null,
+                  expiry_date: (currentPermit as any).expiry_date ?? null,
+                });
+              }
+            } catch (err) {
+              console.error('⚠️ Could not fetch current permit for modification:', err);
+            } finally {
+              setCurrentPermitLoaded(true);
             }
           }
         }
@@ -1861,6 +1991,67 @@ export default function AssessmentApplicationPage() {
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
+              {/* Transfer apps have no Assessment Report tab, so the assessor
+                  needs a duration control here. Seeder defaults it to the
+                  remaining validity of the old permit. */}
+              {isTransferApp && application && (
+                <Card className="border-blue-200 bg-blue-50/40">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Permit Duration</CardTitle>
+                    <CardDescription>
+                      Number of years the new permit will be valid. Defaults to
+                      the remaining validity of the permit being transferred.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-3 max-w-sm">
+                      <Input
+                        id="transfer-permit-length"
+                        type="number"
+                        min={1}
+                        max={15}
+                        step={1}
+                        disabled={isReadOnly || permitLengthSaving}
+                        value={
+                          typeof assessorPermitLength === "number"
+                            ? String(assessorPermitLength)
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "") {
+                            setAssessorPermitLength(undefined);
+                            return;
+                          }
+                          const parsed = parseInt(v, 10);
+                          if (!Number.isNaN(parsed)) {
+                            setAssessorPermitLength(parsed);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (
+                            typeof assessorPermitLength === "number" &&
+                            assessorPermitLength >= 1 &&
+                            assessorPermitLength <= 15
+                          ) {
+                            void savePermitLengthAdjustment(assessorPermitLength);
+                          }
+                        }}
+                      />
+                      <span className="text-sm text-muted-foreground">years</span>
+                    </div>
+                    {!hasValidDuration && !isReadOnly && (
+                      <Alert className="border-amber-200 bg-amber-50 py-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800 text-sm">
+                          Set the permit duration (1–15 years) before sending
+                          for review.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
               {application && (
                 <RegistryPermitComparisonCard
                   application={application}

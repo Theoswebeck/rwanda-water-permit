@@ -1801,27 +1801,6 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           )}
                         />
 
-                        <FormField
-                          control={form.control}
-                          name="flowRate"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Flow Rate (m³/s)</FormLabel>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  value={field.value || ""}
-                                  type="number"
-                                  step="0.001"
-                                  placeholder="Enter flow rate"
-                                  disabled={readOnly || !isManualPermit}
-                                  className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
                       </div>
                     </div>
                   )}

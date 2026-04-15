@@ -560,14 +560,6 @@ const applicationFormSchema = z.object({
     }
 
     abstractionDetails.forEach((detail, index) => {
-      if (!isFilled(detail?.flowRate)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["waterAbstractionDetails", index, "flowRate"],
-          message: "Flow rate is required."
-        });
-      }
-
       if (!isFilled(detail?.maxAverageYearly)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -805,7 +797,7 @@ function computeModificationChanges(
   }
 
   // Flatten waterAbstractionDetails (array of objects) into individual sub-field comparisons
-  const abstractionSubFields = ['flowRate', 'maxAverageYearly', 'abstractionMethod'] as const;
+  const abstractionSubFields = ['maxAverageYearly', 'abstractionMethod'] as const;
   const origAbstraction = ((originalData.waterAbstractionDetails as any[]) || [])[0] || {};
   const currAbstraction = ((currentData.waterAbstractionDetails as any[]) || [])[0] || {};
   for (const subField of abstractionSubFields) {
@@ -899,7 +891,6 @@ const FIELD_LABELS: Record<string, string> = {
   irrigationProductionSystem: 'Production System',
   irrigationStorageFacilities: 'Storage Facilities',
   // Water abstraction (flattened sub-fields)
-  waterAbstraction_flowRate: 'Flow Rate (m³/s)',
   waterAbstraction_maxAverageYearly: 'Maximum Average Yearly (m³/year)',
   waterAbstraction_abstractionMethod: 'Method of Water Abstraction',
   // Hydropower / Electricity
@@ -1730,7 +1721,6 @@ export function ApplicationForm({
     if (!Array.isArray(details) || details.length === 0) return false;
     return details.every((detail) => {
       return (
-        isFilled(detail?.flowRate) &&
         isFilled(detail?.maxAverageYearly) &&
         isFilled(detail?.abstractionMethod)
       );
@@ -1947,12 +1937,6 @@ export function ApplicationForm({
         const details = form.getValues('waterAbstractionDetails') || [];
         if (!hasCompleteWaterAbstractionDetails(details)) {
           details.forEach((detail: any, index: number) => {
-            if (!isFilled(detail?.flowRate)) {
-              form.setError(`waterAbstractionDetails.${index}.flowRate` as any, {
-                type: "manual",
-                message: "Flow rate is required."
-              });
-            }
             if (!isFilled(detail?.maxAverageYearly)) {
               form.setError(`waterAbstractionDetails.${index}.maxAverageYearly` as any, {
                 type: "manual",
@@ -1970,7 +1954,6 @@ export function ApplicationForm({
           return false;
         }
         details.forEach((_: any, index: number) => {
-          form.clearErrors(`waterAbstractionDetails.${index}.flowRate` as any);
           form.clearErrors(`waterAbstractionDetails.${index}.maxAverageYearly` as any);
           form.clearErrors(`waterAbstractionDetails.${index}.abstractionMethod` as any);
         });
@@ -5997,30 +5980,6 @@ export function ApplicationForm({
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <FormField
                                 control={form.control}
-                                name="waterAbstractionDetails.0.flowRate"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Flow Rate (m³/s)</FormLabel>
-                                    <FormControl>
-                                      <Input 
-                                        type="number"
-                                        step="0.001"
-                                        {...field}
-                                        value={field.value ?? ""}
-                                        onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                        placeholder="Enter flow rate (m³/s)"
-                                        disabled={readOnly}
-                                        readOnly={readOnly}
-                                        className={readOnly ? "bg-gray-50 border-gray-200 cursor-default opacity-60" : ""}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
-                              
-                              <FormField
-                                control={form.control}
                                 name="waterAbstractionDetails.0.maxAverageYearly"
                                 render={({ field }) => (
                                   <FormItem>
@@ -6553,7 +6512,7 @@ export function ApplicationForm({
                       Previous
                     </Button>
                     
-                    {activeTab !== "land-ownership" && (
+                    {activeTab !== "land-ownership" && activeTab !== "payment" && (
                       <Button
                         type="button"
                         onClick={readOnly ? () => {
@@ -6563,7 +6522,7 @@ export function ApplicationForm({
                             setActiveTab(tabs[currentIndex + 1]);
                           }
                         } : handleNextTab}
-                        disabled={(!readOnly && activeTab === "payment") || (!readOnly && isNextButtonDisabled())}
+                        disabled={!readOnly && isNextButtonDisabled()}
                         className={(!readOnly && isNextButtonDisabled()) ? "opacity-50 cursor-not-allowed" : ""}
                       >
                         Next
