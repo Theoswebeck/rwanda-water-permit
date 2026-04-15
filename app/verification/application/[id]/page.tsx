@@ -1024,6 +1024,7 @@ export default function VerificationApplicationPage() {
                 application={application}
                 mode="staff-preview"
                 showChrome
+                transferPermit={transferPermit}
               />
             </TabsContent>
 

@@ -9,6 +9,7 @@ import {
   buildContractPlaceholderContext,
   fillContractText,
   type ApplicationForContract,
+  type TransferPermitContext,
 } from "@/lib/contract-placeholders";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -20,6 +21,7 @@ type ContractTermsPreviewProps = {
   variantOverride?: PermitVariant | null;
   mode?: Mode;
   showChrome?: boolean;
+  transferPermit?: TransferPermitContext | null;
 };
 
 function isSignatureSection(title: string): boolean {
@@ -33,6 +35,7 @@ export function ContractTermsPreview({
   variantOverride = null,
   mode = "public",
   showChrome = true,
+  transferPermit = null,
 }: ContractTermsPreviewProps) {
   const error = !application;
 
@@ -71,7 +74,8 @@ export function ContractTermsPreview({
   const placeholderCtx = application
     ? buildContractPlaceholderContext(
         application,
-        application.application_number ?? undefined
+        application.application_number ?? undefined,
+        transferPermit,
       )
     : null;
 

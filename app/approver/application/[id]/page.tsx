@@ -1087,6 +1087,7 @@ export default function ApproverApplicationPage() {
                 application={application}
                 mode="staff-preview"
                 showChrome
+                transferPermit={transferPermit}
               />
             </TabsContent>
 

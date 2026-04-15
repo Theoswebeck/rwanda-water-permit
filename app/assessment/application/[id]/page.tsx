@@ -2285,6 +2285,7 @@ export default function AssessmentApplicationPage() {
                 application={application}
                 mode="staff-preview"
                 showChrome
+                transferPermit={transferPermit}
               />
             </TabsContent>
 

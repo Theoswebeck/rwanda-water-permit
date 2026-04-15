@@ -1437,6 +1437,7 @@ export default function ReviewApplicationPage() {
                 application={application}
                 mode="staff-preview"
                 showChrome
+                transferPermit={transferPermit}
               />
             </TabsContent>
 

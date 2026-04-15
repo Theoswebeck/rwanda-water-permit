@@ -373,25 +373,41 @@ function resolveVolumeLabel(application: ApplicationForContract): string {
   return "N/A";
 }
 
-function resolveDurationYears(application: ApplicationForContract): string {
+function resolveDurationYears(
+  application: ApplicationForContract,
+  transferPermit?: TransferPermitContext | null,
+): string {
   const notes = getInternalNotes(application);
-  
+
   // Priority 1: Assessor recommended duration (from assessor adjustments)
   const assessorAdjustments = notes?._assessorAdjustments;
-  if (typeof assessorAdjustments?.permitLengthYears === "number" && 
+  if (typeof assessorAdjustments?.permitLengthYears === "number" &&
       Number.isFinite(assessorAdjustments.permitLengthYears) &&
-      assessorAdjustments.permitLengthYears >= 1 && 
+      assessorAdjustments.permitLengthYears >= 1 &&
       assessorAdjustments.permitLengthYears <= 15) {
     return String(Math.round(assessorAdjustments.permitLengthYears));
   }
-  
-  // Priority 2: Database field (may have been updated by assessor)
-  if (typeof application.proposed_duration_years === "number" && 
+
+  // Priority 2: Transfer fallback — remaining validity of the transferred permit.
+  // Applies before the assessor has committed a duration adjustment so the preview
+  // does not mislead reviewers with a generic "5 years" default.
+  if (isTransferApplication(application) && transferPermit?.expiry_date) {
+    const expiry = new Date(`${transferPermit.expiry_date}T00:00:00Z`);
+    if (!Number.isNaN(expiry.getTime())) {
+      const years = Math.ceil(
+        (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
+      );
+      if (years >= 1 && years <= 15) return String(years);
+    }
+  }
+
+  // Priority 3: Database field (may have been updated by assessor)
+  if (typeof application.proposed_duration_years === "number" &&
       Number.isFinite(application.proposed_duration_years)) {
     return String(Math.max(1, Math.round(application.proposed_duration_years)));
   }
-  
-  // Priority 3: Default
+
+  // Priority 4: Default
   return "5";
 }
 
@@ -483,9 +499,15 @@ function applyTransferOverlay(
   };
 }
 
+export type TransferPermitContext = {
+  permit_number?: string | null;
+  expiry_date?: string | null;
+};
+
 export function buildContractPlaceholderContext(
   application: ApplicationForContract,
-  applicationNumber?: string
+  applicationNumber?: string,
+  transferPermit?: TransferPermitContext | null,
 ): ContractPlaceholderContext {
   const waterSourceLocation = resolveWaterSourceAdminLocation(application);
   const officeLocation = resolveOfficeAdminLocation(application);
@@ -493,7 +515,14 @@ export function buildContractPlaceholderContext(
   const systemType = resolveSystemTypeLabels(application);
   const isIndividual = (application.applicant?.account_type ?? null) === "individual";
   const appNo = (applicationNumber ?? "").trim();
+  const transferredPermitNumber =
+    isTransferApplication(application) && typeof transferPermit?.permit_number === "string"
+      ? transferPermit.permit_number.trim()
+      : "";
   const contractNumber = (() => {
+    // For transfers, the contract continues the existing permit — reuse that number
+    // so the preview never displays a different number from what gets issued.
+    if (transferredPermitNumber) return transferredPermitNumber;
     if (!appNo) return "N/A";
     // Common format: "RWB-2025-000025" -> "000025/RWB/2025"
     const m = appNo.match(/^RWB-(\d{4})-(\d+)$/i);
@@ -523,7 +552,7 @@ export function buildContractPlaceholderContext(
     lat,
     lng,
     volumeLabel: resolveVolumeLabel(application),
-    durationYearsLabel: resolveDurationYears(application),
+    durationYearsLabel: resolveDurationYears(application, transferPermit),
     concessionAreaLabel: resolveConcessionAreaLabel(application),
     activityLabel: resolveActivityLabel(application),
     systemTypeEnglish: systemType.english,
