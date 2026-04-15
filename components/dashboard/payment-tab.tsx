@@ -487,6 +487,16 @@ export function PaymentTab({
     _existingPaymentCoversOverride && (paymentCompleted || payment?.status === 'completed');
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
+  // Balance-due state: a prior payment is "completed" but a correction override is set
+  // and that prior payment covers less than the override amount. Applicant must pay the difference.
+  const isBalanceDue =
+    payment?.status === 'completed' &&
+    _overrideAmountForRender !== null &&
+    !_existingPaymentCoversOverride;
+  const previouslyPaidAmount = Number(payment?.amount || 0);
+  const balanceDueAmount = _overrideAmountForRender !== null
+    ? Math.max(_overrideAmountForRender - previouslyPaidAmount, 0)
+    : 0;
 
   // Show success screen if payment completed and application saved
   if (paymentCompleted && completedApplication) {
@@ -710,6 +720,46 @@ export function PaymentTab({
                 className="w-full"
               >
                 View My Applications
+              </Button>
+            </div>
+          ) : isBalanceDue ? (
+            // Correction override: prior payment exists but balance is still due
+            <div className="space-y-6">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Balance Due</AlertTitle>
+                <AlertDescription className="space-y-1">
+                  <div>
+                    A billing correction was applied to your application. The correct fee is{' '}
+                    <strong>{formatAmount(_overrideAmountForRender || 0)}</strong>.
+                  </div>
+                  <div>
+                    Already paid: <strong>{formatAmount(previouslyPaidAmount)}</strong>
+                  </div>
+                  <div>
+                    Remaining balance: <strong>{formatAmount(balanceDueAmount)}</strong>
+                  </div>
+                </AlertDescription>
+              </Alert>
+
+              <Button
+                type="button"
+                onClick={handleInitiatePayment}
+                disabled={isInitializing}
+                size="lg"
+                className="w-full"
+              >
+                {isInitializing ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
+                    Initializing Payment...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Pay Balance ({formatAmount(balanceDueAmount)})
+                  </>
+                )}
               </Button>
             </div>
           ) : payment && (isPaymentPending || isPaymentFailed) ? (
