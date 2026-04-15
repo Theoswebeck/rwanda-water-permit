@@ -27,7 +27,11 @@ import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
 import { contractTermsByVariant, splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
-import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
+import {
+  buildContractPlaceholderContext,
+  fillContractText,
+  type TransferPermitContext,
+} from "@/lib/contract-placeholders";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import type { AppLanguage } from "@/lib/i18n/language";
@@ -143,6 +147,7 @@ export default function TermsConditionsPage() {
   const [isLoadingTerms, setIsLoadingTerms] = useState(true);
   const [termsLoadError, setTermsLoadError] = useState<string | null>(null);
   const [termsApplication, setTermsApplication] = useState<any | null>(null);
+  const [transferPermitCtx, setTransferPermitCtx] = useState<TransferPermitContext | null>(null);
   const [issuedPermit, setIssuedPermit] = useState<{
     permitId: string;
     permitNumber: string;
@@ -255,13 +260,43 @@ export default function TermsConditionsPage() {
         const isManualPermit = typeof parsedNotes?.originalPermitId === 'string' &&
           (parsedNotes.originalPermitId as string).startsWith('manual-');
 
+        // Manual-permit transfers: permit number + expiry live in transferFormData.
+        // Seed the transferPermit context from there so the contract reuses them.
+        if (isTransfer && isManualPermit && !cancelled) {
+          const tf = (parsedNotes?.transferFormData as Record<string, any> | undefined) || {};
+          const manualPermitNumber =
+            (parsedNotes?.originalPermitNumber as string | undefined)?.trim() || null;
+          const manualExpiry =
+            typeof tf.expirationDate === "string" && tf.expirationDate.trim()
+              ? tf.expirationDate
+              : null;
+          setTransferPermitCtx({
+            permit_number: manualPermitNumber,
+            expiry_date: manualExpiry,
+          });
+        }
+
         if (isTransfer && parsedNotes?.originalPermitId && !isManualPermit) {
           try {
             const { data: originalPermit } = await supabase
               .from("permits")
-              .select("application_id")
+              .select("application_id, permit_number, expiry_date")
               .eq("id", parsedNotes.originalPermitId)
-              .single() as { data: { application_id?: string | null } | null; error: any };
+              .single() as {
+                data: {
+                  application_id?: string | null;
+                  permit_number?: string | null;
+                  expiry_date?: string | null;
+                } | null;
+                error: any;
+              };
+
+            if (!cancelled && originalPermit) {
+              setTransferPermitCtx({
+                permit_number: originalPermit.permit_number ?? null,
+                expiry_date: originalPermit.expiry_date ?? null,
+              });
+            }
 
             const origAppId = originalPermit?.application_id;
             if (origAppId) {
@@ -442,11 +477,15 @@ export default function TermsConditionsPage() {
   const placeholderCtx = useMemo(() => {
     if (!termsApplication) return null;
     try {
-      return buildContractPlaceholderContext(termsApplication, applicationNumber);
+      return buildContractPlaceholderContext(
+        termsApplication,
+        applicationNumber,
+        transferPermitCtx,
+      );
     } catch {
       return null;
     }
-  }, [termsApplication, applicationNumber]);
+  }, [termsApplication, applicationNumber, transferPermitCtx]);
 
   const navigateBack = () => {
     router.push(`/dashboard/application/${applicationId}`);
