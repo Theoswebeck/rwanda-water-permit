@@ -488,14 +488,18 @@ export function PaymentTab({
   const isPaymentPending = payment?.status === 'pending' || payment?.status === 'processing';
   const isPaymentFailed = payment?.status === 'failed' || payment?.status === 'cancelled';
   // Balance-due state: a prior payment is "completed" but a correction override is set
-  // and that prior payment covers less than the override amount. Applicant must pay the difference.
+  // and that prior payment covers less than the override amount. Applicant must pay the override.
+  // Semantics: payment_override_amount is the *amount to charge next* (i.e. the remaining
+  // balance itself), not the total fee. The backend already computed it as total − already_paid
+  // when the override was applied.
   const isBalanceDue =
     payment?.status === 'completed' &&
     _overrideAmountForRender !== null &&
     !_existingPaymentCoversOverride;
   const previouslyPaidAmount = Number(payment?.amount || 0);
-  const balanceDueAmount = _overrideAmountForRender !== null
-    ? Math.max(_overrideAmountForRender - previouslyPaidAmount, 0)
+  const balanceDueAmount = _overrideAmountForRender ?? 0;
+  const correctedTotalFee = _overrideAmountForRender !== null
+    ? _overrideAmountForRender + previouslyPaidAmount
     : 0;
 
   // Show success screen if payment completed and application saved
@@ -731,7 +735,7 @@ export function PaymentTab({
                 <AlertDescription className="space-y-1">
                   <div>
                     A billing correction was applied to your application. The correct fee is{' '}
-                    <strong>{formatAmount(_overrideAmountForRender || 0)}</strong>.
+                    <strong>{formatAmount(correctedTotalFee)}</strong>.
                   </div>
                   <div>
                     Already paid: <strong>{formatAmount(previouslyPaidAmount)}</strong>
