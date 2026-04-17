@@ -267,22 +267,36 @@ function resolveActivityLabel(application: ApplicationForContract): string {
 
 function resolveLatLng(application: ApplicationForContract): { lat: string; lng: string } {
   const notes = getInternalNotes(application);
-  const latRaw = typeof notes?.waterSourceLatitude === "string" ? notes.waterSourceLatitude.trim() : "";
-  const lngRaw = typeof notes?.waterSourceLongitude === "string" ? notes.waterSourceLongitude.trim() : "";
-  const latNum = latRaw ? Number.parseFloat(latRaw) : NaN;
-  const lngNum = lngRaw ? Number.parseFloat(lngRaw) : NaN;
-  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-    return { lat: latNum.toFixed(6), lng: lngNum.toFixed(6) };
+
+  // Helper: attempt to parse a lat/lng pair from two raw values.
+  const tryPair = (rawLat: unknown, rawLng: unknown): { lat: string; lng: string } | null => {
+    const latStr = typeof rawLat === "string" ? rawLat.trim() : typeof rawLat === "number" ? String(rawLat) : "";
+    const lngStr = typeof rawLng === "string" ? rawLng.trim() : typeof rawLng === "number" ? String(rawLng) : "";
+    const latNum = latStr ? Number.parseFloat(latStr) : NaN;
+    const lngNum = lngStr ? Number.parseFloat(lngStr) : NaN;
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      return { lat: latNum.toFixed(6), lng: lngNum.toFixed(6) };
+    }
+    return null;
+  };
+
+  // Priority 1: top-level internal_notes (new-application form path)
+  const p1 = tryPair(notes?.waterSourceLatitude, notes?.waterSourceLongitude);
+  if (p1) return p1;
+
+  // Priority 2: nested under permitDetails (renewal form path)
+  const pd = notes?.permitDetails;
+  if (pd && typeof pd === "object") {
+    const p2 = tryPair((pd as any).waterSourceLatitude, (pd as any).waterSourceLongitude);
+    if (p2) return p2;
   }
 
+  // Priority 3: GeoJSON Point in the coordinates DB column
   const geom: any = application.coordinates as any;
   if (geom && geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
     const [lng, lat] = geom.coordinates;
-    const latN = Number(lat);
-    const lngN = Number(lng);
-    if (Number.isFinite(latN) && Number.isFinite(lngN)) {
-      return { lat: latN.toFixed(6), lng: lngN.toFixed(6) };
-    }
+    const p3 = tryPair(lat, lng);
+    if (p3) return p3;
   }
 
   return { lat: "N/A", lng: "N/A" };
@@ -343,16 +357,43 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
   return { english: capitalizedMethod, kinyarwanda: capitalizedMethod };
 }
 
+function hasActivity(application: ApplicationForContract, activity: string): boolean {
+  const acts = Array.isArray((application as any).intended_activities)
+    ? ((application as any).intended_activities as unknown[]).map(String)
+    : [];
+  if (acts.includes(activity)) return true;
+  const notes = getInternalNotes(application);
+  const noteActs = Array.isArray(notes?.intendedActivities)
+    ? (notes.intendedActivities as unknown[]).map(String)
+    : [];
+  return noteActs.includes(activity);
+}
+
 function resolveVolumeLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
-  
+
+  // For construction_of_infrastructures the contract should render the
+  // actual flow rate (m³/s) from the Water Abstraction Details section,
+  // not the yearly volume which is a different metric.
+  if (hasActivity(application, "construction_of_infrastructures")) {
+    const flowRate = notes?.waterAbstractionDetails?.[0]?.flowRate;
+    if (typeof flowRate === "number" && Number.isFinite(flowRate) && flowRate > 0) {
+      return `${formatNumber(flowRate)} m³/s`;
+    }
+    // Also check the dedicated DB column
+    const dbFlowRate = (application as any).flow_rate_m3_per_second;
+    if (typeof dbFlowRate === "number" && Number.isFinite(dbFlowRate) && dbFlowRate > 0) {
+      return `${formatNumber(dbFlowRate)} m³/s`;
+    }
+  }
+
   // Priority 1: Assessor recommended volume (from assessor adjustments)
   const assessorAdjustments = notes?._assessorAdjustments;
-  if (typeof assessorAdjustments?.recommendedVolumeM3 === "number" && 
+  if (typeof assessorAdjustments?.recommendedVolumeM3 === "number" &&
       Number.isFinite(assessorAdjustments.recommendedVolumeM3)) {
     return `${formatNumber(assessorAdjustments.recommendedVolumeM3)} m³/year`;
   }
-  
+
   // Priority 2: Fall back to database fields (original applicant values)
   if (typeof application.max_yearly_volume_m3 === "number" && Number.isFinite(application.max_yearly_volume_m3)) {
     return `${formatNumber(application.max_yearly_volume_m3)} m³/year`;
@@ -364,7 +405,7 @@ function resolveVolumeLabel(application: ApplicationForContract): string {
     const unit = (application.usage_unit ?? "m³").trim() || "m³";
     return `${formatNumber(application.estimated_usage_volume)} ${unit}`;
   }
-  
+
   // Priority 3: Check internal_notes for original form data
   const formVolume = notes?.waterAbstractionDetails?.[0]?.maxAverageYearly;
   if (typeof formVolume === "number" && Number.isFinite(formVolume)) {
