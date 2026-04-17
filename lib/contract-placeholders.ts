@@ -54,6 +54,7 @@ export type ApplicationForContract = {
 
   proposed_duration_years?: number | null;
   concession_area?: number | null;
+  flow_rate_m3_per_second?: number | null;
 
   applicant?: {
     account_type?: string | null;
@@ -372,19 +373,21 @@ function hasActivity(application: ApplicationForContract, activity: string): boo
 function resolveVolumeLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
 
-  // For construction_of_infrastructures the contract should render the
-  // actual flow rate (m³/s) from the Water Abstraction Details section,
-  // not the yearly volume which is a different metric.
-  if (hasActivity(application, "construction_of_infrastructures")) {
-    const flowRate = notes?.waterAbstractionDetails?.[0]?.flowRate;
-    if (typeof flowRate === "number" && Number.isFinite(flowRate) && flowRate > 0) {
-      return `${formatNumber(flowRate)} m³/s`;
-    }
-    // Also check the dedicated DB column
-    const dbFlowRate = (application as any).flow_rate_m3_per_second;
-    if (typeof dbFlowRate === "number" && Number.isFinite(dbFlowRate) && dbFlowRate > 0) {
-      return `${formatNumber(dbFlowRate)} m³/s`;
-    }
+  // The contract template says "with a flow rate of {{VOLUME_LABEL}}",
+  // so when a real flow rate exists it should take priority.
+  // Check the dedicated DB column first, then form data.
+  const dbFlowRate = application.flow_rate_m3_per_second;
+  if (typeof dbFlowRate === "number" && Number.isFinite(dbFlowRate) && dbFlowRate > 0) {
+    return `${formatNumber(dbFlowRate)} m³/s`;
+  }
+  const formFlowRate = notes?.waterAbstractionDetails?.[0]?.flowRate;
+  if (typeof formFlowRate === "number" && Number.isFinite(formFlowRate) && formFlowRate > 0) {
+    return `${formatNumber(formFlowRate)} m³/s`;
+  }
+  // Transfer form may store flow rate separately
+  const tfFlowRate = notes?.transferFormData?.flowRate;
+  if (typeof tfFlowRate === "number" && Number.isFinite(tfFlowRate) && tfFlowRate > 0) {
+    return `${formatNumber(tfFlowRate)} m³/s`;
   }
 
   // Priority 1: Assessor recommended volume (from assessor adjustments)

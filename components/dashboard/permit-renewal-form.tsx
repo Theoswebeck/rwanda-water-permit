@@ -308,7 +308,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       // Try to get coordinates from internal_notes
       setWaterSourceLatitude(appNotes?.waterSourceLatitude || "");
       setWaterSourceLongitude(appNotes?.waterSourceLongitude || "");
-      setConcessionArea(app?.concession_area?.toString() || "");
+      setConcessionArea(
+        app?.concession_area?.toString() ||
+        permitDetails?.concessionArea?.toString() ||
+        appNotes?.fishLakeAreaHectares?.toString() ||
+        appNotes?.concessionArea?.toString() ||
+        ""
+      );
     }
   }, [permit, currentApplication, isManualPermit]);
 
