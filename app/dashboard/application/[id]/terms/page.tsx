@@ -50,7 +50,8 @@ function parseInternalNotes(input: unknown): Record<string, any> | null {
 
 function resolveDurationFromAssessor(
   applicationData: any,
-  parsedNotes: Record<string, any> | null
+  parsedNotes: Record<string, any> | null,
+  transferPermit?: TransferPermitContext | null,
 ): number {
   const assessorAdjustments = parsedNotes?._assessorAdjustments;
   if (
@@ -60,6 +61,21 @@ function resolveDurationFromAssessor(
     assessorAdjustments.permitLengthYears <= 15
   ) {
     return assessorAdjustments.permitLengthYears;
+  }
+  // Transfer fallback: remaining validity of the transferred permit.
+  // Matches the priority chain in contract-placeholders resolveDurationYears
+  // so the preview and the issued permit stay consistent.
+  const isTransfer =
+    applicationData?.application_type === "transfer" ||
+    parsedNotes?.isTransfer === true;
+  if (isTransfer && transferPermit?.expiry_date) {
+    const expiry = new Date(`${transferPermit.expiry_date}T00:00:00Z`);
+    if (!Number.isNaN(expiry.getTime())) {
+      const years = Math.ceil(
+        (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
+      );
+      if (years >= 1 && years <= 15) return years;
+    }
   }
   if (
     typeof applicationData?.proposed_duration_years === "number" &&
@@ -660,7 +676,7 @@ export default function TermsConditionsPage() {
 
       const assessorAdjustments = parsedNotes?._assessorAdjustments;
       const isConcession = isConcessionApplication(applicationData as any);
-      const resolvedDurationYearsGlobal = resolveDurationFromAssessor(applicationData, parsedNotes);
+      const resolvedDurationYearsGlobal = resolveDurationFromAssessor(applicationData, parsedNotes, transferPermitCtx);
       const resolvedVolumeM3 = resolveVolumeOrAreaFromAssessor(applicationData, parsedNotes, isConcession);
       const resolvedAllowanceUnit = isConcession ? 'ha' : (applicationData.usage_unit || parsedNotes?.transferFormData?.allowanceUnit || 'm³');
 
