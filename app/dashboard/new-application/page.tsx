@@ -1755,6 +1755,9 @@ function NewApplicationContent() {
       if (pd?.maxYearlyVolume != null) {
         optionalColumns.max_yearly_volume_m3 = pd.maxYearlyVolume;
       }
+      if (pd?.concessionArea != null) {
+        optionalColumns.concession_area = pd.concessionArea;
+      }
 
       const renewalApplicationData = { ...corePayload, ...optionalColumns };
       
