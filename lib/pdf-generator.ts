@@ -638,6 +638,9 @@ function resolveConcessionAreaHectares(application: Application): number | null 
   if (notesConcessionArea != null) return notesConcessionArea;
   const fishLakeArea = parsePositiveNumber(notes?.fishLakeAreaHectares);
   if (fishLakeArea != null) return fishLakeArea;
+  // Renewal form stores concession area under permitDetails
+  const pdArea = parsePositiveNumber(notes?.permitDetails?.concessionArea);
+  if (pdArea != null) return pdArea;
   return null;
 }
 

@@ -499,6 +499,10 @@ function resolveConcessionAreaLabel(application: ApplicationForContract): string
 
     const recreationM2 = parsePositiveNumber(notes.recreationConcessionAreaM2);
     if (recreationM2) return `${formatNumber(recreationM2 / 10000)} Ha`;
+
+    // Renewal form stores concession area under permitDetails
+    const pdArea = parsePositiveNumber(notes.permitDetails?.concessionArea);
+    if (pdArea) return `${formatNumber(pdArea)} Ha`;
   }
 
   return "N/A";

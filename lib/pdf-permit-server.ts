@@ -191,6 +191,8 @@ function resolveArea(app: PermitApplication): number | null {
   if (typeof app.concession_area === "number" && Number.isFinite(app.concession_area)) return app.concession_area;
   if (typeof notes?.concessionArea === "number") return notes.concessionArea;
   if (typeof notes?.fishLakeAreaHectares === "number") return notes.fishLakeAreaHectares;
+  // Renewal form stores concession area under permitDetails
+  if (typeof notes?.permitDetails?.concessionArea === "number") return notes.permitDetails.concessionArea;
   return null;
 }
 
