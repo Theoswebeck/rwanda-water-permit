@@ -379,7 +379,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     proposed_duration_years: formData.permitLengthYears,
     
     // Technical specifications - based on new form structure
-    water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || 'Not specified',
+    water_taking_method: formData.waterAbstractionDetails?.[0]?.abstractionMethod || undefined,
     water_measuring_method: 'Flow meter', // Default for drafts
     concession_area: concessionAreaHectares,
     return_flow_description: undefined, // Will be filled when form is more complete

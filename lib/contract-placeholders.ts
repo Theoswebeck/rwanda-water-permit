@@ -293,17 +293,26 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
   kinyarwanda: string;
 } {
   const notes = getInternalNotes(application);
-  const rawMethod =
-    (typeof application.water_taking_method === "string" ? application.water_taking_method : "") ||
-    (typeof notes?.waterAbstractionDetails?.[0]?.abstractionMethod === "string"
-      ? notes.waterAbstractionDetails[0].abstractionMethod
-      : "") ||
-    (typeof notes?.abstractionMethod === "string" ? notes.abstractionMethod : "") ||
-    (typeof notes?.transferFormData?.abstractionMethod === "string"
-      ? notes.transferFormData.abstractionMethod
-      : "");
 
-  const normalized = rawMethod.trim().toLowerCase();
+  // Helper: return the value only if it carries real information.
+  // The application-utils save path stores "Not specified" as a sentinel
+  // when waterAbstractionDetails is empty — treat that (and similar
+  // placeholders) as blank so the priority chain keeps looking.
+  const meaningful = (v: unknown): string =>
+    typeof v === "string" &&
+    v.trim() !== "" &&
+    !/^not[_ ]specified$/i.test(v.trim()) &&
+    v.trim().toLowerCase() !== "n/a"
+      ? v.trim()
+      : "";
+
+  const rawMethod =
+    meaningful(application.water_taking_method) ||
+    meaningful(notes?.waterAbstractionDetails?.[0]?.abstractionMethod) ||
+    meaningful(notes?.abstractionMethod) ||
+    meaningful(notes?.transferFormData?.abstractionMethod);
+
+  const normalized = rawMethod.toLowerCase();
   if (!normalized) {
     return { english: "N/A", kinyarwanda: "N/A" };
   }

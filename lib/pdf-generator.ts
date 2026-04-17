@@ -768,13 +768,21 @@ function resolveLatLng(application: Application): { lat: string; lng: string } {
 }
 
 function resolveAbstractionMethodRaw(application: Application): string {
-  const fromCol = typeof application.water_taking_method === "string" ? application.water_taking_method.trim() : "";
+  // Filter sentinel values stored when waterAbstractionDetails was empty.
+  const meaningful = (v: unknown): string =>
+    typeof v === "string" &&
+    v.trim() !== "" &&
+    !/^not[_ ]specified$/i.test(v.trim()) &&
+    v.trim().toLowerCase() !== "n/a"
+      ? v.trim()
+      : "";
+  const fromCol = meaningful(application.water_taking_method);
   if (fromCol) return fromCol;
   const notes = getInternalNotes(application);
-  const fromNotes = notes?.waterAbstractionDetails?.[0]?.abstractionMethod;
-  if (typeof fromNotes === "string" && fromNotes.trim()) return fromNotes.trim();
-  const fromTransfer = notes?.transferFormData?.abstractionMethod;
-  return typeof fromTransfer === "string" ? fromTransfer.trim() : "";
+  const fromNotes = meaningful(notes?.waterAbstractionDetails?.[0]?.abstractionMethod);
+  if (fromNotes) return fromNotes;
+  const fromTransfer = meaningful(notes?.transferFormData?.abstractionMethod);
+  return fromTransfer;
 }
 
 function resolveSystemType(application: Application): string {
