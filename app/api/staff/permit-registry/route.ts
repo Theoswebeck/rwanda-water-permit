@@ -4,353 +4,68 @@ import { query } from "@/lib/db/postgres";
 const EMPTY_RESULT = {
   items: [],
   total: 0,
-  summary: { total: 0, operational: 0, expired: 0, expiringSoon: 0, regimeTypes: 0 },
+  summary: { total: 0, distinctPermits: 0, operational: 0, expired: 0, expiringSoon: 0, regimeTypes: 0 },
   pagination: { limit: 50, offset: 0, returned: 0 },
 };
 
 async function detectSchema(): Promise<{
   hasRegistry: boolean;
-  hasPermits: boolean;
-  hasApplications: boolean;
   hasDocColumns: boolean;
+  hasRawDateColumns: boolean;
+  hasRowIndex: boolean;
   hasPostGIS: boolean;
 }> {
   const [tablesRes, extRes] = await Promise.all([
     query<{ table_name: string }>(
       `select table_name from information_schema.tables
        where table_schema = 'public'
-         and table_name in ('permit_registry', 'permits', 'applications')`
+         and table_name = 'permit_registry'`
     ),
     query<{ n: string }>(
       `select count(*)::text as n from pg_extension where extname = 'postgis'`
     ),
   ]);
 
-  const tables = new Set(tablesRes.rows.map((r) => r.table_name));
-  const hasRegistry = tables.has("permit_registry");
+  const hasRegistry = tablesRes.rows.some((r) => r.table_name === "permit_registry");
 
   let hasDocColumns = false;
+  let hasRawDateColumns = false;
+  let hasRowIndex = false;
+
   if (hasRegistry) {
-    const docRes = await query<{ present: string }>(
-      `select count(*)::text as present
+    const colRes = await query<{ column_name: string }>(
+      `select column_name
        from information_schema.columns
        where table_schema = 'public'
          and table_name = 'permit_registry'
          and column_name in (
            'uploaded_doc_path','uploaded_doc_name',
-           'uploaded_doc_mime_type','uploaded_doc_uploaded_at'
+           'uploaded_doc_mime_type','uploaded_doc_uploaded_at',
+           'issuance_date_raw','expiration_date_raw',
+           'row_index'
          )`
     );
-    hasDocColumns = Number(docRes.rows[0]?.present || "0") === 4;
+    const cols = new Set(colRes.rows.map((r) => r.column_name));
+    hasDocColumns = cols.has("uploaded_doc_path") && cols.has("uploaded_doc_name") &&
+                    cols.has("uploaded_doc_mime_type") && cols.has("uploaded_doc_uploaded_at");
+    hasRawDateColumns = cols.has("issuance_date_raw") && cols.has("expiration_date_raw");
+    hasRowIndex = cols.has("row_index");
   }
 
   return {
     hasRegistry,
-    hasPermits: tables.has("permits"),
-    hasApplications: tables.has("applications"),
     hasDocColumns,
+    hasRawDateColumns,
+    hasRowIndex,
     hasPostGIS: Number(extRes.rows[0]?.n || "0") > 0,
   };
 }
-
-function buildRegistrySelect(hasDocColumns: boolean): string {
-  const docSelect = hasDocColumns
-    ? `pr.uploaded_doc_path, pr.uploaded_doc_name, pr.uploaded_doc_mime_type, pr.uploaded_doc_uploaded_at,`
-    : `null::text as uploaded_doc_path, null::text as uploaded_doc_name,
-       null::text as uploaded_doc_mime_type, null::timestamptz as uploaded_doc_uploaded_at,`;
-
-  return `
-    select
-      pr.id,
-      pr.serial_number,
-      pr.permit_holder,
-      pr.permit_number,
-      pr.regime,
-      pr.water_source,
-      pr.volume_or_area,
-      pr.method_of_water_taking,
-      pr.authorized_activity,
-      pr.location,
-      pr.latitude,
-      pr.longitude,
-      null::text as coordinates_geojson,
-      pr.issuance_date,
-      pr.duration,
-      pr.expiration_date,
-      upper(coalesce(pr.status, 'OPERATIONAL')) as status,
-      pr.contact,
-      ${docSelect}
-      pr.created_at,
-      pr.updated_at,
-      'registry'::text as source_kind
-    from public.permit_registry pr`;
-}
-
-function buildPermitsSelect(hasApplications: boolean, hasPostGIS: boolean): string {
-  const regimeExpr = hasPostGIS
-    ? `case
-         when geometrytype(coalesce(p.coordinates, a.coordinates)) in ('POLYGON', 'MULTIPOLYGON') then 'Concession'
-         else 'Authorization'
-       end`
-    : `'Authorization'`;
-
-  const latExpr = hasPostGIS
-    ? `case
-         when coalesce(p.coordinates, a.coordinates) is null then null
-         else st_y(st_centroid(coalesce(p.coordinates, a.coordinates)))
-       end`
-    : `null::double precision`;
-
-  const lngExpr = hasPostGIS
-    ? `case
-         when coalesce(p.coordinates, a.coordinates) is null then null
-         else st_x(st_centroid(coalesce(p.coordinates, a.coordinates)))
-       end`
-    : `null::double precision`;
-
-  const geojsonExpr = hasPostGIS
-    ? `case
-         when coalesce(p.coordinates, a.coordinates) is null then null
-         else st_asgeojson(coalesce(p.coordinates, a.coordinates))
-       end`
-    : `null::text`;
-
-  if (!hasApplications) {
-    return `
-    select
-      p.id,
-      null::integer as serial_number,
-      'Unknown Permit Holder' as permit_holder,
-      p.permit_number::text as permit_number,
-      'Authorization' as regime,
-      p.water_source::text as water_source,
-      coalesce(
-        nullif(trim(concat_ws(' ', p.water_allowance::text, p.allowance_unit)), ''),
-        nullif(trim(concat_ws(' ', p.water_body_surface_area::text, p.surface_area_unit)), '')
-      ) as volume_or_area,
-      null::text as method_of_water_taking,
-      p.purpose::text as authorized_activity,
-      null::text as location,
-      null::double precision as latitude,
-      null::double precision as longitude,
-      null::text as coordinates_geojson,
-      p.issued_date as issuance_date,
-      case
-        when p.issued_date is not null and p.expiry_date is not null then
-          trim(concat_ws(' ',
-            case when extract(year from age(p.expiry_date, p.issued_date))::int > 0
-              then extract(year from age(p.expiry_date, p.issued_date))::int || ' years' end,
-            case when extract(month from age(p.expiry_date, p.issued_date))::int % 12 > 0
-              then (extract(month from age(p.expiry_date, p.issued_date))::int % 12) || ' months' end
-          ))
-        else null
-      end as duration,
-      p.expiry_date as expiration_date,
-      case
-        when p.status = 'expired'::permit_status then 'EXPIRED'
-        when p.status = 'expiring_soon'::permit_status then 'EXPIRING_SOON'
-        when p.status = 'suspended'::permit_status then 'SUSPENDED'
-        when p.status = 'revoked'::permit_status then 'REVOKED'
-        else 'OPERATIONAL'
-      end as status,
-      null::text as contact,
-      null::text as uploaded_doc_path,
-      null::text as uploaded_doc_name,
-      null::text as uploaded_doc_mime_type,
-      null::timestamptz as uploaded_doc_uploaded_at,
-      p.created_at,
-      p.updated_at,
-      'permit'::text as source_kind
-    from public.permits p
-    where p.permit_number is not null`;
-  }
-
-  return `
-    select
-      p.id,
-      null::integer as serial_number,
-      coalesce(
-        nullif(trim(concat_ws(' ', appu.first_name, appu.last_name)), ''),
-        appu.company_name,
-        'Unknown Permit Holder'
-      ) as permit_holder,
-      p.permit_number::text as permit_number,
-      ${regimeExpr} as regime,
-      p.water_source::text as water_source,
-      coalesce(
-        nullif(trim(concat_ws(' ', p.water_allowance::text, p.allowance_unit)), ''),
-        nullif(trim(concat_ws(' ', p.water_body_surface_area::text, p.surface_area_unit)), '')
-      ) as volume_or_area,
-      a.water_taking_method::text as method_of_water_taking,
-      coalesce(p.purpose::text, a.water_purpose::text) as authorized_activity,
-      case when a.id is not null then concat_ws(', ', a.district, a.province::text) else null end as location,
-      ${latExpr} as latitude,
-      ${lngExpr} as longitude,
-      ${geojsonExpr} as coordinates_geojson,
-      p.issued_date as issuance_date,
-      case
-        when p.issued_date is not null and p.expiry_date is not null then
-          trim(concat_ws(' ',
-            case when extract(year from age(p.expiry_date, p.issued_date))::int > 0
-              then extract(year from age(p.expiry_date, p.issued_date))::int || ' years' end,
-            case when extract(month from age(p.expiry_date, p.issued_date))::int % 12 > 0
-              then (extract(month from age(p.expiry_date, p.issued_date))::int % 12) || ' months' end
-          ))
-        when a.proposed_duration_years is not null then a.proposed_duration_years || ' years'
-        else null
-      end as duration,
-      p.expiry_date as expiration_date,
-      case
-        when p.status = 'expired'::permit_status then 'EXPIRED'
-        when p.status = 'expiring_soon'::permit_status then 'EXPIRING_SOON'
-        when p.status = 'suspended'::permit_status then 'SUSPENDED'
-        when p.status = 'revoked'::permit_status then 'REVOKED'
-        else 'OPERATIONAL'
-      end as status,
-      null::text as contact,
-      null::text as uploaded_doc_path,
-      null::text as uploaded_doc_name,
-      null::text as uploaded_doc_mime_type,
-      null::timestamptz as uploaded_doc_uploaded_at,
-      p.created_at,
-      p.updated_at,
-      'permit'::text as source_kind
-    from public.permits p
-    left join public.applications a on a.id = p.application_id
-    left join public.users appu on appu.id = a.applicant_id
-    where p.permit_number is not null`;
-}
-
-const MERGED_CTE = `
-  merged as (
-    select
-      coalesce(
-        max(u.id::text) filter (where u.source_kind = 'registry'),
-        max(u.id::text) filter (where u.source_kind = 'permit')
-      )::uuid as id,
-      max(u.serial_number) filter (where u.source_kind = 'registry') as serial_number,
-      coalesce(
-        max(u.permit_holder) filter (where u.source_kind = 'registry'),
-        max(u.permit_holder) filter (where u.source_kind = 'permit')
-      ) as permit_holder,
-      u.permit_number,
-      coalesce(
-        max(u.regime) filter (where u.source_kind = 'registry'),
-        max(u.regime) filter (where u.source_kind = 'permit')
-      ) as regime,
-      coalesce(
-        max(u.water_source) filter (where u.source_kind = 'registry'),
-        max(u.water_source) filter (where u.source_kind = 'permit')
-      ) as water_source,
-      coalesce(
-        max(u.volume_or_area) filter (where u.source_kind = 'registry'),
-        max(u.volume_or_area) filter (where u.source_kind = 'permit')
-      ) as volume_or_area,
-      coalesce(
-        max(u.method_of_water_taking) filter (where u.source_kind = 'registry'),
-        max(u.method_of_water_taking) filter (where u.source_kind = 'permit')
-      ) as method_of_water_taking,
-      coalesce(
-        max(u.authorized_activity) filter (where u.source_kind = 'registry'),
-        max(u.authorized_activity) filter (where u.source_kind = 'permit')
-      ) as authorized_activity,
-      coalesce(
-        max(u.location) filter (where u.source_kind = 'registry'),
-        max(u.location) filter (where u.source_kind = 'permit')
-      ) as location,
-      coalesce(
-        max(u.latitude) filter (where u.source_kind = 'registry'),
-        max(u.latitude) filter (where u.source_kind = 'permit')
-      ) as latitude,
-      coalesce(
-        max(u.longitude) filter (where u.source_kind = 'registry'),
-        max(u.longitude) filter (where u.source_kind = 'permit')
-      ) as longitude,
-      max(u.coordinates_geojson) filter (where u.source_kind = 'permit') as coordinates_geojson,
-      coalesce(
-        max(u.issuance_date) filter (where u.source_kind = 'registry'),
-        max(u.issuance_date) filter (where u.source_kind = 'permit')
-      ) as issuance_date,
-      coalesce(
-        max(u.duration) filter (where u.source_kind = 'registry'),
-        max(u.duration) filter (where u.source_kind = 'permit')
-      ) as duration,
-      coalesce(
-        max(u.expiration_date) filter (where u.source_kind = 'registry'),
-        max(u.expiration_date) filter (where u.source_kind = 'permit')
-      ) as expiration_date,
-      coalesce(
-        max(u.status) filter (where u.source_kind = 'registry'),
-        max(u.status) filter (where u.source_kind = 'permit')
-      ) as status,
-      coalesce(
-        max(u.contact) filter (where u.source_kind = 'registry'),
-        max(u.contact) filter (where u.source_kind = 'permit')
-      ) as contact,
-      max(u.uploaded_doc_path) filter (where u.source_kind = 'registry') as uploaded_doc_path,
-      max(u.uploaded_doc_name) filter (where u.source_kind = 'registry') as uploaded_doc_name,
-      max(u.uploaded_doc_mime_type) filter (where u.source_kind = 'registry') as uploaded_doc_mime_type,
-      max(u.uploaded_doc_uploaded_at) filter (where u.source_kind = 'registry') as uploaded_doc_uploaded_at,
-      coalesce(
-        max(u.created_at) filter (where u.source_kind = 'registry'),
-        max(u.created_at) filter (where u.source_kind = 'permit')
-      ) as created_at,
-      coalesce(
-        max(u.updated_at) filter (where u.source_kind = 'registry'),
-        max(u.updated_at) filter (where u.source_kind = 'permit')
-      ) as updated_at,
-      string_agg(distinct u.source_kind, ',' order by u.source_kind) as source_kind,
-      (
-        jsonb_agg(
-          jsonb_build_object(
-            'permit_holder', u.permit_holder,
-            'regime', u.regime,
-            'water_source', u.water_source,
-            'volume_or_area', u.volume_or_area,
-            'method_of_water_taking', u.method_of_water_taking,
-            'authorized_activity', u.authorized_activity,
-            'location', u.location,
-            'latitude', u.latitude,
-            'longitude', u.longitude,
-            'issuance_date', u.issuance_date,
-            'duration', u.duration,
-            'expiration_date', u.expiration_date,
-            'status', u.status,
-            'contact', u.contact
-          )
-          order by u.updated_at desc nulls last
-        )
-      filter (where u.source_kind = 'registry')) -> 0 as registry_values,
-      (
-        jsonb_agg(
-          jsonb_build_object(
-            'permit_holder', u.permit_holder,
-            'regime', u.regime,
-            'water_source', u.water_source,
-            'volume_or_area', u.volume_or_area,
-            'method_of_water_taking', u.method_of_water_taking,
-            'authorized_activity', u.authorized_activity,
-            'location', u.location,
-            'latitude', u.latitude,
-            'longitude', u.longitude,
-            'issuance_date', u.issuance_date,
-            'duration', u.duration,
-            'expiration_date', u.expiration_date,
-            'status', u.status,
-            'contact', u.contact
-          )
-          order by u.updated_at desc nulls last
-        )
-      filter (where u.source_kind = 'permit')) -> 0 as permit_values
-    from unified u
-    group by u.permit_number
-  )`;
 
 export async function GET(req: NextRequest) {
   try {
     const schema = await detectSchema();
 
-    if (!schema.hasRegistry && !schema.hasPermits) {
+    if (!schema.hasRegistry) {
       return NextResponse.json(EMPTY_RESULT);
     }
 
@@ -358,14 +73,29 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get("q")?.trim().toLowerCase() || "";
     const regime = searchParams.get("regime") || "all";
     const status = searchParams.get("status") || "all";
-    const sortBy = searchParams.get("sort_by") || "serial_number";
-    const sortDir = searchParams.get("sort_dir") === "desc" ? false : true;
+    const sortBy = searchParams.get("sort_by") || (schema.hasRowIndex ? "row_index" : "serial_number");
+    const sortDir = searchParams.get("sort_dir") === "desc" ? "desc" : "asc";
     const limit = Math.min(Math.max(parseInt(searchParams.get("limit") || "200", 10), 1), 500);
     const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10), 0);
 
-    const validSortColumns = ["serial_number", "permit_holder", "permit_number", "status", "regime"];
-    const column = validSortColumns.includes(sortBy) ? sortBy : "serial_number";
-    const orderDir = sortDir ? "asc" : "desc";
+    const validSortColumns = ["serial_number", "permit_holder", "permit_number", "status", "regime", "row_index"];
+    const column = validSortColumns.includes(sortBy) ? sortBy : (schema.hasRowIndex ? "row_index" : "serial_number");
+
+    // Build dynamic SELECT columns
+    const docSelect = schema.hasDocColumns
+      ? `pr.uploaded_doc_path, pr.uploaded_doc_name, pr.uploaded_doc_mime_type, pr.uploaded_doc_uploaded_at,`
+      : `null::text as uploaded_doc_path, null::text as uploaded_doc_name,
+         null::text as uploaded_doc_mime_type, null::timestamptz as uploaded_doc_uploaded_at,`;
+
+    const rawDateSelect = schema.hasRawDateColumns
+      ? `pr.issuance_date_raw, pr.expiration_date_raw,`
+      : `null::text as issuance_date_raw, null::text as expiration_date_raw,`;
+
+    const rowIndexSelect = schema.hasRowIndex
+      ? `pr.row_index,`
+      : `null::integer as row_index,`;
+
+    // Build WHERE filters
     const where: string[] = [];
     const values: unknown[] = [];
     const p = (value: unknown) => {
@@ -373,58 +103,41 @@ export async function GET(req: NextRequest) {
       return `$${values.length}`;
     };
 
-    if (regime && regime !== "all") where.push(`lower(coalesce(regime, '')) = lower(${p(regime)})`);
-    if (status && status !== "all") where.push(`upper(coalesce(status, '')) = ${p(status.toUpperCase())}`);
+    if (regime && regime !== "all") where.push(`lower(coalesce(pr.regime, '')) = lower(${p(regime)})`);
+    if (status && status !== "all") where.push(`upper(coalesce(pr.status, '')) = ${p(status.toUpperCase())}`);
     if (q) {
       const term = `%${q}%`;
       const pv = p(term);
       where.push(
-        `(lower(permit_holder) like ${pv} or lower(permit_number) like ${pv} or lower(location) like ${pv} or lower(water_source) like ${pv} or lower(authorized_activity) like ${pv})`
+        `(lower(coalesce(pr.permit_holder, '')) like ${pv} or lower(coalesce(pr.permit_number, '')) like ${pv} or lower(coalesce(pr.location, '')) like ${pv} or lower(coalesce(pr.water_source, '')) like ${pv} or lower(coalesce(pr.authorized_activity, '')) like ${pv})`
       );
     }
-    const whereSql = where.length ? `and ${where.join(" and ")}` : "";
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-    const unionParts: string[] = [];
-    if (schema.hasRegistry) {
-      unionParts.push(buildRegistrySelect(schema.hasDocColumns));
-    }
-    if (schema.hasPermits) {
-      unionParts.push(buildPermitsSelect(schema.hasApplications, schema.hasPostGIS));
-    }
-
-    const baseCte = `
-      with unified as (
-        ${unionParts.join("\n        union all\n")}
-      ),
-      ${MERGED_CTE}
-    `;
-
+    // Summary query
     const summaryRes = await query<{
       total: string;
+      distinct_permits: string;
       operational: string;
       expired: string;
       expiring_soon: string;
       regime_types: string;
     }>(
       `
-      ${baseCte}
-      , filtered as (
-        select *
-        from merged
-        where 1 = 1
-        ${whereSql}
-      )
-      select
+      SELECT
         count(*)::text as total,
-        count(*) filter (where upper(coalesce(status, '')) = 'OPERATIONAL')::text as operational,
-        count(*) filter (where upper(coalesce(status, '')) = 'EXPIRED')::text as expired,
-        count(*) filter (where upper(coalesce(status, '')) = 'EXPIRING_SOON')::text as expiring_soon,
-        count(distinct nullif(trim(coalesce(regime, '')), ''))::text as regime_types
-      from filtered
+        count(distinct nullif(trim(coalesce(pr.permit_number, '')), ''))::text as distinct_permits,
+        count(*) filter (where upper(coalesce(pr.status, '')) like '%OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
+        count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRED%')::text as expired,
+        count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRING%')::text as expiring_soon,
+        count(distinct nullif(trim(coalesce(pr.regime, '')), ''))::text as regime_types
+      FROM public.permit_registry pr
+      ${whereSql}
       `,
       values
     );
 
+    // Paginated data query
     const pageValues = [...values];
     pageValues.push(offset);
     const offsetParam = `$${pageValues.length}`;
@@ -433,58 +146,54 @@ export async function GET(req: NextRequest) {
 
     const pageRes = await query(
       `
-      ${baseCte}
-      select
-        id,
-        serial_number,
-        permit_holder,
-        permit_number,
-        regime,
-        water_source,
-        volume_or_area,
-        method_of_water_taking,
-        authorized_activity,
-        location,
-        latitude,
-        longitude,
-        coordinates_geojson,
-        issuance_date,
-        duration,
-        expiration_date,
-        status,
-        contact,
-        uploaded_doc_path,
-        uploaded_doc_name,
-        uploaded_doc_mime_type,
-        uploaded_doc_uploaded_at,
-        created_at,
-        updated_at,
-        source_kind,
-        registry_values,
-        permit_values
-      from merged
-      where 1 = 1
+      SELECT
+        pr.id,
+        ${rowIndexSelect}
+        pr.serial_number,
+        pr.permit_holder,
+        pr.permit_number,
+        pr.regime,
+        pr.water_source,
+        pr.volume_or_area,
+        pr.method_of_water_taking,
+        pr.authorized_activity,
+        pr.location,
+        pr.latitude,
+        pr.longitude,
+        null::text as coordinates_geojson,
+        pr.issuance_date,
+        ${rawDateSelect}
+        pr.duration,
+        pr.expiration_date,
+        upper(coalesce(pr.status, 'OPERATIONAL')) as status,
+        pr.contact,
+        ${docSelect}
+        pr.created_at,
+        pr.updated_at,
+        'registry'::text as source_kind
+      FROM public.permit_registry pr
       ${whereSql}
-      order by ${column} ${orderDir} nulls last
-      offset ${offsetParam} limit ${limitParam}
+      ORDER BY ${column} ${sortDir} NULLS LAST
+      OFFSET ${offsetParam} LIMIT ${limitParam}
       `,
       pageValues
     );
+
     const summaryRow = summaryRes.rows[0];
     const count = Number(summaryRow?.total || "0");
-    const data = pageRes.rows;
 
     return NextResponse.json({
-      items: data || [],
-      total: count ?? 0,
+      items: pageRes.rows || [],
+      total: count,
       summary: {
-        total: count ?? 0,
+        total: count,
+        distinctPermits: Number(summaryRow?.distinct_permits || "0"),
         operational: Number(summaryRow?.operational || "0"),
         expired: Number(summaryRow?.expired || "0"),
         expiringSoon: Number(summaryRow?.expiring_soon || "0"),
         regimeTypes: Number(summaryRow?.regime_types || "0"),
       },
-      pagination: { limit, offset, returned: (data || []).length },
+      pagination: { limit, offset, returned: (pageRes.rows || []).length },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";

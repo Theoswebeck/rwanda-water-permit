@@ -21,6 +21,7 @@ export interface PermitRegistryQueryResult {
   total: number;
   summary: {
     total: number;
+    distinctPermits: number;
     operational: number;
     expired: number;
     expiringSoon: number;
@@ -36,7 +37,7 @@ export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enable
       const searchParams = new URLSearchParams();
       searchParams.set("limit", String(params.limit ?? 50));
       searchParams.set("offset", String(params.offset ?? 0));
-      searchParams.set("sort_by", params.sort_by ?? "serial_number");
+      searchParams.set("sort_by", params.sort_by ?? "row_index");
       searchParams.set("sort_dir", params.sort_dir ?? "asc");
       if (params.q && params.q.trim()) searchParams.set("q", params.q.trim());
       if (params.regime && params.regime !== "all") searchParams.set("regime", params.regime);
@@ -54,6 +55,7 @@ export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enable
         total: Number(json.total || 0),
         summary: {
           total: Number(json.summary?.total || json.total || 0),
+          distinctPermits: Number(json.summary?.distinctPermits || 0),
           operational: Number(json.summary?.operational || 0),
           expired: Number(json.summary?.expired || 0),
           expiringSoon: Number(json.summary?.expiringSoon || 0),

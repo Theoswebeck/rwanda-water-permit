@@ -63,6 +63,7 @@ const LeafletPolygon = dynamic(() => import("react-leaflet").then((m) => m.Polyg
 const Popup = dynamic(() => import("react-leaflet").then((m) => m.Popup), { ssr: false });
 
 type SortField =
+  | "row_index"
   | "serial_number"
   | "permit_holder"
   | "permit_number"
@@ -101,7 +102,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [searchTerm, setSearchTerm] = useState("");
   const [regimeFilter, setRegimeFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortField, setSortField] = useState<SortField>("serial_number");
+  const [sortField, setSortField] = useState<SortField>("row_index");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -109,9 +110,12 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{
     inserted: number;
-    skipped: number;
+    dateParseFailures?: number;
     errors?: string[];
   } | null>(null);
+  const [showUploadConfirm, setShowUploadConfirm] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [jumpPage, setJumpPage] = useState("");
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [docUploadResult, setDocUploadResult] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
@@ -148,16 +152,17 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     if (data?.summary) {
       return {
         total: data.summary.total,
+        distinctPermits: data.summary.distinctPermits,
         operational: data.summary.operational,
         expired: data.summary.expired,
         regimeTypes: data.summary.regimeTypes,
       };
     }
     const pageTotal = entries.length;
-    const operational = entries.filter((e) => e.status?.toUpperCase() === "OPERATIONAL").length;
-    const expired = entries.filter((e) => e.status?.toUpperCase() === "EXPIRED").length;
+    const operational = entries.filter((e) => e.status?.toUpperCase()?.includes("OPERATIONAL") && !e.status?.toUpperCase()?.includes("NON")).length;
+    const expired = entries.filter((e) => e.status?.toUpperCase()?.includes("EXPIRED")).length;
     const regimeSet = new Set(entries.map((e) => e.regime).filter(Boolean));
-    return { total: pageTotal, operational, expired, regimeTypes: regimeSet.size };
+    return { total: pageTotal, distinctPermits: 0, operational, expired, regimeTypes: regimeSet.size };
   }, [data?.summary, entries]);
 
   const toggleSort = useCallback(
@@ -193,33 +198,45 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     );
   };
 
-  const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPendingFile(file);
+    setShowUploadConfirm(true);
+    e.target.value = "";
+  };
+
+  const handleUploadConfirm = async () => {
+    if (!pendingFile) return;
+    setShowUploadConfirm(false);
     setUploading(true);
     setUploadResult(null);
 
     try {
-      const text = await file.text();
+      const formData = new FormData();
+      formData.append("file", pendingFile);
       const res = await fetch("/api/staff/permit-registry/ingest", {
         method: "POST",
-        body: text,
-        headers: { "Content-Type": "text/plain" },
+        body: formData,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Upload failed");
-      setUploadResult({ inserted: json.inserted, skipped: json.skipped, errors: json.errors });
+      setUploadResult({ inserted: json.inserted, dateParseFailures: json.dateParseFailures, errors: json.errors });
       refetch();
     } catch (err) {
       setUploadResult({
         inserted: 0,
-        skipped: 0,
         errors: [err instanceof Error ? err.message : "Unknown error"],
       });
     } finally {
       setUploading(false);
-      e.target.value = "";
+      setPendingFile(null);
     }
+  };
+
+  const handleUploadCancel = () => {
+    setShowUploadConfirm(false);
+    setPendingFile(null);
   };
 
   const handlePermitDocUpload = async (entryId: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -377,13 +394,21 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             {
-              label: "Total Permits",
+              label: "Total Rows",
               value: stats.total,
               icon: FileText,
               color: "text-slate-700 dark:text-slate-300",
               bg: "bg-slate-50 dark:bg-slate-900",
               border: "border-slate-200 dark:border-slate-800",
             },
+            ...(stats.distinctPermits > 0 ? [{
+              label: "Distinct Permits",
+              value: stats.distinctPermits,
+              icon: Database,
+              color: "text-blue-700 dark:text-blue-400",
+              bg: "bg-blue-50/70 dark:bg-blue-950/30",
+              border: "border-blue-200 dark:border-blue-800",
+            }] : []),
             {
               label: "Operational",
               value: stats.operational,
@@ -495,8 +520,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
           <label className="cursor-pointer">
             <input
               type="file"
-              accept=".csv"
-              onChange={handleCsvUpload}
+              accept=".xlsx,.xls"
+              onChange={handleFileSelect}
               className="hidden"
               disabled={uploading}
             />
@@ -513,12 +538,56 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                 ) : (
                   <Upload className="h-4 w-4 mr-2" />
                 )}
-                {uploading ? "Importing..." : "Import CSV"}
+                {uploading ? "Importing..." : "Import XLSX"}
               </span>
             </Button>
           </label>
         </div>
       </div>
+
+      {/* Upload Confirmation Modal */}
+      <AnimatePresence>
+        {showUploadConfirm && pendingFile && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className="p-4 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-2">
+                <p className="font-medium text-amber-800 dark:text-amber-200">
+                  Replace entire permit registry?
+                </p>
+                <p className="text-amber-700 dark:text-amber-300">
+                  This will delete all existing registry rows and import <span className="font-semibold">{pendingFile.name}</span> as the new registry. This action cannot be undone.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={handleUploadConfirm}
+                    className="h-8"
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />
+                    Yes, replace registry
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleUploadCancel}
+                    className="h-8"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Upload Result Banner */}
       <AnimatePresence>
@@ -537,8 +606,12 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
             <div className="flex items-start justify-between">
               <div>
                 Imported <span className="font-semibold">{uploadResult.inserted}</span>{" "}
-                record{uploadResult.inserted !== 1 ? "s" : ""}, skipped{" "}
-                {uploadResult.skipped}.
+                row{uploadResult.inserted !== 1 ? "s" : ""}.
+                {uploadResult.dateParseFailures ? (
+                  <span className="ml-1 text-amber-600 dark:text-amber-400">
+                    ({uploadResult.dateParseFailures} date{uploadResult.dateParseFailures !== 1 ? "s" : ""} could not be parsed — raw values preserved)
+                  </span>
+                ) : null}
                 {uploadResult.errors?.length ? (
                   <ul className="mt-2 list-disc list-inside space-y-0.5 text-xs">
                     {uploadResult.errors.slice(0, 5).map((e, i) => (
@@ -630,7 +703,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
           </p>
           <p className="text-sm text-muted-foreground mt-1 max-w-sm">
             {total === 0
-              ? "Import a CSV file to populate the water permit registry"
+              ? "Import an XLSX file to populate the water permit registry"
               : "Try broadening your search or adjusting the filters"}
           </p>
         </div>
@@ -647,11 +720,11 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                     <TableHead className="w-[44px]" />
                     <TableHead
                       className="w-[52px] cursor-pointer select-none text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider"
-                      onClick={() => toggleSort("serial_number")}
+                      onClick={() => toggleSort("row_index")}
                     >
                       <span className="flex items-center">
                         #
-                        <SortIcon field="serial_number" />
+                        <SortIcon field="row_index" />
                       </span>
                     </TableHead>
                     <TableHead
@@ -711,7 +784,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             </div>
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 text-muted-foreground text-sm tabular-nums">
-                            {entry.serial_number ?? "-"}
+                            {entry.row_index ?? entry.serial_number ?? "-"}
                           </TableCell>
                           <TableCell className="p-2 sm:p-3 max-w-[280px]">
                             <div className="flex items-center gap-1.5 min-w-0">
@@ -788,7 +861,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                 className="h-8 rounded-md text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                                 onClick={(event) => event.stopPropagation()}
                               >
-                                <a href={`/permit/view/${encodeURIComponent(entry.permit_number)}`} target="_blank" rel="noopener noreferrer">
+                                <a href={`/permit/view/${encodeURIComponent(entry.permit_number || "")}`} target="_blank" rel="noopener noreferrer">
                                   <Eye className="h-3.5 w-3.5 mr-1.5" />
                                   View
                                 </a>
@@ -842,6 +915,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                     icon={<Calendar className="h-3.5 w-3.5" />}
                                     label="Issuance Date"
                                     value={formatDate(entry.issuance_date)}
+                                    rawValue={!entry.issuance_date && entry.issuance_date_raw ? entry.issuance_date_raw : undefined}
                                   />
                                   <DetailField
                                     label="Duration"
@@ -851,6 +925,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                     icon={<Calendar className="h-3.5 w-3.5" />}
                                     label="Expiration Date"
                                     value={formatDate(entry.expiration_date)}
+                                    rawValue={!entry.expiration_date && entry.expiration_date_raw ? entry.expiration_date_raw : undefined}
                                   />
                                   {entry.contact && entry.contact.trim() !== "Email:                                 Tel:" && (
                                     <DetailField
@@ -886,6 +961,27 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                   >
                     Previous
                   </Button>
+                  <form
+                    className="flex items-center gap-1.5"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const page = parseInt(jumpPage, 10);
+                      if (page >= 1 && page <= totalPages) {
+                        setCurrentPage(page);
+                        setJumpPage("");
+                      }
+                    }}
+                  >
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      placeholder="Go to"
+                      value={jumpPage}
+                      onChange={(e) => setJumpPage(e.target.value)}
+                      className="w-[72px] h-8 text-xs text-center"
+                    />
+                  </form>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1014,11 +1110,13 @@ function DetailField({
   label,
   value,
   wide,
+  rawValue,
 }: {
   icon?: React.ReactNode;
   label: string;
   value: string | null | undefined;
   wide?: boolean;
+  rawValue?: string;
 }) {
   return (
     <div className={wide ? "md:col-span-2" : ""}>
@@ -1031,6 +1129,11 @@ function DetailField({
       <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed">
         {value || "N/A"}
       </p>
+      {rawValue && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5" title="Original value from spreadsheet">
+          Raw: {rawValue}
+        </p>
+      )}
     </div>
   );
 }

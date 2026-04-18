@@ -91,11 +91,13 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
 
       if (isRegistry && appNumber) {
         const realPermitNumber = extractPermitNumber(appNumber);
-        const { data: regData } = await supabase
+        const { data: regRows } = await supabase
           .from("permit_registry")
           .select("*")
           .eq("permit_number", realPermitNumber)
-          .maybeSingle();
+          .order("row_index", { ascending: false, nullsFirst: false })
+          .limit(1);
+        const regData = regRows?.[0] ?? null;
 
         setRegistryEntry((regData as RegistryEntry | null) || null);
         setPermit(null);

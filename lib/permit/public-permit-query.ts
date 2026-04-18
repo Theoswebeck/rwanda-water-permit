@@ -146,6 +146,7 @@ export async function findPublicPermitByNumber(
         when upper(trim(pr.permit_number)) = upper($2) then 1
         else 2
       end,
+      pr.row_index desc nulls last,
       pr.updated_at desc nulls last,
       pr.created_at desc nulls last
     limit 1

@@ -1,36 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
+import * as XLSX from "xlsx";
 
-function parseCSVLine(line: string): string[] {
-  const fields: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        current += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ",") {
-        fields.push(current.trim());
-        current = "";
-      } else {
-        current += ch;
-      }
-    }
-  }
-  fields.push(current.trim());
-  return fields;
-}
+// ---------------------------------------------------------------------------
+// Date helpers
+// ---------------------------------------------------------------------------
 
 function isValidDateParts(year: number, month: number, day: number): boolean {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
@@ -48,17 +22,28 @@ function toISODate(year: number, month: number, day: number): string | null {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-function parseDate(raw: string | undefined): string | null {
-  if (!raw) return null;
+/** Convert an Excel serial date number to an ISO date string. */
+function excelSerialToISODate(serial: number): string | null {
+  if (!Number.isFinite(serial) || serial < 1) return null;
+  // Excel epoch is 1899-12-30; serial 1 = 1900-01-01.
+  // Lotus 1900 leap-year bug: Excel thinks 1900 was a leap year, so serials
+  // >= 60 (1900-02-29 which doesn't exist) are off by one day.
+  const adjustedSerial = serial > 59 ? serial - 1 : serial;
+  const ms = (adjustedSerial - 1) * 86400000;
+  const epoch = Date.UTC(1900, 0, 1);
+  const dt = new Date(epoch + ms);
+  if (Number.isNaN(dt.getTime())) return null;
+  return toISODate(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+}
+
+/** Parse a date string in DD/MM/YYYY or YYYY-MM-DD format. */
+function parseDateString(raw: string): string | null {
   const cleaned = raw.trim();
   if (!cleaned) return null;
 
   const isoMatch = cleaned.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
   if (isoMatch) {
-    const year = Number(isoMatch[1]);
-    const month = Number(isoMatch[2]);
-    const day = Number(isoMatch[3]);
-    return toISODate(year, month, day);
+    return toISODate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
   }
 
   const slashMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
@@ -68,13 +53,51 @@ function parseDate(raw: string | undefined): string | null {
   const second = Number(slashMatch[2]);
   const year = Number(slashMatch[3]);
 
-  // Accept both DD/MM/YYYY and MM/DD/YYYY to prevent imports from failing.
   if (first > 12 && second <= 12) return toISODate(year, second, first);
   if (second > 12 && first <= 12) return toISODate(year, first, second);
 
-  // Ambiguous dates default to DD/MM/YYYY (legacy dataset expectation).
+  // Ambiguous — default to DD/MM/YYYY (legacy dataset expectation).
   return toISODate(year, second, first);
 }
+
+/**
+ * Parse a date cell. Handles:
+ * - Excel serial dates (numeric cells like 41493)
+ * - String dates in DD/MM/YYYY or YYYY-MM-DD format
+ * - Annotated dates like "18/09/2014 (Amended to 3/7/2020)" — extracts the
+ *   first recognisable date; the full text is preserved in *_raw columns.
+ */
+function parseDateCell(rawValue: string | undefined): string | null {
+  if (!rawValue) return null;
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
+
+  // Purely numeric → Excel serial
+  if (/^\d+(\.\d+)?$/.test(trimmed)) {
+    return excelSerialToISODate(Number(trimmed));
+  }
+
+  // Try exact parse first
+  const exact = parseDateString(trimmed);
+  if (exact) return exact;
+
+  // Try to extract the first DD/MM/YYYY or YYYY-MM-DD from a longer string
+  const firstSlash = trimmed.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (firstSlash) {
+    const first = Number(firstSlash[1]);
+    const second = Number(firstSlash[2]);
+    const year = Number(firstSlash[3]);
+    if (first > 12 && second <= 12) return toISODate(year, second, first);
+    if (second > 12 && first <= 12) return toISODate(year, first, second);
+    return toISODate(year, second, first);
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Coordinate helpers (unchanged from original)
+// ---------------------------------------------------------------------------
 
 function parseCoordinate(raw: string | undefined): number | null {
   if (!raw) return null;
@@ -161,13 +184,18 @@ function getConcessionPolygonWkt(
   return `POLYGON((${wktCoords}))`;
 }
 
+// ---------------------------------------------------------------------------
+// Map normalisation helpers (unchanged from original)
+// ---------------------------------------------------------------------------
+
 function normalizeMapStatus(status: string | undefined, expirationDate: string | null): "active" | "expired" | "expiring_soon" | "suspended" | "revoked" {
   const normalized = status?.trim().toLowerCase() || "";
-  if (normalized === "expired") return "expired";
+  if (normalized.includes("expired")) return "expired";
   if (normalized === "expiring_soon" || normalized === "expiring soon") return "expiring_soon";
-  if (normalized === "suspended") return "suspended";
-  if (normalized === "revoked") return "revoked";
-  if (normalized === "active" || normalized === "operational" || normalized === "approved" || normalized === "valid") {
+  if (normalized.includes("suspended")) return "suspended";
+  if (normalized.includes("revoked")) return "revoked";
+  if (normalized.includes("cancelled") || normalized.includes("canceled")) return "revoked";
+  if (normalized === "active" || normalized.includes("operational") || normalized === "approved" || normalized === "valid") {
     return "active";
   }
 
@@ -196,175 +224,235 @@ function normalizeMapPurpose(activity: string | undefined, waterSource: string |
   return "other";
 }
 
+// ---------------------------------------------------------------------------
+// XLSX cell helpers
+// ---------------------------------------------------------------------------
+
+/** Read a cell value as a trimmed string, handling all SheetJS cell types. */
+function cellText(ws: XLSX.WorkSheet, cellRef: string): string {
+  const cell = ws[cellRef];
+  if (!cell) return "";
+  // For dates stored as numbers, prefer the raw value so our parser handles it
+  if (cell.t === "n") return String(cell.v ?? "");
+  // Use SheetJS formatted text for everything else
+  return String(cell.w ?? cell.v ?? "").trim();
+}
+
+// ---------------------------------------------------------------------------
+// POST handler
+// ---------------------------------------------------------------------------
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.text();
-    if (!body.trim()) {
-      return NextResponse.json({ error: "Empty CSV body" }, { status: 400 });
+    const formData = await req.formData();
+    const file = formData.get("file");
+    if (!file || !(file instanceof File)) {
+      return NextResponse.json({ error: "No file uploaded. Send multipart/form-data with a 'file' field." }, { status: 400 });
     }
 
-    const lines = body.split(/\r?\n/);
-    if (lines.length < 2) {
-      return NextResponse.json({ error: "CSV must have a header row and at least one data row" }, { status: 400 });
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
+      return NextResponse.json({ error: "Only .xlsx or .xls files are accepted." }, { status: 400 });
     }
 
-    // Skip header row
-    const dataLines = lines.slice(1);
-    let inserted = 0;
-    let skipped = 0;
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+
+    // Find the REGISTER sheet (case-insensitive)
+    const sheetName = workbook.SheetNames.find((n) => n.toUpperCase().includes("REGISTER"))
+      || workbook.SheetNames[0];
+    const ws = workbook.Sheets[sheetName];
+    if (!ws) {
+      return NextResponse.json({ error: "No worksheet found in the uploaded file." }, { status: 400 });
+    }
+
+    const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+    const lastRow = range.e.r; // 0-based
+    if (lastRow < 1) {
+      return NextResponse.json({ error: "Worksheet must have a header row and at least one data row." }, { status: 400 });
+    }
+
+    // Build row payloads
+    const colLetter = (c: number) => XLSX.utils.encode_col(c);
+
+    interface RowPayload {
+      serialNumber: number | null;
+      permitHolder: string | null;
+      permitNumber: string | null;
+      regime: string | null;
+      waterSource: string | null;
+      volumeOrArea: string | null;
+      method: string | null;
+      activity: string | null;
+      location: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      issuanceDate: string | null;
+      issuanceDateRaw: string | null;
+      expirationDate: string | null;
+      expirationDateRaw: string | null;
+      duration: string | null;
+      status: string | null;
+      contact: string | null;
+      mapStatus: string;
+      mapPurpose: string;
+      polygonWkt: string | null;
+      rowIndex: number;
+    }
+
+    const rows: RowPayload[] = [];
+    let dateParseFailures = 0;
+    let coordParseFailures = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < dataLines.length; i++) {
-      const line = dataLines[i].trim();
-      if (!line) {
-        skipped++;
+    for (let r = 1; r <= lastRow; r++) {
+      const ref = (c: number) => `${colLetter(c)}${r + 1}`; // +1 because SheetJS is 1-based in refs
+
+      const serialRaw = cellText(ws, ref(0));
+      const permitHolder = cellText(ws, ref(1)) || null;
+      const permitNumber = cellText(ws, ref(2)) || null;
+      const regime = cellText(ws, ref(3)) || null;
+      const waterSource = cellText(ws, ref(4)) || null;
+      const volumeOrArea = cellText(ws, ref(5)) || null;
+      const method = cellText(ws, ref(6)) || null;
+      const activity = cellText(ws, ref(7)) || null;
+      const location = cellText(ws, ref(8)) || null;
+      const latitudeRaw = cellText(ws, ref(9));
+      const longitudeRaw = cellText(ws, ref(10));
+      const issuanceDateRaw = cellText(ws, ref(11));
+      const durationRaw = cellText(ws, ref(12)) || null;
+      const expirationDateRaw = cellText(ws, ref(13));
+      const status = cellText(ws, ref(14)) || null;
+      const contact = cellText(ws, ref(15)) || null;
+
+      // Skip completely empty rows
+      if (!permitHolder && !permitNumber && !waterSource && !status && !activity) {
         continue;
       }
 
-      const fields = parseCSVLine(line);
-      const latitudeRaw = fields[9];
-      const longitudeRaw = fields[10];
+      const serialNumber = serialRaw ? parseInt(serialRaw, 10) : null;
+      const issuanceDate = parseDateCell(issuanceDateRaw);
+      const expirationDate = parseDateCell(expirationDateRaw);
 
-      const serialNumber = fields[0] ? parseInt(fields[0], 10) : null;
-      const permitHolder = fields[1]?.trim();
-      const permitNumber = fields[2]?.trim();
+      if (issuanceDateRaw && !issuanceDate) dateParseFailures++;
+      if (expirationDateRaw && !expirationDate) dateParseFailures++;
 
-      if (!permitHolder || !permitNumber) {
-        skipped++;
-        continue;
-      }
-
-      const row = {
-        serial_number: Number.isFinite(serialNumber) ? serialNumber : null,
-        permit_holder: permitHolder,
-        permit_number: permitNumber,
-        regime: fields[3]?.trim() || null,
-        water_source: fields[4]?.trim() || null,
-        volume_or_area: fields[5]?.trim() || null,
-        method_of_water_taking: fields[6]?.trim() || null,
-        authorized_activity: fields[7]?.trim() || null,
-        location: fields[8]?.trim() || null,
-        latitude: parseCoordinate(latitudeRaw),
-        longitude: parseCoordinate(longitudeRaw),
-        issuance_date: parseDate(fields[11]),
-        duration: fields[12]?.trim() || null,
-        expiration_date: parseDate(fields[13]),
-        status: fields[14]?.trim()?.toUpperCase() || "OPERATIONAL",
-        contact: fields[15]?.trim() || null,
-      };
-
-      let latitude = row.latitude;
-      let longitude = row.longitude;
+      let latitude = parseCoordinate(latitudeRaw);
+      let longitude = parseCoordinate(longitudeRaw);
       if (latitude !== null && !isLatitudeInRange(latitude)) {
-        errors.push(`Row ${i + 2}: latitude out of range (${latitude}) - stored as NULL`);
+        errors.push(`Row ${r + 1}: latitude out of range (${latitude}) - stored as NULL`);
         latitude = null;
+        coordParseFailures++;
       }
       if (longitude !== null && !isLongitudeInRange(longitude)) {
-        errors.push(`Row ${i + 2}: longitude out of range (${longitude}) - stored as NULL`);
+        errors.push(`Row ${r + 1}: longitude out of range (${longitude}) - stored as NULL`);
         longitude = null;
+        coordParseFailures++;
       }
 
-      const mapStatus = normalizeMapStatus(row.status, row.expiration_date);
-      const mapPurpose = normalizeMapPurpose(row.authorized_activity || undefined, row.water_source || undefined);
-      const concessionPolygonWkt = getConcessionPolygonWkt(row.regime, latitudeRaw, longitudeRaw);
-
-      try {
-        await query(
-          `
-          insert into public.permit_registry (
-            serial_number,
-            permit_holder,
-            permit_number,
-            regime,
-            water_source,
-            volume_or_area,
-            method_of_water_taking,
-            authorized_activity,
-            location,
-            latitude,
-            longitude,
-            issuance_date,
-            duration,
-            expiration_date,
-            status,
-            contact,
-            map_geometry,
-            map_status,
-            map_purpose,
-            map_updated_at,
-            created_at,
-            updated_at
-          ) values (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-            case
-              when $19::text is not null
-              then ST_GeomFromText($19::text, 4326)
-              when $10::double precision is not null and $11::double precision is not null
-              then ST_SetSRID(ST_MakePoint($11::double precision, $10::double precision), 4326)
-              else null
-            end,
-            $17::permit_status,
-            $18::water_purpose,
-            now(),
-            now(),
-            now()
-          )
-          on conflict (permit_number) do update set
-            serial_number = excluded.serial_number,
-            permit_holder = excluded.permit_holder,
-            regime = excluded.regime,
-            water_source = excluded.water_source,
-            volume_or_area = excluded.volume_or_area,
-            method_of_water_taking = excluded.method_of_water_taking,
-            authorized_activity = excluded.authorized_activity,
-            location = excluded.location,
-            latitude = excluded.latitude,
-            longitude = excluded.longitude,
-            issuance_date = excluded.issuance_date,
-            duration = excluded.duration,
-            expiration_date = excluded.expiration_date,
-            status = excluded.status,
-            contact = excluded.contact,
-            map_geometry = excluded.map_geometry,
-            map_status = excluded.map_status,
-            map_purpose = excluded.map_purpose,
-            map_updated_at = now(),
-            updated_at = now()
-          `,
-          [
-            row.serial_number,
-            row.permit_holder,
-            row.permit_number,
-            row.regime,
-            row.water_source,
-            row.volume_or_area,
-            row.method_of_water_taking,
-            row.authorized_activity,
-            row.location,
-            latitude,
-            longitude,
-            row.issuance_date,
-            row.duration,
-            row.expiration_date,
-            row.status,
-            row.contact,
-            mapStatus,
-            mapPurpose,
-            concessionPolygonWkt,
-          ]
-        );
-        inserted++;
-      } catch (error) {
-        errors.push(`Row ${i + 2}: ${error instanceof Error ? error.message : "Insert failed"}`);
-      }
+      rows.push({
+        serialNumber: Number.isFinite(serialNumber) ? serialNumber : null,
+        permitHolder,
+        permitNumber,
+        regime,
+        waterSource,
+        volumeOrArea,
+        method,
+        activity,
+        location,
+        latitude,
+        longitude,
+        issuanceDate,
+        issuanceDateRaw: issuanceDateRaw || null,
+        expirationDate,
+        expirationDateRaw: expirationDateRaw || null,
+        duration: durationRaw,
+        status,
+        contact,
+        mapStatus: normalizeMapStatus(status || undefined, expirationDate),
+        mapPurpose: normalizeMapPurpose(activity || undefined, waterSource || undefined),
+        polygonWkt: getConcessionPolygonWkt(regime, latitudeRaw, longitudeRaw),
+        rowIndex: r, // 1-based: Excel row 2 → row_index 1
+      });
     }
 
-    return NextResponse.json({
-      success: true,
-      inserted,
-      skipped,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    if (rows.length === 0) {
+      return NextResponse.json({ error: "No data rows found in the REGISTER sheet." }, { status: 400 });
+    }
+
+    // Run TRUNCATE + bulk INSERT inside a single transaction
+    await query("BEGIN");
+    try {
+      await query("TRUNCATE public.permit_registry");
+
+      const INSERT_SQL = `
+        INSERT INTO public.permit_registry (
+          id, serial_number, permit_holder, permit_number, regime,
+          water_source, volume_or_area, method_of_water_taking,
+          authorized_activity, location, latitude, longitude,
+          issuance_date, issuance_date_raw, expiration_date, expiration_date_raw,
+          duration, status, contact, row_index,
+          map_geometry, map_status, map_purpose,
+          map_updated_at, created_at, updated_at
+        ) VALUES (
+          gen_random_uuid(),
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+          $12, $13, $14, $15, $16, $17, $18, $19,
+          CASE
+            WHEN $22::text IS NOT NULL
+            THEN ST_GeomFromText($22::text, 4326)
+            WHEN $10::double precision IS NOT NULL AND $11::double precision IS NOT NULL
+            THEN ST_SetSRID(ST_MakePoint($11::double precision, $10::double precision), 4326)
+            ELSE NULL
+          END,
+          $20::permit_status,
+          $21::water_purpose,
+          now(), now(), now()
+        )
+      `;
+
+      let inserted = 0;
+      for (const row of rows) {
+        await query(INSERT_SQL, [
+          row.serialNumber,      // $1
+          row.permitHolder,      // $2
+          row.permitNumber,      // $3
+          row.regime,            // $4
+          row.waterSource,       // $5
+          row.volumeOrArea,      // $6
+          row.method,            // $7
+          row.activity,          // $8
+          row.location,          // $9
+          row.latitude,          // $10
+          row.longitude,         // $11
+          row.issuanceDate,      // $12
+          row.issuanceDateRaw,   // $13
+          row.expirationDate,    // $14
+          row.expirationDateRaw, // $15
+          row.duration,          // $16
+          row.status,            // $17
+          row.contact,           // $18
+          row.rowIndex,          // $19
+          row.mapStatus,         // $20
+          row.mapPurpose,        // $21
+          row.polygonWkt,        // $22
+        ]);
+        inserted++;
+      }
+
+      await query("COMMIT");
+
+      return NextResponse.json({
+        success: true,
+        inserted,
+        dateParseFailures,
+        coordParseFailures,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (txErr) {
+      await query("ROLLBACK").catch(() => {});
+      throw txErr;
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });

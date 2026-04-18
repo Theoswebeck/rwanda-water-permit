@@ -151,11 +151,13 @@ export async function fetchInspectionData(
 
     // Third fallback: registry-only permit (no application or permits-table entry)
     if (!application) {
-      const { data: registryEntry, error: regError } = await supabase
+      const { data: registryRows, error: regError } = await supabase
         .from('permit_registry')
         .select('*')
         .eq('permit_number', applicationNumber)
-        .maybeSingle();
+        .order('row_index', { ascending: false, nullsFirst: false })
+        .limit(1);
+      const registryEntry = registryRows?.[0] ?? null;
 
       if (regError) throw regError;
       if (!registryEntry) return null;
@@ -215,12 +217,13 @@ export async function fetchInspectionData(
     let registryCoordFallback: { latitude?: number | null; longitude?: number | null } | undefined;
     const registryPermitNumber = permitData?.permit_number || applicationNumber;
     try {
-      const { data: regEntry } = await supabase
+      const { data: regRows } = await supabase
         .from('permit_registry')
         .select('latitude, longitude')
         .eq('permit_number', registryPermitNumber)
-        .maybeSingle();
-      const reg = regEntry as { latitude?: number | null; longitude?: number | null } | null;
+        .order('row_index', { ascending: false, nullsFirst: false })
+        .limit(1);
+      const reg = (regRows?.[0] ?? null) as { latitude?: number | null; longitude?: number | null } | null;
       if (reg?.latitude != null || reg?.longitude != null) {
         registryCoordFallback = { latitude: reg.latitude, longitude: reg.longitude };
       }

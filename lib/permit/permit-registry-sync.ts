@@ -34,32 +34,28 @@ export async function syncPermitToRegistry(
 
     const trimmed = permitNumber.trim();
 
-    // Try exact match first, then case-insensitive
-    let existing: { id: string; permit_number: string } | null = null;
+    // Find ALL matching rows (exact match first, then case-insensitive fallback)
+    let matches: { id: string; permit_number: string }[] = [];
 
     const { data: exact, error: exactErr } = await supabaseClient
       .from("permit_registry")
       .select("id, permit_number")
-      .eq("permit_number", trimmed)
-      .limit(1)
-      .maybeSingle();
+      .eq("permit_number", trimmed);
 
-    if (!exactErr && exact) {
-      existing = exact;
+    if (!exactErr && exact && exact.length > 0) {
+      matches = exact;
     } else {
       const { data: fuzzy, error: fuzzyErr } = await supabaseClient
         .from("permit_registry")
         .select("id, permit_number")
-        .ilike("permit_number", trimmed)
-        .limit(1)
-        .maybeSingle();
+        .ilike("permit_number", trimmed);
 
-      if (!fuzzyErr && fuzzy) {
-        existing = fuzzy;
+      if (!fuzzyErr && fuzzy && fuzzy.length > 0) {
+        matches = fuzzy;
       }
     }
 
-    if (!existing) {
+    if (matches.length === 0) {
       return { synced: false };
     }
 
@@ -79,17 +75,18 @@ export async function syncPermitToRegistry(
     if (updates.method_of_water_taking) payload.method_of_water_taking = updates.method_of_water_taking;
     if (updates.regime) payload.regime = updates.regime;
 
+    const matchIds = matches.map((r) => r.id);
     const { error: updateErr } = await supabaseClient
       .from("permit_registry")
       .update(payload)
-      .eq("id", existing.id);
+      .in("id", matchIds);
 
     if (updateErr) {
       console.warn("⚠️ permit-registry-sync: update error", updateErr.message);
       return { synced: false, error: updateErr.message };
     }
 
-    console.log("✅ permit-registry-sync: updated registry row", existing.permit_number);
+    console.log(`✅ permit-registry-sync: updated ${matches.length} registry row(s) for`, matches[0].permit_number);
     return { synced: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

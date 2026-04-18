@@ -420,9 +420,10 @@ export interface Permit {
 
 export interface PermitRegistryEntry {
   id: string
+  row_index: number | null
   serial_number: number | null
-  permit_holder: string
-  permit_number: string
+  permit_holder: string | null
+  permit_number: string | null
   regime: string | null
   water_source: string | null
   volume_or_area: string | null
@@ -433,8 +434,10 @@ export interface PermitRegistryEntry {
   longitude: number | null
   coordinates_geojson?: string | null
   issuance_date: string | null
+  issuance_date_raw: string | null
   duration: string | null
   expiration_date: string | null
+  expiration_date_raw: string | null
   status: string | null
   contact: string | null
   uploaded_doc_path: string | null
