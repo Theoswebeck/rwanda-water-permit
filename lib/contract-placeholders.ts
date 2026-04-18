@@ -441,9 +441,19 @@ function resolveDurationYears(
     return String(Math.round(assessorAdjustments.permitLengthYears));
   }
 
-  // Priority 2: Transfer fallback — remaining validity of the transferred permit.
-  // Applies before the assessor has committed a duration adjustment so the preview
-  // does not mislead reviewers with a generic "5 years" default.
+  // Priority 2a: Renewal — inherit the original permit's total duration (expiry − issue).
+  if (isRenewalApplication(application) && transferPermit?.issue_date && transferPermit?.expiry_date) {
+    const issue = new Date(`${transferPermit.issue_date}T00:00:00Z`);
+    const expiry = new Date(`${transferPermit.expiry_date}T00:00:00Z`);
+    if (!Number.isNaN(issue.getTime()) && !Number.isNaN(expiry.getTime())) {
+      const years = Math.round(
+        (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
+      );
+      if (years >= 1 && years <= 15) return String(years);
+    }
+  }
+
+  // Priority 2b: Transfer — remaining validity of the transferred permit.
   if (isTransferApplication(application) && transferPermit?.expiry_date) {
     const expiry = new Date(`${transferPermit.expiry_date}T00:00:00Z`);
     if (!Number.isNaN(expiry.getTime())) {
@@ -464,7 +474,10 @@ function resolveDurationYears(
   return "5";
 }
 
-function resolveConcessionAreaLabel(application: ApplicationForContract): string {
+function resolveConcessionAreaLabel(
+  application: ApplicationForContract,
+  originalPermit?: TransferPermitContext | null,
+): string {
   const notes = getInternalNotes(application);
 
   const assessorArea = parsePositiveNumber(notes?._assessorAdjustments?.recommendedVolumeM3);
@@ -507,6 +520,10 @@ function resolveConcessionAreaLabel(application: ApplicationForContract): string
     const pdArea = parsePositiveNumber(notes.permitDetails?.concessionArea);
     if (pdArea) return `${formatNumber(pdArea)} Ha`;
   }
+
+  // Fallback: inherit concession area from the original permit (renewals/transfers)
+  const origArea = parsePositiveNumber(originalPermit?.concession_area);
+  if (origArea) return `${formatNumber(origArea)} Ha`;
 
   return "N/A";
 }
@@ -559,7 +576,16 @@ function applyTransferOverlay(
 export type TransferPermitContext = {
   permit_number?: string | null;
   expiry_date?: string | null;
+  issue_date?: string | null;
+  concession_area?: number | null;
 };
+
+function isRenewalApplication(application: ApplicationForContract): boolean {
+  const appType = application.application_type;
+  if (typeof appType === "string" && appType.toLowerCase() === "renewal") return true;
+  const notes = getInternalNotes(application);
+  return notes?.isRenewal === true;
+}
 
 export function buildContractPlaceholderContext(
   application: ApplicationForContract,
@@ -610,7 +636,7 @@ export function buildContractPlaceholderContext(
     lng,
     volumeLabel: resolveVolumeLabel(application),
     durationYearsLabel: resolveDurationYears(application, transferPermit),
-    concessionAreaLabel: resolveConcessionAreaLabel(application),
+    concessionAreaLabel: resolveConcessionAreaLabel(application, transferPermit),
     activityLabel: resolveActivityLabel(application),
     systemTypeEnglish: systemType.english,
     systemTypeKinyarwanda: systemType.kinyarwanda,

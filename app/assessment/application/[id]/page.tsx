@@ -2285,7 +2285,12 @@ export default function AssessmentApplicationPage() {
                 application={application}
                 mode="staff-preview"
                 showChrome
-                transferPermit={transferPermit}
+                transferPermit={transferPermit ?? (renewalPermit ? {
+                  permit_number: renewalPermit.permit_number,
+                  issue_date: (renewalPermit as any).issued_date,
+                  expiry_date: renewalPermit.expiry_date,
+                  concession_area: (renewalPermit as any).application?.concession_area,
+                } : null)}
               />
             </TabsContent>
 

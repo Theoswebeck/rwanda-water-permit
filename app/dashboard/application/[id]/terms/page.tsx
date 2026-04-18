@@ -384,6 +384,9 @@ export default function TermsConditionsPage() {
             const { data: renewalPermit, error: renewalPermitError } = await supabase
               .from("permits")
               .select(`
+                permit_number,
+                issued_date,
+                expiry_date,
                 application_id,
                 application:applications!application_id(
                   internal_notes,
@@ -432,6 +435,17 @@ export default function TermsConditionsPage() {
               }
               if (!(data as any).water_purpose && sourceApp?.water_purpose) {
                 (data as any).water_purpose = sourceApp.water_purpose;
+              }
+
+              // Set the original permit context so the contract preview shows
+              // the correct permit number, duration, and concession area.
+              if (!cancelled) {
+                setTransferPermitCtx({
+                  permit_number: renewalPermit.permit_number ?? null,
+                  issue_date: renewalPermit.issued_date ?? null,
+                  expiry_date: renewalPermit.expiry_date ?? null,
+                  concession_area: sourceApp?.concession_area ?? null,
+                });
               }
             }
           } catch (renewalErr) {
