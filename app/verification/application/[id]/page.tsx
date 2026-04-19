@@ -481,16 +481,19 @@ export default function VerificationApplicationPage() {
     const loadRenewalPermit = async () => {
       if (!application) return;
       
-      const isRenewal = (application as any).is_renewal;
       let parsedNotesForRenewal: any = {};
       try {
         const raw = (application as any).internal_notes;
         parsedNotesForRenewal = typeof raw === "string" ? JSON.parse(raw) : (raw ?? {});
       } catch { /* ignore */ }
-      const isRenewalFromNotes = parsedNotesForRenewal?.isRenewal === true;
+      const isRenewal =
+        (application as any).is_renewal ||
+        (application as any).application_type?.toLowerCase() === "renewal" ||
+        parsedNotesForRenewal?.isRenewal === true;
       const permitId = (application as any).renewed_from_permit_id || parsedNotesForRenewal?.originalPermitId;
+      const originalPermitNumber = parsedNotesForRenewal?.originalPermitNumber as string | undefined;
 
-      if ((!isRenewal && !isRenewalFromNotes) || !permitId) {
+      if (!isRenewal || (!permitId && !originalPermitNumber)) {
         setRenewalPermit(null);
         setRenewalRecommendedDurationYears(undefined);
         setRenewalRecommendedVolumeM3(undefined);
@@ -500,7 +503,7 @@ export default function VerificationApplicationPage() {
       try {
         setLoadingRenewalPermit(true);
         
-        const { data: permit, error: permitError } = await supabase
+        let permitQuery = supabase
           .from('permits')
           .select(`
             *,
@@ -535,10 +538,14 @@ export default function VerificationApplicationPage() {
                 account_type
               )
             )
-          `)
-          .eq('id', permitId)
-          .single();
-          
+          `);
+        if (permitId) {
+          permitQuery = permitQuery.eq('id', permitId) as typeof permitQuery;
+        } else {
+          permitQuery = permitQuery.eq('permit_number', originalPermitNumber!) as typeof permitQuery;
+        }
+        const { data: permit, error: permitError } = await permitQuery.single();
+
         if (permitError) {
           console.error('Error loading renewal permit:', permitError);
         } else {

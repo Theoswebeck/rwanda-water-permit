@@ -599,13 +599,21 @@ export function buildContractPlaceholderContext(
   const isIndividual = (application.applicant?.account_type ?? null) === "individual";
   const appNo = (applicationNumber ?? "").trim();
   const transferredPermitNumber =
-    isTransferApplication(application) && typeof transferPermit?.permit_number === "string"
+    (isTransferApplication(application) || isRenewalApplication(application)) &&
+    typeof transferPermit?.permit_number === "string"
       ? transferPermit.permit_number.trim()
       : "";
   const contractNumber = (() => {
-    // For transfers, the contract continues the existing permit — reuse that number
-    // so the preview never displays a different number from what gets issued.
+    // For transfers and renewals passed via prop, the contract reuses the existing permit number.
     if (transferredPermitNumber) return transferredPermitNumber;
+    // For renewals: originalPermitNumber is stored synchronously in internal_notes —
+    // read it directly so the contract number is correct even if async prop hasn't loaded.
+    if (isRenewalApplication(application)) {
+      const notes = getInternalNotes(application);
+      const stored =
+        typeof notes?.originalPermitNumber === "string" ? notes.originalPermitNumber.trim() : "";
+      if (stored) return stored;
+    }
     if (!appNo) return "N/A";
     // Common format: "RWB-2025-000025" -> "000025/RWB/2025"
     const m = appNo.match(/^RWB-(\d{4})-(\d+)$/i);
