@@ -648,10 +648,16 @@ export default function ReviewApplicationPage() {
     const loadRenewalPermit = async () => {
       if (!application) return;
       
-      const isRenewal = (application as any).is_renewal;
-      const permitId = (application as any).renewed_from_permit_id;
-      
-      if (!isRenewal || !permitId) {
+      const isRenewal = (application as any).is_renewal || (application as any).internal_notes_parsed?.isRenewal;
+      let parsedNotesForRenewal: any = {};
+      try {
+        const raw = (application as any).internal_notes;
+        parsedNotesForRenewal = typeof raw === "string" ? JSON.parse(raw) : (raw ?? {});
+      } catch { /* ignore */ }
+      const isRenewalFromNotes = parsedNotesForRenewal?.isRenewal === true;
+      const permitId = (application as any).renewed_from_permit_id || parsedNotesForRenewal?.originalPermitId;
+
+      if ((!isRenewal && !isRenewalFromNotes) || !permitId) {
         setRenewalPermit(null);
         setRenewalRecommendedDurationYears(undefined);
         setRenewalRecommendedVolumeM3(undefined);
