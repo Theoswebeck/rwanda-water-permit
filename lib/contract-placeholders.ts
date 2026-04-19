@@ -587,6 +587,13 @@ function isRenewalApplication(application: ApplicationForContract): boolean {
   return notes?.isRenewal === true;
 }
 
+function isModificationApplication(application: ApplicationForContract): boolean {
+  const appType = application.application_type;
+  if (typeof appType === "string" && appType.toLowerCase() === "modification") return true;
+  const notes = getInternalNotes(application);
+  return notes?.isModification === true;
+}
+
 export function buildContractPlaceholderContext(
   application: ApplicationForContract,
   applicationNumber?: string,
@@ -599,16 +606,16 @@ export function buildContractPlaceholderContext(
   const isIndividual = (application.applicant?.account_type ?? null) === "individual";
   const appNo = (applicationNumber ?? "").trim();
   const transferredPermitNumber =
-    (isTransferApplication(application) || isRenewalApplication(application)) &&
+    (isTransferApplication(application) || isRenewalApplication(application) || isModificationApplication(application)) &&
     typeof transferPermit?.permit_number === "string"
       ? transferPermit.permit_number.trim()
       : "";
   const contractNumber = (() => {
-    // For transfers and renewals passed via prop, the contract reuses the existing permit number.
+    // For transfers/renewals/modifications passed via prop, the contract reuses the existing permit number.
     if (transferredPermitNumber) return transferredPermitNumber;
-    // For renewals: originalPermitNumber is stored synchronously in internal_notes —
+    // For renewals and modifications: originalPermitNumber is stored synchronously in internal_notes —
     // read it directly so the contract number is correct even if async prop hasn't loaded.
-    if (isRenewalApplication(application)) {
+    if (isRenewalApplication(application) || isModificationApplication(application)) {
       const notes = getInternalNotes(application);
       const stored =
         typeof notes?.originalPermitNumber === "string" ? notes.originalPermitNumber.trim() : "";
