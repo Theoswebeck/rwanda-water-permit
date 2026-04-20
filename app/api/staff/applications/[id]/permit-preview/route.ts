@@ -212,21 +212,74 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     // ── Resolve permit number ─────────────────────────────────────────────────
     const isModification =
       row.is_modification === true || notes?.isModification === true;
+    const isRenewal =
+      application.application_type === "renewal" || notes?.isRenewal === true;
+    const isTransfer =
+      application.application_type === "transfer" || notes?.isTransfer === true;
+
     const permitNumber = resolvePreviewPermitNumber(
       application.application_type,
       Boolean(isModification),
       notes,
     );
 
+    // ── Resolve permit validity years ─────────────────────────────────────────
+    // resolvePermitDuration (inside generatePermitPdfBuffer) already handles
+    // transferFormData.expirationDate for registry/manual permits.
+    // For renewals/modifications of real DB permits the original permit dates
+    // must be fetched here and passed as permitValidityYears (used as fallback).
+    let permitValidityYears: number | undefined;
+
+    if (isRenewal || isModification) {
+      const originalPermitId =
+        typeof notes?.originalPermitId === "string" ? notes.originalPermitId.trim() : null;
+      const UUID_RE =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      if (originalPermitId && UUID_RE.test(originalPermitId)) {
+        try {
+          const pRes = await query<{ issued_date: string | null; expiry_date: string | null }>(
+            `SELECT issued_date, expiry_date FROM public.permits WHERE id = $1 LIMIT 1`,
+            [originalPermitId],
+          );
+          if (pRes.rows.length) {
+            const { issued_date, expiry_date } = pRes.rows[0];
+            if (expiry_date) {
+              const expiry = new Date(`${expiry_date}T00:00:00Z`);
+              if (!Number.isNaN(expiry.getTime())) {
+                if (isRenewal && issued_date) {
+                  // Renewal: inherit total duration (expiry − issue) of original permit.
+                  const issue = new Date(`${issued_date}T00:00:00Z`);
+                  if (!Number.isNaN(issue.getTime())) {
+                    const totalYears = Math.round(
+                      (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
+                    );
+                    if (totalYears >= 1 && totalYears <= 15) permitValidityYears = totalYears;
+                  }
+                } else {
+                  // Modification: remaining validity of the permit being modified.
+                  const remaining = Math.ceil(
+                    (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
+                  );
+                  if (remaining >= 1 && remaining <= 15) permitValidityYears = remaining;
+                }
+              }
+            }
+          }
+        } catch {
+          // Non-fatal — resolvePermitDuration falls back to proposed_duration_years or 5.
+        }
+      }
+    }
+
     // ── Generate PDF ──────────────────────────────────────────────────────────
-    // issuedDate = today; expiryDate computed inside generatePermitPdfBuffer via
-    // resolvePermitDuration (assessorAdjustments.permitLengthYears → proposed_duration_years → 5).
     const pdfBuffer = await generatePermitPdfBuffer({
       application,
       permitNumber,
       issuedDate: new Date(),
       skipQr: true,
       isModified: Boolean(isModification),
+      ...(permitValidityYears !== undefined && { permitValidityYears }),
     });
 
     return new NextResponse(pdfBuffer as unknown as BodyInit, {

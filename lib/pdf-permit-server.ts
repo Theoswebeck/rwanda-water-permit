@@ -286,15 +286,60 @@ function resolveEnglishSystemLabel(app: PermitApplication): string {
 function resolveVolumes(app: PermitApplication): { yearly: number | null; daily: number | null } {
   const notes = resolveNotes(app);
   const assessorVol = notes?._assessorAdjustments?.recommendedVolumeM3 ?? app.assessor_recommended_volume_m3 ?? null;
-  const yearly = assessorVol ?? app.max_yearly_volume_m3 ?? app.estimated_usage_volume ?? null;
+  // Only treat estimated_usage_volume as meaningful when > 0 — a value of 0 means
+  // "not set" (e.g. transfer applications that store volume in transferFormData instead).
+  const estVol = (typeof app.estimated_usage_volume === "number" && app.estimated_usage_volume > 0)
+    ? app.estimated_usage_volume : null;
+  const yearly = assessorVol ?? app.max_yearly_volume_m3 ?? estVol ?? null;
   const daily = app.max_daily_volume_m3 ?? (yearly != null ? yearly / 365 : null);
   return { yearly: typeof yearly === "number" && Number.isFinite(yearly) ? yearly : null, daily };
 }
 
 function resolvePermitDuration(app: PermitApplication, fallback = 5): number {
   const notes = resolveNotes(app);
+
+  // Priority 1: Assessor explicit override — always highest.
   const adj = notes?._assessorAdjustments?.permitLengthYears;
   if (typeof adj === "number" && adj >= 1 && adj <= 15) return adj;
+
+  const appType = String((app as any).application_type ?? "").toLowerCase();
+  const isTransferLike =
+    appType === "transfer" || appType === "renewal" || appType === "modification" ||
+    notes?.isTransfer === true || notes?.isRenewal === true || notes?.isModification === true;
+
+  if (isTransferLike) {
+    // Priority 2: Original permit dates stored in transferFormData (registry/manual permits
+    // and any transfer where the applicant entered the original permit's dates in the form).
+    const expiryStr = notes?.transferFormData?.expirationDate;
+    const issueStr = notes?.transferFormData?.effectiveDate;
+    if (typeof expiryStr === "string" && expiryStr.trim()) {
+      const expiry = new Date(`${expiryStr.trim()}T00:00:00Z`);
+      if (!Number.isNaN(expiry.getTime())) {
+        const isRenewal = appType === "renewal" || notes?.isRenewal === true;
+        if (isRenewal && typeof issueStr === "string" && issueStr.trim()) {
+          // Renewal: inherit the original permit's total duration (expiry − issue).
+          const issue = new Date(`${issueStr.trim()}T00:00:00Z`);
+          if (!Number.isNaN(issue.getTime())) {
+            const totalYears = Math.round(
+              (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
+            );
+            if (totalYears >= 1 && totalYears <= 15) return totalYears;
+          }
+        } else {
+          // Transfer / modification: remaining validity of the original permit.
+          const remaining = Math.ceil(
+            (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
+          );
+          if (remaining >= 1 && remaining <= 15) return remaining;
+        }
+      }
+    }
+    // For DB-permit renewals/modifications without transferFormData dates, the route
+    // fetches the original permit and passes the computed years via permitValidityYears.
+    return fallback;
+  }
+
+  // New applications: use the applicant's requested duration, then fallback.
   if (typeof app.proposed_duration_years === "number" && app.proposed_duration_years >= 1) return app.proposed_duration_years;
   return fallback;
 }
@@ -345,6 +390,14 @@ function resolveFlowRate(app: PermitApplication): string {
   const v = resolveVolumes(app);
   if (v.yearly != null) return `${fmtNum(v.yearly)} M3/year`;
   if (v.daily != null) return `${fmtNum(v.daily)} M3/day`;
+  // Fallback: transferFormData for permit-registry transfers (preserves original unit).
+  const notes = resolveNotes(app);
+  const tfData = notes?.transferFormData;
+  if (tfData) {
+    const tfVal = tfData.waterAllowance != null ? parseFloat(String(tfData.waterAllowance)) : NaN;
+    const tfUnit = String(tfData.allowanceUnit ?? "").trim();
+    if (Number.isFinite(tfVal) && tfVal > 0) return `${fmtNum(tfVal)} ${tfUnit || "M3/year"}`;
+  }
   return "N/A";
 }
 
