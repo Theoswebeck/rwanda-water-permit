@@ -272,24 +272,25 @@ CREATE OR REPLACE FUNCTION public.generate_permit_number()
  LANGUAGE plpgsql
 AS $function$
 DECLARE
-    year_prefix VARCHAR(4);
-    counter INTEGER;
-    new_number VARCHAR(50);
+  current_year INTEGER;
+  counter      INTEGER;
 BEGIN
-    IF NEW.permit_number IS NULL THEN
-        year_prefix := EXTRACT(YEAR FROM NOW())::VARCHAR;
-        
-        -- Find the max counter for the current year with the new format
-        SELECT COALESCE(MAX(CAST(SUBSTRING(permit_number FROM 1 FOR 6) AS INTEGER)), 0) + 1
-        INTO counter
-        FROM permits
-        WHERE permit_number LIKE '%' || '/RWB/' || year_prefix;
-        
-        new_number := LPAD(counter::VARCHAR, 6, '0') || '/RWB/' || year_prefix;
-        NEW.permit_number := new_number;
+  IF NEW.permit_number IS NULL THEN
+    current_year := EXTRACT(YEAR FROM NOW() AT TIME ZONE 'Africa/Kigali')::INTEGER;
+
+    INSERT INTO public.permit_number_counters (year, last_issued)
+    VALUES (current_year, 1)
+    ON CONFLICT (year)
+    DO UPDATE SET last_issued = permit_number_counters.last_issued + 1
+    RETURNING last_issued INTO counter;
+
+    IF counter IS NULL THEN
+      RAISE EXCEPTION 'permit_number_counters: failed to obtain counter for year %', current_year;
     END IF;
-    
-    RETURN NEW;
+
+    NEW.permit_number := LPAD(counter::TEXT, 4, '0') || '/RWB/' || current_year;
+  END IF;
+  RETURN NEW;
 END;
 $function$
 
