@@ -121,7 +121,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         a.assessor_recommended_volume_m3,
         a.max_daily_volume_m3,
         a.max_yearly_volume_m3,
-        a.internal_notes,
+        a.internal_notes::text AS internal_notes,
         a.water_taking_method,
         a.is_modification,
         u.first_name,
@@ -184,7 +184,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       max_yearly_volume_m3:
         row.max_yearly_volume_m3 != null ? Number(row.max_yearly_volume_m3) : undefined,
       internal_notes:
-        row.internal_notes != null ? String(row.internal_notes) : undefined,
+        row.internal_notes != null ? (row.internal_notes as string) : undefined,
       water_taking_method:
         row.water_taking_method != null ? String(row.water_taking_method) : undefined,
       applicant: {
