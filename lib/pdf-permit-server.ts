@@ -87,6 +87,8 @@ export interface PermitRenderOpts {
   issuedDate?: Date;
   expiryDate?: Date;
   isModified?: boolean;
+  /** When true, omits the QR code and replaces the footer with a DRAFT banner. */
+  skipQr?: boolean;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -435,6 +437,41 @@ async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Prom
   doc.restore();
 }
 
+/** Replaces the QR footer for draft previews — same footer box, amber "DRAFT" banner. */
+function drawPreviewBanner(doc: PDFKit.PDFDocument): void {
+  const pw = 595.28;
+  const ph = 841.89;
+  const marginX = 15 * PT;
+  const footerW = pw - marginX * 2;
+  const footerH = 46 * PT;
+  const footerY = ph - 74 * PT;
+
+  doc.save();
+  doc.roundedRect(marginX, footerY, footerW, footerH, 4)
+    .lineWidth(0.5).fillAndStroke("#fff8ed", "#f59e0b");
+  doc.font(FONT_BOLD).fontSize(11).fillColor("#92400e");
+  doc.text("DRAFT — NOT YET ISSUED", marginX, footerY + 8 * PT, { width: footerW, align: "center" });
+  doc.font(FONT_ITALIC).fontSize(8).fillColor("#78350f");
+  doc.text(
+    "This digital permit is only valid if the information on it is the same as the information in the water use permit registry.",
+    marginX + 10 * PT, footerY + 24 * PT,
+    { width: footerW - 20 * PT, align: "center" },
+  );
+  doc.restore();
+}
+
+/** Draws a faint diagonal "DRAFT" across the page — call per page when skipQr is true. */
+function drawDraftOverlay(doc: PDFKit.PDFDocument): void {
+  const pw = 595.28;
+  const ph = 841.89;
+  doc.save();
+  doc.translate(pw / 2, ph / 2);
+  doc.rotate(-45);
+  doc.font(FONT_BOLD).fontSize(72).fillColor("#dc2626").opacity(0.06);
+  doc.text("DRAFT", -150, -40, { width: 300, align: "center" });
+  doc.restore();
+}
+
 function drawPageFooter(doc: PDFKit.PDFDocument, permitNumber: string, page: number, total: number): void {
   const pw = 595.28;
   const y = 841.89 - 12 * PT;
@@ -513,12 +550,13 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
-  await drawQrFooter(doc, permitNumber);
+  if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
 
   const total = doc.bufferedPageRange().count;
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
     drawPageFooter(doc, permitNumber, i + 1, total);
+    if (opts.skipQr) drawDraftOverlay(doc);
   }
 
   return docToBuffer(doc);
@@ -590,9 +628,13 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
-  await drawQrFooter(doc, permitNumber);
+  if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) { doc.switchToPage(i); drawPageFooter(doc, permitNumber, i + 1, total); }
+  for (let i = 0; i < total; i++) {
+    doc.switchToPage(i);
+    drawPageFooter(doc, permitNumber, i + 1, total);
+    if (opts.skipQr) drawDraftOverlay(doc);
+  }
   return docToBuffer(doc);
 }
 
@@ -663,9 +705,13 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
-  await drawQrFooter(doc, permitNumber);
+  if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) { doc.switchToPage(i); drawPageFooter(doc, permitNumber, i + 1, total); }
+  for (let i = 0; i < total; i++) {
+    doc.switchToPage(i);
+    drawPageFooter(doc, permitNumber, i + 1, total);
+    if (opts.skipQr) drawDraftOverlay(doc);
+  }
   return docToBuffer(doc);
 }
 
@@ -743,9 +789,13 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
 
-  await drawQrFooter(doc, permitNumber);
+  if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) { doc.switchToPage(i); drawPageFooter(doc, permitNumber, i + 1, total); }
+  for (let i = 0; i < total; i++) {
+    doc.switchToPage(i);
+    drawPageFooter(doc, permitNumber, i + 1, total);
+    if (opts.skipQr) drawDraftOverlay(doc);
+  }
   return docToBuffer(doc);
 }
 

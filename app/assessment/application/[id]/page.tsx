@@ -1990,7 +1990,7 @@ export default function AssessmentApplicationPage() {
             className="space-y-6"
           >
             <TabsList
-              className={`grid w-full ${isTransferApp ? "grid-cols-3" : "grid-cols-4"} h-auto p-1 bg-muted/80`}
+              className={`grid w-full ${isTransferApp ? "grid-cols-4" : "grid-cols-5"} h-auto p-1 bg-muted/80`}
             >
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               {!isTransferApp && (
@@ -1999,6 +1999,7 @@ export default function AssessmentApplicationPage() {
                 </TabsTrigger>
               )}
               <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>
+              <TabsTrigger value="permit_preview" className="py-2.5">Permit Preview</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -2307,6 +2308,31 @@ export default function AssessmentApplicationPage() {
               />
             </TabsContent>
 
+            {/* Permit Preview Tab */}
+            <TabsContent value="permit_preview" className="focus-visible:outline-none">
+              {application.id && (
+                <div className="relative rounded-lg border overflow-hidden bg-muted/30" style={{ height: '900px' }}>
+                  <div
+                    id={`permit-preview-loading-${application.id}`}
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 z-10"
+                  >
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                    <p className="text-sm text-muted-foreground">Generating permit preview…</p>
+                  </div>
+                  <iframe
+                    src={`/api/staff/applications/${application.id}/permit-preview`}
+                    className="w-full h-full"
+                    style={{ border: 'none' }}
+                    title="Permit Preview"
+                    onLoad={() => {
+                      const overlay = document.getElementById(`permit-preview-loading-${application.id}`);
+                      if (overlay) overlay.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </TabsContent>
+
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               {application.id && (
@@ -2315,7 +2341,7 @@ export default function AssessmentApplicationPage() {
                   applicationStatus={application.status}
                   applicationSubmittedAt={application.submitted_at ?? undefined}
                   applicationCreatedAt={application.created_at}
-                  applicantName={application.applicant?.first_name && application.applicant?.last_name 
+                  applicantName={application.applicant?.first_name && application.applicant?.last_name
                     ? `${application.applicant.first_name} ${application.applicant.last_name}`
                     : application.applicant?.company_name || application.project_title?.replace(' Water Permit Application', '') || undefined}
                 />

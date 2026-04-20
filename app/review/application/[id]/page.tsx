@@ -1268,12 +1268,13 @@ export default function ReviewApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-3' : 'grid-cols-4'} h-auto p-1 bg-muted/80`}>
+            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-4' : 'grid-cols-5'} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
               {!isTransferApp && (
                 <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
               )}
               <TabsTrigger value="contract_preview">Contract Preview</TabsTrigger>
+              <TabsTrigger value="permit_preview">Permit Preview</TabsTrigger>
               <TabsTrigger value="internal_notes">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -1456,6 +1457,31 @@ export default function ReviewApplicationPage() {
                   concession_area: (renewalPermit as any).application?.concession_area,
                 } : null)}
               />
+            </TabsContent>
+
+            {/* Permit Preview Tab */}
+            <TabsContent value="permit_preview" className="focus-visible:outline-none">
+              {application.id && (
+                <div className="relative rounded-lg border overflow-hidden bg-muted/30" style={{ height: '900px' }}>
+                  <div
+                    id={`permit-preview-loading-${application.id}`}
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 z-10"
+                  >
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+                    <p className="text-sm text-muted-foreground">Generating permit preview…</p>
+                  </div>
+                  <iframe
+                    src={`/api/staff/applications/${application.id}/permit-preview`}
+                    className="w-full h-full"
+                    style={{ border: 'none' }}
+                    title="Permit Preview"
+                    onLoad={() => {
+                      const overlay = document.getElementById(`permit-preview-loading-${application.id}`);
+                      if (overlay) overlay.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
             </TabsContent>
 
             {/* Internal Notes Tab */}
