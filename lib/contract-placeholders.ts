@@ -26,6 +26,7 @@ export type ContractPlaceholderContext = {
   durationYearsLabel: string; // e.g. "5"
   concessionAreaLabel: string; // e.g. "12 Ha"
   activityLabel: string; // e.g. "Fish farming in lakes"
+  activityLabelRw: string; // e.g. "Uburobyi byo mu biyaga"
   systemTypeEnglish: string; // e.g. "Gravity system" or "Pumping system"
   systemTypeKinyarwanda: string; // e.g. "gravity" or "gupompa"
 };
@@ -262,6 +263,38 @@ function resolveActivityLabel(application: ApplicationForContract): string {
     gaz_extraction: "Gaz Extraction",
     livestock: "Livestock",
     other: "Other",
+  };
+  return labels[primary] || (primary ? primary.replaceAll("_", " ") : "N/A");
+}
+
+function resolveActivityLabelRw(application: ApplicationForContract): string {
+  const notes = getInternalNotes(application);
+  let intended = Array.isArray((application as any).intended_activities)
+    ? ((application as any).intended_activities as unknown[]).map(String).filter(Boolean)
+    : Array.isArray(notes?.intendedActivities)
+      ? (notes?.intendedActivities as unknown[]).map(String).filter(Boolean)
+      : [];
+  if (!intended.length && typeof notes?.transferFormData?.waterPurpose === "string") {
+    const tp = notes.transferFormData.waterPurpose.trim();
+    if (tp) intended = [tp];
+  }
+  const primary = intended?.[0] ?? "";
+  const labels: Record<string, string> = {
+    fish_farming_lakes: "Uburobyi byo mu biyaga",
+    fish_farming_ponds: "Uburobyi bwo mu kidendezi",
+    irrigation: "Kuhira",
+    water_supply: "Gutanga amazi",
+    industry: "Inganda",
+    coffee_washing: "Isukura ry'ikawa",
+    electricity_generation: "Gukora amashanyarazi (Amashanyarazi y'amazi)",
+    mining: "Amabuye y'agaciro",
+    construction_of_dam: "Kubaka Urugomero",
+    construction_of_infrastructures: "Kubaka cyangwa gushyiraho ibikorwa remezo",
+    navigation: "Ubwogero",
+    recreation_activities: "Ibikorwa byo kuryoherereza",
+    gaz_extraction: "Kwakira gaze",
+    livestock: "Ubworozi",
+    other: "Ikindi",
   };
   return labels[primary] || (primary ? primary.replaceAll("_", " ") : "N/A");
 }
@@ -653,6 +686,7 @@ export function buildContractPlaceholderContext(
     durationYearsLabel: resolveDurationYears(application, transferPermit),
     concessionAreaLabel: resolveConcessionAreaLabel(application, transferPermit),
     activityLabel: resolveActivityLabel(application),
+    activityLabelRw: resolveActivityLabelRw(application),
     systemTypeEnglish: systemType.english,
     systemTypeKinyarwanda: systemType.kinyarwanda,
   };
@@ -811,7 +845,7 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("Hegitari XXX", ctx.concessionAreaLabel);
   s = s.replaceAll("NAME OF TYPE OF WATER ACTIVITIES APPLIED FOR", ctx.activityLabel);
   s = s.replaceAll("NAME OF ACTIVITIES APPLIED FOR", ctx.activityLabel);
-  s = s.replaceAll("IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA", ctx.activityLabel);
+  s = s.replaceAll("IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA", ctx.activityLabelRw);
 
   // Lake cleanup: remove stray "XXXX" next to "Lake" after we’ve filled the lake name.
   // e.g. "Lake XXXX <name>" -> "Lake <name>"
