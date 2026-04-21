@@ -415,6 +415,74 @@ function resolveFlowRate(app: PermitApplication): string {
   return "N/A";
 }
 
+// ── Kinyarwanda helpers (ported from lib/pdf-generator.ts, used by
+//    the abstraction_organization second page) ──────────────────────────
+
+function formatProvinceOrCityOfKigali(provinceRaw: string): string {
+  if (!provinceRaw) return "N/A";
+  return provinceRaw.toLowerCase() === "kigali" ? "City OF Kigali" : `${provinceRaw} Province`;
+}
+
+function formatIntaraOrUmujyiWaKigali(provinceRaw: string): string {
+  if (!provinceRaw) return "N/A";
+  return provinceRaw.toLowerCase() === "kigali" ? "Umujyi wa Kigali" : `Intara ya ${provinceRaw}`;
+}
+
+function getActivityLabelKinyarwanda(activity: string): string {
+  const activityLabels: Record<string, string> = {
+    irrigation: "kuhira",
+    domestic: "gukoresha mu rugo",
+    industrial: "inganda",
+    livestock: "ubworozi",
+    fish_farming_ponds: "ubworozi bw'amafi",
+    fish_farming_lakes: "ubworozi bw'amafi",
+    aquaculture: "ubworozi bw'amafi",
+    electricity_generation: "kubyaza amashanyarazi amazi",
+    hydropower_source: "kubyaza amashanyarazi amazi",
+    mining: "ubucukuzi bw'amabuye y'agaciro",
+    recreation_activities: "imyidagaduro",
+    water_supply: "gutanga amazi",
+    municipal_supply: "gutanga amazi",
+    other: "ibindi",
+  };
+  return activityLabels[activity] || activity.replace(/[_-]/g, " ");
+}
+
+function resolveActivitiesKinyarwanda(app: PermitApplication): string {
+  const raw = app.intended_activities;
+  let acts: string[] = [];
+  if (Array.isArray(raw)) {
+    acts = raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+  } else if (typeof raw === "string" && raw.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) acts = parsed.filter((x): x is string => typeof x === "string");
+    } catch {
+      acts = [raw.trim()];
+    }
+  }
+  if (!acts.length) {
+    const purpose = typeof app.water_purpose === "string" ? app.water_purpose.trim() : "";
+    if (purpose) return getActivityLabelKinyarwanda(purpose);
+    return "N/A";
+  }
+  return acts.map(getActivityLabelKinyarwanda).join(", ");
+}
+
+function resolveKinyarwandaSystemType(app: PermitApplication): string {
+  const raw = resolveAbstractionMethodRaw(app);
+  const n = raw.toLowerCase();
+  if (!n) return "GUKORESHA";
+  if (n.includes("pump")) return "GUPOMPA";
+  if (n.includes("grav")) return "GUKORESHA";
+  if (n.includes("diversion") || n === "diversion_channel") return "gukoresha umuyoboro w'amazi";
+  if (n.includes("dam") || n.includes("reservoir")) return "gukoresha ikidendezi";
+  if (n.includes("borehole")) return "gukoresha iriba ryatobowe";
+  if (n.includes("spring")) return "gufata amazi y'isoko";
+  if (n.includes("hand") || (n.includes("dug") && n.includes("well"))) return "gukoresha iriba ryacukuwe";
+  return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GUKORESHA";
+}
+
 // ─── PDF builder ─────────────────────────────────────────────────────────────
 
 function docToBuffer(doc: PDFKit.PDFDocument): Promise<Buffer> {
