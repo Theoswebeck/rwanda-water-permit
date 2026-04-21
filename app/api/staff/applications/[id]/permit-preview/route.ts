@@ -19,6 +19,29 @@ const ALLOWED_STAFF_ROLES = [
   "assessor",
 ] as const;
 
+/**
+ * Parse a date string that may be ISO (YYYY-MM-DD) or US MM/DD/YYYY format.
+ * Returns null when unparseable so callers can fall through gracefully.
+ */
+function parseFlexDate(s: unknown): Date | null {
+  if (typeof s !== "string" || !s.trim()) return null;
+  const t = s.trim();
+  // ISO: YYYY-MM-DD (± optional time component)
+  if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+    const d = new Date(`${t.slice(0, 10)}T00:00:00Z`);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  // US date-picker output: MM/DD/YYYY
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const d = new Date(
+      `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}T00:00:00Z`,
+    );
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
 function parseNotes(raw: unknown): Record<string, any> | null {
   if (!raw) return null;
   if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, any>;
@@ -223,51 +246,74 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       notes,
     );
 
-    // ── Resolve permit validity years ─────────────────────────────────────────
-    // resolvePermitDuration (inside generatePermitPdfBuffer) already handles
-    // transferFormData.expirationDate for registry/manual permits.
-    // For renewals/modifications of real DB permits the original permit dates
-    // must be fetched here and passed as permitValidityYears (used as fallback).
+    // ── Resolve exact expiry date and validity years ──────────────────────────
+    // For transfers and modifications the permit must show the EXACT original
+    // expiry date — not today + N years, which drifts from the real date.
+    // For renewals the new permit starts today but runs for the same total
+    // duration as the original.
+    // We pass expiryDate directly so the renderers use it verbatim instead of
+    // computing issueDate + resolvePermitDuration().
+    let exactExpiryDate: Date | undefined;
     let permitValidityYears: number | undefined;
 
-    if (isRenewal || isModification) {
-      const originalPermitId =
-        typeof notes?.originalPermitId === "string" ? notes.originalPermitId.trim() : null;
-      const UUID_RE =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const originalPermitId =
+      typeof notes?.originalPermitId === "string" ? notes.originalPermitId.trim() : null;
 
-      if (originalPermitId && UUID_RE.test(originalPermitId)) {
+    if (isRenewal || isModification || isTransfer) {
+      // Step 1: try transferFormData (registry/manual permits + any transfer where
+      // the applicant entered the original permit's dates in the form).
+      const expiryFromNotes = parseFlexDate(notes?.transferFormData?.expirationDate);
+      const issueFromNotes  = parseFlexDate(notes?.transferFormData?.effectiveDate);
+
+      if (expiryFromNotes) {
+        if (isTransfer || isModification) {
+          // Transfer / modification: preserve the exact expiry of the original permit.
+          exactExpiryDate = expiryFromNotes;
+        } else if (isRenewal && issueFromNotes) {
+          // Renewal from registry permit: inherit total duration, starting today.
+          const totalYears = Math.round(
+            (expiryFromNotes.getTime() - issueFromNotes.getTime()) / (365.25 * 24 * 3600 * 1000),
+          );
+          if (totalYears >= 1 && totalYears <= 15) {
+            permitValidityYears = totalYears;
+            const d = new Date();
+            d.setFullYear(d.getFullYear() + totalYears);
+            exactExpiryDate = d;
+          }
+        }
+      }
+
+      // Step 2: if still no exact date, fetch original permit from DB.
+      if (!exactExpiryDate && originalPermitId && UUID_RE.test(originalPermitId)) {
         try {
           const pRes = await query<{ issued_date: string | null; expiry_date: string | null }>(
             `SELECT issued_date, expiry_date FROM public.permits WHERE id = $1 LIMIT 1`,
             [originalPermitId],
           );
           if (pRes.rows.length) {
-            const { issued_date, expiry_date } = pRes.rows[0];
-            if (expiry_date) {
-              const expiry = new Date(`${expiry_date}T00:00:00Z`);
-              if (!Number.isNaN(expiry.getTime())) {
-                if (isRenewal && issued_date) {
-                  // Renewal: inherit total duration (expiry − issue) of original permit.
-                  const issue = new Date(`${issued_date}T00:00:00Z`);
-                  if (!Number.isNaN(issue.getTime())) {
-                    const totalYears = Math.round(
-                      (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
-                    );
-                    if (totalYears >= 1 && totalYears <= 15) permitValidityYears = totalYears;
-                  }
-                } else {
-                  // Modification: remaining validity of the permit being modified.
-                  const remaining = Math.ceil(
-                    (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
-                  );
-                  if (remaining >= 1 && remaining <= 15) permitValidityYears = remaining;
+            const origExpiry = parseFlexDate(pRes.rows[0].expiry_date);
+            const origIssue  = parseFlexDate(pRes.rows[0].issued_date);
+            if (origExpiry) {
+              if (isRenewal && origIssue) {
+                // Renewal: same total duration as original, starting today.
+                const totalYears = Math.round(
+                  (origExpiry.getTime() - origIssue.getTime()) / (365.25 * 24 * 3600 * 1000),
+                );
+                if (totalYears >= 1 && totalYears <= 15) {
+                  permitValidityYears = totalYears;
+                  const d = new Date();
+                  d.setFullYear(d.getFullYear() + totalYears);
+                  exactExpiryDate = d;
                 }
+              } else {
+                // Transfer / modification: preserve exact original expiry.
+                exactExpiryDate = origExpiry;
               }
             }
           }
         } catch {
-          // Non-fatal — resolvePermitDuration falls back to proposed_duration_years or 5.
+          // Non-fatal — renderer falls back to resolvePermitDuration() / 5 years.
         }
       }
     }
@@ -279,6 +325,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       issuedDate: new Date(),
       skipQr: true,
       isModified: Boolean(isModification),
+      ...(exactExpiryDate   !== undefined && { expiryDate: exactExpiryDate }),
       ...(permitValidityYears !== undefined && { permitValidityYears }),
     });
 

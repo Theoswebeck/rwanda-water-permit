@@ -119,27 +119,6 @@ function fmtNum(n: number, maxDec = 2): string {
   }).format(n);
 }
 
-const SMALL_EN: Record<number, string> = {
-  0: "Zero", 1: "One", 2: "Two", 3: "Three", 4: "Four", 5: "Five",
-  6: "Six", 7: "Seven", 8: "Eight", 9: "Nine", 10: "Ten",
-  11: "Eleven", 12: "Twelve", 13: "Thirteen", 14: "Fourteen", 15: "Fifteen",
-  16: "Sixteen", 17: "Seventeen", 18: "Eighteen", 19: "Nineteen", 20: "Twenty",
-};
-const TENS_EN: Record<number, string> = {
-  2: "Twenty", 3: "Thirty", 4: "Forty", 5: "Fifty",
-  6: "Sixty", 7: "Seventy", 8: "Eighty", 9: "Ninety",
-};
-
-function numWords(n: number): string {
-  const num = Math.abs(Math.trunc(n));
-  if (SMALL_EN[num]) return SMALL_EN[num];
-  const tens = Math.floor(num / 10);
-  const ones = num % 10;
-  const tw = TENS_EN[tens];
-  if (!tw) return String(n);
-  return ones === 0 ? tw : `${tw}-${SMALL_EN[ones]}`;
-}
-
 function resolveNotes(app: PermitApplication) {
   return safeJson(app.internal_notes);
 }
@@ -308,47 +287,48 @@ function resolvePermitDuration(app: PermitApplication, fallback = 5): number {
     notes?.isTransfer === true || notes?.isRenewal === true || notes?.isModification === true;
 
   if (isTransferLike) {
-    // Priority 2: Original permit dates stored in transferFormData (registry/manual permits
-    // and any transfer where the applicant entered the original permit's dates in the form).
-    const expiryStr = notes?.transferFormData?.expirationDate;
-    const issueStr = notes?.transferFormData?.effectiveDate;
-    if (typeof expiryStr === "string" && expiryStr.trim()) {
-      const expiry = new Date(`${expiryStr.trim()}T00:00:00Z`);
-      if (!Number.isNaN(expiry.getTime())) {
-        const isRenewal = appType === "renewal" || notes?.isRenewal === true;
-        if (isRenewal && typeof issueStr === "string" && issueStr.trim()) {
-          // Renewal: inherit the original permit's total duration (expiry − issue).
-          const issue = new Date(`${issueStr.trim()}T00:00:00Z`);
-          if (!Number.isNaN(issue.getTime())) {
-            const totalYears = Math.round(
-              (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
-            );
-            if (totalYears >= 1 && totalYears <= 15) return totalYears;
-          }
-        } else {
-          // Transfer / modification: remaining validity of the original permit.
-          const remaining = Math.ceil(
-            (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
-          );
-          if (remaining >= 1 && remaining <= 15) return remaining;
-        }
+    // Priority 2: Original permit dates stored in transferFormData.
+    // Dates may be ISO (YYYY-MM-DD) or US MM/DD/YYYY from the date picker.
+    const parseTfDate = (s: unknown): Date | null => {
+      if (typeof s !== "string" || !s.trim()) return null;
+      const t = s.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+        const d = new Date(`${t.slice(0, 10)}T00:00:00Z`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      const mm = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (mm) {
+        const d = new Date(`${mm[3]}-${mm[1].padStart(2,"0")}-${mm[2].padStart(2,"0")}T00:00:00Z`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
+    const expiry = parseTfDate(notes?.transferFormData?.expirationDate);
+    const issue  = parseTfDate(notes?.transferFormData?.effectiveDate);
+    if (expiry) {
+      const isRenewal = appType === "renewal" || notes?.isRenewal === true;
+      if (isRenewal && issue) {
+        // Renewal: inherit the original permit's total duration (expiry − issue).
+        const totalYears = Math.round(
+          (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
+        );
+        if (totalYears >= 1 && totalYears <= 15) return totalYears;
+      } else if (!isRenewal) {
+        // Transfer / modification: remaining validity.
+        const remaining = Math.ceil(
+          (expiry.getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000),
+        );
+        if (remaining >= 1 && remaining <= 15) return remaining;
       }
     }
-    // For DB-permit renewals/modifications without transferFormData dates, the route
-    // fetches the original permit and passes the computed years via permitValidityYears.
+    // For DB-permit renewals/modifications, the route fetches original permit
+    // dates and passes the computed years via permitValidityYears.
     return fallback;
   }
 
   // New applications: use the applicant's requested duration, then fallback.
   if (typeof app.proposed_duration_years === "number" && app.proposed_duration_years >= 1) return app.proposed_duration_years;
   return fallback;
-}
-
-function computeYearsBetween(a: Date, b: Date): number {
-  let years = b.getFullYear() - a.getFullYear();
-  const anniv = new Date(a.getFullYear() + years, a.getMonth(), a.getDate());
-  if (b.getTime() < anniv.getTime()) years -= 1;
-  return years > 0 ? years : 1;
 }
 
 function resolvePermitTitleNumber(permitNumber: string, headerYear: number): string {
@@ -577,13 +557,11 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   const lake = resolveLakeName(app);
   const loc = resolveAdminLocation(app);
   const prov = fmtProvince(loc.province);
-  const validYears = computeYearsBetween(issueDate, expiryDate);
-  const validWord = numWords(validYears);
 
   const paragraphs = [
     `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
     `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to carry out ${acts} on the surface area of ${areaStr} (Concession area) in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov} as shown on the attached map. This permit applies for activities conducted solely within the water body.`,
-    `This water use permit is valid for a period of ${validWord} (${validYears}) years from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
+    `This water use permit is valid from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
     `In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.`,
   ];
 
@@ -656,13 +634,11 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   const vols = resolveVolumes(app);
   const yearlyStr = vols.yearly != null ? `${fmtNum(vols.yearly)} m³/year` : "N/A m³/year";
   const acts = resolveActivities(app);
-  const validYears = computeYearsBetween(issueDate, expiryDate);
-  const validWord = numWords(validYears);
 
   const paragraphs = [
     `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
     `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of ${yearlyStr}. Water abstracted will be used for ${acts}.`,
-    `This water use permit is valid for a period of ${validYears} (${validWord}) years from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
+    `This water use permit is valid from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
     `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
   ];
 
@@ -732,14 +708,12 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   const sysLabel = resolveEnglishSystemLabel(app);
   const flowRate = resolveFlowRate(app);
   const acts = resolveActivities(app);
-  const validYears = computeYearsBetween(issueDate, expiryDate);
-  const validWord = numWords(validYears);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
 
   const paragraphs = [
     `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
     `\u201C${orgName}\u201D, with its registered office address as follows: ${officeAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} with a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`,
-    `This water use permit is valid for a period of ${validWord} (${validYears}) years from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
+    `This water use permit is valid from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
     `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
   ];
 
@@ -808,8 +782,6 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const lake = resolveLakeName(app);
   const loc = resolveAdminLocation(app);
   const prov = fmtProvince(loc.province);
-  const validYears = computeYearsBetween(issueDate, expiryDate);
-  const validWord = numWords(validYears);
 
   const notes = resolveNotes(app);
   const wsLocParts = [
@@ -823,7 +795,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const paragraphs = [
     `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
     `\u201C${orgName}\u201D, with its water source location as follows: ${wsLocParts}; represented by ${rep.name}; is authorized to carry out ${acts} on the surface area of ${areaStr} in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`,
-    `This water use permit is valid for a period of ${validWord} (${validYears}) years from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
+    `This water use permit is valid from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
     `In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.`,
   ];
 

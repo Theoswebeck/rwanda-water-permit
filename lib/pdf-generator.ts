@@ -8,87 +8,6 @@ const WATERMARK_IMAGE_PATH = "/assets/rwanda_logo.png";
 const PERMIT_HEADER_LOGO_PATH = "/assets/rwanda_water_board_Logo.png";
 const PERMIT_FONT_FAMILY = "times";
 
-// =============================================
-// Small formatting helpers
-// =============================================
-function numberToEnglishWords(n: number): string {
-  // Supports 0-99; falls back to numeric string for anything else.
-  if (!Number.isFinite(n)) return String(n);
-  const num = Math.abs(Math.trunc(n));
-
-  const small: Record<number, string> = {
-    0: "Zero",
-    1: "One",
-    2: "Two",
-    3: "Three",
-    4: "Four",
-    5: "Five",
-    6: "Six",
-    7: "Seven",
-    8: "Eight",
-    9: "Nine",
-    10: "Ten",
-    11: "Eleven",
-    12: "Twelve",
-    13: "Thirteen",
-    14: "Fourteen",
-    15: "Fifteen",
-    16: "Sixteen",
-    17: "Seventeen",
-    18: "Eighteen",
-    19: "Nineteen",
-    20: "Twenty",
-  };
-  if (small[num]) return small[num];
-
-  const tensMap: Record<number, string> = {
-    2: "Twenty",
-    3: "Thirty",
-    4: "Forty",
-    5: "Fifty",
-    6: "Sixty",
-    7: "Seventy",
-    8: "Eighty",
-    9: "Ninety",
-  };
-  const tens = Math.floor(num / 10);
-  const ones = num % 10;
-  const tensWord = tensMap[tens];
-  if (!tensWord) return String(n);
-  if (ones === 0) return tensWord;
-  return `${tensWord}-${small[ones]}`;
-}
-
-function numberToKinyarwandaWords(n: number): string {
-  if (!Number.isFinite(n)) return String(n);
-  const num = Math.abs(Math.trunc(n));
-
-  const small: Record<number, string> = {
-    0: "zero",
-    1: "umwe",
-    2: "ibiri",
-    3: "itatu",
-    4: "ine",
-    5: "itanu",
-    6: "itandatu",
-    7: "irindwi",
-    8: "umunani",
-    9: "icyenda",
-    10: "icumi",
-    11: "cumi n'umwe",
-    12: "cumi n'ibiri",
-    13: "cumi na gatatu",
-    14: "cumi na kane",
-    15: "cumi na gatanu",
-    16: "cumi na gatandatu",
-    17: "cumi n'irindwi",
-    18: "cumi n'umunani",
-    19: "cumi n'icyenda",
-    20: "makumyabiri",
-  };
-  return small[num] || String(n);
-}
-
 /**
  * Pre-load the watermark image and return a Promise that resolves to the data URL.
  * This is cached for performance.
@@ -1112,10 +1031,8 @@ async function renderAbstractionIndividualPermitPdfBlob(opts: {
     `at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, ` +
     `by a ${systemType} with a flow rate of ${yearlyStr}. ` +
     `Water abstracted will be used for ${activitiesText}.`;
-  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
-  const validityWord = numberToEnglishWords(validityNumber);
   const para3 =
-    `This water use permit is valid for a period of ${validityNumber} (${validityWord}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
+    `This water use permit is valid from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.";
 
@@ -1198,9 +1115,6 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
   const activitiesTextRw = formatActivitiesForPermitKinyarwanda(application);
   const flowRateLabel = resolveFlowRateLabel(application);
 
-  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
-  const validityWord = numberToEnglishWords(validityNumber);
-  const validityWordRw = numberToKinyarwandaWords(validityNumber);
   const provinceLabel = formatProvinceOrCityOfKigali(loc.province);
   const officeProvinceLabelRw = (() => {
     const notes = getInternalNotes(application);
@@ -1224,7 +1138,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     `Water abstracted will be used for ${activitiesText}.`;
 
   const para3 =
-    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
+    `This water use permit is valid from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
 
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.";
@@ -1240,7 +1154,7 @@ async function renderAbstractionOrganizationPermitPdfBlob(opts: {
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
     `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${activitiesTextRw}.`;
   const paraRw4 =
-    `Uru ruhushya rufite agaciro mu gihe cy'imyaka ${validityNumber} (${validityWordRw}) kuva ${formatDateDMY(issueDate)} kugeza ${formatDateDMY(resolvedExpiryDate)}.`;
+    `Uru ruhushya rufite agaciro kuva ${formatDateDMY(issueDate)} kugeza ${formatDateDMY(resolvedExpiryDate)}.`;
   const paraRw5 =
     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.";
 
@@ -1342,20 +1256,17 @@ async function renderConcessionIndividualPermitPdfBlob(opts: {
   const loc = resolveWaterSourceAdminLocation(application);
   const provinceStr = formatProvinceOrKigali(loc.province);
 
-  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
-  const validityWord = numberToEnglishWords(validityNumber);
-
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,";
 
   const para2 =
-    `“${applicantName}”, with ID Number: ${applicantId}, is authorized to carry out ${activitiesText} ` +
+    `”${applicantName}”, with ID Number: ${applicantId}, is authorized to carry out ${activitiesText} ` +
     `on the surface area of ${areaStr} (Concession area) in ${lakeName}, on its part located in ` +
     `${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${provinceStr} ` +
     `as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
 
   const para3 =
-    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
+    `This water use permit is valid from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
 
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.";
@@ -1439,21 +1350,18 @@ async function renderConcessionOrganizationPermitPdfBlob(opts: {
   const loc = resolveWaterSourceAdminLocation(application);
   const provinceStr = formatProvinceOrKigali(loc.province);
 
-  const validityNumber = computeValidityYearsFromDates(issueDate, resolvedExpiryDate) ?? permitValidityYears;
-  const validityWord = numberToEnglishWords(validityNumber);
-
   const para1 =
     "Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,";
 
   // Note: User preference earlier was to show representative name (no position).
   const para2 =
-    `“${orgName}”, with its water source location as follows: ${waterSourceLocationAddress}; represented by ${rep.name}; ` +
+    `”${orgName}”, with its water source location as follows: ${waterSourceLocationAddress}; represented by ${rep.name}; ` +
     `is authorized to carry out ${activitiesText} on the surface area of ${areaStr} in ${lakeName}, ` +
     `on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${provinceStr}, ` +
     `as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
 
   const para3 =
-    `This water use permit is valid for a period of ${validityWord} (${validityNumber}) years from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
+    `This water use permit is valid from ${formatDateDMY(issueDate)} to ${formatDateDMY(resolvedExpiryDate)}.`;
 
   const para4 =
     "In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.";
