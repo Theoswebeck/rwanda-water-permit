@@ -50,7 +50,6 @@ import {
   ExternalLink,
   Database,
   Eye,
-  ArrowRight,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
@@ -967,12 +966,13 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
             </div>
             {total > PAGE_SIZE && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-800 px-4 py-3">
-                <p className="text-xs text-muted-foreground">
-                  Page <span className="font-medium text-foreground">{currentPage}</span> of{" "}
+                <p className="text-xs text-muted-foreground hidden sm:block">
+                  Showing page <span className="font-medium text-foreground">{currentPage}</span> of{" "}
                   <span className="font-medium text-foreground">{totalPages}</span>
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -980,30 +980,46 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                   >
                     Previous
                   </Button>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className="hidden sm:inline">Page</span>
                     <Input
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
-                      aria-label={`Go to page (1 to ${totalPages})`}
+                      aria-label={`Current page — type 1 to ${totalPages} and press Enter to jump`}
                       aria-invalid={jumpError || undefined}
                       aria-describedby="jump-page-error"
-                      placeholder={`1–${totalPages}`}
-                      value={jumpPage}
+                      value={jumpPage !== "" ? jumpPage : String(currentPage)}
+                      onFocus={(e) => {
+                        setJumpPage(String(currentPage));
+                        requestAnimationFrame(() => e.target.select());
+                      }}
                       onChange={(e) => {
                         const val = e.target.value.replace(/\D/g, "");
                         setJumpPage(val);
                         if (jumpError) setJumpError(false);
                       }}
+                      onBlur={() => {
+                        if (jumpPage.length > 0 && parseInt(jumpPage, 10) !== currentPage) {
+                          submitJump();
+                        }
+                        setJumpPage("");
+                        setJumpError(false);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
                           submitJump();
+                          (e.currentTarget as HTMLInputElement).blur();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          setJumpPage("");
+                          setJumpError(false);
+                          (e.currentTarget as HTMLInputElement).blur();
                         }
                       }}
                       className={cn(
-                        "h-8 text-xs text-center transition-colors",
-                        "w-[88px] tabular-nums",
+                        "h-8 w-14 text-xs text-center px-1.5 tabular-nums font-medium text-foreground transition-colors",
                         jumpError &&
                           "border-red-500 text-red-600 focus-visible:ring-red-500 dark:border-red-500/70 dark:text-red-400"
                       )}
@@ -1011,19 +1027,10 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                     <span id="jump-page-error" role="status" aria-live="polite" className="sr-only">
                       {jumpError ? `Page must be between 1 and ${totalPages}` : ""}
                     </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 px-2"
-                      onClick={submitJump}
-                      disabled={jumpPage.length === 0}
-                      aria-label="Jump to page"
-                      title="Jump to page"
-                    >
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
+                    <span>of <span className="font-medium text-foreground">{totalPages}</span></span>
                   </div>
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
