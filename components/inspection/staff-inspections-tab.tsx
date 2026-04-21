@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -12,16 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, Eye, Loader2, MoreHorizontal, Search, UserPlus } from "lucide-react";
+import { AlertCircle, Eye, Loader2, MoreHorizontal, Search } from "lucide-react";
 import { CreateInspectionDialog } from "@/components/inspection/create-inspection-dialog";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import {
@@ -30,7 +20,6 @@ import {
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
 import { getInspectionBasePath } from "@/lib/inspection-workflow";
-import { fetchAssessorOptions } from "@/lib/staff-assessors";
 
 type ApplicantInfo = {
   first_name?: string;
@@ -51,6 +40,8 @@ type InspectionRow = {
   scheduled_date?: string;
   completed_date?: string | null;
   created_at?: string;
+  owner_kind?: string | null;
+  owner_id?: string | null;
   application: {
     id: string;
     application_number?: string;
@@ -99,22 +90,6 @@ function statusPill(status: InspectionWorkflowStatus | string) {
       {label}
     </Badge>
   );
-}
-
-type AssessorUser = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  role: string;
-};
-
-function getAssessorDisplayLabel(assessor: AssessorUser): string {
-  const fullName = `${assessor.first_name || ""} ${assessor.last_name || ""}`.trim();
-  if (fullName && assessor.email) return `${fullName} (${assessor.email})`;
-  if (fullName) return fullName;
-  if (assessor.email) return assessor.email;
-  return `Assessor (${assessor.id.slice(0, 8)})`;
 }
 
 function getDisplayStatus(row: InspectionRow): string {
@@ -193,107 +168,8 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const [inspections, setInspections] = useState<InspectionRow[]>([]);
   const [permitByAppId, setPermitByAppId] = useState<Record<string, PermitLite | undefined>>({});
   const [permitHolderByNumber, setPermitHolderByNumber] = useState<Record<string, string>>({});
+  const [registryByInspectionId, setRegistryByInspectionId] = useState<Record<string, { permit_number: string; permit_holder: string | null } | undefined>>({});
   const [activeChipId, setActiveChipId] = useState("all");
-
-  const [assessors, setAssessors] = useState<AssessorUser[]>([]);
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-  const [selectedInspection, setSelectedInspection] = useState<InspectionRow | null>(null);
-  const [selectedAssessorId, setSelectedAssessorId] = useState("");
-  const [assignLoading, setAssignLoading] = useState(false);
-
-  // Only show Assign Assessor when on /review (reviewer or admin context)
-  const pathname = usePathname();
-  const isOnReviewPage = pathname?.startsWith("/review") ?? false;
-  const canAssign = isOnReviewPage && (roleContext === "reviewer" || roleContext === "admin");
-
-  useEffect(() => {
-    if (!canAssign) return;
-    const fetchAssessors = async () => {
-      try {
-        const assessorOptions = await fetchAssessorOptions();
-        setAssessors(assessorOptions);
-      } catch (err) {
-        console.error("❌ Failed to fetch assessors:", err);
-      }
-    };
-    fetchAssessors();
-  }, [canAssign]);
-
-  const openAssignDialog = useCallback((inspection: InspectionRow) => {
-    setSelectedInspection(inspection);
-    setSelectedAssessorId("");
-    setAssignDialogOpen(true);
-  }, []);
-
-  const handleAssignToAssessor = useCallback(async () => {
-    if (!selectedInspection || !selectedAssessorId) return;
-    try {
-      setAssignLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const assessor = assessors.find(a => a.id === selectedAssessorId);
-      if (!assessor) {
-        alert("Please select a valid assessor");
-        return;
-      }
-
-      const { error: updateError } = await supabase
-        .from("inspections")
-        .update({
-          assigned_assessor_id: selectedAssessorId,
-          workflow_status: "pending_assessment",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", selectedInspection.id);
-
-      if (updateError) throw updateError;
-
-      const { error: historyError } = await supabase
-        .from("inspection_workflow_history")
-        .insert({
-          inspection_id: selectedInspection.id,
-          user_id: user.id,
-          from_status: selectedInspection.workflow_status || "submitted",
-          to_status: "pending_assessment",
-          action: "assign_to_assessor",
-          comment: `Assigned to ${getAssessorDisplayLabel(assessor)} for assessment`,
-        });
-
-      if (historyError) {
-        console.error("⚠️ Failed to log workflow history:", historyError);
-      }
-
-      console.log(`✅ Inspection ${selectedInspection.id.slice(0, 8)} assigned to ${getAssessorDisplayLabel(assessor)}`);
-
-      fetch('/api/notifications/staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          eventType: 'inspection_assigned_to_assessor',
-          entityType: 'inspection',
-          entityId: selectedInspection.id,
-        }),
-      }).catch(() => null)
-
-      setInspections(prev =>
-        prev.map(ins =>
-          ins.id === selectedInspection.id
-            ? { ...ins, workflow_status: "pending_assessment" }
-            : ins
-        )
-      );
-
-      setAssignDialogOpen(false);
-      setSelectedInspection(null);
-      setSelectedAssessorId("");
-    } catch (err: any) {
-      console.error("❌ Error assigning assessor:", err);
-      alert(err?.message || "Failed to assign assessor. Please try again.");
-    } finally {
-      setAssignLoading(false);
-    }
-  }, [selectedInspection, selectedAssessorId, assessors]);
 
   useEffect(() => {
     const load = async () => {
@@ -316,6 +192,8 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             scheduled_date,
             completed_date,
             created_at,
+            owner_kind,
+            owner_id,
             application:applications!application_id(
               id,
               application_number,
@@ -335,9 +213,52 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
         const rows = (data || []) as unknown as InspectionRow[];
         setInspections(rows);
 
+        // Registry-backed inspections: resolve permit via polymorphic owner_kind/owner_id
+        const registryOwnerIds = Array.from(
+          new Set(
+            rows
+              .filter((r) => r.owner_kind === "permit_registry" && r.owner_id)
+              .map((r) => r.owner_id as string)
+          )
+        );
+        const registryById: Record<string, { permit_number: string; permit_holder: string | null }> = {};
+        if (registryOwnerIds.length > 0) {
+          const { data: regRows, error: regErr } = await supabase
+            .from("permit_registry")
+            .select("id, permit_number, permit_holder")
+            .in("id", registryOwnerIds);
+          if (regErr) {
+            console.warn("⚠️ Failed to load permit_registry for inspections:", regErr);
+          } else {
+            for (const r of (regRows || []) as Array<{ id: string; permit_number: string; permit_holder: string | null }>) {
+              registryById[r.id] = { permit_number: r.permit_number, permit_holder: r.permit_holder };
+            }
+          }
+        }
+        const registryByInspection: Record<string, { permit_number: string; permit_holder: string | null } | undefined> = {};
+        for (const r of rows) {
+          if (r.owner_kind === "permit_registry" && r.owner_id && registryById[r.owner_id]) {
+            registryByInspection[r.id] = registryById[r.owner_id];
+          }
+        }
+        setRegistryByInspectionId(registryByInspection);
+
         const appIds = rows.map(r => r.application?.id).filter(Boolean) as string[];
         if (appIds.length === 0) {
           setPermitByAppId({});
+          // Still collect holders from registry for search/row rendering
+          const regPermitNos = Array.from(
+            new Set(Object.values(registryByInspection).map((v) => v?.permit_number).filter((p): p is string => Boolean(p)))
+          );
+          if (regPermitNos.length > 0) {
+            const holderMap: Record<string, string> = {};
+            for (const v of Object.values(registryByInspection)) {
+              if (v?.permit_number && v.permit_holder) holderMap[v.permit_number] = v.permit_holder;
+            }
+            setPermitHolderByNumber(holderMap);
+          } else {
+            setPermitHolderByNumber({});
+          }
           return;
         }
 
@@ -415,9 +336,19 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             console.warn("⚠️ Failed to load permit holder names from registry:", registryResult.error);
           }
 
+          for (const v of Object.values(registryByInspection)) {
+            if (v?.permit_number && v.permit_holder && !holderMap[v.permit_number]) {
+              holderMap[v.permit_number] = v.permit_holder;
+            }
+          }
+
           setPermitHolderByNumber(holderMap);
         } else {
-          setPermitHolderByNumber({});
+          const holderMap: Record<string, string> = {};
+          for (const v of Object.values(registryByInspection)) {
+            if (v?.permit_number && v.permit_holder) holderMap[v.permit_number] = v.permit_holder;
+          }
+          setPermitHolderByNumber(holderMap);
         }
       } catch (e: any) {
         console.error("❌ Failed to load inspections:", e);
@@ -453,15 +384,20 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
       result = result.filter((r) => {
         const id = (r.id || "").toLowerCase();
         const appNo = (r.application?.application_number || "").toLowerCase();
-        const permitNo = r.application?.id ? (permitByAppId[r.application.id]?.permit_number || "").toLowerCase() : "";
-        const permitNumber = r.application?.id ? permitByAppId[r.application.id]?.permit_number : undefined;
-        const permitHolder = (permitNumber ? permitHolderByNumber[permitNumber] : null) || applicantName(r.applicant);
+        const permitNumber =
+          (r.application?.id ? permitByAppId[r.application.id]?.permit_number : undefined) ||
+          registryByInspectionId[r.id]?.permit_number;
+        const permitNo = (permitNumber || "").toLowerCase();
+        const permitHolder =
+          (permitNumber ? permitHolderByNumber[permitNumber] : null) ||
+          registryByInspectionId[r.id]?.permit_holder ||
+          applicantName(r.applicant);
         return id.includes(q) || appNo.includes(q) || permitNo.includes(q) || permitHolder.toLowerCase().includes(q);
       });
     }
 
     return result;
-  }, [inspections, permitByAppId, permitHolderByNumber, search, activeChipId]);
+  }, [inspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
 
   if (loading) {
     return (
@@ -518,7 +454,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[14%]">Inspection</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date submitted</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[18%]">Permit #</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[24%]">Permit Holder</TableHead>
                   <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[16%]">Workflow</TableHead>
@@ -535,13 +471,16 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                 ) : (
                   filtered.map((r) => {
                     const appId = r.application?.id;
-                    const permit = appId ? permitByAppId[appId] : undefined;
+                    const appPermit = appId ? permitByAppId[appId] : undefined;
+                    const registryEntry = registryByInspectionId[r.id];
+                    const permitNumber = appPermit?.permit_number || registryEntry?.permit_number;
                     const date = r.completed_date || r.scheduled_date || r.created_at || null;
-                    const holderName = permit?.permit_number
-                      ? (permitHolderByNumber[permit.permit_number] || applicantName(r.applicant))
-                      : applicantName(r.applicant);
+                    const holderName =
+                      (permitNumber ? permitHolderByNumber[permitNumber] : undefined) ||
+                      registryEntry?.permit_holder ||
+                      applicantName(r.applicant);
                     const displayStatus = getDisplayStatus(r);
-                    const viewIdentifier = permit?.permit_number || r.application?.application_number;
+                    const viewIdentifier = permitNumber || r.application?.application_number;
                     const viewHref = viewIdentifier
                       ? `${basePath}/permit/${encodeURIComponent(viewIdentifier)}`
                       : `${basePath}/${r.id}`;
@@ -553,7 +492,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                           </Link>
                         </TableCell>
                         <TableCell>{fmtDate(date)}</TableCell>
-                        <TableCell className="font-medium">{permit?.permit_number || "—"}</TableCell>
+                        <TableCell className="font-medium">{permitNumber || "—"}</TableCell>
                         <TableCell className="truncate max-w-[280px]">{holderName}</TableCell>
                         <TableCell>{statusPill(displayStatus)}</TableCell>
                         <TableCell className="text-right">
@@ -584,23 +523,14 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                                   </Link>
                                 </DropdownMenuItem>
                               ) : null}
-                              {permit?.permit_number ? (
+                              {permitNumber ? (
                                 <DropdownMenuItem asChild>
-                                  <Link href={`/permit/view/${encodeURIComponent(permit.permit_number)}`} className="flex items-center gap-2">
+                                  <Link href={`/permit/view/${encodeURIComponent(permitNumber)}`} className="flex items-center gap-2">
                                     <Eye className="h-4 w-4" />
                                     View permit
                                   </Link>
                                 </DropdownMenuItem>
                               ) : null}
-                              {canAssign && displayStatus === "submitted" && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => openAssignDialog(r)} className="flex items-center gap-2">
-                                    <UserPlus className="h-4 w-4" />
-                                    Assign Assessor
-                                  </DropdownMenuItem>
-                                </>
-                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>
@@ -614,40 +544,6 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
         </CardContent>
       </Card>
     </div>
-
-    <Dialog open={assignDialogOpen} onOpenChange={(open) => { if (!open) { setAssignDialogOpen(false); setSelectedInspection(null); } }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Assign Assessor</DialogTitle>
-          <DialogDescription>
-            Assign an assessor to review inspection {selectedInspection ? shortId(selectedInspection.id) : ""}.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4">
-          <Select value={selectedAssessorId} onValueChange={setSelectedAssessorId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select an assessor…" />
-            </SelectTrigger>
-            <SelectContent>
-              {assessors.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {getAssessorDisplayLabel(a)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => { setAssignDialogOpen(false); setSelectedInspection(null); }}>
-            Cancel
-          </Button>
-          <Button disabled={!selectedAssessorId || assignLoading} onClick={handleAssignToAssessor}>
-            {assignLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Assign
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
     </>
   );
 }

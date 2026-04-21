@@ -115,6 +115,10 @@ const TRANSITION_MAP: Record<
     assessor: RESUBMIT_TRANSITION,
     admin: RESUBMIT_TRANSITION,
   },
+  submitted: {
+    reviewer: REVIEW_TRANSITIONS,
+    admin: REVIEW_TRANSITIONS,
+  },
   pending_review: {
     reviewer: REVIEW_TRANSITIONS,
     admin: REVIEW_TRANSITIONS,
