@@ -8,6 +8,7 @@ import fs from "node:fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { selectPermitVariant } from "@/lib/permit-variant";
+import { addYearsSafe } from "./date-math";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -552,11 +553,9 @@ function drawPageFooter(doc: PDFKit.PDFDocument, permitNumber: string, page: num
 async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffer> {
   const { application: app, permitNumber, isModified } = opts;
   const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate = opts.expiryDate ?? (() => {
-    const d = new Date(issueDate);
-    d.setFullYear(d.getFullYear() + resolvePermitDuration(app, opts.permitValidityYears));
-    return d;
-  })();
+  const expiryDate =
+    opts.expiryDate ??
+    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
 
@@ -629,11 +628,9 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buffer> {
   const { application: app, permitNumber, isModified } = opts;
   const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate = opts.expiryDate ?? (() => {
-    const d = new Date(issueDate);
-    d.setFullYear(d.getFullYear() + resolvePermitDuration(app, opts.permitValidityYears));
-    return d;
-  })();
+  const expiryDate =
+    opts.expiryDate ??
+    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
   drawWatermark(doc);
@@ -703,11 +700,9 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
 async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Buffer> {
   const { application: app, permitNumber, isModified } = opts;
   const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate = opts.expiryDate ?? (() => {
-    const d = new Date(issueDate);
-    d.setFullYear(d.getFullYear() + resolvePermitDuration(app, opts.permitValidityYears));
-    return d;
-  })();
+  const expiryDate =
+    opts.expiryDate ??
+    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
   drawWatermark(doc);
@@ -778,11 +773,9 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
 async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buffer> {
   const { application: app, permitNumber, isModified } = opts;
   const issueDate = opts.issuedDate ?? new Date();
-  const expiryDate = opts.expiryDate ?? (() => {
-    const d = new Date(issueDate);
-    d.setFullYear(d.getFullYear() + resolvePermitDuration(app, opts.permitValidityYears));
-    return d;
-  })();
+  const expiryDate =
+    opts.expiryDate ??
+    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
   drawWatermark(doc);
