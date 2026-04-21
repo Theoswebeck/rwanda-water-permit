@@ -166,6 +166,18 @@ function ReadonlyField({ label, value }: { label: string; value?: string | null 
   );
 }
 
+function fmtPermitDate(value?: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 function isFieldEmpty(value?: string | number | null): boolean {
   if (value === null || value === undefined) return true;
   if (typeof value === "string" && (value.trim() === "" || value.trim().toLowerCase() === "n/a")) return true;
@@ -534,8 +546,8 @@ export function InspectionFormLayout({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <ReadonlyField label="Number" value={locked.permitNumber} />
                 <EditableLockedField label="Name of Facility/Project" lockedValue={locked.facilityProjectName} overrideKey="facilityProjectName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <ReadonlyField label="Issuance date" value={locked.issuanceDate || ""} />
-                <ReadonlyField label="Expiration date" value={locked.expirationDate || ""} />
+                <ReadonlyField label="Issuance date" value={fmtPermitDate(locked.issuanceDate)} />
+                <ReadonlyField label="Expiration date" value={fmtPermitDate(locked.expirationDate)} />
               </div>
             </SectionShell>
 
