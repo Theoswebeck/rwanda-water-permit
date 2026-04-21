@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/session";
 import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
+import { addYearsSafe } from "@/lib/date-math";
 
 export const runtime = "nodejs";
 
@@ -277,9 +278,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           );
           if (totalYears >= 1 && totalYears <= 15) {
             permitValidityYears = totalYears;
-            const d = new Date();
-            d.setFullYear(d.getFullYear() + totalYears);
-            exactExpiryDate = d;
+            exactExpiryDate = addYearsSafe(new Date(), totalYears);
           }
         }
       }
@@ -302,9 +301,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
                 );
                 if (totalYears >= 1 && totalYears <= 15) {
                   permitValidityYears = totalYears;
-                  const d = new Date();
-                  d.setFullYear(d.getFullYear() + totalYears);
-                  exactExpiryDate = d;
+                  exactExpiryDate = addYearsSafe(new Date(), totalYears);
                 }
               } else {
                 // Transfer / modification: preserve exact original expiry.
