@@ -50,11 +50,13 @@ import {
   ExternalLink,
   Database,
   Eye,
+  ArrowRight,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import type { PermitRegistryEntry } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
+import { cn } from "@/lib/utils";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
@@ -116,6 +118,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [showUploadConfirm, setShowUploadConfirm] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [jumpPage, setJumpPage] = useState("");
+  const [jumpError, setJumpError] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [docUploadResult, setDocUploadResult] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 
@@ -181,13 +184,28 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
 
   useEffect(() => {
     setCurrentPage(1);
+    setJumpPage("");
+    setJumpError(false);
   }, [searchTerm, regimeFilter, statusFilter, sortField, sortDir]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
+      setJumpError(false);
     }
   }, [currentPage, totalPages]);
+
+  const submitJump = useCallback(() => {
+    if (jumpPage.length === 0) return;
+    const page = parseInt(jumpPage, 10);
+    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      setJumpPage("");
+      setJumpError(false);
+    } else {
+      setJumpError(true);
+    }
+  }, [jumpPage, totalPages]);
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
@@ -948,9 +966,10 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               </Table>
             </div>
             {total > PAGE_SIZE && (
-              <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-800 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 dark:border-slate-800 px-4 py-3">
                 <p className="text-xs text-muted-foreground">
-                  Page {currentPage} of {totalPages}
+                  Page <span className="font-medium text-foreground">{currentPage}</span> of{" "}
+                  <span className="font-medium text-foreground">{totalPages}</span>
                 </p>
                 <div className="flex items-center gap-2">
                   <Button
@@ -961,27 +980,49 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                   >
                     Previous
                   </Button>
-                  <form
-                    className="flex items-center gap-1.5"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const page = parseInt(jumpPage, 10);
-                      if (page >= 1 && page <= totalPages) {
-                        setCurrentPage(page);
-                        setJumpPage("");
-                      }
-                    }}
-                  >
+                  <div className="flex items-center gap-1">
                     <Input
-                      type="number"
-                      min={1}
-                      max={totalPages}
-                      placeholder="Go to"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      aria-label={`Go to page (1 to ${totalPages})`}
+                      aria-invalid={jumpError || undefined}
+                      aria-describedby="jump-page-error"
+                      placeholder={`1–${totalPages}`}
                       value={jumpPage}
-                      onChange={(e) => setJumpPage(e.target.value)}
-                      className="w-[72px] h-8 text-xs text-center"
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setJumpPage(val);
+                        if (jumpError) setJumpError(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          submitJump();
+                        }
+                      }}
+                      className={cn(
+                        "h-8 text-xs text-center transition-colors",
+                        "w-[88px] tabular-nums",
+                        jumpError &&
+                          "border-red-500 text-red-600 focus-visible:ring-red-500 dark:border-red-500/70 dark:text-red-400"
+                      )}
                     />
-                  </form>
+                    <span id="jump-page-error" role="status" aria-live="polite" className="sr-only">
+                      {jumpError ? `Page must be between 1 and ${totalPages}` : ""}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2"
+                      onClick={submitJump}
+                      disabled={jumpPage.length === 0}
+                      aria-label="Jump to page"
+                      title="Jump to page"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
