@@ -30,7 +30,7 @@ const FONT_BOLD    = hasSegoe ? "SegoeUI-Bold"   : "Times-Bold";
 const FONT_ITALIC  = hasSegoe ? "SegoeUI-Italic" : "Times-Italic";
 
 function createDoc(): PDFKit.PDFDocument {
-  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 }, bufferPages: true });
   if (hasSegoe) {
     doc.registerFont("SegoeUI", SEGOE_REGULAR);
     doc.registerFont("SegoeUI-Bold", SEGOE_BOLD);
