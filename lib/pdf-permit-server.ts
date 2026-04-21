@@ -765,6 +765,76 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   return docToBuffer(doc);
 }
 
+async function drawKinyarwandaOrgAbstractionPage(
+  doc: PDFKit.PDFDocument,
+  opts: PermitRenderOpts,
+  permitTitleLine: string,
+  issueDate: Date,
+  expiryDate: Date,
+): Promise<void> {
+  const { application: app } = opts;
+
+  doc.addPage();
+  drawWatermark(doc);
+  const logoY = drawLogo(doc);
+  drawTitle(doc, `URUHUSHYA RWO GUKORESHA AMAZI N° ${permitTitleLine}`, logoY);
+
+  const notes = resolveNotes(app) || {};
+  const orgName = resolveApplicantName(app);
+  const rep = resolveOrgRep(app);
+  const officeSector =
+    typeof notes.officeSector === "string" && notes.officeSector.trim()
+      ? notes.officeSector.trim()
+      : "N/A";
+  const officeDistrict =
+    typeof notes.officeDistrict === "string" && notes.officeDistrict.trim()
+      ? notes.officeDistrict.trim()
+      : "N/A";
+  const officeProvinceRaw =
+    typeof notes.officeProvince === "string" ? notes.officeProvince.trim() : "";
+
+  const waterSourceName = resolveWaterSourceName(app);
+  const loc = resolveAdminLocation(app);
+  const { lat, lng } = resolveLatLng(app);
+  const systemTypeRw = resolveKinyarwandaSystemType(app);
+  const activitiesRw = resolveActivitiesKinyarwanda(app);
+  const flowRate = resolveFlowRate(app);
+
+  const paraRw2 =
+    "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,";
+
+  const paraRw3 =
+    `"${orgName}" ifite ibiro biherereye mu Murenge wa ${officeSector}, Akarere ka ${officeDistrict}, ${formatIntaraOrUmujyiWaKigali(officeProvinceRaw)}; ` +
+    `ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
+    `ava ku ${waterSourceName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+    `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
+    `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${activitiesRw}.`;
+
+  const paraRw4 =
+    `Uru ruhushya rufite agaciro kuva ${fmtDMY(issueDate)} kugeza ${fmtDMY(expiryDate)}.`;
+
+  const paraRw5 =
+    "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.";
+
+  doc.font("Helvetica").fontSize(11).fillColor("#000");
+  const leftX = 50;
+  const maxWidth = doc.page.width - leftX * 2;
+
+  let y = logoY + 30;
+  for (const p of [paraRw2, paraRw3, paraRw4, paraRw5]) {
+    doc.text(p, leftX, y, { width: maxWidth, align: "left" });
+    y = doc.y + 8;
+  }
+
+  // Signature line — left side: title; right side: "Bikorewe i Kigali, kuwa …"
+  const sigY = Math.max(y + 24, doc.page.height - 140);
+  doc.text("Umuyobozi Mukuru wa RWB", leftX, sigY);
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, leftX, sigY, {
+    width: maxWidth,
+    align: "right",
+  });
+}
+
 async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Buffer> {
   const { application: app, permitNumber, isModified } = opts;
   const issueDate = opts.issuedDate ?? new Date();
@@ -827,6 +897,15 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
   doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+
+  // Second page — Kinyarwanda translation (abstraction_organization only)
+  await drawKinyarwandaOrgAbstractionPage(
+    doc,
+    opts,
+    resolvePermitTitleNumber(permitNumber, issueDate.getFullYear()),
+    issueDate,
+    expiryDate,
+  );
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
