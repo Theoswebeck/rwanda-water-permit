@@ -859,43 +859,6 @@ const PROVINCE_ALIAS_MAP: Record<string, string> = {
 function parseLocationString(raw: string | null | undefined): ParsedLocation {
   if (!raw || typeof raw !== 'string') return {};
 
-  const tokens = raw
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean)
-    .map(t =>
-      t.replace(/\s+(province|district|sector|cell|village)$/i, '').trim()
-    )
-    .filter(Boolean);
-
-  if (tokens.length === 0) return {};
-
-  const result: ParsedLocation = {};
-  const remaining = new Set(tokens);
-
-  // 1. Identify province
-  for (const token of tokens) {
-    const key = PROVINCE_ALIAS_MAP[token.toLowerCase()];
-    if (key && rwandaAdministrativeData[key]) {
-      result.province = key;
-      remaining.delete(token);
-      break;
-    }
-  }
-
-  // If no province matched via alias, try matching any token directly as a province key
-  if (!result.province) {
-    for (const token of tokens) {
-      if (rwandaAdministrativeData[token]) {
-        result.province = token;
-        remaining.delete(token);
-        break;
-      }
-    }
-  }
-
-  // Build a flat lookup of all districts (and which province they belong to)
-  // so we can still resolve district even if province wasn't found.
   const districtToProvince: Record<string, string> = {};
   for (const prov of Object.keys(rwandaAdministrativeData)) {
     for (const dist of Object.keys(rwandaAdministrativeData[prov])) {
@@ -903,58 +866,164 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
     }
   }
 
-  // 2. Identify district
-  for (const token of remaining) {
-    const lower = token.toLowerCase();
-    if (result.province) {
-      const districts = rwandaAdministrativeData[result.province];
-      const match = Object.keys(districts).find(d => d.toLowerCase() === lower);
-      if (match) {
-        result.district = match;
-        remaining.delete(token);
-        break;
-      }
-    } else if (districtToProvince[lower]) {
-      result.province = districtToProvince[lower];
-      const districts = rwandaAdministrativeData[result.province];
-      result.district = Object.keys(districts).find(d => d.toLowerCase() === lower) || token;
-      remaining.delete(token);
-      break;
+  const resolveProvince = (value: string): string | undefined => {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    const alias = PROVINCE_ALIAS_MAP[trimmed.toLowerCase()];
+    if (alias && rwandaAdministrativeData[alias]) return alias;
+
+    const direct = Object.keys(rwandaAdministrativeData).find(
+      p => p.toLowerCase() === trimmed.toLowerCase()
+    );
+    return direct;
+  };
+
+  const tokens = raw
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean);
+
+  if (tokens.length === 0) return {};
+
+  const result: ParsedLocation = {};
+  const remaining: string[] = [];
+
+  const normalizeTokenPrefix = (value: string): string =>
+    value
+      .replace(/^\d+\.\s*/, '')
+      .replace(/^[^,]+:\s*/, '')
+      .trim();
+
+  const stripTrailingLabel = (value: string): string =>
+    value
+      .replace(/\s+(province|provence|districts?|sectors?|cells?|villages?)\s*$/i, '')
+      .trim();
+
+  const labelMatchRegex = /^(.+?)[\s.]+(province|provence|districts?|sectors?|cells?|villages?)\s*$/i;
+  const normalizeLabel = (value: string): 'province' | 'district' | 'sector' | 'cell' | 'village' => {
+    const lower = value.toLowerCase();
+    if (lower === 'provence') return 'province';
+    if (lower.startsWith('district')) return 'district';
+    if (lower.startsWith('sector')) return 'sector';
+    if (lower.startsWith('cell')) return 'cell';
+    if (lower.startsWith('village')) return 'village';
+    return 'province';
+  };
+
+  // 1) Explicit labels are authoritative: "... Village", "... Cell", etc.
+  for (const token of tokens) {
+    const normalized = normalizeTokenPrefix(token);
+    if (!normalized) continue;
+
+    const match = normalized.match(labelMatchRegex);
+    if (!match) {
+      const unlabeled = stripTrailingLabel(normalized);
+      if (unlabeled) remaining.push(unlabeled);
+      continue;
+    }
+
+    const value = match[1].trim();
+    if (!value) continue;
+
+    const label = normalizeLabel(match[2]);
+    if (label === 'province' && !result.province) {
+      result.province = resolveProvince(value) || value;
+      continue;
+    }
+    if (label === 'district' && !result.district) {
+      result.district = value;
+      continue;
+    }
+    if (label === 'sector' && !result.sector) {
+      result.sector = value;
+      continue;
+    }
+    if (label === 'cell' && !result.cell) {
+      result.cell = value;
+      continue;
+    }
+    if (label === 'village' && !result.village) {
+      result.village = value;
+      continue;
     }
   }
 
-  // 3. Identify sector
-  if (result.province && result.district) {
+  // If a labeled district exists, infer province when possible.
+  if (result.district && !result.province) {
+    const inferredProvince = districtToProvince[result.district.toLowerCase()];
+    if (inferredProvince) result.province = inferredProvince;
+  }
+
+  // If nothing was labeled, keep legacy behavior on unlabeled tokens.
+  if (remaining.length === 0) {
+    for (const token of tokens) {
+      const normalized = stripTrailingLabel(normalizeTokenPrefix(token));
+      if (normalized) remaining.push(normalized);
+    }
+  }
+
+  // 2. Identify province (fallback)
+  if (!result.province) {
+    for (const token of remaining) {
+      const match = resolveProvince(token);
+      if (match) {
+        result.province = match;
+        break;
+      }
+    }
+  }
+
+  // 3. Identify district (fallback)
+  if (!result.district) {
+    for (const token of remaining) {
+      const lower = token.toLowerCase();
+      if (result.province && rwandaAdministrativeData[result.province]) {
+        const districts = rwandaAdministrativeData[result.province];
+        const match = Object.keys(districts).find(d => d.toLowerCase() === lower);
+        if (match) {
+          result.district = match;
+          break;
+        }
+      } else if (districtToProvince[lower]) {
+        result.province = districtToProvince[lower];
+        const districts = rwandaAdministrativeData[result.province];
+        result.district = Object.keys(districts).find(d => d.toLowerCase() === lower) || token;
+        break;
+      }
+    }
+  }
+
+  // 4. Identify sector (fallback)
+  if (!result.sector && result.province && result.district) {
     const sectors = rwandaAdministrativeData[result.province]?.[result.district];
     if (sectors) {
       for (const token of remaining) {
         const match = Object.keys(sectors).find(s => s.toLowerCase() === token.toLowerCase());
         if (match) {
           result.sector = match;
-          remaining.delete(token);
           break;
         }
       }
     }
   }
 
-  // 4. Identify cell
-  if (result.province && result.district && result.sector) {
+  // 5. Identify cell (fallback)
+  if (!result.cell && result.province && result.district && result.sector) {
     const cells = rwandaAdministrativeData[result.province]?.[result.district]?.[result.sector];
     if (cells) {
       for (const token of remaining) {
         const match = Object.keys(cells).find(c => c.toLowerCase() === token.toLowerCase());
         if (match) {
           result.cell = match;
-          remaining.delete(token);
           break;
         }
       }
     }
   }
 
-  // 5. Identify village
-  if (result.province && result.district && result.sector && result.cell) {
+  // 6. Identify village (fallback)
+  if (!result.village && result.province && result.district && result.sector && result.cell) {
     const villages = rwandaAdministrativeData[result.province]?.[result.district]?.[result.sector]?.[result.cell];
     if (villages) {
       for (const token of remaining) {
