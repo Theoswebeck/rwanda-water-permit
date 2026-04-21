@@ -124,6 +124,12 @@ function resolveNotes(app: PermitApplication) {
 }
 
 function resolveApplicantName(app: PermitApplication): string {
+  const notes = resolveNotes(app);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  if ((app.application_type === "transfer" || notes?.isTransfer === true) && tfd) {
+    const n = (tfd.transfereeName as string | undefined)?.trim();
+    if (n) return n;
+  }
   return app.applicant?.account_type === "individual"
     ? `${app.applicant.first_name ?? ""} ${app.applicant.last_name ?? ""}`.trim() || "N/A"
     : app.applicant?.company_name || "N/A";
@@ -342,13 +348,29 @@ function resolvePermitTitleNumber(permitNumber: string, headerYear: number): str
 
 function resolveOrgAddress(app: PermitApplication): string {
   const notes = resolveNotes(app);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  const isTransfer = app.application_type === "transfer" || notes?.isTransfer === true;
+
+  // For transfer applications use the transferee's office address from the form.
+  if (isTransfer && tfd) {
+    const sector   = (tfd.transfereeAddressSector   as string | undefined)?.trim() ?? "";
+    const district = (tfd.transfereeAddressDistrict as string | undefined)?.trim() ?? "";
+    const province = (tfd.transfereeAddressProvince as string | undefined)?.trim() ?? "";
+    const parts = [
+      sector   ? `${sector} Sector`   : null,
+      district ? `${district} District` : null,
+      province ? (province.toLowerCase() === "kigali" ? "City OF Kigali" : `${province} Province`) : null,
+    ].filter(Boolean);
+    if (parts.length) return parts.join(", ");
+  }
+
   const parts = [
-    (notes?.officeSector as string)?.trim() ? `${notes.officeSector} Sector` : null,
-    (notes?.officeDistrict as string)?.trim() ? `${notes.officeDistrict} District` : null,
+    (notes?.officeSector as string)?.trim() ? `${notes!.officeSector} Sector` : null,
+    (notes?.officeDistrict as string)?.trim() ? `${notes!.officeDistrict} District` : null,
     (notes?.officeProvince as string)?.trim()
-      ? (notes.officeProvince as string).toLowerCase() === "kigali"
+      ? (notes!.officeProvince as string).toLowerCase() === "kigali"
         ? "City OF Kigali"
-        : `${notes.officeProvince} Province`
+        : `${notes!.officeProvince} Province`
       : null,
   ].filter(Boolean);
   if (parts.length) return parts.join(", ");
@@ -357,6 +379,17 @@ function resolveOrgAddress(app: PermitApplication): string {
 
 function resolveOrgRep(app: PermitApplication): { name: string; title: string } {
   const notes = resolveNotes(app);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  const isTransfer = app.application_type === "transfer" || notes?.isTransfer === true;
+
+  // For transfer applications use the transferee's representative from the form.
+  if (isTransfer && tfd) {
+    const repName  = (tfd.transfereeRepresentativeName  as string | undefined)?.trim() ?? "";
+    const repTitle = ((tfd.transfereeRepresentativePosition as string | undefined)?.trim()
+                  || (tfd.transfereeTitlePosition as string | undefined)?.trim()) ?? "";
+    if (repName) return { name: repName, title: repTitle || "Representative" };
+  }
+
   const name = (notes?.nameRepresentative as string)?.trim()
     || `${app.applicant?.first_name ?? ""} ${app.applicant?.last_name ?? ""}`.trim()
     || "N/A";

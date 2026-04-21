@@ -452,6 +452,12 @@ function computeValidityYearsFromDates(issued: Date, expiry: Date): number | nul
 // NOTE: variant selection is shared with the UI via `lib/permit-variant.ts`.
 
 function resolveApplicantName(application: Application): string {
+  const notes = getInternalNotes(application);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  if ((application.application_type === "transfer" || notes?.isTransfer === true) && tfd) {
+    const n = (tfd.transfereeName as string | undefined)?.trim();
+    if (n) return n;
+  }
   return application.applicant?.account_type === "individual"
     ? `${application.applicant.first_name ?? ""} ${application.applicant.last_name ?? ""}`.trim() || "N/A"
     : application.applicant?.company_name || "N/A";
@@ -459,6 +465,12 @@ function resolveApplicantName(application: Application): string {
 
 function resolveOrganizationNameForPermit(application: Application): string {
   const notes = getInternalNotes(application);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  const isTransfer = application.application_type === "transfer" || notes?.isTransfer === true;
+  if (isTransfer && tfd) {
+    const n = (tfd.transfereeName as string | undefined)?.trim();
+    if (n) return n;
+  }
   const fromNotes = typeof notes?.fullNameApplicant === "string" ? notes.fullNameApplicant.trim() : "";
   if (fromNotes) return fromNotes;
   const fromApplicant = typeof application.applicant?.company_name === "string" ? application.applicant.company_name.trim() : "";
@@ -504,6 +516,22 @@ function resolveWaterSourceLocationAddress(application: Application): string {
 
 function resolveOrganizationRegisteredOfficeAddress(application: Application): string {
   const notes = getInternalNotes(application);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  const isTransfer = application.application_type === "transfer" || notes?.isTransfer === true;
+
+  // For transfers, use the transferee's office address captured in the form.
+  if (isTransfer && tfd) {
+    const sector   = (tfd.transfereeAddressSector   as string | undefined)?.trim() ?? "";
+    const district = (tfd.transfereeAddressDistrict as string | undefined)?.trim() ?? "";
+    const province = (tfd.transfereeAddressProvince as string | undefined)?.trim() ?? "";
+    const parts = [
+      sector   ? `${sector} Sector`   : null,
+      district ? `${district} District` : null,
+      province ? (province.toLowerCase() === "kigali" ? "City OF Kigali" : `${province} Province`) : null,
+    ].filter(Boolean) as string[];
+    if (parts.length) return parts.join(", ");
+  }
+
   const sector = typeof notes?.officeSector === "string" ? notes.officeSector.trim() : "";
   const district = typeof notes?.officeDistrict === "string" ? notes.officeDistrict.trim() : "";
   const provinceRaw = typeof notes?.officeProvince === "string" ? notes.officeProvince.trim() : "";
@@ -524,6 +552,17 @@ function resolveOrganizationRegisteredOfficeAddress(application: Application): s
 
 function resolveOrganizationRepresentative(application: Application): { name: string; title: string } {
   const notes = getInternalNotes(application);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  const isTransfer = application.application_type === "transfer" || notes?.isTransfer === true;
+
+  // For transfers, use the transferee's representative captured in the form.
+  if (isTransfer && tfd) {
+    const repName  = (tfd.transfereeRepresentativeName  as string | undefined)?.trim() ?? "";
+    const repTitle = ((tfd.transfereeRepresentativePosition as string | undefined)?.trim()
+                  || (tfd.transfereeTitlePosition as string | undefined)?.trim()) ?? "";
+    if (repName) return { name: repName, title: repTitle || "Representative" };
+  }
+
   const name = typeof notes?.nameRepresentative === "string" ? notes.nameRepresentative.trim() : "";
   const fallbackName =
     `${application.applicant?.first_name ?? ""} ${application.applicant?.last_name ?? ""}`.trim() || "N/A";
