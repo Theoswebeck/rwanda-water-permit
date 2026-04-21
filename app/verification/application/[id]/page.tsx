@@ -35,6 +35,7 @@ import type { RecommendationData } from "@/components/inspection/verification-su
 import { ArrowLeft, Loader2, XCircle, ClipboardCheck, Check, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
+import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
 
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new"),
@@ -1051,27 +1052,7 @@ export default function VerificationApplicationPage() {
 
             {/* Permit Preview Tab */}
             <TabsContent value="permit_preview" className="focus-visible:outline-none">
-              {application.id && (
-                <div className="relative rounded-lg border overflow-hidden bg-muted/30" style={{ height: '900px' }}>
-                  <div
-                    id={`permit-preview-loading-${application.id}`}
-                    className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 z-10"
-                  >
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-                    <p className="text-sm text-muted-foreground">Generating permit preview…</p>
-                  </div>
-                  <iframe
-                    src={`/api/staff/applications/${application.id}/permit-preview`}
-                    className="w-full h-full"
-                    style={{ border: 'none' }}
-                    title="Permit Preview"
-                    onLoad={() => {
-                      const overlay = document.getElementById(`permit-preview-loading-${application.id}`);
-                      if (overlay) overlay.style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
+              {application.id && <PermitPreviewFrame applicationId={application.id} />}
             </TabsContent>
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
