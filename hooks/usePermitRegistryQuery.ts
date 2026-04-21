@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { PermitRegistryEntry } from "@/types/database";
 
 export const permitRegistryKeys = {
@@ -67,5 +67,6 @@ export function usePermitRegistryQuery(params: PermitRegistryQueryParams, enable
     enabled,
     staleTime: 5 * 60 * 1000,
     retry: 1,
+    placeholderData: keepPreviousData,
   });
 }

@@ -188,11 +188,11 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   }, [searchTerm, regimeFilter, statusFilter, sortField, sortDir]);
 
   useEffect(() => {
-    if (currentPage > totalPages) {
+    if (total > 0 && currentPage > totalPages) {
       setCurrentPage(totalPages);
       setJumpError(false);
     }
-  }, [currentPage, totalPages]);
+  }, [currentPage, totalPages, total]);
 
   const submitJump = useCallback(() => {
     if (jumpPage.length === 0) return;
