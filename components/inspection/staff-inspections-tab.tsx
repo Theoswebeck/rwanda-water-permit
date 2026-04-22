@@ -157,7 +157,7 @@ interface StaffInspectionsTabProps {
 }
 
 export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
-  const { userProfile } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const currentUserId = userProfile?.id ?? null;
   const basePath = getInspectionBasePath(roleContext || userProfile?.role);
   const [loading, setLoading] = useState(true);
@@ -405,7 +405,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     return result;
   }, [visibleInspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2">
