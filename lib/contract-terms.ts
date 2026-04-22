@@ -583,7 +583,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
         title: "IGICE CYA II: UBURENGANZIRA N’INSHINGANO BY’UKORESHA MAZI — Ingingo ya 4: Uburenganzira bwo gufata amazi no kuyakoresha",
         paragraphs: [
           "1. Ukoresha amazi yemerewe gukoresha amazi ava mu {{WATER_SOURCE_NAME}} mu gice cyacyo giherereye mu Intara y' {{PROVINCE_LABEL}}, Akarere ka {{DISTRICT}}, Umurenge wa {{SECTOR}}, Akagari ka {{CELL}}, Umudugudu wa {{VILLAGE}} kuri Latitide (Latitude): {{LAT}}°, Lonjitide (Longitude): {{LNG}}°, hakoreshejwe uburyo bwa {{SYSTEM_TYPE_RW}} ku gipimo cya {{VOLUME_LABEL}}.",
-          "2. Amazi yafashwe azakoreshwa gusa mu  XXXX (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
+          "2. Amazi yafashwe azakoreshwa gusa mu bikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
           "3. Ukoresha amazi yemera ko amazi ava mu {{WATER_SOURCE_NAME}} akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "4. Umuyobozi Mukuru ntiyishingira ingano n’ ubuziranenge by’ amazi bikenewe n’ ukoresha amazi mu mirimo ye.",
         ],
@@ -912,7 +912,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
           "Aho imbago ihererereye: Ikiyaga cya XXXX (Izina ry’Ikiyaga), igice cyacyo giherereye mu Umudugudu wa XXXX, Akagari ka XXX, Umurenge wa XXXX, Akarere ka XXXX, Intara y' XXXX nk’uko bigaragazwa n’ikarita iri ku umugereka.",
           "Ubuso bw’imbago: Hegitari XXX",
           "2. Uru ruhushya ni urwo gukorera mu mazi gusa. Uwaruhawe abaye akeneye gukorera mu nkengero z’ikiyaga (buffer zone) agomba kubisabira uburenganzira urwego rubishinzwe.",
-          "3. Imbago yatanzwe izakoreshwa gusa mu bikorwa byo (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
+          "3. Imbago yatanzwe izakoreshwa gusa mu bikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
           "4. Ukoresha amazi yemera ko amazi y’ Ikiyaga cya XXXX (Izina ry’Ikiyaga) akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "5. Umuyobozi Mukuru ntiyishingira ingano n’ ubuziranenge by’ amazi bikenewe n’ ukoresha amazi mu mirimo ye.",
         ],
@@ -1237,11 +1237,11 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
       {
         title: "IGICE CYA II: UBURENGANZIRA N'INSHINGANO Z’UKORESHA AMAZI — Ingingo ya 4: Uburenganzira ku imbago",
         paragraphs: [
-          "Umuyobozi Mukuru atanze Uruhushya rwo gukora ibikorwa byo (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) ku buryo bukurikira:",
+          "Umuyobozi Mukuru atanze Uruhushya rwo gukora ibikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) ku buryo bukurikira:",
           "Aho imbago ihererereye: Ikiyaga cya XXX (IZINA RY’IKIYAGA), igice cyacyo giherereye mu Umudugudu wa Rusumo, Akagari ka Karambi, Umurenge wa Kivumu, Akarere ka Rutsiro, Intara y' Iburengerazuba nk’uko bigaragazwa n’ikarita iri ku umugereka.",
           "Ubuso bw’imbago: Hegitari XXX",
           "2. Uru ruhushya ni urwo gukorera mu mazi gusa. Uwaruhawe akeneye gukorera mu nkengero z’ikiyaga (buffer zone) agomba kubisabira uburenganzira urwego rubishinzwe.",
-          "3. Imbago yatanzwe izakoreshwa gusa mu bikorwa byo (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize igice cy’aya masezerano.",
+          "3. Imbago yatanzwe izakoreshwa gusa mu bikorwa (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize igice cy’aya masezerano.",
           "4. Ukoresha amazi yemera ko amazi y’ Ikiyaga cya XXX (IZINA RY’IKIYAGA) akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "5. Umuyobozi Mukuru ntiyishingira ingano n’ubuziranenge by’ amazi bikenewe n’ukoresha amazi mu mirimo ye.",
         ],

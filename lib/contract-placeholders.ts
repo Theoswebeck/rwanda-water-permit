@@ -284,31 +284,42 @@ function resolveActivityLabelRw(application: ApplicationForContract): string {
     if (tp) intended = [tp];
   }
   const primary = intended?.[0] ?? "";
+  // Each label is a full noun phrase that fits after "mu bikorwa" / "ibikorwa".
+  // Kinyarwanda noun-class concord: verbs take "byo" (e.g. byo kuhira),
+  // nouns take "bya" / "by'" (e.g. by'inganda).
   const labels: Record<string, string> = {
-    fish_farming_lakes: "Uburobyi byo mu biyaga",
-    fish_farming_ponds: "Uburobyi bwo mu kidendezi",
-    irrigation: "Kuhira",
-    water_supply: "Gutanga amazi",
-    industry: "Inganda",
-    industrial: "Inganda",
-    coffee_washing: "Isukura ry'ikawa",
-    electricity_generation: "Gukora amashanyarazi (Amashanyarazi y'amazi)",
-    electricity: "Gukora amashanyarazi (Amashanyarazi y'amazi)",
-    mining: "Ubucukuzi bw'amabuye y'agaciro",
-    construction_of_dam: "Kubaka Urugomero",
-    construction_of_infrastructures: "Kubaka cyangwa gushyiraho ibikorwa remezo",
-    construction: "Kubaka",
-    navigation: "Ubwogero",
-    recreation_activities: "Ibikorwa byo kuryoherereza",
-    recreation: "Ibikorwa byo kuryoherereza",
-    gaz_extraction: "Gucukura gaze",
-    livestock: "Ubworozi",
-    domestic: "Imikoreshereze yo mu rugo",
-    aquaculture: "Ubworozi bw'amafi n'ibindi binyabuzima byo mu mazi",
-    municipal_supply: "Gutanga amazi mu mijyi",
-    other: "Ikindi",
+    fish_farming_lakes: "by'uburobyi mu biyaga",
+    fish_farming_ponds: "by'uburobyi mu bidendezi",
+    irrigation: "byo kuhira",
+    water_supply: "byo gutanga amazi",
+    industry: "by'inganda",
+    industrial: "by'inganda",
+    coffee_washing: "byo gusukura ikawa",
+    electricity_generation: "byo gukora amashanyarazi",
+    electricity: "byo gukora amashanyarazi",
+    mining: "byo gucukura amabuye y'agaciro",
+    construction_of_dam: "byo kubaka urugomero",
+    construction_of_infrastructures: "byo kubaka cyangwa gushyiraho ibikorwa remezo",
+    construction: "byo kubaka",
+    navigation: "by'ubwogero",
+    recreation_activities: "byo kwidagadura",
+    recreation: "byo kwidagadura",
+    gaz_extraction: "byo gucukura gaze",
+    livestock: "by'ubworozi",
+    domestic: "byo gukoreshwa mu rugo",
+    aquaculture: "by'ubworozi bw'amafi",
+    municipal_supply: "byo gutanga amazi mu mijyi",
+    other: "by'ibindi bisobanuwe",
   };
-  return labels[primary] || humanizeActivityCode(primary);
+  return labels[primary] || humanizeActivityCodeRw(primary);
+}
+
+function humanizeActivityCodeRw(code: string): string {
+  if (!code) return "by'ibindi";
+  // Best-effort fallback: prefix with "byo" so any unmapped enum still renders
+  // a syntactically plausible Kinyarwanda phrase. Add the new code to the
+  // labels map above to get a properly translated phrase.
+  return `byo ${code.replaceAll("_", " ")}`;
 }
 
 function resolveLatLng(application: ApplicationForContract): { lat: string; lng: string } {
@@ -857,6 +868,11 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("Hegitari XXX", ctx.concessionAreaLabel);
   s = s.replaceAll("NAME OF TYPE OF WATER ACTIVITIES APPLIED FOR", ctx.activityLabel);
   s = s.replaceAll("NAME OF ACTIVITIES APPLIED FOR", ctx.activityLabel);
+  // Swallow surrounding parens because activityLabelRw already carries its
+  // concord prefix (e.g. "by'inganda") and parens read awkwardly in the
+  // rendered Kinyarwanda contract. Then handle the bare placeholder as a
+  // fallback for any template that doesn't wrap it.
+  s = s.replaceAll("(IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA)", ctx.activityLabelRw);
   s = s.replaceAll("IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA", ctx.activityLabelRw);
 
   // Lake cleanup: remove stray "XXXX" next to "Lake" after we’ve filled the lake name.
