@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -419,6 +419,12 @@ export default function AssessmentApplicationPage() {
   const [permitLengthSaving, setPermitLengthSaving] = useState(false);
   const [assessorRecommendedVolume, setAssessorRecommendedVolume] = useState<number | undefined>(undefined);
   const [volumeSaving, setVolumeSaving] = useState(false);
+  // Bumped after each successful assessor save (document-overrides, duration,
+  // or volume) so the permit preview iframe refetches the latest PDF.
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const bumpPreviewRefresh = useCallback(() => {
+    setPreviewRefreshKey((k) => k + 1);
+  }, []);
   
   // Original requested values (from applicant submission - read-only)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
@@ -1421,6 +1427,7 @@ export default function AssessmentApplicationPage() {
       } as any);
       
       console.log('✅ Permit length adjusted to', newPermitLength, 'years');
+      bumpPreviewRefresh();
     } catch (err) {
       console.error('❌ Error saving permit length adjustment:', err);
       alert('Failed to save permit length adjustment. Please try again.');
@@ -1485,6 +1492,7 @@ export default function AssessmentApplicationPage() {
       } as any);
       
       console.log('✅ Volume adjusted to', newVolume, 'm³/year');
+      bumpPreviewRefresh();
     } catch (err) {
       console.error('❌ Error saving volume adjustment:', err);
       alert('Failed to save volume adjustment. Please try again.');
@@ -2019,6 +2027,7 @@ export default function AssessmentApplicationPage() {
                     };
                   });
                 }}
+                onSaved={bumpPreviewRefresh}
               />
             )}
 
@@ -2329,7 +2338,12 @@ export default function AssessmentApplicationPage() {
 
             {/* Permit Preview Tab */}
             <TabsContent value="permit_preview" className="focus-visible:outline-none">
-              {application.id && <PermitPreviewFrame applicationId={application.id} />}
+              {application.id && (
+                <PermitPreviewFrame
+                  applicationId={application.id}
+                  refreshKey={previewRefreshKey}
+                />
+              )}
             </TabsContent>
 
             {/* Internal Notes Tab */}

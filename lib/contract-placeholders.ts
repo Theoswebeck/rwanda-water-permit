@@ -166,6 +166,10 @@ function resolveApplicantIdNumber(application: ApplicationForContract): string {
 }
 
 function resolveWaterSourceName(application: ApplicationForContract): string {
+  // Assessor override (notes.nameSourceWater) wins over the column.
+  const notes = getInternalNotes(application);
+  const fromNotes = typeof notes?.nameSourceWater === "string" ? notes.nameSourceWater.trim() : "";
+  if (fromNotes) return fromNotes;
   const waterBody = (application.water_body_name ?? "").trim();
   if (waterBody) return waterBody;
   const ws = (application.water_source ?? "").trim();
@@ -208,6 +212,8 @@ function resolveOfficeAdminLocation(application: ApplicationForContract): {
   province: string;
   district: string;
   sector: string;
+  cell: string;
+  village: string;
 } {
   const notes = getInternalNotes(application);
   const province =
@@ -222,17 +228,28 @@ function resolveOfficeAdminLocation(application: ApplicationForContract): {
     typeof notes?.officeSector === "string" && notes.officeSector.trim()
       ? notes.officeSector.trim()
       : (application.sector ?? "").trim() || "N/A";
+  const cell =
+    typeof notes?.officeCell === "string" && notes.officeCell.trim()
+      ? notes.officeCell.trim()
+      : "N/A";
+  const village =
+    typeof notes?.officeVillage === "string" && notes.officeVillage.trim()
+      ? notes.officeVillage.trim()
+      : "N/A";
 
-  return { province, district, sector };
+  return { province, district, sector, cell, village };
 }
 
 function resolveActivityLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
-  let intended = Array.isArray((application as any).intended_activities)
-    ? ((application as any).intended_activities as unknown[]).map(String).filter(Boolean)
-    : Array.isArray(notes?.intendedActivities)
-      ? (notes?.intendedActivities as unknown[]).map(String).filter(Boolean)
-      : [];
+  // Assessor override (notes.intendedActivities) wins when non-empty.
+  const fromNotes = Array.isArray(notes?.intendedActivities)
+    ? (notes!.intendedActivities as unknown[]).map(String).map((s) => s.trim()).filter(Boolean)
+    : [];
+  let intended: string[] = fromNotes;
+  if (!intended.length && Array.isArray((application as any).intended_activities)) {
+    intended = ((application as any).intended_activities as unknown[]).map(String).filter(Boolean);
+  }
   if (!intended.length && typeof notes?.transferFormData?.waterPurpose === "string") {
     const tp = notes.transferFormData.waterPurpose.trim();
     if (tp) intended = [tp];
@@ -274,11 +291,14 @@ function humanizeActivityCode(code: string): string {
 
 function resolveActivityLabelRw(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
-  let intended = Array.isArray((application as any).intended_activities)
-    ? ((application as any).intended_activities as unknown[]).map(String).filter(Boolean)
-    : Array.isArray(notes?.intendedActivities)
-      ? (notes?.intendedActivities as unknown[]).map(String).filter(Boolean)
-      : [];
+  // Assessor override (notes.intendedActivities) wins when non-empty.
+  const fromNotes = Array.isArray(notes?.intendedActivities)
+    ? (notes!.intendedActivities as unknown[]).map(String).map((s) => s.trim()).filter(Boolean)
+    : [];
+  let intended: string[] = fromNotes;
+  if (!intended.length && Array.isArray((application as any).intended_activities)) {
+    intended = ((application as any).intended_activities as unknown[]).map(String).filter(Boolean);
+  }
   if (!intended.length && typeof notes?.transferFormData?.waterPurpose === "string") {
     const tp = notes.transferFormData.waterPurpose.trim();
     if (tp) intended = [tp];
