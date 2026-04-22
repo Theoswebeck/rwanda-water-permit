@@ -147,6 +147,15 @@ EMAIL_DEV_MODE=false
 - **Health check:** `GET /api/health`
 - **Build:** Nixpacks
 
+### Branch → environment mapping
+
+| Branch                                     | Environment |
+|--------------------------------------------|-------------|
+| `chore/stage-unstaged-2026-03-01`          | **production** |
+| `chore/stage-unstaged-2026-03-01-uat`      | **staging**    |
+
+Despite the names, `-uat` is staging and the non-`-uat` branch is prod. Push fixes that need to reach production to **both** branches (fast-forward when possible).
+
 ---
 
 ## Important Constraints

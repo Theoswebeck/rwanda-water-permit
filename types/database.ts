@@ -444,6 +444,8 @@ export interface PermitRegistryEntry {
   uploaded_doc_name: string | null
   uploaded_doc_mime_type: string | null
   uploaded_doc_uploaded_at: string | null
+  deleted_at: string | null
+  manually_edited_at: string | null
   created_at: string
   updated_at: string
   source_kind?: string | null

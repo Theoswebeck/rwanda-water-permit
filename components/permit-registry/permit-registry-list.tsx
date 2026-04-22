@@ -49,13 +49,18 @@ import {
   FileText,
   ExternalLink,
   Database,
-  Eye,
+  Lock,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
+import { useUpdatePermitRegistry } from "@/hooks/useUpdatePermitRegistry";
+import { useDeletePermitRegistry } from "@/hooks/useDeletePermitRegistry";
 import type { PermitRegistryEntry } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 import { cn } from "@/lib/utils";
+import { RowActions } from "@/components/permit-registry/row-actions";
+import { EditRegistryDrawer } from "@/components/permit-registry/edit-registry-drawer";
+import { DeleteRegistryDialog } from "@/components/permit-registry/delete-registry-dialog";
 
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
@@ -120,6 +125,12 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   const [jumpError, setJumpError] = useState(false);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [docUploadResult, setDocUploadResult] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+  const [editEntry, setEditEntry] = useState<PermitRegistryEntry | null>(null);
+  const [deleteEntry, setDeleteEntry] = useState<PermitRegistryEntry | null>(null);
+  const [rowActionResult, setRowActionResult] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+
+  const updateMutation = useUpdatePermitRegistry();
+  const deleteMutation = useDeletePermitRegistry();
 
   const offset = (currentPage - 1) * PAGE_SIZE;
   const { data, isLoading, error, refetch } = usePermitRegistryQuery({
@@ -151,20 +162,33 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   }, [entries]);
 
   const stats = useMemo(() => {
+    const isAboutToExpire = (value: string | null | undefined): boolean => {
+      if (!value) return false;
+      const expiry = new Date(value);
+      if (Number.isNaN(expiry.getTime())) return false;
+      const now = new Date();
+      const horizon = new Date(now);
+      horizon.setMonth(horizon.getMonth() + 3);
+      return expiry >= now && expiry <= horizon;
+    };
+
     if (data?.summary) {
       return {
         total: data.summary.total,
-        distinctPermits: data.summary.distinctPermits,
         operational: data.summary.operational,
         expired: data.summary.expired,
+        cancelled: data.summary.cancelled,
+        expiringSoon: data.summary.expiringSoon,
         regimeTypes: data.summary.regimeTypes,
       };
     }
     const pageTotal = entries.length;
     const operational = entries.filter((e) => e.status?.toUpperCase()?.includes("OPERATIONAL") && !e.status?.toUpperCase()?.includes("NON")).length;
     const expired = entries.filter((e) => e.status?.toUpperCase()?.includes("EXPIRED")).length;
+    const cancelled = entries.filter((e) => e.status?.toUpperCase()?.includes("CANCEL")).length;
+    const expiringSoon = entries.filter((e) => isAboutToExpire(e.expiration_date)).length;
     const regimeSet = new Set(entries.map((e) => e.regime).filter(Boolean));
-    return { total: pageTotal, distinctPermits: 0, operational, expired, regimeTypes: regimeSet.size };
+    return { total: pageTotal, operational, expired, cancelled, expiringSoon, regimeTypes: regimeSet.size };
   }, [data?.summary, entries]);
 
   const toggleSort = useCallback(
@@ -285,6 +309,49 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     } finally {
       setUploadingDocId(null);
       e.target.value = "";
+    }
+  };
+
+  const handleEditSave = async (
+    id: string,
+    expectedUpdatedAt: string,
+    updates: Record<string, string | number | null>
+  ) => {
+    setRowActionResult(null);
+    try {
+      await updateMutation.mutateAsync({
+        id,
+        expectedUpdatedAt,
+        data: updates,
+      });
+      setRowActionResult({
+        kind: "success",
+        message: "Row updated successfully.",
+      });
+      setEditEntry(null);
+    } catch (err) {
+      setRowActionResult({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Failed to update row",
+      });
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteEntry) return;
+    setRowActionResult(null);
+    try {
+      await deleteMutation.mutateAsync(deleteEntry.id);
+      setRowActionResult({
+        kind: "success",
+        message: "Row deleted successfully.",
+      });
+      setDeleteEntry(null);
+    } catch (err) {
+      setRowActionResult({
+        kind: "error",
+        message: err instanceof Error ? err.message : "Failed to delete row",
+      });
     }
   };
 
@@ -411,28 +478,22 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             {
-              label: "Total Rows",
+              label: "Total Permits",
               value: stats.total,
               icon: FileText,
               color: "text-slate-700 dark:text-slate-300",
               bg: "bg-slate-50 dark:bg-slate-900",
               border: "border-slate-200 dark:border-slate-800",
+              statusFilterValue: "all",
             },
-            ...(stats.distinctPermits > 0 ? [{
-              label: "Distinct Permits",
-              value: stats.distinctPermits,
-              icon: Database,
-              color: "text-blue-700 dark:text-blue-400",
-              bg: "bg-blue-50/70 dark:bg-blue-950/30",
-              border: "border-blue-200 dark:border-blue-800",
-            }] : []),
             {
-              label: "Operational",
+              label: "Active",
               value: stats.operational,
               icon: Shield,
               color: "text-emerald-700 dark:text-emerald-400",
               bg: "bg-emerald-50/70 dark:bg-emerald-950/30",
               border: "border-emerald-200 dark:border-emerald-800",
+              statusFilterValue: "__ACTIVE__",
             },
             {
               label: "Expired",
@@ -441,6 +502,25 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               color: "text-red-600 dark:text-red-400",
               bg: "bg-red-50/70 dark:bg-red-950/30",
               border: "border-red-200 dark:border-red-800",
+              statusFilterValue: "__EXPIRED__",
+            },
+            {
+              label: "Canceled",
+              value: stats.cancelled,
+              icon: X,
+              color: "text-orange-700 dark:text-orange-400",
+              bg: "bg-orange-50/70 dark:bg-orange-950/30",
+              border: "border-orange-200 dark:border-orange-800",
+              statusFilterValue: "__CANCELLED__",
+            },
+            {
+              label: "About to expire",
+              value: stats.expiringSoon,
+              icon: Calendar,
+              color: "text-amber-700 dark:text-amber-400",
+              bg: "bg-amber-50/70 dark:bg-amber-950/30",
+              border: "border-amber-200 dark:border-amber-800",
+              statusFilterValue: "__ABOUT_TO_EXPIRE__",
             },
             {
               label: "Regime Types",
@@ -449,11 +529,20 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               color: "text-violet-700 dark:text-violet-400",
               bg: "bg-violet-50/70 dark:bg-violet-950/30",
               border: "border-violet-200 dark:border-violet-800",
+              statusFilterValue: null,
             },
           ].map((stat) => (
-            <div
+            <button
               key={stat.label}
-              className={`${stat.bg} ${stat.border} border rounded-xl p-4 transition-all duration-200`}
+              type="button"
+              onClick={() => {
+                if (stat.statusFilterValue !== null) {
+                  setStatusFilter(stat.statusFilterValue);
+                }
+              }}
+              className={`${stat.bg} ${stat.border} border rounded-xl p-4 transition-all duration-200 text-left w-full ${
+                stat.statusFilterValue ? "hover:shadow-sm cursor-pointer" : ""
+              }`}
             >
               <div className="flex items-center gap-2 mb-1">
                 <stat.icon className={`h-4 w-4 ${stat.color} opacity-70`} />
@@ -462,7 +551,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               <p className={`text-2xl font-bold ${stat.color} tracking-tight`}>
                 {stat.value}
               </p>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -497,6 +586,10 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               </SelectTrigger>
               <SelectContent className="rounded-lg border-slate-200 dark:border-slate-700">
                 <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="__ACTIVE__">Active</SelectItem>
+                <SelectItem value="__EXPIRED__">Expired</SelectItem>
+                <SelectItem value="__CANCELLED__">Canceled</SelectItem>
+                <SelectItem value="__ABOUT_TO_EXPIRE__">About to expire</SelectItem>
                 {availableStatuses.map((s) => (
                   <SelectItem key={s} value={s}>
                     {s.charAt(0) + s.slice(1).toLowerCase()}
@@ -682,6 +775,35 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         )}
       </AnimatePresence>
 
+      {/* Edit/Delete Result Banner */}
+      <AnimatePresence>
+        {rowActionResult && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2 }}
+            className={`p-4 rounded-xl border text-sm ${
+              rowActionResult.kind === "error"
+                ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300"
+                : "bg-green-50 border-green-200 text-green-800 dark:bg-green-950/30 dark:border-green-800 dark:text-green-300"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p>{rowActionResult.message}</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRowActionResult(null)}
+                className="h-6 w-6 p-0 shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
@@ -785,6 +907,9 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                 <TableBody>
                   {entries.map((entry) => {
                     const isExpanded = expandedRow === entry.id;
+                    const sourceKind = entry.source_kind ?? "";
+                    const canUpload = hasRegistrySource(entry);
+                    const canModify = canUpload && !sourceKind.includes("permit") && entry.row_index != null;
                     return (
                       <Fragment key={entry.id}>
                         <TableRow
@@ -808,6 +933,15 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                               <span className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
                                 {entry.permit_holder}
                               </span>
+                              {entry.manually_edited_at && (
+                                <span
+                                  title="Manually edited row. Automatic permit-to-registry sync is blocked."
+                                  className="shrink-0 inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-1.5 py-0 text-[10px] font-medium text-amber-700 dark:text-amber-400"
+                                >
+                                  <Lock className="h-2.5 w-2.5 mr-1" />
+                                  Locked
+                                </span>
+                              )}
                               {isPermitOnly(entry) && (
                                 <span
                                   title="From permits table (system-issued)"
@@ -844,46 +978,15 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             className="p-2 sm:p-3 text-right"
                             onClick={(event) => event.stopPropagation()}
                           >
-                            {hasRegistrySource(entry) ? (
-                              <label className="inline-flex cursor-pointer" onClick={(event) => event.stopPropagation()}>
-                                <input
-                                  type="file"
-                                  accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
-                                  onChange={(event) => handlePermitDocUpload(entry.id, event)}
-                                  className="hidden"
-                                  disabled={uploadingDocId === entry.id}
-                                />
-                                <Button
-                                  variant={entry.uploaded_doc_path ? "secondary" : "outline"}
-                                  size="sm"
-                                  asChild
-                                  disabled={uploadingDocId === entry.id}
-                                  className="h-8 rounded-md"
-                                >
-                                  <span>
-                                    {uploadingDocId === entry.id ? (
-                                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                    ) : (
-                                      <Upload className="h-3.5 w-3.5 mr-1.5" />
-                                    )}
-                                    {entry.uploaded_doc_path ? "Replace" : "Upload"}
-                                  </span>
-                                </Button>
-                              </label>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                asChild
-                                className="h-8 rounded-md text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <a href={`/permit/view/${encodeURIComponent(entry.permit_number || "")}`} target="_blank" rel="noopener noreferrer">
-                                  <Eye className="h-3.5 w-3.5 mr-1.5" />
-                                  View
-                                </a>
-                              </Button>
-                            )}
+                            <RowActions
+                              entry={entry}
+                              uploadingDocId={uploadingDocId}
+                              canUpload={canUpload}
+                              canModify={canModify}
+                              onUploadDoc={handlePermitDocUpload}
+                              onEdit={setEditEntry}
+                              onDelete={setDeleteEntry}
+                            />
                           </TableCell>
                         </TableRow>
                         {isExpanded && (
@@ -1044,6 +1147,26 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
           </CardContent>
         </Card>
       )}
+
+      <EditRegistryDrawer
+        entry={editEntry}
+        open={Boolean(editEntry)}
+        onOpenChange={(open) => {
+          if (!open) setEditEntry(null);
+        }}
+        onSave={handleEditSave}
+        saving={updateMutation.isPending}
+      />
+
+      <DeleteRegistryDialog
+        entry={deleteEntry}
+        open={Boolean(deleteEntry)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteEntry(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        deleting={deleteMutation.isPending}
+      />
     </div>
   );
 

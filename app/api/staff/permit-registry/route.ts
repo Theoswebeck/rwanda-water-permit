@@ -4,7 +4,7 @@ import { query } from "@/lib/db/postgres";
 const EMPTY_RESULT = {
   items: [],
   total: 0,
-  summary: { total: 0, distinctPermits: 0, operational: 0, expired: 0, expiringSoon: 0, regimeTypes: 0 },
+  summary: { total: 0, operational: 0, expired: 0, cancelled: 0, expiringSoon: 0, regimeTypes: 0 },
   pagination: { limit: 50, offset: 0, returned: 0 },
 };
 
@@ -13,6 +13,8 @@ async function detectSchema(): Promise<{
   hasDocColumns: boolean;
   hasRawDateColumns: boolean;
   hasRowIndex: boolean;
+  hasDeletedAt: boolean;
+  hasManuallyEditedAt: boolean;
   hasPostGIS: boolean;
 }> {
   const [tablesRes, extRes] = await Promise.all([
@@ -31,6 +33,8 @@ async function detectSchema(): Promise<{
   let hasDocColumns = false;
   let hasRawDateColumns = false;
   let hasRowIndex = false;
+  let hasDeletedAt = false;
+  let hasManuallyEditedAt = false;
 
   if (hasRegistry) {
     const colRes = await query<{ column_name: string }>(
@@ -42,7 +46,9 @@ async function detectSchema(): Promise<{
            'uploaded_doc_path','uploaded_doc_name',
            'uploaded_doc_mime_type','uploaded_doc_uploaded_at',
            'issuance_date_raw','expiration_date_raw',
-           'row_index'
+           'row_index',
+           'deleted_at',
+           'manually_edited_at'
          )`
     );
     const cols = new Set(colRes.rows.map((r) => r.column_name));
@@ -50,6 +56,8 @@ async function detectSchema(): Promise<{
                     cols.has("uploaded_doc_mime_type") && cols.has("uploaded_doc_uploaded_at");
     hasRawDateColumns = cols.has("issuance_date_raw") && cols.has("expiration_date_raw");
     hasRowIndex = cols.has("row_index");
+    hasDeletedAt = cols.has("deleted_at");
+    hasManuallyEditedAt = cols.has("manually_edited_at");
   }
 
   return {
@@ -57,6 +65,8 @@ async function detectSchema(): Promise<{
     hasDocColumns,
     hasRawDateColumns,
     hasRowIndex,
+    hasDeletedAt,
+    hasManuallyEditedAt,
     hasPostGIS: Number(extRes.rows[0]?.n || "0") > 0,
   };
 }
@@ -95,6 +105,14 @@ export async function GET(req: NextRequest) {
       ? `pr.row_index,`
       : `null::integer as row_index,`;
 
+    const deletedAtSelect = schema.hasDeletedAt
+      ? `pr.deleted_at,`
+      : `null::timestamptz as deleted_at,`;
+
+    const manuallyEditedAtSelect = schema.hasManuallyEditedAt
+      ? `pr.manually_edited_at,`
+      : `null::timestamptz as manually_edited_at,`;
+
     // Build WHERE filters
     const where: string[] = [];
     const values: unknown[] = [];
@@ -103,8 +121,24 @@ export async function GET(req: NextRequest) {
       return `$${values.length}`;
     };
 
+    if (schema.hasDeletedAt) {
+      where.push("pr.deleted_at is null");
+    }
     if (regime && regime !== "all") where.push(`lower(coalesce(pr.regime, '')) = lower(${p(regime)})`);
-    if (status && status !== "all") where.push(`upper(coalesce(pr.status, '')) = ${p(status.toUpperCase())}`);
+    if (status && status !== "all") {
+      const normalizedStatus = status.toUpperCase();
+      if (normalizedStatus === "__ACTIVE__") {
+        where.push(`upper(coalesce(pr.status, '')) like '%OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%'`);
+      } else if (normalizedStatus === "__EXPIRED__") {
+        where.push(`upper(coalesce(pr.status, '')) like '%EXPIRED%'`);
+      } else if (normalizedStatus === "__CANCELLED__") {
+        where.push(`upper(coalesce(pr.status, '')) like '%CANCEL%'`);
+      } else if (normalizedStatus === "__ABOUT_TO_EXPIRE__") {
+        where.push(`pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months')`);
+      } else {
+        where.push(`upper(coalesce(pr.status, '')) = ${p(normalizedStatus)}`);
+      }
+    }
     if (q) {
       const term = `%${q}%`;
       const pv = p(term);
@@ -117,19 +151,19 @@ export async function GET(req: NextRequest) {
     // Summary query
     const summaryRes = await query<{
       total: string;
-      distinct_permits: string;
       operational: string;
       expired: string;
+      cancelled: string;
       expiring_soon: string;
       regime_types: string;
     }>(
       `
       SELECT
         count(*)::text as total,
-        count(distinct nullif(trim(coalesce(pr.permit_number, '')), ''))::text as distinct_permits,
         count(*) filter (where upper(coalesce(pr.status, '')) like '%OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
         count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRED%')::text as expired,
-        count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRING%')::text as expiring_soon,
+        count(*) filter (where upper(coalesce(pr.status, '')) like '%CANCEL%')::text as cancelled,
+        count(*) filter (where pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months'))::text as expiring_soon,
         count(distinct nullif(trim(coalesce(pr.regime, '')), ''))::text as regime_types
       FROM public.permit_registry pr
       ${whereSql}
@@ -168,6 +202,8 @@ export async function GET(req: NextRequest) {
         upper(coalesce(pr.status, 'OPERATIONAL')) as status,
         pr.contact,
         ${docSelect}
+        ${deletedAtSelect}
+        ${manuallyEditedAtSelect}
         pr.created_at,
         pr.updated_at,
         'registry'::text as source_kind
@@ -187,9 +223,9 @@ export async function GET(req: NextRequest) {
       total: count,
       summary: {
         total: count,
-        distinctPermits: Number(summaryRow?.distinct_permits || "0"),
         operational: Number(summaryRow?.operational || "0"),
         expired: Number(summaryRow?.expired || "0"),
+        cancelled: Number(summaryRow?.cancelled || "0"),
         expiringSoon: Number(summaryRow?.expiring_soon || "0"),
         regimeTypes: Number(summaryRow?.regime_types || "0"),
       },

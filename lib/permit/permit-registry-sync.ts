@@ -76,10 +76,24 @@ export async function syncPermitToRegistry(
     if (updates.regime) payload.regime = updates.regime;
 
     const matchIds = matches.map((r) => r.id);
-    const { error: updateErr } = await supabaseClient
+    let updateErr: { message?: string } | null = null;
+    const guardedUpdate = await supabaseClient
       .from("permit_registry")
       .update(payload)
-      .in("id", matchIds);
+      .in("id", matchIds)
+      .is("manually_edited_at", null)
+      .is("deleted_at", null);
+    updateErr = guardedUpdate.error;
+
+    // Backward compatibility before migration is run.
+    if (updateErr?.message?.includes("manually_edited_at") || updateErr?.message?.includes("deleted_at")) {
+      console.warn("⚠️ permit-registry-sync: missing edit/delete columns, using legacy sync behavior");
+      const legacyUpdate = await supabaseClient
+        .from("permit_registry")
+        .update(payload)
+        .in("id", matchIds);
+      updateErr = legacyUpdate.error;
+    }
 
     if (updateErr) {
       console.warn("⚠️ permit-registry-sync: update error", updateErr.message);

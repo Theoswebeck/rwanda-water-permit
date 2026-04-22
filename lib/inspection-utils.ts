@@ -887,7 +887,7 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
   if (tokens.length === 0) return {};
 
   const result: ParsedLocation = {};
-  const remaining: string[] = [];
+  const remaining = new Set<string>();
 
   const normalizeTokenPrefix = (value: string): string =>
     value
@@ -919,7 +919,7 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
     const match = normalized.match(labelMatchRegex);
     if (!match) {
       const unlabeled = stripTrailingLabel(normalized);
-      if (unlabeled) remaining.push(unlabeled);
+      if (unlabeled) remaining.add(unlabeled);
       continue;
     }
 
@@ -956,19 +956,20 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
   }
 
   // If nothing was labeled, keep legacy behavior on unlabeled tokens.
-  if (remaining.length === 0) {
+  if (remaining.size === 0) {
     for (const token of tokens) {
       const normalized = stripTrailingLabel(normalizeTokenPrefix(token));
-      if (normalized) remaining.push(normalized);
+      if (normalized) remaining.add(normalized);
     }
   }
 
   // 2. Identify province (fallback)
   if (!result.province) {
-    for (const token of remaining) {
+    for (const token of Array.from(remaining)) {
       const match = resolveProvince(token);
       if (match) {
         result.province = match;
+        remaining.delete(token);
         break;
       }
     }
@@ -976,19 +977,21 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
 
   // 3. Identify district (fallback)
   if (!result.district) {
-    for (const token of remaining) {
+    for (const token of Array.from(remaining)) {
       const lower = token.toLowerCase();
       if (result.province && rwandaAdministrativeData[result.province]) {
         const districts = rwandaAdministrativeData[result.province];
         const match = Object.keys(districts).find(d => d.toLowerCase() === lower);
         if (match) {
           result.district = match;
+          remaining.delete(token);
           break;
         }
       } else if (districtToProvince[lower]) {
         result.province = districtToProvince[lower];
         const districts = rwandaAdministrativeData[result.province];
         result.district = Object.keys(districts).find(d => d.toLowerCase() === lower) || token;
+        remaining.delete(token);
         break;
       }
     }
@@ -998,10 +1001,11 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
   if (!result.sector && result.province && result.district) {
     const sectors = rwandaAdministrativeData[result.province]?.[result.district];
     if (sectors) {
-      for (const token of remaining) {
+      for (const token of Array.from(remaining)) {
         const match = Object.keys(sectors).find(s => s.toLowerCase() === token.toLowerCase());
         if (match) {
           result.sector = match;
+          remaining.delete(token);
           break;
         }
       }
@@ -1012,10 +1016,11 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
   if (!result.cell && result.province && result.district && result.sector) {
     const cells = rwandaAdministrativeData[result.province]?.[result.district]?.[result.sector];
     if (cells) {
-      for (const token of remaining) {
+      for (const token of Array.from(remaining)) {
         const match = Object.keys(cells).find(c => c.toLowerCase() === token.toLowerCase());
         if (match) {
           result.cell = match;
+          remaining.delete(token);
           break;
         }
       }
@@ -1026,9 +1031,10 @@ function parseLocationString(raw: string | null | undefined): ParsedLocation {
   if (!result.village && result.province && result.district && result.sector && result.cell) {
     const villages = rwandaAdministrativeData[result.province]?.[result.district]?.[result.sector]?.[result.cell];
     if (villages) {
-      for (const token of remaining) {
+      for (const token of Array.from(remaining)) {
         if (villages.some(v => v.toLowerCase() === token.toLowerCase())) {
           result.village = villages.find(v => v.toLowerCase() === token.toLowerCase());
+          remaining.delete(token);
           break;
         }
       }
