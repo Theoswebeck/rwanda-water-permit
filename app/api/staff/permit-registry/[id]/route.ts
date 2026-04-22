@@ -129,7 +129,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       update public.permit_registry
       set
         ${clauses.join(", ")},
-        manually_edited_at = now(),
         updated_at = now()
       where id = ${idParam}
         and row_index is not null

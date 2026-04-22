@@ -49,7 +49,6 @@ import {
   FileText,
   ExternalLink,
   Database,
-  Lock,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import { useUpdatePermitRegistry } from "@/hooks/useUpdatePermitRegistry";
@@ -179,7 +178,6 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
         expired: data.summary.expired,
         cancelled: data.summary.cancelled,
         expiringSoon: data.summary.expiringSoon,
-        regimeTypes: data.summary.regimeTypes,
       };
     }
     const pageTotal = entries.length;
@@ -187,8 +185,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     const expired = entries.filter((e) => e.status?.toUpperCase()?.includes("EXPIRED")).length;
     const cancelled = entries.filter((e) => e.status?.toUpperCase()?.includes("CANCEL")).length;
     const expiringSoon = entries.filter((e) => isAboutToExpire(e.expiration_date)).length;
-    const regimeSet = new Set(entries.map((e) => e.regime).filter(Boolean));
-    return { total: pageTotal, operational, expired, cancelled, expiringSoon, regimeTypes: regimeSet.size };
+    return { total: pageTotal, operational, expired, cancelled, expiringSoon };
   }, [data?.summary, entries]);
 
   const toggleSort = useCallback(
@@ -522,26 +519,19 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
               border: "border-amber-200 dark:border-amber-800",
               statusFilterValue: "__ABOUT_TO_EXPIRE__",
             },
-            {
-              label: "Regime Types",
-              value: stats.regimeTypes,
-              icon: Activity,
-              color: "text-violet-700 dark:text-violet-400",
-              bg: "bg-violet-50/70 dark:bg-violet-950/30",
-              border: "border-violet-200 dark:border-violet-800",
-              statusFilterValue: null,
-            },
-          ].map((stat) => (
+          ].map((stat) => {
+            const isSelected = statusFilter === stat.statusFilterValue;
+            return (
             <button
               key={stat.label}
               type="button"
               onClick={() => {
-                if (stat.statusFilterValue !== null) {
-                  setStatusFilter(stat.statusFilterValue);
-                }
+                setStatusFilter(stat.statusFilterValue);
               }}
               className={`${stat.bg} ${stat.border} border rounded-xl p-4 transition-all duration-200 text-left w-full ${
-                stat.statusFilterValue ? "hover:shadow-sm cursor-pointer" : ""
+                isSelected
+                  ? "ring-2 ring-offset-1 ring-blue-600 shadow-md scale-[1.01]"
+                  : "hover:shadow-sm cursor-pointer"
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
@@ -552,7 +542,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                 {stat.value}
               </p>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -899,7 +890,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                         <SortIcon field="status" />
                       </span>
                     </TableHead>
-                    <TableHead className="w-[130px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap text-right">
+                    <TableHead className="w-[112px] text-slate-600 dark:text-slate-400 font-medium text-xs uppercase tracking-wider whitespace-nowrap text-right">
                       Actions
                     </TableHead>
                   </TableRow>
@@ -933,15 +924,6 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                               <span className="font-medium text-slate-900 dark:text-slate-100 text-sm truncate">
                                 {entry.permit_holder}
                               </span>
-                              {entry.manually_edited_at && (
-                                <span
-                                  title="Manually edited row. Automatic permit-to-registry sync is blocked."
-                                  className="shrink-0 inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-1.5 py-0 text-[10px] font-medium text-amber-700 dark:text-amber-400"
-                                >
-                                  <Lock className="h-2.5 w-2.5 mr-1" />
-                                  Locked
-                                </span>
-                              )}
                               {isPermitOnly(entry) && (
                                 <span
                                   title="From permits table (system-issued)"
@@ -975,7 +957,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                             </div>
                           </TableCell>
                           <TableCell
-                            className="p-2 sm:p-3 text-right"
+                            className="p-2 sm:p-3 text-right whitespace-nowrap"
                             onClick={(event) => event.stopPropagation()}
                           >
                             <RowActions

@@ -64,10 +64,6 @@ type PermitRegistryHolder = {
   permit_holder: string | null;
 };
 
-function shortId(id: string): string {
-  return id ? `${id.slice(0, 8)}…` : "—";
-}
-
 function fmtDate(dateString?: string | null): string {
   if (!dateString) return "—";
   const d = new Date(dateString);
@@ -108,7 +104,7 @@ const CHIP_DEFS: StatusChipDef[] = [
   {
     id: "in_field",
     label: "In Field",
-    statuses: ["scheduled", "in_progress"],
+    statuses: ["scheduled"],
     priority: "secondary",
   },
   {
@@ -362,14 +358,16 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   }, []);
 
   const statusForFilter = useMemo(() => {
-    return inspections.map((r) => ({
+    return inspections
+      .filter((r) => r.status !== "in_progress")
+      .map((r) => ({
       ...r,
       status: getDisplayStatus(r),
     }));
   }, [inspections]);
 
   const filtered = useMemo(() => {
-    let result = inspections;
+    let result = inspections.filter((r) => r.status !== "in_progress");
 
     const activeChip = CHIP_DEFS.find((c) => c.id === activeChipId);
     if (activeChip && activeChip.statuses.length > 0) {
@@ -382,8 +380,6 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     const q = search.trim().toLowerCase();
     if (q) {
       result = result.filter((r) => {
-        const id = (r.id || "").toLowerCase();
-        const appNo = (r.application?.application_number || "").toLowerCase();
         const permitNumber =
           (r.application?.id ? permitByAppId[r.application.id]?.permit_number : undefined) ||
           registryByInspectionId[r.id]?.permit_number;
@@ -392,7 +388,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           (permitNumber ? permitHolderByNumber[permitNumber] : null) ||
           registryByInspectionId[r.id]?.permit_holder ||
           applicantName(r.applicant);
-        return id.includes(q) || appNo.includes(q) || permitNo.includes(q) || permitHolder.toLowerCase().includes(q);
+        return permitNo.includes(q) || permitHolder.toLowerCase().includes(q);
       });
     }
 
@@ -445,7 +441,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60">
             <div className="flex items-center gap-2 w-full md:w-[360px]">
               <Search className="h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search inspection id, permit #, permit holder…" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input placeholder="Search permit #, permit holder…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -453,18 +449,17 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             <Table className="w-full">
               <TableHeader>
                 <TableRow className="border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[14%]">Inspection</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[12%]">Date submitted</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[18%]">Permit #</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[24%]">Permit Holder</TableHead>
-                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[16%]">Workflow</TableHead>
-                  <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium w-[8%]">Actions</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[18%]">Date submitted</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[24%]">Permit #</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[30%]">Permit Holder</TableHead>
+                  <TableHead className="text-slate-700 dark:text-slate-300 font-medium w-[18%]">Workflow</TableHead>
+                  <TableHead className="text-right text-slate-700 dark:text-slate-300 font-medium w-[10%]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
                       No inspections found.
                     </TableCell>
                   </TableRow>
@@ -486,11 +481,6 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                       : `${basePath}/${r.id}`;
                     return (
                       <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">
-                        <TableCell className="font-medium">
-                          <Link href={viewHref} className="hover:underline">
-                            {shortId(r.id)}
-                          </Link>
-                        </TableCell>
                         <TableCell>{fmtDate(date)}</TableCell>
                         <TableCell className="font-medium">{permitNumber || "—"}</TableCell>
                         <TableCell className="truncate max-w-[280px]">{holderName}</TableCell>
