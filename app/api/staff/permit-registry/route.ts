@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
       } else if (normalizedStatus === "__EXPIRED__") {
         where.push(`upper(coalesce(pr.status, '')) like '%EXPIRED%'`);
       } else if (normalizedStatus === "__CANCELLED__") {
-        where.push(`upper(coalesce(pr.status, '')) like '%CANCEL%'`);
+        where.push(`upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%'`);
       } else if (normalizedStatus === "__ABOUT_TO_EXPIRE__") {
         where.push(`pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months')`);
       } else {
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
         count(*)::text as total,
         count(*) filter (where upper(coalesce(pr.status, '')) like '%OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
         count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRED%')::text as expired,
-        count(*) filter (where upper(coalesce(pr.status, '')) like '%CANCEL%')::text as cancelled,
+        count(*) filter (where upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%')::text as cancelled,
         count(*) filter (where pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months'))::text as expiring_soon,
         count(distinct nullif(trim(coalesce(pr.regime, '')), ''))::text as regime_types
       FROM public.permit_registry pr
