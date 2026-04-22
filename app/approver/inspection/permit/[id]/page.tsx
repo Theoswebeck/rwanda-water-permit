@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
+import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-badge";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
 import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
 
@@ -570,21 +571,39 @@ export default function PermitInspectionUnifiedPage() {
           <p className="text-muted-foreground">
             Permit: <span className="font-medium">{inspectionData?.permit?.permit_number || inspectionData?.prepopulatedData?.permitNumber || "N/A"}</span>
           </p>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="outline">Template: {template}</Badge>
             {inspectionId ? <Badge variant="secondary">Draft/Record: {inspectionId.slice(0, 8)}…</Badge> : <Badge variant="secondary">New</Badge>}
+            <InspectionOwnerBadge inspectorId={inspectionRecord?.inspector_id} />
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {inspectionData?.application?.id ? (
-            <Link href={`/dashboard/application/${inspectionData.application.id}`}>
-              <Button variant="outline" className="gap-2">
+          {(() => {
+            const isRegistryOnly = inspectionData?.source === "permit_registry";
+            const hasRealApplication = !!inspectionData?.application?.id && !isRegistryOnly;
+            if (hasRealApplication) {
+              return (
+                <Link href={`/dashboard/application/${inspectionData.application.id}`}>
+                  <Button variant="outline" className="gap-2">
+                    <Eye className="h-4 w-4" />
+                    View application
+                  </Button>
+                </Link>
+              );
+            }
+            return (
+              <Button
+                variant="outline"
+                className="gap-2"
+                disabled
+                title="No application linked — registry-only permit"
+              >
                 <Eye className="h-4 w-4" />
                 View application
               </Button>
-            </Link>
-          ) : null}
+            );
+          })()}
 
           {canEdit ? (
             <>
