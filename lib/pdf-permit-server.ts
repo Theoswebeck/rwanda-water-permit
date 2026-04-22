@@ -9,6 +9,7 @@ import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { addYearsSafe } from "./date-math";
+import { getEffectiveInternalNotes } from "./document-overrides";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -16,6 +17,8 @@ const ASSETS_DIR = path.join(process.cwd(), "public", "assets");
 const LOGO_PATH = path.join(ASSETS_DIR, "rwanda_water_board_Logo.png");
 // Cropped watermark asset to avoid transparent margins that cause blur/offset.
 const WATERMARK_PATH = path.join(ASSETS_DIR, "rwanda_logo_watermark.png");
+const WATERMARK_BW_PATH = path.join(ASSETS_DIR, "rwanda_logo_watermark_bw.png");
+let watermarkBufferPromise: Promise<Buffer | null> | null = null;
 
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 const FONTS_DIR = path.join(process.cwd(), "public", "assets", "fonts");
@@ -30,7 +33,12 @@ const FONT_BOLD    = hasSegoe ? "SegoeUI-Bold"   : "Times-Bold";
 const FONT_ITALIC  = hasSegoe ? "SegoeUI-Italic" : "Times-Italic";
 
 function createDoc(): PDFKit.PDFDocument {
-  const doc = new PDFDocument({ size: "A4", margins: { top: 0, bottom: 0, left: 0, right: 0 }, bufferPages: true });
+  const doc = new PDFDocument({
+    size: "A4",
+    layout: "landscape",
+    margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    bufferPages: true,
+  });
   if (hasSegoe) {
     doc.registerFont("SegoeUI", SEGOE_REGULAR);
     doc.registerFont("SegoeUI-Bold", SEGOE_BOLD);
@@ -42,6 +50,30 @@ function createDoc(): PDFKit.PDFDocument {
 const PRODUCTION_URL = "https://waterpermit.rwb.rw";
 
 const PT = 2.83465; // 1mm in points
+
+function pageWidth(doc: PDFKit.PDFDocument): number {
+  return doc.page.width;
+}
+
+function pageHeight(doc: PDFKit.PDFDocument): number {
+  return doc.page.height;
+}
+
+function contentBottomY(doc: PDFKit.PDFDocument): number {
+  // Keep room for footer/QR while maximizing body area on landscape pages.
+  return pageHeight(doc) - 76 * PT;
+}
+
+function drawPageBorder(doc: PDFKit.PDFDocument): void {
+  const inset = 5 * PT;
+  const borderW = pageWidth(doc) - inset * 2;
+  const borderH = pageHeight(doc) - inset * 2;
+  doc.save();
+  doc.lineWidth(0.9);
+  doc.strokeColor("#2f2f2f");
+  doc.rect(inset, inset, borderW, borderH).stroke();
+  doc.restore();
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -94,16 +126,6 @@ export interface PermitRenderOpts {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function safeJson(s: unknown): Record<string, any> | null {
-  if (typeof s !== "string" || !s.trim()) return null;
-  try {
-    const v = JSON.parse(s);
-    return v && typeof v === "object" && !Array.isArray(v) ? v : null;
-  } catch {
-    return null;
-  }
-}
-
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -121,11 +143,14 @@ function fmtNum(n: number, maxDec = 2): string {
 }
 
 function resolveNotes(app: PermitApplication) {
-  return safeJson(app.internal_notes);
+  return getEffectiveInternalNotes(app.internal_notes);
 }
 
 function resolveApplicantName(app: PermitApplication): string {
   const notes = resolveNotes(app);
+  const fullNameFromNotes =
+    typeof notes?.fullNameApplicant === "string" ? notes.fullNameApplicant.trim() : "";
+  if (fullNameFromNotes) return fullNameFromNotes;
   const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
   if ((app.application_type === "transfer" || notes?.isTransfer === true) && tfd) {
     const n = (tfd.transfereeName as string | undefined)?.trim();
@@ -495,21 +520,50 @@ function docToBuffer(doc: PDFKit.PDFDocument): Promise<Buffer> {
   });
 }
 
-function drawWatermark(doc: PDFKit.PDFDocument): void {
-  if (!fs.existsSync(WATERMARK_PATH)) return;
-  const pw = 595.28;
-  const ph = 841.89;
-  const wmSize = 140 * PT;
-  const x = (pw - wmSize) / 2 - 4 * PT;
-  const y = (ph - wmSize) / 2 - 18 * PT;
-  doc.save();
-  doc.opacity(0.18);
-  doc.image(WATERMARK_PATH, x, y, { width: wmSize, height: wmSize });
-  doc.restore();
+async function getWatermarkBuffer(): Promise<Buffer | null> {
+  if (watermarkBufferPromise) return watermarkBufferPromise;
+  watermarkBufferPromise = (async () => {
+    const sourcePath = fs.existsSync(WATERMARK_BW_PATH)
+      ? WATERMARK_BW_PATH
+      : fs.existsSync(WATERMARK_PATH)
+        ? WATERMARK_PATH
+        : null;
+    if (!sourcePath) return null;
+
+    try {
+      const sharpModule = await import("sharp").catch(() => null);
+      const sharp = sharpModule?.default;
+      if (!sharp) return fs.readFileSync(sourcePath);
+      return await sharp(sourcePath).grayscale().png().toBuffer();
+    } catch {
+      try {
+        return fs.readFileSync(sourcePath);
+      } catch {
+        return null;
+      }
+    }
+  })();
+  return watermarkBufferPromise;
+}
+
+async function drawWatermark(doc: PDFKit.PDFDocument): Promise<void> {
+  const pw = pageWidth(doc);
+  const ph = pageHeight(doc);
+  const watermarkBuffer = await getWatermarkBuffer();
+  if (watermarkBuffer) {
+    const wmSize = Math.min(pw, ph) * 0.6;
+    const x = (pw - wmSize) / 2;
+    const y = (ph - wmSize) / 2;
+    doc.save();
+    doc.opacity(0.08);
+    doc.image(watermarkBuffer, x, y, { width: wmSize, height: wmSize });
+    doc.restore();
+  }
+  drawPageBorder(doc);
 }
 
 function drawLogo(doc: PDFKit.PDFDocument): number {
-  const pw = 595.28;
+  const pw = pageWidth(doc);
   // Natural aspect ratio of logo image (1450×1600px ≈ 0.906 w:h).
   const logoW = 38 * PT;
   const logoH = 42 * PT;
@@ -525,7 +579,7 @@ function drawLogo(doc: PDFKit.PDFDocument): number {
 }
 
 function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number {
-  const pw = 595.28;
+  const pw = pageWidth(doc);
   doc.font(FONT_BOLD).fontSize(12);
   const titleW = doc.widthOfString(title);
   const titleX = (pw - titleW) / 2;
@@ -535,8 +589,8 @@ function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number
 }
 
 async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Promise<void> {
-  const pw = 595.28;
-  const ph = 841.89;
+  const pw = pageWidth(doc);
+  const ph = pageHeight(doc);
   const verifyUrl = `${PRODUCTION_URL}/permit/view/${encodeURIComponent(permitNumber.trim())}`;
 
   const marginX = 15 * PT;
@@ -574,8 +628,8 @@ async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Prom
 
 /** Replaces the QR footer for draft previews — same footer box, amber "DRAFT" banner. */
 function drawPreviewBanner(doc: PDFKit.PDFDocument): void {
-  const pw = 595.28;
-  const ph = 841.89;
+  const pw = pageWidth(doc);
+  const ph = pageHeight(doc);
   const marginX = 15 * PT;
   const footerW = pw - marginX * 2;
   const footerH = 46 * PT;
@@ -597,8 +651,8 @@ function drawPreviewBanner(doc: PDFKit.PDFDocument): void {
 
 /** Draws a faint diagonal "DRAFT" across the page — call per page when skipQr is true. */
 function drawDraftOverlay(doc: PDFKit.PDFDocument): void {
-  const pw = 595.28;
-  const ph = 841.89;
+  const pw = pageWidth(doc);
+  const ph = pageHeight(doc);
   doc.save();
   doc.translate(pw / 2, ph / 2);
   doc.rotate(-45);
@@ -608,8 +662,8 @@ function drawDraftOverlay(doc: PDFKit.PDFDocument): void {
 }
 
 function drawPageFooter(doc: PDFKit.PDFDocument, permitNumber: string, page: number, total: number): void {
-  const pw = 595.28;
-  const y = 841.89 - 12 * PT;
+  const pw = pageWidth(doc);
+  const y = pageHeight(doc) - 12 * PT;
   doc.save().font(FONT_REGULAR).fontSize(8).fillColor("#646464");
   doc.text(`Document ID: ${permitNumber}`, 0, y, { width: pw, align: "center" });
   doc.text(`Page ${page} of ${total}`, pw - 60 * PT, y, { width: 50 * PT, align: "right" });
@@ -627,7 +681,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   const doc = createDoc();
 
-  drawWatermark(doc);
+  await drawWatermark(doc);
   drawLogo(doc);
 
   const headerYear = issueDate.getFullYear();
@@ -636,7 +690,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   if (isModified) {
     doc.save();
-    const bx = 595.28 - 60 * PT;
+    const bx = pageWidth(doc) - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
     doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
@@ -644,10 +698,10 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   }
 
   const leftX = 20 * PT;
-  const maxW = 170 * PT;
+  const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 2;
-  const paraGap = 12;
+  const lineGap = 1.3;
+  const paraGap = 5;
 
   const name = resolveApplicantName(app);
   const idNum = resolveIdNumber(app);
@@ -669,17 +723,17 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 20 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
   y += 4;
   doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: pageWidth(doc) - leftX, align: "right" });
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
 
@@ -701,16 +755,15 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
     addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
-  drawWatermark(doc);
+  await drawWatermark(doc);
   drawLogo(doc);
-
   const headerYear = issueDate.getFullYear();
   const titleNum = resolvePermitTitleNumber(permitNumber, headerYear);
   let y = drawTitle(doc, `WATER USE PERMIT N° ${titleNum}`, 49 * PT);
 
   if (isModified) {
     doc.save();
-    const bx = 595.28 - 60 * PT;
+    const bx = pageWidth(doc) - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
     doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
@@ -718,10 +771,10 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   }
 
   const leftX = 20 * PT;
-  const maxW = 170 * PT;
+  const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 2;
-  const paraGap = 12;
+  const lineGap = 1.3;
+  const paraGap = 5;
 
   const name = resolveApplicantName(app);
   const idNum = resolveIdNumber(app);
@@ -744,16 +797,16 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 20 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 4;
   doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: pageWidth(doc) - leftX, align: "right" });
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
@@ -771,11 +824,12 @@ async function drawKinyarwandaOrgAbstractionPage(
   permitTitleLine: string,
   issueDate: Date,
   expiryDate: Date,
+  addNewPage = true,
 ): Promise<void> {
   const { application: app } = opts;
 
-  doc.addPage();
-  drawWatermark(doc);
+  if (addNewPage) doc.addPage();
+  await drawWatermark(doc);
   const logoY = drawLogo(doc);
   drawTitle(doc, `URUHUSHYA RWO GUKORESHA AMAZI N° ${permitTitleLine}`, logoY);
 
@@ -816,7 +870,7 @@ async function drawKinyarwandaOrgAbstractionPage(
   const paraRw5 =
     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.";
 
-  doc.font("Helvetica").fontSize(11).fillColor("#000");
+  doc.font(FONT_REGULAR).fontSize(11).fillColor("#000");
   const leftX = 50;
   const maxWidth = doc.page.width - leftX * 2;
 
@@ -843,16 +897,23 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
-  drawWatermark(doc);
-  drawLogo(doc);
-
   const headerYear = issueDate.getFullYear();
   const titleNum = resolvePermitTitleNumber(permitNumber, headerYear);
-  let y = drawTitle(doc, `WATER USE PERMIT N° ${titleNum}`, 49 * PT);
+  await drawWatermark(doc);
+  const title = `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`;
+  if (fs.existsSync(LOGO_PATH)) {
+    const logoW = 22 * PT;
+    const logoH = 24 * PT;
+    doc.image(LOGO_PATH, 16 * PT, 10 * PT, { width: logoW, height: logoH });
+  }
+  doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
+  doc.text(title, 0, 16 * PT, { width: pageWidth(doc), align: "center" });
+  doc.moveTo(16 * PT, 28 * PT).lineTo(pageWidth(doc) - 16 * PT, 28 * PT).lineWidth(0.7).stroke("#111827");
+  let y = 33 * PT;
 
   if (isModified) {
     doc.save();
-    const bx = 595.28 - 60 * PT;
+    const bx = pageWidth(doc) - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
     doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
@@ -860,12 +921,12 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   }
 
   const leftX = 20 * PT;
-  const maxW = 170 * PT;
+  const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 2;
-  const paraGap = 12;
+  const lineGap = 1.4;
+  const paraGap = 5;
 
-  const orgName = app.applicant?.company_name?.trim() || resolveApplicantName(app);
+  const orgName = resolveApplicantName(app);
   const officeAddr = resolveOrgAddress(app);
   const rep = resolveOrgRep(app);
   const wsName = resolveWaterSourceName(app);
@@ -874,38 +935,79 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   const sysLabel = resolveEnglishSystemLabel(app);
   const flowRate = resolveFlowRate(app);
   const acts = resolveActivities(app);
+  const actsRw = resolveActivitiesKinyarwanda(app);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
+  const notes = resolveNotes(app) || {};
+  const officeSector =
+    typeof notes.officeSector === "string" && notes.officeSector.trim()
+      ? notes.officeSector.trim()
+      : "N/A";
+  const officeDistrict =
+    typeof notes.officeDistrict === "string" && notes.officeDistrict.trim()
+      ? notes.officeDistrict.trim()
+      : "N/A";
+  const officeProvinceRaw =
+    typeof notes.officeProvince === "string" ? notes.officeProvince.trim() : "";
+  const systemTypeRw = resolveKinyarwandaSystemType(app);
 
-  const paragraphs = [
+  const englishParagraphs = [
     `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
-    `\u201C${orgName}\u201D, with its registered office address as follows: ${officeAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} with a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`,
+    `\u201C${orgName}\u201D, represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} with flow rate ${flowRate}. Water will be used for ${acts}.`,
     `This water use permit is valid from ${fmtDMY(issueDate)} to ${fmtDMY(expiryDate)}.`,
     `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
   ];
+  const rwParagraphs = [
+    "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+    `"${orgName}" ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
+      `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+      `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
+      `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`,
+    `Uru ruhushya rufite agaciro kuva ${fmtDMY(issueDate)} kugeza ${fmtDMY(expiryDate)}.`,
+    "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.",
+  ];
 
-  y += 8;
+  y += 6;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of paragraphs) {
+  for (const p of englishParagraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
-  y += 4;
-  doc.font(FONT_REGULAR).fontSize(fontSize);
-  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  if (y > contentBottomY(doc) - 22 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.8).stroke("#1f2937");
+  y += 8;
 
-  // Second page — Kinyarwanda translation (abstraction_organization only)
-  await drawKinyarwandaOrgAbstractionPage(
-    doc,
-    opts,
-    resolvePermitTitleNumber(permitNumber, issueDate.getFullYear()),
-    issueDate,
-    expiryDate,
-  );
+  for (const p of rwParagraphs) {
+    const h = doc.heightOfString(p, { width: maxW, lineGap });
+    if (y + h > contentBottomY(doc) - 6 * PT) {
+      doc.addPage();
+      await drawWatermark(doc);
+      y = 30 * PT;
+    }
+    doc.text(p, leftX, y, { width: maxW, lineGap });
+    y += h + paraGap;
+  }
+
+  if (y > contentBottomY(doc) - 6 * PT) {
+    doc.addPage();
+    await drawWatermark(doc);
+    y = 30 * PT;
+  }
+  y += 2;
+  doc.font(FONT_REGULAR).fontSize(fontSize);
+  doc.text("Signature/Umukono: ..............................", leftX, y);
+  doc.text(`Done at Kigali/Bikorewe i Kigali, On/kuwa ${fmtDMY(issueDate)}`, leftX, y, {
+    width: maxW,
+    align: "right",
+  });
+  y += 14;
+  doc.font(FONT_BOLD).fontSize(11);
+  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
+  y += 12;
+  doc.font(FONT_BOLD).fontSize(11);
+  doc.text("Director General / Umuyobozi Mukuru", leftX, y);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
@@ -925,7 +1027,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
     addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
 
   const doc = createDoc();
-  drawWatermark(doc);
+  await drawWatermark(doc);
   drawLogo(doc);
 
   const headerYear = issueDate.getFullYear();
@@ -934,7 +1036,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
 
   if (isModified) {
     doc.save();
-    const bx = 595.28 - 60 * PT;
+    const bx = pageWidth(doc) - 60 * PT;
     doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
     doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
       .text("MODIFIED PERMIT", bx, 6.5 * PT, { width: 52 * PT, align: "center" });
@@ -942,10 +1044,10 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   }
 
   const leftX = 20 * PT;
-  const maxW = 170 * PT;
+  const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 2;
-  const paraGap = 12;
+  const lineGap = 1.3;
+  const paraGap = 5;
 
   const orgName = resolveApplicantName(app);
   const rep = resolveOrgRep(app);
@@ -957,11 +1059,19 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const prov = fmtProvince(loc.province);
 
   const notes = resolveNotes(app);
+  const waterSourceSector =
+    typeof notes?.waterSourceSector === "string" ? notes.waterSourceSector.trim() : "";
+  const waterSourceDistrict =
+    typeof notes?.waterSourceDistrict === "string" ? notes.waterSourceDistrict.trim() : "";
+  const waterSourceProvince =
+    typeof notes?.waterSourceProvince === "string" ? notes.waterSourceProvince.trim() : "";
   const wsLocParts = [
-    (notes?.waterSourceSector as string)?.trim() ? `${notes.waterSourceSector} Sector` : null,
-    (notes?.waterSourceDistrict as string)?.trim() ? `${notes.waterSourceDistrict} District` : null,
-    (notes?.waterSourceProvince as string)?.trim()
-      ? (notes.waterSourceProvince as string).toLowerCase() === "kigali" ? "City OF Kigali" : `${notes.waterSourceProvince} Province`
+    waterSourceSector ? `${waterSourceSector} Sector` : null,
+    waterSourceDistrict ? `${waterSourceDistrict} District` : null,
+    waterSourceProvince
+      ? waterSourceProvince.toLowerCase() === "kigali"
+        ? "City OF Kigali"
+        : `${waterSourceProvince} Province`
       : null,
   ].filter(Boolean).join(", ") || "N/A";
 
@@ -976,16 +1086,16 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > 700) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > 640) { doc.addPage(); drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 20 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 4;
   doc.font(FONT_REGULAR).fontSize(fontSize);
   doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: 595.28 - leftX, align: "right" });
+  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: pageWidth(doc) - leftX, align: "right" });
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
