@@ -244,18 +244,32 @@ function resolveActivityLabel(application: ApplicationForContract): string {
     irrigation: "Irrigation",
     water_supply: "Water Supply",
     industry: "Industry",
+    industrial: "Industrial Use",
     coffee_washing: "Coffee Washing",
     electricity_generation: "Electricity Generation (Hydropower)",
+    electricity: "Electricity Generation (Hydropower)",
     mining: "Mining",
     construction_of_dam: "Construction of Dam",
     construction_of_infrastructures: "Construction or installation of infrastructure",
+    construction: "Construction",
     navigation: "Navigation",
     recreation_activities: "Recreational Activities",
-    gaz_extraction: "Gaz Extraction",
+    recreation: "Recreational Activities",
+    gaz_extraction: "Gas Extraction",
     livestock: "Livestock",
+    domestic: "Domestic Use",
+    aquaculture: "Aquaculture",
+    municipal_supply: "Municipal Water Supply",
     other: "Other",
   };
-  return labels[primary] || (primary ? primary.replaceAll("_", " ") : "N/A");
+  return labels[primary] || humanizeActivityCode(primary);
+}
+
+function humanizeActivityCode(code: string): string {
+  if (!code) return "N/A";
+  return code
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
 function resolveActivityLabelRw(application: ApplicationForContract): string {
@@ -276,18 +290,25 @@ function resolveActivityLabelRw(application: ApplicationForContract): string {
     irrigation: "Kuhira",
     water_supply: "Gutanga amazi",
     industry: "Inganda",
+    industrial: "Inganda",
     coffee_washing: "Isukura ry'ikawa",
     electricity_generation: "Gukora amashanyarazi (Amashanyarazi y'amazi)",
-    mining: "Amabuye y'agaciro",
+    electricity: "Gukora amashanyarazi (Amashanyarazi y'amazi)",
+    mining: "Ubucukuzi bw'amabuye y'agaciro",
     construction_of_dam: "Kubaka Urugomero",
     construction_of_infrastructures: "Kubaka cyangwa gushyiraho ibikorwa remezo",
+    construction: "Kubaka",
     navigation: "Ubwogero",
     recreation_activities: "Ibikorwa byo kuryoherereza",
-    gaz_extraction: "Kwakira gaze",
+    recreation: "Ibikorwa byo kuryoherereza",
+    gaz_extraction: "Gucukura gaze",
     livestock: "Ubworozi",
+    domestic: "Imikoreshereze yo mu rugo",
+    aquaculture: "Ubworozi bw'amafi n'ibindi binyabuzima byo mu mazi",
+    municipal_supply: "Gutanga amazi mu mijyi",
     other: "Ikindi",
   };
-  return labels[primary] || (primary ? primary.replaceAll("_", " ") : "N/A");
+  return labels[primary] || humanizeActivityCode(primary);
 }
 
 function resolveLatLng(application: ApplicationForContract): { lat: string; lng: string } {
