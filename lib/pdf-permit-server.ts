@@ -59,9 +59,11 @@ function pageHeight(doc: PDFKit.PDFDocument): number {
   return doc.page.height;
 }
 
-function contentBottomY(doc: PDFKit.PDFDocument): number {
-  // Keep room for footer/QR while maximizing body area on landscape pages.
-  return pageHeight(doc) - 76 * PT;
+function contentBottomY(doc: PDFKit.PDFDocument, _skipQr = false): number {
+  // Both footers (slim DRAFT banner for previews, compact QR footer for final
+  // issuance) live in the same bottom band (~38mm from the page bottom), so
+  // we reserve a single ~42mm bottom margin for body text in both modes.
+  return pageHeight(doc) - 42 * PT;
 }
 
 function drawPageBorder(doc: PDFKit.PDFDocument): void {
@@ -551,11 +553,11 @@ async function drawWatermark(doc: PDFKit.PDFDocument): Promise<void> {
   const ph = pageHeight(doc);
   const watermarkBuffer = await getWatermarkBuffer();
   if (watermarkBuffer) {
-    const wmSize = Math.min(pw, ph) * 0.6;
+    const wmSize = Math.min(pw, ph) * 0.9;
     const x = (pw - wmSize) / 2;
     const y = (ph - wmSize) / 2;
     doc.save();
-    doc.opacity(0.08);
+    doc.opacity(0.12);
     doc.image(watermarkBuffer, x, y, { width: wmSize, height: wmSize });
     doc.restore();
   }
@@ -565,27 +567,29 @@ async function drawWatermark(doc: PDFKit.PDFDocument): Promise<void> {
 function drawLogo(doc: PDFKit.PDFDocument): number {
   const pw = pageWidth(doc);
   // Natural aspect ratio of logo image (1450×1600px ≈ 0.906 w:h).
-  const logoW = 38 * PT;
-  const logoH = 42 * PT;
+  const logoW = 26 * PT;
+  const logoH = 29 * PT;
   const logoX = (pw - logoW) / 2;
-  const logoY = 8 * PT;
+  const logoY = 6 * PT;
   if (fs.existsSync(LOGO_PATH)) {
     doc.image(LOGO_PATH, logoX, logoY, { width: logoW, height: logoH });
   } else {
     doc.font(FONT_BOLD).fontSize(13)
-      .text("Rwanda Water Resources Board", 0, 23 * PT, { align: "center", width: pw });
+      .text("Rwanda Water Resources Board", 0, 18 * PT, { align: "center", width: pw });
   }
-  return logoY + logoH + 10 * PT;
+  return logoY + logoH + 4 * PT;
 }
 
 function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number {
   const pw = pageWidth(doc);
-  doc.font(FONT_BOLD).fontSize(12);
-  const titleW = doc.widthOfString(title);
-  const titleX = (pw - titleW) / 2;
-  doc.text(title, titleX, yPos);
-  doc.moveTo(titleX, yPos + 14).lineTo(titleX + titleW, yPos + 14).lineWidth(0.5).stroke("#000");
-  return yPos + 22;
+  const marginX = 24 * PT;
+  const maxW = pw - marginX * 2;
+  doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
+  const titleH = doc.heightOfString(title, { width: maxW, align: "center" });
+  doc.text(title, marginX, yPos, { width: maxW, align: "center" });
+  const lineY = yPos + titleH + 4;
+  doc.moveTo(marginX, lineY).lineTo(marginX + maxW, lineY).lineWidth(0.5).stroke("#000");
+  return lineY + 8;
 }
 
 async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Promise<void> {
@@ -593,63 +597,76 @@ async function drawQrFooter(doc: PDFKit.PDFDocument, permitNumber: string): Prom
   const ph = pageHeight(doc);
   const verifyUrl = `${PRODUCTION_URL}/permit/view/${encodeURIComponent(permitNumber.trim())}`;
 
+  // Compact horizontal footer pinned near the page bottom (above the page-number row).
   const marginX = 15 * PT;
   const footerW = pw - marginX * 2;
-  const footerH = 46 * PT;
-  const footerY = ph - 74 * PT;
+  const footerH = 16 * PT; // ≈ 45pt
+  const footerY = ph - 22 * PT - footerH;
 
-  const qrBox = 34 * PT;
-  const qrPad = 2.5 * PT;
-  const qrX = marginX + (footerW - qrBox) / 2;
-  const qrY = footerY + 2 * PT;
+  // QR box on the left side of the footer.
+  const qrPad = 1.2 * PT;
+  const qrBox = footerH - qrPad * 2;
+  const qrX = marginX + qrPad;
+  const qrY = footerY + qrPad;
 
   doc.save();
   doc.roundedRect(marginX, footerY, footerW, footerH, 4).lineWidth(0.5).fillAndStroke("#fbfdff", "#e2e8f0");
-  doc.roundedRect(qrX, qrY, qrBox, qrBox, 4).fillAndStroke("#ffffff", "#e2e8f0");
+  doc.roundedRect(qrX, qrY, qrBox, qrBox, 3).fillAndStroke("#ffffff", "#e2e8f0");
   doc.restore();
 
   const qrPng = await QRCode.toBuffer(verifyUrl, {
     errorCorrectionLevel: "H",
     width: 512,
-    margin: 2,
+    margin: 1,
     color: { dark: "#000000", light: "#ffffff" },
   });
-  doc.image(qrPng, qrX + qrPad, qrY + qrPad, { width: qrBox - qrPad * 2, height: qrBox - qrPad * 2 });
+  const qrInner = qrBox - qrPad * 2;
+  doc.image(qrPng, qrX + qrPad, qrY + qrPad, { width: qrInner, height: qrInner });
 
+  // Disclaimer wrapped to the right of the QR box.
   doc.save();
   doc.font(FONT_ITALIC).fontSize(8).fillColor("#646464");
-  const disclaimerY = qrY + qrBox + 3 * PT;
+  const textX = qrX + qrBox + 6 * PT;
+  const textW = footerW - (textX - marginX) - 4 * PT;
+  const textY = footerY + 4 * PT;
   doc.text(
-    "This digital permit is only valid if the information on it is the same as the information as the water use permit registry.",
-    marginX + 10 * PT, disclaimerY, { width: footerW - 20 * PT, align: "center" },
+    "Scan to verify. This digital permit is only valid if the information on it matches the water use permit registry.",
+    textX, textY, { width: textW, align: "left" },
   );
   doc.restore();
 }
 
-/** Replaces the QR footer for draft previews — same footer box, amber "DRAFT" banner. */
+/** Slim "DRAFT — NOT YET ISSUED" strip pinned just above the page-number footer. */
 function drawPreviewBanner(doc: PDFKit.PDFDocument): void {
   const pw = pageWidth(doc);
   const ph = pageHeight(doc);
   const marginX = 15 * PT;
-  const footerW = pw - marginX * 2;
-  const footerH = 46 * PT;
-  const footerY = ph - 74 * PT;
+  const bannerW = pw - marginX * 2;
+  const bannerH = 18 * PT;
+  const bannerY = ph - 38 * PT;
 
   doc.save();
-  doc.roundedRect(marginX, footerY, footerW, footerH, 4)
+  doc.roundedRect(marginX, bannerY, bannerW, bannerH, 3)
     .lineWidth(0.5).fillAndStroke("#fff8ed", "#f59e0b");
-  doc.font(FONT_BOLD).fontSize(11).fillColor("#92400e");
-  doc.text("DRAFT — NOT YET ISSUED", marginX, footerY + 8 * PT, { width: footerW, align: "center" });
-  doc.font(FONT_ITALIC).fontSize(8).fillColor("#78350f");
-  doc.text(
-    "This digital permit is only valid if the information on it is the same as the information in the water use permit registry.",
-    marginX + 10 * PT, footerY + 24 * PT,
-    { width: footerW - 20 * PT, align: "center" },
-  );
+  doc.font(FONT_BOLD).fontSize(10).fillColor("#92400e");
+  doc.text("DRAFT — NOT YET ISSUED", marginX, bannerY + 4.5 * PT, { width: bannerW, align: "center" });
   doc.restore();
 }
 
-/** Draws a faint diagonal "DRAFT" across the page — call per page when skipQr is true. */
+/** Single centered closing line that replaces the legacy signature/name/role block. */
+function drawClosingLine(doc: PDFKit.PDFDocument, yPos: number): number {
+  const pw = pageWidth(doc);
+  const marginX = 24 * PT;
+  const maxW = pw - marginX * 2;
+  doc.font(FONT_BOLD).fontSize(11).fillColor("#000000");
+  doc.text("Director General of RWB / Umuyobozi Mukuru wa RWB", marginX, yPos, {
+    width: maxW,
+    align: "center",
+  });
+  return yPos + 16;
+}
+
+/** Draws a faint diagonal "DRAFT" across the page — currently unused (kept for future re-use). */
 function drawDraftOverlay(doc: PDFKit.PDFDocument): void {
   const pw = pageWidth(doc);
   const ph = pageHeight(doc);
@@ -700,8 +717,8 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   const leftX = 20 * PT;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 1.3;
-  const paraGap = 5;
+  const lineGap = 2.0;
+  const paraGap = 7;
 
   const name = resolveApplicantName(app);
   const idNum = resolveIdNumber(app);
@@ -723,17 +740,15 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 20 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
-  y += 4;
-  doc.font(FONT_REGULAR).fontSize(fontSize);
-  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: pageWidth(doc) - leftX, align: "right" });
+  y += 8;
+  drawClosingLine(doc, y);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
 
@@ -741,7 +756,6 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
     drawPageFooter(doc, permitNumber, i + 1, total);
-    if (opts.skipQr) drawDraftOverlay(doc);
   }
 
   return docToBuffer(doc);
@@ -773,8 +787,8 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   const leftX = 20 * PT;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 1.3;
-  const paraGap = 5;
+  const lineGap = 2.0;
+  const paraGap = 7;
 
   const name = resolveApplicantName(app);
   const idNum = resolveIdNumber(app);
@@ -797,23 +811,20 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 20 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
-  doc.font(FONT_REGULAR).fontSize(fontSize);
-  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: pageWidth(doc) - leftX, align: "right" });
+  if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 8;
+  drawClosingLine(doc, y);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
     drawPageFooter(doc, permitNumber, i + 1, total);
-    if (opts.skipQr) drawDraftOverlay(doc);
   }
   return docToBuffer(doc);
 }
@@ -900,16 +911,9 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   const headerYear = issueDate.getFullYear();
   const titleNum = resolvePermitTitleNumber(permitNumber, headerYear);
   await drawWatermark(doc);
+  const logoBottomY = drawLogo(doc);
   const title = `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`;
-  if (fs.existsSync(LOGO_PATH)) {
-    const logoW = 22 * PT;
-    const logoH = 24 * PT;
-    doc.image(LOGO_PATH, 16 * PT, 10 * PT, { width: logoW, height: logoH });
-  }
-  doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
-  doc.text(title, 0, 16 * PT, { width: pageWidth(doc), align: "center" });
-  doc.moveTo(16 * PT, 28 * PT).lineTo(pageWidth(doc) - 16 * PT, 28 * PT).lineWidth(0.7).stroke("#111827");
-  let y = 33 * PT;
+  let y = drawTitle(doc, title, logoBottomY);
 
   if (isModified) {
     doc.save();
@@ -923,8 +927,8 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   const leftX = 20 * PT;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 1.4;
-  const paraGap = 5;
+  const lineGap = 1.8;
+  const paraGap = 6;
 
   const orgName = resolveApplicantName(app);
   const officeAddr = resolveOrgAddress(app);
@@ -970,18 +974,19 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of englishParagraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 22 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.8).stroke("#1f2937");
+  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 8;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.8).stroke("#1f2937");
+  y += 10;
 
   for (const p of rwParagraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc) - 6 * PT) {
+    if (y + h > contentBottomY(doc, opts.skipQr)) {
       doc.addPage();
       await drawWatermark(doc);
       y = 30 * PT;
@@ -990,31 +995,19 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 6 * PT) {
+  if (y > contentBottomY(doc, opts.skipQr) - 24) {
     doc.addPage();
     await drawWatermark(doc);
     y = 30 * PT;
   }
-  y += 2;
-  doc.font(FONT_REGULAR).fontSize(fontSize);
-  doc.text("Signature/Umukono: ..............................", leftX, y);
-  doc.text(`Done at Kigali/Bikorewe i Kigali, On/kuwa ${fmtDMY(issueDate)}`, leftX, y, {
-    width: maxW,
-    align: "right",
-  });
-  y += 14;
-  doc.font(FONT_BOLD).fontSize(11);
-  doc.text("Dr. Emmanuel RUKUNDO", leftX, y);
-  y += 12;
-  doc.font(FONT_BOLD).fontSize(11);
-  doc.text("Director General / Umuyobozi Mukuru", leftX, y);
+  y += 6;
+  drawClosingLine(doc, y);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
     drawPageFooter(doc, permitNumber, i + 1, total);
-    if (opts.skipQr) drawDraftOverlay(doc);
   }
   return docToBuffer(doc);
 }
@@ -1046,8 +1039,8 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const leftX = 20 * PT;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
-  const lineGap = 1.3;
-  const paraGap = 5;
+  const lineGap = 2.0;
+  const paraGap = 7;
 
   const orgName = resolveApplicantName(app);
   const rep = resolveOrgRep(app);
@@ -1086,23 +1079,20 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
     const h = doc.heightOfString(p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     doc.text(p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 20 * PT) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
-  doc.font(FONT_REGULAR).fontSize(fontSize);
-  doc.text("Umuyobozi Mukuru wa RWB", leftX, y);
-  doc.text(`Bikorewe i Kigali, kuwa ${fmtDMY(issueDate)}`, 0, y, { width: pageWidth(doc) - leftX, align: "right" });
+  if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 8;
+  drawClosingLine(doc, y);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
   for (let i = 0; i < total; i++) {
     doc.switchToPage(i);
     drawPageFooter(doc, permitNumber, i + 1, total);
-    if (opts.skipQr) drawDraftOverlay(doc);
   }
   return docToBuffer(doc);
 }
