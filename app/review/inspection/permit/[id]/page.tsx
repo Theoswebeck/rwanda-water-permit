@@ -469,7 +469,7 @@ export default function PermitInspectionUnifiedPage() {
         // missing columns one-by-one.
         for (let attempt = 0; attempt < 25; attempt++) {
           const { data, error } = await run(cur);
-          if (!error) return { data, error: null };
+          if (!error) return { data, error: null, droppedColumns: Array.from(removed) };
 
           lastErr = error;
           const missingCol = extractMissingColumnFromError(error);
@@ -488,14 +488,19 @@ export default function PermitInspectionUnifiedPage() {
             continue;
           }
 
-          return { data: null, error };
+          return { data: null, error, droppedColumns: Array.from(removed) };
         }
 
-        return { data: null, error: lastErr };
+        return { data: null, error: lastErr, droppedColumns: Array.from(removed) };
       };
 
+      const buildDroppedSuffix = (dropped: string[]) =>
+        dropped.length
+          ? `\n\n⚠️ The following ${dropped.length} field(s) were not saved because the database schema is missing the matching column(s): ${dropped.join(", ")}.\nPlease ask an administrator to apply the latest database migrations.`
+          : "";
+
       if (inspectionId) {
-        const { data, error: upErr } = await runWithMissingColumnRetries<{ id: string }>(
+        const { data, error: upErr, droppedColumns } = await runWithMissingColumnRetries<{ id: string }>(
           p => supabase.from("inspections").update(p).eq("id", inspectionId).select("id").single(),
           payload
         );
@@ -505,14 +510,15 @@ export default function PermitInspectionUnifiedPage() {
           ...(payload as Partial<Inspection>),
           id: data.id,
         }));
+        const suffix = buildDroppedSuffix(droppedColumns);
         if (mode === "submit") {
           setCanEditForm(false);
-          alert("✅ Inspection submitted. You can now use workflow actions below.");
+          alert("✅ Inspection submitted. You can now use workflow actions below." + suffix);
         } else {
-          alert("✅ Draft saved");
+          alert("✅ Draft saved" + suffix);
         }
       } else {
-        const { data, error: insErr } = await runWithMissingColumnRetries<{ id: string }>(
+        const { data, error: insErr, droppedColumns } = await runWithMissingColumnRetries<{ id: string }>(
           p => supabase.from("inspections").insert(p).select("id").single(),
           payload
         );
@@ -522,11 +528,12 @@ export default function PermitInspectionUnifiedPage() {
           ...(payload as Partial<Inspection>),
           id: data.id,
         } as Inspection);
+        const suffix = buildDroppedSuffix(droppedColumns);
         if (mode === "submit") {
           setCanEditForm(false);
-          alert("✅ Inspection submitted. You can now use workflow actions below.");
+          alert("✅ Inspection submitted. You can now use workflow actions below." + suffix);
         } else {
-          alert("✅ Draft created");
+          alert("✅ Draft created" + suffix);
         }
       }
     } catch (e: any) {

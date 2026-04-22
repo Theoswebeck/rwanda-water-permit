@@ -36,6 +36,7 @@ const JSONB_COLUMNS_BY_TABLE: Record<string, Set<string>> = {
     'employment_gender_breakdown',
     'ohs_gender_sensitive',
     'inspection_documents',
+    'locked_field_overrides',
   ]),
   payment_transactions: new Set(['provider_response']),
   payments: new Set(['gateway_response', 'gateway_metadata']),
