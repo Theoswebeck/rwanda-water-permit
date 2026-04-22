@@ -29,6 +29,9 @@ export function PermitPreviewFrame({
   useEffect(() => {
     let cancelled = false;
     let createdUrl: string | null = null;
+    const controller = new AbortController();
+    const timeoutMs = 30000;
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
     setStatus("loading");
     setErrorMessage(null);
@@ -39,7 +42,7 @@ export function PermitPreviewFrame({
 
     (async () => {
       try {
-        const res = await fetch(url, { cache: "no-store" });
+        const res = await fetch(url, { cache: "no-store", signal: controller.signal });
         if (cancelled) return;
         if (!res.ok) {
           const ct = res.headers.get("content-type") || "";
@@ -54,18 +57,31 @@ export function PermitPreviewFrame({
         }
         const blob = await res.blob();
         if (cancelled) return;
+        if (blob.size === 0) {
+          setErrorMessage("Preview response was empty.");
+          setStatus("error");
+          return;
+        }
         createdUrl = URL.createObjectURL(blob);
         setBlobUrl(createdUrl);
         setStatus("ready");
       } catch (err) {
         if (cancelled) return;
-        setErrorMessage(err instanceof Error ? err.message : "Network error");
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setErrorMessage("Preview request timed out. Please try again.");
+        } else {
+          setErrorMessage(err instanceof Error ? err.message : "Network error");
+        }
         setStatus("error");
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     })();
 
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutId);
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
   }, [url, reloadKey]);

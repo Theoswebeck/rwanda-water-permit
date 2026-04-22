@@ -57,6 +57,34 @@ function parseNotes(raw: unknown): Record<string, any> | null {
   return null;
 }
 
+function resolvePreviewErrorMessage(err: unknown): string {
+  if (!(err instanceof Error)) return "Failed to generate permit preview";
+  const message = err.message?.trim() ?? "";
+  const lower = message.toLowerCase();
+
+  if (!message) return "Failed to generate permit preview";
+  if (lower.includes("invalid session") || lower.includes("jwt")) return "Invalid session";
+  if (lower.includes("forbidden") || lower.includes("not authenticated")) return "Forbidden";
+  if (lower.includes("not found")) return "Application not found";
+  if (
+    lower.includes("database") ||
+    lower.includes("postgres") ||
+    lower.includes("connection") ||
+    lower.includes("timeout")
+  ) {
+    return "Could not load application data for preview";
+  }
+  if (
+    lower.includes("pdf") ||
+    lower.includes("render") ||
+    lower.includes("watermark") ||
+    lower.includes("font")
+  ) {
+    return "Could not render permit preview PDF";
+  }
+  return "Failed to generate permit preview";
+}
+
 /**
  * Resolve the permit number to show on the draft preview.
  * - Renewals / modifications / transfers: always the original permit number from internal_notes.
@@ -334,7 +362,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Server error";
+    const message = resolvePreviewErrorMessage(err);
     if (message.includes("Invalid session") || message.includes("JWT")) {
       const res = NextResponse.json(
         { success: false, message: "Invalid session" },
@@ -345,7 +373,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
     console.error("❌ permit-preview error:", err);
     return NextResponse.json(
-      { success: false, message: "Server error" },
+      { success: false, message },
       { status: 500 },
     );
   }
