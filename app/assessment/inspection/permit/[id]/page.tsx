@@ -20,6 +20,7 @@ import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-badge";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
+import { isAssessorOwnedWorkflow } from "@/lib/inspection-workflow";
 import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
 
 type InspectionTemplate = "authorization" | "concession";
@@ -240,9 +241,11 @@ export default function PermitInspectionUnifiedPage() {
 
           if (existing) {
             setInspectionId(existing.id);
-            const isDraft = existing.status === "scheduled" || existing.status === "in_progress";
             const isOwner = existing.inspector_id === user?.id;
-            setCanEditForm(canCreateInspection && isOwner && isDraft);
+            const isAssessorOwned = isAssessorOwnedWorkflow(
+              (existing as { workflow_status?: string | null }).workflow_status
+            );
+            setCanEditForm(canCreateInspection && isOwner && isAssessorOwned);
             setInspectionRecord(existing);
 
             setForm(prev => ({
@@ -344,7 +347,15 @@ export default function PermitInspectionUnifiedPage() {
         type: "annual",
         inspection_template: template,
         status: mode === "submit" ? "completed" : "in_progress",
-        workflow_status: mode === "submit" ? "pending_review" : "draft",
+        workflow_status:
+          mode === "submit"
+            ? "pending_review"
+            : (() => {
+                const current = (inspectionRecord?.workflow_status as string) || "draft";
+                return current === "pending_assessment" || current === "returned_to_assessment"
+                  ? current
+                  : "draft";
+              })(),
         scheduled_date: nowIso,
         completed_date: mode === "submit" ? nowIso : null,
         review_status: mode === "submit" ? "pending" : null,

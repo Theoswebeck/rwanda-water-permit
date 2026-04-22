@@ -159,6 +159,22 @@ export function canActOnInspection(
   return getAvailableTransitions(workflowStatus, role).length > 0;
 }
 
+const ASSESSOR_OWNED_WORKFLOW: ReadonlySet<string> = new Set([
+  "draft",
+  "pending_assessment",
+  "returned_to_assessment",
+]);
+
+// Workflow states in which the assigned assessor still owns the inspection
+// and is expected to keep editing it. Used by the inspection editor pages
+// to gate `canEditForm`. Treats null/empty as "draft" so legacy rows
+// without a workflow_status are editable by their owner.
+export function isAssessorOwnedWorkflow(
+  workflowStatus: string | null | undefined
+): boolean {
+  return ASSESSOR_OWNED_WORKFLOW.has((workflowStatus ?? "draft").trim() || "draft");
+}
+
 export function getResponsibleRole(
   workflowStatus: InspectionWorkflowStatus | string
 ): UserRole | null {
