@@ -1,5 +1,6 @@
 import type { Json } from "@/types/database";
 import { polygonsToGeoJSON } from "@/lib/geoUtils";
+import { getEffectiveInternalNotes } from "@/lib/document-overrides";
 import * as turf from "@turf/turf";
 
 export type ContractPlaceholderContext = {
@@ -66,19 +67,9 @@ export type ApplicationForContract = {
   } | null;
 };
 
-function safeJsonParseObject(s: unknown): Record<string, any> | null {
-  if (typeof s !== "string" || !s.trim()) return null;
-  try {
-    const v = JSON.parse(s);
-    if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, any>;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 function getInternalNotes(application: ApplicationForContract): Record<string, any> | null {
-  return safeJsonParseObject(application.internal_notes);
+  const notes = getEffectiveInternalNotes(application.internal_notes);
+  return notes && typeof notes === "object" ? notes : null;
 }
 
 function formatNumber(n: number): string {

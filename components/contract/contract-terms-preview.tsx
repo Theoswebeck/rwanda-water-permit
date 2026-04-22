@@ -100,7 +100,7 @@ export function ContractTermsPreview({
         title: terms.importantNotice.title,
         body:
           mode === "staff-preview"
-            ? "This is a preview of the contract that will be issued if the application is approved. Values are filled from the current application; nothing is saved."
+            ? "This is a preview of the contract that will be issued if the application is approved. Dynamic values are editable in staff mode and saved as draft overrides."
             : isTermsRejected
               ? "You have rejected these terms and conditions. The permit number remains hidden until terms are accepted."
               : "You have already acknowledged these terms. You confirm that you have read, understood, and agree to comply with all conditions. Violation of any condition may result in permit suspension or revocation.",

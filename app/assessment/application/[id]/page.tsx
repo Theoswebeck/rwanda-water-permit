@@ -68,6 +68,7 @@ import {
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
+import { DocumentValuesEditor } from "@/components/staff/document-values-editor";
 
 function toDateInputValue(value?: string | null): string {
   if (!value) return "";
@@ -2003,6 +2004,23 @@ export default function AssessmentApplicationPage() {
               <TabsTrigger value="permit_preview" className="py-2.5">Permit Preview</TabsTrigger>
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
+
+            {application?.id && (
+              <DocumentValuesEditor
+                applicationId={application.id}
+                internalNotes={application.internal_notes}
+                readOnly={isReadOnly}
+                onInternalNotesChange={(nextInternalNotes) => {
+                  setApplication((prev) => {
+                    if (!prev) return prev;
+                    return {
+                      ...prev,
+                      internal_notes: nextInternalNotes,
+                    };
+                  });
+                }}
+              />
+            )}
 
             {/* Application Details Tab */}
             <TabsContent value="application_details" className="space-y-6 focus-visible:outline-none">
