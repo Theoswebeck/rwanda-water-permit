@@ -653,15 +653,28 @@ function drawPreviewBanner(doc: PDFKit.PDFDocument): void {
   doc.restore();
 }
 
-/** Single centered closing line that replaces the legacy signature/name/role block. */
-function drawClosingLine(doc: PDFKit.PDFDocument, yPos: number): number {
+/**
+ * Two-column closing block:
+ *   left  — "Director General of RWB / Umuyobozi Mukuru wa RWB"
+ *   right — "Done at Kigali / Bikorewe i Kigali, On/kuwa ......./......./{year}"
+ * Day and month are intentionally blank for handwritten signing on print.
+ */
+function drawClosingLine(doc: PDFKit.PDFDocument, yPos: number, issueDate: Date): number {
   const pw = pageWidth(doc);
   const marginX = 24 * PT;
-  const maxW = pw - marginX * 2;
+  const colW = (pw - marginX * 2) / 2 - 4 * PT;
+  const leftX = marginX;
+  const rightX = pw / 2 + 4 * PT;
+  const year = issueDate.getFullYear();
+
   doc.font(FONT_BOLD).fontSize(11).fillColor("#000000");
-  doc.text("Director General of RWB / Umuyobozi Mukuru wa RWB", marginX, yPos, {
-    width: maxW,
-    align: "center",
+  doc.text("Director General of RWB / Umuyobozi Mukuru wa RWB", leftX, yPos, {
+    width: colW,
+    align: "left",
+  });
+  doc.text(`Done at Kigali / Bikorewe i Kigali, On/kuwa ......../......../${year}`, rightX, yPos, {
+    width: colW,
+    align: "right",
   });
   return yPos + 16;
 }
@@ -748,7 +761,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
   y += 8;
-  drawClosingLine(doc, y);
+  drawClosingLine(doc, y, issueDate);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
 
@@ -818,7 +831,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
 
   if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 8;
-  drawClosingLine(doc, y);
+  drawClosingLine(doc, y, issueDate);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
@@ -1001,7 +1014,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     y = 30 * PT;
   }
   y += 6;
-  drawClosingLine(doc, y);
+  drawClosingLine(doc, y, issueDate);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
@@ -1086,7 +1099,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
 
   if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 8;
-  drawClosingLine(doc, y);
+  drawClosingLine(doc, y, issueDate);
 
   if (opts.skipQr) { drawPreviewBanner(doc); } else { await drawQrFooter(doc, permitNumber); }
   const total = doc.bufferedPageRange().count;
