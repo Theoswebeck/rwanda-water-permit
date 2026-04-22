@@ -32,6 +32,7 @@ type InspectionRow = {
   id: string;
   status: "scheduled" | "in_progress" | "completed" | "cancelled" | string;
   workflow_status: InspectionWorkflowStatus | string;
+  inspector_id?: string | null;
   type?: string;
   result?: string | null;
   review_status?: string | null;
@@ -104,7 +105,7 @@ const CHIP_DEFS: StatusChipDef[] = [
   {
     id: "in_field",
     label: "In Field",
-    statuses: ["scheduled"],
+    statuses: ["scheduled", "in_progress"],
     priority: "secondary",
   },
   {
@@ -157,6 +158,7 @@ interface StaffInspectionsTabProps {
 
 export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const { userProfile } = useAuth();
+  const currentUserId = userProfile?.id ?? null;
   const basePath = getInspectionBasePath(roleContext || userProfile?.role);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +182,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             id,
             status,
             workflow_status,
+            inspector_id,
             type,
             result,
             review_status,
@@ -357,17 +360,24 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     load();
   }, []);
 
+  const visibleInspections = useMemo(() => {
+    return inspections.filter((r) => {
+      const isPrivateWorkInProgress = r.status === "in_progress" || r.workflow_status === "draft";
+      if (!isPrivateWorkInProgress) return true;
+      return Boolean(currentUserId && r.inspector_id === currentUserId);
+    });
+  }, [inspections, currentUserId]);
+
   const statusForFilter = useMemo(() => {
-    return inspections
-      .filter((r) => r.status !== "in_progress")
+    return visibleInspections
       .map((r) => ({
       ...r,
       status: getDisplayStatus(r),
     }));
-  }, [inspections]);
+  }, [visibleInspections]);
 
   const filtered = useMemo(() => {
-    let result = inspections.filter((r) => r.status !== "in_progress");
+    let result = visibleInspections;
 
     const activeChip = CHIP_DEFS.find((c) => c.id === activeChipId);
     if (activeChip && activeChip.statuses.length > 0) {
@@ -393,7 +403,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     }
 
     return result;
-  }, [inspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
+  }, [visibleInspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
 
   if (loading) {
     return (
