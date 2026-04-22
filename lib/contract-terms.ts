@@ -912,7 +912,7 @@ export const contractTermsByVariant: Record<PermitVariant, ContractTerms | null>
           "Aho imbago ihererereye: Ikiyaga cya XXXX (Izina ry’Ikiyaga), igice cyacyo giherereye mu Umudugudu wa XXXX, Akagari ka XXX, Umurenge wa XXXX, Akarere ka XXXX, Intara y' XXXX nk’uko bigaragazwa n’ikarita iri ku umugereka.",
           "Ubuso bw’imbago: Hegitari XXX",
           "2. Uru ruhushya ni urwo gukorera mu mazi gusa. Uwaruhawe abaye akeneye gukorera mu nkengero z’ikiyaga (buffer zone) agomba kubisabira uburenganzira urwego rubishinzwe.",
-          "3. Imbago yatanzwe izakoreshwa gusa mu bikorwa by’ XXXX (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA)i nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
+          "3. Imbago yatanzwe izakoreshwa gusa mu bikorwa byo (IBIKORWA/ IMIRIMO BYASABIWE URUHUSHYA) nk’uko bigaragazwa n’inyandiko z’umushinga zigize kandi igice cy’aya masezerano.",
           "4. Ukoresha amazi yemera ko amazi y’ Ikiyaga cya XXXX (Izina ry’Ikiyaga) akoreshwa mu buryo rusange kandi ko ashobora gusaranganywa mu gihe cyose bitagize uwo bibangamira.",
           "5. Umuyobozi Mukuru ntiyishingira ingano n’ ubuziranenge by’ amazi bikenewe n’ ukoresha amazi mu mirimo ye.",
         ],

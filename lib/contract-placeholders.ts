@@ -880,6 +880,7 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   stripXPrefixAroundValue(ctx.organizationName);
   stripXPrefixAroundValue(ctx.representativeName);
   stripXPrefixAroundValue(ctx.activityLabel);
+  stripXPrefixAroundValue(ctx.activityLabelRw);
   stripXPrefixBeforeValue(ctx.waterSourceName);
   stripXPrefixBeforeValue(ctx.applicantName);
   stripXPrefixBeforeValue(ctx.organizationName);
