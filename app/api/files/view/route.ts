@@ -34,16 +34,29 @@ async function findAccessibleDocument(
   const variants = Array.from(new Set([normalizedPath, pathWithoutLeadingSlash]));
   const staff = await isStaffUser(userId);
 
+  // LEFT JOIN to applications so registry-owned documents (which have
+  // application_id IS NULL and owner_kind='permit_registry') still
+  // resolve. Inspection documents uploaded against a permit_registry
+  // owner fall into this bucket; an INNER JOIN would silently drop
+  // them and surface as a misleading "Document not found or access
+  // denied" 404 in the UI.
   const res = await query<{
     file_path: string;
     mime_type: string | null;
     name: string | null;
-    applicant_id: string;
+    applicant_id: string | null;
+    owner_kind: string | null;
+    uploaded_by: string | null;
   }>(
     `
-    select d.file_path, d.mime_type, d.name, a.applicant_id
+    select d.file_path,
+           d.mime_type,
+           d.name,
+           a.applicant_id,
+           d.owner_kind,
+           d.uploaded_by
     from public.documents d
-    join public.applications a on a.id = d.application_id
+    left join public.applications a on a.id = d.application_id
     where d.file_path = any($1::text[])
     order by d.created_at desc
     limit 1
@@ -53,7 +66,18 @@ async function findAccessibleDocument(
 
   const row = res.rows[0];
   if (!row) return null;
-  if (!staff && row.applicant_id !== userId) return null;
+
+  // Access policy:
+  //   * Staff can view any document.
+  //   * The original uploader can view their own document (covers staff
+  //     who uploaded a registry-owned doc, and applicants for their own
+  //     application docs).
+  //   * The applicant can view documents on their application.
+  if (!staff) {
+    const isUploader = row.uploaded_by && row.uploaded_by === userId;
+    const isApplicant = row.applicant_id && row.applicant_id === userId;
+    if (!isUploader && !isApplicant) return null;
+  }
 
   return {
     file_path: row.file_path,
