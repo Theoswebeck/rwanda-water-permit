@@ -29,11 +29,25 @@ export type StructuredFieldKey =
   | "expiry_date";
 
 /**
+ * Permit-specific fields the renderer attaches to the slot context.
+ * Permit slot resolvers assume this is present.
+ */
+export type PermitSlotContextExtras = {
+  permitNumber: string;
+  issueDate: Date;
+  expiryDate: Date;
+  isModified: boolean;
+  /** True for the assessor preview (no QR code, DRAFT banner shown). */
+  skipQr: boolean;
+  /** Header year derived from issueDate. Cached so resolvers don't recompute. */
+  headerYear: number;
+};
+
+/**
  * Caller-provided context that {@link DocumentTextSlot.defaultResolver}
  * receives when computing the default text for a slot. Renderers build this
  * once from the application record and pass it to every `resolveSlotText`
- * call. Keeping it as `Record<string, unknown>` here keeps this module
- * dependency-free; concrete renderers narrow it to their own context type.
+ * call.
  */
 export type SlotResolverContext = {
   application: {
@@ -48,6 +62,10 @@ export type SlotResolverContext = {
   variant: PermitVariant;
   /** Locale tag for date formatting; defaults to "en-GB" (DD/MM/YYYY). */
   locale?: string;
+  /** Populated when rendering a permit. Permit slot resolvers assume this is
+   *  set; non-permit consumers (editor preview list) can leave it undefined
+   *  and the resolver falls back to placeholder text. */
+  permit?: PermitSlotContextExtras;
   /** Free-form bag for renderer-specific fields. */
   extras?: Record<string, unknown>;
 };

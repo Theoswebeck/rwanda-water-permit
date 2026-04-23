@@ -104,49 +104,43 @@ Push to both branches.
    - Group names: `Header`, `Authorization`, `Validity`, `Contract reference`, `Closing block`, `Footer`. (Bilingual variant adds `Authorization (Kinyarwanda)`, etc.)
    - Labels must be human-meaningful in the editor (e.g. "Header — Permit title (English)" not just `title.en`).
 
-4. **Golden-file parity test** (`__tests__/pdf-permit-server.parity.test.ts`)
-   - Build a fixture application per variant.
-   - Render PDF on `main` (pre-change) → extract text per page with `pdf-parse` → store as snapshot in `__tests__/__snapshots__/permit-<variant>.txt`.
-   - Render PDF on this branch → extract text per page → assert deep-equal to snapshot.
-   - **If the snapshot files don't exist yet** the test should fail loudly so we generate them deliberately from the pre-change branch (not from the changed branch).
+4. **Parity verification script** `scripts/check-permit-slots-parity.ts`
+   - Builds one fixture per variant.
+   - For every slot in the catalogue, computes its `defaultResolver(ctx)` output and compares it to a hand-replicated copy of the pre-Phase-2 template literal (lifted verbatim from `git show HEAD~:lib/pdf-permit-server.ts`).
+   - Includes an override-wins regression: writes a `document_text_overrides.values` entry into `internal_notes` and asserts `resolveSlotText` returns the override (and the sibling slot is unaffected).
+   - 31 invariants in v1.
 
-   Procedure to generate snapshots:
-   ```bash
-   git stash
-   git checkout chore/stage-unstaged-2026-03-01 -- lib/pdf-permit-server.ts
-   npx vitest run __tests__/pdf-permit-server.parity.test.ts -u
-   git checkout HEAD -- lib/pdf-permit-server.ts
-   git stash pop
-   ```
-
-5. **Override-applies test**
-   - Same fixtures, but apply one slot override per variant and assert the new string appears in the extracted text and the surrounding paragraphs are unchanged.
+5. **Helper extraction** — pull every text-data resolver out of `lib/pdf-permit-server.ts` into `lib/permit/permit-text-data.ts` (pure module, no PDFKit dep). The renderer keeps only `resolvePermitDuration` (which it uses to compute `expiryDate` before slot resolution).
 
 ### Verification
 
 ```bash
-npx vitest run __tests__/pdf-permit-server.parity.test.ts
-npx vitest run __tests__/document-slots
-npx tsc --noEmit
-npm run lint
+npx tsc --noEmit                                    # zero new errors in changed files
+npx tsx scripts/check-document-slots.ts             # 44 invariants pass
+npx tsx scripts/check-permit-slots-parity.ts        # 31 invariants pass
 ```
 
-All green. Manual sanity: hit `/api/permit/[id]/preview` for one of each variant, eyeball the PDF — must look identical to today.
+All green. Manual sanity: hit `/api/staff/applications/[id]/permit-preview` for one of each variant, eyeball the PDF — must look identical to today.
 
 ### Commit
 
 ```
-feat(permit-pdf): route every text emission through document-slots resolver
+feat(permit-pdf): route every text emission through document-slots resolver (Phase 2)
 
 Catalogues all editable text positions for the 4 permit variants and
 swaps every literal in lib/pdf-permit-server.ts for resolveSlotText().
-Golden-file parity test confirms byte-identical output when no
-overrides exist; one-slot override test confirms the resolver wins.
+Pure data resolvers extracted to lib/permit/permit-text-data.ts so the
+catalogue and the renderer share one source of truth.
 
-No editor UI or API surface yet — that lands in phase 3.
+scripts/check-permit-slots-parity.ts asserts every slot default matches
+the pre-refactor template literal byte-for-byte across all 4 variants
+(31 invariants), and includes an override-wins regression for the new
+document_text_overrides envelope.
+
+No editor UI or API surface yet — that lands in Phase 3.
 ```
 
-Push to both branches.
+Push to both branches once the user has reviewed.
 
 ---
 
