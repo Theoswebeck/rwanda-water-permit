@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { query } from "@/lib/db/postgres";
+import { withTransaction } from "@/lib/db/postgres";
 import {
   clearSessionCookie,
   readSessionTokenFromRequest,
   verifySessionToken,
 } from "@/lib/auth/session";
 import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
+import { parseInternalNotes } from "@/lib/document-overrides";
 
 export const runtime = "nodejs";
 
@@ -129,148 +130,139 @@ export async function POST(
       );
     }
 
-    // Pull existing assessor adjustments so we can merge (a single statement touching
-    // only the two paths we care about). We also reject renewals here — the page
-    // already gates this on the client, but enforcing it server-side prevents a
-    // direct API call from corrupting renewal applications.
-    // NOTE: applications.internal_notes is a TEXT column that holds a JSON
-    // document, so we must explicitly cast text -> jsonb to use the `->`
-    // operator. NULLIF guards against empty-string rows that would fail
-    // ::jsonb.
-    const existingRes = await query<{
-      is_renewal: boolean | null;
-      assessor_adjustments: unknown;
-      original_requested_values: unknown;
-    }>(
-      `
-      SELECT
-        COALESCE(is_renewal, false) AS is_renewal,
-        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_assessorAdjustments'      AS assessor_adjustments,
-        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_originalRequestedValues'  AS original_requested_values
-      FROM public.applications
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [id],
-    );
-    const existingRow = existingRes.rows[0];
-    if (!existingRow) {
+    const requestedPayload = (body.requestedValues ?? null) as RequestedValuesPayload | null;
+
+    // Race-safe write strategy:
+    //   applications.internal_notes is a TEXT column that holds a JSON
+    //   document. The previous SQL-only jsonb_set design was brittle on rows
+    //   with malformed or scalar JSON, so we instead lock the row, parse +
+    //   mutate in JS (which `parseInternalNotes` does tolerantly), then write
+    //   the whole column back. The row lock preserves the original intent —
+    //   no concurrent writer can clobber sibling JSON paths (most importantly
+    //   the `document_overrides` envelope) between our read and write.
+    const result = await withTransaction(async (client) => {
+      const lockRes = await client.query<{
+        is_renewal: boolean | null;
+        internal_notes: string | null;
+      }>(
+        `
+        SELECT COALESCE(is_renewal, false) AS is_renewal, internal_notes
+        FROM public.applications
+        WHERE id = $1
+        FOR UPDATE
+        `,
+        [id],
+      );
+      const lockRow = lockRes.rows[0];
+      if (!lockRow) {
+        return { kind: "not_found" as const };
+      }
+      if (lockRow.is_renewal) {
+        return { kind: "renewal_locked" as const };
+      }
+
+      const existingNotes = parseInternalNotes(lockRow.internal_notes);
+      const existingAdjustments = isPlainObject(existingNotes._assessorAdjustments)
+        ? (existingNotes._assessorAdjustments as Record<string, unknown>)
+        : {};
+      const existingOriginal = existingNotes._originalRequestedValues ?? null;
+
+      const nowIso = new Date().toISOString();
+      const nextAdjustments: Record<string, unknown> = { ...existingAdjustments };
+      if (patch.permitLengthYears !== undefined) {
+        nextAdjustments.permitLengthYears = patch.permitLengthYears;
+        nextAdjustments.adjustedAt = nowIso;
+      }
+      if (patch.recommendedVolumeM3 !== undefined) {
+        nextAdjustments.recommendedVolumeM3 = patch.recommendedVolumeM3;
+        nextAdjustments.volumeAdjustedAt = nowIso;
+      }
+
+      // Backfill `_originalRequestedValues` only when the database hasn't
+      // already recorded them. The client sends its current view of the
+      // requested values so we have something to seed from on the very first
+      // assessor adjustment.
+      let nextOriginal: unknown = existingOriginal;
+      if (existingOriginal == null && requestedPayload && typeof requestedPayload === "object") {
+        const seed: Record<string, unknown> = { storedAt: nowIso };
+        const seedLength = Number(requestedPayload.permitLengthYears);
+        if (Number.isFinite(seedLength) && seedLength > 0) {
+          seed.permitLengthYears = Math.trunc(seedLength);
+        }
+        const seedVolume = Number(requestedPayload.volumeM3);
+        if (Number.isFinite(seedVolume) && seedVolume > 0) {
+          seed.volumeM3 = seedVolume;
+        }
+        // Only persist a seed if at least one numeric requested value was
+        // supplied — an empty `{ storedAt: ... }` would falsely advertise
+        // "we have the original values" and prevent future backfills.
+        if (seed.permitLengthYears !== undefined || seed.volumeM3 !== undefined) {
+          nextOriginal = seed;
+        }
+      }
+
+      const nextNotes: Record<string, unknown> = { ...existingNotes };
+      nextNotes._assessorAdjustments = nextAdjustments;
+      if (nextOriginal != null) nextNotes._originalRequestedValues = nextOriginal;
+
+      const nextNotesJson = JSON.stringify(nextNotes);
+
+      // Update internal_notes always; conditionally also write the dedicated
+      // `proposed_duration_years` column so PDF rendering and the JSON ledger
+      // never drift apart.
+      let updateRes;
+      if (patch.permitLengthYears !== undefined) {
+        updateRes = await client.query<{ proposed_duration_years: number | null }>(
+          `
+          UPDATE public.applications
+          SET internal_notes = $2,
+              proposed_duration_years = $3,
+              updated_at = now()
+          WHERE id = $1
+          RETURNING proposed_duration_years
+          `,
+          [id, nextNotesJson, patch.permitLengthYears],
+        );
+      } else {
+        updateRes = await client.query<{ proposed_duration_years: number | null }>(
+          `
+          UPDATE public.applications
+          SET internal_notes = $2,
+              updated_at = now()
+          WHERE id = $1
+          RETURNING proposed_duration_years
+          `,
+          [id, nextNotesJson],
+        );
+      }
+      const updatedRow = updateRes.rows[0];
+
+      return {
+        kind: "ok" as const,
+        assessor_adjustments: nextAdjustments,
+        original_requested_values: nextOriginal,
+        proposed_duration_years: updatedRow?.proposed_duration_years ?? null,
+      };
+    });
+
+    if (result.kind === "not_found") {
       return NextResponse.json(
         { success: false, message: "Application not found" },
         { status: 404 },
       );
     }
-    if (existingRow.is_renewal) {
+    if (result.kind === "renewal_locked") {
       return NextResponse.json(
         { success: false, message: "Renewal applications inherit assessor recommendations and cannot be edited." },
         { status: 409 },
       );
     }
 
-    const existingAdjustments = isPlainObject(existingRow.assessor_adjustments)
-      ? (existingRow.assessor_adjustments as Record<string, unknown>)
-      : {};
-    const nowIso = new Date().toISOString();
-    const nextAdjustments: Record<string, unknown> = { ...existingAdjustments };
-    if (patch.permitLengthYears !== undefined) {
-      nextAdjustments.permitLengthYears = patch.permitLengthYears;
-      nextAdjustments.adjustedAt = nowIso;
-    }
-    if (patch.recommendedVolumeM3 !== undefined) {
-      nextAdjustments.recommendedVolumeM3 = patch.recommendedVolumeM3;
-      nextAdjustments.volumeAdjustedAt = nowIso;
-    }
-
-    // Backfill `_originalRequestedValues` only when the database hasn't already
-    // recorded them. The client sends its current view of the requested values so
-    // we have something to seed from on the very first assessor adjustment.
-    const requestedPayload = (body.requestedValues ?? null) as RequestedValuesPayload | null;
-    let originalRequestedValuesJson: string | null = null;
-    if (existingRow.original_requested_values === null && requestedPayload && typeof requestedPayload === "object") {
-      const seed: Record<string, unknown> = { storedAt: nowIso };
-      const seedLength = Number(requestedPayload.permitLengthYears);
-      if (Number.isFinite(seedLength) && seedLength > 0) {
-        seed.permitLengthYears = Math.trunc(seedLength);
-      }
-      const seedVolume = Number(requestedPayload.volumeM3);
-      if (Number.isFinite(seedVolume) && seedVolume > 0) {
-        seed.volumeM3 = seedVolume;
-      }
-      // Only persist a seed if at least one numeric requested value was supplied —
-      // an empty `{ storedAt: ... }` would falsely advertise "we have the original
-      // values" and prevent future backfills.
-      if (seed.permitLengthYears !== undefined || seed.volumeM3 !== undefined) {
-        originalRequestedValuesJson = JSON.stringify(seed);
-      }
-    }
-
-    // Build the UPDATE. We always set `_assessorAdjustments`. We conditionally
-    // chain a second `jsonb_set` for `_originalRequestedValues`. Using two
-    // statements would reopen the race we are trying to close, so this stays
-    // a single SQL statement.
-    const adjustmentsJson = JSON.stringify(nextAdjustments);
-    const updateProposedDuration = patch.permitLengthYears !== undefined;
-
-    // internal_notes is a TEXT column — we cast to jsonb for jsonb_set, then
-    // back to text for the column write. NULLIF handles the empty-string
-    // case which would otherwise fail ::jsonb.
-    const baseExpr = `COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb`;
-    const setExpr = originalRequestedValuesJson !== null
-      ? `jsonb_set(
-           jsonb_set(
-             ${baseExpr},
-             '{_assessorAdjustments}',
-             $2::jsonb,
-             true
-           ),
-           '{_originalRequestedValues}',
-           $3::jsonb,
-           true
-         )::text`
-      : `jsonb_set(
-           ${baseExpr},
-           '{_assessorAdjustments}',
-           $2::jsonb,
-           true
-         )::text`;
-
-    const params: unknown[] = [id, adjustmentsJson];
-    if (originalRequestedValuesJson !== null) params.push(originalRequestedValuesJson);
-
-    const proposedDurationFragment = updateProposedDuration
-      ? `, proposed_duration_years = ${patch.permitLengthYears}`
-      : "";
-
-    const sql = `
-      UPDATE public.applications
-      SET
-        internal_notes = ${setExpr}${proposedDurationFragment},
-        updated_at = now()
-      WHERE id = $1
-      RETURNING
-        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_assessorAdjustments'      AS assessor_adjustments,
-        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_originalRequestedValues'  AS original_requested_values,
-        proposed_duration_years
-    `;
-
-    const updateRes = await query<{
-      assessor_adjustments: unknown;
-      original_requested_values: unknown;
-      proposed_duration_years: number | null;
-    }>(sql, params);
-    const updatedRow = updateRes.rows[0];
-    if (!updatedRow) {
-      return NextResponse.json(
-        { success: false, message: "Application not found" },
-        { status: 404 },
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      assessor_adjustments: updatedRow.assessor_adjustments,
-      original_requested_values: updatedRow.original_requested_values,
-      proposed_duration_years: updatedRow.proposed_duration_years,
+      assessor_adjustments: result.assessor_adjustments,
+      original_requested_values: result.original_requested_values,
+      proposed_duration_years: result.proposed_duration_years,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Server error";
