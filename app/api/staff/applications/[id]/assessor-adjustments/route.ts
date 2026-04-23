@@ -133,6 +133,10 @@ export async function POST(
     // only the two paths we care about). We also reject renewals here — the page
     // already gates this on the client, but enforcing it server-side prevents a
     // direct API call from corrupting renewal applications.
+    // NOTE: applications.internal_notes is a TEXT column that holds a JSON
+    // document, so we must explicitly cast text -> jsonb to use the `->`
+    // operator. NULLIF guards against empty-string rows that would fail
+    // ::jsonb.
     const existingRes = await query<{
       is_renewal: boolean | null;
       assessor_adjustments: unknown;
@@ -141,8 +145,8 @@ export async function POST(
       `
       SELECT
         COALESCE(is_renewal, false) AS is_renewal,
-        internal_notes->'_assessorAdjustments' AS assessor_adjustments,
-        internal_notes->'_originalRequestedValues' AS original_requested_values
+        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_assessorAdjustments'      AS assessor_adjustments,
+        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_originalRequestedValues'  AS original_requested_values
       FROM public.applications
       WHERE id = $1
       LIMIT 1
@@ -207,10 +211,14 @@ export async function POST(
     const adjustmentsJson = JSON.stringify(nextAdjustments);
     const updateProposedDuration = patch.permitLengthYears !== undefined;
 
+    // internal_notes is a TEXT column — we cast to jsonb for jsonb_set, then
+    // back to text for the column write. NULLIF handles the empty-string
+    // case which would otherwise fail ::jsonb.
+    const baseExpr = `COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb`;
     const setExpr = originalRequestedValuesJson !== null
       ? `jsonb_set(
            jsonb_set(
-             COALESCE(internal_notes, '{}'::jsonb),
+             ${baseExpr},
              '{_assessorAdjustments}',
              $2::jsonb,
              true
@@ -218,13 +226,13 @@ export async function POST(
            '{_originalRequestedValues}',
            $3::jsonb,
            true
-         )`
+         )::text`
       : `jsonb_set(
-           COALESCE(internal_notes, '{}'::jsonb),
+           ${baseExpr},
            '{_assessorAdjustments}',
            $2::jsonb,
            true
-         )`;
+         )::text`;
 
     const params: unknown[] = [id, adjustmentsJson];
     if (originalRequestedValuesJson !== null) params.push(originalRequestedValuesJson);
@@ -240,8 +248,8 @@ export async function POST(
         updated_at = now()
       WHERE id = $1
       RETURNING
-        internal_notes->'_assessorAdjustments' AS assessor_adjustments,
-        internal_notes->'_originalRequestedValues' AS original_requested_values,
+        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_assessorAdjustments'      AS assessor_adjustments,
+        (COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb)->'_originalRequestedValues'  AS original_requested_values,
         proposed_duration_years
     `;
 

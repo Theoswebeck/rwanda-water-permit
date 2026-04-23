@@ -135,19 +135,29 @@ export async function POST(
       values: nextValues,
     };
 
+    // NOTE: applications.internal_notes is a TEXT column that holds a JSON
+    // document, so we must explicitly cast text <-> jsonb on every JSON
+    // operation. NULLIF guards against rows where internal_notes is the empty
+    // string (which would fail the ::jsonb cast).
     const updateRes = await query<{ id: string }>(
       `
       UPDATE public.applications
       SET
         internal_notes = jsonb_set(
-          COALESCE(internal_notes, '{}'::jsonb),
+          COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb,
           '{document_overrides}',
           $2::jsonb,
           true
-        ),
+        )::text,
         updated_at = now()
       WHERE id = $1
-        AND COALESCE((internal_notes->'document_overrides'->>'version')::int, 0) = $3
+        AND COALESCE(
+              (
+                COALESCE(NULLIF(internal_notes, ''), '{}')::jsonb
+                  -> 'document_overrides' ->> 'version'
+              )::int,
+              0
+            ) = $3
       RETURNING id
       `,
       [id, JSON.stringify(nextEnvelope), clientVersion],
