@@ -2025,22 +2025,36 @@ export default function AssessmentApplicationPage() {
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
             </TabsList>
 
+            {/*
+              Permit & Contract Dynamic Values editor is only relevant when
+              the assessor is reviewing the generated documents. Hide it via
+              CSS on other tabs so any in-progress drafts are preserved when
+              the assessor switches tabs (re-rendering would reset state).
+            */}
             {application?.id && (
-              <DocumentValuesEditor
-                applicationId={application.id}
-                application={application as any}
-                readOnly={isReadOnly}
-                onInternalNotesChange={(nextInternalNotes) => {
-                  setApplication((prev) => {
-                    if (!prev) return prev;
-                    return {
-                      ...prev,
-                      internal_notes: nextInternalNotes,
-                    };
-                  });
-                }}
-                onSaved={bumpPreviewRefresh}
-              />
+              <div
+                className={
+                  activeTab === "contract_preview" || activeTab === "permit_preview"
+                    ? ""
+                    : "hidden"
+                }
+              >
+                <DocumentValuesEditor
+                  applicationId={application.id}
+                  application={application as any}
+                  readOnly={isReadOnly}
+                  onInternalNotesChange={(nextInternalNotes) => {
+                    setApplication((prev) => {
+                      if (!prev) return prev;
+                      return {
+                        ...prev,
+                        internal_notes: nextInternalNotes,
+                      };
+                    });
+                  }}
+                  onSaved={bumpPreviewRefresh}
+                />
+              </div>
             )}
 
             {/* Application Details Tab */}

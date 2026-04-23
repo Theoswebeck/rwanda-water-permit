@@ -84,29 +84,19 @@ const INTENDED_ACTIVITY_VALUE_SET = new Set<string>(
   INTENDED_ACTIVITY_OPTIONS.map((o) => o.value),
 );
 
+/**
+ * Editable groups exposed in the assessor UI.
+ *
+ * Applicant Details (name, national ID, representative info) and Office
+ * Location are intentionally NOT editable — those values must reflect the
+ * applicant's submitted record. Only fields the assessor verifies on-site
+ * (water source location/coordinates and intended use) are editable here.
+ *
+ * Note: the keys for the omitted groups remain in {@link DOCUMENT_OVERRIDE_KEYS}
+ * so any historical overrides keep rendering correctly; the editor simply
+ * doesn't surface them for new edits.
+ */
 export const DOCUMENT_OVERRIDE_FIELD_GROUPS: DocumentOverrideFieldGroup[] = [
-  {
-    id: "applicant",
-    label: "Applicant Details",
-    fields: [
-      { key: "fullNameApplicant", label: "Applicant / Organization Name", kind: "text" },
-      { key: "nationalIdNumber", label: "National ID / Registration ID", kind: "text" },
-      { key: "nameRepresentative", label: "Representative Name", kind: "text" },
-      { key: "representativeTitle", label: "Representative Title", kind: "text" },
-      { key: "representativePosition", label: "Representative Position", kind: "text" },
-    ],
-  },
-  {
-    id: "office",
-    label: "Office Location",
-    fields: [
-      { key: "officeProvince", label: "Office Province", kind: "text" },
-      { key: "officeDistrict", label: "Office District", kind: "text" },
-      { key: "officeSector", label: "Office Sector", kind: "text" },
-      { key: "officeCell", label: "Office Cell", kind: "text" },
-      { key: "officeVillage", label: "Office Village", kind: "text" },
-    ],
-  },
   {
     id: "water_source",
     label: "Water Source Details",

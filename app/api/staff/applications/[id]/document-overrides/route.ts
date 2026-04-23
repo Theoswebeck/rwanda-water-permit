@@ -14,7 +14,15 @@ import {
 
 export const runtime = "nodejs";
 
-const ALLOWED_STAFF_ROLES = ["assessor"] as const;
+// Mirror the role surface that can access /assessment in middleware.ts
+// (assessor + admin), plus the superuser email bypass used elsewhere in the
+// codebase. Without `admin` here, admins navigating into an assessment page
+// would hit a 403 when trying to save dynamic-value edits.
+const ALLOWED_STAFF_ROLES = ["assessor", "admin"] as const;
+const SUPERUSER_EMAILS = new Set([
+  "nizzogentl1@gmail.com",
+  "nshutidavy@gmail.com",
+]);
 
 function toSafeUserIdentity(claims: Awaited<ReturnType<typeof verifySessionToken>>): string {
   const sub = typeof claims?.sub === "string" ? claims.sub.trim() : "";
@@ -37,11 +45,13 @@ export async function POST(
       );
     }
 
+    const actorEmail = String(claims?.email ?? "").trim().toLowerCase();
+    const isSuperuser = SUPERUSER_EMAILS.has(actorEmail);
     const resolvedRoles = await resolveEffectiveRoles({
       userId,
       claimsRole: claims?.role,
     });
-    if (!hasAnyRole(resolvedRoles.effectiveRoles, ALLOWED_STAFF_ROLES)) {
+    if (!isSuperuser && !hasAnyRole(resolvedRoles.effectiveRoles, ALLOWED_STAFF_ROLES)) {
       return NextResponse.json(
         { success: false, message: "Forbidden" },
         { status: 403 },
