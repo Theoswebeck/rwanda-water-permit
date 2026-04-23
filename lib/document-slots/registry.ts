@@ -62,8 +62,18 @@ export function getSlotsForDocument(
   });
 }
 
-/** Test helper — clear the registry. Do NOT call from production code. */
-export function __resetSlotRegistryForTests(): void {
+/**
+ * Test helper — clear the registry. **Never** import this from production code.
+ *
+ * Guarded at runtime: throws when `NODE_ENV === "production"` to make the
+ * footgun audible if it ever gets called from a server build. Tests must
+ * import this directly from `./registry`, not from the package barrel
+ * (`@/lib/document-slots`), which deliberately does not re-export it.
+ */
+export function __INTERNAL_resetSlotRegistryForTests(): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("__INTERNAL_resetSlotRegistryForTests must not run in production");
+  }
   REGISTRY.clear();
   ORDERED.length = 0;
 }

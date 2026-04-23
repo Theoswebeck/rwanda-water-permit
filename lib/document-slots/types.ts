@@ -18,7 +18,15 @@ import type { PermitVariant } from "@/lib/permit-variant";
 export type { PermitVariant };
 
 export type DocumentKind = "permit" | "contract";
-export type SlotLanguage = "en" | "rw";
+/**
+ * Slot content language.
+ *  - `en` / `rw`: monolingual content; the editor groups these into language tabs.
+ *  - `bilingual`: the slot's text intentionally mixes English and Kinyarwanda
+ *    in one string (e.g. the closing block "Director General of RWB / Umuyobozi
+ *    Mukuru wa RWB"). The editor renders these in their own non-tabbed section
+ *    above the EN/RW tabs so an assessor sees both halves at once.
+ */
+export type SlotLanguage = "en" | "rw" | "bilingual";
 
 /** Structured fields on the application record that a slot can mirror. */
 export type StructuredFieldKey =
@@ -71,9 +79,20 @@ export type SlotResolverContext = {
 };
 
 export type DocumentTextSlot = {
-  /** Stable, dotted id. Format: `<documentKind>.<variant>.<language>.<key>` or
-   *  `<documentKind>.<variant>.section_<i>.paragraph_<j>.<language>` for the
-   *  contract. Never reuse an id for a different position. */
+  /** Stable, dotted id.
+   *
+   *  Recommended formats:
+   *    - Variant-specific:  `<documentKind>.<variant>.<language>.<key>`
+   *    - Cross-variant:     `<documentKind>.shared.<key>[.<language>]`
+   *
+   *  The trailing `<language>` segment is optional but conventional for
+   *  shared slots whose content is bilingual or English-only (it documents
+   *  the content language at-a-glance even though the `language` field
+   *  carries the authoritative value).
+   *
+   *  **Never** rename or reuse an id once a release ships — the id is the
+   *  primary key for stored overrides; a rename silently abandons every
+   *  override saved under the old id. */
   id: string;
   documentKind: DocumentKind;
   /** When set, the slot only applies to this variant. Cross-variant slots

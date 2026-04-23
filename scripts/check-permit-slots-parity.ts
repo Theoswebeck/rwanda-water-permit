@@ -428,6 +428,154 @@ group("abstraction_organization (bilingual)", () => {
      "rw.para_4");
 });
 
+// ─── Edge-case fixture coverage ──────────────────────────────────────────────
+//
+// The reviewer (Phase 2 code review) flagged that the four "happy-path"
+// fixtures above don't exercise several `defaultResolver` fall-through
+// branches. Add fixtures that hit:
+//   - lat/lng = "N/A"   (no coordinates → no `°` suffix)
+//   - area    = null    (no concession_area + no _assessorAdjustments)
+//   - vols.yearly = null (no estimated/recommended volume → "N/A m³/year")
+//   - org rep missing   (rep.name fallback to applicant first/last/N/A)
+//   - province = "Kigali" for concession_individual (Umujyi-wa-Kigali branch
+//     is exercised for abstraction_organization at line 990 of the renderer
+//     but concession variants use `fmtProvince` → "CITY OF KIGALI" branch)
+//   - transfer application — `application_type === "transfer"` triggers the
+//     transferFormData branches in resolveApplicantName / resolveOrgRep /
+//     resolveOrgAddress / resolveActivities / resolvePermitDuration
+//
+// Every fall-through string is asserted against the literal that the
+// pre-Phase-2 renderer would have emitted.
+
+// Fixture: abstraction_individual with NO coordinates and NO volume
+const fxAbsIndMinimal: PermitApplication = {
+  ...fxAbsInd,
+  id: "fx-1b",
+  estimated_usage_volume: 0,
+  max_yearly_volume_m3: undefined,
+  max_daily_volume_m3: undefined,
+  assessor_recommended_volume_m3: undefined,
+  internal_notes: JSON.stringify({}), // strips lat/lng + assessor adjustments
+};
+
+// Fixture: concession_individual in Kigali with NO concession_area
+const fxConcIndKigaliNoArea: PermitApplication = {
+  ...fxConcInd,
+  id: "fx-3b",
+  province: "Kigali",
+  concession_area: undefined,
+  internal_notes: JSON.stringify({ nameSourceWater: "Lake Muhazi" }),
+};
+
+// Fixture: concession_organization with no representative + no waterSource* notes
+const fxConcOrgMinimal: PermitApplication = {
+  ...fxConcOrg,
+  id: "fx-4b",
+  concession_area: undefined,
+  internal_notes: JSON.stringify({ nameSourceWater: "Lake Kivu" }),
+  applicant: { ...fxConcOrg.applicant, first_name: "", last_name: "" },
+};
+
+// Fixture: abstraction_organization with no rep + no coordinates (rep.name → "N/A")
+const fxAbsOrgMinimal: PermitApplication = {
+  ...fxAbsOrg,
+  id: "fx-2b",
+  estimated_usage_volume: 0,
+  max_yearly_volume_m3: undefined,
+  max_daily_volume_m3: undefined,
+  assessor_recommended_volume_m3: undefined,
+  internal_notes: JSON.stringify({}),
+  applicant: { ...fxAbsOrg.applicant, first_name: "", last_name: "" },
+};
+
+group("abstraction_individual — N/A branches (no coords, no volume)", () => {
+  const ctx = buildPermitCtx(fxAbsIndMinimal);
+  const name = resolveApplicantName(fxAbsIndMinimal);
+  const idNum = resolveIdNumber(fxAbsIndMinimal);
+  const wsName = resolveWaterSourceName(fxAbsIndMinimal);
+  const loc = resolveAdminLocation(fxAbsIndMinimal);
+  // lat / lng both "N/A" — no `°` suffix should be appended.
+  eq(resolveLatLng(fxAbsIndMinimal).lat, "N/A", "lat is N/A");
+  eq(resolveLatLng(fxAbsIndMinimal).lng, "N/A", "lng is N/A");
+  // vols.yearly null → "N/A m³/year"
+  const vols = resolveVolumes(fxAbsIndMinimal);
+  eq(vols.yearly === null ? "ok" : "fail", "ok", "vols.yearly is null");
+  const sysType = resolveSystemType(fxAbsIndMinimal);
+  const acts = resolveActivities(fxAbsIndMinimal);
+  const expected = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysType} with a flow rate of N/A m³/year. Water abstracted will be used for ${acts}.`;
+  eq(resolveSlotText("permit.abstraction_individual.en.para_2", ctx), expected, "en.para_2 (N/A branches)");
+});
+
+group("concession_individual — Kigali province + N/A area", () => {
+  const ctx = buildPermitCtx(fxConcIndKigaliNoArea);
+  const name = resolveApplicantName(fxConcIndKigaliNoArea);
+  const idNum = resolveIdNumber(fxConcIndKigaliNoArea);
+  const acts = resolveActivities(fxConcIndKigaliNoArea);
+  const lake = resolveLakeName(fxConcIndKigaliNoArea);
+  const loc = resolveAdminLocation(fxConcIndKigaliNoArea);
+  // fmtProvince("Kigali") → "CITY OF KIGALI" (uppercase). Verify.
+  eq(fmtProvince(loc.province), "CITY OF KIGALI", "fmtProvince(Kigali)");
+  const expected = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to carry out ${acts} on the surface area of N/A Hectare (Concession area) in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, CITY OF KIGALI as shown on the attached map. This permit applies for activities conducted solely within the water body.`;
+  eq(resolveSlotText("permit.concession_individual.en.para_2", ctx), expected, "en.para_2 (Kigali + N/A area)");
+});
+
+group("concession_organization — minimal data (rep fallback, N/A area)", () => {
+  const ctx = buildPermitCtx(fxConcOrgMinimal);
+  const orgName = resolveApplicantName(fxConcOrgMinimal);
+  const rep = resolveOrgRep(fxConcOrgMinimal);
+  // No nameRepresentative + empty applicant first/last → rep.name === "N/A"
+  eq(rep.name, "N/A", "rep.name fallback to N/A");
+  eq(rep.title, "Representative", "rep.title default");
+  const acts = resolveActivities(fxConcOrgMinimal);
+  const lake = resolveLakeName(fxConcOrgMinimal);
+  const loc = resolveAdminLocation(fxConcOrgMinimal);
+  const prov = fmtProvince(loc.province);
+  // No waterSourceSector/District/Province in notes → wsLocParts === "N/A"
+  const expected = `\u201C${orgName}\u201D, with its water source location as follows: N/A; represented by ${rep.name}; is authorized to carry out ${acts} on the surface area of N/A hectares in ${lake}, on its part located in ${loc.village} Village, ${loc.cell} Cell, ${loc.sector} Sector, ${loc.district} District, ${prov}, as shown on the attached map. This permit applies to activities conducted solely within the water body.`;
+  eq(resolveSlotText("permit.concession_organization.en.para_2", ctx), expected, "en.para_2 (rep+area+ws fallback)");
+});
+
+group("abstraction_organization — minimal data (no coords, no volume, fallback rep)", () => {
+  const ctx = buildPermitCtx(fxAbsOrgMinimal);
+  const orgName = resolveApplicantName(fxAbsOrgMinimal);
+  const rep = resolveOrgRep(fxAbsOrgMinimal);
+  const wsName = resolveWaterSourceName(fxAbsOrgMinimal);
+  const loc = resolveAdminLocation(fxAbsOrgMinimal);
+  const sysLabel = resolveEnglishSystemLabel(fxAbsOrgMinimal);
+  const flowRate = resolveFlowRate(fxAbsOrgMinimal);
+  const acts = resolveActivities(fxAbsOrgMinimal);
+  const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
+  const expectedEn2 = `\u201C${orgName}\u201D, represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysLabel} with flow rate ${flowRate}. Water will be used for ${acts}.`;
+  eq(resolveSlotText("permit.abstraction_organization.en.para_2", ctx), expectedEn2, "en.para_2 (no coords, fallback rep)");
+
+  const systemTypeRw = resolveKinyarwandaSystemType(fxAbsOrgMinimal);
+  const actsRw = resolveActivitiesKinyarwanda(fxAbsOrgMinimal);
+  // Province is "Kigali" → formatIntaraOrUmujyiWaKigali returns "Umujyi wa Kigali"
+  eq(formatIntaraOrUmujyiWaKigali(loc.province), "Umujyi wa Kigali", "formatIntaraOrUmujyiWaKigali(Kigali)");
+  const expectedRw2 =
+    `"${orgName}" ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
+    `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+    `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): N/A, ` +
+    `Lonjitide (Longitude): N/A. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+  eq(resolveSlotText("permit.abstraction_organization.rw.para_2", ctx), expectedRw2, "rw.para_2 (no coords, Umujyi wa Kigali, fallback rep)");
+});
+
+group("permit.shared.closing.date — placeholder when ctx.permit missing", () => {
+  // Build a ctx WITHOUT the permit namespace (mirrors what the editor
+  // preview API will do in Phase 3 when there is no issuance yet).
+  const ctxNoPermit: SlotResolverContext = {
+    application: fxAbsInd as unknown as SlotResolverContext["application"],
+    applicant: fxAbsInd.applicant as unknown as Record<string, unknown>,
+    effectiveNotes: getEffectiveInternalNotes(fxAbsInd.internal_notes),
+    variant: selectPermitVariant(fxAbsInd as Parameters<typeof selectPermitVariant>[0]),
+  };
+  eq(
+    resolveSlotText("permit.shared.closing.date.bilingual", ctxNoPermit),
+    "Done at Kigali / Bikorewe i Kigali, On/kuwa [ISSUE_DATE]",
+    "labelled placeholder when no permit ctx",
+  );
+});
+
 // ─── Override-wins regression check ──────────────────────────────────────────
 
 group("override beats default for permit slots", () => {

@@ -84,7 +84,7 @@ const sharedSlots: DocumentTextSlot[] = [
   {
     id: "permit.shared.closing.signatory.bilingual",
     documentKind: "permit",
-    language: "en",
+    language: "bilingual",
     group: GROUP.CLOSING,
     label: "Signatory line (bilingual)",
     inline: true,
@@ -94,7 +94,7 @@ const sharedSlots: DocumentTextSlot[] = [
   {
     id: "permit.shared.closing.date.bilingual",
     documentKind: "permit",
-    language: "en",
+    language: "bilingual",
     group: GROUP.CLOSING,
     label: "Closing date line (bilingual, snapshot)",
     inline: true,
@@ -102,8 +102,13 @@ const sharedSlots: DocumentTextSlot[] = [
     structuredField: "issue_date",
     defaultResolver: (ctx) => {
       const p = permitOf(ctx);
-      const date = p ? p.issueDate : new Date();
-      return `Done at Kigali / Bikorewe i Kigali, On/kuwa ${fmtDMY(date)}`;
+      // When the editor preview builds a partial ctx (no `permit` namespace),
+      // surface a labelled placeholder rather than silently substituting
+      // today's date — otherwise the assessor sees a misleading snapshot.
+      if (!p) {
+        return "Done at Kigali / Bikorewe i Kigali, On/kuwa [ISSUE_DATE]";
+      }
+      return `Done at Kigali / Bikorewe i Kigali, On/kuwa ${fmtDMY(p.issueDate)}`;
     },
   },
   {

@@ -15,7 +15,7 @@ import {
   writeEnvelopeIntoNotes,
 } from "../lib/document-slots/envelope";
 import {
-  __resetSlotRegistryForTests,
+  __INTERNAL_resetSlotRegistryForTests,
   findSlot,
   getSlotsForDocument,
   registerSlots,
@@ -141,7 +141,7 @@ group("envelope: writeEnvelopeIntoNotes is pure", () => {
 });
 
 group("registry + resolver: register, find, resolve, override", () => {
-  __resetSlotRegistryForTests();
+  __INTERNAL_resetSlotRegistryForTests();
 
   const slotA: DocumentTextSlot = {
     id: "permit.test.en.alpha",
@@ -246,7 +246,7 @@ group("registry + resolver: register, find, resolve, override", () => {
   assert(betaEntry?.overrideText === null, "beta has no override");
   assert(betaEntry?.editedBy === null, "beta editor null");
 
-  __resetSlotRegistryForTests();
+  __INTERNAL_resetSlotRegistryForTests();
 });
 
 console.log(`\n${passes} passed, ${failures} failed`);

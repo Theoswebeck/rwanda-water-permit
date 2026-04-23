@@ -35,7 +35,10 @@ export function resolveSlotText(slotId: string, ctx: SlotResolverContext): strin
   if (!slot) throw new UnknownSlotError(slotId);
   const env = getDocumentTextOverridesEnvelope(ctx.application.internal_notes);
   const override = env.values[slotId];
-  if (override && override.text) return override.text;
+  // Explicit `!== ""` so that any future code path that bypasses
+  // `coerceEntry` and writes an empty string still falls back to the default
+  // (an empty override is never a valid edit per spec §4.3).
+  if (override && override.text !== "") return override.text;
   return slot.defaultResolver(ctx);
 }
 

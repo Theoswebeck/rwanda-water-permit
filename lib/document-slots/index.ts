@@ -25,8 +25,9 @@ export {
   findSlot,
   getSlotsForDocument,
   SlotRegistrationError,
-  __resetSlotRegistryForTests,
 } from "./registry";
+// __INTERNAL_resetSlotRegistryForTests is deliberately NOT re-exported. Test
+// scripts that need it must import from "./registry" directly.
 export {
   resolveSlotText,
   resolveSlotsForEditor,

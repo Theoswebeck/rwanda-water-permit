@@ -37,27 +37,36 @@ export function makeEmptyEnvelope(): DocumentTextOverridesEnvelope {
   return { version: 0, updatedAt: null, updatedBy: null, values: {} };
 }
 
-function isEditor(value: unknown): value is SlotEditor {
-  if (!value || typeof value !== "object") return false;
+/**
+ * Coerce arbitrary input into a {@link SlotEditor}.
+ *
+ * Returns `null` only when the actor cannot reasonably be identified at all
+ * (no id+name+email). `role` is *tolerated as missing* and defaults to
+ * `"unknown"` — older envelopes written before the `role` field existed (or
+ * by future feature flags that omitted it) must not silently lose their
+ * `editedBy` audit trail.
+ */
+function coerceEditor(value: unknown): SlotEditor | null {
+  if (!value || typeof value !== "object") return null;
   const o = value as Record<string, unknown>;
-  return (
-    typeof o.id === "string" &&
-    typeof o.name === "string" &&
-    typeof o.email === "string" &&
-    typeof o.role === "string"
-  );
+  if (typeof o.id !== "string" || !o.id) return null;
+  if (typeof o.name !== "string" || !o.name) return null;
+  if (typeof o.email !== "string" || !o.email) return null;
+  const role = typeof o.role === "string" && o.role ? o.role : "unknown";
+  return { id: o.id, name: o.name, email: o.email, role };
 }
 
 function coerceEntry(raw: unknown): DocumentTextOverrideEntry | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  if (typeof o.text !== "string" || !o.text) return null;
+  if (typeof o.text !== "string" || o.text === "") return null;
   if (typeof o.editedAt !== "string" || !o.editedAt) return null;
-  if (!isEditor(o.editedBy)) return null;
+  const editor = coerceEditor(o.editedBy);
+  if (!editor) return null;
   return {
     text: o.text,
     editedAt: o.editedAt,
-    editedBy: o.editedBy,
+    editedBy: editor,
   };
 }
 
@@ -69,7 +78,8 @@ function coerceEnvelope(raw: unknown): DocumentTextOverridesEnvelope {
     env.version = Math.max(0, Math.trunc(o.version));
   }
   if (typeof o.updatedAt === "string" && o.updatedAt) env.updatedAt = o.updatedAt;
-  if (isEditor(o.updatedBy)) env.updatedBy = o.updatedBy;
+  const updatedBy = coerceEditor(o.updatedBy);
+  if (updatedBy) env.updatedBy = updatedBy;
   if (o.values && typeof o.values === "object" && !Array.isArray(o.values)) {
     for (const [slotId, raw2] of Object.entries(o.values as Record<string, unknown>)) {
       if (typeof slotId !== "string" || !slotId) continue;
