@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { withTransaction } from "@/lib/db/postgres";
 import {
   clearSessionCookie,
@@ -6,7 +7,7 @@ import {
   verifySessionToken,
 } from "@/lib/auth/session";
 import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
-import { parseInternalNotes } from "@/lib/document-overrides";
+import { parseInternalNotesStrict } from "@/lib/document-overrides";
 
 export const runtime = "nodejs";
 
@@ -40,20 +41,26 @@ type RequestedValuesPayload = {
  *   in JavaScript, then wrote the *whole* JSON column back via the Supabase client.
  *   That full-replace would silently clobber any concurrent partial write — most
  *   importantly the `document_overrides` envelope produced by the document-values
- *   editor, which auto-saves on a debounce. With the new auto-refreshing preview
- *   this race became materially more reachable, so we moved the write server-side.
+ *   editor. With the new auto-refreshing preview this race became materially more
+ *   reachable, so we moved the write server-side.
  *
  * Guarantees:
- *   - Writes only the `_assessorAdjustments` and (on first save) `_originalRequestedValues`
- *     paths via `jsonb_set`. Every other key in `internal_notes` — including
- *     `document_overrides` — is preserved exactly as the database currently stores it.
- *   - Updates the dedicated `proposed_duration_years` column atomically in the same
- *     statement as the JSON path write, so PDF rendering and the JSON ledger never
- *     drift apart.
+ *   - The read + mutate + write happens inside a single transaction with
+ *     `SELECT ... FOR UPDATE`, so the row lock prevents any concurrent writer
+ *     from clobbering sibling JSON paths (most importantly `document_overrides`)
+ *     between our read and our write.
+ *   - Only `_assessorAdjustments` and (on first save) `_originalRequestedValues`
+ *     are mutated; every other key in `internal_notes` is round-tripped
+ *     unchanged via parseInternalNotesStrict + JSON.stringify.
+ *   - Updates the dedicated `proposed_duration_years` column atomically in the
+ *     same UPDATE statement as the JSON write, so PDF rendering and the JSON
+ *     ledger never drift apart.
  *   - Does not implement optimistic concurrency on `_assessorAdjustments` itself —
  *     overlapping writes from a single assessor session are rare and last-write-wins
  *     is acceptable for these scalar fields. The hard rule we are protecting is
- *     "do not clobber sibling JSON paths", which `jsonb_set` enforces structurally.
+ *     "do not clobber sibling JSON paths", which the row lock enforces.
+ *   - `lock_timeout` and `statement_timeout` are set per-transaction so a stuck
+ *     row can't wedge the connection pool.
  */
 export async function POST(
   req: NextRequest,
@@ -132,15 +139,13 @@ export async function POST(
 
     const requestedPayload = (body.requestedValues ?? null) as RequestedValuesPayload | null;
 
-    // Race-safe write strategy:
-    //   applications.internal_notes is a TEXT column that holds a JSON
-    //   document. The previous SQL-only jsonb_set design was brittle on rows
-    //   with malformed or scalar JSON, so we instead lock the row, parse +
-    //   mutate in JS (which `parseInternalNotes` does tolerantly), then write
-    //   the whole column back. The row lock preserves the original intent —
-    //   no concurrent writer can clobber sibling JSON paths (most importantly
-    //   the `document_overrides` envelope) between our read and write.
     const result = await withTransaction(async (client) => {
+      // Bound how long we wait for the row lock and how long the transaction
+      // can hold a connection. Without these, a hung writer on the same row
+      // could exhaust the pg.Pool (max=10) for every assessor.
+      await client.query(`SET LOCAL lock_timeout = '5s'`);
+      await client.query(`SET LOCAL statement_timeout = '15s'`);
+
       const lockRes = await client.query<{
         is_renewal: boolean | null;
         internal_notes: string | null;
@@ -161,11 +166,22 @@ export async function POST(
         return { kind: "renewal_locked" as const };
       }
 
-      const existingNotes = parseInternalNotes(lockRow.internal_notes);
+      const parsed = parseInternalNotesStrict(lockRow.internal_notes);
+      if (!parsed.ok) {
+        // Refusing to write is the right call here: the row already contains
+        // *something* (legacy plain-text staff note, scalar, malformed JSON).
+        // Spreading `{}` and stringifying back would silently destroy it.
+        return {
+          kind: "corrupt_notes" as const,
+          reason: parsed.reason,
+          preview: parsed.rawPreview,
+        };
+      }
+      const existingNotes = parsed.value;
       const existingAdjustments = isPlainObject(existingNotes._assessorAdjustments)
         ? (existingNotes._assessorAdjustments as Record<string, unknown>)
         : {};
-      const existingOriginal = existingNotes._originalRequestedValues ?? null;
+      const existingOriginal = existingNotes._originalRequestedValues;
 
       const nowIso = new Date().toISOString();
       const nextAdjustments: Record<string, unknown> = { ...existingAdjustments };
@@ -182,6 +198,9 @@ export async function POST(
       // already recorded them. The client sends its current view of the
       // requested values so we have something to seed from on the very first
       // assessor adjustment.
+      // `== null` is intentional: parseInternalNotesStrict returns `undefined`
+      // for missing keys, but legacy rows may have stored an explicit JSON
+      // null — both cases should trigger a backfill, neither should skip it.
       let nextOriginal: unknown = existingOriginal;
       if (existingOriginal == null && requestedPayload && typeof requestedPayload === "object") {
         const seed: Record<string, unknown> = { storedAt: nowIso };
@@ -210,7 +229,10 @@ export async function POST(
       // Update internal_notes always; conditionally also write the dedicated
       // `proposed_duration_years` column so PDF rendering and the JSON ledger
       // never drift apart.
-      let updateRes;
+      // (We let TS infer the QueryResult type — importing the explicit
+      //  generic from `pg` triggers a `@types/pg` resolution issue in this
+      //  project's tsconfig.)
+      let updateRes: { rows: { proposed_duration_years: number | null }[] };
       if (patch.permitLengthYears !== undefined) {
         updateRes = await client.query<{ proposed_duration_years: number | null }>(
           `
@@ -257,6 +279,23 @@ export async function POST(
         { status: 409 },
       );
     }
+    if (result.kind === "corrupt_notes") {
+      console.error("assessor-adjustments refusing to write over non-object internal_notes", {
+        applicationId: id,
+        reason: result.reason,
+        preview: result.preview,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Saved notes for this application are in an unexpected format and need to be repaired by an administrator before further edits can be saved.",
+          reason: result.reason,
+          preview: result.preview,
+        },
+        { status: 409 },
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -274,9 +313,21 @@ export async function POST(
       clearSessionCookie(res);
       return res;
     }
-    console.error("assessor-adjustments error:", err);
+    if (message.includes("lock timeout") || message.includes("canceling statement due to lock timeout")) {
+      return NextResponse.json(
+        { success: false, message: "The application is currently being edited. Please retry in a few seconds." },
+        { status: 503, headers: { "Retry-After": "3" } },
+      );
+    }
+    const correlationId = randomUUID();
+    console.error("assessor-adjustments error", { correlationId, err });
     return NextResponse.json(
-      { success: false, message: "Failed to save assessor adjustment" },
+      {
+        success: false,
+        message: "Failed to save assessor adjustment",
+        correlationId,
+        detail: message,
+      },
       { status: 500 },
     );
   }

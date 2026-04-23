@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { withTransaction } from "@/lib/db/postgres";
 import {
   clearSessionCookie,
@@ -8,7 +9,7 @@ import {
 import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 import {
   getDocumentOverrideEnvelopeFromNotes,
-  parseInternalNotes,
+  parseInternalNotesStrict,
   sanitizeDocumentOverridePatch,
 } from "@/lib/document-overrides";
 
@@ -98,16 +99,26 @@ export async function POST(
     //   jsonb_set, which broke because applications.internal_notes is a TEXT
     //   column (not jsonb) and the casts were brittle on rows with malformed
     //   JSON. Instead, we now do the work inside a single transaction:
-    //     1. SELECT ... FOR UPDATE to take a row lock.
-    //     2. Parse the JSON in JS (parseInternalNotes is tolerant of bad data).
-    //     3. Compare-and-swap on the override envelope's `version` field.
-    //     4. Mutate only the `document_overrides` key, preserving every other
+    //     1. SET LOCAL lock_timeout / statement_timeout so a stuck row can't
+    //        wedge the connection pool.
+    //     2. SELECT ... FOR UPDATE to take a row lock.
+    //     3. Parse the JSON in JS via parseInternalNotesStrict so a row whose
+    //        internal_notes contains *non-empty unparseable text* surfaces as
+    //        a 409 instead of being silently overwritten with `{}`.
+    //     4. Compare-and-swap on the override envelope's `version` field.
+    //     5. Mutate only the `document_overrides` key, preserving every other
     //        sibling (including `_assessorAdjustments`, `transferFormData`, …).
-    //     5. UPDATE the row with the stringified result.
+    //     6. UPDATE the row with the stringified result.
     //   The row lock guarantees no concurrent writer can slip a partial update
-    //   in between (3) and (5), which preserves the atomicity that the prior
+    //   in between (4) and (6), which preserves the atomicity that the prior
     //   jsonb_set design was trying to enforce structurally.
     const result = await withTransaction(async (client) => {
+      // Bound how long we wait for the row lock and how long the transaction
+      // can hold a connection. Without these, a hung writer on the same row
+      // could exhaust the pg.Pool (max=10) for every assessor.
+      await client.query(`SET LOCAL lock_timeout = '5s'`);
+      await client.query(`SET LOCAL statement_timeout = '15s'`);
+
       const lockRes = await client.query<{ internal_notes: string | null }>(
         `
         SELECT internal_notes
@@ -122,7 +133,20 @@ export async function POST(
         return { kind: "not_found" as const };
       }
 
-      const existingNotes = parseInternalNotes(lockRow.internal_notes);
+      const parsed = parseInternalNotesStrict(lockRow.internal_notes);
+      if (!parsed.ok) {
+        // Refusing to write is the right call here: the row already contains
+        // *something* (legacy plain-text staff note, scalar, malformed JSON).
+        // Spreading `{}` and stringifying back would silently destroy it.
+        // Surface a 409 with a diagnostic preview so ops can repair the row
+        // by hand instead of a 500 that hides the problem.
+        return {
+          kind: "corrupt_notes" as const,
+          reason: parsed.reason,
+          preview: parsed.rawPreview,
+        };
+      }
+      const existingNotes = parsed.value;
       const existingEnvelope = getDocumentOverrideEnvelopeFromNotes(existingNotes);
       if (existingEnvelope.version !== clientVersion) {
         return {
@@ -164,6 +188,23 @@ export async function POST(
         { status: 404 },
       );
     }
+    if (result.kind === "corrupt_notes") {
+      console.error("document-overrides refusing to write over non-object internal_notes", {
+        applicationId: id,
+        reason: result.reason,
+        preview: result.preview,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          message:
+            "Saved notes for this application are in an unexpected format and need to be repaired by an administrator before further edits can be saved.",
+          reason: result.reason,
+          preview: result.preview,
+        },
+        { status: 409 },
+      );
+    }
     if (result.kind === "conflict") {
       return NextResponse.json(
         {
@@ -190,9 +231,27 @@ export async function POST(
       clearSessionCookie(res);
       return res;
     }
-    console.error("document-overrides error:", err);
+    // Lock-timeout surfaces as a recognizable error string from pg. Translate
+    // it to a 503 with retry-after so the editor can prompt the assessor to
+    // try again instead of returning a generic 500.
+    if (message.includes("lock timeout") || message.includes("canceling statement due to lock timeout")) {
+      return NextResponse.json(
+        { success: false, message: "The application is currently being edited. Please retry in a few seconds." },
+        { status: 503, headers: { "Retry-After": "3" } },
+      );
+    }
+    // Tag every 500 with a correlationId and (since this is a staff-only
+    // endpoint with no PII risk) include the underlying error message so the
+    // assessor can quote it to ops without us needing log access.
+    const correlationId = randomUUID();
+    console.error("document-overrides error", { correlationId, err });
     return NextResponse.json(
-      { success: false, message: "Failed to save document overrides" },
+      {
+        success: false,
+        message: "Failed to save document overrides",
+        correlationId,
+        detail: message,
+      },
       { status: 500 },
     );
   }

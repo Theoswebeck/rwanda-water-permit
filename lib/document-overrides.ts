@@ -159,6 +159,47 @@ export function parseInternalNotes(raw: unknown): Record<string, any> {
   return {};
 }
 
+/**
+ * Strict variant of {@link parseInternalNotes} that distinguishes between
+ * "the column has no JSON object yet" (safe to start fresh from `{}`) and
+ * "the column has *something*, but it isn't a JSON object" (legacy plain-text
+ * note, scalar, array, malformed JSON).
+ *
+ * Read paths can keep using {@link parseInternalNotes} (lossy/best-effort).
+ * **Write paths must use this**: returning `{}` for a non-empty unparseable
+ * row would cause us to silently overwrite legacy data when we re-stringify.
+ *
+ * Empty/null/whitespace-only input is treated as `ok: true, value: {}`.
+ */
+export type StrictParseResult =
+  | { ok: true; value: Record<string, any> }
+  | { ok: false; reason: "non_object" | "invalid_json"; rawPreview: string };
+
+export function parseInternalNotesStrict(raw: unknown): StrictParseResult {
+  if (raw == null) return { ok: true, value: {} };
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return { ok: true, value: { ...(raw as Record<string, any>) } };
+  }
+  if (typeof raw !== "string") {
+    return {
+      ok: false,
+      reason: "non_object",
+      rawPreview: String(raw).slice(0, 80),
+    };
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: {} };
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { ok: true, value: { ...(parsed as Record<string, any>) } };
+    }
+    return { ok: false, reason: "non_object", rawPreview: trimmed.slice(0, 80) };
+  } catch {
+    return { ok: false, reason: "invalid_json", rawPreview: trimmed.slice(0, 80) };
+  }
+}
+
 export function getDocumentOverrideEnvelopeFromNotes(
   notesRaw: unknown,
 ): DocumentOverrideEnvelope {
