@@ -1,16 +1,16 @@
 import Image from "next/image";
 import {
-  contractTermsByVariant,
   splitContractSectionsByLanguage,
   parseSectionHeading,
 } from "@/lib/contract-terms";
-import { selectPermitVariant, type PermitVariant } from "@/lib/permit-variant";
+import type { PermitVariant } from "@/lib/permit-variant";
 import {
   buildContractPlaceholderContext,
-  fillContractText,
   type ApplicationForContract,
   type TransferPermitContext,
 } from "@/lib/contract-placeholders";
+import { getResolvedContractTerms } from "@/lib/document-slots";
+import type { PermitApplication } from "@/lib/permit/permit-text-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Mode = "public" | "staff-preview";
@@ -44,13 +44,26 @@ export function ContractTermsPreview({
   const termsStatus = termsStatusRaw.trim().toLowerCase();
   const isTermsRejected = termsStatus === "rejected";
 
-  const inferredVariant: PermitVariant | null = application
-    ? selectPermitVariant(application)
+  // Slot-aware resolution: assessor overrides win, otherwise the placeholder
+  // context fills `{{...}}` tokens in the template. `getResolvedContractTerms`
+  // returns a fresh ContractTerms with each paragraph already-rendered, so
+  // the React side just walks the array.
+  const terms = application
+    ? getResolvedContractTerms({
+        application: application as ApplicationForContract & PermitApplication,
+        applicationNumber: application.application_number ?? undefined,
+        transferPermit,
+        variantOverride: variantOverride ?? null,
+      })
     : null;
-  const variant: PermitVariant =
-    variantOverride ?? inferredVariant ?? "abstraction_individual";
 
-  const terms = contractTermsByVariant[variant] ?? null;
+  const placeholderCtx = application
+    ? buildContractPlaceholderContext(
+        application,
+        application.application_number ?? undefined,
+        transferPermit,
+      )
+    : null;
 
   const displaySectionGroups = terms
     ? (() => {
@@ -71,25 +84,18 @@ export function ContractTermsPreview({
       })()
     : [];
 
-  const placeholderCtx = application
-    ? buildContractPlaceholderContext(
-        application,
-        application.application_number ?? undefined,
-        transferPermit,
-      )
-    : null;
-
   const filledSectionGroups = displaySectionGroups.map((group) => ({
     ...group,
     sections: group.sections.map((section) => ({
       title: section.title,
       paragraphs: section.paragraphs.map((p) => {
-        const filled = placeholderCtx ? fillContractText(p, placeholderCtx) : p;
+        // The slot resolver already filled placeholders; we still apply the
+        // "hide contract number" rewrite for the public terms-rejected view.
         if (!isTermsRejected || !placeholderCtx || placeholderCtx.contractNumber === "N/A")
-          return filled;
-        return filled.replaceAll(
+          return p;
+        return p.replaceAll(
           placeholderCtx.contractNumber,
-          "[Hidden until terms are accepted]"
+          "[Hidden until terms are accepted]",
         );
       }),
     })),

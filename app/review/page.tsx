@@ -58,8 +58,8 @@ import { StatusFilterChips, type StatusChipDef } from "@/components/shared/statu
 import { WorkflowDatesCell } from "@/components/shared/workflow-dates-cell";
 import { batchFetchWorkflowDates, type WorkflowDates } from "@/lib/workflow-dates";
 import { downloadFromDocumentsBucket, uploadTermsPdf } from "@/lib/supabase-storage";
-import { contractTermsByVariant } from "@/lib/contract-terms";
-import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
+import { buildContractPlaceholderContext } from "@/lib/contract-placeholders";
+import { getResolvedContractTerms } from "@/lib/document-slots";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
@@ -435,13 +435,26 @@ export default function ReviewerDashboard() {
       if (appErr || !applicationData) throw appErr ?? new Error("Application not found");
 
       const variant = selectPermitVariant(applicationData as any);
-      const resolvedTerms = (contractTermsByVariant as any)[variant] ?? null;
+      // getResolvedContractTerms applies any assessor text overrides on top
+      // of the variant template + placeholder substitution; returns null
+      // when the variant has no template.
+      const resolvedTerms = getResolvedContractTerms({
+        application: applicationData as any,
+        applicationNumber: app.application_number || "",
+        variantOverride: variant,
+      });
       if (!resolvedTerms) throw new Error("No contract terms configured for this application type.");
 
-      const placeholderCtx = buildContractPlaceholderContext(applicationData as any, app.application_number || "");
-      const filledSections = resolvedTerms.sections.map((section: any) => ({
+      // placeholderCtx is no longer needed for filling text (resolver did it)
+      // but a couple of downstream callers still want it for derived labels.
+      const placeholderCtx = buildContractPlaceholderContext(
+        applicationData as any,
+        app.application_number || "",
+      );
+      void placeholderCtx;
+      const filledSections = resolvedTerms.sections.map((section) => ({
         title: section.title,
-        paragraphs: section.paragraphs.map((p: string) => fillContractText(p, placeholderCtx)),
+        paragraphs: section.paragraphs,
       }));
 
       const applicantName = (() => {

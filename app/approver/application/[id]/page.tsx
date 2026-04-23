@@ -45,6 +45,7 @@ import { AssessorRecommendations } from "@/components/inspection/assessor-recomm
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
+import { ApproverChangedSlotsPane } from "@/components/approver/changed-slots-pane";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -264,6 +265,19 @@ export default function ApproverApplicationPage() {
   const [decisionReasonPreset, setDecisionReasonPreset] = useState<string>("");
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  // Free-text override review gate: when the assessor has rewritten any
+  // permit/contract slot, the approver MUST acknowledge the diff before they
+  // can approve. The pane below the permit preview owns the checkbox; it
+  // pushes its current state up via `onAcknowledgementChange`.
+  const [overrideReview, setOverrideReview] = useState<{
+    count: number;
+    acknowledged: boolean;
+    version: number | null;
+  }>({
+    count: 0,
+    acknowledged: false,
+    version: null,
+  });
   const [decisionSuccess, setDecisionSuccess] = useState<string | null>(null);
   
   useEffect(() => {
@@ -744,6 +758,13 @@ export default function ApproverApplicationPage() {
           applicationId: application.id,
           decision: decisionType,
           reason: decisionReason.trim(),
+          // Server-side issuance gate: when overrides exist on the
+          // application, the API requires this to equal the current envelope
+          // version, otherwise approval is rejected with 409.
+          acknowledgedOverrideVersion:
+            decisionType === "approve" && overrideReview.count > 0 && overrideReview.acknowledged
+              ? overrideReview.version
+              : undefined,
         }),
       });
 
@@ -1112,7 +1133,13 @@ export default function ApproverApplicationPage() {
             </TabsContent>
 
             {/* Permit Preview Tab */}
-            <TabsContent value="permit_preview" className="focus-visible:outline-none">
+            <TabsContent value="permit_preview" className="space-y-4 focus-visible:outline-none">
+              {application.id && (
+                <ApproverChangedSlotsPane
+                  applicationId={application.id}
+                  onAcknowledgementChange={setOverrideReview}
+                />
+              )}
               {application.id && <PermitPreviewFrame applicationId={application.id} />}
             </TabsContent>
 
@@ -1169,6 +1196,17 @@ export default function ApproverApplicationPage() {
                 <p className="mt-1 font-medium">{application.status.replaceAll("_", " ")}</p>
               </div>
             </div>
+
+            {decisionType === "approve" && overrideReview.count > 0 && !overrideReview.acknowledged ? (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  This application has {overrideReview.count} assessor text edit
+                  {overrideReview.count === 1 ? "" : "s"} on the permit/contract.
+                  Please open the <strong>Permit Preview</strong> tab, review the diffs,
+                  and tick the acknowledgement before approving.
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             {decisionType === "reject" || decisionType === "return_to_assessment" ? (
               <div className="space-y-2">
@@ -1227,7 +1265,13 @@ export default function ApproverApplicationPage() {
             </Button>
             <Button
               onClick={handleFinalDecision}
-              disabled={submittingDecision || (decisionType !== "approve" && !decisionReason.trim())}
+              disabled={
+                submittingDecision ||
+                (decisionType !== "approve" && !decisionReason.trim()) ||
+                (decisionType === "approve" &&
+                  overrideReview.count > 0 &&
+                  !overrideReview.acknowledged)
+              }
               variant={
                 decisionType === "approve"
                   ? "default"
@@ -1236,6 +1280,13 @@ export default function ApproverApplicationPage() {
                     : "outline"
               }
               className={decisionType === "approve" ? "bg-green-600 hover:bg-green-700" : ""}
+              title={
+                decisionType === "approve" &&
+                overrideReview.count > 0 &&
+                !overrideReview.acknowledged
+                  ? "Open the Permit Preview tab and acknowledge the assessor text edits before approving"
+                  : undefined
+              }
             >
               {submittingDecision ? (
                 <>

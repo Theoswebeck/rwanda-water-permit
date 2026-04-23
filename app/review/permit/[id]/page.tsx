@@ -11,8 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Download, FileCheck, Loader2, Shield } from "lucide-react";
 import { downloadFromDocumentsBucket, uploadTermsPdf } from "@/lib/supabase-storage";
 import { generateTermsConditionsPdfBlob } from "@/lib/pdf-generator";
-import { contractTermsByVariant } from "@/lib/contract-terms";
-import { buildContractPlaceholderContext, fillContractText } from "@/lib/contract-placeholders";
+import { getResolvedContractTerms } from "@/lib/document-slots";
 import { selectPermitVariant } from "@/lib/permit-variant";
 import { getActivityLabel } from "@/lib/assessment-report-utils";
 
@@ -198,13 +197,16 @@ export default function StaffPermitDetailPage() {
       }
 
       const variant = selectPermitVariant(applicationData as any);
-      const resolvedTerms = (contractTermsByVariant as any)[variant] ?? null;
+      const resolvedTerms = getResolvedContractTerms({
+        application: applicationData as any,
+        applicationNumber: applicationData?.application_number || "",
+        variantOverride: variant,
+      });
       if (!resolvedTerms) throw new Error("No contract terms configured for this permit type.");
 
-      const placeholderCtx = buildContractPlaceholderContext(applicationData as any, applicationData?.application_number || "");
-      const filledSections = resolvedTerms.sections.map((section: any) => ({
+      const filledSections = resolvedTerms.sections.map((section) => ({
         title: section.title,
-        paragraphs: section.paragraphs.map((p: string) => fillContractText(p, placeholderCtx)),
+        paragraphs: section.paragraphs,
       }));
 
       const applicantName = (() => {

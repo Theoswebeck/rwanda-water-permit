@@ -47,7 +47,12 @@ import { selectPermitVariant } from "@/lib/permit-variant";
 
 export const runtime = "nodejs";
 
-const ALLOWED_STAFF_ROLES = ["assessor", "admin"] as const;
+// Write access stays gated to the people who own the document content
+// (assessors + admins). Read access is opened up to approvers as well so the
+// approver review pane can show changed slots before issuance (Phase 4 spec
+// §6 "approver_must_review_changed_slots").
+const WRITE_ROLES = ["assessor", "admin"] as const;
+const READ_ROLES = ["assessor", "admin", "approver"] as const;
 const SUPERUSER_EMAILS = new Set([
   "nizzogentl1@gmail.com",
   "nshutidavy@gmail.com",
@@ -200,7 +205,10 @@ function toEditor(
   };
 }
 
-async function authenticate(req: NextRequest) {
+async function authenticate(
+  req: NextRequest,
+  allowedRoles: readonly string[],
+) {
   const token = readSessionTokenFromRequest(req);
   const claims = token ? await verifySessionToken(token) : null;
   const userId = claims?.sub;
@@ -219,7 +227,7 @@ async function authenticate(req: NextRequest) {
     userId,
     claimsRole: claims?.role,
   });
-  if (!isSuperuser && !hasAnyRole(resolvedRoles.effectiveRoles, ALLOWED_STAFF_ROLES)) {
+  if (!isSuperuser && !hasAnyRole(resolvedRoles.effectiveRoles, allowedRoles)) {
     return {
       ok: false as const,
       response: NextResponse.json(
@@ -236,7 +244,7 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, READ_ROLES);
     if (!auth.ok) return auth.response;
 
     const { id } = await ctx.params;
@@ -369,7 +377,7 @@ export async function POST(
   ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, WRITE_ROLES);
     if (!auth.ok) return auth.response;
 
     const { id } = await ctx.params;

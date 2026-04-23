@@ -9,6 +9,7 @@
  */
 
 import "./permit-slots";
+import "./contract-slots";
 
 export * from "./types";
 export {
@@ -34,3 +35,8 @@ export {
   UnknownSlotError,
   type ResolvedSlotForEditor,
 } from "./resolver";
+export { CONTRACT_PARAGRAPH_SEPARATOR } from "./contract-slots";
+export {
+  getResolvedContractTerms,
+  type GetResolvedContractTermsInput,
+} from "./contract-resolver";

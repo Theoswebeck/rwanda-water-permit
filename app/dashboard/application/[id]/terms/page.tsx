@@ -26,12 +26,12 @@ import { supabase } from "@/lib/supabase";
 import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
-import { contractTermsByVariant, splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
+import { splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import {
   buildContractPlaceholderContext,
-  fillContractText,
   type TransferPermitContext,
 } from "@/lib/contract-placeholders";
+import { getResolvedContractTerms } from "@/lib/document-slots";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import type { AppLanguage } from "@/lib/i18n/language";
@@ -477,9 +477,16 @@ export default function TermsConditionsPage() {
   }, [applicationId]);
 
   const resolvedTerms = useMemo(() => {
-    if (!termsVariant) return null;
-    return contractTermsByVariant[termsVariant] ?? null;
-  }, [termsVariant]);
+    if (!termsVariant || !termsApplication) return null;
+    // Slot-aware: returns the variant template with assessor text overrides
+    // applied and `{{...}}` placeholders pre-filled.
+    return getResolvedContractTerms({
+      application: termsApplication as any,
+      applicationNumber: termsApplication.application_number ?? undefined,
+      transferPermit: transferPermitCtx ?? null,
+      variantOverride: termsVariant,
+    });
+  }, [termsApplication, transferPermitCtx, termsVariant]);
 
   const visibleLanguageGroups = useMemo(() => {
     if (!resolvedTerms) return [];
@@ -1476,7 +1483,7 @@ export default function TermsConditionsPage() {
           <div className="space-y-2.5">
             {section.paragraphs.map((p, pIdx) => (
               <p key={pIdx} className="text-sm leading-relaxed text-muted-foreground">
-                {placeholderCtx ? fillContractText(p, placeholderCtx) : p}
+                {p}
               </p>
             ))}
           </div>

@@ -7,6 +7,7 @@ import { getPortalUrl } from '@/lib/notifications/portal-url'
 import { notifyOnTransferPendingTerms } from '@/lib/notifications/transfer-pending-terms'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 import { hasAnyRole, resolveEffectiveRoles } from '@/lib/auth/effective-roles'
+import { getDocumentTextOverridesEnvelope } from '@/lib/document-slots'
 
 type Decision = 'approve' | 'reject' | 'return_to_assessment'
 const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
@@ -147,11 +148,17 @@ export async function POST(req: NextRequest) {
     const applicationId = body?.applicationId as string
     const reason = (body?.reason as string | undefined) || ''
     const conditions = (body?.conditions as string | undefined) || ''
+    const acknowledgedOverrideVersion: number | null =
+      typeof body?.acknowledgedOverrideVersion === 'number' &&
+      Number.isFinite(body.acknowledgedOverrideVersion)
+        ? Math.trunc(body.acknowledgedOverrideVersion)
+        : null
     logFinalDecision('log', traceId, 'parsed request body', {
       applicationId,
       decision,
       hasReason: isNonEmptyString(reason),
       hasConditions: isNonEmptyString(conditions),
+      acknowledgedOverrideVersion,
     })
 
     if (!isNonEmptyString(applicationId) || !['approve', 'reject', 'return_to_assessment'].includes(decision)) {
@@ -197,6 +204,58 @@ export async function POST(req: NextRequest) {
       isTransferApplication,
       applicantId: application.applicant_id,
     })
+
+    if (decision === 'approve') {
+      // Issuance gate: if the assessor has rewritten any free-text slot on
+      // either the permit or contract, the approver must have read AND
+      // acknowledged the diff for the *current* envelope version.
+      // The client passes `acknowledgedOverrideVersion` from the GET payload;
+      // anything stale (or missing while overrides exist) is rejected.
+      const envelope = getDocumentTextOverridesEnvelope(application.internal_notes)
+      const overrideCount = Object.keys(envelope.values).length
+      if (overrideCount > 0) {
+        if (acknowledgedOverrideVersion === null) {
+          logFinalDecision('warn', traceId, 'rejecting approval because overrides exist but no acknowledgement was supplied', {
+            applicationId,
+            overrideCount,
+            envelopeVersion: envelope.version,
+          })
+          return NextResponse.json(
+            {
+              success: false,
+              code: 'OVERRIDE_REVIEW_REQUIRED',
+              message: 'This application has assessor text edits. Please review and acknowledge them on the Permit Preview tab before approving.',
+              overrideCount,
+              currentVersion: envelope.version,
+            },
+            { status: 409 }
+          )
+        }
+        if (acknowledgedOverrideVersion !== envelope.version) {
+          logFinalDecision('warn', traceId, 'rejecting approval because acknowledged override version is stale', {
+            applicationId,
+            acknowledgedOverrideVersion,
+            envelopeVersion: envelope.version,
+          })
+          return NextResponse.json(
+            {
+              success: false,
+              code: 'OVERRIDE_REVIEW_STALE',
+              message: 'The assessor text edits changed while you were reviewing. Please reload the Permit Preview tab and re-acknowledge them before approving.',
+              overrideCount,
+              currentVersion: envelope.version,
+              acknowledgedVersion: acknowledgedOverrideVersion,
+            },
+            { status: 409 }
+          )
+        }
+        logFinalDecision('log', traceId, 'override acknowledgement accepted', {
+          applicationId,
+          overrideCount,
+          envelopeVersion: envelope.version,
+        })
+      }
+    }
 
     const applicantRes = await query<ApplicantContact & { email: string }>(
       `
