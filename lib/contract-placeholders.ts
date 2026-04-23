@@ -15,6 +15,12 @@ export type ContractPlaceholderContext = {
   officeProvinceLabel: string;
   officeDistrict: string;
   officeSector: string;
+  officeCell: string;
+  officeVillage: string;
+  /** Pre-composed English office address, e.g. "X Sector, Y District, Z Province" with cell/village prepended when set. */
+  officeAddressEnglish: string;
+  /** Pre-composed Kinyarwanda office address, e.g. "Umurenge wa X, Akarere ka Y, Intara y' Z" with cell/village prepended when set. */
+  officeAddressKinyarwanda: string;
   waterSourceName: string;
   provinceLabel: string;
   district: string;
@@ -611,6 +617,44 @@ function isTransferApplication(application: ApplicationForContract): boolean {
   return notes?.isTransfer === true;
 }
 
+/**
+ * Build the English office-address sentence used in the contract template.
+ * Cell and village are prepended only when set so existing applications without
+ * those overrides keep producing the legacy "Sector, District, Province" string.
+ */
+function composeOfficeAddressEnglish(loc: {
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
+}, provinceLabel: string): string {
+  const parts: string[] = [];
+  if (loc.village && loc.village !== "N/A") parts.push(`${loc.village} Village`);
+  if (loc.cell && loc.cell !== "N/A") parts.push(`${loc.cell} Cell`);
+  parts.push(`${loc.sector} Sector`);
+  parts.push(`${loc.district} District`);
+  parts.push(provinceLabel);
+  return parts.join(", ");
+}
+
+/** Kinyarwanda counterpart to {@link composeOfficeAddressEnglish}. */
+function composeOfficeAddressKinyarwanda(loc: {
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
+}, provinceLabel: string): string {
+  const parts: string[] = [];
+  if (loc.village && loc.village !== "N/A") parts.push(`Umudugudu wa ${loc.village}`);
+  if (loc.cell && loc.cell !== "N/A") parts.push(`Akagari ka ${loc.cell}`);
+  parts.push(`Umurenge wa ${loc.sector}`);
+  parts.push(`Akarere ka ${loc.district}`);
+  parts.push(`Intara y' ${provinceLabel}`);
+  return parts.join(", ");
+}
+
 function applyTransferOverlay(
   ctx: ContractPlaceholderContext,
   application: ApplicationForContract
@@ -646,6 +690,29 @@ function applyTransferOverlay(
     officeProvinceLabel: transfereeProvince ? provinceLabelForContract(transfereeProvince) : "N/A",
     officeDistrict: transfereeDistrict || "N/A",
     officeSector: transfereeSector || "N/A",
+    // Transfer form does not collect transferee cell/village.
+    officeCell: "N/A",
+    officeVillage: "N/A",
+    officeAddressEnglish: composeOfficeAddressEnglish(
+      {
+        province: transfereeProvince || "N/A",
+        district: transfereeDistrict || "N/A",
+        sector: transfereeSector || "N/A",
+        cell: "N/A",
+        village: "N/A",
+      },
+      transfereeProvince ? provinceLabelForContract(transfereeProvince) : "N/A",
+    ),
+    officeAddressKinyarwanda: composeOfficeAddressKinyarwanda(
+      {
+        province: transfereeProvince || "N/A",
+        district: transfereeDistrict || "N/A",
+        sector: transfereeSector || "N/A",
+        cell: "N/A",
+        village: "N/A",
+      },
+      transfereeProvince ? provinceLabelForContract(transfereeProvince) : "N/A",
+    ),
   };
 }
 
@@ -717,6 +784,16 @@ export function buildContractPlaceholderContext(
     officeProvinceLabel: provinceLabelForContract(officeLocation.province),
     officeDistrict: officeLocation.district,
     officeSector: officeLocation.sector,
+    officeCell: officeLocation.cell,
+    officeVillage: officeLocation.village,
+    officeAddressEnglish: composeOfficeAddressEnglish(
+      officeLocation,
+      provinceLabelForContract(officeLocation.province),
+    ),
+    officeAddressKinyarwanda: composeOfficeAddressKinyarwanda(
+      officeLocation,
+      provinceLabelForContract(officeLocation.province),
+    ),
     waterSourceName: resolveWaterSourceName(application),
     provinceLabel: provinceLabelForContract(waterSourceLocation.province),
     district: waterSourceLocation.district,
@@ -754,6 +831,10 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("{{OFFICE_PROVINCE_LABEL}}", ctx.officeProvinceLabel);
   s = s.replaceAll("{{OFFICE_DISTRICT}}", ctx.officeDistrict);
   s = s.replaceAll("{{OFFICE_SECTOR}}", ctx.officeSector);
+  s = s.replaceAll("{{OFFICE_CELL}}", ctx.officeCell);
+  s = s.replaceAll("{{OFFICE_VILLAGE}}", ctx.officeVillage);
+  s = s.replaceAll("{{OFFICE_ADDRESS_EN}}", ctx.officeAddressEnglish);
+  s = s.replaceAll("{{OFFICE_ADDRESS_RW}}", ctx.officeAddressKinyarwanda);
   s = s.replaceAll("{{WATER_SOURCE_NAME}}", ctx.waterSourceName);
   s = s.replaceAll("{{PROVINCE_LABEL}}", ctx.provinceLabel);
   s = s.replaceAll("{{DISTRICT}}", ctx.district);
@@ -800,11 +881,11 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   // Organization + representative
   s = s.replaceAll(
     "“XXXXX (NAME OF ORGANIZATION)”, with its registered office address as follows: XXX Sector, XXX District, XXX Province; represented by XXXX (NAME OF REPRESENTATIVE) “TITLE OF REPRESENTATIVE”, and hereafter referred to as the (“Water User”) on the other hand;",
-    `“${ctx.organizationName}”, with its registered office address as follows: ${ctx.officeSector} Sector, ${ctx.officeDistrict} District, ${ctx.officeProvinceLabel}; represented by ${ctx.representativeName} “${ctx.representativeTitle}”, and hereafter referred to as the (“Water User”) on the other hand;`
+    `“${ctx.organizationName}”, with its registered office address as follows: ${ctx.officeAddressEnglish}; represented by ${ctx.representativeName} “${ctx.representativeTitle}”, and hereafter referred to as the (“Water User”) on the other hand;`
   );
   s = s.replaceAll(
     "“(IZINA RY’ IKIGO/KOPERATIVE/ IKOMPANYI N’IBINDI CYASABYE)”, ifite ibiro biherereye mu Umurenge wa XXXXX, Akarere ka XXXX, Intara y' XXXX; ihagarariwe na XXX (IZINA RY’UHAGARARIYE IKIGO “ICYO ASHINZWE”, muri aya masezerano witwa “Ukoresha amazi” ku rundi ruhande;",
-    `“${ctx.organizationName}”, ifite ibiro biherereye mu Umurenge wa ${ctx.officeSector}, Akarere ka ${ctx.officeDistrict}, Intara y' ${ctx.officeProvinceLabel}; ihagarariwe na ${ctx.representativeName} “${ctx.representativeTitle}”, muri aya masezerano witwa “Ukoresha amazi” ku rundi ruhande;`
+    `“${ctx.organizationName}”, ifite ibiro biherereye mu ${ctx.officeAddressKinyarwanda}; ihagarariwe na ${ctx.representativeName} “${ctx.representativeTitle}”, muri aya masezerano witwa “Ukoresha amazi” ku rundi ruhande;`
   );
   s = s.replaceAll("NAME OF APPLIED ORGANIZATION", ctx.organizationName);
   s = s.replaceAll("NAME OF ORGANIZATION", ctx.organizationName);

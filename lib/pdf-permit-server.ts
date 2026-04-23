@@ -226,7 +226,12 @@ const ACTIVITY_LABELS: Record<string, string> = {
 
 function resolveActivities(app: PermitApplication): string {
   let acts: string[] = [];
-  // Assessor override (notes.intendedActivities) wins over the application column when non-empty.
+  // `notes` here is the *effective* notes — i.e. the document_overrides envelope
+  // has already been merged on top by `getEffectiveInternalNotes`. So the
+  // assessor's saved `intendedActivities` (if any) is what shows up under
+  // `notes?.intendedActivities`. This block prefers that over the original
+  // `app.intended_activities` column, then falls back to the column, then to
+  // the legacy transferFormData purpose, then to the bare water_purpose string.
   const notes = resolveNotes(app);
   const fromNotes = notes?.intendedActivities;
   if (Array.isArray(fromNotes)) {
@@ -464,28 +469,38 @@ function formatIntaraOrUmujyiWaKigali(provinceRaw: string): string {
 }
 
 function getActivityLabelKinyarwanda(activity: string): string {
+  // Keep this map in sync with the canonical applicant list in
+  // `components/dashboard/application-form-new.tsx` and with
+  // `lib/contract-placeholders.ts:resolveActivityLabelRw`.
   const activityLabels: Record<string, string> = {
-    irrigation: "kuhira",
-    domestic: "gukoresha mu rugo",
-    industrial: "inganda",
-    livestock: "ubworozi",
-    fish_farming_ponds: "ubworozi bw'amafi",
-    fish_farming_lakes: "ubworozi bw'amafi",
-    aquaculture: "ubworozi bw'amafi",
+    coffee_washing: "byo gusukura ikawa",
+    construction_of_dam: "byo kubaka urugomero",
+    construction_of_infrastructures: "byo kubaka cyangwa gushyiraho ibikorwa remezo",
     electricity_generation: "kubyaza amashanyarazi amazi",
-    hydropower_source: "kubyaza amashanyarazi amazi",
+    fish_farming_lakes: "ubworozi bw'amafi",
+    fish_farming_ponds: "ubworozi bw'amafi",
+    gaz_extraction: "byo gucukura gaze",
+    industry: "by'inganda",
+    irrigation: "kuhira",
+    livestock: "ubworozi",
     mining: "ubucukuzi bw'amabuye y'agaciro",
     recreation_activities: "imyidagaduro",
     water_supply: "gutanga amazi",
-    municipal_supply: "gutanga amazi",
     other: "ibindi",
+    // Legacy / non-canonical codes that may still appear in older applications.
+    domestic: "gukoresha mu rugo",
+    industrial: "by'inganda",
+    aquaculture: "ubworozi bw'amafi",
+    hydropower_source: "kubyaza amashanyarazi amazi",
+    municipal_supply: "gutanga amazi",
   };
   return activityLabels[activity] || activity.replace(/[_-]/g, " ");
 }
 
 function resolveActivitiesKinyarwanda(app: PermitApplication): string {
   let acts: string[] = [];
-  // Assessor override (notes.intendedActivities) wins when non-empty.
+  // Same precedence as resolveActivities: effective notes (with override merged
+  // in by getEffectiveInternalNotes) wins, then column, then legacy transfer purpose.
   const notes = resolveNotes(app);
   const fromNotes = notes?.intendedActivities;
   if (Array.isArray(fromNotes)) {
