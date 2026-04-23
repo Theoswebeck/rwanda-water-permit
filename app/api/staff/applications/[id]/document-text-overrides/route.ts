@@ -53,6 +53,15 @@ export const runtime = "nodejs";
 // §6 "approver_must_review_changed_slots").
 const WRITE_ROLES = ["assessor", "admin"] as const;
 const READ_ROLES = ["assessor", "admin", "approver"] as const;
+// Free-text edits are only permitted while the application is still in an
+// assessment stage. Mirrors the `isEditableAssessment` check in
+// `app/assessment/application/[id]/page.tsx` so the API can't be coerced
+// into mutating overrides after the file has moved past assessment.
+const ASSESSMENT_WRITABLE_STATUSES: ReadonlySet<string> = new Set([
+  "pending_assessment",
+  "under_review",
+  "returned_to_assessment",
+]);
 const SUPERUSER_EMAILS = new Set([
   "nizzogentl1@gmail.com",
   "nshutidavy@gmail.com",
@@ -419,9 +428,19 @@ export async function POST(
       await client.query(`SET LOCAL lock_timeout = '5s'`);
       await client.query(`SET LOCAL statement_timeout = '15s'`);
 
-      const lockRes = await client.query<{ internal_notes: string | null }>(
+      // Status guard: free-text edits are only permitted while the
+      // application is still in an assessment stage. Once the file moves
+      // forward (pending_review → final_approval → approved → issued) the
+      // approver review pane has either run already or is about to, and the
+      // gate in `app/api/approver/final-decision/route.ts` keys off the
+      // envelope version. Allowing late writes here would silently bypass
+      // that gate (review C1).
+      const lockRes = await client.query<{
+        internal_notes: string | null;
+        status: string | null;
+      }>(
         `
-        SELECT internal_notes
+        SELECT internal_notes, status
         FROM public.applications
         WHERE id = $1
         FOR UPDATE
@@ -431,6 +450,10 @@ export async function POST(
       const lockRow = lockRes.rows[0];
       if (!lockRow) {
         return { kind: "not_found" as const };
+      }
+      const status = String(lockRow.status ?? "").toLowerCase();
+      if (!ASSESSMENT_WRITABLE_STATUSES.has(status)) {
+        return { kind: "wrong_status" as const, status };
       }
 
       const parsed = readEnvelopeForWrite(lockRow.internal_notes);
@@ -474,6 +497,17 @@ export async function POST(
       return NextResponse.json(
         { success: false, message: "Application not found" },
         { status: 404 },
+      );
+    }
+    if (result.kind === "wrong_status") {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "STATUS_NOT_EDITABLE",
+          message: `Document text edits are only allowed while the application is in an assessment stage (current status: ${result.status || "unknown"}).`,
+          status: result.status,
+        },
+        { status: 409 },
       );
     }
     if (result.kind === "corrupt_notes") {

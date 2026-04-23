@@ -4,11 +4,7 @@
  * Spec: docs/superpowers/specs/2026-04-23-document-text-editor-design.md §6.4
  */
 
-import type {
-  ClientResolvedSlot,
-  DiffEntry,
-  PendingChange,
-} from "./types";
+import type { ClientResolvedSlot, DiffEntry } from "./types";
 
 /**
  * Reduce the live slot list + a draft map into one DiffEntry per slot whose
@@ -36,7 +32,47 @@ export function buildDiffEntries(
       after = slot.defaultText;
       kind = "reset";
     } else {
+      // Empty drafts: the server refuses empty text (use null to reset).
+      // Promote them to a reset locally so users who clear a field don't
+      // get a confusing 422; if there's nothing to reset, skip silently
+      // (review I3).
+      if (draftText === "") {
+        if (!slot.overrideText) continue;
+        out.push({
+          slotId,
+          label: slot.slot.label,
+          group: slot.slot.group,
+          language: slot.slot.language,
+          documentKind: slot.slot.documentKind,
+          before,
+          after: slot.defaultText,
+          kind: "reset",
+          structuredField: slot.slot.structuredField,
+        });
+        continue;
+      }
       if (draftText === before) continue; // unchanged
+      // Editing an overridden slot back to the default text is semantically
+      // a reset, not an update — otherwise we'd persist a "phantom override"
+      // that equals the default, which still bumps envelope.version and
+      // forces the approver gate even though no visible text has changed
+      // (review M1).
+      if (slot.overrideText && draftText === slot.defaultText) {
+        after = slot.defaultText;
+        kind = "reset";
+        out.push({
+          slotId,
+          label: slot.slot.label,
+          group: slot.slot.group,
+          language: slot.slot.language,
+          documentKind: slot.slot.documentKind,
+          before,
+          after,
+          kind,
+          structuredField: slot.slot.structuredField,
+        });
+        continue;
+      }
       after = draftText;
       kind = slot.overrideText ? "update" : "set";
     }

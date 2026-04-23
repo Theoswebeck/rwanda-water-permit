@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { query } from '@/lib/db/postgres'
+import { query, withTransaction } from '@/lib/db/postgres'
 import { PindoClient } from '@/lib/pindo-client'
 import { getApplicantName, getApplicantPhone, type ApplicantContact } from '@/lib/notifications/applicant-contact'
 import { sendSmtpEmail } from '@/lib/notifications/smtp-email'
@@ -299,32 +299,20 @@ export async function POST(req: NextRequest) {
       applicationId,
       decision,
     })
+    // Pre-validate the SMS phone for any decision that triggers an applicant
+    // notification, BEFORE we open the approval transaction. This way a bad
+    // phone number can't ever leave the application in a partially-approved
+    // state where the row was updated but the SMS failed.
     if (decision !== 'return_to_assessment') {
-      const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
-      const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
-      if (!pindo.isValidRwandanPhone(applicantPhone)) {
+      const senderNamePre = process.env.PINDO_SENDER_NAME || 'RWB'
+      const pindoPre = new PindoClient(process.env.PINDO_API_KEY, senderNamePre)
+      if (!pindoPre.isValidRwandanPhone(applicantPhone)) {
         logFinalDecision('warn', traceId, 'aborting because applicant phone format is invalid', {
           applicationId,
           applicantPhone: maskPhone(applicantPhone),
         })
         return NextResponse.json({ success: false, message: 'Invalid applicant phone number format' }, { status: 400 })
       }
-      logFinalDecision('log', traceId, 'sending applicant approval notifications', {
-        applicationId,
-        smsTo: maskPhone(applicantPhone),
-        emailTo: maskEmail(applicantEmail),
-        senderName,
-      })
-      await pindo.sendSMS(applicantPhone, copy.sms, senderName)
-      logFinalDecision('log', traceId, 'applicant SMS sent successfully', {
-        applicationId,
-        smsTo: maskPhone(applicantPhone),
-      })
-      await sendSmtpEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
-      logFinalDecision('log', traceId, 'applicant email sent successfully', {
-        applicationId,
-        emailTo: maskEmail(applicantEmail),
-      })
     }
 
     if (decision === 'approve') {
@@ -332,24 +320,101 @@ export async function POST(req: NextRequest) {
         applicationId,
         hasConditions: isNonEmptyString(conditions.trim()),
       })
-      await query(
-        `
-        update public.applications
-        set
-          status = 'approved_pending_permit',
-          assigned_approver_id = $2,
-          approved_at = now(),
-          updated_at = now(),
-          terms_status = 'pending',
-          terms_presented_at = now(),
-          approval_conditions = case when $3 <> '' then $3 else approval_conditions end
-        where id = $1
-        `,
-        [applicationId, actorUserId, conditions.trim()]
-      )
+      // Transactional approval (review I1):
+      //   1. Lock the row with SELECT … FOR UPDATE so a concurrent assessor
+      //      POST that's already inside its own transaction must wait.
+      //   2. Re-read internal_notes inside the lock to get the canonical
+      //      envelope version. The pre-flight check above is just an early
+      //      bailout; the authoritative check happens here.
+      //   3. If overrides exist, require acknowledgedOverrideVersion ===
+      //      envelope.version. Any drift (assessor saved while the approve
+      //      request was in flight) → abort with 409 BEFORE the UPDATE so
+      //      no SMS/email is sent for an approval that didn't happen.
+      //   4. Apply the status UPDATE inside the same transaction.
+      const txResult = await withTransaction(async (client) => {
+        await client.query(`SET LOCAL lock_timeout = '5s'`)
+        await client.query(`SET LOCAL statement_timeout = '15s'`)
+        const lockRes = await client.query<{ internal_notes: string | null }>(
+          `select internal_notes::text as internal_notes from public.applications where id = $1 for update`,
+          [applicationId]
+        )
+        const lockRow = lockRes.rows[0]
+        if (!lockRow) {
+          return { kind: 'not_found' as const }
+        }
+        const liveEnvelope = getDocumentTextOverridesEnvelope(lockRow.internal_notes)
+        const liveOverrideCount = Object.keys(liveEnvelope.values).length
+        if (liveOverrideCount > 0) {
+          if (acknowledgedOverrideVersion === null) {
+            return { kind: 'override_required' as const, overrideCount: liveOverrideCount, currentVersion: liveEnvelope.version }
+          }
+          if (acknowledgedOverrideVersion !== liveEnvelope.version) {
+            return {
+              kind: 'override_stale' as const,
+              overrideCount: liveOverrideCount,
+              currentVersion: liveEnvelope.version,
+              acknowledgedVersion: acknowledgedOverrideVersion,
+            }
+          }
+        }
+        await client.query(
+          `
+          update public.applications
+          set
+            status = 'approved_pending_permit',
+            assigned_approver_id = $2,
+            approved_at = now(),
+            updated_at = now(),
+            terms_status = 'pending',
+            terms_presented_at = now(),
+            approval_conditions = case when $3 <> '' then $3 else approval_conditions end
+          where id = $1
+          `,
+          [applicationId, actorUserId, conditions.trim()]
+        )
+        return { kind: 'ok' as const, envelopeVersion: liveEnvelope.version, overrideCount: liveOverrideCount }
+      })
+      if (txResult.kind === 'not_found') {
+        return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
+      }
+      if (txResult.kind === 'override_required') {
+        logFinalDecision('warn', traceId, 'rejecting approval inside tx because overrides exist but no acknowledgement was supplied', {
+          applicationId,
+          ...txResult,
+        })
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'OVERRIDE_REVIEW_REQUIRED',
+            message: 'This application has assessor text edits. Please review and acknowledge them on the Permit Preview tab before approving.',
+            overrideCount: txResult.overrideCount,
+            currentVersion: txResult.currentVersion,
+          },
+          { status: 409 }
+        )
+      }
+      if (txResult.kind === 'override_stale') {
+        logFinalDecision('warn', traceId, 'rejecting approval inside tx because acknowledged override version is stale', {
+          applicationId,
+          ...txResult,
+        })
+        return NextResponse.json(
+          {
+            success: false,
+            code: 'OVERRIDE_REVIEW_STALE',
+            message: 'The assessor text edits changed while you were reviewing. Please reload the Permit Preview tab and re-acknowledge them before approving.',
+            overrideCount: txResult.overrideCount,
+            currentVersion: txResult.currentVersion,
+            acknowledgedVersion: txResult.acknowledgedVersion,
+          },
+          { status: 409 }
+        )
+      }
       logFinalDecision('log', traceId, 'application status updated to approved_pending_permit', {
         applicationId,
         applicationNumber,
+        envelopeVersion: txResult.envelopeVersion,
+        overrideCount: txResult.overrideCount,
       })
 
       logFinalDecision('log', traceId, 'dispatching transferee pending-terms notification', {
@@ -418,6 +483,31 @@ export async function POST(req: NextRequest) {
           notifyStaffOnEvent('application_returned_to_verification', 'application', applicationId)
         )
         .catch((err) => console.error('❌ [STAFF-NOTIFY] final-decision fire-and-forget failed:', err))
+    }
+
+    // Send the applicant notifications AFTER the DB has been mutated. This
+    // way an approval that was aborted by the override gate (review I1) never
+    // sends an "approved" SMS, and an SMS retry can never land before the
+    // status row reflects the decision.
+    if (decision !== 'return_to_assessment') {
+      const senderName = process.env.PINDO_SENDER_NAME || 'RWB'
+      const pindo = new PindoClient(process.env.PINDO_API_KEY, senderName)
+      logFinalDecision('log', traceId, 'sending applicant decision notifications', {
+        applicationId,
+        smsTo: maskPhone(applicantPhone),
+        emailTo: maskEmail(applicantEmail),
+        senderName,
+      })
+      await pindo.sendSMS(applicantPhone, copy.sms, senderName)
+      logFinalDecision('log', traceId, 'applicant SMS sent successfully', {
+        applicationId,
+        smsTo: maskPhone(applicantPhone),
+      })
+      await sendSmtpEmail({ to: applicantEmail, subject: copy.email.subject, title: copy.email.title, text: copy.email.text })
+      logFinalDecision('log', traceId, 'applicant email sent successfully', {
+        applicationId,
+        emailTo: maskEmail(applicantEmail),
+      })
     }
 
     await query(

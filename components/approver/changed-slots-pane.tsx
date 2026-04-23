@@ -65,15 +65,22 @@ export function ApproverChangedSlotsPane({
   const [error, setError] = useState<string | null>(null);
   const [acknowledged, setAcknowledged] = useState<boolean>(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/staff/applications/${encodeURIComponent(applicationId)}/document-text-overrides`, {
-      credentials: "include",
-    })
-      .then(async (res) => {
-        const json = (await res.json().catch(() => null)) as EditorPayload | { success: false; message?: string } | null;
+  // Fetch the editor payload. Pulled out so it can be reused on focus
+  // refetch (review I2) — assessor edits made while the approver is in this
+  // tab shouldn't be invisible.
+  const refresh = useMemo(
+    () => async (signal?: AbortSignal) => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch(
+          `/api/staff/applications/${encodeURIComponent(applicationId)}/document-text-overrides`,
+          { credentials: "include", signal },
+        );
+        const json = (await res.json().catch(() => null)) as
+          | EditorPayload
+          | { success: false; message?: string }
+          | null;
         if (!res.ok || !json || (json as { success?: boolean }).success !== true) {
           const message =
             (json && typeof (json as { message?: unknown }).message === "string"
@@ -81,19 +88,27 @@ export function ApproverChangedSlotsPane({
               : null) ?? `Failed to load (${res.status})`;
           throw new Error(message);
         }
-        if (!cancelled) setPayload(json as EditorPayload);
-      })
-      .catch((err: unknown) => {
-        if (cancelled) return;
+        setPayload(json as EditorPayload);
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Failed to load overrides");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [applicationId],
+  );
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    refresh(ctrl.signal);
+    const onFocus = () => refresh();
+    window.addEventListener("focus", onFocus);
     return () => {
-      cancelled = true;
+      ctrl.abort();
+      window.removeEventListener("focus", onFocus);
     };
-  }, [applicationId]);
+  }, [refresh]);
 
   const permitChanged = useMemo(
     () => (payload ? buildChangedRows(payload.permitSlots) : []),

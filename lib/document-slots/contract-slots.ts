@@ -146,6 +146,18 @@ function buildVariantSlots(
   }
 
   terms.sections.forEach((section, idx) => {
+    // Round-trip safety net (review M2): the body slot stores all paragraphs
+    // joined by CONTRACT_PARAGRAPH_SEPARATOR and the resolver splits on the
+    // same string. If a future template paragraph (or a placeholder
+    // substitution result) happened to contain that separator, it would
+    // silently get split into two paragraphs on render. Catch this at module
+    // load instead of mysteriously losing a line in production.
+    if (section.paragraphs.some((p) => p.includes(CONTRACT_PARAGRAPH_SEPARATOR))) {
+      throw new Error(
+        `contract-slots: variant=${variant} section[${idx}] (${section.title}) contains the paragraph separator inside a paragraph; getResolvedContractTerms would split it incorrectly. Choose a different separator or refactor the paragraph.`,
+      );
+    }
+
     const lang = languageOf(section.title);
     const group = groupForSection(section.title);
 
