@@ -2028,7 +2028,7 @@ export default function AssessmentApplicationPage() {
             {application?.id && (
               <DocumentValuesEditor
                 applicationId={application.id}
-                internalNotes={application.internal_notes}
+                application={application as any}
                 readOnly={isReadOnly}
                 onInternalNotesChange={(nextInternalNotes) => {
                   setApplication((prev) => {
