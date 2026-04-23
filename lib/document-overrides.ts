@@ -206,6 +206,236 @@ export function getDocumentOverrideEnvelopeFromNotes(
   };
 }
 
+/**
+ * Minimal application shape that {@link getDocumentBaseValues} needs to read
+ * underlying values for each override key. Kept narrow so this module stays
+ * dependency-free.
+ */
+export type ApplicationForOverrides = {
+  province?: string | null;
+  district?: string | null;
+  sector?: string | null;
+  cell?: string | null;
+  village?: string | null;
+  coordinates?: unknown;
+  water_body_name?: string | null;
+  water_source?: string | null;
+  intended_activities?: unknown;
+  internal_notes?: unknown;
+  applicant?: {
+    account_type?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    company_name?: string | null;
+    id_number?: string | null;
+  } | null;
+};
+
+export type DocumentBaseValues = Partial<Record<DocumentOverrideKey, string | string[]>>;
+export type DocumentEffectiveValues = Record<DocumentOverrideKey, string | string[]>;
+
+function trimStr(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function pickFirstString(...candidates: unknown[]): string {
+  for (const c of candidates) {
+    const t = trimStr(c);
+    if (t) return t;
+  }
+  return "";
+}
+
+function extractLatLngFromApp(app: ApplicationForOverrides): { lat: string; lng: string } {
+  const notes = parseInternalNotes(app.internal_notes);
+  const tryPair = (rawLat: unknown, rawLng: unknown): { lat: string; lng: string } | null => {
+    const latStr = trimStr(rawLat);
+    const lngStr = trimStr(rawLng);
+    const latNum = latStr ? Number.parseFloat(latStr) : NaN;
+    const lngNum = lngStr ? Number.parseFloat(lngStr) : NaN;
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      return { lat: String(latNum), lng: String(lngNum) };
+    }
+    return null;
+  };
+  const fromNotes = tryPair(notes.waterSourceLatitude, notes.waterSourceLongitude);
+  if (fromNotes) return fromNotes;
+  const tfd = (notes as any).transferFormData;
+  if (tfd && typeof tfd === "object") {
+    const fromTfd = tryPair(tfd.waterSourceLatitude, tfd.waterSourceLongitude);
+    if (fromTfd) return fromTfd;
+  }
+  const geom = app.coordinates as any;
+  if (geom && geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
+    const [lng, lat] = geom.coordinates;
+    const fromGeom = tryPair(lat, lng);
+    if (fromGeom) return fromGeom;
+  }
+  return { lat: "", lng: "" };
+}
+
+function extractIntendedActivitiesBase(app: ApplicationForOverrides): string[] {
+  const allowed = INTENDED_ACTIVITY_VALUE_SET;
+  const fromCol = Array.isArray(app.intended_activities)
+    ? (app.intended_activities as unknown[])
+        .filter((x): x is string => typeof x === "string")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && allowed.has(s))
+    : [];
+  if (fromCol.length) return fromCol.slice(0, MAX_MULTISELECT_ITEMS);
+  const notes = parseInternalNotes(app.internal_notes);
+  const tfd = (notes as any).transferFormData;
+  if (tfd && typeof tfd === "object" && Array.isArray(tfd.intendedActivities)) {
+    const fromTfd = (tfd.intendedActivities as unknown[])
+      .filter((x): x is string => typeof x === "string")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && allowed.has(s));
+    if (fromTfd.length) return fromTfd.slice(0, MAX_MULTISELECT_ITEMS);
+  }
+  return [];
+}
+
+/**
+ * Underlying values for each override key, derived from application columns
+ * and the *raw* internal_notes (excluding the override envelope). These are the
+ * values that would render if the assessor cleared all overrides — so the editor
+ * can prefill its inputs with what the assessor currently sees in the preview.
+ */
+export function getDocumentBaseValues(app: ApplicationForOverrides): DocumentBaseValues {
+  const rawNotes = parseInternalNotes(app.internal_notes);
+  // Re-parse with override stripped so we never accidentally leak override
+  // values back into the "base" pool. (parseInternalNotes returns a shallow
+  // copy, so deleting from this is safe.)
+  const baseNotes: Record<string, any> = { ...rawNotes };
+  delete baseNotes.document_overrides;
+
+  const tfd = (baseNotes.transferFormData ?? null) as Record<string, unknown> | null;
+
+  const accType = trimStr(app.applicant?.account_type);
+  const isIndividual = accType === "individual";
+  const firstName = trimStr(app.applicant?.first_name);
+  const lastName = trimStr(app.applicant?.last_name);
+  const companyName = trimStr(app.applicant?.company_name);
+  const fullName = isIndividual
+    ? `${firstName} ${lastName}`.trim()
+    : companyName || `${firstName} ${lastName}`.trim();
+
+  const out: DocumentBaseValues = {};
+
+  // Applicant block — top-level notes fields (set during application form
+  // submission) take precedence over user record fields, mirroring the
+  // resolveOrganizationName / resolveRepresentativeName logic in the renderers.
+  const baseFullName = pickFirstString(
+    baseNotes.fullNameApplicant,
+    isIndividual ? fullName : companyName,
+    fullName,
+  );
+  if (baseFullName) out.fullNameApplicant = baseFullName;
+
+  const baseNationalId = pickFirstString(baseNotes.nationalIdNumber, app.applicant?.id_number);
+  if (baseNationalId) out.nationalIdNumber = baseNationalId;
+
+  const baseRepName = pickFirstString(
+    baseNotes.nameRepresentative,
+    !isIndividual && (firstName || lastName) ? `${firstName} ${lastName}`.trim() : "",
+  );
+  if (baseRepName) out.nameRepresentative = baseRepName;
+
+  const baseRepTitle = pickFirstString(baseNotes.representativeTitle);
+  if (baseRepTitle) out.representativeTitle = baseRepTitle;
+
+  const baseRepPosition = pickFirstString(baseNotes.representativePosition);
+  if (baseRepPosition) out.representativePosition = baseRepPosition;
+
+  // Office location block. Office cell/village have no application column
+  // fallback, so they are only sourced from notes.
+  const officeProvince = pickFirstString(baseNotes.officeProvince, app.province);
+  if (officeProvince) out.officeProvince = officeProvince;
+
+  const officeDistrict = pickFirstString(baseNotes.officeDistrict, app.district);
+  if (officeDistrict) out.officeDistrict = officeDistrict;
+
+  const officeSector = pickFirstString(baseNotes.officeSector, app.sector);
+  if (officeSector) out.officeSector = officeSector;
+
+  const officeCell = pickFirstString(baseNotes.officeCell);
+  if (officeCell) out.officeCell = officeCell;
+
+  const officeVillage = pickFirstString(baseNotes.officeVillage);
+  if (officeVillage) out.officeVillage = officeVillage;
+
+  // Water source block.
+  const baseSourceName = pickFirstString(
+    baseNotes.nameSourceWater,
+    app.water_body_name,
+    typeof app.water_source === "string" ? app.water_source.replaceAll("_", " ") : "",
+    tfd && typeof tfd.waterPurpose === "string" ? tfd.waterPurpose : "",
+  );
+  if (baseSourceName) out.nameSourceWater = baseSourceName;
+
+  const wsProvince = pickFirstString(baseNotes.waterSourceProvince, app.province);
+  if (wsProvince) out.waterSourceProvince = wsProvince;
+  const wsDistrict = pickFirstString(baseNotes.waterSourceDistrict, app.district);
+  if (wsDistrict) out.waterSourceDistrict = wsDistrict;
+  const wsSector = pickFirstString(baseNotes.waterSourceSector, app.sector);
+  if (wsSector) out.waterSourceSector = wsSector;
+  const wsCell = pickFirstString(baseNotes.waterSourceCell, app.cell);
+  if (wsCell) out.waterSourceCell = wsCell;
+  const wsVillage = pickFirstString(baseNotes.waterSourceVillage, app.village);
+  if (wsVillage) out.waterSourceVillage = wsVillage;
+
+  const { lat, lng } = extractLatLngFromApp(app);
+  if (lat) out.waterSourceLatitude = lat;
+  if (lng) out.waterSourceLongitude = lng;
+
+  // Use purpose — multiselect.
+  const baseActivities = extractIntendedActivitiesBase(app);
+  if (baseActivities.length) out.intendedActivities = baseActivities;
+
+  return out;
+}
+
+/**
+ * Combined values per override key: override envelope wins, then base value,
+ * else "" (or [] for multiselect). Use this to prefill the editor inputs so
+ * the assessor sees what the permit currently renders.
+ */
+export function getEffectiveDocumentValues(app: ApplicationForOverrides): DocumentEffectiveValues {
+  const overrides = getDocumentOverrideEnvelopeFromNotes(app.internal_notes).values;
+  const base = getDocumentBaseValues(app);
+  const out = {} as DocumentEffectiveValues;
+  for (const key of DOCUMENT_OVERRIDE_KEYS) {
+    if (MULTISELECT_KEYS.has(key)) {
+      const ov = overrides[key];
+      if (Array.isArray(ov) && ov.length > 0) {
+        out[key] = ov.map(String);
+        continue;
+      }
+      const bv = base[key];
+      out[key] = Array.isArray(bv) ? bv.map(String) : [];
+      continue;
+    }
+    const ov = overrides[key];
+    if (typeof ov === "string" && ov.trim()) {
+      out[key] = ov;
+      continue;
+    }
+    if (typeof ov === "number" && Number.isFinite(ov)) {
+      out[key] = String(ov);
+      continue;
+    }
+    const bv = base[key];
+    if (typeof bv === "string" && bv) {
+      out[key] = bv;
+      continue;
+    }
+    out[key] = "";
+  }
+  return out;
+}
+
 export function getEffectiveInternalNotes(notesRaw: unknown): Record<string, any> {
   const notes = parseInternalNotes(notesRaw);
   const envelope = getDocumentOverrideEnvelopeFromNotes(notes);
