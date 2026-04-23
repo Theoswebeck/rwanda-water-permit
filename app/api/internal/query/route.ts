@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db/postgres'
+import { getTableColumns, invalidateSchemaCache } from '@/lib/db/schema-cache'
 import { readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
 type Filter = {
@@ -18,6 +19,81 @@ function isSafeIdent(value: string) {
 
 function quoteIdent(value: string) {
   return `"${value.replaceAll('"', '""')}"`
+}
+
+const ALLOWED_TABLES: ReadonlyArray<string> = [
+  'applications',
+  'users',
+  'documents',
+  'inspections',
+  'reviews',
+  'permits',
+  'workflow_history',
+  'audit_logs',
+  'role_delegations',
+  'water_use_reports',
+  'payments',
+  'payment_transactions',
+  'permit_registry',
+  'phone_verification_logs',
+  'notifications',
+  'staff_assignments',
+  'assessment_reports',
+  'contracts',
+  'system_settings',
+  'application_status_history',
+  'application_comments',
+  'application_reviews',
+  'application_verifications',
+  'inspection_reports',
+  'transfer_requests',
+  'application_documents',
+  'technical_assessments',
+  'portal_feedback',
+  'inspection_workflow_history',
+  'water_use_report_workflow_history',
+]
+const ALLOWED_TABLES_SET: ReadonlySet<string> = new Set(ALLOWED_TABLES)
+
+/**
+ * Validate that every key in the supplied write payload corresponds to
+ * a real column on `table`. Rejects unknown columns up front with a
+ * single 400 instead of letting them hit Postgres and triggering the
+ * legacy 25-retry "silently strip and pray" loop on the client.
+ *
+ * Returns null on success, or a NextResponse to short-circuit.
+ */
+function isMissingColumnError(err: unknown): boolean {
+  const msg = String((err as { message?: unknown })?.message ?? err ?? '')
+  return /column .* does not exist/i.test(msg) || /Could not find the .* column/i.test(msg)
+}
+
+async function rejectIfUnknownColumns(
+  table: string,
+  payload: Record<string, unknown>,
+): Promise<NextResponse | null> {
+  const known = await getTableColumns(table, ALLOWED_TABLES)
+  if (!known) return null
+  for (const key of Object.keys(payload)) {
+    if (!isSafeIdent(key)) continue
+    if (!known.has(key)) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: {
+            code: 'UNKNOWN_COLUMN',
+            table,
+            column: key,
+            message:
+              `Database is missing column \`${key}\` on \`public.${table}\`. ` +
+              `A migration is needed before this field can be saved.`,
+          },
+        },
+        { status: 400 },
+      )
+    }
+  }
+  return null
 }
 
 const JSONB_COLUMNS_BY_TABLE: Record<string, Set<string>> = {
@@ -293,39 +369,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { message: 'Invalid request' } }, { status: 400 })
     }
 
-    const allowedTables = new Set([
-      'applications',
-      'users',
-      'documents',
-      'inspections',
-      'reviews',
-      'permits',
-      'workflow_history',
-      'audit_logs',
-      'role_delegations',
-      'water_use_reports',
-      'payments',
-      'payment_transactions',
-      'permit_registry',
-      'phone_verification_logs',
-      'notifications',
-      'staff_assignments',
-      'assessment_reports',
-      'contracts',
-      'system_settings',
-      'application_status_history',
-      'application_comments',
-      'application_reviews',
-      'application_verifications',
-      'inspection_reports',
-      'transfer_requests',
-      'application_documents',
-      'technical_assessments',
-      'portal_feedback',
-      'inspection_workflow_history',
-      'water_use_report_workflow_history',
-    ])
-    if (!allowedTables.has(table)) {
+    if (!ALLOWED_TABLES_SET.has(table)) {
       return NextResponse.json({ error: { message: `Table not allowed: ${table}` } }, { status: 400 })
     }
 
@@ -333,13 +377,22 @@ export async function POST(req: NextRequest) {
       const rows = Array.isArray(body.payload) ? body.payload : [body.payload || {}]
       if (!rows.length) return NextResponse.json({ data: null, error: { message: 'Missing payload' } }, { status: 400 })
       const row = rows[0] as Record<string, unknown>
+      const guardFail = await rejectIfUnknownColumns(table, row)
+      if (guardFail) return guardFail
       const keys = Object.keys(row).filter(isSafeIdent)
       const vals = keys.map((k) => (isJsonbColumn(table, k) ? toJsonbParamValue(row[k]) : row[k]))
       const ph = keys.map((k, i) => (isJsonbColumn(table, k) ? `$${i + 1}::jsonb` : `$${i + 1}`))
       const sql = `insert into public.${quoteIdent(table)} (${keys.map(quoteIdent).join(', ')}) values (${ph.join(', ')}) returning *`
-      const res = await query(sql, vals)
-      const data = body.singleMode ? (res.rows[0] || null) : res.rows
-      return NextResponse.json({ data, error: null })
+      try {
+        const res = await query(sql, vals)
+        const data = body.singleMode ? (res.rows[0] || null) : res.rows
+        return NextResponse.json({ data, error: null })
+      } catch (err) {
+        // Migration applied at runtime? Drop the cache so the next
+        // request re-reads information_schema.
+        if (isMissingColumnError(err)) invalidateSchemaCache()
+        throw err
+      }
     }
 
     const alias = tableAlias(table)
@@ -385,6 +438,8 @@ export async function POST(req: NextRequest) {
 
     if (action === 'update') {
       const payload = (body.payload || {}) as Record<string, unknown>
+      const guardFail = await rejectIfUnknownColumns(table, payload)
+      if (guardFail) return guardFail
       const keys = Object.keys(payload).filter(isSafeIdent)
       if (!keys.length) return NextResponse.json({ data: null, error: { message: 'Missing update payload' } }, { status: 400 })
       const setClauses: string[] = []
@@ -402,9 +457,14 @@ export async function POST(req: NextRequest) {
         ${whereWithShift.length ? `where ${whereWithShift.join(' and ')}` : ''}
         returning *
       `
-      const res = await query(sql, [...setVals, ...params])
-      const data = body.singleMode ? (res.rows[0] || null) : res.rows
-      return NextResponse.json({ data, error: null })
+      try {
+        const res = await query(sql, [...setVals, ...params])
+        const data = body.singleMode ? (res.rows[0] || null) : res.rows
+        return NextResponse.json({ data, error: null })
+      } catch (err) {
+        if (isMissingColumnError(err)) invalidateSchemaCache()
+        throw err
+      }
     }
 
     if (action === 'delete') {

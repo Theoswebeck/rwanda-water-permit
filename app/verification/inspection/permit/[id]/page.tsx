@@ -22,6 +22,8 @@ import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-b
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
 import { isAssessorOwnedWorkflow } from "@/lib/inspection-workflow";
 import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
+import { assertInspectionPayloadKeys } from "@/lib/inspections/payload-columns";
+import { runInspectionSaveWithSafetyNet } from "@/lib/inspections/safe-payload-retry";
 
 type InspectionTemplate = "authorization" | "concession";
 
@@ -421,119 +423,41 @@ export default function PermitInspectionUnifiedPage() {
         });
       }
 
-      const stripDocs = (p: any) => {
-        const { inspection_documents, ...rest } = p || {};
-        return rest;
-      };
-
-      const extractMissingColumnFromError = (err: any): string | null => {
-        const msg = String(err?.message || "");
-
-        // PostgREST schema cache error (Supabase REST API)
-        // Example: Could not find the 'activity_starting_date' column of 'inspections' in the schema cache
-        let m = msg.match(/Could not find the '([^']+)' column of '([^']+)' in the schema cache/i);
-        if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
-
-        // Postgres error (via RPC/SQL)
-        // Example: column "inspection_documents" of relation "inspections" does not exist
-        m = msg.match(/column ["']?([^"']+)["']? of relation ["']?([^"']+)["']? does not exist/i);
-        if (m && (m[2] === "inspections" || m[2] === "public.inspections")) return m[1];
-
-        // PostgreSQL may emit: column "foo" does not exist
-        m = msg.match(/column ["']?([^"']+)["']? does not exist/i);
-        if (m) return m[1];
-
-        // Fallback for older handling
-        if (msg.toLowerCase().includes("inspection_documents") && msg.toLowerCase().includes("does not exist")) {
-          return "inspection_documents";
-        }
-
-        return null;
-      };
-
-      const omitKey = (p: any, key: string) => {
-        const { [key]: _omitted, ...rest } = p || {};
-        return rest;
-      };
-
-      const runWithMissingColumnRetries = async <T,>(
-        run: (p: any) => Promise<{ data: T | null; error: any }>,
-        initialPayload: any
-      ) => {
-        let cur = initialPayload;
-        const removed = new Set<string>();
-        let lastErr: any = null;
-
-        // Retry several times, stripping unknown columns reported by Supabase/PostgREST.
-        // In environments where DB migrations haven't been applied, Supabase will surface
-        // missing columns one-by-one.
-        for (let attempt = 0; attempt < 25; attempt++) {
-          const { data, error } = await run(cur);
-          if (!error) return { data, error: null, droppedColumns: Array.from(removed) };
-
-          lastErr = error;
-          const missingCol = extractMissingColumnFromError(error);
-          if (missingCol && missingCol in cur && !removed.has(missingCol)) {
-            removed.add(missingCol);
-            cur = omitKey(cur, missingCol);
-            console.warn(`⚠️ Inspections schema missing column '${missingCol}'. Retrying without it.`);
-            continue;
-          }
-
-          // Keep the legacy "documents" fallback as a safety net
-          if (!removed.has("inspection_documents") && extractMissingColumnFromError(error) === "inspection_documents") {
-            removed.add("inspection_documents");
-            cur = stripDocs(cur);
-            console.warn("⚠️ Inspections schema missing column 'inspection_documents'. Retrying without it.");
-            continue;
-          }
-
-          return { data: null, error, droppedColumns: Array.from(removed) };
-        }
-
-        return { data: null, error: lastErr, droppedColumns: Array.from(removed) };
-      };
-
-      const buildDroppedSuffix = (dropped: string[]) =>
-        dropped.length
-          ? `\n\n⚠️ The following ${dropped.length} field(s) were not saved because the database schema is missing the matching column(s): ${dropped.join(", ")}.\nPlease ask an administrator to apply the latest database migrations.`
-          : "";
+      assertInspectionPayloadKeys(payload);
 
       if (inspectionId) {
-        const { data, error: upErr, droppedColumns } = await runWithMissingColumnRetries<{ id: string }>(
-          p => supabase.from("inspections").update(p).eq("id", inspectionId).select("id").single(),
-          payload
+        const { data, error: upErr } = await runInspectionSaveWithSafetyNet<{ id: string }>(
+          (p) => supabase.from("inspections").update(p).eq("id", inspectionId).select("id").single(),
+          payload,
         );
         if (upErr) throw upErr;
         setInspectionRecord((prev) => ({
           ...(prev || ({} as Inspection)),
           ...(payload as Partial<Inspection>),
-          id: data.id,
+          id: data!.id,
         }));
-        const suffix = buildDroppedSuffix(droppedColumns);
         if (mode === "submit") {
           setCanEditForm(false);
-          alert("✅ Inspection submitted. You can now use workflow actions below." + suffix);
+          alert("✅ Inspection submitted. You can now use workflow actions below.");
         } else {
-          alert("✅ Draft saved" + suffix);
+          alert("✅ Draft saved");
         }
       } else {
-        const { data, error: insErr, droppedColumns } = await runWithMissingColumnRetries<{ id: string }>(
-          p => supabase.from("inspections").insert(p).select("id").single(),
-          payload
+        const { data, error: insErr } = await runInspectionSaveWithSafetyNet<{ id: string }>(
+          (p) => supabase.from("inspections").insert(p).select("id").single(),
+          payload,
         );
         if (insErr) throw insErr;
-        setInspectionId(data.id);
+        setInspectionId(data!.id);
         setInspectionRecord({
           ...(payload as Partial<Inspection>),
-          id: data.id,
+          id: data!.id,
         } as Inspection);
-        const suffix = buildDroppedSuffix(droppedColumns);
         if (mode === "submit") {
           setCanEditForm(false);
-          alert("✅ Inspection submitted. You can now use workflow actions below." + suffix);
+          alert("✅ Inspection submitted. You can now use workflow actions below.");
         } else {
-          alert("✅ Draft created" + suffix);
+          alert("✅ Draft created");
         }
       }
     } catch (e: any) {

@@ -1,0 +1,59 @@
+{
+  "table": "public.inspections",
+  "columns": [
+    { "name": "application_id", "type": "uuid" },
+    { "name": "owner_kind", "type": "text", "note": "polymorphic owner discriminator" },
+    { "name": "owner_id", "type": "uuid", "note": "polymorphic owner id (e.g. permit_registry.id)" },
+    { "name": "inspector_id", "type": "uuid" },
+    { "name": "type", "type": "text", "note": "always 'annual' for now" },
+    { "name": "inspection_template", "type": "text", "note": "'authorization' | 'concession'" },
+    { "name": "status", "type": "text" },
+    { "name": "workflow_status", "type": "text" },
+    { "name": "scheduled_date", "type": "timestamptz" },
+    { "name": "completed_date", "type": "timestamptz" },
+
+    { "name": "review_status", "type": "text" },
+    { "name": "review_notes", "type": "text" },
+    { "name": "reviewed_by", "type": "uuid" },
+    { "name": "reviewed_at", "type": "timestamptz" },
+
+    { "name": "catchment_level1", "type": "text" },
+    { "name": "catchment_level2", "type": "text" },
+
+    { "name": "activity_type", "type": "text" },
+    { "name": "activity_starting_date", "type": "date" },
+    { "name": "wastewater_system_type", "type": "text" },
+    { "name": "wastewater_system_effectiveness", "type": "text" },
+    { "name": "fees_payment_amount", "type": "numeric" },
+    { "name": "fees_payment_details", "type": "text", "note": "Section 10 free-text" },
+    { "name": "fees_payment_proof", "type": "text" },
+    { "name": "reports_submission_date", "type": "date" },
+    { "name": "reports_reference_number", "type": "text" },
+    { "name": "reports_proof", "type": "text" },
+    { "name": "water_use_conflicts", "type": "text" },
+    { "name": "catchment_protection_initiatives", "type": "text" },
+    { "name": "general_conclusion", "type": "text" },
+    { "name": "recommendations", "type": "text" },
+    { "name": "recommendation_details", "type": "text", "note": "Section 14 free-text" },
+
+    { "name": "employment_gender_breakdown", "type": "jsonb" },
+    { "name": "ohs_gender_sensitive", "type": "jsonb" },
+
+    { "name": "inspection_documents", "type": "jsonb" },
+
+    { "name": "locked_field_overrides", "type": "jsonb" },
+
+    { "name": "allowed_quantity", "type": "numeric" },
+    { "name": "allowed_unit", "type": "text" },
+    { "name": "authorized_abstraction_method", "type": "text" },
+    { "name": "actual_quantity", "type": "numeric" },
+    { "name": "actual_unit", "type": "text" },
+    { "name": "actual_abstraction_method", "type": "text" },
+    { "name": "measurement_device_type", "type": "text" },
+
+    { "name": "authorized_surface_area_ha", "type": "numeric" },
+    { "name": "actual_surface_area_ha", "type": "numeric" },
+    { "name": "authorized_concession_boundaries", "type": "jsonb" },
+    { "name": "actual_concession_boundaries", "type": "jsonb" }
+  ]
+}
