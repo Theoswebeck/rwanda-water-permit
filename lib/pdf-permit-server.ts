@@ -171,10 +171,12 @@ function resolveIdNumber(app: PermitApplication): string {
 }
 
 function resolveWaterSourceName(app: PermitApplication): string {
-  if ((app as any).water_body_name) return (app as any).water_body_name;
+  // Assessor override wins over the column so explicit edits take effect.
   const notes = resolveNotes(app);
-  return (notes?.nameSourceWater as string)?.trim()
-    || (app.water_source || "N/A").replaceAll("_", " ");
+  const override = typeof notes?.nameSourceWater === "string" ? notes.nameSourceWater.trim() : "";
+  if (override) return override;
+  if ((app as any).water_body_name) return (app as any).water_body_name;
+  return (app.water_source || "N/A").replaceAll("_", " ");
 }
 
 function resolveLakeName(app: PermitApplication): string {
@@ -224,15 +226,24 @@ const ACTIVITY_LABELS: Record<string, string> = {
 
 function resolveActivities(app: PermitApplication): string {
   let acts: string[] = [];
-  if (Array.isArray(app.intended_activities)) acts = app.intended_activities.map(String).filter(Boolean);
-  if (!acts.length) {
-    const notes = resolveNotes(app);
-    const fromNotes = notes?.intendedActivities;
-    if (Array.isArray(fromNotes)) acts = fromNotes.map(String).filter(Boolean);
-    if (!acts.length && typeof notes?.transferFormData?.waterPurpose === "string") {
-      const tp = notes.transferFormData.waterPurpose.trim();
-      if (tp) acts = [tp];
-    }
+  // `notes` here is the *effective* notes — i.e. the document_overrides envelope
+  // has already been merged on top by `getEffectiveInternalNotes`. So the
+  // assessor's saved `intendedActivities` (if any) is what shows up under
+  // `notes?.intendedActivities`. This block prefers that over the original
+  // `app.intended_activities` column, then falls back to the column, then to
+  // the legacy transferFormData purpose, then to the bare water_purpose string.
+  const notes = resolveNotes(app);
+  const fromNotes = notes?.intendedActivities;
+  if (Array.isArray(fromNotes)) {
+    const cleaned = fromNotes.map(String).map((s) => s.trim()).filter(Boolean);
+    if (cleaned.length) acts = cleaned;
+  }
+  if (!acts.length && Array.isArray(app.intended_activities)) {
+    acts = app.intended_activities.map(String).filter(Boolean);
+  }
+  if (!acts.length && typeof notes?.transferFormData?.waterPurpose === "string") {
+    const tp = notes.transferFormData.waterPurpose.trim();
+    if (tp) acts = [tp];
   }
   if (acts.length) return acts.map((a) => ACTIVITY_LABELS[a] || a).join(", ");
   const purpose = app.water_purpose?.trim();
@@ -393,6 +404,8 @@ function resolveOrgAddress(app: PermitApplication): string {
   }
 
   const parts = [
+    (notes?.officeVillage as string)?.trim() ? `${notes!.officeVillage} Village` : null,
+    (notes?.officeCell as string)?.trim() ? `${notes!.officeCell} Cell` : null,
     (notes?.officeSector as string)?.trim() ? `${notes!.officeSector} Sector` : null,
     (notes?.officeDistrict as string)?.trim() ? `${notes!.officeDistrict} District` : null,
     (notes?.officeProvince as string)?.trim()
@@ -456,36 +469,58 @@ function formatIntaraOrUmujyiWaKigali(provinceRaw: string): string {
 }
 
 function getActivityLabelKinyarwanda(activity: string): string {
+  // Keep this map in sync with the canonical applicant list in
+  // `components/dashboard/application-form-new.tsx` and with
+  // `lib/contract-placeholders.ts:resolveActivityLabelRw`.
   const activityLabels: Record<string, string> = {
-    irrigation: "kuhira",
-    domestic: "gukoresha mu rugo",
-    industrial: "inganda",
-    livestock: "ubworozi",
-    fish_farming_ponds: "ubworozi bw'amafi",
-    fish_farming_lakes: "ubworozi bw'amafi",
-    aquaculture: "ubworozi bw'amafi",
+    coffee_washing: "byo gusukura ikawa",
+    construction_of_dam: "byo kubaka urugomero",
+    construction_of_infrastructures: "byo kubaka cyangwa gushyiraho ibikorwa remezo",
     electricity_generation: "kubyaza amashanyarazi amazi",
-    hydropower_source: "kubyaza amashanyarazi amazi",
+    fish_farming_lakes: "ubworozi bw'amafi",
+    fish_farming_ponds: "ubworozi bw'amafi",
+    gaz_extraction: "byo gucukura gaze",
+    industry: "by'inganda",
+    irrigation: "kuhira",
+    livestock: "ubworozi",
     mining: "ubucukuzi bw'amabuye y'agaciro",
     recreation_activities: "imyidagaduro",
     water_supply: "gutanga amazi",
-    municipal_supply: "gutanga amazi",
     other: "ibindi",
+    // Legacy / non-canonical codes that may still appear in older applications.
+    domestic: "gukoresha mu rugo",
+    industrial: "by'inganda",
+    aquaculture: "ubworozi bw'amafi",
+    hydropower_source: "kubyaza amashanyarazi amazi",
+    municipal_supply: "gutanga amazi",
   };
   return activityLabels[activity] || activity.replace(/[_-]/g, " ");
 }
 
 function resolveActivitiesKinyarwanda(app: PermitApplication): string {
-  const raw = app.intended_activities;
   let acts: string[] = [];
-  if (Array.isArray(raw)) {
-    acts = raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
-  } else if (typeof raw === "string" && raw.trim()) {
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) acts = parsed.filter((x): x is string => typeof x === "string");
-    } catch {
-      acts = [raw.trim()];
+  // Same precedence as resolveActivities: effective notes (with override merged
+  // in by getEffectiveInternalNotes) wins, then column, then legacy transfer purpose.
+  const notes = resolveNotes(app);
+  const fromNotes = notes?.intendedActivities;
+  if (Array.isArray(fromNotes)) {
+    const cleaned = fromNotes
+      .filter((x): x is string => typeof x === "string")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    if (cleaned.length) acts = cleaned;
+  }
+  if (!acts.length) {
+    const raw = app.intended_activities;
+    if (Array.isArray(raw)) {
+      acts = raw.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+    } else if (typeof raw === "string" && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) acts = parsed.filter((x): x is string => typeof x === "string");
+      } catch {
+        acts = [raw.trim()];
+      }
     }
   }
   if (!acts.length) {
@@ -656,8 +691,8 @@ function drawPreviewBanner(doc: PDFKit.PDFDocument): void {
 /**
  * Two-column closing block:
  *   left  — "Director General of RWB / Umuyobozi Mukuru wa RWB"
- *   right — "Done at Kigali / Bikorewe i Kigali, On/kuwa ......./......./{year}"
- * Day and month are intentionally blank for handwritten signing on print.
+ *   right — "Done at Kigali / Bikorewe i Kigali, On/kuwa DD/MM/YYYY"
+ * The right column uses the renderer's issueDate formatted DD/MM/YYYY (Rwanda format).
  */
 function drawClosingLine(doc: PDFKit.PDFDocument, yPos: number, issueDate: Date): number {
   const pw = pageWidth(doc);
@@ -665,14 +700,13 @@ function drawClosingLine(doc: PDFKit.PDFDocument, yPos: number, issueDate: Date)
   const colW = (pw - marginX * 2) / 2 - 4 * PT;
   const leftX = marginX;
   const rightX = pw / 2 + 4 * PT;
-  const year = issueDate.getFullYear();
 
   doc.font(FONT_BOLD).fontSize(11).fillColor("#000000");
   doc.text("Director General of RWB / Umuyobozi Mukuru wa RWB", leftX, yPos, {
     width: colW,
     align: "left",
   });
-  doc.text(`Done at Kigali / Bikorewe i Kigali, On/kuwa ......../......../${year}`, rightX, yPos, {
+  doc.text(`Done at Kigali / Bikorewe i Kigali, On/kuwa ${fmtDMY(issueDate)}`, rightX, yPos, {
     width: colW,
     align: "right",
   });

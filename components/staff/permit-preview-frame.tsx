@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Status = "loading" | "ready" | "error";
 
@@ -10,12 +10,19 @@ interface PermitPreviewFrameProps {
   src?: string;
   /** Height in px; default 900 to match existing tab height. */
   height?: number;
+  /**
+   * Parent-controlled refresh trigger. Bumping this value (e.g. after the
+   * assessor saves a field) causes the iframe to refetch the PDF, debounced
+   * by ~600 ms so rapid bumps coalesce into a single fetch.
+   */
+  refreshKey?: number;
 }
 
 export function PermitPreviewFrame({
   applicationId,
   src,
   height = 900,
+  refreshKey = 0,
 }: PermitPreviewFrameProps) {
   const url = src ?? `/api/staff/applications/${applicationId}/permit-preview`;
   const [status, setStatus] = useState<Status>("loading");
@@ -23,8 +30,31 @@ export function PermitPreviewFrame({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   // Bumping reloadKey re-runs the effect (cache-safe way to retry).
   const [reloadKey, setReloadKey] = useState(0);
+  // Debounced mirror of `refreshKey` so rapid parent bumps coalesce.
+  const [debouncedRefreshKey, setDebouncedRefreshKey] = useState(refreshKey);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const retry = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  // Coalesce parent-driven refresh requests into a single fetch ~600 ms after
+  // the last bump. Skip the debounce on the very first render so the initial
+  // load is immediate.
+  useEffect(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+    if (refreshKey === debouncedRefreshKey) return;
+    debounceTimerRef.current = setTimeout(() => {
+      setDebouncedRefreshKey(refreshKey);
+    }, 600);
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+    };
+  }, [refreshKey, debouncedRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +114,7 @@ export function PermitPreviewFrame({
       window.clearTimeout(timeoutId);
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [url, reloadKey]);
+  }, [url, reloadKey, debouncedRefreshKey]);
 
   return (
     <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -419,6 +419,12 @@ export default function AssessmentApplicationPage() {
   const [permitLengthSaving, setPermitLengthSaving] = useState(false);
   const [assessorRecommendedVolume, setAssessorRecommendedVolume] = useState<number | undefined>(undefined);
   const [volumeSaving, setVolumeSaving] = useState(false);
+  // Bumped after each successful assessor save (document-overrides, duration,
+  // or volume) so the permit preview iframe refetches the latest PDF.
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const bumpPreviewRefresh = useCallback(() => {
+    setPreviewRefreshKey((k) => k + 1);
+  }, []);
   
   // Original requested values (from applicant submission - read-only)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
@@ -1362,65 +1368,101 @@ export default function AssessmentApplicationPage() {
     inspectionDate,
   ]);
 
-  // Save assessor's permit length adjustment to the application
+  /**
+   * Persist a single assessor adjustment ({@link patch}) via the dedicated
+   * server endpoint. The endpoint uses `jsonb_set` so concurrent writes to
+   * other paths in `internal_notes` (e.g. `document_overrides` from the
+   * autosaving editor) are not clobbered. After a successful save we patch
+   * only the `_assessorAdjustments` and (if backfilled) `_originalRequestedValues`
+   * paths in local state — the rest of `internal_notes` is left as the editor
+   * may have already updated it.
+   */
+  const persistAssessorAdjustment = useCallback(
+    async (
+      appId: string,
+      patch: { permitLengthYears?: number; recommendedVolumeM3?: number },
+    ): Promise<{
+      assessorAdjustments: Record<string, unknown>;
+      originalRequestedValues: Record<string, unknown> | null;
+      proposedDurationYears: number | null;
+    }> => {
+      const res = await fetch(
+        `/api/staff/applications/${appId}/assessor-adjustments`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            ...patch,
+            requestedValues: {
+              permitLengthYears: requestedDurationYears,
+              volumeM3: requestedVolumeM3,
+            },
+          }),
+        },
+      );
+      const json = await res.json().catch(() => ({} as any));
+      if (!res.ok || !json?.success) {
+        const msg = typeof json?.message === "string" ? json.message : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      const adjustments =
+        json.assessor_adjustments && typeof json.assessor_adjustments === "object"
+          ? (json.assessor_adjustments as Record<string, unknown>)
+          : {};
+      const originals =
+        json.original_requested_values && typeof json.original_requested_values === "object"
+          ? (json.original_requested_values as Record<string, unknown>)
+          : null;
+      const proposed =
+        typeof json.proposed_duration_years === "number" ? json.proposed_duration_years : null;
+      return {
+        assessorAdjustments: adjustments,
+        originalRequestedValues: originals,
+        proposedDurationYears: proposed,
+      };
+    },
+    [requestedDurationYears, requestedVolumeM3],
+  );
+
+  // Save assessor's permit length adjustment via the race-safe endpoint.
   const savePermitLengthAdjustment = async (newPermitLength: number) => {
     if (!application) return;
     if ((application as any).is_renewal) {
       alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
       return;
     }
-    
+
     try {
       setPermitLengthSaving(true);
-      
-      // Parse existing internal_notes to preserve other form data
-      let existingFormData: any = {};
-      try {
-        existingFormData = JSON.parse(application.internal_notes || '{}');
-      } catch {
-        existingFormData = {};
-      }
-      
-      // Preserve original requested values (NEVER modify these)
-      if (!existingFormData._originalRequestedValues) {
-        existingFormData._originalRequestedValues = {
-          permitLengthYears: requestedDurationYears,
-          volumeM3: requestedVolumeM3,
-          storedAt: new Date().toISOString()
-        };
-      }
-      
-      // Update assessor adjustments (separate from original values)
-      existingFormData._assessorAdjustments = {
-        ...(existingFormData._assessorAdjustments || {}),
-        permitLengthYears: newPermitLength,
-        adjustedAt: new Date().toISOString(),
-      };
-      
-      // Note: We do NOT update permitLengthYears in the root of existingFormData
-      // as that would overwrite the applicant's original request
-      
-      // Update internal_notes (JSON) and the dedicated database column for permit generation
-      const { error } = await supabase
-        .from('applications')
-        .update({
-          internal_notes: JSON.stringify(existingFormData),
-          proposed_duration_years: newPermitLength,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', application.id);
-      
-      if (error) throw error;
-      
-      // Update local state
+      const { assessorAdjustments, originalRequestedValues, proposedDurationYears } =
+        await persistAssessorAdjustment(application.id, {
+          permitLengthYears: newPermitLength,
+        });
+
+      // Patch only the JSON paths the server actually wrote, so any in-flight
+      // editor save reflected in our current local state survives.
+      setApplication((prev) => {
+        if (!prev) return prev;
+        let parsed: Record<string, unknown> = {};
+        try {
+          parsed = prev.internal_notes ? JSON.parse(prev.internal_notes) : {};
+        } catch {
+          parsed = {};
+        }
+        parsed._assessorAdjustments = assessorAdjustments;
+        if (originalRequestedValues) parsed._originalRequestedValues = originalRequestedValues;
+        return {
+          ...prev,
+          internal_notes: JSON.stringify(parsed),
+          proposed_duration_years:
+            proposedDurationYears ?? (prev as any).proposed_duration_years ?? null,
+        } as any;
+      });
       setAssessorPermitLength(newPermitLength);
-      setApplication({
-        ...application,
-        internal_notes: JSON.stringify(existingFormData),
-        proposed_duration_years: newPermitLength
-      } as any);
-      
+
       console.log('✅ Permit length adjusted to', newPermitLength, 'years');
+      bumpPreviewRefresh();
     } catch (err) {
       console.error('❌ Error saving permit length adjustment:', err);
       alert('Failed to save permit length adjustment. Please try again.');
@@ -1429,62 +1471,40 @@ export default function AssessmentApplicationPage() {
     }
   };
 
-  // Save assessor's volume adjustment to the application
+  // Save assessor's volume adjustment via the race-safe endpoint.
   const saveVolumeAdjustment = async (newVolume: number) => {
     if (!application) return;
     if ((application as any).is_renewal) {
       alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
       return;
     }
-    
+
     try {
       setVolumeSaving(true);
-      
-      // Parse existing internal_notes to preserve other form data
-      let existingFormData: any = {};
-      try {
-        existingFormData = JSON.parse(application.internal_notes || '{}');
-      } catch {
-        existingFormData = {};
-      }
-      
-      // Preserve original requested values (NEVER modify these)
-      if (!existingFormData._originalRequestedValues) {
-        existingFormData._originalRequestedValues = {
-          permitLengthYears: requestedDurationYears,
-          volumeM3: requestedVolumeM3,
-          storedAt: new Date().toISOString()
-        };
-      }
-      
-      // Update assessor adjustments (separate from original values)
-      existingFormData._assessorAdjustments = {
-        ...(existingFormData._assessorAdjustments || {}),
-        recommendedVolumeM3: newVolume,
-        volumeAdjustedAt: new Date().toISOString(),
-      };
-      
-      // Store in internal_notes JSON (works without database migration)
-      const updateData: any = {
-        internal_notes: JSON.stringify(existingFormData),
-        updated_at: new Date().toISOString()
-      };
-      
-      const { error } = await supabase
-        .from('applications')
-        .update(updateData)
-        .eq('id', application.id);
-      
-      if (error) throw error;
-      
-      // Update local state
+      const { assessorAdjustments, originalRequestedValues } = await persistAssessorAdjustment(
+        application.id,
+        { recommendedVolumeM3: newVolume },
+      );
+
+      setApplication((prev) => {
+        if (!prev) return prev;
+        let parsed: Record<string, unknown> = {};
+        try {
+          parsed = prev.internal_notes ? JSON.parse(prev.internal_notes) : {};
+        } catch {
+          parsed = {};
+        }
+        parsed._assessorAdjustments = assessorAdjustments;
+        if (originalRequestedValues) parsed._originalRequestedValues = originalRequestedValues;
+        return {
+          ...prev,
+          internal_notes: JSON.stringify(parsed),
+        } as any;
+      });
       setAssessorRecommendedVolume(newVolume);
-      setApplication({
-        ...application,
-        internal_notes: JSON.stringify(existingFormData),
-      } as any);
-      
+
       console.log('✅ Volume adjusted to', newVolume, 'm³/year');
+      bumpPreviewRefresh();
     } catch (err) {
       console.error('❌ Error saving volume adjustment:', err);
       alert('Failed to save volume adjustment. Please try again.');
@@ -2019,6 +2039,7 @@ export default function AssessmentApplicationPage() {
                     };
                   });
                 }}
+                onSaved={bumpPreviewRefresh}
               />
             )}
 
@@ -2329,7 +2350,12 @@ export default function AssessmentApplicationPage() {
 
             {/* Permit Preview Tab */}
             <TabsContent value="permit_preview" className="focus-visible:outline-none">
-              {application.id && <PermitPreviewFrame applicationId={application.id} />}
+              {application.id && (
+                <PermitPreviewFrame
+                  applicationId={application.id}
+                  refreshKey={previewRefreshKey}
+                />
+              )}
             </TabsContent>
 
             {/* Internal Notes Tab */}
