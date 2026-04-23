@@ -68,7 +68,7 @@ import {
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
-import { DocumentValuesEditor } from "@/components/staff/document-values-editor";
+import { DocumentTextEditor } from "@/components/staff/document-text-editor";
 
 function toDateInputValue(value?: string | null): string {
   if (!value) return "";
@@ -2026,10 +2026,11 @@ export default function AssessmentApplicationPage() {
             </TabsList>
 
             {/*
-              Permit & Contract Dynamic Values editor is only relevant when
-              the assessor is reviewing the generated documents. Hide it via
-              CSS on other tabs so any in-progress drafts are preserved when
-              the assessor switches tabs (re-rendering would reset state).
+              Free-text editor for every editable string in the Permit and
+              Contract documents. Only meaningful while the assessor is
+              actually reviewing one of those previews — hidden via CSS on
+              other tabs so in-progress drafts are preserved when the
+              assessor flips between tabs (re-rendering would discard them).
             */}
             {application?.id && (
               <div
@@ -2039,19 +2040,10 @@ export default function AssessmentApplicationPage() {
                     : "hidden"
                 }
               >
-                <DocumentValuesEditor
+                <DocumentTextEditor
                   applicationId={application.id}
-                  application={application as any}
+                  refreshKey={previewRefreshKey}
                   readOnly={isReadOnly}
-                  onInternalNotesChange={(nextInternalNotes) => {
-                    setApplication((prev) => {
-                      if (!prev) return prev;
-                      return {
-                        ...prev,
-                        internal_notes: nextInternalNotes,
-                      };
-                    });
-                  }}
                   onSaved={bumpPreviewRefresh}
                 />
               </div>
