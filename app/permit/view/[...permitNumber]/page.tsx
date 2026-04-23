@@ -11,6 +11,7 @@ import { isConcessionApplication } from "@/lib/permit-variant";
 import { PermitLocationMap } from "@/components/public/permit-location-map";
 import { Tx } from "@/components/ui/tx";
 import { geometryToCoordinatePolygons, type CoordinatePoint } from "@/lib/geoUtils";
+import { getEffectiveInternalNotes } from "@/lib/document-overrides";
 
 function formatDate(dateString: string): string {
   const raw = dateString.trim();
@@ -51,16 +52,22 @@ function parsePositiveNumber(value: unknown): number | null {
   return null;
 }
 
+/**
+ * Effective internal notes for public rendering: starts from the parsed
+ * `internal_notes` JSON, then flattens the assessor's `document_overrides.values`
+ * onto the top-level keys (e.g. `waterSourceVillage`, `nameSourceWater`,
+ * `intendedActivities`). Returns `null` for empty/unparseable input so callers
+ * can keep their existing null-checks.
+ *
+ * `_assessorAdjustments` (recommendedVolumeM3, permitLengthYears) is preserved
+ * intact under that key — read it directly from the returned object.
+ */
 function parseInternalNotes(value: unknown): Record<string, unknown> | null {
-  if (!value) return null;
-  if (typeof value === "object") return value as Record<string, unknown>;
-  if (typeof value !== "string") return null;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
+  if (value == null) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const effective = getEffectiveInternalNotes(value);
+  if (!effective || typeof effective !== "object") return null;
+  return Object.keys(effective).length > 0 ? effective : null;
 }
 
 function statusBadgeVariant(status: PermitStatus): { label: string; className: string } {
@@ -162,18 +169,10 @@ export default async function PublicPermitViewPage({
     const app = permit.application;
     if (!app) return "N/A";
 
-    const notes = (() => {
-      const rawNotes = app.internal_notes;
-      if (!rawNotes) return null;
-      if (typeof rawNotes === "object") return rawNotes as Record<string, unknown>;
-      if (typeof rawNotes !== "string") return null;
-      try {
-        const parsed = JSON.parse(rawNotes);
-        return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-      } catch {
-        return null;
-      }
-    })();
+    // Effective notes flattens any assessor `document_overrides` (waterSourceVillage,
+    // waterSourceCell, …) onto the top level so an override always wins over the
+    // application-column fallback below.
+    const notes = parseInternalNotes(app.internal_notes);
 
     const parts = [
       notes?.waterSourceVillage ?? app.village,
@@ -186,43 +185,56 @@ export default async function PublicPermitViewPage({
   })();
 
   const badge = statusBadgeVariant(permit.status as PermitStatus);
+  const application = permit.application as Record<string, unknown> | null;
+  const internalNotes = parseInternalNotes(application?.internal_notes);
+  const assessorAdjustments = (internalNotes?._assessorAdjustments ?? null) as Record<string, unknown> | null;
+
   const intendedWaterActivity = (() => {
-    const app = permit.application as Record<string, unknown> | null;
-    const intendedActivities = Array.isArray(app?.intended_activities)
-      ? app.intended_activities
+    // Override (`document_overrides.values.intendedActivities`) is flattened
+    // onto `internalNotes.intendedActivities` by parseInternalNotes, so reading
+    // it from `internalNotes` first lets the assessor's edit win.
+    const overrideActivities = Array.isArray(internalNotes?.intendedActivities)
+      ? (internalNotes.intendedActivities as unknown[])
           .filter((activity): activity is string => typeof activity === "string")
           .map((activity) => activity.trim())
           .filter((activity) => activity.length > 0)
       : [];
 
-    let transferActivity = "";
-    if (!intendedActivities.length && app?.internal_notes) {
-      try {
-        const notes = typeof app.internal_notes === "string"
-          ? JSON.parse(app.internal_notes as string)
-          : app.internal_notes;
-        if (notes?.transferFormData?.waterPurpose) {
-          transferActivity = String(notes.transferFormData.waterPurpose);
-        }
-      } catch { /* ignore */ }
-    }
+    const intendedActivities = overrideActivities.length
+      ? overrideActivities
+      : Array.isArray(application?.intended_activities)
+        ? (application.intended_activities as unknown[])
+            .filter((activity): activity is string => typeof activity === "string")
+            .map((activity) => activity.trim())
+            .filter((activity) => activity.length > 0)
+        : [];
 
-    const appWaterPurpose = typeof app?.water_purpose === "string" ? app.water_purpose.trim() : "";
+    const transferFormData = (internalNotes?.transferFormData ?? null) as
+      | Record<string, unknown>
+      | null;
+    const transferActivity =
+      !intendedActivities.length && typeof transferFormData?.waterPurpose === "string"
+        ? transferFormData.waterPurpose
+        : "";
+
+    const appWaterPurpose = typeof application?.water_purpose === "string" ? application.water_purpose.trim() : "";
     const permitPurpose = typeof permit.purpose === "string" ? permit.purpose.trim() : "";
     const primaryActivity = intendedActivities[0] || transferActivity || appWaterPurpose || permitPurpose;
 
     return primaryActivity ? getActivityLabel(primaryActivity) : "N/A";
   })();
   const issueDate = getCanonicalIssueDate(permit as Record<string, unknown>);
-  const application = permit.application as Record<string, unknown> | null;
   const normalizedPurpose = typeof permit.purpose === "string" ? permit.purpose.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
   const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities"]);
   const isConcessionPermit = (application ? isConcessionApplication(application) : false) || concessionPurposeHints.has(normalizedPurpose);
-  const internalNotes = parseInternalNotes(application?.internal_notes);
 
   const abstractionValue = (() => {
+    // Order matters: the assessor's latest adjustment (saved into
+    // `internal_notes._assessorAdjustments.recommendedVolumeM3`) must win over
+    // the permit-row snapshot, otherwise post-issuance edits never surface here.
+    const assessorAdjustmentVolume = parsePositiveNumber(assessorAdjustments?.recommendedVolumeM3);
     const permitVolume = parsePositiveNumber(permit.water_allowance);
-    const assessorVolume = parsePositiveNumber(application?.assessor_recommended_volume_m3);
+    const assessorColumnVolume = parsePositiveNumber(application?.assessor_recommended_volume_m3);
     const yearlyVolume = parsePositiveNumber(application?.max_yearly_volume_m3);
     const estimatedVolume = parsePositiveNumber(application?.estimated_usage_volume);
     const abstractionFromNotes = parsePositiveNumber(
@@ -230,7 +242,13 @@ export default async function PublicPermitViewPage({
         ? (internalNotes?.waterAbstractionDetails as Array<Record<string, unknown>>)[0]?.maxAverageYearly
         : null
     );
-    const volume = permitVolume ?? assessorVolume ?? yearlyVolume ?? estimatedVolume ?? abstractionFromNotes;
+    const volume =
+      assessorAdjustmentVolume ??
+      permitVolume ??
+      assessorColumnVolume ??
+      yearlyVolume ??
+      estimatedVolume ??
+      abstractionFromNotes;
     if (!volume) return "N/A";
 
     const unitCandidate = [
@@ -242,9 +260,11 @@ export default async function PublicPermitViewPage({
   })();
 
   const concessionAreaValue = (() => {
-    const assessorArea = parsePositiveNumber(
-      (internalNotes?._assessorAdjustments as Record<string, unknown> | undefined)?.recommendedVolumeM3
-    );
+    // Note: the assessor recommendations UI reuses `recommendedVolumeM3` as the
+    // payload key even when editing a concession permit's surface area in
+    // hectares (see components/inspection/assessor-recommendations.tsx). For a
+    // concession permit, treat that number as hectares.
+    const assessorArea = parsePositiveNumber(assessorAdjustments?.recommendedVolumeM3);
     if (assessorArea) return `${assessorArea.toLocaleString()} ha`;
 
     const dbArea = parsePositiveNumber(application?.concession_area);
@@ -347,9 +367,22 @@ export default async function PublicPermitViewPage({
                 <div className="rounded-xl border p-4">
                   <div className="text-xs text-slate-500"><Tx>Water source</Tx></div>
                   <div className="mt-1 text-sm font-medium text-slate-900">
-                    {typeof permit.water_source === "string"
-                      ? permit.water_source.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
-                      : <Tx>N/A</Tx>}
+                    {(() => {
+                      const sourceTypeLabel =
+                        typeof permit.water_source === "string"
+                          ? permit.water_source
+                              .replace(/_/g, " ")
+                              .replace(/\b\w/g, (c: string) => c.toUpperCase())
+                          : null;
+                      const overrideName =
+                        typeof internalNotes?.nameSourceWater === "string"
+                          ? internalNotes.nameSourceWater.trim()
+                          : "";
+                      if (overrideName && sourceTypeLabel) {
+                        return `${overrideName} (${sourceTypeLabel})`;
+                      }
+                      return overrideName || sourceTypeLabel || <Tx>N/A</Tx>;
+                    })()}
                   </div>
                 </div>
                 <div className="rounded-xl border p-4">

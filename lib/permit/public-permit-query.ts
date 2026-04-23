@@ -1,5 +1,6 @@
 import { query } from "@/lib/db/postgres";
 import { buildPermitLookupCandidates, normalizePermitLookupInput } from "@/lib/permit-number-utils";
+import { getEffectiveInternalNotes } from "@/lib/document-overrides";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -22,16 +23,15 @@ function extractCoordinateFromNotes(
 ): number | null {
   if (!application) return null;
   const raw = application.internal_notes;
-  if (!raw) return null;
-  try {
-    const notes = typeof raw === "string" ? JSON.parse(raw) : typeof raw === "object" ? raw : null;
-    if (!notes || typeof notes !== "object") return null;
-    const value = (notes as Record<string, unknown>)[key];
-    const num = typeof value === "number" ? value : typeof value === "string" ? parseFloat(value) : NaN;
-    return Number.isFinite(num) ? num : null;
-  } catch {
-    return null;
-  }
+  if (raw == null) return null;
+  // getEffectiveInternalNotes flattens `document_overrides.values.<key>` onto
+  // the top-level notes object, so an assessor coordinate edit takes priority
+  // over the original applicant-supplied value here.
+  const notes = getEffectiveInternalNotes(raw);
+  if (!notes || typeof notes !== "object") return null;
+  const value = (notes as Record<string, unknown>)[key];
+  const num = typeof value === "number" ? value : typeof value === "string" ? parseFloat(value) : NaN;
+  return Number.isFinite(num) ? num : null;
 }
 
 export async function findPublicPermitByNumber(
