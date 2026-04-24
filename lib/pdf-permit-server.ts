@@ -204,6 +204,71 @@ function drawLogo(doc: PDFKit.PDFDocument): number {
   return logoY + logoH + 4 * PT;
 }
 
+// ─── Rich-text (inline `**bold**`) helpers ──────────────────────────────────
+//
+// Slot text that needs inline emphasis wraps the bold runs in `**…**` markers
+// (Markdown-style). The renderer splits each paragraph on `**`, treats every
+// odd-indexed segment as bold, and emits the runs back-to-back via
+// `continued: true` so PDFKit handles wrapping automatically.
+//
+// Assessor edits stay in plain text — they see and edit the markers directly,
+// which gives them simple, predictable control over emphasis.
+
+function stripBoldMarkers(text: string): string {
+  return text.replace(/\*\*/g, "");
+}
+
+interface RichTextOptions {
+  width: number;
+  lineGap?: number;
+  align?: "left" | "right" | "center" | "justify";
+}
+
+/**
+ * Estimate the rendered height of a paragraph that may contain `**bold**`
+ * runs. Bold glyphs are slightly wider than regular ones, so measuring with
+ * the bold font gives a small upper bound — the page-break heuristic must
+ * never under-allocate.
+ */
+function heightOfRichText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  options: RichTextOptions,
+): number {
+  doc.font(FONT_BOLD);
+  return doc.heightOfString(stripBoldMarkers(text), options);
+}
+
+/**
+ * Render a paragraph that may contain `**bold**` runs. When no markers are
+ * present, falls back to a single regular-weight `text()` call (cheap path).
+ */
+function drawRichText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  options: RichTextOptions,
+): void {
+  const parts = text.split("**");
+  if (parts.length === 1) {
+    doc.font(FONT_REGULAR);
+    doc.text(text, x, y, options);
+    return;
+  }
+  for (let i = 0; i < parts.length; i++) {
+    const isBold = i % 2 === 1;
+    const isLast = i === parts.length - 1;
+    const segment = parts[i];
+    doc.font(isBold ? FONT_BOLD : FONT_REGULAR);
+    if (i === 0) {
+      doc.text(segment, x, y, { ...options, continued: !isLast });
+    } else {
+      doc.text(segment, { ...options, continued: !isLast });
+    }
+  }
+}
+
 function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number {
   const pw = pageWidth(doc);
   const marginX = 24 * PT;
@@ -342,11 +407,15 @@ function drawClosingLine(
   const leftX = marginX;
   const rightX = pw / 2 + 4 * PT;
 
-  doc.font(FONT_BOLD).fontSize(11).fillColor("#000000");
+  doc.fontSize(11).fillColor("#000000");
+  // Signatory stays bold (matches the sample's "Director General/ Umuyobozi
+  // Mukuru" treatment); the date line on the right is regular weight.
+  doc.font(FONT_BOLD);
   doc.text(
     resolveSlotText("permit.shared.closing.signatory.bilingual", ctx),
     leftX, yPos, { width: colW, align: "left" },
   );
+  doc.font(FONT_REGULAR);
   doc.text(
     resolveSlotText("permit.shared.closing.date.bilingual", ctx),
     rightX, yPos, { width: colW, align: "right" },
@@ -398,9 +467,9 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   y += 8;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
-    const h = doc.heightOfString(p, { width: maxW, lineGap });
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
     if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    doc.text(p, leftX, y, { width: maxW, lineGap });
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
@@ -453,9 +522,9 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   y += 8;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
-    const h = doc.heightOfString(p, { width: maxW, lineGap });
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
     if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    doc.text(p, leftX, y, { width: maxW, lineGap });
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
@@ -511,9 +580,9 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   y += 6;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of englishParagraphs) {
-    const h = doc.heightOfString(p, { width: maxW, lineGap });
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
     if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    doc.text(p, leftX, y, { width: maxW, lineGap });
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
@@ -523,13 +592,13 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   y += 10;
 
   for (const p of rwParagraphs) {
-    const h = doc.heightOfString(p, { width: maxW, lineGap });
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
     if (y + h > contentBottomY(doc, opts.skipQr)) {
       doc.addPage();
       await drawWatermark(doc);
       y = 30 * PT;
     }
-    doc.text(p, leftX, y, { width: maxW, lineGap });
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
@@ -584,9 +653,9 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   y += 8;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of paragraphs) {
-    const h = doc.heightOfString(p, { width: maxW, lineGap });
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
     if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-    doc.text(p, leftX, y, { width: maxW, lineGap });
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 

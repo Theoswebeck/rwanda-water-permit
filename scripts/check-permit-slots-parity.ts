@@ -23,10 +23,12 @@ import type {
   SlotResolverContext,
 } from "../lib/document-slots/types";
 import {
+  englishYearsPhrase,
   fmtDMY,
   fmtNum,
   formatIntaraOrUmujyiWaKigali,
   fmtProvince,
+  kinyarwandaYearsPhrase,
   resolveActivities,
   resolveActivitiesKinyarwanda,
   resolveAdminLocation,
@@ -41,6 +43,7 @@ import {
   resolveOrgAddress,
   resolveOrgAddressKinyarwanda,
   resolveOrgRep,
+  resolvePermitDuration,
   resolvePermitTitleNumber,
   resolveSystemType,
   resolveVolumes,
@@ -382,7 +385,7 @@ group("abstraction_organization (bilingual)", () => {
      `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`, "title.en");
 
   eq(resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
-     `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
+     `Pursuant to **Law N°49/2018 of 13/08/2018** determining the use and management of water resources in Rwanda,`,
      "en.para_1");
 
   // EN para_2
@@ -396,11 +399,12 @@ group("abstraction_organization (bilingual)", () => {
   const flowRate = resolveFlowRate(fxAbsOrg);
   const acts = resolveActivities(fxAbsOrg);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
-  const expectedEnPara2 = `\u201C${orgName}\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`;
+  const expectedEnPara2 = `\u201C**${orgName}**\u201D with its registered office address as follows: **${orgAddr}**; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
   eq(resolveSlotText("permit.abstraction_organization.en.para_2", ctx), expectedEnPara2, "en.para_2");
 
+  const yearsEn = englishYearsPhrase(resolvePermitDuration(fxAbsOrg));
   eq(resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
-     `This water use permit is valid from ${fmtDMY(ISSUE_DATE)} to ${fmtDMY(EXPIRY_DATE)}.`,
+     `This water use permit is valid for a **${yearsEn}** from ${fmtDMY(ISSUE_DATE)} to ${fmtDMY(EXPIRY_DATE)}.`,
      "en.para_3");
 
   eq(resolveSlotText("permit.abstraction_organization.en.para_4", ctx),
@@ -409,7 +413,7 @@ group("abstraction_organization (bilingual)", () => {
 
   // RW para_1
   eq(resolveSlotText("permit.abstraction_organization.rw.para_1", ctx),
-     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "Hashingiwe ku Itegeko **N° 49/2018 ryo ku wa 13/08/2018** rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
      "rw.para_1");
 
   // RW para_2
@@ -417,15 +421,16 @@ group("abstraction_organization (bilingual)", () => {
   const actsRw = resolveActivitiesKinyarwanda(fxAbsOrg);
   const orgAddrRw = resolveOrgAddressKinyarwanda(fxAbsOrg);
   const expectedRwPara2 =
-    `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
-    `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+    `"**${orgName}**" ifite ibiro biherereye mu **${orgAddrRw}**; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+    `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
-    `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+    `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
   eq(resolveSlotText("permit.abstraction_organization.rw.para_2", ctx), expectedRwPara2, "rw.para_2");
 
   // RW para_3
+  const yearsRw = kinyarwandaYearsPhrase(resolvePermitDuration(fxAbsOrg));
   eq(resolveSlotText("permit.abstraction_organization.rw.para_3", ctx),
-     `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
+     `Uru ruhushya rufite agaciro mu gihe cy' **${yearsRw}** kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
      "rw.para_3");
 
   // RW para_4
@@ -553,7 +558,7 @@ group("abstraction_organization — minimal data (no coords, no volume, fallback
   const flowRate = resolveFlowRate(fxAbsOrgMinimal);
   const acts = resolveActivities(fxAbsOrgMinimal);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
-  const expectedEn2 = `\u201C${orgName}\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysLabel} at a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`;
+  const expectedEn2 = `\u201C**${orgName}**\u201D with its registered office address as follows: **${orgAddr}**; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
   eq(resolveSlotText("permit.abstraction_organization.en.para_2", ctx), expectedEn2, "en.para_2 (no coords, fallback rep)");
 
   const systemTypeRw = resolveKinyarwandaSystemType(fxAbsOrgMinimal);
@@ -561,10 +566,10 @@ group("abstraction_organization — minimal data (no coords, no volume, fallback
   // Province is "Kigali" → formatIntaraOrUmujyiWaKigali returns "Umujyi wa Kigali"
   eq(formatIntaraOrUmujyiWaKigali(loc.province), "Umujyi wa Kigali", "formatIntaraOrUmujyiWaKigali(Kigali)");
   const expectedRw2 =
-    `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
-    `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+    `"**${orgName}**" ifite ibiro biherereye mu **${orgAddrRw}**; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+    `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): N/A, ` +
-    `Lonjitide (Longitude): N/A. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+    `Lonjitide (Longitude): N/A. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
   eq(resolveSlotText("permit.abstraction_organization.rw.para_2", ctx), expectedRw2, "rw.para_2 (no coords, Umujyi wa Kigali, fallback rep)");
 });
 

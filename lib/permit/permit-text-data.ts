@@ -379,6 +379,41 @@ export function resolveOrgAddressKinyarwanda(app: PermitApplication): string {
   return app.applicant?.company_address?.trim() || "N/A";
 }
 
+/**
+ * Render the validity-period phrase used in the bold portion of paragraph 3
+ * of every permit variant. The sample produced by RWB pairs the English number
+ * word with the numeric in parentheses (e.g. "period of fifteen (15) years").
+ * Falls back to numeric-only for durations outside the lookup table.
+ */
+export function englishYearsPhrase(years: number): string {
+  const map: Record<number, string> = {
+    1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+    6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
+    11: "eleven", 12: "twelve", 13: "thirteen", 14: "fourteen",
+    15: "fifteen", 16: "sixteen", 17: "seventeen", 18: "eighteen",
+    19: "nineteen", 20: "twenty", 25: "twenty-five", 30: "thirty",
+  };
+  const word = map[years];
+  return word ? `period of ${word} (${years}) years` : `period of ${years} years`;
+}
+
+/**
+ * Kinyarwanda equivalent of `englishYearsPhrase` — e.g.
+ *   `Imyaka cumi n' itanu (15)`.
+ */
+export function kinyarwandaYearsPhrase(years: number): string {
+  const map: Record<number, string> = {
+    1: "rimwe", 2: "kabiri", 3: "gatatu", 4: "kane", 5: "gatanu",
+    6: "gatandatu", 7: "karindwi", 8: "umunani", 9: "icyenda", 10: "icumi",
+    11: "cumi na rimwe", 12: "cumi na kabiri", 13: "cumi na gatatu",
+    14: "cumi na kane", 15: "cumi n' itanu", 16: "cumi na gatandatu",
+    17: "cumi na karindwi", 18: "cumi n' umunani", 19: "cumi n' icyenda",
+    20: "makumyabiri", 25: "makumyabiri n' atanu", 30: "mirongo itatu",
+  };
+  const word = map[years];
+  return word ? `Imyaka ${word} (${years})` : `Imyaka ${years}`;
+}
+
 export function resolveOrgRep(app: PermitApplication): { name: string; title: string } {
   const notes = resolveNotes(app);
   const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;

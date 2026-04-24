@@ -13,10 +13,12 @@
  */
 
 import {
+  englishYearsPhrase,
   fmtDMY,
   fmtNum,
   formatIntaraOrUmujyiWaKigali,
   fmtProvince,
+  kinyarwandaYearsPhrase,
   resolveActivities,
   resolveActivitiesKinyarwanda,
   resolveAdminLocation,
@@ -32,6 +34,7 @@ import {
   resolveOrgAddress,
   resolveOrgAddressKinyarwanda,
   resolveOrgRep,
+  resolvePermitDuration,
   resolvePermitTitleNumber,
   resolveSystemType,
   resolveVolumes,
@@ -410,7 +413,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     label: "Paragraph 1 — Legal basis (English)",
     softMaxLength: 400,
     defaultResolver: () =>
-      `Pursuant to Law N°49/2018 of 13/08/2018, determining the use and management of water resources in Rwanda,`,
+      `Pursuant to **Law N°49/2018 of 13/08/2018** determining the use and management of water resources in Rwanda,`,
   },
   {
     id: "permit.abstraction_organization.en.para_2",
@@ -432,7 +435,9 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const acts = resolveActivities(app);
       const provLabel =
         loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
-      return `\u201C${orgName}\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`;
+      // Dynamic values are wrapped in `**…**` so the renderer emits them
+      // bold inline (matches the official RWB sample).
+      return `\u201C**${orgName}**\u201D with its registered office address as follows: **${orgAddr}**; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
     },
   },
   {
@@ -446,8 +451,10 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     structuredField: "expiry_date",
     defaultResolver: (ctx) => {
       const p = permitOf(ctx);
-      if (!p) return "This water use permit is valid from … to ….";
-      return `This water use permit is valid from ${fmtDMY(p.issueDate)} to ${fmtDMY(p.expiryDate)}.`;
+      const app = appOf(ctx);
+      const yearsPhrase = englishYearsPhrase(resolvePermitDuration(app));
+      if (!p) return `This water use permit is valid for a **${yearsPhrase}** from … to ….`;
+      return `This water use permit is valid for a **${yearsPhrase}** from ${fmtDMY(p.issueDate)} to ${fmtDMY(p.expiryDate)}.`;
     },
   },
   {
@@ -470,7 +477,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     label: "Paragraph 1 — Igihe gisanzwe (Kinyarwanda)",
     softMaxLength: 400,
     defaultResolver: () =>
-      "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+      "Hashingiwe ku Itegeko **N° 49/2018 ryo ku wa 13/08/2018** rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
   },
   {
     id: "permit.abstraction_organization.rw.para_2",
@@ -490,10 +497,12 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const systemTypeRw = resolveKinyarwandaSystemType(app);
       const flowRate = resolveFlowRate(app);
       const actsRw = resolveActivitiesKinyarwanda(app);
-      return `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
-        `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+      // Dynamic values are wrapped in `**…**` so the renderer emits them
+      // bold inline (matches the official RWB sample).
+      return `"**${orgName}**" ifite ibiro biherereye mu **${orgAddrRw}**; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+        `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
         `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
-        `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+        `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
     },
   },
   {
@@ -507,8 +516,10 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     structuredField: "expiry_date",
     defaultResolver: (ctx) => {
       const p = permitOf(ctx);
-      if (!p) return "Uru ruhushya rufite agaciro kuva … kugeza ….";
-      return `Uru ruhushya rufite agaciro kuva ${fmtDMY(p.issueDate)} kugeza ${fmtDMY(p.expiryDate)}.`;
+      const app = appOf(ctx);
+      const yearsPhrase = kinyarwandaYearsPhrase(resolvePermitDuration(app));
+      if (!p) return `Uru ruhushya rufite agaciro mu gihe cy' **${yearsPhrase}** kuva … kugeza ….`;
+      return `Uru ruhushya rufite agaciro mu gihe cy' **${yearsPhrase}** kuva ${fmtDMY(p.issueDate)} kugeza ${fmtDMY(p.expiryDate)}.`;
     },
   },
   {
