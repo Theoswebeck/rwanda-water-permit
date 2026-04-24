@@ -84,16 +84,6 @@ const sharedSlots: DocumentTextSlot[] = [
     defaultResolver: () => "MODIFIED PERMIT",
   },
   {
-    id: "permit.shared.closing.signature_line.bilingual",
-    documentKind: "permit",
-    language: "bilingual",
-    group: GROUP.CLOSING,
-    label: "Signature line (bilingual, above the signatory block)",
-    inline: true,
-    softMaxLength: 200,
-    defaultResolver: () => "Signature/Umukono: ........................................",
-  },
-  {
     id: "permit.shared.closing.signatory.bilingual",
     documentKind: "permit",
     language: "bilingual",
@@ -433,8 +423,10 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const provLabel =
         loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
       // Dynamic values are wrapped in `**…**` so the renderer emits them
-      // bold inline (matches the official RWB sample).
-      return `\u201C**${orgName}**\u201D with its registered office address as follows: **${orgAddr}**; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
+      // bold inline (matches the official RWB sample). The office address
+      // itself is intentionally NOT bold — only org name, rep title, water
+      // source, flow rate, and activities are emphasised.
+      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
     },
   },
   {
@@ -493,8 +485,11 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const flowRate = resolveFlowRate(app);
       const actsRw = resolveActivitiesKinyarwanda(app);
       // Dynamic values are wrapped in `**…**` so the renderer emits them
-      // bold inline (matches the official RWB sample).
-      return `"**${orgName}**" ifite ibiro biherereye mu **${orgAddrRw}**; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+      // bold inline (matches the official RWB sample). The office address
+      // itself is intentionally NOT bold — only org name, rep title, water
+      // source, flow rate, and activities are emphasised. Bold parity with
+      // the English paragraph is required.
+      return `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
         `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
         `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
         `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;

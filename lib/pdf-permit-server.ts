@@ -300,27 +300,6 @@ function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number
   return lineY + 8;
 }
 
-/**
- * "Signature/Umukono: …" line rendered between the validity paragraph
- * and the two-column signatory/date closing block. Matches the sample
- * permit layout where the signature placeholder sits above the
- * Director-General title.
- */
-function drawSignatureLine(
-  doc: PDFKit.PDFDocument,
-  yPos: number,
-  ctx: SlotResolverContext,
-): number {
-  const leftX = PERMIT_MARGIN_X;
-  const maxW = pageWidth(doc) - leftX * 2;
-  doc.font(FONT_REGULAR).fontSize(11).fillColor("#000000");
-  doc.text(
-    resolveSlotText("permit.shared.closing.signature_line.bilingual", ctx),
-    leftX, yPos, { width: maxW, align: "left" },
-  );
-  return yPos + 18;
-}
-
 async function drawQrFooter(
   doc: PDFKit.PDFDocument,
   permitNumber: string,
@@ -490,9 +469,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
-  y += 8;
-  y = drawSignatureLine(doc, y, ctx);
-  y += 6;
+  y += 12;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -544,9 +521,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   }
 
   if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 8;
-  y = drawSignatureLine(doc, y, ctx);
-  y += 6;
+  y += 12;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -626,9 +601,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     await drawWatermark(doc);
     y = 30 * PT;
   }
-  y += 2;
-  y = drawSignatureLine(doc, y, ctx);
-  y += 2;
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -679,9 +652,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   }
 
   if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 8;
-  y = drawSignatureLine(doc, y, ctx);
-  y += 6;
+  y += 12;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
