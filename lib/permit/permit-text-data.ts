@@ -345,6 +345,40 @@ export function resolveOrgAddress(app: PermitApplication): string {
   return app.applicant?.company_address?.trim() || "N/A";
 }
 
+/**
+ * Kinyarwanda-formatted version of the organization office address.
+ * Mirrors the structure rendered in the sample permit PDF, e.g.
+ *   "Umurenge wa Musanze, Akarere ka Musanze, Intara y'Amajyaruguru"
+ *
+ * Falls back to the free-text `company_address` (or "N/A") when the
+ * structured `officeSector / officeDistrict / officeProvince` notes
+ * are not populated.
+ */
+export function resolveOrgAddressKinyarwanda(app: PermitApplication): string {
+  const notes = resolveNotes(app);
+  const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;
+  const isTransfer = app.application_type === "transfer" || notes?.isTransfer === true;
+
+  const sectorEn = isTransfer && tfd
+    ? ((tfd.transfereeAddressSector as string | undefined)?.trim() ?? "")
+    : ((notes?.officeSector as string)?.trim() ?? "");
+  const districtEn = isTransfer && tfd
+    ? ((tfd.transfereeAddressDistrict as string | undefined)?.trim() ?? "")
+    : ((notes?.officeDistrict as string)?.trim() ?? "");
+  const provinceEn = isTransfer && tfd
+    ? ((tfd.transfereeAddressProvince as string | undefined)?.trim() ?? "")
+    : ((notes?.officeProvince as string)?.trim() ?? "");
+
+  const parts = [
+    sectorEn ? `Umurenge wa ${sectorEn}` : null,
+    districtEn ? `Akarere ka ${districtEn}` : null,
+    provinceEn ? formatIntaraOrUmujyiWaKigali(provinceEn) : null,
+  ].filter(Boolean);
+
+  if (parts.length) return parts.join(", ");
+  return app.applicant?.company_address?.trim() || "N/A";
+}
+
 export function resolveOrgRep(app: PermitApplication): { name: string; title: string } {
   const notes = resolveNotes(app);
   const tfd = notes?.transferFormData as Record<string, unknown> | null | undefined;

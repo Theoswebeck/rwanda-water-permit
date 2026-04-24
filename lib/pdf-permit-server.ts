@@ -209,11 +209,36 @@ function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number
   const marginX = 24 * PT;
   const maxW = pw - marginX * 2;
   doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
+  // Top rule (matches the sample permit, where the title is bracketed
+  // between two horizontal rules covering the same width as the text).
+  doc.moveTo(marginX, yPos).lineTo(marginX + maxW, yPos).lineWidth(0.5).stroke("#000");
+  const titleY = yPos + 6;
   const titleH = doc.heightOfString(title, { width: maxW, align: "center" });
-  doc.text(title, marginX, yPos, { width: maxW, align: "center" });
-  const lineY = yPos + titleH + 4;
+  doc.text(title, marginX, titleY, { width: maxW, align: "center" });
+  const lineY = titleY + titleH + 4;
   doc.moveTo(marginX, lineY).lineTo(marginX + maxW, lineY).lineWidth(0.5).stroke("#000");
   return lineY + 8;
+}
+
+/**
+ * "Signature/Umukono: …" line rendered between the validity paragraph
+ * and the two-column signatory/date closing block. Matches the sample
+ * permit layout where the signature placeholder sits above the
+ * Director-General title.
+ */
+function drawSignatureLine(
+  doc: PDFKit.PDFDocument,
+  yPos: number,
+  ctx: SlotResolverContext,
+): number {
+  const leftX = 20 * PT;
+  const maxW = pageWidth(doc) - leftX * 2;
+  doc.font(FONT_REGULAR).fontSize(11).fillColor("#000000");
+  doc.text(
+    resolveSlotText("permit.shared.closing.signature_line.bilingual", ctx),
+    leftX, yPos, { width: maxW, align: "left" },
+  );
+  return yPos + 18;
 }
 
 async function drawQrFooter(
@@ -379,9 +404,11 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
   y += 8;
+  y = drawSignatureLine(doc, y, ctx);
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -432,8 +459,10 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 8;
+  y = drawSignatureLine(doc, y, ctx);
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -504,11 +533,13 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 24) {
+  if (y > contentBottomY(doc, opts.skipQr) - 50) {
     doc.addPage();
     await drawWatermark(doc);
     y = 30 * PT;
   }
+  y += 6;
+  y = drawSignatureLine(doc, y, ctx);
   y += 6;
   drawClosingLine(doc, y, ctx);
 
@@ -559,8 +590,10 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 30) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 8;
+  y = drawSignatureLine(doc, y, ctx);
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }

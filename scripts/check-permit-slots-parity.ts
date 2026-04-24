@@ -38,6 +38,8 @@ import {
   resolveKinyarwandaSystemType,
   resolveLakeName,
   resolveLatLng,
+  resolveOrgAddress,
+  resolveOrgAddressKinyarwanda,
   resolveOrgRep,
   resolvePermitTitleNumber,
   resolveSystemType,
@@ -237,8 +239,9 @@ const fxConcOrg: PermitApplication = {
 // ─── Expected strings (lifted verbatim from pre-Phase-2 pdf-permit-server.ts) ─
 
 // Shared closing date — depends on issueDate (fixed in tests)
-const expectedClosingDate = `Done at Kigali / Bikorewe i Kigali, On/kuwa ${fmtDMY(ISSUE_DATE)}`;
-const expectedSignatory = "Director General of RWB / Umuyobozi Mukuru wa RWB";
+const expectedClosingDate = `Done at Kigali/Bikorewe i Kigali, On/kuwa ${fmtDMY(ISSUE_DATE)}`;
+const expectedSignatureLine = "Signature/Umukono: ........................................";
+const expectedSignatory = "Director General / Umuyobozi Mukuru";
 const expectedQrDisclaimer =
   "Scan to verify. This digital permit is only valid if the information on it matches the water use permit registry.";
 const expectedDraftBanner = "DRAFT — NOT YET ISSUED";
@@ -250,6 +253,7 @@ group("shared slots (variant-independent)", () => {
   // Use any fixture's ctx; shared resolvers don't read variant-specific data.
   const ctx = buildPermitCtx(fxAbsInd);
   eq(resolveSlotText("permit.shared.modified_badge.en", ctx), expectedModifiedBadge, "modified_badge.en");
+  eq(resolveSlotText("permit.shared.closing.signature_line.bilingual", ctx), expectedSignatureLine, "closing.signature_line.bilingual");
   eq(resolveSlotText("permit.shared.closing.signatory.bilingual", ctx), expectedSignatory, "closing.signatory.bilingual");
   eq(resolveSlotText("permit.shared.closing.date.bilingual", ctx), expectedClosingDate, "closing.date.bilingual");
   eq(resolveSlotText("permit.shared.footer.qr_disclaimer.en", ctx), expectedQrDisclaimer, "footer.qr_disclaimer.en");
@@ -383,6 +387,7 @@ group("abstraction_organization (bilingual)", () => {
 
   // EN para_2
   const orgName = resolveApplicantName(fxAbsOrg);
+  const orgAddr = resolveOrgAddress(fxAbsOrg);
   const rep = resolveOrgRep(fxAbsOrg);
   const wsName = resolveWaterSourceName(fxAbsOrg);
   const loc = resolveAdminLocation(fxAbsOrg);
@@ -391,7 +396,7 @@ group("abstraction_organization (bilingual)", () => {
   const flowRate = resolveFlowRate(fxAbsOrg);
   const acts = resolveActivities(fxAbsOrg);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
-  const expectedEnPara2 = `\u201C${orgName}\u201D, represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} with flow rate ${flowRate}. Water will be used for ${acts}.`;
+  const expectedEnPara2 = `\u201C${orgName}\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`;
   eq(resolveSlotText("permit.abstraction_organization.en.para_2", ctx), expectedEnPara2, "en.para_2");
 
   eq(resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
@@ -410,8 +415,9 @@ group("abstraction_organization (bilingual)", () => {
   // RW para_2
   const systemTypeRw = resolveKinyarwandaSystemType(fxAbsOrg);
   const actsRw = resolveActivitiesKinyarwanda(fxAbsOrg);
+  const orgAddrRw = resolveOrgAddressKinyarwanda(fxAbsOrg);
   const expectedRwPara2 =
-    `"${orgName}" ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
+    `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
     `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
     `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
@@ -538,6 +544,8 @@ group("concession_organization — minimal data (rep fallback, N/A area)", () =>
 group("abstraction_organization — minimal data (no coords, no volume, fallback rep)", () => {
   const ctx = buildPermitCtx(fxAbsOrgMinimal);
   const orgName = resolveApplicantName(fxAbsOrgMinimal);
+  const orgAddr = resolveOrgAddress(fxAbsOrgMinimal);
+  const orgAddrRw = resolveOrgAddressKinyarwanda(fxAbsOrgMinimal);
   const rep = resolveOrgRep(fxAbsOrgMinimal);
   const wsName = resolveWaterSourceName(fxAbsOrgMinimal);
   const loc = resolveAdminLocation(fxAbsOrgMinimal);
@@ -545,7 +553,7 @@ group("abstraction_organization — minimal data (no coords, no volume, fallback
   const flowRate = resolveFlowRate(fxAbsOrgMinimal);
   const acts = resolveActivities(fxAbsOrgMinimal);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
-  const expectedEn2 = `\u201C${orgName}\u201D, represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysLabel} with flow rate ${flowRate}. Water will be used for ${acts}.`;
+  const expectedEn2 = `\u201C${orgName}\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysLabel} at a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`;
   eq(resolveSlotText("permit.abstraction_organization.en.para_2", ctx), expectedEn2, "en.para_2 (no coords, fallback rep)");
 
   const systemTypeRw = resolveKinyarwandaSystemType(fxAbsOrgMinimal);
@@ -553,7 +561,7 @@ group("abstraction_organization — minimal data (no coords, no volume, fallback
   // Province is "Kigali" → formatIntaraOrUmujyiWaKigali returns "Umujyi wa Kigali"
   eq(formatIntaraOrUmujyiWaKigali(loc.province), "Umujyi wa Kigali", "formatIntaraOrUmujyiWaKigali(Kigali)");
   const expectedRw2 =
-    `"${orgName}" ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
+    `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
     `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): N/A, ` +
     `Lonjitide (Longitude): N/A. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
@@ -571,7 +579,7 @@ group("permit.shared.closing.date — placeholder when ctx.permit missing", () =
   };
   eq(
     resolveSlotText("permit.shared.closing.date.bilingual", ctxNoPermit),
-    "Done at Kigali / Bikorewe i Kigali, On/kuwa [ISSUE_DATE]",
+    "Done at Kigali/Bikorewe i Kigali, On/kuwa [ISSUE_DATE]",
     "labelled placeholder when no permit ctx",
   );
 });

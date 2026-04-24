@@ -29,6 +29,8 @@ import {
   resolveLakeName,
   resolveLatLng,
   resolveNotes,
+  resolveOrgAddress,
+  resolveOrgAddressKinyarwanda,
   resolveOrgRep,
   resolvePermitTitleNumber,
   resolveSystemType,
@@ -82,14 +84,24 @@ const sharedSlots: DocumentTextSlot[] = [
     defaultResolver: () => "MODIFIED PERMIT",
   },
   {
+    id: "permit.shared.closing.signature_line.bilingual",
+    documentKind: "permit",
+    language: "bilingual",
+    group: GROUP.CLOSING,
+    label: "Signature line (bilingual, above the signatory block)",
+    inline: true,
+    softMaxLength: 200,
+    defaultResolver: () => "Signature/Umukono: ........................................",
+  },
+  {
     id: "permit.shared.closing.signatory.bilingual",
     documentKind: "permit",
     language: "bilingual",
     group: GROUP.CLOSING,
-    label: "Signatory line (bilingual)",
+    label: "Signatory title (bilingual, no person name)",
     inline: true,
     softMaxLength: 200,
-    defaultResolver: () => "Director General of RWB / Umuyobozi Mukuru wa RWB",
+    defaultResolver: () => "Director General / Umuyobozi Mukuru",
   },
   {
     id: "permit.shared.closing.date.bilingual",
@@ -106,9 +118,9 @@ const sharedSlots: DocumentTextSlot[] = [
       // surface a labelled placeholder rather than silently substituting
       // today's date — otherwise the assessor sees a misleading snapshot.
       if (!p) {
-        return "Done at Kigali / Bikorewe i Kigali, On/kuwa [ISSUE_DATE]";
+        return "Done at Kigali/Bikorewe i Kigali, On/kuwa [ISSUE_DATE]";
       }
-      return `Done at Kigali / Bikorewe i Kigali, On/kuwa ${fmtDMY(p.issueDate)}`;
+      return `Done at Kigali/Bikorewe i Kigali, On/kuwa ${fmtDMY(p.issueDate)}`;
     },
   },
   {
@@ -410,6 +422,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     defaultResolver: (ctx) => {
       const app = appOf(ctx);
       const orgName = resolveApplicantName(app);
+      const orgAddr = resolveOrgAddress(app);
       const rep = resolveOrgRep(app);
       const wsName = resolveWaterSourceName(app);
       const loc = resolveAdminLocation(app);
@@ -419,7 +432,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const acts = resolveActivities(app);
       const provLabel =
         loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
-      return `\u201C${orgName}\u201D, represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} with flow rate ${flowRate}. Water will be used for ${acts}.`;
+      return `\u201C${orgName}\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C${rep.title}\u201D, is authorized to abstract water from ${wsName} located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of ${flowRate}. Water abstracted will be used for ${acts}.`;
     },
   },
   {
@@ -469,6 +482,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     defaultResolver: (ctx) => {
       const app = appOf(ctx);
       const orgName = resolveApplicantName(app);
+      const orgAddrRw = resolveOrgAddressKinyarwanda(app);
       const rep = resolveOrgRep(app);
       const wsName = resolveWaterSourceName(app);
       const loc = resolveAdminLocation(app);
@@ -476,7 +490,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const systemTypeRw = resolveKinyarwandaSystemType(app);
       const flowRate = resolveFlowRate(app);
       const actsRw = resolveActivitiesKinyarwanda(app);
-      return `"${orgName}" ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
+      return `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe ${systemTypeRw} amazi angana na ${flowRate}, ` +
         `ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
         `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
         `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
