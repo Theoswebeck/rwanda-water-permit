@@ -13,12 +13,10 @@
  */
 
 import {
-  englishYearsPhrase,
   fmtDMY,
   fmtNum,
   formatIntaraOrUmujyiWaKigali,
   fmtProvince,
-  kinyarwandaYearsPhrase,
   resolveActivities,
   resolveActivitiesKinyarwanda,
   resolveAdminLocation,
@@ -34,7 +32,6 @@ import {
   resolveOrgAddress,
   resolveOrgAddressKinyarwanda,
   resolveOrgRep,
-  resolvePermitDuration,
   resolvePermitTitleNumber,
   resolveSystemType,
   resolveVolumes,
@@ -451,10 +448,8 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     structuredField: "expiry_date",
     defaultResolver: (ctx) => {
       const p = permitOf(ctx);
-      const app = appOf(ctx);
-      const yearsPhrase = englishYearsPhrase(resolvePermitDuration(app));
-      if (!p) return `This water use permit is valid for a **${yearsPhrase}** from … to ….`;
-      return `This water use permit is valid for a **${yearsPhrase}** from ${fmtDMY(p.issueDate)} to ${fmtDMY(p.expiryDate)}.`;
+      if (!p) return "This water use permit is valid from … to ….";
+      return `This water use permit is valid from ${fmtDMY(p.issueDate)} to ${fmtDMY(p.expiryDate)}.`;
     },
   },
   {
@@ -516,10 +511,8 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
     structuredField: "expiry_date",
     defaultResolver: (ctx) => {
       const p = permitOf(ctx);
-      const app = appOf(ctx);
-      const yearsPhrase = kinyarwandaYearsPhrase(resolvePermitDuration(app));
-      if (!p) return `Uru ruhushya rufite agaciro mu gihe cy' **${yearsPhrase}** kuva … kugeza ….`;
-      return `Uru ruhushya rufite agaciro mu gihe cy' **${yearsPhrase}** kuva ${fmtDMY(p.issueDate)} kugeza ${fmtDMY(p.expiryDate)}.`;
+      if (!p) return "Uru ruhushya rufite agaciro kuva … kugeza ….";
+      return `Uru ruhushya rufite agaciro kuva ${fmtDMY(p.issueDate)} kugeza ${fmtDMY(p.expiryDate)}.`;
     },
   },
   {

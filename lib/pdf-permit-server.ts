@@ -79,10 +79,19 @@ function pageHeight(doc: PDFKit.PDFDocument): number {
 
 function contentBottomY(doc: PDFKit.PDFDocument, _skipQr = false): number {
   // Both footers (slim DRAFT banner for previews, compact QR footer for final
-  // issuance) live in the same bottom band (~38mm from the page bottom), so
-  // we reserve a single ~42mm bottom margin for body text in both modes.
-  return pageHeight(doc) - 42 * PT;
+  // issuance) live in the same bottom band, so we reserve a single bottom
+  // margin for body text. Tightened to ~28mm so the EN+RW paragraph blocks
+  // and the closing block fit on a single page (was 42mm).
+  return pageHeight(doc) - 28 * PT;
 }
+
+/**
+ * Horizontal page margin used by the title rule and every paragraph block.
+ * Tightened from 20–24pt to 12pt so the long single-line items (the title
+ * and the bilingual signature line) hug less whitespace and the EN+RW
+ * paragraphs wrap to fewer lines — required to fit the sample on one page.
+ */
+const PERMIT_MARGIN_X = 12 * PT;
 
 function drawPageBorder(doc: PDFKit.PDFDocument): void {
   const inset = 5 * PT;
@@ -271,17 +280,23 @@ function drawRichText(
 
 function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number {
   const pw = pageWidth(doc);
-  const marginX = 24 * PT;
+  const marginX = PERMIT_MARGIN_X;
   const maxW = pw - marginX * 2;
   doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
-  // Top rule (matches the sample permit, where the title is bracketed
-  // between two horizontal rules covering the same width as the text).
-  doc.moveTo(marginX, yPos).lineTo(marginX + maxW, yPos).lineWidth(0.5).stroke("#000");
-  const titleY = yPos + 6;
+  // Render the title centered, then draw a single underline whose width
+  // matches the actual text width (sample-style — see screenshot 6).
   const titleH = doc.heightOfString(title, { width: maxW, align: "center" });
-  doc.text(title, marginX, titleY, { width: maxW, align: "center" });
-  const lineY = titleY + titleH + 4;
-  doc.moveTo(marginX, lineY).lineTo(marginX + maxW, lineY).lineWidth(0.5).stroke("#000");
+  doc.text(title, marginX, yPos, { width: maxW, align: "center" });
+  // Measure the rendered text width so the rule hugs the text instead of
+  // running edge-to-edge across the page.
+  const textW = Math.min(doc.widthOfString(title), maxW);
+  const ruleStartX = marginX + (maxW - textW) / 2;
+  const lineY = yPos + titleH + 2;
+  doc
+    .moveTo(ruleStartX, lineY)
+    .lineTo(ruleStartX + textW, lineY)
+    .lineWidth(0.7)
+    .stroke("#000");
   return lineY + 8;
 }
 
@@ -296,7 +311,7 @@ function drawSignatureLine(
   yPos: number,
   ctx: SlotResolverContext,
 ): number {
-  const leftX = 20 * PT;
+  const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   doc.font(FONT_REGULAR).fontSize(11).fillColor("#000000");
   doc.text(
@@ -451,7 +466,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
-  const leftX = 20 * PT;
+  const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
   const lineGap = 2.0;
@@ -506,7 +521,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
-  const leftX = 20 * PT;
+  const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
   const lineGap = 2.0;
@@ -558,11 +573,15 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
-  const leftX = 20 * PT;
+  const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
+  // Tightened typography so the bilingual EN+RW blocks plus closing block
+  // fit on a single A4-landscape page (the user's hard requirement). The
+  // sample uses a single page; paragraphs were previously spilling onto
+  // page 2 after the inline-bold expansion grew them by ~1 line each.
   const fontSize = 11;
-  const lineGap = 1.8;
-  const paraGap = 6;
+  const lineGap = 1.0;
+  const paraGap = 4;
 
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
@@ -577,7 +596,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     resolveSlotText("permit.abstraction_organization.rw.para_4", ctx),
   ];
 
-  y += 6;
+  y += 2;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of englishParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -587,9 +606,9 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   }
 
   if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 8;
-  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.8).stroke("#1f2937");
-  y += 10;
+  y += 4;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
+  y += 6;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -607,9 +626,9 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     await drawWatermark(doc);
     y = 30 * PT;
   }
-  y += 6;
+  y += 2;
   y = drawSignatureLine(doc, y, ctx);
-  y += 6;
+  y += 2;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -637,7 +656,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
-  const leftX = 20 * PT;
+  const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
   const lineGap = 2.0;
