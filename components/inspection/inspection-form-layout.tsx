@@ -16,6 +16,7 @@ import { CalendarIcon } from "lucide-react";
 import { format, parse, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { InspectionDocumentsUpload, type InspectionDocumentFile } from "@/components/inspection/inspection-documents-upload";
+import { CatchmentAutocomplete } from "@/components/inspection/catchment-autocomplete";
 import {
   INSPECTION_RECOMMENDATION_OPTIONS,
   RECOMMENDATION_DETAIL_HINTS,
@@ -45,7 +46,6 @@ export interface InspectionLockedData {
   residence?: string;
 
   permitNumber?: string;
-  facilityProjectName?: string;
   issuanceDate?: string;
   expirationDate?: string;
 
@@ -64,6 +64,10 @@ export interface InspectionLockedData {
   allowanceUnit?: string;
   abstractionMethod?: string;
   flowRate?: number;
+  // Deprecated: Section 7 ("Activity in which water is used") was removed from
+  // the UI per RWB inspector feedback. These fields are no longer rendered but
+  // the editor pages still forward them so the underlying DB columns continue
+  // to be backfilled for legacy reporting.
   activityType?: string;
   activityStartingDate?: string;
   catchmentLevel1?: string;
@@ -74,6 +78,13 @@ export interface InspectionLockedData {
 }
 
 export interface InspectionFormState {
+  // Project (activity site) coordinates — separate from water source coordinates
+  // because the activity site is sometimes far from the water source.
+  project_latitude?: number;
+  project_longitude?: number;
+
+  // Deprecated — kept on the type for back-compat with rows already in the DB.
+  // No longer rendered in the inspection UI (Section 7 was removed).
   activity_type?: string;
   activity_starting_date?: string;
 
@@ -157,10 +168,13 @@ function SectionShell({
   );
 }
 
-function ReadonlyField({ label, value }: { label: string; value?: string | null }) {
+function ReadonlyField({ label, value, description }: { label: string; value?: string | null; description?: string }) {
   return (
     <div className="space-y-2">
       <Label className="text-sm">{label}</Label>
+      {description ? (
+        <p className="text-xs text-muted-foreground -mt-1">{description}</p>
+      ) : null}
       <Input disabled value={value || "N/A"} className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" />
     </div>
   );
@@ -191,6 +205,8 @@ function EditableLockedField({
   overrides,
   canEdit,
   onOverride,
+  description,
+  placeholder,
 }: {
   label: string;
   lockedValue?: string | null;
@@ -198,12 +214,14 @@ function EditableLockedField({
   overrides?: Record<string, string>;
   canEdit: boolean;
   onOverride: (key: string, value: string) => void;
+  description?: string;
+  placeholder?: string;
 }) {
   const hasRealValue = !isFieldEmpty(lockedValue);
   const overrideValue = overrides?.[overrideKey];
 
   if (hasRealValue) {
-    return <ReadonlyField label={label} value={lockedValue} />;
+    return <ReadonlyField label={label} value={lockedValue} description={description} />;
   }
 
   return (
@@ -214,10 +232,13 @@ function EditableLockedField({
           <span className="ml-1.5 text-xs text-amber-600 dark:text-amber-400 font-normal">(missing — editable)</span>
         )}
       </Label>
+      {description ? (
+        <p className="text-xs text-muted-foreground -mt-1">{description}</p>
+      ) : null}
       <Input
         disabled={!canEdit}
         value={overrideValue ?? ""}
-        placeholder={canEdit ? `Enter ${label.toLowerCase()}…` : "N/A"}
+        placeholder={canEdit ? (placeholder ?? `Enter ${label.toLowerCase()}…`) : "N/A"}
         className={cn(
           "h-11 border-slate-200 dark:border-slate-800",
           canEdit
@@ -372,7 +393,7 @@ function ReportsSection({
   };
 
   return (
-    <SectionShell title="11. Water User Annual Report">
+    <SectionShell title="7. Water User Annual Report">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label className="text-sm">Recent Submission Date</Label>
@@ -538,26 +559,47 @@ export function InspectionFormLayout({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <EditableLockedField label="Name" lockedValue={locked.permitHolderName} overrideKey="permitHolderName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="ID/TIN" lockedValue={locked.permitHolderId} overrideKey="permitHolderId" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField label="Residence" lockedValue={locked.residence} overrideKey="residence" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField
+                  label="Residence"
+                  description="Permit holder's head office address"
+                  lockedValue={locked.residence}
+                  overrideKey="residence"
+                  overrides={overrides}
+                  canEdit={canEdit}
+                  onOverride={handleOverride}
+                />
               </div>
             </SectionShell>
 
             <SectionShell title="2. Permit Particulars">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <ReadonlyField label="Number" value={locked.permitNumber} />
-                <EditableLockedField label="Name of Facility/Project" lockedValue={locked.facilityProjectName} overrideKey="facilityProjectName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <ReadonlyField label="Issuance date" value={fmtPermitDate(locked.issuanceDate)} />
                 <ReadonlyField label="Expiration date" value={fmtPermitDate(locked.expirationDate)} />
               </div>
             </SectionShell>
 
-            <SectionShell title="2.1 Permit Location">
+            <SectionShell title="2.1 Project Location" description="Where the activity actually takes place. The project site can sit far from the water source.">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <EditableLockedField label="Province / City of Kigali" lockedValue={locked.permitLocationProvince} overrideKey="permitLocationProvince" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="District" lockedValue={locked.permitLocationDistrict} overrideKey="permitLocationDistrict" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Sector" lockedValue={locked.permitLocationSector} overrideKey="permitLocationSector" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Cell" lockedValue={locked.permitLocationCell} overrideKey="permitLocationCell" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Village" lockedValue={locked.permitLocationVillage} overrideKey="permitLocationVillage" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+              </div>
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <NumberField
+                  label="Project Latitude"
+                  value={form.project_latitude ?? null}
+                  disabled={!canEdit}
+                  onChange={(v) => setField("project_latitude", v ?? undefined)}
+                />
+                <NumberField
+                  label="Project Longitude"
+                  value={form.project_longitude ?? null}
+                  disabled={!canEdit}
+                  onChange={(v) => setField("project_longitude", v ?? undefined)}
+                />
               </div>
             </SectionShell>
 
@@ -567,8 +609,32 @@ export function InspectionFormLayout({
                 <EditableLockedField label="Water Source Name" lockedValue={locked.waterSourceName} overrideKey="waterSourceName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Water Use / Purpose" lockedValue={locked.waterPurpose} overrideKey="waterPurpose" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Location" lockedValue={locked.waterSourceLocation} overrideKey="waterSourceLocation" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField label="Level I Catchment" lockedValue={locked.catchmentLevel1} overrideKey="catchmentLevel1" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField label="Level II Catchment" lockedValue={locked.catchmentLevel2} overrideKey="catchmentLevel2" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                {!isFieldEmpty(locked.catchmentLevel1) ? (
+                  <ReadonlyField label="Level I Catchment" value={locked.catchmentLevel1} />
+                ) : (
+                  <CatchmentAutocomplete
+                    label="Level I Catchment"
+                    level="level1"
+                    value={overrides?.catchmentLevel1 ?? ""}
+                    disabled={!canEdit}
+                    onChange={(v) => handleOverride("catchmentLevel1", v)}
+                  />
+                )}
+                {!isFieldEmpty(locked.catchmentLevel2) ? (
+                  <ReadonlyField label="Level II Catchment" value={locked.catchmentLevel2} />
+                ) : (
+                  <CatchmentAutocomplete
+                    label="Level II Catchment"
+                    level="level2"
+                    value={overrides?.catchmentLevel2 ?? ""}
+                    disabled={!canEdit}
+                    onChange={(v) => handleOverride("catchmentLevel2", v)}
+                  />
+                )}
+              </div>
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <EditableLockedField label="Water Source Latitude" lockedValue={locked.waterSourceLatitude} overrideKey="waterSourceLatitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                <EditableLockedField label="Water Source Longitude" lockedValue={locked.waterSourceLongitude} overrideKey="waterSourceLongitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
               </div>
             </SectionShell>
 
@@ -579,28 +645,12 @@ export function InspectionFormLayout({
                   <EditableLockedField label="Boundary Points" lockedValue={locked.concessionBoundaries && locked.concessionBoundaries.length > 0 ? `${locked.concessionBoundaries.length} points defined` : undefined} overrideKey="concessionBoundaryPoints" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 </div>
               </SectionShell>
-            ) : (
-              <SectionShell title="2.3 Abstraction & Volume">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <EditableLockedField label="Water Allowance" lockedValue={locked.waterAllowance !== undefined ? String(locked.waterAllowance) : undefined} overrideKey="waterAllowance" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Allowance Unit" lockedValue={locked.allowanceUnit} overrideKey="allowanceUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Method of Abstraction" lockedValue={locked.abstractionMethod} overrideKey="abstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Flow Rate (m³/s)" lockedValue={locked.flowRate !== undefined ? String(locked.flowRate) : undefined} overrideKey="flowRate" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                </div>
-              </SectionShell>
-            )}
-
-            <SectionShell title="2.4 Water Source Coordinates">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <EditableLockedField label="Latitude" lockedValue={locked.waterSourceLatitude} overrideKey="waterSourceLatitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField label="Longitude" lockedValue={locked.waterSourceLongitude} overrideKey="waterSourceLongitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-              </div>
-            </SectionShell>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="specifics" className="pt-6 space-y-6">
             {template === "authorization" ? (
-              <SectionShell title="5–6. Water abstraction (Authorization)" description="As per the official RWB checklist.">
+              <SectionShell title="3. Water Abstraction (Authorization)" description="As per the official RWB checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                   <EditableLockedField label="Allowed quantity" lockedValue={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} overrideKey="allowedQuantity" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                   <EditableLockedField label="Allowed unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
@@ -645,7 +695,7 @@ export function InspectionFormLayout({
 
                 <div className="mt-6">
                   <TextField
-                    label="Type of water measurement device in place (Add pictures)"
+                    label="Type of water measurement device in place"
                     value={form.measurement_device_type ?? ""}
                     disabled={!canEdit}
                     onChange={(v) => setField("measurement_device_type", v as any)}
@@ -653,7 +703,7 @@ export function InspectionFormLayout({
                 </div>
               </SectionShell>
             ) : (
-              <SectionShell title="5–6. Concession (Surface area & boundaries)" description="As per the official RWB concession checklist.">
+              <SectionShell title="3. Concession (Surface area & boundaries)" description="As per the official RWB concession checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <EditableLockedField label="Authorized surface area" lockedValue={locked.concessionAreaHa !== undefined ? `${locked.concessionAreaHa} Ha` : undefined} overrideKey="authorizedSurfaceArea" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                   <NumberField label="Actual surface area covered" value={form.actual_surface_area_ha ?? null} disabled={!canEdit} onChange={(v) => setField("actual_surface_area_ha", (v ?? undefined) as any)} suffix="Ha" />
@@ -714,27 +764,20 @@ export function InspectionFormLayout({
               </SectionShell>
             )}
 
-            <SectionShell title="7. Activity in which water is used">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <EditableLockedField label="Type of activity" lockedValue={locked.activityType} overrideKey="activityType" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField label="Starting date" lockedValue={locked.activityStartingDate} overrideKey="activityStartingDate" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-              </div>
-            </SectionShell>
-
-            <SectionShell title="8. Wastewater management system">
+            <SectionShell title="4. Wastewater Management System">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <TextField label="Type of the system" value={form.wastewater_system_type ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_type", v as any)} />
-                <TextField label="Effectiveness of the system (Add pictures)" value={form.wastewater_system_effectiveness ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_effectiveness", v as any)} />
+                <TextField label="Effectiveness of the system" value={form.wastewater_system_effectiveness ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_effectiveness", v as any)} />
               </div>
             </SectionShell>
           </TabsContent>
 
           <TabsContent value="social" className="pt-6 space-y-6">
-            <SectionShell title="9. Social and Gender-Disaggregated Information">
+            <SectionShell title="5. Social and Gender-Disaggregated Information">
               <div className="space-y-6">
                 <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
                   <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-800 font-medium">
-                    9.1 Employment Related to Water Use Activity
+                    5.1 Employment Related to Water Use Activity
                   </div>
                   <div className="grid grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-slate-200 dark:border-slate-800">
                     <div>Category</div>
@@ -743,56 +786,112 @@ export function InspectionFormLayout({
                     <div>Total</div>
                   </div>
 
-                  {(
-                    [
+                  {(() => {
+                    // The Total Workers row is fully derived: each column is the sum
+                    // of the four worker categories above. Persist the derived totals
+                    // to `employment_gender_breakdown` so PDFs/exports stay correct.
+                    const CATEGORY_KEYS = [
+                      "skilledPermanentWorkers",
+                      "unskilledPermanentWorkers",
+                      "skilledTemporaryWorkers",
+                      "unskilledTemporaryWorkers",
+                    ] as const;
+
+                    const sumColumn = (
+                      breakdown: Record<string, EmploymentRow | undefined> | undefined,
+                      column: "male" | "female"
+                    ): number | null => {
+                      if (!breakdown) return null;
+                      let any = false;
+                      let total = 0;
+                      for (const key of CATEGORY_KEYS) {
+                        const v = toFiniteNumberOrNull(breakdown[key]?.[column]);
+                        if (v !== null) {
+                          any = true;
+                          total += v;
+                        }
+                      }
+                      return any ? total : null;
+                    };
+
+                    const recomputeTotalsRow = (
+                      breakdown: Record<string, EmploymentRow | undefined>
+                    ): EmploymentRow => {
+                      const male = sumColumn(breakdown, "male");
+                      const female = sumColumn(breakdown, "female");
+                      return { male, female, total: computeEmploymentTotal(male, female) };
+                    };
+
+                    const ROWS = [
                       ["skilledPermanentWorkers", "Skilled Permanent Workers"],
                       ["unskilledPermanentWorkers", "Unskilled Permanent Workers"],
                       ["skilledTemporaryWorkers", "Skilled Temporary Workers"],
                       ["unskilledTemporaryWorkers", "Unskilled Temporary Workers"],
                       ["totalWorkers", "Total Workers"],
-                    ] as const
-                  ).map(([key, label]) => {
-                    const row = (employment as any)[key] || {};
-                    const computedTotal = computeEmploymentTotal(row.male, row.female);
-                    return (
-                      <div key={key} className="grid grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-3 border-b last:border-b-0 border-slate-200 dark:border-slate-800">
-                        <div className={cn("text-sm font-medium", key === "totalWorkers" ? "font-semibold" : "")}>{label}</div>
-                        <Input
-                          disabled={!canEdit}
-                          value={row.male ?? ""}
-                          className="h-10"
-                          onChange={(e) => {
-                            const next = { ...(employment as any) };
-                            const male = toNumberOrNull(e.target.value);
-                            const female = (next[key] || {})?.female;
-                            next[key] = { ...(next[key] || {}), male, total: computeEmploymentTotal(male, female) };
-                            setField("employment_gender_breakdown", next as any);
-                          }}
-                        />
-                        <Input
-                          disabled={!canEdit}
-                          value={row.female ?? ""}
-                          className="h-10"
-                          onChange={(e) => {
-                            const next = { ...(employment as any) };
-                            const female = toNumberOrNull(e.target.value);
-                            const male = (next[key] || {})?.male;
-                            next[key] = { ...(next[key] || {}), female, total: computeEmploymentTotal(male, female) };
-                            setField("employment_gender_breakdown", next as any);
-                          }}
-                        />
-                        <Input
-                          disabled
-                          value={computedTotal ?? ""}
-                          className="h-10 bg-muted/30"
-                        />
-                      </div>
-                    );
-                  })}
+                    ] as const;
+
+                    return ROWS.map(([key, label]) => {
+                      const isTotals = key === "totalWorkers";
+                      const liveTotalsRow = isTotals
+                        ? recomputeTotalsRow(employment as any)
+                        : null;
+                      const row = isTotals
+                        ? (liveTotalsRow as EmploymentRow)
+                        : ((employment as any)[key] || {});
+                      const computedTotal = isTotals
+                        ? row.total ?? null
+                        : computeEmploymentTotal(row.male, row.female);
+
+                      return (
+                        <div
+                          key={key}
+                          className={cn(
+                            "grid grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-3 border-b last:border-b-0 border-slate-200 dark:border-slate-800",
+                            isTotals ? "bg-slate-50/60 dark:bg-slate-900/20" : ""
+                          )}
+                        >
+                          <div className={cn("text-sm font-medium", isTotals ? "font-semibold" : "")}>{label}</div>
+                          <Input
+                            disabled={!canEdit || isTotals}
+                            value={row.male ?? ""}
+                            className={cn("h-10", isTotals ? "bg-muted/30 font-semibold" : "")}
+                            onChange={(e) => {
+                              if (isTotals) return;
+                              const next = { ...(employment as any) } as Record<string, EmploymentRow | undefined>;
+                              const male = toNumberOrNull(e.target.value);
+                              const female = next[key]?.female;
+                              next[key] = { ...(next[key] || {}), male, total: computeEmploymentTotal(male, female) };
+                              next.totalWorkers = recomputeTotalsRow(next);
+                              setField("employment_gender_breakdown", next as any);
+                            }}
+                          />
+                          <Input
+                            disabled={!canEdit || isTotals}
+                            value={row.female ?? ""}
+                            className={cn("h-10", isTotals ? "bg-muted/30 font-semibold" : "")}
+                            onChange={(e) => {
+                              if (isTotals) return;
+                              const next = { ...(employment as any) } as Record<string, EmploymentRow | undefined>;
+                              const female = toNumberOrNull(e.target.value);
+                              const male = next[key]?.male;
+                              next[key] = { ...(next[key] || {}), female, total: computeEmploymentTotal(male, female) };
+                              next.totalWorkers = recomputeTotalsRow(next);
+                              setField("employment_gender_breakdown", next as any);
+                            }}
+                          />
+                          <Input
+                            disabled
+                            value={computedTotal ?? ""}
+                            className={cn("h-10 bg-muted/30", isTotals ? "font-semibold" : "")}
+                          />
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
 
                 <div className="space-y-3">
-                  <div className="font-medium">9.2 Occupational Health and Safety (Gender-Sensitive)</div>
+                  <div className="font-medium">5.2 Occupational Health and Safety (Gender-Sensitive)</div>
                   <YesNoRemarks
                     label="Gender-inclusive safety measures are in place"
                     value={(ohs as any).genderInclusiveSafetyMeasures?.value}
@@ -829,7 +928,7 @@ export function InspectionFormLayout({
           </TabsContent>
 
           <TabsContent value="fees" className="pt-6 space-y-6">
-            <SectionShell title="10. Pending fees">
+            <SectionShell title="6. Pending Fees">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <NumberField label="Amount" value={form.fees_payment_amount ?? null} disabled={!canEdit} onChange={(v) => setField("fees_payment_amount", (v ?? undefined) as any)} />
               </div>
@@ -871,7 +970,7 @@ export function InspectionFormLayout({
           </TabsContent>
 
           <TabsContent value="findings" className="pt-6 space-y-6">
-            <SectionShell title="12. Water use conflicts">
+            <SectionShell title="8. Water use conflicts">
               <div className="space-y-2">
                 <Label>Description of any water use conflict in the area related to the permit</Label>
                 <Textarea
@@ -883,9 +982,9 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title="13. Catchment protection initiatives">
+            <SectionShell title="9. Catchment protection initiatives">
               <div className="space-y-2">
-                <Label>Description of any initiative by the water user to protect the catchment (Add pictures)</Label>
+                <Label>Description of any initiative by the water user to protect the catchment</Label>
                 <Textarea
                   disabled={!canEdit}
                   className="min-h-[140px] bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
@@ -895,7 +994,7 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title="14. Conclusion and recommendations">
+            <SectionShell title="10. Conclusion and recommendations">
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label>General conclusion</Label>

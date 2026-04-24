@@ -20,8 +20,11 @@
     { "name": "catchment_level1", "type": "text" },
     { "name": "catchment_level2", "type": "text" },
 
-    { "name": "activity_type", "type": "text" },
-    { "name": "activity_starting_date", "type": "date" },
+    { "name": "project_latitude",  "type": "numeric", "note": "Section 2.1 project/activity site coordinates" },
+    { "name": "project_longitude", "type": "numeric", "note": "Section 2.1 project/activity site coordinates" },
+
+    { "name": "activity_type", "type": "text", "note": "deprecated — Section 7 removed from UI; kept for legacy rows" },
+    { "name": "activity_starting_date", "type": "date", "note": "deprecated — Section 7 removed from UI; kept for legacy rows" },
     { "name": "wastewater_system_type", "type": "text" },
     { "name": "wastewater_system_effectiveness", "type": "text" },
     { "name": "fees_payment_amount", "type": "numeric" },

@@ -86,6 +86,10 @@ interface FormState {
   employment_gender_breakdown?: EmploymentBreakdown;
   ohs_gender_sensitive?: OhsGenderSensitive;
 
+  // Project (activity site) coordinates — Section 2.1
+  project_latitude?: number;
+  project_longitude?: number;
+
   // Documents (stored as JSONB in DB)
   inspection_documents?: any[];
 
@@ -255,6 +259,10 @@ export default function PermitInspectionUnifiedPage() {
               ...existing,
               activity_type: (existing as any).activity_type ?? data?.prepopulatedData?.activityType ?? prev.activity_type,
               activity_starting_date: (existing as any).activity_starting_date ?? data?.prepopulatedData?.activityStartingDate ?? prev.activity_starting_date,
+              // Explicit rehydrate for new project-coordinate columns so that a
+              // future narrowing of the select list can never silently drop them.
+              project_latitude: (existing as any).project_latitude ?? prev.project_latitude,
+              project_longitude: (existing as any).project_longitude ?? prev.project_longitude,
               allowed_quantity: (existing as any).allowed_quantity ?? data?.permit?.water_allowance ?? prev.allowed_quantity,
               allowed_unit: (existing as any).allowed_unit ?? data?.permit?.allowance_unit ?? prev.allowed_unit,
               authorized_abstraction_method:
@@ -392,6 +400,10 @@ export default function PermitInspectionUnifiedPage() {
         general_conclusion: form.general_conclusion ?? null,
         recommendations: form.recommendations ?? null,
         recommendation_details: form.recommendation_details ?? null,
+
+        // Project (activity site) coordinates — Section 2.1
+        project_latitude: form.project_latitude ?? null,
+        project_longitude: form.project_longitude ?? null,
 
         // Social/OHS
         employment_gender_breakdown: form.employment_gender_breakdown ?? null,
@@ -591,7 +603,6 @@ export default function PermitInspectionUnifiedPage() {
             permitHolderId: locked?.permitHolderId,
             residence: locked?.residence,
             permitNumber: locked?.permitNumber,
-            facilityProjectName: locked?.facilityProjectName,
             issuanceDate: locked?.issuanceDate,
             expirationDate: locked?.expirationDate,
             permitLocationProvince: locked?.province,

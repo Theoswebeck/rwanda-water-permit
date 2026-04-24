@@ -49,7 +49,6 @@ export interface PrepopulatedInspectionData {
   
   // Section 3: Permit Particulars
   permitNumber: string;
-  facilityProjectName?: string;
   issuanceDate?: string;
   expirationDate?: string;
   
@@ -359,6 +358,42 @@ function toDisplayLabel(value: unknown): string | undefined {
     .replace(/\s+/g, " ")
     .toLowerCase()
     .replace(/\b\w/g, ch => ch.toUpperCase());
+}
+
+// Catalogue of water source types we can recognise from the source NAME.
+// Order matters when names contain multiple keywords (e.g. "Spring Lake" → Spring).
+// Singular/plural and en-dash variants handled by the simple word-boundary regex.
+const WATER_SOURCE_TYPE_KEYWORDS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bspring(s)?\b/i, label: "Spring" },
+  { pattern: /\bborehole(s)?\b/i, label: "Borehole" },
+  { pattern: /\bwell(s)?\b/i, label: "Well" },
+  { pattern: /\blake(s)?\b/i, label: "Lake" },
+  { pattern: /\briver(s)?\b/i, label: "River" },
+  { pattern: /\bstream(s)?\b/i, label: "Stream" },
+  { pattern: /\bdam(s)?\b/i, label: "Dam" },
+  { pattern: /\breservoir(s)?\b/i, label: "Reservoir" },
+  { pattern: /\bpond(s)?\b/i, label: "Pond" },
+  { pattern: /\bmarsh(es)?\b/i, label: "Marsh" },
+  { pattern: /\bwetland(s)?\b/i, label: "Wetland" },
+  { pattern: /\bswamp(s)?\b/i, label: "Swamp" },
+];
+
+/**
+ * Best-effort fallback that infers a water source type from its name when no
+ * authoritative type is available on the permit/application. The assessor can
+ * still override the value via the editable locked-field control.
+ *
+ * Returns undefined when no keyword matches so the caller can decide what to
+ * show (typically an empty editable field).
+ */
+function deriveWaterSourceTypeFromName(name?: string | null): string | undefined {
+  if (typeof name !== "string") return undefined;
+  const trimmed = name.trim();
+  if (!trimmed || trimmed.toUpperCase() === "N/A") return undefined;
+  for (const { pattern, label } of WATER_SOURCE_TYPE_KEYWORDS) {
+    if (pattern.test(trimmed)) return label;
+  }
+  return undefined;
 }
 
 function toDateOnly(value: unknown): string | undefined {
@@ -682,8 +717,12 @@ function prepareInspectionData(
     locationVillage,
     locationProvince,
   ].filter(Boolean).join(", ");
+  // Residence = the permit holder's head office address.
+  // Do NOT fall back to the water source / project location chain — the head office
+  // is often physically far from the activity site (per RWB inspectors' feedback).
+  // Leave blank ('N/A') when no real applicant address is on file so the assessor
+  // is forced to type the actual head office.
   const residence = pickFirstNonEmptyString(
-    locationChain || undefined,
     applicant?.address,
     (applicant as any)?.company_address
   ) || 'N/A';
@@ -724,16 +763,18 @@ function prepareInspectionData(
   
   // Section 3: Permit Particulars
   const permitNumber = permit?.permit_number || 'Not Issued';
-  const facilityProjectName = pickFirstNonEmptyString(application.project_title, (application as any)?.facility_project_name);
   const issuanceDate = toDateOnly(permit?.issued_date);
   const expirationDate = toDateOnly(permit?.expiry_date);
   
   // Section 4: Water Source
+  // Compute the water source name first so we can use it as a final fallback
+  // for the type (e.g. "Kabonobono Spring" implies type "Spring").
+  const waterSourceName = pickFirstNonEmptyString(application.water_body_name, application.water_source?.replace(/_/g, ' '), 'N/A') || 'N/A';
   const waterSourceType = pickFirstNonEmptyString(
     toDisplayLabel(permit?.water_source),
-    toDisplayLabel(application.water_source)
+    toDisplayLabel(application.water_source),
+    deriveWaterSourceTypeFromName(waterSourceName)
   );
-  const waterSourceName = pickFirstNonEmptyString(application.water_body_name, application.water_source?.replace(/_/g, ' '), 'N/A') || 'N/A';
   const waterPurpose = pickFirstNonEmptyString(
     permit?.purpose ? getActivityLabel(permit.purpose) : undefined,
     getActivityLabel(primaryActivity),
@@ -802,7 +843,6 @@ function prepareInspectionData(
     activityType,
     activityStartingDate,
     permitNumber,
-    facilityProjectName,
     issuanceDate,
     expirationDate,
     waterSourceName,
@@ -1079,20 +1119,23 @@ function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionDat
   return {
     permitHolderName,
     permitHolderId: 'N/A',
-    residence: location || 'N/A',
+    // Residence is the permit holder's head office address. Registry-only permits
+    // have no applicant.address on file, so leave it blank ('N/A') — the assessor
+    // must type the head office during inspection. Do NOT seed it from the water
+    // source / project location chain.
+    residence: 'N/A',
     representative: 'N/A',
     contacts,
     operatorName: permitHolderName !== 'N/A' ? permitHolderName : undefined,
     operatorIdTin: undefined,
-    operatorResidence: location || undefined,
+    operatorResidence: undefined,
     activityType,
     activityStartingDate: issuanceDate,
     permitNumber,
-    facilityProjectName: undefined,
     issuanceDate,
     expirationDate,
     waterSourceName,
-    waterSourceType: undefined,
+    waterSourceType: deriveWaterSourceTypeFromName(waterSourceName),
     waterPurpose: activityType !== 'N/A' ? activityType : undefined,
     waterSourceLocation: [
       parsedLocation.village,
