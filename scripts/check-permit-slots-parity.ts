@@ -49,6 +49,11 @@ import {
 } from "../lib/permit/permit-text-data";
 import { getEffectiveInternalNotes } from "../lib/document-overrides";
 import { selectPermitVariant } from "../lib/permit-variant";
+import {
+  hasBalancedBoldMarkers,
+  parseBoldRuns,
+  stripBoldMarkers,
+} from "../lib/document-slots/bold-markers";
 
 let failures = 0;
 let passes = 0;
@@ -611,6 +616,69 @@ group("override beats default for permit slots", () => {
   eq(resolveSlotText("permit.abstraction_individual.en.para_4", ctx),
      `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
      "sibling unaffected");
+});
+
+// ─── Bold-marker parser invariants ──────────────────────────────────────────
+//
+// `drawRichText` and `hasBalancedBoldMarkers` need to agree on what
+// "balanced" means and how unbalanced markers are normalised (review I1).
+// These assertions live next to the slot parity tests so a regression in
+// either helper is caught by the same `npm`-style runtime check.
+
+function deepEq(actual: unknown, expected: unknown, label: string): void {
+  const a = JSON.stringify(actual);
+  const e = JSON.stringify(expected);
+  if (a === e) {
+    passes += 1;
+    console.log(`  ✓ ${label}`);
+  } else {
+    failures += 1;
+    console.error(`  ✗ ${label}`);
+    console.error(`    expected: ${e}`);
+    console.error(`    actual:   ${a}`);
+  }
+}
+
+group("bold-marker parser (lib/document-slots/bold-markers.ts)", () => {
+  // Balanced: alternating regular / bold runs.
+  deepEq(
+    parseBoldRuns("foo **bold** rest").map((r) => [r.text, r.bold]),
+    [["foo ", false], ["bold", true], [" rest", false]],
+    "balanced: foo **bold** rest",
+  );
+  // Unbalanced: trailing unmatched ** is folded back as literal text.
+  deepEq(
+    parseBoldRuns("foo **unclosed").map((r) => [r.text, r.bold]),
+    [["foo **unclosed", false]],
+    "unbalanced: foo **unclosed (normalised)",
+  );
+  // Escape: \*\* becomes literal ** in run text and is not treated as a marker.
+  deepEq(
+    parseBoldRuns("\\*\\*literal\\*\\*").map((r) => [r.text, r.bold]),
+    [["**literal**", false]],
+    "escaped: \\*\\*literal\\*\\* (literal **)",
+  );
+  // Edge case: bare ****.
+  deepEq(
+    parseBoldRuns("****").map((r) => [r.text, r.bold]),
+    [["", false], ["", true], ["", false]],
+    "edge: ****",
+  );
+  // Plain text: no markers.
+  deepEq(
+    parseBoldRuns("plain text").map((r) => [r.text, r.bold]),
+    [["plain text", false]],
+    "plain: no markers",
+  );
+
+  // hasBalancedBoldMarkers — the API gate.
+  if (hasBalancedBoldMarkers("foo **bold** rest")) { passes++; console.log("  ✓ balanced ⇒ true"); } else { failures++; console.error("  ✗ balanced ⇒ true"); }
+  if (!hasBalancedBoldMarkers("foo **unclosed")) { passes++; console.log("  ✓ unbalanced ⇒ false"); } else { failures++; console.error("  ✗ unbalanced ⇒ false"); }
+  if (hasBalancedBoldMarkers("\\*\\*literal\\*\\*")) { passes++; console.log("  ✓ escaped ⇒ true (no real markers)"); } else { failures++; console.error("  ✗ escaped ⇒ true"); }
+
+  // stripBoldMarkers — used by non-rich PDF paths.
+  if (stripBoldMarkers("**Bold** then plain") === "Bold then plain") { passes++; console.log("  ✓ strip: removes ** markers"); } else { failures++; console.error("  ✗ strip removes ** markers"); }
+  if (stripBoldMarkers("\\*\\*literal\\*\\*") === "**literal**") { passes++; console.log("  ✓ strip: unescapes \\*\\*"); } else { failures++; console.error("  ✗ strip unescapes \\*\\*"); }
 });
 
 console.log(`\n${passes} passed, ${failures} failed`);

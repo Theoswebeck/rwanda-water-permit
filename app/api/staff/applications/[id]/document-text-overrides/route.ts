@@ -38,6 +38,7 @@ import {
   type SlotEditor,
   writeEnvelopeIntoNotes,
 } from "@/lib/document-slots";
+import { hasBalancedBoldMarkers } from "@/lib/document-slots/bold-markers";
 import {
   buildContractSlotContext,
   buildPermitSlotContext,
@@ -374,6 +375,16 @@ function sanitizePatches(
       return {
         ok: false,
         message: `Patch ${o.slotId}: text exceeds ${HARD_MAX_SLOT_LENGTH}-char hard limit`,
+      };
+    }
+    // Reject unbalanced **…** markers up front so the assessor sees a
+    // friendly error instead of relying on the renderer's defensive
+    // normalisation (which would silently fold the trailing typo into the
+    // surrounding text). Use `\*\*` to produce a literal `**` in the PDF.
+    if (!hasBalancedBoldMarkers(o.text)) {
+      return {
+        ok: false,
+        message: `Patch ${o.slotId}: unbalanced **…** markers — every opening ** needs a matching closing **. Type \\*\\* if you want a literal ** in the document.`,
       };
     }
     out.push({ slotId: o.slotId, text: o.text });

@@ -10,6 +10,27 @@
  * for its registration side-effect.
  *
  * Spec: docs/superpowers/specs/2026-04-23-document-text-editor-design.md §7.1
+ *
+ * ---
+ *
+ * RETIRED SLOT IDS — DO NOT REUSE
+ *
+ * Slot ids are the primary key for stored override entries. Once a release
+ * has shipped a slot, its id must never be re-used for a different purpose,
+ * because any application that has an override saved under that id would
+ * silently inherit the new slot's content (see `types.ts` JSDoc on
+ * `DocumentTextSlot.id`).
+ *
+ * The following ids were once registered and are now retired:
+ *
+ *   - `permit.shared.closing.signature_line.bilingual`
+ *       Removed in commit `c0c3afa` (2026-04). Was the
+ *       "Signature/Umukono: ……" placeholder line above the closing block.
+ *       Removal SQL for orphan override entries is documented in
+ *       `docs/superpowers/specs/2026-04-23-document-text-editor-design.md`.
+ *       The `resolveSlotsForEditor` helper already filters out entries
+ *       whose slot id is no longer registered, so the renderer and the
+ *       editor both ignore any leftover override for this id.
  */
 
 import {

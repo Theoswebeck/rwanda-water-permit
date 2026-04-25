@@ -24,6 +24,7 @@ import {
 } from "@/lib/permit/permit-text-data";
 import { resolveSlotText } from "@/lib/document-slots";
 import type { SlotResolverContext } from "@/lib/document-slots";
+import { parseBoldRuns, stripBoldMarkers } from "@/lib/document-slots/bold-markers";
 
 // Re-export PermitApplication so existing callers that imported it from this
 // file keep working (e.g. API routes that build the input object).
@@ -77,12 +78,23 @@ function pageHeight(doc: PDFKit.PDFDocument): number {
   return doc.page.height;
 }
 
+// Footer geometry — kept as named constants so `contentBottomY` can never
+// drift below the footer top. Both footers (slim DRAFT banner for previews,
+// compact QR footer for final issuance) sit with their top edge at
+// `ph - FOOTER_TOP_OFFSET`; body text must end at least `BODY_BOTTOM_PAD`
+// above that line or the QR/DRAFT chrome will paint over the last paragraph
+// (see `drawQrFooter`/`drawPreviewBanner`).
+const FOOTER_TOP_OFFSET = 38 * PT;
+const BODY_BOTTOM_PAD = 2 * PT;
+
 function contentBottomY(doc: PDFKit.PDFDocument, _skipQr = false): number {
-  // Both footers (slim DRAFT banner for previews, compact QR footer for final
-  // issuance) live in the same bottom band, so we reserve a single bottom
-  // margin for body text. Tightened to ~28mm so the EN+RW paragraph blocks
-  // and the closing block fit on a single page (was 42mm).
-  return pageHeight(doc) - 28 * PT;
+  // Reserve = footer height (38pt) + small visual breathing room (2pt).
+  // Earlier revisions tightened this to 28pt to win vertical space, but that
+  // moved the cap *into* the footer band (see review C1) and silently
+  // truncated paragraphs whose last lines fell in the [ph−38pt, ph−28pt]
+  // band — the footer's solid fill hid the bug. Both footer variants start
+  // at the same offset, so a single reserve is correct.
+  return pageHeight(doc) - FOOTER_TOP_OFFSET - BODY_BOTTOM_PAD;
 }
 
 /**
@@ -216,41 +228,44 @@ function drawLogo(doc: PDFKit.PDFDocument): number {
 // ─── Rich-text (inline `**bold**`) helpers ──────────────────────────────────
 //
 // Slot text that needs inline emphasis wraps the bold runs in `**…**` markers
-// (Markdown-style). The renderer splits each paragraph on `**`, treats every
-// odd-indexed segment as bold, and emits the runs back-to-back via
-// `continued: true` so PDFKit handles wrapping automatically.
+// (Markdown-style). Parsing/escape/normalisation rules live in
+// `lib/document-slots/bold-markers.ts` so the renderer and the slot-overrides
+// API speak the same dialect (review I1).
 //
 // Assessor edits stay in plain text — they see and edit the markers directly,
 // which gives them simple, predictable control over emphasis.
 
-function stripBoldMarkers(text: string): string {
-  return text.replace(/\*\*/g, "");
-}
-
 interface RichTextOptions {
   width: number;
   lineGap?: number;
-  align?: "left" | "right" | "center" | "justify";
+  // NOTE: `align: "justify"` is not safe with `continued: true` chains
+  // because PDFKit computes justification per `text()` call rather than
+  // across the logical line, so a paragraph with inline bold runs can
+  // come out unevenly spaced. We deliberately omit it from this type.
+  align?: "left" | "right" | "center";
 }
 
 /**
  * Estimate the rendered height of a paragraph that may contain `**bold**`
- * runs. Bold glyphs are slightly wider than regular ones, so measuring with
- * the bold font gives a small upper bound — the page-break heuristic must
- * never under-allocate.
+ * runs. We measure the visible plain text (with markers stripped and escapes
+ * unescaped) using the bold font, which gives a small upper bound — bold
+ * glyphs are wider for Segoe so a bold-only measurement never under-allocates
+ * the page-break budget.
  */
 function heightOfRichText(
   doc: PDFKit.PDFDocument,
   text: string,
   options: RichTextOptions,
 ): number {
+  const plain = parseBoldRuns(text).map((r) => r.text).join("");
   doc.font(FONT_BOLD);
-  return doc.heightOfString(stripBoldMarkers(text), options);
+  return doc.heightOfString(plain, options);
 }
 
 /**
- * Render a paragraph that may contain `**bold**` runs. When no markers are
- * present, falls back to a single regular-weight `text()` call (cheap path).
+ * Render a paragraph that may contain `**bold**` runs. When the parsed text
+ * collapses to a single non-bold visible run, falls back to a single
+ * regular-weight `text()` call (cheap path).
  */
 function drawRichText(
   doc: PDFKit.PDFDocument,
@@ -259,21 +274,23 @@ function drawRichText(
   y: number,
   options: RichTextOptions,
 ): void {
-  const parts = text.split("**");
-  if (parts.length === 1) {
-    doc.font(FONT_REGULAR);
-    doc.text(text, x, y, options);
+  const runs = parseBoldRuns(text).filter((r) => r.text !== "");
+  if (runs.length === 0) {
     return;
   }
-  for (let i = 0; i < parts.length; i++) {
-    const isBold = i % 2 === 1;
-    const isLast = i === parts.length - 1;
-    const segment = parts[i];
-    doc.font(isBold ? FONT_BOLD : FONT_REGULAR);
+  if (runs.length === 1 && !runs[0].bold) {
+    doc.font(FONT_REGULAR);
+    doc.text(runs[0].text, x, y, options);
+    return;
+  }
+  for (let i = 0; i < runs.length; i++) {
+    const run = runs[i];
+    const isLast = i === runs.length - 1;
+    doc.font(run.bold ? FONT_BOLD : FONT_REGULAR);
     if (i === 0) {
-      doc.text(segment, x, y, { ...options, continued: !isLast });
+      doc.text(run.text, x, y, { ...options, continued: !isLast });
     } else {
-      doc.text(segment, { ...options, continued: !isLast });
+      doc.text(run.text, { ...options, continued: !isLast });
     }
   }
 }
@@ -282,14 +299,20 @@ function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number
   const pw = pageWidth(doc);
   const marginX = PERMIT_MARGIN_X;
   const maxW = pw - marginX * 2;
+  // The title is rendered through `doc.text()` (not `drawRichText`), so
+  // strip any inline `**` markers that may have leaked in via an assessor
+  // override — otherwise they'd render as visible asterisks (review I3).
+  const cleanTitle = stripBoldMarkers(title);
+  // Re-assert the bold font + size immediately before measuring + drawing so
+  // the rule width is never accidentally derived from a stale font state
+  // left over from a previous render call (review M4).
   doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
   // Render the title centered, then draw a single underline whose width
   // matches the actual text width (sample-style — see screenshot 6).
-  const titleH = doc.heightOfString(title, { width: maxW, align: "center" });
-  doc.text(title, marginX, yPos, { width: maxW, align: "center" });
-  // Measure the rendered text width so the rule hugs the text instead of
-  // running edge-to-edge across the page.
-  const textW = Math.min(doc.widthOfString(title), maxW);
+  const titleH = doc.heightOfString(cleanTitle, { width: maxW, align: "center" });
+  doc.text(cleanTitle, marginX, yPos, { width: maxW, align: "center" });
+  doc.font(FONT_BOLD).fontSize(12); // belt-and-braces re-set before width measurement
+  const textW = Math.min(doc.widthOfString(cleanTitle), maxW);
   const ruleStartX = marginX + (maxW - textW) / 2;
   const lineY = yPos + titleH + 2;
   doc
@@ -310,10 +333,13 @@ async function drawQrFooter(
   const verifyUrl = `${PRODUCTION_URL}/permit/view/${encodeURIComponent(permitNumber.trim())}`;
 
   // Compact horizontal footer pinned near the page bottom (above the page-number row).
+  // The footer top sits exactly at `ph - FOOTER_TOP_OFFSET` so that
+  // `contentBottomY` (which reserves the same offset + a small pad) cannot
+  // be set to a value that would let body text overlap the footer chrome.
   const marginX = 15 * PT;
   const footerW = pw - marginX * 2;
-  const footerH = 16 * PT; // ≈ 45pt
-  const footerY = ph - 22 * PT - footerH;
+  const footerH = 16 * PT;
+  const footerY = ph - FOOTER_TOP_OFFSET; // top of the QR footer band
 
   // QR box on the left side of the footer.
   const qrPad = 1.2 * PT;
@@ -342,7 +368,7 @@ async function drawQrFooter(
   const textW = footerW - (textX - marginX) - 4 * PT;
   const textY = footerY + 4 * PT;
   doc.text(
-    resolveSlotText("permit.shared.footer.qr_disclaimer.en", ctx),
+    stripBoldMarkers(resolveSlotText("permit.shared.footer.qr_disclaimer.en", ctx)),
     textX, textY, { width: textW, align: "left" },
   );
   doc.restore();
@@ -355,14 +381,14 @@ function drawPreviewBanner(doc: PDFKit.PDFDocument, ctx: SlotResolverContext): v
   const marginX = 15 * PT;
   const bannerW = pw - marginX * 2;
   const bannerH = 18 * PT;
-  const bannerY = ph - 38 * PT;
+  const bannerY = ph - FOOTER_TOP_OFFSET; // matches QR-footer top so contentBottomY is consistent
 
   doc.save();
   doc.roundedRect(marginX, bannerY, bannerW, bannerH, 3)
     .lineWidth(0.5).fillAndStroke("#fff8ed", "#f59e0b");
   doc.font(FONT_BOLD).fontSize(10).fillColor("#92400e");
   doc.text(
-    resolveSlotText("permit.shared.footer.draft_banner.en", ctx),
+    stripBoldMarkers(resolveSlotText("permit.shared.footer.draft_banner.en", ctx)),
     marginX, bannerY + 4.5 * PT, { width: bannerW, align: "center" },
   );
   doc.restore();
@@ -375,7 +401,7 @@ function drawModifiedBadge(doc: PDFKit.PDFDocument, ctx: SlotResolverContext): v
   doc.roundedRect(bx, 4 * PT, 52 * PT, 10 * PT, 4).fill("#b45309");
   doc.font(FONT_BOLD).fontSize(8).fillColor("#ffffff")
     .text(
-      resolveSlotText("permit.shared.modified_badge.en", ctx),
+      stripBoldMarkers(resolveSlotText("permit.shared.modified_badge.en", ctx)),
       bx, 6.5 * PT, { width: 52 * PT, align: "center" },
     );
   doc.restore();
@@ -403,15 +429,17 @@ function drawClosingLine(
 
   doc.fontSize(11).fillColor("#000000");
   // Signatory stays bold (matches the sample's "Director General/ Umuyobozi
-  // Mukuru" treatment); the date line on the right is regular weight.
+  // Mukuru" treatment); the date line on the right is regular weight. Both
+  // sides flow through `doc.text()` (not `drawRichText`), so any `**` an
+  // assessor types is stripped here to avoid leaking visible markers.
   doc.font(FONT_BOLD);
   doc.text(
-    resolveSlotText("permit.shared.closing.signatory.bilingual", ctx),
+    stripBoldMarkers(resolveSlotText("permit.shared.closing.signatory.bilingual", ctx)),
     leftX, yPos, { width: colW, align: "left" },
   );
   doc.font(FONT_REGULAR);
   doc.text(
-    resolveSlotText("permit.shared.closing.date.bilingual", ctx),
+    stripBoldMarkers(resolveSlotText("permit.shared.closing.date.bilingual", ctx)),
     rightX, yPos, { width: colW, align: "right" },
   );
   return yPos + 16;
