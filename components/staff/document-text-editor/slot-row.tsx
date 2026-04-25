@@ -1,15 +1,25 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  hasBalancedBoldMarkers,
+  parseBoldRuns,
+} from "@/lib/document-slots/bold-markers";
 
 import type { ClientResolvedSlot } from "./types";
+
+// Slots are considered "paragraph-style" when their soft cap allows more than
+// a one-line label. The bold-syntax hint is only worth surfacing on those —
+// the title, signatory line, and modified-permit badge would never want
+// inline emphasis and the hint just adds visual noise there.
+const HINT_MIN_SOFT_MAX = 200;
 
 export interface SlotRowProps {
   resolved: ClientResolvedSlot;
@@ -49,6 +59,18 @@ export function SlotRow({
   const showReset = isOverridden || draft !== undefined;
   const formattedEditedAt = editedAt ? formatTimestamp(editedAt) : null;
 
+  // Inline-bold affordance state. Only shown for paragraph-style slots and
+  // only when the text already contains `**`, so the hint never appears
+  // unsolicited on simple labels.
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const supportsBold = !slot.inline && (slot.softMaxLength ?? 0) >= HINT_MIN_SOFT_MAX;
+  const containsMarkers = supportsBold && /\*\*/.test(value);
+  const balanced = !containsMarkers || hasBalancedBoldMarkers(value);
+  const previewRuns = useMemo(
+    () => (containsMarkers && previewOpen ? parseBoldRuns(value) : []),
+    [containsMarkers, previewOpen, value],
+  );
+
   return (
     <motion.div
       layout
@@ -76,6 +98,16 @@ export function SlotRow({
         {isDirty && (
           <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">
             Unsaved
+          </Badge>
+        )}
+        {containsMarkers && !balanced && (
+          <Badge
+            variant="outline"
+            className="border-red-300 bg-red-50 text-red-800"
+            title="Every opening ** needs a matching closing **. Type \\*\\* if you want a literal ** in the document."
+          >
+            <AlertTriangle className="mr-1 h-3 w-3" />
+            Unbalanced **…**
           </Badge>
         )}
         {slot.structuredField && (
@@ -114,6 +146,58 @@ export function SlotRow({
             (overSoft ? "border-amber-400 focus-visible:ring-amber-400" : "")
           }
         />
+      )}
+
+      {supportsBold && (
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+          <span>
+            Use <code className="rounded bg-muted px-1 py-0.5">**bold**</code>{" "}
+            for emphasis. Type{" "}
+            <code className="rounded bg-muted px-1 py-0.5">{"\\*\\*"}</code>{" "}
+            for a literal <code className="rounded bg-muted px-1 py-0.5">**</code>.
+          </span>
+          {containsMarkers && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setPreviewOpen((v) => !v)}
+            >
+              {previewOpen ? (
+                <>
+                  <EyeOff className="mr-1 h-3 w-3" /> Hide preview
+                </>
+              ) : (
+                <>
+                  <Eye className="mr-1 h-3 w-3" /> Show preview
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {previewOpen && containsMarkers && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+          className="mt-2 overflow-hidden rounded-md border border-dashed border-muted-foreground/30 bg-muted/40 p-3 text-sm leading-relaxed"
+        >
+          <p className="whitespace-pre-wrap break-words">
+            {previewRuns.map((run, i) =>
+              run.bold ? (
+                <span key={i} className="font-semibold">
+                  {run.text}
+                </span>
+              ) : (
+                <span key={i}>{run.text}</span>
+              ),
+            )}
+          </p>
+        </motion.div>
       )}
 
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
