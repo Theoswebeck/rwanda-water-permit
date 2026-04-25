@@ -45,6 +45,7 @@ import {
   resolveArea,
   resolveEnglishSystemLabel,
   resolveFlowRate,
+  resolveFlowRateKinyarwanda,
   resolveIdNumber,
   resolveKinyarwandaSystemType,
   resolveLakeName,
@@ -158,32 +159,47 @@ const sharedSlots: DocumentTextSlot[] = [
 
 // ─── Per-variant slots ───────────────────────────────────────────────────────
 
-/** Build the title slot for a single-language permit (concession + abstraction
- *  individual). The bilingual abstraction_organization variant has its own
- *  title resolver. */
-function titleSlotEnglishOnly(variant: PermitVariant): DocumentTextSlot {
+/** Build the title slot for every permit variant. The slot id remains
+ * `title.en` for backwards compatibility with saved overrides, but the
+ * rendered title is bilingual so individual/concession previews match the
+ * organization-abstraction layout. */
+function titleSlot(variant: PermitVariant): DocumentTextSlot {
   return {
     id: `permit.${variant}.title.en`,
     documentKind: "permit",
     variant,
     language: "en",
     group: GROUP.HEADER,
-    label: "Permit title",
+    label: "Permit title (bilingual)",
     inline: true,
-    softMaxLength: 200,
+    softMaxLength: 250,
     defaultResolver: (ctx) => {
       const p = permitOf(ctx);
-      if (!p) return `WATER USE PERMIT N° ${placeholder("PERMIT_NUMBER")}`;
+      if (!p) return `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${placeholder("PERMIT_NUMBER")}`;
       const titleNum = resolvePermitTitleNumber(p.permitNumber, p.headerYear);
-      return `WATER USE PERMIT N° ${titleNum}`;
+      return `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`;
     },
   };
+}
+
+function rwLegalBasis(): string {
+  return "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,";
+}
+
+function rwValidity(ctx: SlotResolverContext): string {
+  const p = permitOf(ctx);
+  if (!p) return "Uru ruhushya rufite agaciro kuva … kugeza ….";
+  return `Uru ruhushya rufite agaciro kuva ${fmtDMY(p.issueDate)} kugeza ${fmtDMY(p.expiryDate)}.`;
+}
+
+function rwContractReference(): string {
+  return "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.";
 }
 
 // ─── concession_individual ──────────────────────────────────────────────────
 
 const concessionIndividualSlots: DocumentTextSlot[] = [
-  titleSlotEnglishOnly("concession_individual"),
+  titleSlot("concession_individual"),
   {
     id: "permit.concession_individual.en.para_1",
     documentKind: "permit",
@@ -241,12 +257,62 @@ const concessionIndividualSlots: DocumentTextSlot[] = [
     defaultResolver: () =>
       `In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.`,
   },
+  {
+    id: "permit.concession_individual.rw.para_1",
+    documentKind: "permit",
+    variant: "concession_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 1 — Igihe gisanzwe (Kinyarwanda)",
+    softMaxLength: 400,
+    defaultResolver: rwLegalBasis,
+  },
+  {
+    id: "permit.concession_individual.rw.para_2",
+    documentKind: "permit",
+    variant: "concession_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 2 — Authorization (Kinyarwanda, snapshot of dynamic values)",
+    defaultResolver: (ctx) => {
+      const app = appOf(ctx);
+      const name = resolveApplicantName(app);
+      const idNum = resolveIdNumber(app);
+      const actsRw = resolveActivitiesKinyarwanda(app);
+      const area = resolveArea(app);
+      const areaStr = area != null ? `${fmtNum(area)} Hectare` : "N/A Hectare";
+      const lake = resolveLakeName(app);
+      const loc = resolveAdminLocation(app);
+      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} (ahakorerwa ibikorwa) muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+    },
+  },
+  {
+    id: "permit.concession_individual.rw.para_3",
+    documentKind: "permit",
+    variant: "concession_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 3 — Igihe rufite agaciro (Kinyarwanda, snapshot of dates)",
+    softMaxLength: 200,
+    structuredField: "expiry_date",
+    defaultResolver: rwValidity,
+  },
+  {
+    id: "permit.concession_individual.rw.para_4",
+    documentKind: "permit",
+    variant: "concession_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 4 — Amasezerano (Kinyarwanda)",
+    softMaxLength: 300,
+    defaultResolver: rwContractReference,
+  },
 ];
 
 // ─── abstraction_individual ──────────────────────────────────────────────────
 
 const abstractionIndividualSlots: DocumentTextSlot[] = [
-  titleSlotEnglishOnly("abstraction_individual"),
+  titleSlot("abstraction_individual"),
   {
     id: "permit.abstraction_individual.en.para_1",
     documentKind: "permit",
@@ -305,6 +371,57 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
     defaultResolver: () =>
       `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
   },
+  {
+    id: "permit.abstraction_individual.rw.para_1",
+    documentKind: "permit",
+    variant: "abstraction_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 1 — Igihe gisanzwe (Kinyarwanda)",
+    softMaxLength: 400,
+    defaultResolver: rwLegalBasis,
+  },
+  {
+    id: "permit.abstraction_individual.rw.para_2",
+    documentKind: "permit",
+    variant: "abstraction_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 2 — Authorization (Kinyarwanda, snapshot of dynamic values)",
+    defaultResolver: (ctx) => {
+      const app = appOf(ctx);
+      const name = resolveApplicantName(app);
+      const idNum = resolveIdNumber(app);
+      const wsName = resolveWaterSourceName(app);
+      const loc = resolveAdminLocation(app);
+      const { lat, lng } = resolveLatLng(app);
+      const systemTypeRw = resolveKinyarwandaSystemType(app);
+      const yearlyStr = resolveFlowRateKinyarwanda(app);
+      const actsRw = resolveActivitiesKinyarwanda(app);
+      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya ${yearlyStr}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+    },
+  },
+  {
+    id: "permit.abstraction_individual.rw.para_3",
+    documentKind: "permit",
+    variant: "abstraction_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 3 — Igihe rufite agaciro (Kinyarwanda, snapshot of dates)",
+    softMaxLength: 200,
+    structuredField: "expiry_date",
+    defaultResolver: rwValidity,
+  },
+  {
+    id: "permit.abstraction_individual.rw.para_4",
+    documentKind: "permit",
+    variant: "abstraction_individual",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 4 — Amasezerano (Kinyarwanda)",
+    softMaxLength: 300,
+    defaultResolver: rwContractReference,
+  },
 ];
 
 // ─── concession_organization ─────────────────────────────────────────────────
@@ -331,8 +448,26 @@ function concessionOrgWaterSourceLocation(ctx: SlotResolverContext): string {
     .join(", ") || "N/A";
 }
 
+function concessionOrgWaterSourceLocationRw(ctx: SlotResolverContext): string {
+  const app = appOf(ctx);
+  const notes = resolveNotes(app);
+  const waterSourceSector =
+    typeof notes?.waterSourceSector === "string" ? notes.waterSourceSector.trim() : "";
+  const waterSourceDistrict =
+    typeof notes?.waterSourceDistrict === "string" ? notes.waterSourceDistrict.trim() : "";
+  const waterSourceProvince =
+    typeof notes?.waterSourceProvince === "string" ? notes.waterSourceProvince.trim() : "";
+  return [
+    waterSourceSector ? `Umurenge wa ${waterSourceSector}` : null,
+    waterSourceDistrict ? `Akarere ka ${waterSourceDistrict}` : null,
+    waterSourceProvince ? formatIntaraOrUmujyiWaKigali(waterSourceProvince) : null,
+  ]
+    .filter(Boolean)
+    .join(", ") || "N/A";
+}
+
 const concessionOrganizationSlots: DocumentTextSlot[] = [
-  titleSlotEnglishOnly("concession_organization"),
+  titleSlot("concession_organization"),
   {
     id: "permit.concession_organization.en.para_1",
     documentKind: "permit",
@@ -390,6 +525,57 @@ const concessionOrganizationSlots: DocumentTextSlot[] = [
     softMaxLength: 300,
     defaultResolver: () =>
       `In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.`,
+  },
+  {
+    id: "permit.concession_organization.rw.para_1",
+    documentKind: "permit",
+    variant: "concession_organization",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 1 — Igihe gisanzwe (Kinyarwanda)",
+    softMaxLength: 400,
+    defaultResolver: rwLegalBasis,
+  },
+  {
+    id: "permit.concession_organization.rw.para_2",
+    documentKind: "permit",
+    variant: "concession_organization",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 2 — Authorization (Kinyarwanda, snapshot of dynamic values)",
+    defaultResolver: (ctx) => {
+      const app = appOf(ctx);
+      const orgName = resolveApplicantName(app);
+      const rep = resolveOrgRep(app);
+      const actsRw = resolveActivitiesKinyarwanda(app);
+      const area = resolveArea(app);
+      const areaStr = area != null ? `${fmtNum(area)} hectares` : "N/A hectares";
+      const lake = resolveLakeName(app);
+      const loc = resolveAdminLocation(app);
+      const wsLocParts = concessionOrgWaterSourceLocationRw(ctx);
+      return `"${orgName}", ifite aho ifatira amazi hakurikira: ${wsLocParts}; ihagarariwe na ${rep.name}; yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+    },
+  },
+  {
+    id: "permit.concession_organization.rw.para_3",
+    documentKind: "permit",
+    variant: "concession_organization",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 3 — Igihe rufite agaciro (Kinyarwanda, snapshot of dates)",
+    softMaxLength: 200,
+    structuredField: "expiry_date",
+    defaultResolver: rwValidity,
+  },
+  {
+    id: "permit.concession_organization.rw.para_4",
+    documentKind: "permit",
+    variant: "concession_organization",
+    language: "rw",
+    group: GROUP.AUTH_RW,
+    label: "Paragraph 4 — Amasezerano (Kinyarwanda)",
+    softMaxLength: 300,
+    defaultResolver: rwContractReference,
   },
 ];
 
@@ -503,7 +689,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const loc = resolveAdminLocation(app);
       const { lat, lng } = resolveLatLng(app);
       const systemTypeRw = resolveKinyarwandaSystemType(app);
-      const flowRate = resolveFlowRate(app);
+      const flowRate = resolveFlowRateKinyarwanda(app);
       const actsRw = resolveActivitiesKinyarwanda(app);
       // Dynamic values are wrapped in `**…**` so the renderer emits them
       // bold inline (matches the official RWB sample). The office address

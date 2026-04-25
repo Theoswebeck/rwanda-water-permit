@@ -34,6 +34,7 @@ import {
   resolveArea,
   resolveEnglishSystemLabel,
   resolveFlowRate,
+  resolveFlowRateKinyarwanda,
   resolveIdNumber,
   resolveKinyarwandaSystemType,
   resolveLakeName,
@@ -263,14 +264,86 @@ group("shared slots (variant-independent)", () => {
   eq(resolveSlotText("permit.shared.footer.draft_banner.en", ctx), expectedDraftBanner, "footer.draft_banner.en");
 });
 
+group("Kinyarwanda province and flow-rate formatting", () => {
+  eq(formatIntaraOrUmujyiWaKigali("East"), "Intara y'Iburasirazuba", "East → Intara y'Iburasirazuba");
+  eq(formatIntaraOrUmujyiWaKigali("Eastern"), "Intara y'Iburasirazuba", "Eastern → Intara y'Iburasirazuba");
+  eq(formatIntaraOrUmujyiWaKigali("Eastern Province"), "Intara y'Iburasirazuba", "Eastern Province → Intara y'Iburasirazuba");
+  eq(formatIntaraOrUmujyiWaKigali("Province of Eastern"), "Intara y'Iburasirazuba", "Province of Eastern → Intara y'Iburasirazuba");
+  eq(formatIntaraOrUmujyiWaKigali("West"), "Intara y'Iburengerazuba", "West → Intara y'Iburengerazuba");
+  eq(formatIntaraOrUmujyiWaKigali("Western"), "Intara y'Iburengerazuba", "Western → Intara y'Iburengerazuba");
+  eq(formatIntaraOrUmujyiWaKigali("Western Province"), "Intara y'Iburengerazuba", "Western Province → Intara y'Iburengerazuba");
+  eq(formatIntaraOrUmujyiWaKigali("North"), "Intara y'Amajyaruguru", "North → Intara y'Amajyaruguru");
+  eq(formatIntaraOrUmujyiWaKigali("Northern"), "Intara y'Amajyaruguru", "Northern → Intara y'Amajyaruguru");
+  eq(formatIntaraOrUmujyiWaKigali("Northern Province"), "Intara y'Amajyaruguru", "Northern Province → Intara y'Amajyaruguru");
+  eq(formatIntaraOrUmujyiWaKigali("South"), "Intara y'Amajyepfo", "South → Intara y'Amajyepfo");
+  eq(formatIntaraOrUmujyiWaKigali("Southern"), "Intara y'Amajyepfo", "Southern → Intara y'Amajyepfo");
+  eq(formatIntaraOrUmujyiWaKigali("Southern Province"), "Intara y'Amajyepfo", "Southern Province → Intara y'Amajyepfo");
+  eq(formatIntaraOrUmujyiWaKigali("Kigali"), "Umujyi wa Kigali", "Kigali → Umujyi wa Kigali");
+
+  eq(resolveFlowRateKinyarwanda(fxAbsInd), "50,000 m3 ku mwaka", "estimated yearly volume → ku mwaka");
+  const baseTransferFlow: PermitApplication = {
+    ...fxAbsInd,
+    estimated_usage_volume: 0,
+    max_yearly_volume_m3: undefined,
+    max_daily_volume_m3: undefined,
+    assessor_recommended_volume_m3: undefined,
+    internal_notes: JSON.stringify({
+      transferFormData: {
+        waterAllowance: 12.5,
+        allowanceUnit: "m3/sec",
+      },
+    }),
+  };
+  eq(resolveFlowRateKinyarwanda(baseTransferFlow), "12.5 m3 ku isegonda", "m3/sec → ku isegonda");
+  eq(
+    resolveFlowRateKinyarwanda({
+      ...baseTransferFlow,
+      internal_notes: JSON.stringify({
+        transferFormData: {
+          waterAllowance: 20,
+          allowanceUnit: "m3/day",
+        },
+      }),
+    }),
+    "20 m3 ku munsi",
+    "m3/day → ku munsi",
+  );
+  eq(
+    resolveFlowRateKinyarwanda({
+      ...baseTransferFlow,
+      internal_notes: JSON.stringify({
+        transferFormData: {
+          waterAllowance: 3,
+          allowanceUnit: "m3/hour",
+        },
+      }),
+    }),
+    "3 m3 ku isaha",
+    "m3/hour → ku isaha",
+  );
+  eq(
+    resolveFlowRateKinyarwanda({
+      ...baseTransferFlow,
+      internal_notes: JSON.stringify({
+        transferFormData: {
+          waterAllowance: 7,
+          allowanceUnit: "liters/sec",
+        },
+      }),
+    }),
+    "7 litiro ku isegonda",
+    "liters/sec → litiro ku isegonda",
+  );
+});
+
 group("abstraction_individual", () => {
   const ctx = buildPermitCtx(fxAbsInd);
   const headerYear = ISSUE_DATE.getFullYear();
   const titleNum = resolvePermitTitleNumber(PERMIT_NUMBER, headerYear);
 
-  // Title: pre-refactor → `WATER USE PERMIT N° ${titleNum}`
+  // Title is now bilingual for every permit variant.
   eq(resolveSlotText("permit.abstraction_individual.title.en", ctx),
-     `WATER USE PERMIT N° ${titleNum}`, "title.en");
+     `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`, "title.en");
 
   // Para 1
   eq(resolveSlotText("permit.abstraction_individual.en.para_1", ctx),
@@ -299,6 +372,20 @@ group("abstraction_individual", () => {
   eq(resolveSlotText("permit.abstraction_individual.en.para_4", ctx),
      `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
      "en.para_4");
+
+  eq(resolveSlotText("permit.abstraction_individual.rw.para_1", ctx),
+     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "rw.para_1");
+  const actsRw = resolveActivitiesKinyarwanda(fxAbsInd);
+  const systemTypeRw = resolveKinyarwandaSystemType(fxAbsInd);
+  const expectedRw2 = `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya ${resolveFlowRateKinyarwanda(fxAbsInd)}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+  eq(resolveSlotText("permit.abstraction_individual.rw.para_2", ctx), expectedRw2, "rw.para_2");
+  eq(resolveSlotText("permit.abstraction_individual.rw.para_3", ctx),
+     `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
+     "rw.para_3");
+  eq(resolveSlotText("permit.abstraction_individual.rw.para_4", ctx),
+     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.",
+     "rw.para_4");
 });
 
 group("concession_individual", () => {
@@ -307,7 +394,7 @@ group("concession_individual", () => {
   const titleNum = resolvePermitTitleNumber(PERMIT_NUMBER, headerYear);
 
   eq(resolveSlotText("permit.concession_individual.title.en", ctx),
-     `WATER USE PERMIT N° ${titleNum}`, "title.en");
+     `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`, "title.en");
 
   eq(resolveSlotText("permit.concession_individual.en.para_1", ctx),
      `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
@@ -331,6 +418,19 @@ group("concession_individual", () => {
   eq(resolveSlotText("permit.concession_individual.en.para_4", ctx),
      `In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.`,
      "en.para_4");
+
+  eq(resolveSlotText("permit.concession_individual.rw.para_1", ctx),
+     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "rw.para_1");
+  const actsRw = resolveActivitiesKinyarwanda(fxConcInd);
+  const expectedRw2 = `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} (ahakorerwa ibikorwa) muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+  eq(resolveSlotText("permit.concession_individual.rw.para_2", ctx), expectedRw2, "rw.para_2");
+  eq(resolveSlotText("permit.concession_individual.rw.para_3", ctx),
+     `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
+     "rw.para_3");
+  eq(resolveSlotText("permit.concession_individual.rw.para_4", ctx),
+     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.",
+     "rw.para_4");
 });
 
 group("concession_organization", () => {
@@ -339,7 +439,7 @@ group("concession_organization", () => {
   const titleNum = resolvePermitTitleNumber(PERMIT_NUMBER, headerYear);
 
   eq(resolveSlotText("permit.concession_organization.title.en", ctx),
-     `WATER USE PERMIT N° ${titleNum}`, "title.en");
+     `WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI N° ${titleNum}`, "title.en");
 
   eq(resolveSlotText("permit.concession_organization.en.para_1", ctx),
      `Pursuant to Law N°49/2018 of 13/08/2018 determining the use and management of water resources in Rwanda,`,
@@ -374,6 +474,24 @@ group("concession_organization", () => {
   eq(resolveSlotText("permit.concession_organization.en.para_4", ctx),
      `In addition to the conditions specified in the Law mentioned above, this water use permit is subject to the terms and conditions as defined in the attached contract.`,
      "en.para_4");
+
+  eq(resolveSlotText("permit.concession_organization.rw.para_1", ctx),
+     "Hashingiwe ku Itegeko N° 49/2018 ryo ku wa 13/08/2018 rigena imikoreshereze n'imicungire y'umutungo kamere w'amazi mu Rwanda,",
+     "rw.para_1");
+  const wsLocPartsRw = [
+    wsSector ? `Umurenge wa ${wsSector}` : null,
+    wsDist ? `Akarere ka ${wsDist}` : null,
+    wsProv ? formatIntaraOrUmujyiWaKigali(wsProv) : null,
+  ].filter(Boolean).join(", ") || "N/A";
+  const actsRw = resolveActivitiesKinyarwanda(fxConcOrg);
+  const expectedRw2 = `"${orgName}", ifite aho ifatira amazi hakurikira: ${wsLocPartsRw}; ihagarariwe na ${rep.name}; yemerewe gukora ${actsRw} ku buso bungana na ${areaStr} muri ${lake}, ku gice giherereye mu Mudugudu wa ${loc.village}, Akagari ka ${loc.cell}, Umurenge wa ${loc.sector}, Akarere ka ${loc.district}, ${formatIntaraOrUmujyiWaKigali(loc.province)}, nk'uko bigaragara ku ikarita iri ku mugereka. Uru ruhushya rukoreshwa gusa ku bikorwa bikorerwa muri ayo mazi.`;
+  eq(resolveSlotText("permit.concession_organization.rw.para_2", ctx), expectedRw2, "rw.para_2");
+  eq(resolveSlotText("permit.concession_organization.rw.para_3", ctx),
+     `Uru ruhushya rufite agaciro kuva ${fmtDMY(ISSUE_DATE)} kugeza ${fmtDMY(EXPIRY_DATE)}.`,
+     "rw.para_3");
+  eq(resolveSlotText("permit.concession_organization.rw.para_4", ctx),
+     "Uretse ibiteganywa n'Itegeko ryavuzwe haruguru, uru ruhushya kandi rugengwa n'ibikubiye mu masezerano ari ku mugereka.",
+     "rw.para_4");
 });
 
 group("abstraction_organization (bilingual)", () => {
@@ -397,6 +515,7 @@ group("abstraction_organization (bilingual)", () => {
   const { lat, lng } = resolveLatLng(fxAbsOrg);
   const sysLabel = resolveEnglishSystemLabel(fxAbsOrg);
   const flowRate = resolveFlowRate(fxAbsOrg);
+  const flowRateRw = resolveFlowRateKinyarwanda(fxAbsOrg);
   const acts = resolveActivities(fxAbsOrg);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
   const expectedEnPara2 = `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
@@ -420,7 +539,7 @@ group("abstraction_organization (bilingual)", () => {
   const actsRw = resolveActivitiesKinyarwanda(fxAbsOrg);
   const orgAddrRw = resolveOrgAddressKinyarwanda(fxAbsOrg);
   const expectedRwPara2 =
-    `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+    `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRateRw}**, ` +
     `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
     `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
@@ -554,6 +673,7 @@ group("abstraction_organization — minimal data (no coords, no volume, fallback
   const loc = resolveAdminLocation(fxAbsOrgMinimal);
   const sysLabel = resolveEnglishSystemLabel(fxAbsOrgMinimal);
   const flowRate = resolveFlowRate(fxAbsOrgMinimal);
+  const flowRateRw = resolveFlowRateKinyarwanda(fxAbsOrgMinimal);
   const acts = resolveActivities(fxAbsOrgMinimal);
   const provLabel = loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
   const expectedEn2 = `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: N/A, Longitude: N/A, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
@@ -564,7 +684,7 @@ group("abstraction_organization — minimal data (no coords, no volume, fallback
   // Province is "Kigali" → formatIntaraOrUmujyiWaKigali returns "Umujyi wa Kigali"
   eq(formatIntaraOrUmujyiWaKigali(loc.province), "Umujyi wa Kigali", "formatIntaraOrUmujyiWaKigali(Kigali)");
   const expectedRw2 =
-    `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+    `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRateRw}**, ` +
     `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
     `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): N/A, ` +
     `Lonjitide (Longitude): N/A. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;

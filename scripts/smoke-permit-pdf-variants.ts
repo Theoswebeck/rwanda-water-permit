@@ -9,9 +9,9 @@
  * breaks one variant's pagination — the case the parity script can't see
  * (it doesn't actually render PDFKit, only inspects slot defaults).
  *
- * Requires `pdfinfo` (poppler-utils). Skips the page-count assertion
- * gracefully if `pdfinfo` is not on PATH so the script remains useful in
- * CI environments without poppler.
+ * Requires `pdfinfo` + `pdftotext` (poppler-utils). Skips the corresponding
+ * assertions gracefully if those binaries are not on PATH so the script
+ * remains useful in CI environments without poppler.
  *
  * Run with: npx tsx scripts/smoke-permit-pdf-variants.ts
  *
@@ -190,6 +190,12 @@ try {
 } catch {
   pdfinfoAvailable = false;
 }
+let pdftotextAvailable = true;
+try {
+  execFileSync("pdftotext", ["-v"], { stdio: ["ignore", "ignore", "ignore"] });
+} catch {
+  pdftotextAvailable = false;
+}
 
 function countPages(file: string): number {
   const out = execFileSync("pdfinfo", [file], { encoding: "utf-8" });
@@ -200,10 +206,47 @@ function countPages(file: string): number {
   return Number(m[1]);
 }
 
+function includesKinyarwanda(file: string, label: string): boolean {
+  const text = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf-8" })
+    .replace(/\s+/g, " ");
+  const common = [
+    "Hashingiwe ku Itegeko",
+    "Uru ruhushya rufite agaciro",
+    "Uretse ibiteganywa",
+  ];
+  const para2Marker = label.startsWith("concession_")
+    ? "Uru ruhushya rukoreshwa"
+    : "Aya mazi yemerewe";
+  const provinceMarkerByVariant: Record<string, string> = {
+    abstraction_individual: "Intara y'Iburasirazuba",
+    abstraction_organization: "Umujyi wa Kigali",
+    concession_individual: "Intara y'Iburasirazuba",
+    concession_organization: "Intara y'Iburengerazuba",
+  };
+  const flowRateMarkers = label.startsWith("abstraction_") ? ["m3 ku mwaka"] : [];
+  return [
+    ...common,
+    para2Marker,
+    provinceMarkerByVariant[label],
+    ...flowRateMarkers,
+  ].every((marker) => text.includes(marker));
+}
+
+function omitsPageFooter(file: string): boolean {
+  const text = execFileSync("pdftotext", ["-layout", file, "-"], { encoding: "utf-8" });
+  return !/Document ID:/i.test(text) && !/Page\s+\d+\s+of\s+\d+/i.test(text);
+}
+
 async function smokeOne(
   outDir: string,
   v: VariantSmoke,
-): Promise<{ ok: boolean; pages: number | null; file: string }> {
+): Promise<{
+  ok: boolean;
+  pages: number | null;
+  hasKinyarwanda: boolean | null;
+  footerRemoved: boolean | null;
+  file: string;
+}> {
   const buf = await generatePermitPdfBuffer({
     application: v.fixture,
     permitNumber: PERMIT_NUMBER,
@@ -215,17 +258,28 @@ async function smokeOne(
   const file = path.join(outDir, `${v.label}.pdf`);
   writeFileSync(file, buf);
 
-  if (!pdfinfoAvailable) {
-    return { ok: true, pages: null, file };
-  }
-  const pages = countPages(file);
-  return { ok: pages === 1, pages, file };
+  const pages = pdfinfoAvailable ? countPages(file) : null;
+  const hasKinyarwanda = pdftotextAvailable ? includesKinyarwanda(file, v.label) : null;
+  const footerRemoved = pdftotextAvailable ? omitsPageFooter(file) : null;
+  return {
+    ok:
+      (pages === null || pages === 1) &&
+      (hasKinyarwanda === null || hasKinyarwanda) &&
+      (footerRemoved === null || footerRemoved),
+    pages,
+    hasKinyarwanda,
+    footerRemoved,
+    file,
+  };
 }
 
 async function main(): Promise<void> {
   console.log(`Smoke-rendering ${VARIANTS.length} permit variants...`);
   if (!pdfinfoAvailable) {
     console.log("⚠  pdfinfo not on PATH — skipping page-count assertion (PDFs still produced)");
+  }
+  if (!pdftotextAvailable) {
+    console.log("⚠  pdftotext not on PATH — skipping Kinyarwanda-text assertion");
   }
   const outDir = mkdtempSync(path.join(tmpdir(), "permit-smoke-"));
   console.log(`Output dir: ${outDir}\n`);
@@ -236,13 +290,29 @@ async function main(): Promise<void> {
       const r = await smokeOne(outDir, v);
       if (r.pages == null) {
         console.log(`  ◯ ${v.label}: rendered (${r.file}) — page count not verified`);
-        continue;
-      }
-      if (r.ok) {
+      } else if (r.pages === 1) {
         console.log(`  ✓ ${v.label}: 1 page (${r.file})`);
       } else {
         allOk = false;
         console.error(`  ✗ ${v.label}: expected 1 page, got ${r.pages} (${r.file})`);
+      }
+
+      if (r.hasKinyarwanda == null) {
+        console.log(`  ◯ ${v.label}: Kinyarwanda text not verified`);
+      } else if (r.hasKinyarwanda) {
+        console.log(`  ✓ ${v.label}: Kinyarwanda text present`);
+      } else {
+        allOk = false;
+        console.error(`  ✗ ${v.label}: Kinyarwanda text missing (${r.file})`);
+      }
+
+      if (r.footerRemoved == null) {
+        console.log(`  ◯ ${v.label}: footer removal not verified`);
+      } else if (r.footerRemoved) {
+        console.log(`  ✓ ${v.label}: document-id/page footer removed`);
+      } else {
+        allOk = false;
+        console.error(`  ✗ ${v.label}: document-id/page footer still present (${r.file})`);
       }
     } catch (err) {
       allOk = false;
@@ -252,10 +322,10 @@ async function main(): Promise<void> {
   }
 
   if (!allOk) {
-    console.error("\nSMOKE FAILED — at least one variant did not fit on a single page.");
+    console.error("\nSMOKE FAILED — at least one variant failed page, language, or footer checks.");
     process.exit(1);
   }
-  console.log("\nAll variants rendered to a single page ✓");
+  console.log("\nAll variants rendered to a single page with Kinyarwanda and no page footer ✓");
 }
 
 main().catch((err) => {

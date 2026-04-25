@@ -70,7 +70,7 @@ export interface PermitApplication {
   };
 }
 
-export function resolveNotes(app: PermitApplication): Record<string, any> {
+export function resolveNotes(app: PermitApplication): ReturnType<typeof getEffectiveInternalNotes> {
   return getEffectiveInternalNotes(app.internal_notes);
 }
 
@@ -144,7 +144,30 @@ export function formatProvinceOrCityOfKigali(provinceRaw: string): string {
 
 export function formatIntaraOrUmujyiWaKigali(provinceRaw: string): string {
   if (!provinceRaw) return "N/A";
-  return provinceRaw.toLowerCase() === "kigali" ? "Umujyi wa Kigali" : `Intara ya ${provinceRaw}`;
+  const key = provinceRaw
+    .trim()
+    .toLowerCase()
+    .replace(/\s+province$/i, "")
+    .replace(/^province\s+of\s+/i, "")
+    .trim();
+  const provinces: Record<string, string> = {
+    east: "Intara y'Iburasirazuba",
+    eastern: "Intara y'Iburasirazuba",
+    iburasirazuba: "Intara y'Iburasirazuba",
+    west: "Intara y'Iburengerazuba",
+    western: "Intara y'Iburengerazuba",
+    iburengerazuba: "Intara y'Iburengerazuba",
+    north: "Intara y'Amajyaruguru",
+    northern: "Intara y'Amajyaruguru",
+    amajyaruguru: "Intara y'Amajyaruguru",
+    south: "Intara y'Amajyepfo",
+    southern: "Intara y'Amajyepfo",
+    amajyepfo: "Intara y'Amajyepfo",
+    kigali: "Umujyi wa Kigali",
+    "city of kigali": "Umujyi wa Kigali",
+    "umujyi wa kigali": "Umujyi wa Kigali",
+  };
+  return provinces[key] ?? `Intara ya ${provinceRaw.trim()}`;
 }
 
 export function resolveArea(app: PermitApplication): number | null {
@@ -410,6 +433,78 @@ export function resolveFlowRate(app: PermitApplication): string {
     const tfVal = tfData.waterAllowance != null ? parseFloat(String(tfData.waterAllowance)) : NaN;
     const tfUnit = String(tfData.allowanceUnit ?? "").trim();
     if (Number.isFinite(tfVal) && tfVal > 0) return `${fmtNum(tfVal)} ${tfUnit || "M3/year"}`;
+  }
+  return "N/A";
+}
+
+function formatFlowRateUnitKinyarwanda(unitRaw: string): string {
+  const unit = unitRaw.trim();
+  if (!unit) return "m3 ku mwaka";
+  const normalized = unit
+    .toLowerCase()
+    .replace(/³/g, "3")
+    .replace(/\s+/g, "")
+    .replace(/^cubicmeters?/, "m3")
+    .replace(/^cubicmetres?/, "m3");
+
+  const compactMap: Record<string, string> = {
+    m3: "m3",
+    "m3/year": "m3 ku mwaka",
+    "m3/yr": "m3 ku mwaka",
+    "m3/y": "m3 ku mwaka",
+    "m3/annum": "m3 ku mwaka",
+    "m3/peryear": "m3 ku mwaka",
+    "m3/day": "m3 ku munsi",
+    "m3/d": "m3 ku munsi",
+    "m3/perday": "m3 ku munsi",
+    "m3/hour": "m3 ku isaha",
+    "m3/hr": "m3 ku isaha",
+    "m3/h": "m3 ku isaha",
+    "m3/perhour": "m3 ku isaha",
+    "m3/minute": "m3 ku munota",
+    "m3/min": "m3 ku munota",
+    "m3/perminute": "m3 ku munota",
+    "m3/second": "m3 ku isegonda",
+    "m3/sec": "m3 ku isegonda",
+    "m3/s": "m3 ku isegonda",
+    "m3/persecond": "m3 ku isegonda",
+    "l/s": "litiro ku isegonda",
+    "l/sec": "litiro ku isegonda",
+    "liters/sec": "litiro ku isegonda",
+    "litres/sec": "litiro ku isegonda",
+    "liter/sec": "litiro ku isegonda",
+    "litre/sec": "litiro ku isegonda",
+    "liters/s": "litiro ku isegonda",
+    "litres/s": "litiro ku isegonda",
+    "liters/second": "litiro ku isegonda",
+    "litres/second": "litiro ku isegonda",
+    "liter/second": "litiro ku isegonda",
+    "litre/second": "litiro ku isegonda",
+  };
+  if (compactMap[normalized]) return compactMap[normalized];
+
+  return unit
+    .replace(/m³/gi, "m3")
+    .replace(/m3\s*\/\s*(year|yr|y|annum)/gi, "m3 ku mwaka")
+    .replace(/m3\s*\/\s*(day|d)/gi, "m3 ku munsi")
+    .replace(/m3\s*\/\s*(hour|hr|h)/gi, "m3 ku isaha")
+    .replace(/m3\s*\/\s*(minute|min)/gi, "m3 ku munota")
+    .replace(/m3\s*\/\s*(second|sec|s)/gi, "m3 ku isegonda")
+    .replace(/\b(l|liter|litre|liters|litres)\s*\/\s*(second|sec|s)\b/gi, "litiro ku isegonda");
+}
+
+export function resolveFlowRateKinyarwanda(app: PermitApplication): string {
+  const v = resolveVolumes(app);
+  if (v.yearly != null) return `${fmtNum(v.yearly)} m3 ku mwaka`;
+  if (v.daily != null) return `${fmtNum(v.daily)} m3 ku munsi`;
+  const notes = resolveNotes(app);
+  const tfData = notes?.transferFormData;
+  if (tfData) {
+    const tfVal = tfData.waterAllowance != null ? parseFloat(String(tfData.waterAllowance)) : NaN;
+    const tfUnit = String(tfData.allowanceUnit ?? "").trim();
+    if (Number.isFinite(tfVal) && tfVal > 0) {
+      return `${fmtNum(tfVal)} ${formatFlowRateUnitKinyarwanda(tfUnit || "M3/year")}`;
+    }
   }
   return "N/A";
 }

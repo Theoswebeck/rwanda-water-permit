@@ -79,15 +79,13 @@ function pageHeight(doc: PDFKit.PDFDocument): number {
 }
 
 // Footer geometry — kept as named constants so `contentBottomY` can never
-// drift below the footer top. Both footers (slim DRAFT banner for previews,
-// compact QR footer for final issuance) sit with their top edge at
-// `ph - FOOTER_TOP_OFFSET`; body text must end at least `BODY_BOTTOM_PAD`
-// above that line or the QR/DRAFT chrome will paint over the last paragraph
-// (see `drawQrFooter`/`drawPreviewBanner`).
-const FOOTER_TOP_OFFSET = 38 * PT;
+// drift below the QR/DRAFT band. The old bottom page row ("Document ID" and
+// "Page 1 of 1") has been removed, so the QR/DRAFT band can sit lower and
+// return more body space to the bilingual content.
+const FOOTER_TOP_OFFSET = 32 * PT;
 const BODY_BOTTOM_PAD = 2 * PT;
 
-function contentBottomY(doc: PDFKit.PDFDocument, _skipQr = false): number {
+function contentBottomY(doc: PDFKit.PDFDocument): number {
   // Reserve = footer height (38pt) + small visual breathing room (2pt).
   // Earlier revisions tightened this to 28pt to win vertical space, but that
   // moved the cap *into* the footer band (see review C1) and silently
@@ -212,17 +210,17 @@ async function drawWatermark(doc: PDFKit.PDFDocument): Promise<void> {
 function drawLogo(doc: PDFKit.PDFDocument): number {
   const pw = pageWidth(doc);
   // Natural aspect ratio of logo image (1450×1600px ≈ 0.906 w:h).
-  const logoW = 26 * PT;
-  const logoH = 29 * PT;
+  const logoW = 31 * PT;
+  const logoH = 34.2 * PT;
   const logoX = (pw - logoW) / 2;
-  const logoY = 6 * PT;
+  const logoY = 4.5 * PT;
   if (fs.existsSync(LOGO_PATH)) {
     doc.image(LOGO_PATH, logoX, logoY, { width: logoW, height: logoH });
   } else {
-    doc.font(FONT_BOLD).fontSize(13)
+    doc.font(FONT_BOLD).fontSize(14)
       .text("Rwanda Water Resources Board", 0, 18 * PT, { align: "center", width: pw });
   }
-  return logoY + logoH + 4 * PT;
+  return logoY + logoH + 3 * PT;
 }
 
 // ─── Rich-text (inline `**bold**`) helpers ──────────────────────────────────
@@ -295,6 +293,20 @@ function drawRichText(
   }
 }
 
+function ensureBilingualPermitTitle(title: string): string {
+  if (/URUHUSHYA RWO GUKORESHA AMAZI/i.test(title)) {
+    return title;
+  }
+  // Existing saved overrides use the legacy English-only title shape
+  // (`WATER USE PERMIT N° ...`). Preserve the override's permit number while
+  // normalising that stale shape to the new bilingual heading, so old
+  // application-level title overrides do not keep staging/prod English-only.
+  return title.replace(
+    /^WATER USE PERMIT\s+(N[°º]\s*)/i,
+    "WATER USE PERMIT / URUHUSHYA RWO GUKORESHA AMAZI $1",
+  );
+}
+
 function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number {
   const pw = pageWidth(doc);
   const marginX = PERMIT_MARGIN_X;
@@ -302,7 +314,7 @@ function drawTitle(doc: PDFKit.PDFDocument, title: string, yPos: number): number
   // The title is rendered through `doc.text()` (not `drawRichText`), so
   // strip any inline `**` markers that may have leaked in via an assessor
   // override — otherwise they'd render as visible asterisks (review I3).
-  const cleanTitle = stripBoldMarkers(title);
+  const cleanTitle = stripBoldMarkers(ensureBilingualPermitTitle(title));
   // Re-assert the bold font + size immediately before measuring + drawing so
   // the rule width is never accidentally derived from a stale font state
   // left over from a previous render call (review M4).
@@ -332,7 +344,7 @@ async function drawQrFooter(
   const ph = pageHeight(doc);
   const verifyUrl = `${PRODUCTION_URL}/permit/view/${encodeURIComponent(permitNumber.trim())}`;
 
-  // Compact horizontal footer pinned near the page bottom (above the page-number row).
+  // Compact horizontal footer pinned near the page bottom.
   // The footer top sits exactly at `ph - FOOTER_TOP_OFFSET` so that
   // `contentBottomY` (which reserves the same offset + a small pad) cannot
   // be set to a value that would let body text overlap the footer chrome.
@@ -374,7 +386,7 @@ async function drawQrFooter(
   doc.restore();
 }
 
-/** Slim "DRAFT — NOT YET ISSUED" strip pinned just above the page-number footer. */
+/** Slim "DRAFT — NOT YET ISSUED" strip pinned near the bottom border. */
 function drawPreviewBanner(doc: PDFKit.PDFDocument, ctx: SlotResolverContext): void {
   const pw = pageWidth(doc);
   const ph = pageHeight(doc);
@@ -445,15 +457,6 @@ function drawClosingLine(
   return yPos + 16;
 }
 
-function drawPageFooter(doc: PDFKit.PDFDocument, permitNumber: string, page: number, total: number): void {
-  const pw = pageWidth(doc);
-  const y = pageHeight(doc) - 12 * PT;
-  doc.save().font(FONT_REGULAR).fontSize(8).fillColor("#646464");
-  doc.text(`Document ID: ${permitNumber}`, 0, y, { width: pw, align: "center" });
-  doc.text(`Page ${page} of ${total}`, pw - 60 * PT, y, { width: 50 * PT, align: "right" });
-  doc.restore();
-}
-
 // ─── Variant renderers ──────────────────────────────────────────────────────
 
 async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffer> {
@@ -467,46 +470,58 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   const doc = createDoc();
 
   await drawWatermark(doc);
-  drawLogo(doc);
+  const logoBottomY = drawLogo(doc);
 
-  let y = drawTitle(doc, resolveSlotText("permit.concession_individual.title.en", ctx), 49 * PT);
+  let y = drawTitle(doc, resolveSlotText("permit.concession_individual.title.en", ctx), logoBottomY);
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
   const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 11;
-  const lineGap = 2.0;
-  const paraGap = 7;
+  const fontSize = 10;
+  const lineGap = 1.0;
+  const paraGap = 4;
 
-  const paragraphs = [
+  const englishParagraphs = [
     resolveSlotText("permit.concession_individual.en.para_1", ctx),
     resolveSlotText("permit.concession_individual.en.para_2", ctx),
     resolveSlotText("permit.concession_individual.en.para_3", ctx),
     resolveSlotText("permit.concession_individual.en.para_4", ctx),
   ];
+  const rwParagraphs = [
+    resolveSlotText("permit.concession_individual.rw.para_1", ctx),
+    resolveSlotText("permit.concession_individual.rw.para_2", ctx),
+    resolveSlotText("permit.concession_individual.rw.para_3", ctx),
+    resolveSlotText("permit.concession_individual.rw.para_4", ctx),
+  ];
 
-  y += 8;
+  y += 2;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of paragraphs) {
+  for (const p of englishParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 4;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
+  y += 6;
 
-  y += 12;
+  for (const p of rwParagraphs) {
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
+    y += h + paraGap;
+  }
+
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-
-  const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) {
-    doc.switchToPage(i);
-    drawPageFooter(doc, permitNumber, i + 1, total);
-  }
 
   return docToBuffer(doc);
 }
@@ -521,43 +536,56 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
 
   const doc = createDoc();
   await drawWatermark(doc);
-  drawLogo(doc);
-  let y = drawTitle(doc, resolveSlotText("permit.abstraction_individual.title.en", ctx), 49 * PT);
+  const logoBottomY = drawLogo(doc);
+  let y = drawTitle(doc, resolveSlotText("permit.abstraction_individual.title.en", ctx), logoBottomY);
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
   const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 11;
-  const lineGap = 2.0;
-  const paraGap = 7;
+  const fontSize = 10;
+  const lineGap = 1.0;
+  const paraGap = 4;
 
-  const paragraphs = [
+  const englishParagraphs = [
     resolveSlotText("permit.abstraction_individual.en.para_1", ctx),
     resolveSlotText("permit.abstraction_individual.en.para_2", ctx),
     resolveSlotText("permit.abstraction_individual.en.para_3", ctx),
     resolveSlotText("permit.abstraction_individual.en.para_4", ctx),
   ];
+  const rwParagraphs = [
+    resolveSlotText("permit.abstraction_individual.rw.para_1", ctx),
+    resolveSlotText("permit.abstraction_individual.rw.para_2", ctx),
+    resolveSlotText("permit.abstraction_individual.rw.para_3", ctx),
+    resolveSlotText("permit.abstraction_individual.rw.para_4", ctx),
+  ];
 
-  y += 8;
+  y += 2;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of paragraphs) {
+  for (const p of englishParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 12;
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 4;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
+  y += 6;
+
+  for (const p of rwParagraphs) {
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
+    y += h + paraGap;
+  }
+
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-  const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) {
-    doc.switchToPage(i);
-    drawPageFooter(doc, permitNumber, i + 1, total);
-  }
   return docToBuffer(doc);
 }
 
@@ -603,19 +631,19 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
   for (const p of englishParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += 4;
   doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
   y += 6;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc, opts.skipQr)) {
+    if (y + h > contentBottomY(doc)) {
       doc.addPage();
       await drawWatermark(doc);
       y = 30 * PT;
@@ -624,7 +652,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 50) {
+  if (y > contentBottomY(doc) - 50) {
     doc.addPage();
     await drawWatermark(doc);
     y = 30 * PT;
@@ -633,11 +661,6 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-  const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) {
-    doc.switchToPage(i);
-    drawPageFooter(doc, permitNumber, i + 1, total);
-  }
   return docToBuffer(doc);
 }
 
@@ -651,44 +674,57 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
 
   const doc = createDoc();
   await drawWatermark(doc);
-  drawLogo(doc);
+  const logoBottomY = drawLogo(doc);
 
-  let y = drawTitle(doc, resolveSlotText("permit.concession_organization.title.en", ctx), 49 * PT);
+  let y = drawTitle(doc, resolveSlotText("permit.concession_organization.title.en", ctx), logoBottomY);
 
   if (isModified) drawModifiedBadge(doc, ctx);
 
   const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
-  const fontSize = 11;
-  const lineGap = 2.0;
-  const paraGap = 7;
+  const fontSize = 10;
+  const lineGap = 1.0;
+  const paraGap = 4;
 
-  const paragraphs = [
+  const englishParagraphs = [
     resolveSlotText("permit.concession_organization.en.para_1", ctx),
     resolveSlotText("permit.concession_organization.en.para_2", ctx),
     resolveSlotText("permit.concession_organization.en.para_3", ctx),
     resolveSlotText("permit.concession_organization.en.para_4", ctx),
   ];
+  const rwParagraphs = [
+    resolveSlotText("permit.concession_organization.rw.para_1", ctx),
+    resolveSlotText("permit.concession_organization.rw.para_2", ctx),
+    resolveSlotText("permit.concession_organization.rw.para_3", ctx),
+    resolveSlotText("permit.concession_organization.rw.para_4", ctx),
+  ];
 
-  y += 8;
+  y += 2;
   doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
-  for (const p of paragraphs) {
+  for (const p of englishParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
-    if (y + h > contentBottomY(doc, opts.skipQr)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
     drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc, opts.skipQr) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 12;
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 4;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
+  y += 6;
+
+  for (const p of rwParagraphs) {
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
+    y += h + paraGap;
+  }
+
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 6;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
-  const total = doc.bufferedPageRange().count;
-  for (let i = 0; i < total; i++) {
-    doc.switchToPage(i);
-    drawPageFooter(doc, permitNumber, i + 1, total);
-  }
   return docToBuffer(doc);
 }
 
