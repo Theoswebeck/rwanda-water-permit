@@ -22,7 +22,7 @@ function isMissingTransferRequestsTable(err: unknown): boolean {
 }
 
 function toSafeApplicationPayload(input: Record<string, unknown>): Record<string, unknown> {
-  const blocked = new Set(['id', 'applicant_id', 'created_at'])
+  const blocked = new Set(['id', 'applicant_id', 'created_at', 'payment_waived'])
   const optionalUuidColumns = new Set([
     'modified_from_application_id',
     'renewed_from_permit_id',
@@ -57,23 +57,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     const { id } = await context.params
 
-    // TEMP DEBUG: allow a single operator user to fetch any application for
-    // a read-only UX verification of RWB-2026-000007 payment tab. Remove after.
-    const DEBUG_VIEW_ANY_APPLICATION_USER_ID = '2ac580f3-6cbe-4ed4-be12-4ffb018f5907'
-    const isDebugViewer = userId === DEBUG_VIEW_ANY_APPLICATION_USER_ID
-
     let appRes
-    if (isDebugViewer) {
-      appRes = await query(
-        `
-        select *
-        from public.applications
-        where id = $1
-        limit 1
-        `,
-        [id]
-      )
-    } else {
     try {
       appRes = await query(
         `
@@ -111,7 +95,6 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         `,
         [id, userId]
       )
-    }
     }
     const application = appRes.rows[0]
     if (!application) {

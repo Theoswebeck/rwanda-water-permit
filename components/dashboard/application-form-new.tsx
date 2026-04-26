@@ -1202,6 +1202,7 @@ export function ApplicationForm({
     !readOnly &&
     !isStaffView &&
     !isModification &&
+    !currentApplication?.payment_waived &&
     (!currentApplication?.status || ['draft', 'pending_payment'].includes(currentApplication.status));
   const shouldShowApplicantPaymentDetailsTab =
     readOnly &&

@@ -354,7 +354,10 @@ export interface Application {
   modified_from_application_id?: string
   modification_changes?: Record<string, { previous: any; current: any }>
   modification_reason?: string
-  
+
+  // Payment waiver for legacy offline-pay applicants (pre-IremboPay)
+  payment_waived?: boolean
+
   // Renewal tracking
   is_renewal?: boolean
   renewed_from_permit_id?: string
