@@ -402,8 +402,18 @@ export default function PermitInspectionUnifiedPage() {
         // Documents
         inspection_documents: form.inspection_documents ?? null,
 
-        // Inspector-provided overrides for locked fields that were N/A
-        locked_field_overrides: form.locked_field_overrides ?? null,
+        // Inspector-provided overrides for locked fields that were N/A.
+        // For registry inspections, always persist the permit number so the
+        // inspection can be re-linked if the registry is replaced (TRUNCATE+INSERT).
+        locked_field_overrides: isRegistrySource
+          ? {
+              ...(form.locked_field_overrides ?? {}),
+              permitNumber: (inspectionData.registryEntry as any)?.permit_number
+                ?? (inspectionData as any).prepopulatedData?.permitNumber
+                ?? (form.locked_field_overrides as any)?.permitNumber
+                ?? "",
+            }
+          : (form.locked_field_overrides ?? null),
       };
 
       if (template === "authorization") {
