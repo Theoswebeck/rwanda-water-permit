@@ -442,6 +442,24 @@ export async function POST(req: NextRequest) {
 
       await query("COMMIT");
 
+      // Re-link inspections whose owner_id pointed to old registry UUIDs (pre-TRUNCATE).
+      // The permit number is preserved in locked_field_overrides->>'permitNumber'.
+      await query(`
+        UPDATE public.inspections i
+        SET owner_id = pr.id
+        FROM (
+          SELECT DISTINCT ON (permit_number) id, permit_number
+          FROM public.permit_registry
+          WHERE permit_number IS NOT NULL
+          ORDER BY permit_number, row_index DESC NULLS LAST
+        ) pr
+        WHERE i.owner_kind = 'permit_registry'
+          AND pr.permit_number = i.locked_field_overrides->>'permitNumber'
+          AND i.owner_id IS DISTINCT FROM pr.id
+      `).catch((e) => {
+        console.warn("⚠️ owner_id re-link after registry import failed (non-fatal):", e?.message);
+      });
+
       return NextResponse.json({
         success: true,
         inserted,

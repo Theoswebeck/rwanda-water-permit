@@ -43,6 +43,10 @@ type InspectionRow = {
   created_at?: string;
   owner_kind?: string | null;
   owner_id?: string | null;
+  manual_inspection_subject?: string | null;
+  manual_inspection_reason?: string | null;
+  manual_site_notes?: string | null;
+  locked_field_overrides?: Record<string, string> | null;
   application: {
     id: string;
     application_number?: string;
@@ -94,6 +98,27 @@ function getDisplayStatus(row: InspectionRow): string {
   return row.workflow_status || "submitted";
 }
 
+function manualHolderName(row: InspectionRow): string {
+  return (
+    row.manual_inspection_subject ||
+    row.locked_field_overrides?.permitHolderName ||
+    "Manual inspection"
+  );
+}
+
+function manualLocationText(row: InspectionRow): string {
+  const o = row.locked_field_overrides || {};
+  return [
+    o.permitLocationVillage,
+    o.permitLocationCell,
+    o.permitLocationSector,
+    o.permitLocationDistrict,
+    o.permitLocationProvince,
+  ]
+    .filter(Boolean)
+    .join(", ") || row.manual_site_notes || "";
+}
+
 
 const CHIP_DEFS: StatusChipDef[] = [
   {
@@ -106,6 +131,12 @@ const CHIP_DEFS: StatusChipDef[] = [
     id: "in_field",
     label: "In Field",
     statuses: ["scheduled", "in_progress"],
+    priority: "secondary",
+  },
+  {
+    id: "no_permit",
+    label: "No Permit",
+    statuses: ["manual_unpermitted"],
     priority: "secondary",
   },
   {
@@ -193,6 +224,10 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             created_at,
             owner_kind,
             owner_id,
+            manual_inspection_subject,
+            manual_inspection_reason,
+            manual_site_notes,
+            locked_field_overrides,
             application:applications!application_id(
               id,
               application_number,
@@ -234,6 +269,37 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             }
           }
         }
+
+        // Fallback: if registry was replaced (TRUNCATE+INSERT), owner_id UUIDs are stale.
+        // Re-resolve via locked_field_overrides.permitNumber.
+        const unresolved = rows.filter(
+          (r) => r.owner_kind === "permit_registry" && r.owner_id && !registryById[r.owner_id as string]
+        );
+        if (unresolved.length > 0) {
+          const fallbackPNs = Array.from(new Set(
+            unresolved
+              .map((r) => (r.locked_field_overrides as Record<string, string> | null)?.permitNumber)
+              .filter((pn): pn is string => Boolean(pn))
+          ));
+          if (fallbackPNs.length > 0) {
+            const { data: fbRows } = await supabase
+              .from("permit_registry")
+              .select("id, permit_number, permit_holder")
+              .in("permit_number", fallbackPNs)
+              .order("row_index", { ascending: false, nullsFirst: false });
+            if (fbRows) {
+              const pnMap: Record<string, { id: string; permit_number: string; permit_holder: string | null }> = {};
+              for (const fb of fbRows as Array<{ id: string; permit_number: string; permit_holder: string | null }>) {
+                if (fb.permit_number && !pnMap[fb.permit_number]) pnMap[fb.permit_number] = fb;
+              }
+              for (const r of unresolved) {
+                const pn = (r.locked_field_overrides as Record<string, string> | null)?.permitNumber;
+                if (pn && pnMap[pn] && r.owner_id) registryById[r.owner_id as string] = pnMap[pn];
+              }
+            }
+          }
+        }
+
         const registryByInspection: Record<string, { permit_number: string; permit_holder: string | null } | undefined> = {};
         for (const r of rows) {
           if (r.owner_kind === "permit_registry" && r.owner_id && registryById[r.owner_id]) {
@@ -372,7 +438,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     return visibleInspections
       .map((r) => ({
       ...r,
-      status: getDisplayStatus(r),
+      status: r.owner_kind === "manual_unpermitted" ? "manual_unpermitted" : getDisplayStatus(r),
     }));
   }, [visibleInspections]);
 
@@ -382,6 +448,9 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     const activeChip = CHIP_DEFS.find((c) => c.id === activeChipId);
     if (activeChip && activeChip.statuses.length > 0) {
       result = result.filter((r) => {
+        if (activeChip.id === "no_permit") {
+          return r.owner_kind === "manual_unpermitted";
+        }
         const displayStatus = getDisplayStatus(r);
         return activeChip.statuses.includes(displayStatus);
       });
@@ -390,6 +459,15 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     const q = search.trim().toLowerCase();
     if (q) {
       result = result.filter((r) => {
+        if (r.owner_kind === "manual_unpermitted") {
+          return [
+            "no permit",
+            manualHolderName(r),
+            manualLocationText(r),
+            r.manual_inspection_reason || "",
+            r.locked_field_overrides?.permitNumber || "",
+          ].join(" ").toLowerCase().includes(q);
+        }
         const permitNumber =
           (r.application?.id ? permitByAppId[r.application.id]?.permit_number : undefined) ||
           registryByInspectionId[r.id]?.permit_number;
@@ -451,7 +529,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60">
             <div className="flex items-center gap-2 w-full md:w-[360px]">
               <Search className="h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search permit #, permit holder…" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input placeholder="Search permit #, permit holder, no permit…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
           </div>
 
@@ -475,25 +553,46 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                   </TableRow>
                 ) : (
                   filtered.map((r) => {
+                    const isManual = r.owner_kind === "manual_unpermitted";
                     const appId = r.application?.id;
                     const appPermit = appId ? permitByAppId[appId] : undefined;
                     const registryEntry = registryByInspectionId[r.id];
-                    const permitNumber = appPermit?.permit_number || registryEntry?.permit_number;
+                    const permitNumber = isManual
+                      ? (r.locked_field_overrides?.permitNumber || "No permit")
+                      : appPermit?.permit_number || registryEntry?.permit_number;
                     const date = r.completed_date || r.scheduled_date || r.created_at || null;
                     const holderName =
-                      (permitNumber ? permitHolderByNumber[permitNumber] : undefined) ||
-                      registryEntry?.permit_holder ||
-                      applicantName(r.applicant);
+                      isManual
+                        ? manualHolderName(r)
+                        : (permitNumber ? permitHolderByNumber[permitNumber] : undefined) ||
+                          registryEntry?.permit_holder ||
+                          applicantName(r.applicant);
                     const displayStatus = getDisplayStatus(r);
                     const viewIdentifier = permitNumber || r.application?.application_number;
-                    const viewHref = viewIdentifier
+                    const viewHref = isManual
+                      ? `${basePath}/permit/manual-${r.id}`
+                      : viewIdentifier
                       ? `${basePath}/permit/${encodeURIComponent(viewIdentifier)}`
                       : `${basePath}/${r.id}`;
                     return (
                       <TableRow key={r.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/70 dark:hover:bg-slate-900/40 transition-colors">
                         <TableCell>{fmtDate(date)}</TableCell>
-                        <TableCell className="font-medium">{permitNumber || "—"}</TableCell>
-                        <TableCell className="truncate max-w-[280px]">{holderName}</TableCell>
+                        <TableCell className="font-medium">
+                          {isManual ? (
+                            <span className="inline-flex items-center gap-2">
+                              No permit
+                              <Badge variant="outline" className="text-[10px]">Manual</Badge>
+                            </span>
+                          ) : (
+                            permitNumber || "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="truncate max-w-[280px]">
+                          {holderName}
+                          {isManual && manualLocationText(r) ? (
+                            <div className="text-xs text-muted-foreground truncate">{manualLocationText(r)}</div>
+                          ) : null}
+                        </TableCell>
                         <TableCell>{statusPill(displayStatus)}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
@@ -523,7 +622,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                                   </Link>
                                 </DropdownMenuItem>
                               ) : null}
-                              {permitNumber ? (
+                              {!isManual && permitNumber ? (
                                 <DropdownMenuItem asChild>
                                   <Link href={`/permit/view/${encodeURIComponent(permitNumber)}`} className="flex items-center gap-2">
                                     <Eye className="h-4 w-4" />
