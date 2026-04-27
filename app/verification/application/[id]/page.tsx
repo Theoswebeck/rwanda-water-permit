@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
@@ -223,7 +224,6 @@ export default function VerificationApplicationPage() {
         setApplication(appData);
 
         const formData = mapApplicationToFormData(appData, null);
-        setInitialFormData(formData);
 
         // Handle transfer/modification applications: load transfer data and original permit details
         const parsedNotes = (() => {
@@ -318,6 +318,10 @@ export default function VerificationApplicationPage() {
 
         // Process documents for ApplicationForm
         const documentMap: Record<string, { url: string; name: string }> = {};
+        const currentDocuments = (appData as { documents?: unknown }).documents;
+        const documentsForAdditionalLinks = Array.isArray(currentDocuments)
+          ? [...currentDocuments]
+          : [];
         const processDocsIntoMap = (docs: any[]) => {
           for (const doc of docs) {
             if (!doc.file_path || !doc.name) continue;
@@ -346,7 +350,8 @@ export default function VerificationApplicationPage() {
                 .select('*')
                 .eq('application_id', originalAppId)
                 .order('created_at', { ascending: false });
-              if (originalDocs) {
+              if (Array.isArray(originalDocs)) {
+                documentsForAdditionalLinks.push(...originalDocs);
                 processDocsIntoMap(originalDocs);
               }
             } catch (e) {
@@ -355,6 +360,7 @@ export default function VerificationApplicationPage() {
           }
         }
 
+        setInitialFormData(mergeAdditionalDocumentUrls(formData, documentsForAdditionalLinks, getDocumentUrl));
         setInitialDocuments(documentMap);
 
         // Load latest technical assessment as read-only evidence for verifier

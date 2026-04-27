@@ -42,6 +42,7 @@ import { getDocumentUrl } from "@/lib/supabase-storage";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -329,7 +330,6 @@ export default function ReviewApplicationPage() {
 
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
-        setInitialFormData(formData);
         console.log('✅ Form data mapped:', formData);
 
         // Handle transfer applications: load transfer data and original permit details
@@ -426,6 +426,10 @@ export default function ReviewApplicationPage() {
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
+        const currentDocuments = (appData as { documents?: unknown }).documents;
+        const documentsForAdditionalLinks = Array.isArray(currentDocuments)
+          ? [...currentDocuments]
+          : [];
         // Helper: process a list of document rows into the documentMap
         const processDocumentsIntoMap = (docs: any[], label: string) => {
           console.log(`🔍 [${label}] Processing ${docs.length} documents`);
@@ -465,7 +469,8 @@ export default function ReviewApplicationPage() {
                 .eq('application_id', originalAppId)
                 .order('created_at', { ascending: false });
 
-              if (!origDocsError && originalDocs && originalDocs.length > 0) {
+              if (!origDocsError && Array.isArray(originalDocs) && originalDocs.length > 0) {
+                documentsForAdditionalLinks.push(...originalDocs);
                 processDocumentsIntoMap(originalDocs, 'Original App');
               } else if (origDocsError) {
                 console.error('❌ Error fetching original application documents:', origDocsError);
@@ -478,6 +483,7 @@ export default function ReviewApplicationPage() {
           }
         }
         
+        setInitialFormData(mergeAdditionalDocumentUrls(formData, documentsForAdditionalLinks, getDocumentUrl));
         setInitialDocuments(documentMap);
         console.log('📄 Final document map:', documentMap);
 

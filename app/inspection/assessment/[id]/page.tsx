@@ -46,6 +46,7 @@ import type { Application, ApplicationStatus, User, Document } from "@/types/dat
 import dynamic from "next/dynamic";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { generateFieldReportPdf, FieldReportAssessment, FieldReportApplicationData } from "@/lib/pdf-generator";
 
 // Lazy load the ApplicationForm component
@@ -294,7 +295,6 @@ export default function AssessmentPage() {
 
         // Process application data for form display
         const formData = mapApplicationToFormData(appData, appData.applicant);
-        setInitialFormData(formData);
         
         // Process documents using smart classification (copied from review page)
         const documentMap: Record<string, { url: string; name: string }> = {};
@@ -327,6 +327,7 @@ export default function AssessmentPage() {
             }
           }
         }
+        setInitialFormData(mergeAdditionalDocumentUrls(formData, appData.documents, getDocumentUrl));
         setInitialDocuments(documentMap);
         console.log('📄 Final document map:', documentMap);
         console.log('📄 Documents found:', appData.documents?.length || 0, 'documents');

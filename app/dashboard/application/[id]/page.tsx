@@ -25,6 +25,7 @@ import { useApplications } from "@/hooks/useApplications";
 import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl, downloadFromDocumentsBucket } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
@@ -540,10 +541,10 @@ export default function ApplicationDetailPage() {
           
           // Transform application data to form format
           const formData = mapApplicationToFormData(appWithRelations, userProfile);
-          setInitialFormData(formData);
           
           // Process documents for form (smart classification by file path when possible)
           const documentMap: Record<string, { url: string; name: string }> = {};
+          const documentsForAdditionalLinks = [...documents];
           const processDocsIntoMap = (docs: any[]) => {
             for (const doc of docs) {
               if (!doc.file_path || !doc.name) continue;
@@ -567,13 +568,17 @@ export default function ApplicationDetailPage() {
             if (originalAppId) {
               try {
                 const originalDocs = await getDocuments(originalAppId);
-                if (originalDocs) processDocsIntoMap(originalDocs);
+                if (Array.isArray(originalDocs)) {
+                  documentsForAdditionalLinks.push(...originalDocs);
+                  processDocsIntoMap(originalDocs);
+                }
               } catch (e) {
                 console.error('⚠️ Failed to load original application documents:', e);
               }
             }
           }
           
+          setInitialFormData(mergeAdditionalDocumentUrls(formData, documentsForAdditionalLinks, getDocumentUrl));
           setInitialDocuments(documentMap);
           
           console.log('📄 Documents found:', documents.length, 'documents');

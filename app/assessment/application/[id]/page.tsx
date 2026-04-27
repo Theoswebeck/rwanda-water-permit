@@ -49,6 +49,7 @@ import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -811,7 +812,6 @@ export default function AssessmentApplicationPage() {
 
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
-        setInitialFormData(formData);
 
         // Handle transfer/modification applications: load transfer data and original permit details
         const parsedNotes = (() => {
@@ -1099,6 +1099,10 @@ export default function AssessmentApplicationPage() {
         
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
+        const currentDocuments = (appData as { documents?: unknown }).documents;
+        const documentsForAdditionalLinks = Array.isArray(currentDocuments)
+          ? [...currentDocuments]
+          : [];
         const processDocsIntoMap = (docs: any[]) => {
           for (const doc of docs) {
             if (!doc.file_path || !doc.name) continue;
@@ -1127,7 +1131,8 @@ export default function AssessmentApplicationPage() {
                 .select('*')
                 .eq('application_id', originalAppId)
                 .order('created_at', { ascending: false });
-              if (originalDocs) {
+              if (Array.isArray(originalDocs)) {
+                documentsForAdditionalLinks.push(...originalDocs);
                 processDocsIntoMap(originalDocs);
               }
             } catch (e) {
@@ -1136,6 +1141,7 @@ export default function AssessmentApplicationPage() {
           }
         }
         
+        setInitialFormData(mergeAdditionalDocumentUrls(formData, documentsForAdditionalLinks, getDocumentUrl));
         setInitialDocuments(documentMap);
 
         // Mark hydrated + seed autosave snapshot so we don't autosave immediately on initial load

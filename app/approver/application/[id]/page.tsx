@@ -29,6 +29,7 @@ import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
+import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
@@ -369,7 +370,6 @@ export default function ApproverApplicationPage() {
 
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
-        setInitialFormData(formData);
 
         // Handle transfer/modification applications: load transfer data and original permit details
         const parsedNotes = (() => {
@@ -524,6 +524,10 @@ export default function ApproverApplicationPage() {
 
         // Process documents for form
         const documentMap: Record<string, { url: string; name: string }> = {};
+        const currentDocuments = (appData as { documents?: unknown }).documents;
+        const documentsForAdditionalLinks = Array.isArray(currentDocuments)
+          ? [...currentDocuments]
+          : [];
         const processDocsIntoMap = (docs: any[]) => {
           for (const doc of docs) {
             if (!doc.file_path || !doc.name) continue;
@@ -552,7 +556,8 @@ export default function ApproverApplicationPage() {
                 .select('*')
                 .eq('application_id', originalAppId)
                 .order('created_at', { ascending: false });
-              if (originalDocs) {
+              if (Array.isArray(originalDocs)) {
+                documentsForAdditionalLinks.push(...originalDocs);
                 processDocsIntoMap(originalDocs);
               }
             } catch (e) {
@@ -561,6 +566,7 @@ export default function ApproverApplicationPage() {
           }
         }
 
+        setInitialFormData(mergeAdditionalDocumentUrls(formData, documentsForAdditionalLinks, getDocumentUrl));
         setInitialDocuments(documentMap);
 
       } catch (err) {
