@@ -87,9 +87,11 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
 
       const applicationId = data?.application?.id;
       const appNumber = data?.application?.application_number as string | undefined;
-      const isRegistry = isRegistryApplication(appNumber);
+      const isRegistryApp = isRegistryApplication(appNumber);
+      const ownerKind = (data as any).owner_kind as string | null;
+      const ownerId = (data as any).owner_id as string | null;
 
-      if (isRegistry && appNumber) {
+      if (isRegistryApp && appNumber) {
         const realPermitNumber = extractPermitNumber(appNumber);
         const { data: regRows } = await supabase
           .from("permit_registry")
@@ -101,6 +103,38 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
 
         setRegistryEntry((regData as RegistryEntry | null) || null);
         setPermit(null);
+        return;
+      }
+
+      // Polymorphic owner_kind/owner_id path (no stub application row)
+      if (ownerKind === "permit_registry" && ownerId) {
+        const { data: regRows } = await supabase
+          .from("permit_registry")
+          .select("*")
+          .eq("id", ownerId)
+          .limit(1);
+        if (regRows?.[0]) {
+          setRegistryEntry(regRows[0] as RegistryEntry);
+          setPermit(null);
+          return;
+        }
+        // Fallback: look up by permitNumber stored in locked_field_overrides
+        const savedPermitNumber = (data as any).locked_field_overrides?.permitNumber as string | undefined;
+        if (savedPermitNumber) {
+          const { data: fbRows } = await supabase
+            .from("permit_registry")
+            .select("*")
+            .eq("permit_number", savedPermitNumber)
+            .order("row_index", { ascending: false, nullsFirst: false })
+            .limit(1);
+          if (fbRows?.[0]) {
+            setRegistryEntry(fbRows[0] as RegistryEntry);
+            setPermit(null);
+            return;
+          }
+        }
+        setPermit(null);
+        setRegistryEntry(null);
         return;
       }
 
@@ -167,7 +201,7 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
     inspection?.workflow_status || "draft";
   const inspectionStatus: string = inspection?.status || "scheduled";
 
-  const isRegistry = isRegistryApplication(app?.application_number);
+  const isRegistry = isRegistryApplication(app?.application_number) || inspection?.owner_kind === "permit_registry";
   const displayPermitNumber = isRegistry
     ? (registryEntry?.permit_number || extractPermitNumber(app?.application_number || ""))
     : (permit?.permit_number || "N/A");
