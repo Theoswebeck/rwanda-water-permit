@@ -132,6 +132,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       return NextResponse.json({ success: false, message: "Invalid permit registry id" }, { status: 400 });
     }
 
+    // Look up permit_number from registry row
+    const registryResult = await query<{ permit_number: string }>(
+      `select permit_number from public.permit_registry where id = $1 limit 1`,
+      [id]
+    );
+    const registryRow = registryResult.rows[0];
+    if (!registryRow) {
+      return NextResponse.json({ success: false, message: "Permit registry row not found" }, { status: 404 });
+    }
+    const { permit_number } = registryRow;
+
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
@@ -148,65 +159,37 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
-    const relDir = path.join("uploads", "permit-registry", safeSegment(id));
+    const safePermitNumber = safeSegment(permit_number);
+    const relDir = path.join("uploads", "permit-registry", safePermitNumber);
     const absDir = path.join(process.cwd(), "public", relDir);
     await mkdir(absDir, { recursive: true });
 
-    const diskName = `old-permit-${Date.now()}${safeSegment(ext)}`;
+    const diskName = `${Date.now()}-${safeSegment(file.name || `document${ext}`)}`;
     const absFile = path.join(absDir, diskName);
     await writeFile(absFile, bytes);
 
     const relPath = `/${path.join(relDir, diskName).replaceAll(path.sep, "/")}`;
 
-    let result;
-    try {
-      result = await query<{
-        uploaded_doc_path: string | null;
-        uploaded_doc_name: string | null;
-        uploaded_doc_mime_type: string | null;
-        uploaded_doc_uploaded_at: string | null;
-      }>(
-        `
-        update public.permit_registry
-        set
-          uploaded_doc_path = $2,
-          uploaded_doc_name = $3,
-          uploaded_doc_mime_type = $4,
-          uploaded_doc_uploaded_at = now(),
-          updated_at = now()
-        where id = $1
-        returning
-          uploaded_doc_path,
-          uploaded_doc_name,
-          uploaded_doc_mime_type,
-          uploaded_doc_uploaded_at
-        `,
-        [id, relPath, file.name || diskName, mime]
-      );
-    } catch (error) {
-      const pgCode =
-        typeof error === "object" && error !== null && "code" in error
-          ? String((error as { code?: unknown }).code || "")
-          : "";
-      if (pgCode === "42703") {
-        return NextResponse.json(
-          {
-            success: false,
-            message: "Database is missing permit registry upload columns. Run the latest migrations and retry.",
-          },
-          { status: 503 }
-        );
-      }
-      throw error;
-    }
-
-    if (!result.rowCount) {
-      return NextResponse.json({ success: false, message: "Permit registry row not found" }, { status: 404 });
-    }
+    const insertResult = await query<{
+      id: string;
+      permit_number: string;
+      doc_path: string;
+      doc_name: string;
+      doc_mime_type: string;
+      uploaded_at: string;
+    }>(
+      `
+      insert into public.permit_registry_documents
+        (permit_number, doc_path, doc_name, doc_mime_type)
+      values ($1, $2, $3, $4)
+      returning id, permit_number, doc_path, doc_name, doc_mime_type, uploaded_at
+      `,
+      [permit_number, relPath, file.name || diskName, mime]
+    );
 
     return NextResponse.json({
       success: true,
-      document: result.rows[0],
+      document: insertResult.rows[0],
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
