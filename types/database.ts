@@ -421,6 +421,15 @@ export interface Permit {
   updated_at: string
 }
 
+export interface RegistryDocument {
+  id: string
+  permit_number: string
+  doc_name: string
+  doc_path: string
+  doc_mime_type: string
+  uploaded_at: string
+}
+
 export interface PermitRegistryEntry {
   id: string
   row_index: number | null
@@ -447,6 +456,7 @@ export interface PermitRegistryEntry {
   uploaded_doc_name: string | null
   uploaded_doc_mime_type: string | null
   uploaded_doc_uploaded_at: string | null
+  documents?: RegistryDocument[]
   deleted_at: string | null
   manually_edited_at: string | null
   created_at: string

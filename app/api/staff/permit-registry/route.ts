@@ -16,6 +16,7 @@ async function detectSchema(): Promise<{
   hasDeletedAt: boolean;
   hasManuallyEditedAt: boolean;
   hasPostGIS: boolean;
+  hasDocumentsTable: boolean;
 }> {
   const [tablesRes, extRes] = await Promise.all([
     query<{ table_name: string }>(
@@ -60,6 +61,12 @@ async function detectSchema(): Promise<{
     hasManuallyEditedAt = cols.has("manually_edited_at");
   }
 
+  const docsTableRes = await query(
+    `SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'permit_registry_documents' LIMIT 1`
+  );
+  const hasDocumentsTable = docsTableRes.rows.length > 0;
+
   return {
     hasRegistry,
     hasDocColumns,
@@ -68,6 +75,7 @@ async function detectSchema(): Promise<{
     hasDeletedAt,
     hasManuallyEditedAt,
     hasPostGIS: Number(extRes.rows[0]?.n || "0") > 0,
+    hasDocumentsTable,
   };
 }
 
@@ -112,6 +120,14 @@ export async function GET(req: NextRequest) {
     const manuallyEditedAtSelect = schema.hasManuallyEditedAt
       ? `pr.manually_edited_at,`
       : `null::timestamptz as manually_edited_at,`;
+
+    const docsSelect = schema.hasDocumentsTable
+      ? `(
+          SELECT COALESCE(json_agg(d ORDER BY d.uploaded_at ASC), '[]'::json)
+          FROM public.permit_registry_documents d
+          WHERE d.permit_number = pr.permit_number
+        ) AS documents,`
+      : `'[]'::json AS documents,`;
 
     // Build WHERE filters
     const where: string[] = [];
@@ -202,6 +218,7 @@ export async function GET(req: NextRequest) {
         upper(coalesce(pr.status, 'OPERATIONAL')) as status,
         pr.contact,
         ${docSelect}
+        ${docsSelect}
         ${deletedAtSelect}
         ${manuallyEditedAtSelect}
         pr.created_at,
