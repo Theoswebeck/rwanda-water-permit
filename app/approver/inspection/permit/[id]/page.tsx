@@ -90,6 +90,13 @@ interface FormState {
   project_latitude?: number;
   project_longitude?: number;
 
+  // No-permit inspection metadata
+  manual_inspection_subject?: string;
+  manual_inspection_reason?: string;
+  manual_contact_name?: string;
+  manual_contact_phone?: string;
+  manual_site_notes?: string;
+
   // Documents (stored as JSONB in DB)
   inspection_documents?: any[];
 
@@ -137,6 +144,31 @@ function defaultOhs(): OhsGenderSensitive {
     separateSanitationFacilities: { value: null, remarks: "" },
     genderResponsiveGrievanceMechanism: { value: null, remarks: "" },
   };
+}
+
+async function fetchNoPermitInspectionDocuments(inspectionId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id, name, file_path, file_size, mime_type, created_at")
+    .eq("owner_kind", "inspection")
+    .eq("owner_id", inspectionId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("⚠️ Failed to load no-permit inspection documents:", error);
+    return [];
+  }
+
+  return ((data || []) as any[])
+    .filter((row) => row.file_path)
+    .map((row) => ({
+      id: String(row.id),
+      name: String(row.name || "Document"),
+      path: String(row.file_path),
+      size: Number(row.file_size || 0),
+      type: String(row.mime_type || "application/octet-stream"),
+      uploadedAt: String(row.created_at || new Date().toISOString()),
+    }));
 }
 
 function YesNoSelect({
@@ -231,11 +263,16 @@ export default function PermitInspectionUnifiedPage() {
             .from("inspections")
             .select("*")
             .order("created_at", { ascending: false });
-          const scoped = data.source === "permit_registry"
-            ? lookup.eq("owner_kind", "permit_registry").eq("owner_id", data.registryEntry?.id as string)
-            : lookup.eq("application_id", data.application.id);
-          const { data: latest, error: latestError } = await scoped
-            .limit(1);
+          const scoped = data.source === "manual_unpermitted"
+            ? data.manualInspectionId
+              ? lookup.eq("id", data.manualInspectionId).eq("owner_kind", "manual_unpermitted")
+              : null
+            : data.source === "permit_registry"
+              ? lookup.eq("owner_kind", "permit_registry").eq("owner_id", data.registryEntry?.id as string)
+              : lookup.eq("application_id", data.application.id);
+          const { data: latest, error: latestError } = scoped
+            ? await scoped.limit(1)
+            : { data: null, error: null };
 
           if (latestError) throw latestError;
           const existing = (latest && latest[0]) as Inspection | undefined;
@@ -248,6 +285,9 @@ export default function PermitInspectionUnifiedPage() {
             );
             setCanEditForm(canCreateInspection && isOwner && isAssessorOwned);
             setInspectionRecord(existing);
+            const noPermitDocuments = data.source === "manual_unpermitted"
+              ? await fetchNoPermitInspectionDocuments(existing.id)
+              : [];
 
             setForm(prev => ({
               ...prev,
@@ -269,11 +309,19 @@ export default function PermitInspectionUnifiedPage() {
               actual_concession_boundaries: normalizeBoundaryRows((existing as any).actual_concession_boundaries),
               employment_gender_breakdown: ((existing as any).employment_gender_breakdown as any) || prev.employment_gender_breakdown,
               ohs_gender_sensitive: ((existing as any).ohs_gender_sensitive as any) || prev.ohs_gender_sensitive,
+              inspection_documents: noPermitDocuments.length > 0
+                ? noPermitDocuments
+                : ((existing as any).inspection_documents as any[]) || prev.inspection_documents,
               locked_field_overrides: ((existing as any).locked_field_overrides as Record<string, string>) || prev.locked_field_overrides,
             }));
             setTemplate(((existing as any).inspection_template as InspectionTemplate) || tpl);
             return;
           }
+        }
+
+        if (data.source === "manual_unpermitted" && data.manualInspectionId) {
+          setError("No permit inspection not found.");
+          return;
         }
 
         // New inspection -- prefill from prepopulated data
@@ -310,7 +358,8 @@ export default function PermitInspectionUnifiedPage() {
       return;
     }
 
-    if (!inspectionData?.application?.id) {
+    const isManualSourceForSave = inspectionData?.source === "manual_unpermitted";
+    if (!inspectionData?.application?.id && !isManualSourceForSave) {
       alert("⚠️ Permit data not loaded.");
       return;
     }
@@ -328,6 +377,7 @@ export default function PermitInspectionUnifiedPage() {
     try {
       setSaving(true);
 
+      const isManualSource = inspectionData.source === "manual_unpermitted";
       const isRegistrySource = inspectionData.source === "permit_registry";
       const registryOwnerId = isRegistrySource
         ? (inspectionData.registryEntry?.id as string | undefined)
@@ -335,12 +385,12 @@ export default function PermitInspectionUnifiedPage() {
       if (isRegistrySource && !registryOwnerId) {
         throw new Error("Registry permit is missing an internal id; cannot save inspection.");
       }
-      const applicationId = isRegistrySource ? null : inspectionData.application.id;
+      const applicationId = isRegistrySource || isManualSource ? null : inspectionData.application.id;
 
       const nowIso = new Date().toISOString();
       const base = {
         application_id: applicationId,
-        owner_kind: isRegistrySource ? "permit_registry" : null,
+        owner_kind: isManualSource ? "manual_unpermitted" : isRegistrySource ? "permit_registry" : null,
         owner_id: isRegistrySource ? registryOwnerId : null,
         // CRITICAL: use the session user id (same as auth.uid() in Postgres RLS)
         inspector_id: sessionUserId,
@@ -364,8 +414,8 @@ export default function PermitInspectionUnifiedPage() {
         reviewed_at: null,
 
         // Locked fields (stored but not editable)
-        catchment_level1: locked?.catchmentLevel1 ?? null,
-        catchment_level2: locked?.catchmentLevel2 ?? null,
+        catchment_level1: locked?.catchmentLevel1 ?? form.locked_field_overrides?.catchmentLevel1 ?? null,
+        catchment_level2: locked?.catchmentLevel2 ?? form.locked_field_overrides?.catchmentLevel2 ?? null,
       };
 
       const payload: any = {
@@ -390,6 +440,12 @@ export default function PermitInspectionUnifiedPage() {
         general_conclusion: form.general_conclusion ?? null,
         recommendations: form.recommendations ?? null,
         recommendation_details: form.recommendation_details ?? null,
+
+        manual_inspection_subject: form.manual_inspection_subject ?? null,
+        manual_inspection_reason: form.manual_inspection_reason ?? null,
+        manual_contact_name: form.manual_contact_name ?? null,
+        manual_contact_phone: form.manual_contact_phone ?? null,
+        manual_site_notes: form.manual_site_notes ?? null,
 
         // Project (activity site) coordinates — Section 2.1
         project_latitude: form.project_latitude ?? null,
@@ -465,6 +521,9 @@ export default function PermitInspectionUnifiedPage() {
           ...(payload as Partial<Inspection>),
           id: data!.id,
         } as Inspection);
+        if (isManualSource) {
+          router.replace(`/approver/inspection/permit/manual-${data!.id}`);
+        }
         if (mode === "submit") {
           setCanEditForm(false);
           alert("✅ Inspection submitted. You can now use workflow actions below.");
@@ -531,9 +590,15 @@ export default function PermitInspectionUnifiedPage() {
 
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Permit inspection</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {inspectionData?.source === "manual_unpermitted" ? "No Permit Inspection" : "Permit inspection"}
+          </h1>
           <p className="text-muted-foreground">
-            Permit: <span className="font-medium">{inspectionData?.permit?.permit_number || inspectionData?.prepopulatedData?.permitNumber || "N/A"}</span>
+            {inspectionData?.source === "manual_unpermitted" ? (
+              <>No water permit linked</>
+            ) : (
+              <>Permit: <span className="font-medium">{inspectionData?.permit?.permit_number || inspectionData?.prepopulatedData?.permitNumber || "N/A"}</span></>
+            )}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="outline">Template: {template}</Badge>
@@ -544,9 +609,10 @@ export default function PermitInspectionUnifiedPage() {
 
         <div className="flex items-center gap-2">
           {(() => {
+            const isManual = inspectionData?.source === "manual_unpermitted";
             const isRegistryOnly = inspectionData?.source === "permit_registry";
             const hasRealApplication = !!inspectionData?.application?.id && !isRegistryOnly;
-            if (hasRealApplication) {
+            if (hasRealApplication && !isManual) {
               return (
                 <Link href={`/dashboard/application/${inspectionData.application.id}`}>
                   <Button variant="outline" className="gap-2">
@@ -561,7 +627,7 @@ export default function PermitInspectionUnifiedPage() {
                 variant="outline"
                 className="gap-2"
                 disabled
-                title="No application linked — registry-only permit"
+                title={isManual ? "No application linked — no-permit inspection" : "No application linked — registry-only permit"}
               >
                 <Eye className="h-4 w-4" />
                 View application
@@ -629,12 +695,15 @@ export default function PermitInspectionUnifiedPage() {
           }}
           form={form as any}
           canEdit={canEdit}
-          applicationId={inspectionData?.application?.id}
+          applicationId={inspectionData?.source === "manual_unpermitted" ? (inspectionId || "manual-unpermitted") : inspectionData?.application?.id}
           documentOwner={
-            inspectionData?.source === "permit_registry" && inspectionData?.registryEntry?.id
+            inspectionData?.source === "manual_unpermitted" && inspectionId
+              ? { kind: "inspection", id: inspectionId }
+              : inspectionData?.source === "permit_registry" && inspectionData?.registryEntry?.id
               ? { kind: "permit_registry", id: inspectionData.registryEntry.id as string }
               : undefined
           }
+          manualInspection={inspectionData?.source === "manual_unpermitted"}
           setField={(k, v) => setField(k as any, v as any)}
                 />
               </div>
