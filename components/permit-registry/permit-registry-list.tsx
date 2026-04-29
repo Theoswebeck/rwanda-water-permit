@@ -49,6 +49,7 @@ import {
   FileText,
   ExternalLink,
   Database,
+  Trash2,
 } from "lucide-react";
 import { usePermitRegistryQuery } from "@/hooks/usePermitRegistryQuery";
 import { useUpdatePermitRegistry } from "@/hooks/useUpdatePermitRegistry";
@@ -278,36 +279,63 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
   };
 
   const handlePermitDocUpload = async (entryId: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
     setUploadingDocId(entryId);
     setDocUploadResult(null);
 
-    try {
-      const form = new FormData();
-      form.append("file", file);
+    let successCount = 0;
+    let lastError: string | null = null;
 
-      const res = await fetch(`/api/staff/permit-registry/${entryId}/document`, {
-        method: "POST",
-        body: form,
+    for (const file of files) {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch(`/api/staff/permit-registry/${entryId}/document`, {
+          method: "POST",
+          body: form,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.message || "Document upload failed");
+        successCount++;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "Unknown upload error";
+      }
+    }
+
+    if (successCount > 0) {
+      setDocUploadResult({
+        kind: lastError ? "error" : "success",
+        message: lastError
+          ? `${successCount} of ${files.length} file(s) uploaded. Last error: ${lastError}`
+          : `${successCount} document${successCount > 1 ? "s" : ""} uploaded successfully.`,
+      });
+    } else {
+      setDocUploadResult({ kind: "error", message: lastError || "Upload failed" });
+    }
+
+    refetch();
+    setUploadingDocId(null);
+    e.target.value = "";
+  };
+
+  const handleDeleteDoc = useCallback(async (entryId: string, docId: string) => {
+    setDocUploadResult(null);
+    try {
+      const res = await fetch(`/api/staff/permit-registry/${entryId}/document/${docId}`, {
+        method: "DELETE",
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.message || "Document upload failed");
-      setDocUploadResult({
-        kind: "success",
-        message: `Document uploaded for ${json?.document?.uploaded_doc_name || "permit"}.`,
-      });
+      if (!res.ok) throw new Error(json.message || "Delete failed");
+      setDocUploadResult({ kind: "success", message: "Document deleted." });
       refetch();
     } catch (err) {
       setDocUploadResult({
         kind: "error",
-        message: err instanceof Error ? err.message : "Unknown upload error",
+        message: err instanceof Error ? err.message : "Failed to delete document",
       });
-    } finally {
-      setUploadingDocId(null);
-      e.target.value = "";
     }
-  };
+  }, [refetch]);
 
   const handleEditSave = async (
     id: string,
@@ -1037,7 +1065,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
                                   )}
                                 </div>
                                 <SourceComparison entry={entry} />
-                                {hasRegistrySource(entry) && <UploadedDocSection entry={entry} />}
+                                {hasRegistrySource(entry) && <UploadedDocSection entry={entry} onDeleteDoc={handleDeleteDoc} />}
                                 <PermitLocationMap entry={entry} />
                               </div>
                             </TableCell>
@@ -1336,7 +1364,15 @@ function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
   );
 }
 
-function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
+function UploadedDocSection({
+  entry,
+  onDeleteDoc,
+}: {
+  entry: PermitRegistryEntry;
+  onDeleteDoc: (entryId: string, docId: string) => void;
+}) {
+  const docs = entry.documents ?? [];
+
   return (
     <div className="rounded-xl border border-sky-200/70 dark:border-sky-900/70 p-4 bg-gradient-to-r from-sky-50/80 to-blue-50/70 dark:from-sky-950/30 dark:to-blue-950/20 space-y-2.5">
       <div className="flex items-center gap-2">
@@ -1344,10 +1380,49 @@ function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
           <FileText className="h-3.5 w-3.5 text-sky-700 dark:text-sky-300" />
         </div>
         <p className="text-xs font-semibold uppercase tracking-wider text-sky-700/90 dark:text-sky-300">
-          Uploaded doc
+          Uploaded Documents
         </p>
       </div>
-      {entry.uploaded_doc_path ? (
+
+      {docs.length > 0 ? (
+        <ul className="space-y-2">
+          {docs.map((doc) => (
+            <li key={doc.id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium text-slate-800 dark:text-slate-100 break-all min-w-0 truncate">
+                {doc.doc_name}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  asChild
+                  className="h-7 px-2 border-sky-300/80 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                >
+                  <a
+                    href={`/api/staff/permit-registry/${entry.id}/document/${doc.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Open
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  onClick={() => onDeleteDoc(entry.id, doc.id)}
+                  title="Delete document"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  <span className="sr-only">Delete document</span>
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : entry.uploaded_doc_path ? (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <p className="text-sm font-medium text-slate-800 dark:text-slate-100 break-all">
             {entry.uploaded_doc_name || "Uploaded permit document"}
@@ -1365,7 +1440,7 @@ function UploadedDocSection({ entry }: { entry: PermitRegistryEntry }) {
           </Button>
         </div>
       ) : (
-        <p className="text-sm text-slate-600 dark:text-slate-300">No document uploaded yet for this permit.</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">No documents uploaded yet for this permit.</p>
       )}
     </div>
   );

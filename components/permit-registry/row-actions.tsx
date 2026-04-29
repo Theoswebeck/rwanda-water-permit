@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Eye, Loader2, Pencil, Trash2, Upload } from "lucide-react";
 import type { ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,10 @@ export function RowActions({
   onEdit,
   onDelete,
 }: RowActionsProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isUploading = uploadingDocId === entry.id;
+  const hasExistingDocs = (entry.documents?.length ?? 0) > 0 || Boolean(entry.uploaded_doc_path);
+
   if (!canUpload) {
     return (
       <Button
@@ -43,32 +48,31 @@ export function RowActions({
 
   return (
     <div className="inline-flex items-center justify-end gap-1">
-      <label
-        className="inline-flex cursor-pointer"
-        title={entry.uploaded_doc_path ? "Replace document" : "Upload document"}
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
+        onChange={(event) => onUploadDoc(entry.id, event)}
+        className="hidden"
+        disabled={isUploading}
+      />
+      <Button
+        type="button"
+        variant={hasExistingDocs ? "secondary" : "outline"}
+        size="icon"
+        disabled={isUploading}
+        className="h-8 w-8 rounded-md"
+        title={hasExistingDocs ? "Upload more documents" : "Upload document"}
+        onClick={() => inputRef.current?.click()}
       >
-        <input
-          type="file"
-          accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp"
-          onChange={(event) => onUploadDoc(entry.id, event)}
-          className="hidden"
-          disabled={uploadingDocId === entry.id}
-        />
-        <Button
-          variant={entry.uploaded_doc_path ? "secondary" : "outline"}
-          type="button"
-          size="icon"
-          disabled={uploadingDocId === entry.id}
-          className="h-8 w-8 rounded-md"
-        >
-          {uploadingDocId === entry.id ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Upload className="h-3.5 w-3.5" />
-          )}
-          <span className="sr-only">{entry.uploaded_doc_path ? "Replace document" : "Upload document"}</span>
-        </Button>
-      </label>
+        {isUploading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Upload className="h-3.5 w-3.5" />
+        )}
+        <span className="sr-only">{hasExistingDocs ? "Upload more documents" : "Upload document"}</span>
+      </Button>
       {canModify ? (
         <>
           <Button
