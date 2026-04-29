@@ -541,12 +541,17 @@ export default function TermsConditionsPage() {
       console.log('🚀 Starting terms acceptance process...');
       const acceptedAt = new Date();
       const acceptedAtIso = acceptedAt.toISOString();
-      const acceptedDateOnly = acceptedAtIso.split('T')[0];
-      const computeExpiryDateOnly = (durationYears: number) => {
-        const expiry = new Date(acceptedAt);
-        expiry.setFullYear(expiry.getFullYear() + durationYears);
-        return expiry.toISOString().split('T')[0];
-      };
+      // ─── Issuance date base ─────────────────────────────────────────
+      // The legal effective date is the day the Director General approved
+      // the application — that's `applications.approved_at`. The user may
+      // delay clicking accept arbitrarily long after approval; we still
+      // anchor `permits.issued_date` (and the expiry derived from it) to
+      // the approval day, not the click day. See the design spec:
+      // docs/superpowers/specs/2026-04-29-issuance-date-locks-on-approval-design.md
+      // and `lib/permit/resolve-issue-date.ts`.
+      // The actual `issuanceBaseDate` and date-only string are derived
+      // below once we have the application row; this comment documents
+      // the intent so a future reader doesn't reach for `acceptedAt`.
       const computeDurationFromPermitDates = (issuedRaw: unknown, expiryRaw: unknown): number | null => {
         if (typeof issuedRaw !== 'string' || typeof expiryRaw !== 'string') return null;
         const issued = new Date(issuedRaw);
@@ -576,6 +581,34 @@ export default function TermsConditionsPage() {
         throw new Error('Application not found');
       }
       console.log('✅ Application data loaded:', applicationData.application_number);
+
+      // Resolve the issuance-date base. Priority: applications.approved_at
+      // (the legal effective date — the day the Director General signed)
+      // → today (defensive: this code path is only reachable from
+      // status=approved_pending_permit which by construction has
+      // approved_at set, but we guard anyway). The expiry is computed as
+      // base + duration so the contract's "valid from X to Y" line is
+      // anchored to the same X the registry stores.
+      const issuanceBase: Date = (() => {
+        const raw = applicationData.approved_at;
+        if (raw instanceof Date && !Number.isNaN(raw.getTime())) return raw;
+        if (typeof raw === 'string' && raw.trim()) {
+          const parsed = new Date(raw);
+          if (!Number.isNaN(parsed.getTime())) return parsed;
+        }
+        console.warn('⚠️ approved_at missing on application; falling back to today for issuance date.', {
+          applicationId,
+          status: applicationData.status,
+        });
+        return acceptedAt;
+      })();
+      const issuanceBaseDateOnly = issuanceBase.toISOString().split('T')[0];
+      const computeExpiryDateOnly = (durationYears: number) => {
+        const expiry = new Date(issuanceBase);
+        expiry.setFullYear(expiry.getFullYear() + durationYears);
+        return expiry.toISOString().split('T')[0];
+      };
+      console.log('📅 Issuance date locked to approved_at:', issuanceBaseDateOnly);
 
       // Defense-in-depth: transfer terms can only be accepted by the approved transferee.
       const authResponse = await supabase.auth.getUser();
@@ -798,7 +831,7 @@ export default function TermsConditionsPage() {
               return null;
             })();
 
-        const newIssuedDate = acceptedDateOnly;
+        const newIssuedDate = issuanceBaseDateOnly;
         const newExpiryDate = resolvedDurationYears
           ? computeExpiryDateOnly(resolvedDurationYears)
           : null;
@@ -1031,7 +1064,7 @@ export default function TermsConditionsPage() {
         console.log('🔄 Processing RENEWAL - updating existing permit:', renewedFromPermitId);
         console.log('📊 Using assessor-approved duration for renewal:', resolvedDurationYearsGlobal, 'years');
         
-        const newIssuedDate = acceptedDateOnly;
+        const newIssuedDate = issuanceBaseDateOnly;
         const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
         
         const { data: updatedPermit, error: updateError } = await supabase
@@ -1086,12 +1119,13 @@ export default function TermsConditionsPage() {
         !transferOriginalPermitId.startsWith('manual-')
       ) {
         // Real (digital) permit: reassign ownership to transferee.
-        // Issuance date locks to "today" (acceptedDateOnly), matching the
-        // rule in `lib/permit/resolve-issue-date.ts` and `/api/transfers/issue`.
+        // Issuance date locks to applications.approved_at (the day the
+        // Director General signed), matching the rule in
+        // `lib/permit/resolve-issue-date.ts` and `/api/transfers/issue`.
         // Expiry is intentionally preserved by the API — see route comment.
         console.log('🔁 Processing TRANSFER - reassigning original permit ownership:', transferOriginalPermitId);
 
-        const transferIssuedDate = acceptedDateOnly;
+        const transferIssuedDate = issuanceBaseDateOnly;
 
         const issueResp = await fetch('/api/transfers/issue', {
           method: 'POST',
@@ -1141,7 +1175,7 @@ export default function TermsConditionsPage() {
         const originalPermitNumber = ((parsedNotes?.originalPermitNumber as string | undefined) || '').trim() || null;
         console.log('🔁 Processing MANUAL TRANSFER — preserving original permit number:', originalPermitNumber);
 
-        const newIssuedDate = acceptedDateOnly;
+        const newIssuedDate = issuanceBaseDateOnly;
         const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
 
         const { data: newPermit, error: permitError } = await supabase
@@ -1216,7 +1250,7 @@ export default function TermsConditionsPage() {
         console.log('📝 Creating NEW permit in database...');
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
-        const newIssuedDate = acceptedDateOnly;
+        const newIssuedDate = issuanceBaseDateOnly;
         const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
 
         const permitData_insert = {

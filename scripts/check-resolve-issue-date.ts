@@ -7,8 +7,8 @@
  * transfer):
  *
  *   1. permits.issued_date wins (post-issuance lock)
- *   2. else applications.terms_accepted_at (just-signed lock)
- *   3. else today (preview / pending acceptance)
+ *   2. else applications.approved_at (approver-signed lock)
+ *   3. else today (preview / pending approval)
  *
  * Also exercises the input parser so date-only / ISO / US-date / Date /
  * empty / garbage all degrade in the documented way.
@@ -50,20 +50,20 @@ group("priority order", () => {
   eq(
     resolvePermitIssueDate({
       permitIssuedDate: "2024-01-15",
-      termsAcceptedAt: "2026-04-28T10:00:00Z",
+      approvedAt: "2026-04-28T10:00:00Z",
       now: fixedClock,
     }),
     new Date(Date.UTC(2024, 0, 15)),
-    "permitIssuedDate wins over termsAcceptedAt and today",
+    "permitIssuedDate wins over approvedAt and today",
   );
-  // 2. termsAcceptedAt wins over today.
+  // 2. approvedAt wins over today.
   eq(
     resolvePermitIssueDate({
-      termsAcceptedAt: "2026-04-28T15:30:00Z",
+      approvedAt: "2026-04-28T15:30:00Z",
       now: fixedClock,
     }),
     new Date("2026-04-28T15:30:00Z"),
-    "termsAcceptedAt wins over today when permitIssuedDate is missing",
+    "approvedAt wins over today when permitIssuedDate is missing",
   );
   // 3. Falls through to today when nothing is locked.
   eq(
@@ -75,11 +75,11 @@ group("priority order", () => {
   eq(
     resolvePermitIssueDate({
       permitIssuedDate: null,
-      termsAcceptedAt: undefined,
+      approvedAt: undefined,
       now: fixedClock,
     }),
     FIXED_NOW,
-    "null permitIssuedDate + undefined termsAcceptedAt → today",
+    "null permitIssuedDate + undefined approvedAt → today",
   );
 });
 
@@ -122,17 +122,17 @@ group("date parsing variants", () => {
   eq(
     resolvePermitIssueDate({
       permitIssuedDate: "not-a-date",
-      termsAcceptedAt: "2026-04-28T10:00:00Z",
+      approvedAt: "2026-04-28T10:00:00Z",
       now: fixedClock,
     }),
     new Date("2026-04-28T10:00:00Z"),
-    "garbage permitIssuedDate falls through to termsAcceptedAt",
+    "garbage permitIssuedDate falls through to approvedAt",
   );
   // Empty string treated as missing.
   eq(
     resolvePermitIssueDate({
       permitIssuedDate: "",
-      termsAcceptedAt: "   ",
+      approvedAt: "   ",
       now: fixedClock,
     }),
     FIXED_NOW,
@@ -142,11 +142,11 @@ group("date parsing variants", () => {
   eq(
     resolvePermitIssueDate({
       permitIssuedDate: new Date("invalid"),
-      termsAcceptedAt: "2026-04-28T10:00:00Z",
+      approvedAt: "2026-04-28T10:00:00Z",
       now: fixedClock,
     }),
     new Date("2026-04-28T10:00:00Z"),
-    "invalid Date instance falls through to termsAcceptedAt",
+    "invalid Date instance falls through to approvedAt",
   );
 });
 
@@ -157,13 +157,43 @@ group("application-type agnosticism", () => {
   for (const stage of ["new", "renewal", "modification", "transfer"]) {
     eq(
       resolvePermitIssueDate({
-        termsAcceptedAt: "2026-04-28T10:00:00Z",
+        approvedAt: "2026-04-28T10:00:00Z",
         now: fixedClock,
       }),
       new Date("2026-04-28T10:00:00Z"),
-      `${stage}: termsAcceptedAt locks the date regardless of type`,
+      `${stage}: approvedAt locks the date regardless of type`,
     );
   }
+});
+
+group("transferee click delay invariant", () => {
+  // The motivating bug: approver signs on day N, transferee clicks accept
+  // on day N+30. Every render between day N and day N+30 — and every
+  // render after day N+30 — must show day N. The helper has no input for
+  // "click date" by design; it can never accidentally pick up that value.
+  const approvalDay = "2026-04-29T08:00:00Z";
+  // Simulate the resolver running on day N+30 (after the click) in
+  // preview mode (no permit row yet).
+  const dayPlus30 = () => new Date("2026-05-29T16:00:00Z");
+  eq(
+    resolvePermitIssueDate({
+      approvedAt: approvalDay,
+      now: dayPlus30,
+    }),
+    new Date(approvalDay),
+    "preview 30 days after approval still shows the approval day",
+  );
+  // After the permit row is created (terms accepted), `permits.issued_date`
+  // is itself the approval day, so priority 1 already gives the same value.
+  eq(
+    resolvePermitIssueDate({
+      permitIssuedDate: "2026-04-29",
+      approvedAt: approvalDay,
+      now: dayPlus30,
+    }),
+    new Date(Date.UTC(2026, 3, 29)),
+    "post-issuance: permits.issued_date pins the value regardless of approvedAt drift",
+  );
 });
 
 console.log(`\n${passes} passed, ${failures} failed`);

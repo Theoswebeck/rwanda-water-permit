@@ -5,22 +5,48 @@ import { getAuthenticatedUserId, isMissingTransferRequestsTable } from '../_util
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
 /**
- * Coerces an optional date-only ISO string (YYYY-MM-DD) into a normalised
- * value safe to write to `permits.issued_date`. Anything else falls through
- * to today, computed once per request so the value is stable across both the
- * UPDATE and the response payload.
+ * Coerces a date-shaped value into a date-only string (`YYYY-MM-DD`) safe
+ * to write to `permits.issued_date`. Returns `null` when the value cannot
+ * be parsed so the caller can fall through to the next priority layer
+ * (caller-supplied issuedDate → applications.approved_at → today).
  */
-function resolveTransferIssueDateOnly(raw: unknown, now: Date): string {
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim()
-    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
-    if (dateOnly) return trimmed
-    const parsed = new Date(trimmed)
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10)
-    }
+function toDateOnly(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (dateOnly) return trimmed
+  const parsed = new Date(trimmed)
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10)
   }
-  return now.toISOString().slice(0, 10)
+  return null
+}
+
+/**
+ * Resolves the date-only string written to `permits.issued_date` for a
+ * transfer issuance. Same priority as `lib/permit/resolve-issue-date.ts`,
+ * mapped onto the inputs available to this route:
+ *
+ *   1. Caller-supplied `body.issuedDate` (legacy / explicit override path).
+ *   2. `applications.approved_at` — the legal effective date for every
+ *      application type once the Director General has signed.
+ *   3. Today, as a last-resort fallback (defensive — should never trigger
+ *      because this route is only reachable from `approved_pending_permit`,
+ *      which by construction has `approved_at` set).
+ *
+ * Computed once per request so the UPDATE and the response payload agree.
+ */
+function resolveTransferIssueDateOnly(
+  callerSupplied: unknown,
+  approvedAt: string | null,
+  now: Date,
+): string {
+  return (
+    toDateOnly(callerSupplied) ??
+    toDateOnly(approvedAt) ??
+    now.toISOString().slice(0, 10)
+  )
 }
 
 export async function POST(req: NextRequest) {
@@ -90,9 +116,16 @@ export async function POST(req: NextRequest) {
       application_type: string | null
       internal_notes: string | null
       status: string
+      approved_at: string | null
     }>(
       `
-      select id, application_number, application_type, internal_notes::text as internal_notes, status
+      select
+        id,
+        application_number,
+        application_type,
+        internal_notes::text as internal_notes,
+        status,
+        approved_at::text as approved_at
       from public.applications
       where id = $1
       limit 1
@@ -127,14 +160,21 @@ export async function POST(req: NextRequest) {
     const nowIso = nowDate.toISOString()
     const appNumber = app.application_number || app.id
     const transferReason = `Transferred via application ${appNumber}`
-    // Transfer issuance date locks to "today" (the moment the transferee
-    // signs the terms — this route is invoked from the terms-acceptance
-    // handler). The same rule applies to every other application type via
-    // `lib/permit/resolve-issue-date.ts`. Expiry is intentionally NOT
-    // touched here because a transfer preserves the original permit's
-    // remaining validity (see the preview route's "Transfer / modification:
-    // preserve the exact expiry of the original permit." comment).
-    const issuedDateOnly = resolveTransferIssueDateOnly(body?.issuedDate, nowDate)
+    // Transfer issuance date locks to `applications.approved_at` — the
+    // moment the Director General approved the transfer application. This
+    // matches the rule in `lib/permit/resolve-issue-date.ts` and applies
+    // identically to every other application type (new / renewal /
+    // modification). The caller may still pass `body.issuedDate` to
+    // explicitly override (legacy path); when omitted, we read approval
+    // from the application row. Expiry is intentionally NOT touched here
+    // because a transfer preserves the original permit's remaining
+    // validity (see the preview route's "Transfer / modification: preserve
+    // the exact expiry of the original permit." comment).
+    const issuedDateOnly = resolveTransferIssueDateOnly(
+      body?.issuedDate,
+      app.approved_at,
+      nowDate,
+    )
 
     const updatedPermit = await withTransaction(async (tx) => {
       const existingPermitRes = await tx.query<{ id: string }>(

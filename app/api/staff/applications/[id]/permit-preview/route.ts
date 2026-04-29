@@ -177,7 +177,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         a.internal_notes::text AS internal_notes,
         a.water_taking_method,
         a.is_modification,
-        a.terms_accepted_at,
+        a.approved_at,
         u.first_name,
         u.last_name,
         u.email,
@@ -346,18 +346,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     }
 
     // ── Resolve issuance date ─────────────────────────────────────────────────
-    // Same rule as every other render path: locked acceptance date when the
-    // relevant party has already signed terms, today otherwise. This keeps
-    // the preview from showing a stale date frozen by an assessor edit on a
-    // previous day. See `lib/permit/resolve-issue-date.ts`.
-    const termsAcceptedAtRaw =
-      typeof row.terms_accepted_at === "string"
-        ? row.terms_accepted_at
-        : row.terms_accepted_at instanceof Date
-          ? row.terms_accepted_at.toISOString()
+    // Same rule as every other render path: the date locks to
+    // `applications.approved_at` the moment the Director General approves
+    // the application; before that the preview shows today (so a stale
+    // assessor edit from a previous day cannot leak into the legal
+    // validity paragraphs). See `lib/permit/resolve-issue-date.ts`.
+    const approvedAtRaw =
+      typeof row.approved_at === "string"
+        ? row.approved_at
+        : row.approved_at instanceof Date
+          ? row.approved_at.toISOString()
           : null;
     const issuedDate = resolvePermitIssueDate({
-      termsAcceptedAt: termsAcceptedAtRaw,
+      approvedAt: approvedAtRaw,
     });
 
     // ── Generate PDF ──────────────────────────────────────────────────────────

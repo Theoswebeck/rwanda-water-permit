@@ -54,10 +54,13 @@ export function SlotRow({
 
   // Date-bearing slots (closing date line, validity-period paragraphs) are
   // system-managed: their text is rebuilt from the live issuance/expiry date
-  // on every render. The renderer ignores any saved override for these, the
-  // editor API rejects writes to them, and we surface the same constraint in
-  // the UI by locking the input and showing a clear "auto" badge instead of
-  // letting the assessor type something that will never reach the PDF.
+  // on every render. Before the approver signs the application the date
+  // shown is today; once `applications.approved_at` is stamped the date
+  // locks to that calendar day. The renderer ignores any saved override
+  // for these, the editor API rejects writes to them, and we surface the
+  // same constraint in the UI by locking the input and showing a clear
+  // "auto" badge instead of letting the assessor type something that will
+  // never reach the PDF.
   const isDateBearing = Boolean(
     slot.structuredField &&
       DATE_BEARING_STRUCTURED_FIELDS.has(slot.structuredField),
@@ -195,8 +198,8 @@ export function SlotRow({
       {isDateBearing && (
         <p className="mt-2 text-[11px] text-muted-foreground">
           The date in this line refreshes every time the preview is rendered.
-          Once the relevant party signs the terms, this date locks to the
-          signing date and never moves again.
+          Once the approver signs the application, this date locks to the
+          approval date and never moves again.
         </p>
       )}
 

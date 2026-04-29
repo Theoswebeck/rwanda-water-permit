@@ -146,12 +146,17 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
         permit
       );
       // Same rule as every other render path — see lib/permit/resolve-issue-date.ts.
+      // Once the permit row exists, `permits.issued_date` wins (priority 1).
+      // For the rare case where a permit row exists without `issued_date`
+      // (defensive — shouldn't happen via the normal flow), fall back to
+      // `applications.approved_at` so the rendered date still reflects the
+      // legal effective day, not whatever day the public link is opened.
       const issuedDate = resolvePermitIssueDate({
         permitIssuedDate:
           typeof permit.issued_date === "string" ? permit.issued_date : null,
-        termsAcceptedAt:
-          typeof application?.terms_accepted_at === "string"
-            ? application.terms_accepted_at
+        approvedAt:
+          typeof application?.approved_at === "string"
+            ? application.approved_at
             : null,
       });
       const pdfBuffer = await generatePermitPdfBuffer({

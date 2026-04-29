@@ -36,11 +36,18 @@ function formatDate(dateString: string): string {
 }
 
 function getCanonicalIssueDate(permit: Record<string, unknown>): string | null {
+  // Mirrors `lib/permit/resolve-issue-date.ts`: `permits.issued_date` is
+  // the locked legal value once the permit has been issued. Before that
+  // (registry-only permits, or a permit row that somehow exists without an
+  // issued_date) we fall back to `applications.approved_at` — the moment
+  // the Director General signed the application, which is the contractual
+  // effective date. We do NOT fall back to `terms_accepted_at` because the
+  // user can delay clicking accept arbitrarily long after approval.
   const application = permit.application as Record<string, unknown> | null;
   const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
   if (issuedDate) return issuedDate;
-  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
-  return acceptedAt || null;
+  const approvedAt = typeof application?.approved_at === "string" ? application.approved_at.trim() : "";
+  return approvedAt || null;
 }
 
 function parsePositiveNumber(value: unknown): number | null {

@@ -9,21 +9,29 @@
  *      has been issued the date never moves silently — that's the locked
  *      legal value the registry stores.
  *
- *   2. Else if the application's `terms_accepted_at` is set, use it. The
- *      relevant party (applicant or transferee) has signed the terms;
- *      issuance is happening now and we lock to that signing instant even
- *      if the `permits.issued_date` write is in flight.
+ *   2. Else if the application's `approved_at` is set, use it. The
+ *      Director General (approver) has signed; the contract becomes
+ *      legally effective on that calendar day, regardless of when the
+ *      applicant or transferee later clicks "Accept Terms".
  *
- *   3. Else use today. The permit is still in preview / pending acceptance
- *      — every render shows the current calendar day so a stale assessor
- *      preview from a previous day cannot leak through into the legal
- *      validity paragraphs or the closing date line.
+ *   3. Else use today. The application is still in preview / pending
+ *      approval — every render shows the current calendar day so a stale
+ *      assessor preview from a previous day cannot leak through into the
+ *      legal validity paragraphs or the closing date line.
  *
  * Important: this helper only deals with the **rendered** issuance date.
- * It never writes the database — the writes happen at `terms-accepted`
- * time in `app/dashboard/application/[id]/terms/page.tsx`. This module
- * exists so every read path agrees on what date to show, regardless of
- * application type.
+ * It never writes the database — the writes happen at terms-acceptance
+ * time in `app/dashboard/application/[id]/terms/page.tsx` and at
+ * transfer-issuance time in `app/api/transfers/issue/route.ts`. Both write
+ * paths read `applications.approved_at` and persist that exact date to
+ * `permits.issued_date`. This module exists so every read path agrees on
+ * what date to show, regardless of application type.
+ *
+ * History: an earlier version of this helper used `terms_accepted_at` as
+ * the locking date. That mis-modelled the contract — the Director General
+ * signing is the legal effective moment, not the user clicking accept.
+ * See docs/superpowers/specs/2026-04-29-issuance-date-locks-on-approval-design.md
+ * for the full rationale.
  */
 
 export type IssueDateInputs = {
@@ -34,11 +42,12 @@ export type IssueDateInputs = {
    */
   permitIssuedDate?: string | Date | null | undefined;
   /**
-   * `applications.terms_accepted_at` for the originating application. May
-   * be ISO date-only, full ISO timestamp, or a `Date`. Null/undefined when
-   * the relevant party has not yet accepted terms.
+   * `applications.approved_at` for the originating application — the
+   * timestamp at which the approver (Director General) signed. May be ISO
+   * date-only, full ISO timestamp, or a `Date`. Null/undefined when the
+   * approver has not yet approved the application.
    */
-  termsAcceptedAt?: string | Date | null | undefined;
+  approvedAt?: string | Date | null | undefined;
   /**
    * Override for `Date.now()`. Tests pass a deterministic clock; production
    * callers leave this undefined.
@@ -50,15 +59,15 @@ export function resolvePermitIssueDate(input: IssueDateInputs): Date {
   const lockedFromPermit = parseFlexible(input.permitIssuedDate);
   if (lockedFromPermit) return lockedFromPermit;
 
-  const lockedFromTerms = parseFlexible(input.termsAcceptedAt);
-  if (lockedFromTerms) return lockedFromTerms;
+  const lockedFromApproval = parseFlexible(input.approvedAt);
+  if (lockedFromApproval) return lockedFromApproval;
 
   return (input.now ?? (() => new Date()))();
 }
 
 /**
  * Parses any of the date shapes `permits.issued_date` /
- * `applications.terms_accepted_at` can take in this codebase:
+ * `applications.approved_at` can take in this codebase:
  *
  *   - `Date` instance
  *   - Date-only string `YYYY-MM-DD`            (interpreted as UTC midnight)
