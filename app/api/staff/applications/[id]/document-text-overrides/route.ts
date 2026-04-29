@@ -30,6 +30,7 @@ import {
   getDocumentTextOverridesEnvelope,
   getSlotsForDocument,
   HARD_MAX_SLOT_LENGTH,
+  isDateBearingSlot,
   readEnvelopeForWrite,
   resolveSlotsForEditor,
   type DocumentTextPatch,
@@ -355,8 +356,22 @@ function sanitizePatches(
       return { ok: false, message: `Duplicate slotId in batch: ${o.slotId}` };
     }
     seen.add(o.slotId);
-    if (!findSlot(o.slotId)) {
+    const slot = findSlot(o.slotId);
+    if (!slot) {
       return { ok: false, message: `Unknown slotId: ${o.slotId}` };
+    }
+    // Date-bearing slots (closing date line, validity-period paragraphs)
+    // are system-managed: their text is rebuilt from the live issuance /
+    // expiry date on every render. Allowing the assessor to save an
+    // override would freeze a stale date that drifts from the legal
+    // issuance date once the relevant party signs the terms — exactly the
+    // bug this guard prevents. Resets (`text: null`) ARE allowed so the
+    // editor can scrub legacy entries that predate this rule.
+    if (isDateBearingSlot(slot) && o.text !== null) {
+      return {
+        ok: false,
+        message: `Patch ${o.slotId}: this slot is system-managed (its text is built from the permit's issuance/expiry date) and cannot be edited manually.`,
+      };
     }
     if (o.text === null) {
       out.push({ slotId: o.slotId, text: null });

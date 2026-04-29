@@ -32,6 +32,7 @@ export {
 export {
   resolveSlotText,
   resolveSlotsForEditor,
+  isDateBearingSlot,
   UnknownSlotError,
   type ResolvedSlotForEditor,
 } from "./resolver";

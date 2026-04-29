@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { isConcessionApplication } from "@/lib/permit-variant";
+import { resolvePermitIssueDate } from "@/lib/permit/resolve-issue-date";
 
 export const runtime = "nodejs";
 
@@ -63,13 +64,6 @@ async function tryReadStoredPdf(permitPdfUrl: string, req: NextRequest): Promise
     const arr = await res.arrayBuffer();
     return Buffer.from(arr);
   }
-}
-
-function getCanonicalIssueDate(permit: Record<string, unknown>, application: Record<string, unknown> | null): string | undefined {
-  const issuedDate = typeof permit.issued_date === "string" ? permit.issued_date.trim() : "";
-  if (issuedDate) return issuedDate;
-  const acceptedAt = typeof application?.terms_accepted_at === "string" ? application.terms_accepted_at.trim() : "";
-  return acceptedAt || undefined;
 }
 
 function parseIsoLikeDate(input: string | undefined): Date | undefined {
@@ -151,13 +145,21 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
         application as unknown as PermitApplication,
         permit
       );
-      const issueDate = getCanonicalIssueDate(permit, application);
+      // Same rule as every other render path — see lib/permit/resolve-issue-date.ts.
+      const issuedDate = resolvePermitIssueDate({
+        permitIssuedDate:
+          typeof permit.issued_date === "string" ? permit.issued_date : null,
+        termsAcceptedAt:
+          typeof application?.terms_accepted_at === "string"
+            ? application.terms_accepted_at
+            : null,
+      });
       const pdfBuffer = await generatePermitPdfBuffer({
         application: applicationForPdf,
         permitNumber: permitNumberValue,
         permitValidityYears: 5,
         isModified: Boolean(permit.is_modification),
-        issuedDate: parseIsoLikeDate(issueDate),
+        issuedDate,
         expiryDate: parseIsoLikeDate((permit.expiry_date as string | undefined) || undefined),
       });
 

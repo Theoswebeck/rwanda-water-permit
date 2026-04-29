@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, CheckCircle2, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Eye, EyeOff, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,14 @@ import type { ClientResolvedSlot } from "./types";
 // the title, signatory line, and modified-permit badge would never want
 // inline emphasis and the hint just adds visual noise there.
 const HINT_MIN_SOFT_MAX = 200;
+
+/**
+ * Slots whose text is fully derived from the permit's issuance / expiry date.
+ * Mirrors `lib/document-slots/resolver.ts:isDateBearingSlot` — duplicated
+ * here as a tiny local set rather than imported, so the editor bundle does
+ * not pull in the entire server-side document-slots module just to check a
+ * structuredField marker. */
+const DATE_BEARING_STRUCTURED_FIELDS = new Set(["issue_date", "expiry_date"]);
 
 export interface SlotRowProps {
   resolved: ClientResolvedSlot;
@@ -44,19 +52,41 @@ export function SlotRow({
   const id = useId();
   const { slot, defaultText, overrideText, editedAt, editedBy } = resolved;
 
+  // Date-bearing slots (closing date line, validity-period paragraphs) are
+  // system-managed: their text is rebuilt from the live issuance/expiry date
+  // on every render. The renderer ignores any saved override for these, the
+  // editor API rejects writes to them, and we surface the same constraint in
+  // the UI by locking the input and showing a clear "auto" badge instead of
+  // letting the assessor type something that will never reach the PDF.
+  const isDateBearing = Boolean(
+    slot.structuredField &&
+      DATE_BEARING_STRUCTURED_FIELDS.has(slot.structuredField),
+  );
+  const effectiveReadOnly = Boolean(readOnly) || isDateBearing;
+
   // The text shown in the textarea: latest draft if one exists, else the
-  // current effective text (override > default).
-  const effective = overrideText ?? defaultText;
-  const value = draft === undefined ? effective : draft === null ? defaultText : draft;
-  const isOverridden = overrideText !== null && overrideText !== "";
+  // current effective text (override > default). Date-bearing slots always
+  // render the default — even if a stale override exists in the envelope it
+  // is intentionally hidden by the API/resolver.
+  const effective = isDateBearing ? defaultText : overrideText ?? defaultText;
+  const value = isDateBearing
+    ? defaultText
+    : draft === undefined
+      ? effective
+      : draft === null
+        ? defaultText
+        : draft;
+  const isOverridden =
+    !isDateBearing && overrideText !== null && overrideText !== "";
   const isDirty =
+    !isDateBearing &&
     draft !== undefined &&
     !(draft === null ? !isOverridden : draft === effective);
   const softMax = slot.softMaxLength ?? 4000;
   const overSoft = value.length > softMax;
   const overHard = value.length > hardMaxLength;
 
-  const showReset = isOverridden || draft !== undefined;
+  const showReset = !isDateBearing && (isOverridden || draft !== undefined);
   const formattedEditedAt = editedAt ? formatTimestamp(editedAt) : null;
 
   // Inline-bold affordance state. Only shown for paragraph-style slots and
@@ -79,17 +109,29 @@ export function SlotRow({
       transition={{ duration: 0.18, ease: "easeOut" }}
       className={
         "rounded-lg border bg-card p-3 transition-colors " +
-        (isDirty
-          ? "border-amber-300 bg-amber-50/40 dark:bg-amber-950/10"
-          : isOverridden
-            ? "border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10"
-            : "border-border")
+        (isDateBearing
+          ? "border-slate-200 bg-slate-50/60 dark:bg-slate-950/20"
+          : isDirty
+            ? "border-amber-300 bg-amber-50/40 dark:bg-amber-950/10"
+            : isOverridden
+              ? "border-emerald-200 bg-emerald-50/30 dark:bg-emerald-950/10"
+              : "border-border")
       }
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <label htmlFor={id} className="text-sm font-medium leading-none">
           {slot.label}
         </label>
+        {isDateBearing && (
+          <Badge
+            variant="outline"
+            className="border-slate-300 bg-slate-100 text-slate-700"
+            title="This slot's text is rebuilt from the permit's issuance and expiry date on every render. Edits are intentionally disabled so a date saved on a previous day cannot leak into the legal validity paragraph."
+          >
+            <Clock className="mr-1 h-3 w-3" />
+            Auto from system date
+          </Badge>
+        )}
         {isOverridden && (
           <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
             <CheckCircle2 className="mr-1 h-3 w-3" /> Edited
@@ -126,7 +168,8 @@ export function SlotRow({
         <Input
           id={id}
           value={value}
-          disabled={readOnly}
+          disabled={effectiveReadOnly}
+          readOnly={isDateBearing}
           onChange={(e) => onChange(e.target.value)}
           maxLength={hardMaxLength}
           spellCheck
@@ -136,7 +179,8 @@ export function SlotRow({
         <Textarea
           id={id}
           value={value}
-          disabled={readOnly}
+          disabled={effectiveReadOnly}
+          readOnly={isDateBearing}
           onChange={(e) => onChange(e.target.value)}
           rows={Math.max(3, Math.min(14, Math.ceil(value.length / 90)))}
           maxLength={hardMaxLength}
@@ -148,7 +192,15 @@ export function SlotRow({
         />
       )}
 
-      {supportsBold && (
+      {isDateBearing && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          The date in this line refreshes every time the preview is rendered.
+          Once the relevant party signs the terms, this date locks to the
+          signing date and never moves again.
+        </p>
+      )}
+
+      {supportsBold && !isDateBearing && (
         <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
           <span>
             Use <code className="rounded bg-muted px-1 py-0.5">**bold**</code>{" "}

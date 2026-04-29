@@ -8,6 +8,7 @@ import {
 import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
 import { addYearsSafe } from "@/lib/date-math";
+import { resolvePermitIssueDate } from "@/lib/permit/resolve-issue-date";
 
 export const runtime = "nodejs";
 
@@ -176,6 +177,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         a.internal_notes::text AS internal_notes,
         a.water_taking_method,
         a.is_modification,
+        a.terms_accepted_at,
         u.first_name,
         u.last_name,
         u.email,
@@ -343,11 +345,26 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       }
     }
 
+    // ── Resolve issuance date ─────────────────────────────────────────────────
+    // Same rule as every other render path: locked acceptance date when the
+    // relevant party has already signed terms, today otherwise. This keeps
+    // the preview from showing a stale date frozen by an assessor edit on a
+    // previous day. See `lib/permit/resolve-issue-date.ts`.
+    const termsAcceptedAtRaw =
+      typeof row.terms_accepted_at === "string"
+        ? row.terms_accepted_at
+        : row.terms_accepted_at instanceof Date
+          ? row.terms_accepted_at.toISOString()
+          : null;
+    const issuedDate = resolvePermitIssueDate({
+      termsAcceptedAt: termsAcceptedAtRaw,
+    });
+
     // ── Generate PDF ──────────────────────────────────────────────────────────
     const pdfBuffer = await generatePermitPdfBuffer({
       application,
       permitNumber,
-      issuedDate: new Date(),
+      issuedDate,
       skipQr: true,
       isModified: Boolean(isModification),
       ...(exactExpiryDate   !== undefined && { expiryDate: exactExpiryDate }),

@@ -709,9 +709,13 @@ group("permit.shared.closing.date — placeholder when ctx.permit missing", () =
 
 // ─── Override-wins regression check ──────────────────────────────────────────
 
-group("override beats default for permit slots", () => {
-  const overrideText = "TEST — assessor's custom paragraph 3 wording.";
+group("override beats default for non-date permit slots", () => {
+  const overrideText = "TEST — assessor's custom paragraph 4 wording.";
   const editor = { id: "u-1", name: "Override Tester", email: "test@rwb.rw", role: "assessor" };
+  // NOTE: para_3 is intentionally NOT used here — it is date-bearing
+  // (structuredField: "expiry_date") and the resolver always re-renders
+  // from the live ctx, so an override would not "win" there. See the
+  // dedicated date-bearing group below.
   const appWithOverride: PermitApplication = {
     ...fxAbsInd,
     internal_notes: JSON.stringify({
@@ -721,7 +725,7 @@ group("override beats default for permit slots", () => {
         updatedAt: "2026-04-23T10:00:00Z",
         updatedBy: editor,
         values: {
-          "permit.abstraction_individual.en.para_3": {
+          "permit.abstraction_individual.en.para_4": {
             text: overrideText,
             editedAt: "2026-04-23T10:00:00Z",
             editedBy: editor,
@@ -731,11 +735,108 @@ group("override beats default for permit slots", () => {
     }),
   };
   const ctx = buildPermitCtx(appWithOverride);
-  eq(resolveSlotText("permit.abstraction_individual.en.para_3", ctx), overrideText, "override beats default");
+  eq(resolveSlotText("permit.abstraction_individual.en.para_4", ctx), overrideText, "override beats default");
   // Sibling slot in same variant unaffected.
-  eq(resolveSlotText("permit.abstraction_individual.en.para_4", ctx),
-     `In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in attached contract.`,
-     "sibling unaffected");
+  const name = resolveApplicantName(fxAbsInd);
+  const idNum = resolveIdNumber(fxAbsInd);
+  const wsName = resolveWaterSourceName(fxAbsInd);
+  const loc = resolveAdminLocation(fxAbsInd);
+  const { lat, lng } = resolveLatLng(fxAbsInd);
+  const sysType = resolveSystemType(fxAbsInd);
+  const vols = resolveVolumes(fxAbsInd);
+  const yearlyStr = vols.yearly != null ? `${fmtNum(vols.yearly)} m³/year` : "N/A m³/year";
+  const acts = resolveActivities(fxAbsInd);
+  const expectedPara2 = `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of ${yearlyStr}. Water abstracted will be used for ${acts}.`;
+  eq(resolveSlotText("permit.abstraction_individual.en.para_2", ctx), expectedPara2, "sibling para_2 unaffected");
+});
+
+// ─── Date-bearing slots ignore stale overrides ───────────────────────────────
+//
+// The closing-date line (`permit.shared.closing.date.bilingual`) and every
+// validity-period paragraph (`*.{en,rw}.para_3`) are re-rendered from the
+// live ctx.permit on every call. A stale override saved on a previous day
+// (e.g. assessor saved preview on day N, transferee accepts on day N+M)
+// must NOT leak through. This is the single biggest fix in the
+// 2026-04-29 issuance-date refactor — losing this guarantee would re-
+// introduce the "preview shows yesterday's date" bug verbatim.
+
+group("date-bearing slots ignore overrides (live re-render)", () => {
+  const editor = { id: "u-stale", name: "Stale Edit", email: "stale@rwb.rw", role: "assessor" };
+  // Build an application whose envelope has stale (28th) text in EVERY
+  // date-bearing slot. The resolver should ignore all of them and emit
+  // text computed from the live ctx (23rd via the parity fixture).
+  const staleClosing = "Done at Kigali/Bikorewe i Kigali, On/kuwa 28/04/2026";
+  const staleValidity = "This water use permit is valid from 28/04/2026 to 28/04/2031.";
+  const staleValidityRw = "Uru ruhushya rufite agaciro kuva 28/04/2026 kugeza 28/04/2031.";
+  const appWithStaleDates: PermitApplication = {
+    ...fxAbsInd,
+    internal_notes: JSON.stringify({
+      ...JSON.parse(fxAbsInd.internal_notes!),
+      document_text_overrides: {
+        version: 7,
+        updatedAt: "2026-04-28T10:00:00Z",
+        updatedBy: editor,
+        values: {
+          "permit.shared.closing.date.bilingual": {
+            text: staleClosing,
+            editedAt: "2026-04-28T10:00:00Z",
+            editedBy: editor,
+          },
+          "permit.abstraction_individual.en.para_3": {
+            text: staleValidity,
+            editedAt: "2026-04-28T10:00:00Z",
+            editedBy: editor,
+          },
+          "permit.abstraction_individual.rw.para_3": {
+            text: staleValidityRw,
+            editedAt: "2026-04-28T10:00:00Z",
+            editedBy: editor,
+          },
+        },
+      },
+    }),
+  };
+  const ctx = buildPermitCtx(appWithStaleDates);
+  // The expected strings use `fmtDMY` (the same helper the slot resolvers
+  // use), which is timezone-sensitive (`Date#getDate()` in local time). We
+  // call it here so the test passes regardless of TZ instead of hard-
+  // coding "23/04/2026" — what matters for this regression is that the
+  // resolver IGNORES the stale `28/04` text in the envelope.
+  const liveIssue = fmtDMY(ISSUE_DATE);
+  const liveExpiry = fmtDMY(EXPIRY_DATE);
+  eq(
+    resolveSlotText("permit.shared.closing.date.bilingual", ctx),
+    `Done at Kigali/Bikorewe i Kigali, On/kuwa ${liveIssue}`,
+    "closing.date ignores stale 28/04 override and re-renders live date",
+  );
+  eq(
+    resolveSlotText("permit.abstraction_individual.en.para_3", ctx),
+    `This water use permit is valid from ${liveIssue} to ${liveExpiry}.`,
+    "abstraction_individual.en.para_3 ignores stale 28/04 override",
+  );
+  eq(
+    resolveSlotText("permit.abstraction_individual.rw.para_3", ctx),
+    `Uru ruhushya rufite agaciro kuva ${liveIssue} kugeza ${liveExpiry}.`,
+    "abstraction_individual.rw.para_3 ignores stale 28/04 override",
+  );
+  // Defensive: confirm the stale string isn't anywhere in the resolved
+  // text. If a future refactor turns this into a substring contamination
+  // (e.g. the resolver reads the override but appends the new date), this
+  // assertion catches it before the parity strings would.
+  for (const slotId of [
+    "permit.shared.closing.date.bilingual",
+    "permit.abstraction_individual.en.para_3",
+    "permit.abstraction_individual.rw.para_3",
+  ]) {
+    const out = resolveSlotText(slotId, ctx);
+    if (out.includes("28/04/2026")) {
+      failures += 1;
+      console.error(`  ✗ ${slotId} still contains stale 28/04/2026: ${JSON.stringify(out)}`);
+    } else {
+      passes += 1;
+      console.log(`  ✓ ${slotId} contains no stale 28/04/2026 substring`);
+    }
+  }
 });
 
 // ─── Bold-marker parser invariants ──────────────────────────────────────────

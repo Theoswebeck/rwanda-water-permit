@@ -414,6 +414,7 @@ export default function TermsConditionsPage() {
                 ...(parsedNotes || {}),
                 _assessorAdjustments: {
                   ...((parsedNotes as any)?._assessorAdjustments || {}),
+                  ...((sourceNotes as any)?._assessorAdjustments || {}),
                   permitLengthYears: sourceDuration,
                   recommendedVolumeM3: sourceVolumeOrArea,
                   adjustedAt: new Date().toISOString(),
@@ -736,27 +737,35 @@ export default function TermsConditionsPage() {
         applicationData.applicant?.phone?.trim() ||
         undefined;
 
-      // Extract lat/lng from GeoJSON Point or internal_notes waterSource fields.
+      // Extract effective lat/lng for registry/terms context, preferring assessor-approved adjustments.
       const _geom = applicationData.coordinates as any;
       let _registryLat: number | undefined;
       let _registryLng: number | undefined;
-      if (_geom?.type === 'Point' && Array.isArray(_geom.coordinates) && _geom.coordinates.length >= 2) {
-        const [_lng, _lat] = _geom.coordinates;
-        if (Number.isFinite(Number(_lat)) && Number.isFinite(Number(_lng))) {
-          _registryLat = Number(_lat);
-          _registryLng = Number(_lng);
+      const trySetRegistryLatLng = (rawLat: unknown, rawLng: unknown) => {
+        if (_registryLat != null || rawLat == null || rawLng == null) return;
+        const _latN = parseFloat(String(rawLat));
+        const _lngN = parseFloat(String(rawLng));
+        if (Number.isFinite(_latN) && Number.isFinite(_lngN)) {
+          _registryLat = _latN;
+          _registryLng = _lngN;
         }
+      };
+      const registryAssessorAdjustments = parsedNotes?._assessorAdjustments;
+      trySetRegistryLatLng(
+        registryAssessorAdjustments?.waterSourceLatitude,
+        registryAssessorAdjustments?.waterSourceLongitude,
+      );
+      trySetRegistryLatLng(parsedNotes?.waterSourceLatitude, parsedNotes?.waterSourceLongitude);
+      if (_registryLat == null && _geom?.type === 'Point' && Array.isArray(_geom.coordinates) && _geom.coordinates.length >= 2) {
+        const [_lng, _lat] = _geom.coordinates;
+        trySetRegistryLatLng(_lat, _lng);
       }
-      if (_registryLat == null) {
-        const _latRaw = parsedNotes?.waterSourceLatitude;
-        const _lngRaw = parsedNotes?.waterSourceLongitude;
+      if (_registryLat == null && Array.isArray(registryAssessorAdjustments?.waterSourcePolygonPoints)) {
+        const firstPoint = registryAssessorAdjustments.waterSourcePolygonPoints[0];
+        const _latRaw = firstPoint?.latitude;
+        const _lngRaw = firstPoint?.longitude;
         if (_latRaw != null && _lngRaw != null) {
-          const _latN = parseFloat(String(_latRaw));
-          const _lngN = parseFloat(String(_lngRaw));
-          if (Number.isFinite(_latN) && Number.isFinite(_lngN)) {
-            _registryLat = _latN;
-            _registryLng = _lngN;
-          }
+          trySetRegistryLatLng(_latRaw, _lngRaw);
         }
       }
 
@@ -1077,7 +1086,12 @@ export default function TermsConditionsPage() {
         !transferOriginalPermitId.startsWith('manual-')
       ) {
         // Real (digital) permit: reassign ownership to transferee.
+        // Issuance date locks to "today" (acceptedDateOnly), matching the
+        // rule in `lib/permit/resolve-issue-date.ts` and `/api/transfers/issue`.
+        // Expiry is intentionally preserved by the API — see route comment.
         console.log('🔁 Processing TRANSFER - reassigning original permit ownership:', transferOriginalPermitId);
+
+        const transferIssuedDate = acceptedDateOnly;
 
         const issueResp = await fetch('/api/transfers/issue', {
           method: 'POST',
@@ -1085,6 +1099,7 @@ export default function TermsConditionsPage() {
           body: JSON.stringify({
             applicationId,
             oldPermitId: transferOriginalPermitId,
+            issuedDate: transferIssuedDate,
           }),
         });
         const issueJson = await issueResp.json().catch(() => null);
@@ -1094,9 +1109,13 @@ export default function TermsConditionsPage() {
 
         permitData = issueJson.permit;
         transferOwnershipReassigned = true;
-        console.log('✅ Transfer permit ownership reassigned successfully:', permitData.permit_number);
+        console.log('✅ Transfer permit ownership reassigned successfully:', permitData.permit_number,
+          '| New issued date:', transferIssuedDate);
 
-        // Forward-sync digital transfer to permit_registry (non-blocking)
+        // Forward-sync digital transfer to permit_registry (non-blocking).
+        // Pass `issuance_date` so the registry shows the same locked date as
+        // `permits.issued_date` — without it, the registry would silently
+        // keep the previous owner's issuance date.
         if (permitData?.permit_number) {
           syncPermitToRegistry(supabase, permitData.permit_number, {
             status: 'active',
@@ -1107,6 +1126,7 @@ export default function TermsConditionsPage() {
             water_source: applicationData.water_source || undefined,
             authorized_activity: applicationData.water_purpose || undefined,
             volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : undefined,
+            issuance_date: transferIssuedDate,
             duration: `${resolvedDurationYearsGlobal} years`,
             contact: registrySyncContact,
             method_of_water_taking: applicationData.water_taking_method || undefined,

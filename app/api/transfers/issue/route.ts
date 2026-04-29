@@ -4,6 +4,25 @@ import { getAuthenticatedUserId, isMissingTransferRequestsTable } from '../_util
 
 const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0
 
+/**
+ * Coerces an optional date-only ISO string (YYYY-MM-DD) into a normalised
+ * value safe to write to `permits.issued_date`. Anything else falls through
+ * to today, computed once per request so the value is stable across both the
+ * UPDATE and the response payload.
+ */
+function resolveTransferIssueDateOnly(raw: unknown, now: Date): string {
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+    if (dateOnly) return trimmed
+    const parsed = new Date(trimmed)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10)
+    }
+  }
+  return now.toISOString().slice(0, 10)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const userId = await getAuthenticatedUserId(req)
@@ -104,9 +123,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: 'Not a transfer application' }, { status: 400 })
     }
 
-    const now = new Date().toISOString()
+    const nowDate = new Date()
+    const nowIso = nowDate.toISOString()
     const appNumber = app.application_number || app.id
     const transferReason = `Transferred via application ${appNumber}`
+    // Transfer issuance date locks to "today" (the moment the transferee
+    // signs the terms — this route is invoked from the terms-acceptance
+    // handler). The same rule applies to every other application type via
+    // `lib/permit/resolve-issue-date.ts`. Expiry is intentionally NOT
+    // touched here because a transfer preserves the original permit's
+    // remaining validity (see the preview route's "Transfer / modification:
+    // preserve the exact expiry of the original permit." comment).
+    const issuedDateOnly = resolveTransferIssueDateOnly(body?.issuedDate, nowDate)
 
     const updatedPermit = await withTransaction(async (tx) => {
       const existingPermitRes = await tx.query<{ id: string }>(
@@ -130,11 +158,12 @@ export async function POST(req: NextRequest) {
           status = 'active',
           is_transfer = true,
           transfer_reason = $3,
+          issued_date = $5,
           updated_at = $4
         where id = $1
         returning *
         `,
-        [oldPermitId, applicationId, transferReason, now]
+        [oldPermitId, applicationId, transferReason, nowIso, issuedDateOnly]
       )
 
       if (updateRes.rowCount !== 1) {
