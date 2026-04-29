@@ -144,7 +144,7 @@ export async function GET(req: NextRequest) {
     if (status && status !== "all") {
       const normalizedStatus = status.toUpperCase();
       if (normalizedStatus === "__ACTIVE__") {
-        where.push(`upper(coalesce(pr.status, '')) like '%OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%'`);
+        where.push(`(upper(coalesce(pr.status, '')) like '%OPERATIONAL%' or (upper(coalesce(pr.status, '')) like '%ACTIVE%' and upper(coalesce(pr.status, '')) not like '%INACTIVE%')) and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%'`);
       } else if (normalizedStatus === "__EXPIRED__") {
         where.push(`upper(coalesce(pr.status, '')) like '%EXPIRED%'`);
       } else if (normalizedStatus === "__CANCELLED__") {
@@ -176,7 +176,7 @@ export async function GET(req: NextRequest) {
       `
       SELECT
         count(*)::text as total,
-        count(*) filter (where upper(coalesce(pr.status, '')) like '%OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
+        count(*) filter (where (upper(coalesce(pr.status, '')) like '%OPERATIONAL%' or (upper(coalesce(pr.status, '')) like '%ACTIVE%' and upper(coalesce(pr.status, '')) not like '%INACTIVE%')) and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
         count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRED%')::text as expired,
         count(*) filter (where upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%')::text as cancelled,
         count(*) filter (where pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months'))::text as expiring_soon,

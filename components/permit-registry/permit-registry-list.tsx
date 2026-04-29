@@ -182,7 +182,12 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
       };
     }
     const pageTotal = entries.length;
-    const operational = entries.filter((e) => e.status?.toUpperCase()?.includes("OPERATIONAL") && !e.status?.toUpperCase()?.includes("NON")).length;
+    const operational = entries.filter((e) => {
+      const s = e.status?.toUpperCase() ?? "";
+      const isNon = s.includes("NON-OPERATIONAL") || s.includes("NON OPERATIONAL");
+      const isInact = s.includes("INACTIVE") || s.includes("NON-ACTIVE");
+      return (s.includes("OPERATIONAL") || (s.includes("ACTIVE") && !isInact)) && !isNon;
+    }).length;
     const expired = entries.filter((e) => e.status?.toUpperCase()?.includes("EXPIRED")).length;
     const cancelled = entries.filter((e) => e.status?.toUpperCase()?.includes("CANCEL")).length;
     const expiringSoon = entries.filter((e) => isAboutToExpire(e.expiration_date)).length;
@@ -393,7 +398,8 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     const raw = (status || "").trim();
     const s = raw.toUpperCase();
     const isNonOperational = s.includes("NON-OPERATIONAL") || s.includes("NON OPERATIONAL");
-    const isOperational = s.includes("OPERATIONAL") && !isNonOperational;
+    const isInactive = s.includes("INACTIVE") || s.includes("NON-ACTIVE");
+    const isOperational = (s.includes("OPERATIONAL") || (s.includes("ACTIVE") && !isInactive)) && !isNonOperational;
     const isExpired = s.includes("EXPIRED");
     const isSuspended = s.includes("SUSPENDED");
     const isRevoked = s.includes("REVOKED");
