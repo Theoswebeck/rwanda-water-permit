@@ -102,7 +102,7 @@ function manualHolderName(row: InspectionRow): string {
   return (
     row.manual_inspection_subject ||
     row.locked_field_overrides?.permitHolderName ||
-    "Manual inspection"
+    "No permit inspection"
   );
 }
 
@@ -581,7 +581,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                           {isManual ? (
                             <span className="inline-flex items-center gap-2">
                               No permit
-                              <Badge variant="outline" className="text-[10px]">Manual</Badge>
+                              <Badge variant="outline" className="text-[10px]">No Permit</Badge>
                             </span>
                           ) : (
                             permitNumber || "—"

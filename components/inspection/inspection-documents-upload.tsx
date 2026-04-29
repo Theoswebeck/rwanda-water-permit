@@ -61,7 +61,7 @@ export function InspectionDocumentsUpload({
   readOnly = false,
 }: {
   applicationId: string;
-  owner?: { kind: "permit_registry"; id: string };
+  owner?: { kind: "permit_registry"; id: string } | { kind: "inspection"; id: string };
   files: InspectionDocumentFile[];
   onFilesChange: (files: InspectionDocumentFile[]) => void;
   readOnly?: boolean;

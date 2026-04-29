@@ -18,8 +18,9 @@ export interface PermitInspectionData {
   permit?: Permit;
   paymentHistory?: PaymentRecord[];
   prepopulatedData: PrepopulatedInspectionData;
-  source?: "application" | "permit_registry";
+  source?: "application" | "permit_registry" | "manual_unpermitted";
   registryEntry?: any;
+  manualInspectionId?: string;
 }
 
 export interface PaymentRecord {
@@ -95,6 +96,58 @@ export async function fetchInspectionData(
     // to %2F. Normalize once here so every downstream query uses the decoded value.
     let applicationNumber = rawIdentifier;
     try { applicationNumber = decodeURIComponent(rawIdentifier); } catch { /* already decoded */ }
+
+    if (applicationNumber === "manual-new" || applicationNumber.startsWith("manual-")) {
+      const manualInspectionId = applicationNumber === "manual-new"
+        ? undefined
+        : applicationNumber.replace(/^manual-/, "");
+      const nowIso = new Date().toISOString();
+      return {
+        application: {
+          id: "manual_unpermitted",
+          applicant_id: "",
+          application_number: applicationNumber,
+          status: "approved",
+          application_type: "new",
+          water_source: "other",
+          water_purpose: "other",
+          intended_activities: null,
+          province: "",
+          district: "",
+          sector: "",
+          cell: "",
+          project_title: "No Permit Inspection",
+          created_at: nowIso,
+          updated_at: nowIso,
+        } as any,
+        permit: undefined,
+        paymentHistory: [],
+        prepopulatedData: {
+          permitHolderName: "N/A",
+          permitHolderId: "N/A",
+          residence: "N/A",
+          representative: "N/A",
+          contacts: "N/A",
+          activityType: "N/A",
+          permitNumber: "N/A",
+          waterSourceName: "N/A",
+          waterSourceType: "N/A",
+          waterPurpose: "N/A",
+          waterSourceLocation: "N/A",
+          waterSourceLatitude: "N/A",
+          waterSourceLongitude: "N/A",
+          catchmentLevel1: undefined,
+          catchmentLevel2: undefined,
+          province: "N/A",
+          district: "N/A",
+          sector: "N/A",
+          cell: "N/A",
+          village: "N/A",
+        },
+        source: "manual_unpermitted",
+        manualInspectionId,
+      };
+    }
 
     const applicantSelect = `
       *,

@@ -47,7 +47,7 @@ export const uploadDocument = async (
   file: File,
   applicationId: string,
   documentType: string,
-  owner?: { kind: "permit_registry"; id: string }
+  owner?: { kind: "permit_registry"; id: string } | { kind: "inspection"; id: string }
 ): Promise<{ path: string; url: string } | null> => {
   const pathSegment = owner ? owner.id : applicationId;
   const uploadInChunks = async (): Promise<{ path: string; url: string } | null> => {

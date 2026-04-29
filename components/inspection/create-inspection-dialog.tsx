@@ -241,6 +241,11 @@ export function CreateInspectionDialog({
     router.push(`/assessment/inspection/permit/${encodeURIComponent(identifier)}`);
   };
 
+  const startNoPermitInspection = () => {
+    setOpen(false);
+    router.push("/assessment/inspection/permit/manual-new");
+  };
+
   return (
     <Dialog
       open={open}
@@ -265,7 +270,7 @@ export function CreateInspectionDialog({
         <DialogHeader className="px-8 pt-8 pb-6">
           <DialogTitle className="text-2xl font-semibold">Create inspection</DialogTitle>
           <DialogDescription className="text-muted-foreground text-base mt-2">
-            Select the permit you want to inspect. You&apos;ll be taken to the inspection form.
+            Select a permit to inspect, or start a no-permit inspection for an unpermitted area/operator.
           </DialogDescription>
         </DialogHeader>
 
@@ -409,6 +414,9 @@ export function CreateInspectionDialog({
               )}
             </div>
             <div className="flex items-center gap-4">
+              <Button type="button" variant="outline" size="lg" onClick={startNoPermitInspection}>
+                Inspect area without permit
+              </Button>
               <Button type="button" variant="ghost" size="lg" onClick={() => setOpen(false)}>
                 Cancel
               </Button>

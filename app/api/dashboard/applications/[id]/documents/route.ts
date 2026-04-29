@@ -90,9 +90,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
     const ownerKindRaw = String(form.get('ownerKind') || '').trim()
     const ownerIdRaw = String(form.get('ownerId') || '').trim()
     const isRegistryOwner = ownerKindRaw === 'permit_registry' && ownerIdRaw.length > 0
+    const isInspectionOwner = ownerKindRaw === 'inspection' && ownerIdRaw.length > 0
 
-    if (isRegistryOwner) {
-      // Registry documents: staff only, no applications FK to check.
+    if (isRegistryOwner || isInspectionOwner) {
+      // Registry/no-permit inspection documents: staff only, no applications FK to check.
       const staff = await isStaffUser(claims.sub)
       if (!staff) {
         return NextResponse.json({ success: false, message: 'Not authorized' }, { status: 403 })
@@ -145,9 +146,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       )
       returning *
     `
-    const applicationIdParam = isRegistryOwner ? null : applicationId
-    const ownerKindParam = isRegistryOwner ? 'permit_registry' : null
-    const ownerIdParam = isRegistryOwner ? ownerIdRaw : null
+    const applicationIdParam = isRegistryOwner || isInspectionOwner ? null : applicationId
+    const ownerKindParam = isRegistryOwner ? 'permit_registry' : isInspectionOwner ? 'inspection' : null
+    const ownerIdParam = isRegistryOwner || isInspectionOwner ? ownerIdRaw : null
     let insertRes
     try {
       insertRes = await query(insertSql, [

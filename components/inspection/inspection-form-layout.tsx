@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
@@ -121,6 +121,13 @@ export interface InspectionFormState {
   general_conclusion?: string;
   recommendations?: string;
   recommendation_details?: string;
+
+  // Manual no-permit inspection metadata
+  manual_inspection_subject?: string;
+  manual_inspection_reason?: string;
+  manual_contact_name?: string;
+  manual_contact_phone?: string;
+  manual_site_notes?: string;
 
   // Documents
   inspection_documents?: InspectionDocumentFile[];
@@ -291,15 +298,65 @@ function NumberField({
   onChange: (v: number | null) => void;
   suffix?: string;
 }) {
+  const [inputValue, setInputValue] = useState(value === null || value === undefined ? "" : String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) {
+      setInputValue(value === null || value === undefined ? "" : String(value));
+    }
+  }, [focused, value]);
+
+  const handleChange = (raw: string) => {
+    // Keep coordinates editable while users type intermediate numeric states
+    // such as "-", ".", "-.", or "1.".
+    if (!/^-?(?:\d+)?(?:\.\d*)?$/.test(raw)) return;
+    setInputValue(raw);
+
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      onChange(null);
+      return;
+    }
+    if (trimmed === "-" || trimmed === "." || trimmed === "-." || trimmed.endsWith(".")) {
+      return;
+    }
+    const next = Number(trimmed);
+    if (Number.isFinite(next)) onChange(next);
+  };
+
+  const handleBlur = () => {
+    setFocused(false);
+    const trimmed = inputValue.trim();
+    if (!trimmed) {
+      onChange(null);
+      setInputValue("");
+      return;
+    }
+    if (trimmed === "-" || trimmed === "." || trimmed === "-.") {
+      setInputValue(value === null || value === undefined ? "" : String(value));
+      return;
+    }
+    const next = Number(trimmed);
+    if (Number.isFinite(next)) {
+      onChange(next);
+      setInputValue(String(next));
+    }
+  };
+
   return (
     <div className="space-y-2">
       <Label className="text-sm">{label}</Label>
       <div className="flex items-center gap-2">
         <Input
-          value={value ?? ""}
+          type="text"
+          inputMode="decimal"
+          value={inputValue}
           disabled={disabled}
           className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
-          onChange={(e) => onChange(toNumberOrNull(e.target.value))}
+          onFocus={() => setFocused(true)}
+          onBlur={handleBlur}
+          onChange={(e) => handleChange(e.target.value)}
         />
         {suffix ? <span className="text-sm text-muted-foreground whitespace-nowrap">{suffix}</span> : null}
       </div>
@@ -483,6 +540,7 @@ export function InspectionFormLayout({
   canEdit,
   applicationId,
   documentOwner,
+  manualInspection = false,
   setField,
 }: {
   template: InspectionTemplate;
@@ -490,7 +548,8 @@ export function InspectionFormLayout({
   form: InspectionFormState;
   canEdit: boolean;
   applicationId: string;
-  documentOwner?: { kind: "permit_registry"; id: string };
+  documentOwner?: { kind: "permit_registry"; id: string } | { kind: "inspection"; id: string };
+  manualInspection?: boolean;
   setField: <K extends keyof InspectionFormState>(key: K, value: InspectionFormState[K]) => void;
 }) {
   const employment = form.employment_gender_breakdown || {};
@@ -530,18 +589,72 @@ export function InspectionFormLayout({
   return (
     <Card className="border-gray-200 dark:border-gray-800">
       <CardHeader>
-        <CardTitle>Inspection Checklist</CardTitle>
+        <CardTitle>{manualInspection ? "No Permit Inspection" : "Inspection Checklist"}</CardTitle>
         <CardDescription>
-          Fill the inspection form following Rwanda Water Resources Board checklist requirements. Locked values are auto-filled from the permit/application.
+          {manualInspection
+            ? "Fill this inspection manually because the inspected area/operator has no water permit on record."
+            : "Fill the inspection form following Rwanda Water Resources Board checklist requirements. Locked values are auto-filled from the permit/application."}
         </CardDescription>
         <div className="mt-2 flex items-center gap-2">
           <Badge variant="outline">{template === "authorization" ? "Authorization" : "Concession"}</Badge>
+          {manualInspection ? <Badge variant="outline">No Permit</Badge> : null}
           {!canEdit ? <Badge variant="secondary">Read-only</Badge> : <Badge variant="secondary">Editable</Badge>}
         </div>
       </CardHeader>
 
       <CardContent>
-        <Tabs defaultValue="identification" className="w-full">
+        {manualInspection ? (
+          <SectionShell
+            title="No Permit Inspection Details"
+            description="Identify the unpermitted area/operator before completing the normal checklist."
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <TextField
+                label="Subject / Operator / Site name"
+                value={form.manual_inspection_subject ?? ""}
+                disabled={!canEdit}
+                placeholder="Name of area, operator, or site"
+                onChange={(v) => setField("manual_inspection_subject", v)}
+              />
+              <TextField
+                label="Contact name"
+                value={form.manual_contact_name ?? ""}
+                disabled={!canEdit}
+                placeholder="Person met on site, if any"
+                onChange={(v) => setField("manual_contact_name", v)}
+              />
+              <TextField
+                label="Contact phone"
+                value={form.manual_contact_phone ?? ""}
+                disabled={!canEdit}
+                placeholder="+250..."
+                onChange={(v) => setField("manual_contact_phone", v)}
+              />
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-sm">Reason for inspection</Label>
+                <Textarea
+                  disabled={!canEdit}
+                  value={form.manual_inspection_reason ?? ""}
+                  placeholder="Why this area/operator is being inspected"
+                  className="min-h-[100px] bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                  onChange={(e) => setField("manual_inspection_reason", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label className="text-sm">Site notes</Label>
+                <Textarea
+                  disabled={!canEdit}
+                  value={form.manual_site_notes ?? ""}
+                  placeholder="Directions, landmarks, or observations"
+                  className="min-h-[100px] bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                  onChange={(e) => setField("manual_site_notes", e.target.value)}
+                />
+              </div>
+            </div>
+          </SectionShell>
+        ) : null}
+
+        <Tabs defaultValue="identification" className={cn("w-full", manualInspection ? "mt-6" : "")}>
           {/* Sticky tabs so "Documents" is always reachable while scrolling */}
           <div className="sticky top-2 z-20">
             <TabsList className="grid w-full grid-cols-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 border border-slate-200 dark:border-slate-800 shadow-sm">
@@ -572,10 +685,23 @@ export function InspectionFormLayout({
             </SectionShell>
 
             <SectionShell title="2. Permit Particulars">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <ReadonlyField label="Number" value={locked.permitNumber} />
-                <ReadonlyField label="Issuance date" value={fmtPermitDate(locked.issuanceDate)} />
-                <ReadonlyField label="Expiration date" value={fmtPermitDate(locked.expirationDate)} />
+              <div className={cn("grid grid-cols-1 gap-6", manualInspection ? "md:grid-cols-1" : "md:grid-cols-3")}>
+                {manualInspection ? (
+                  <EditableLockedField
+                    label="Permit number, if any"
+                    lockedValue={locked.permitNumber}
+                    overrideKey="permitNumber"
+                    overrides={overrides}
+                    canEdit={canEdit}
+                    onOverride={handleOverride}
+                  />
+                ) : (
+                  <>
+                    <ReadonlyField label="Number" value={locked.permitNumber} />
+                    <ReadonlyField label="Issuance date" value={fmtPermitDate(locked.issuanceDate)} />
+                    <ReadonlyField label="Expiration date" value={fmtPermitDate(locked.expirationDate)} />
+                  </>
+                )}
               </div>
             </SectionShell>
 
@@ -955,10 +1081,17 @@ export function InspectionFormLayout({
             <InspectionDocumentsUpload
               applicationId={applicationId}
               owner={documentOwner}
-              readOnly={!canEdit}
+              readOnly={!canEdit || (manualInspection && !documentOwner)}
               files={(form.inspection_documents || []) as InspectionDocumentFile[]}
               onFilesChange={(next) => setField("inspection_documents", next as any)}
             />
+            {manualInspection && !documentOwner ? (
+              <Card className="border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20">
+                <CardContent className="py-4 text-sm text-amber-800 dark:text-amber-200">
+                  Save the draft first before uploading documents for a no-permit inspection.
+                </CardContent>
+              </Card>
+            ) : null}
             <Card className="border-slate-200 dark:border-slate-800">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Tip</CardTitle>

@@ -20,6 +20,12 @@
     { "name": "catchment_level1", "type": "text" },
     { "name": "catchment_level2", "type": "text" },
 
+    { "name": "manual_inspection_subject", "type": "text", "note": "no-permit inspection subject/site/operator name" },
+    { "name": "manual_inspection_reason", "type": "text", "note": "no-permit inspection reason" },
+    { "name": "manual_contact_name", "type": "text", "note": "no-permit contact person" },
+    { "name": "manual_contact_phone", "type": "text", "note": "no-permit contact phone" },
+    { "name": "manual_site_notes", "type": "text", "note": "no-permit site notes" },
+
     { "name": "project_latitude",  "type": "numeric", "note": "Section 2.1 project/activity site coordinates" },
     { "name": "project_longitude", "type": "numeric", "note": "Section 2.1 project/activity site coordinates" },
 
