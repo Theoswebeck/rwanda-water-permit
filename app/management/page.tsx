@@ -190,7 +190,7 @@ export default function ManagementDashboardPage() {
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground space-y-2">
                     <div>✅ Application counts come from `applications`.</div>
-                    <div>✅ Permit counts come from the official permit registry — these match `/permit-registry` exactly.</div>
+                    <div>✅ Permit counts come from the official permit registry — they reflect the entire registry regardless of geo filters, so they always match `/permit-registry`.</div>
                     <div>✅ Compliance uses `inspections` (will be empty until table exists + data is recorded).</div>
                     <div>✅ Service feedback comes from `portal_feedback`.</div>
                   </CardContent>

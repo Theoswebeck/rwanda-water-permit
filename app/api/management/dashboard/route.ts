@@ -210,8 +210,8 @@ export async function GET(req: NextRequest) {
           fees_paid,
           fees_payment_verified,
           regulatory_compliance,
-          actual_quantity,
-          allowed_quantity,
+          actual_quantity::float8 as actual_quantity,
+          allowed_quantity::float8 as allowed_quantity,
           recommendations
         from public.inspections
         `
@@ -219,7 +219,7 @@ export async function GET(req: NextRequest) {
       inspectionsRows = insRes.rows;
     } catch (err) {
       const msg = String((err as { message?: string }).message || "");
-      if (msg.toLowerCase().includes("recommendations") && msg.toLowerCase().includes("does not exist")) {
+      if (/column ["']?recommendations["']? of relation ["']?(public\.)?inspections["']? does not exist/i.test(msg)) {
         inspectionsRecsAvailable = false;
         try {
           const fallback = await query<InspectionRow>(
@@ -239,8 +239,8 @@ export async function GET(req: NextRequest) {
               fees_paid,
               fees_payment_verified,
               regulatory_compliance,
-              actual_quantity,
-              allowed_quantity,
+              actual_quantity::float8 as actual_quantity,
+              allowed_quantity::float8 as allowed_quantity,
               null::text as recommendations
             from public.inspections
             `
@@ -281,9 +281,21 @@ export async function GET(req: NextRequest) {
 
     const completedInspections = inspectionsFiltered.filter((i: InspectionRow) => i.status === "completed" || Boolean(i.completed_date));
 
+    // Owner-keying rules (must match the polymorphic inspection schema):
+    //   application-owned     -> dedupe by application_id (latest per application)
+    //   permit_registry-owned -> dedupe by registry row id (latest per registry permit)
+    //   manual_unpermitted    -> each inspection IS its own owner (no dedupe; key by inspection id)
     const latestByOwner = new Map<string, InspectionRow>();
     for (const i of completedInspections) {
-      const ownerKey = i.application_id ?? `${i.owner_kind}:${i.owner_id}`;
+      let ownerKey: string;
+      if (i.application_id) {
+        ownerKey = `app:${i.application_id}`;
+      } else if (i.owner_kind === "manual_unpermitted") {
+        ownerKey = `manual_unpermitted:${i.id}`;
+      } else {
+        ownerKey = `${i.owner_kind}:${i.owner_id}`;
+      }
+
       const completedAt = i.completed_date ? new Date(i.completed_date) : new Date(i.created_at);
       const prev = latestByOwner.get(ownerKey);
       if (!prev) {
