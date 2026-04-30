@@ -10,7 +10,7 @@ import type { Payment, PaymentStatus, PaymentReceipt } from '@/types/payment';
 // =============================================
 
 export const PAYMENT_CONFIG = {
-  DEFAULT_FEE: 35000,
+  DEFAULT_FEE: 20,
   CURRENCY: 'RWF',
   PAYMENT_TIMEOUT_MINUTES: 3 * 24 * 60,
   RECEIPT_PREFIX: 'RWB-RCPT',
