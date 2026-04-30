@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
+import {
+  detectRegistrySchema,
+  fetchRegistrySummary,
+  buildRegistryWhere,
+} from "@/lib/permit/registry-counts";
 
 const EMPTY_RESULT = {
   items: [],
@@ -8,80 +13,9 @@ const EMPTY_RESULT = {
   pagination: { limit: 50, offset: 0, returned: 0 },
 };
 
-async function detectSchema(): Promise<{
-  hasRegistry: boolean;
-  hasDocColumns: boolean;
-  hasRawDateColumns: boolean;
-  hasRowIndex: boolean;
-  hasDeletedAt: boolean;
-  hasManuallyEditedAt: boolean;
-  hasPostGIS: boolean;
-  hasDocumentsTable: boolean;
-}> {
-  const [tablesRes, extRes] = await Promise.all([
-    query<{ table_name: string }>(
-      `select table_name from information_schema.tables
-       where table_schema = 'public'
-         and table_name = 'permit_registry'`
-    ),
-    query<{ n: string }>(
-      `select count(*)::text as n from pg_extension where extname = 'postgis'`
-    ),
-  ]);
-
-  const hasRegistry = tablesRes.rows.some((r) => r.table_name === "permit_registry");
-
-  let hasDocColumns = false;
-  let hasRawDateColumns = false;
-  let hasRowIndex = false;
-  let hasDeletedAt = false;
-  let hasManuallyEditedAt = false;
-
-  if (hasRegistry) {
-    const colRes = await query<{ column_name: string }>(
-      `select column_name
-       from information_schema.columns
-       where table_schema = 'public'
-         and table_name = 'permit_registry'
-         and column_name in (
-           'uploaded_doc_path','uploaded_doc_name',
-           'uploaded_doc_mime_type','uploaded_doc_uploaded_at',
-           'issuance_date_raw','expiration_date_raw',
-           'row_index',
-           'deleted_at',
-           'manually_edited_at'
-         )`
-    );
-    const cols = new Set(colRes.rows.map((r) => r.column_name));
-    hasDocColumns = cols.has("uploaded_doc_path") && cols.has("uploaded_doc_name") &&
-                    cols.has("uploaded_doc_mime_type") && cols.has("uploaded_doc_uploaded_at");
-    hasRawDateColumns = cols.has("issuance_date_raw") && cols.has("expiration_date_raw");
-    hasRowIndex = cols.has("row_index");
-    hasDeletedAt = cols.has("deleted_at");
-    hasManuallyEditedAt = cols.has("manually_edited_at");
-  }
-
-  const docsTableRes = await query(
-    `SELECT 1 FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_name = 'permit_registry_documents' LIMIT 1`
-  );
-  const hasDocumentsTable = docsTableRes.rows.length > 0;
-
-  return {
-    hasRegistry,
-    hasDocColumns,
-    hasRawDateColumns,
-    hasRowIndex,
-    hasDeletedAt,
-    hasManuallyEditedAt,
-    hasPostGIS: Number(extRes.rows[0]?.n || "0") > 0,
-    hasDocumentsTable,
-  };
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const schema = await detectSchema();
+    const schema = await detectRegistrySchema();
 
     if (!schema.hasRegistry) {
       return NextResponse.json(EMPTY_RESULT);
@@ -99,7 +33,6 @@ export async function GET(req: NextRequest) {
     const validSortColumns = ["serial_number", "permit_holder", "permit_number", "status", "regime", "row_index"];
     const column = validSortColumns.includes(sortBy) ? sortBy : (schema.hasRowIndex ? "row_index" : "serial_number");
 
-    // Build dynamic SELECT columns
     const docSelect = schema.hasDocColumns
       ? `pr.uploaded_doc_path, pr.uploaded_doc_name, pr.uploaded_doc_mime_type, pr.uploaded_doc_uploaded_at,`
       : `null::text as uploaded_doc_path, null::text as uploaded_doc_name,
@@ -129,65 +62,10 @@ export async function GET(req: NextRequest) {
         ) AS documents,`
       : `'[]'::json AS documents,`;
 
-    // Build WHERE filters
-    const where: string[] = [];
-    const values: unknown[] = [];
-    const p = (value: unknown) => {
-      values.push(value);
-      return `$${values.length}`;
-    };
+    const filters = { q, regime, status };
+    const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
+    const summary = await fetchRegistrySummary(schema, filters);
 
-    if (schema.hasDeletedAt) {
-      where.push("pr.deleted_at is null");
-    }
-    if (regime && regime !== "all") where.push(`lower(coalesce(pr.regime, '')) = lower(${p(regime)})`);
-    if (status && status !== "all") {
-      const normalizedStatus = status.toUpperCase();
-      if (normalizedStatus === "__ACTIVE__") {
-        where.push(`(upper(coalesce(pr.status, '')) like '%OPERATIONAL%' or (upper(coalesce(pr.status, '')) like '%ACTIVE%' and upper(coalesce(pr.status, '')) not like '%INACTIVE%')) and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%'`);
-      } else if (normalizedStatus === "__EXPIRED__") {
-        where.push(`upper(coalesce(pr.status, '')) like '%EXPIRED%'`);
-      } else if (normalizedStatus === "__CANCELLED__") {
-        where.push(`upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%'`);
-      } else if (normalizedStatus === "__ABOUT_TO_EXPIRE__") {
-        where.push(`pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months')`);
-      } else {
-        where.push(`upper(coalesce(pr.status, '')) = ${p(normalizedStatus)}`);
-      }
-    }
-    if (q) {
-      const term = `%${q}%`;
-      const pv = p(term);
-      where.push(
-        `(lower(coalesce(pr.permit_holder, '')) like ${pv} or lower(coalesce(pr.permit_number, '')) like ${pv} or lower(coalesce(pr.location, '')) like ${pv} or lower(coalesce(pr.water_source, '')) like ${pv} or lower(coalesce(pr.authorized_activity, '')) like ${pv})`
-      );
-    }
-    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-    // Summary query
-    const summaryRes = await query<{
-      total: string;
-      operational: string;
-      expired: string;
-      cancelled: string;
-      expiring_soon: string;
-      regime_types: string;
-    }>(
-      `
-      SELECT
-        count(*)::text as total,
-        count(*) filter (where (upper(coalesce(pr.status, '')) like '%OPERATIONAL%' or (upper(coalesce(pr.status, '')) like '%ACTIVE%' and upper(coalesce(pr.status, '')) not like '%INACTIVE%')) and upper(coalesce(pr.status, '')) not like '%NON-OPERATIONAL%' and upper(coalesce(pr.status, '')) not like '%NON OPERATIONAL%')::text as operational,
-        count(*) filter (where upper(coalesce(pr.status, '')) like '%EXPIRED%')::text as expired,
-        count(*) filter (where upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%')::text as cancelled,
-        count(*) filter (where pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months'))::text as expiring_soon,
-        count(distinct nullif(trim(coalesce(pr.regime, '')), ''))::text as regime_types
-      FROM public.permit_registry pr
-      ${whereSql}
-      `,
-      values
-    );
-
-    // Paginated data query
     const pageValues = [...values];
     pageValues.push(offset);
     const offsetParam = `$${pageValues.length}`;
@@ -232,19 +110,16 @@ export async function GET(req: NextRequest) {
       pageValues
     );
 
-    const summaryRow = summaryRes.rows[0];
-    const count = Number(summaryRow?.total || "0");
-
     return NextResponse.json({
       items: pageRes.rows || [],
-      total: count,
+      total: summary.total,
       summary: {
-        total: count,
-        operational: Number(summaryRow?.operational || "0"),
-        expired: Number(summaryRow?.expired || "0"),
-        cancelled: Number(summaryRow?.cancelled || "0"),
-        expiringSoon: Number(summaryRow?.expiring_soon || "0"),
-        regimeTypes: Number(summaryRow?.regime_types || "0"),
+        total: summary.total,
+        operational: summary.operational,
+        expired: summary.expired,
+        cancelled: summary.cancelled,
+        expiringSoon: summary.expiringSoon,
+        regimeTypes: summary.regimeTypes,
       },
       pagination: { limit, offset, returned: (pageRes.rows || []).length },
     });
