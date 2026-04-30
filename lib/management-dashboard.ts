@@ -46,6 +46,10 @@ export type ManagementDashboardData = {
   abstraction: {
     totalPermittedM3PerDay: number;
     totalPermittedM3PerYear: number;
+    /** Registry rows whose volume_or_area parsed to a known unit and contributed to the sum. */
+    parsedCount: number;
+    /** Total registry rows matching the active filters (denominator for the parsed-rate transparency note). */
+    totalRows: number;
     pressureByCatchment: Array<{
       key: string;
       label: string;

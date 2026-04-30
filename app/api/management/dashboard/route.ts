@@ -466,6 +466,8 @@ export async function GET(req: NextRequest) {
       abstraction: {
         totalPermittedM3PerDay: registryAbs.totalPermittedM3PerDay,
         totalPermittedM3PerYear: registryAbs.totalPermittedM3PerYear,
+        parsedCount: registryAbs.parsedCount,
+        totalRows: registryAbs.totalRows,
         pressureByCatchment: [],
       },
       compliance: {

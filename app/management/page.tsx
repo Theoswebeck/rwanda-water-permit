@@ -736,6 +736,18 @@ export default function ManagementDashboardPage() {
                       </Card>
                     </div>
 
+                    {data?.abstraction && data.abstraction.totalRows > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        Sum of {formatNumber(data.abstraction.parsedCount)} of {formatNumber(data.abstraction.totalRows)} permits with a recognizable volume unit.
+                        {data.abstraction.parsedCount < data.abstraction.totalRows ? (
+                          <>
+                            {" "}
+                            {formatNumber(data.abstraction.totalRows - data.abstraction.parsedCount)} permits omitted because their <code>volume_or_area</code> field could not be parsed.
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
+
                     <Card className="shadow-sm">
                       <CardHeader>
                         <CardTitle>Abstraction pressure index per catchment</CardTitle>

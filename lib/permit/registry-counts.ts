@@ -380,20 +380,46 @@ export async function fetchRegistryDistributions(
 export type RegistryAbstraction = {
   totalPermittedM3PerDay: number;
   totalPermittedM3PerYear: number;
+  /** Number of registry rows whose volume_or_area parsed to a known unit and contributed to the sum. */
+  parsedCount: number;
+  /** Total registry rows matching the active filters (denominator for the parsed-rate transparency note). */
+  totalRows: number;
 };
 
 function normalizeUnit(unitRaw: string | null | undefined) {
   return (unitRaw || "").toLowerCase().replace(/\s+/g, "");
 }
 
+// Conversion table mirrors the design doc
+// (docs/superpowers/specs/2026-04-30-management-abstraction-transparency-design.md).
+// Order matters: more-specific patterns must precede more-permissive ones to
+// avoid accidental substring matches (e.g. m3/day before m3 alone).
 function convertToM3PerDay(value: number, unitRaw: string | null | undefined): number | null {
   const unit = normalizeUnit(unitRaw);
   if (!Number.isFinite(value)) return null;
+
+  // Time-based volume rates (m³ derived units)
   if (unit.includes("m3/day") || unit.includes("m³/day") || unit.includes("m3perday") || unit.includes("m³perday")) return value;
   if (unit.includes("m3/year") || unit.includes("m³/year") || unit.includes("m3peryear") || unit.includes("m³peryear")) return value / 365;
   if (unit.includes("m3/month") || unit.includes("m³/month") || unit.includes("m3permonth") || unit.includes("m³permonth")) return value / 30;
-  if (unit.includes("l/s") || unit.includes("lps") || unit.includes("litre/second") || unit.includes("liter/second")) return value * 0.001 * 86400;
+  if (unit.includes("m3/week") || unit.includes("m³/week") || unit.includes("m3/wk") || unit.includes("m³/wk")) return value / 7;
+  if (
+    unit.includes("m3/hour") || unit.includes("m³/hour") ||
+    unit.includes("m3/hr") || unit.includes("m³/hr") ||
+    unit.includes("m3/h") || unit.includes("m³/h")
+  ) return value * 24;
   if (unit.includes("m3/s") || unit.includes("m³/s") || unit.includes("m3persecond") || unit.includes("m³persecond")) return value * 86400;
+
+  // Litre-based rates (1 L = 0.001 m³)
+  if (unit.includes("l/day") || unit.includes("lpd") || unit.includes("litre/day") || unit.includes("liter/day")) return value * 0.001;
+  if (unit.includes("l/min") || unit.includes("lpm") || unit.includes("litre/min") || unit.includes("liter/min")) return value * 0.001 * 1440;
+  if (
+    unit.includes("l/hour") || unit.includes("litre/hour") || unit.includes("liter/hour") ||
+    unit.includes("l/hr") || unit.includes("lph") ||
+    unit.includes("l/h")
+  ) return value * 0.001 * 24;
+  if (unit.includes("l/s") || unit.includes("lps") || unit.includes("litre/second") || unit.includes("liter/second")) return value * 0.001 * 86400;
+
   return null;
 }
 
@@ -415,7 +441,7 @@ export async function fetchRegistryAbstraction(
   filters: RegistryListFilters
 ): Promise<RegistryAbstraction> {
   if (!schema.hasRegistry) {
-    return { totalPermittedM3PerDay: 0, totalPermittedM3PerYear: 0 };
+    return { totalPermittedM3PerDay: 0, totalPermittedM3PerYear: 0, parsedCount: 0, totalRows: 0 };
   }
   const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
 
@@ -425,17 +451,21 @@ export async function fetchRegistryAbstraction(
   );
 
   let total = 0;
+  let parsedCount = 0;
   for (const row of rowsRes.rows) {
     const parsed = parseRegistryVolume(row.volume_or_area);
     if (parsed.amount === null) continue;
     const perDay = convertToM3PerDay(parsed.amount, parsed.unit);
     if (perDay === null) continue;
     total += perDay;
+    parsedCount += 1;
   }
 
   return {
     totalPermittedM3PerDay: total,
     totalPermittedM3PerYear: total * 365,
+    parsedCount,
+    totalRows: rowsRes.rows.length,
   };
 }
 
