@@ -30,6 +30,100 @@ export type RegistryListFilters = {
 
 export type RegistryWhere = { sql: string; values: unknown[] };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Registry value categorization
+// The permit_registry.water_source / authorized_activity columns store raw,
+// human-typed values (e.g. "kivu lake", "lake kivu", "muhazi lake", "akagera river",
+// "gatare spring"). Without categorization, GROUP BY produces hundreds of fragmented
+// buckets that don't sum to the total, and filters that compare equality never match.
+// We categorize via keyword matching so:
+//   - "kivu lake" + "lake kivu" + "muhazi lake" + ... all collapse to "lake"
+//   - filter values from the UI ("lake", "river", ...) match all rows in that bucket
+// Buckets mirror the management-page filter dropdown so the filter and the
+// distribution chart agree perfectly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type CategoryRule = {
+  key: string;
+  label: string;
+  /** lowercase substrings; if any is found in the column value, the row is in this category */
+  keywords: string[];
+};
+
+// Order matters — the first matching rule wins.
+export const WATER_SOURCE_CATEGORIES: CategoryRule[] = [
+  { key: "lake", label: "Lake", keywords: ["lake"] },
+  { key: "river", label: "Stream/River", keywords: ["river", "stream"] },
+  { key: "spring", label: "Spring", keywords: ["spring"] },
+  { key: "borehole", label: "Groundwater (Borehole)", keywords: ["borehole", "well"] },
+  { key: "groundwater", label: "Groundwater", keywords: ["groundwater", "ground water", "underground"] },
+  {
+    key: "surface_water",
+    label: "Dam/Reservoir (Surface water)",
+    keywords: ["dam", "reservoir", "surface", "wetland", "swamp", "marsh", "pond", "canal"],
+  },
+];
+
+export const ACTIVITY_CATEGORIES: CategoryRule[] = [
+  { key: "domestic", label: "Domestic supply", keywords: ["domestic", "household", "drinking"] },
+  { key: "irrigation", label: "Irrigation", keywords: ["irrigation", "agricult"] },
+  {
+    key: "industrial",
+    label: "Industry",
+    keywords: ["industrial", "industry", "factory", "manufacturing", "construction"],
+  },
+  {
+    key: "electricity_generation",
+    label: "Hydropower",
+    keywords: ["hydropower", "hydro", "electricity", "power"],
+  },
+  { key: "mining", label: "Mining", keywords: ["mining", "mineral", "quarry"] },
+  {
+    key: "fish_farming_lakes",
+    label: "Fish farming",
+    keywords: ["fish", "aquaculture"],
+  },
+  {
+    key: "recreation",
+    label: "Recreation",
+    keywords: ["recreation", "tourism", "swimming", "leisure", "hotel"],
+  },
+];
+
+const CATEGORY_LABEL_INDEX: Record<string, Record<string, string>> = {
+  water_source: Object.fromEntries(WATER_SOURCE_CATEGORIES.map((c) => [c.key, c.label])),
+  authorized_activity: Object.fromEntries(ACTIVITY_CATEGORIES.map((c) => [c.key, c.label])),
+};
+CATEGORY_LABEL_INDEX.water_source.other = "Other";
+CATEGORY_LABEL_INDEX.water_source.unknown = "Unknown";
+CATEGORY_LABEL_INDEX.authorized_activity.other = "Other";
+CATEGORY_LABEL_INDEX.authorized_activity.unknown = "Unknown";
+
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/**
+ * Build a SQL CASE expression that classifies a raw text column into one of the
+ * declared category keys (or 'unknown' for null/empty, 'other' for anything else).
+ * The returned SQL is safe to use anywhere in a query because the category keys
+ * and keywords are compile-time constants (no user input).
+ */
+function buildCategoryCaseExpr(columnExpr: string, categories: CategoryRule[]): string {
+  const branches: string[] = [];
+  branches.push(`when ${columnExpr} is null or btrim(${columnExpr}) = '' then 'unknown'`);
+  for (const cat of categories) {
+    const conds = cat.keywords.map(
+      (kw) => `lower(${columnExpr}) like '%${escapeSqlLiteral(kw.toLowerCase())}%'`
+    );
+    branches.push(`when ${conds.join(" or ")} then '${escapeSqlLiteral(cat.key)}'`);
+  }
+  return `case ${branches.join(" ")} else 'other' end`;
+}
+
+const WATER_SOURCE_CATEGORY_SQL = buildCategoryCaseExpr("pr.water_source", WATER_SOURCE_CATEGORIES);
+const ACTIVITY_CATEGORY_SQL = buildCategoryCaseExpr("pr.authorized_activity", ACTIVITY_CATEGORIES);
+
 export async function detectRegistrySchema(): Promise<RegistrySchema> {
   const [tablesRes, extRes] = await Promise.all([
     query<{ table_name: string }>(
@@ -141,12 +235,16 @@ export function buildRegistryWhere(
     );
   }
 
+  // Use the same SQL CASE categorization as the distribution chart so the
+  // filter matches what the user sees and the dropdown values
+  // (lake, river, groundwater, borehole, surface_water, spring, other) actually
+  // resolve against the dirty raw values stored in the registry.
   if (filters.waterSource && filters.waterSource !== "all") {
-    where.push(`lower(coalesce(pr.water_source, '')) = lower(${p(filters.waterSource)})`);
+    where.push(`${WATER_SOURCE_CATEGORY_SQL} = lower(${p(filters.waterSource)})`);
   }
 
   if (filters.authorizedActivity && filters.authorizedActivity !== "all") {
-    where.push(`lower(coalesce(pr.authorized_activity, '')) = lower(${p(filters.authorizedActivity)})`);
+    where.push(`${ACTIVITY_CATEGORY_SQL} = lower(${p(filters.authorizedActivity)})`);
   }
 
   return {
@@ -225,10 +323,14 @@ export async function fetchRegistryDistributions(
 
   const { sql: whereSql, values } = buildRegistryWhere(schema, filters);
 
+  // GROUP BY the SQL CASE categorization so all variants of "lake X" / "X lake" /
+  // "kivu lake" / "lake kivu" collapse into a single Lake bucket, etc. Without
+  // this the chart shows a long tail of dirty distinct values that don't sum to
+  // the total permit count.
   const [waterSourceRes, activityRes, summary] = await Promise.all([
     query<{ key: string; n: string }>(
       `
-      SELECT lower(coalesce(nullif(trim(pr.water_source), ''), 'unknown')) as key,
+      SELECT ${WATER_SOURCE_CATEGORY_SQL} as key,
              count(*)::text as n
       FROM public.permit_registry pr
       ${whereSql}
@@ -239,7 +341,7 @@ export async function fetchRegistryDistributions(
     ),
     query<{ key: string; n: string }>(
       `
-      SELECT lower(coalesce(nullif(trim(pr.authorized_activity), ''), 'unknown')) as key,
+      SELECT ${ACTIVITY_CATEGORY_SQL} as key,
              count(*)::text as n
       FROM public.permit_registry pr
       ${whereSql}
@@ -251,9 +353,21 @@ export async function fetchRegistryDistributions(
     fetchRegistrySummary(schema, filters),
   ]);
 
+  const labelFor = (kind: "water_source" | "authorized_activity", key: string): string => {
+    return CATEGORY_LABEL_INDEX[kind][key] ?? (key === "unknown" ? "Unknown" : "Other");
+  };
+
   return {
-    byWaterSource: waterSourceRes.rows.map((r: { key: string; n: string }) => ({ key: r.key, label: r.key, count: Number(r.n) })),
-    byAuthorizedActivity: activityRes.rows.map((r: { key: string; n: string }) => ({ key: r.key, label: r.key, count: Number(r.n) })),
+    byWaterSource: waterSourceRes.rows.map((r: { key: string; n: string }) => ({
+      key: r.key,
+      label: labelFor("water_source", r.key),
+      count: Number(r.n),
+    })),
+    byAuthorizedActivity: activityRes.rows.map((r: { key: string; n: string }) => ({
+      key: r.key,
+      label: labelFor("authorized_activity", r.key),
+      count: Number(r.n),
+    })),
     byStatusBucket: [
       { key: "operational", label: "Operational", count: summary.operational },
       { key: "expired", label: "Expired", count: summary.expired },

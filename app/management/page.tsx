@@ -549,7 +549,7 @@ export default function ManagementDashboardPage() {
                           {(data?.portfolio.distributions.byWaterSource ?? []).length === 0 ? (
                             <div className="text-sm text-muted-foreground">No permit data found for current filters.</div>
                           ) : (
-                            (data?.portfolio.distributions.byWaterSource ?? []).slice(0, 8).map((row) => (
+                            (data?.portfolio.distributions.byWaterSource ?? []).map((row) => (
                               <div key={row.key} className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="font-medium truncate">{row.label}</div>
