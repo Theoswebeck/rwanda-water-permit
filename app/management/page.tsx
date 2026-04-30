@@ -190,7 +190,7 @@ export default function ManagementDashboardPage() {
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground space-y-2">
                     <div>✅ Application counts come from `applications`.</div>
-                    <div>✅ Permit counts come from the consolidated permit dataset (`permits` + `permit_registry`).</div>
+                    <div>✅ Permit counts come from the official permit registry — these match `/permit-registry` exactly.</div>
                     <div>✅ Compliance uses `inspections` (will be empty until table exists + data is recorded).</div>
                     <div>✅ Service feedback comes from `portal_feedback`.</div>
                   </CardContent>
@@ -489,48 +489,54 @@ export default function ManagementDashboardPage() {
                 {/* Section content */}
                 {section === "portfolio" ? (
                   <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Total permits issued</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.totalPermits ?? 0)}</div>}
-                        </CardContent>
-                      </Card>
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Active</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.active ?? 0)}</div>}
-                        </CardContent>
-                      </Card>
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Expired</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.expired ?? 0)}</div>}
-                        </CardContent>
-                      </Card>
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">Suspended</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.suspended ?? 0)}</div>}
-                        </CardContent>
-                      </Card>
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-medium">New permits ({filters.period})</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.newPermitsIssued ?? 0)}</div>}
-                          <div className="text-xs text-muted-foreground mt-1">Issued in selected period/range</div>
-                        </CardContent>
-                      </Card>
+                    <div className="space-y-2">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Total permits issued</CardTitle>
+                            <CardDescription>From permit registry</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.totalPermits ?? 0)}</div>}
+                          </CardContent>
+                        </Card>
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Operational</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.operational ?? 0)}</div>}
+                          </CardContent>
+                        </Card>
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Expired</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.expired ?? 0)}</div>}
+                          </CardContent>
+                        </Card>
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.cancelled ?? 0)}</div>}
+                          </CardContent>
+                        </Card>
+                        <Card className="shadow-sm">
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium">Expiring soon</CardTitle>
+                            <CardDescription>≤ 3 months</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            {isLoading ? <Skeleton className="h-8 w-20" /> : <div className="text-3xl font-semibold">{formatNumber(data?.portfolio.kpis.expiringSoon ?? 0)}</div>}
+                          </CardContent>
+                        </Card>
+                      </div>
+                      {data?.meta?.permitsScopeNote ? (
+                        <p className="text-xs text-muted-foreground">{data.meta.permitsScopeNote}</p>
+                      ) : null}
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
@@ -561,16 +567,26 @@ export default function ManagementDashboardPage() {
 
                       <Card className="shadow-sm">
                         <CardHeader>
-                          <CardTitle>Pending applications by stage</CardTitle>
-                          <CardDescription>Operational pressure across the workflow</CardDescription>
+                          <CardTitle>Permits by status</CardTitle>
+                          <CardDescription>Same buckets as the permit registry</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          {(data?.portfolio.workflow.pendingByStage ?? []).map((row) => (
-                            <div key={row.key} className="flex items-center justify-between">
-                              <div className="text-sm font-medium">{row.label}</div>
-                              <Badge variant={row.count > 0 ? "secondary" : "outline"}>{formatNumber(row.count)}</Badge>
-                            </div>
-                          ))}
+                          {(data?.portfolio.distributions.byStatusBucket ?? []).map((row) => {
+                            const total = data?.portfolio.kpis.totalPermits ?? 0;
+                            const percentage = total > 0 ? (row.count / total) * 100 : 0;
+                            return (
+                              <div key={row.key} className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="font-medium truncate">{row.label}</div>
+                                  <div className="text-xs text-muted-foreground">{formatNumber(row.count)} permits</div>
+                                </div>
+                                <div className="w-44 flex items-center gap-2">
+                                  <Progress value={percentage} className="h-2" />
+                                  <div className="text-xs text-muted-foreground w-12 text-right">{percentage.toFixed(0)}%</div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </CardContent>
                       </Card>
                     </div>
@@ -602,16 +618,19 @@ export default function ManagementDashboardPage() {
                                   <div className="shrink-0 text-xs text-muted-foreground">{formatDate(entry.createdAt)}</div>
                                 </div>
                                 <div className="mt-2 flex items-center gap-1">
-                                  {entry.rating ? (
-                                    Array.from({ length: 5 }, (_, index) => (
-                                      <Star
-                                        key={`${entry.id}-${index + 1}`}
-                                        className={[
-                                          "h-4 w-4",
-                                          index < entry.rating ? "fill-yellow-500 text-yellow-500" : "text-gray-300",
-                                        ].join(" ")}
-                                      />
-                                    ))
+                                  {entry.rating !== null && entry.rating !== undefined ? (
+                                    Array.from({ length: 5 }, (_, index) => {
+                                      const ratingValue = entry.rating ?? 0;
+                                      return (
+                                        <Star
+                                          key={`${entry.id}-${index + 1}`}
+                                          className={[
+                                            "h-4 w-4",
+                                            index < ratingValue ? "fill-yellow-500 text-yellow-500" : "text-gray-300",
+                                          ].join(" ")}
+                                        />
+                                      );
+                                    })
                                   ) : (
                                     <span className="text-xs text-muted-foreground">No star rating</span>
                                   )}
@@ -648,56 +667,30 @@ export default function ManagementDashboardPage() {
                         </CardContent>
                       </Card>
 
-                      <div className="space-y-4">
-                        <Card className="shadow-sm">
-                          <CardHeader>
-                            <CardTitle>Feedback rating breakdown</CardTitle>
-                            <CardDescription>Distribution of applicant satisfaction scores</CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            {(data?.feedback.ratingBreakdown ?? []).map((row) => {
-                              const totalFeedback = data?.feedback.totalSubmissions ?? 0;
-                              const percentage = totalFeedback > 0 ? (row.count / totalFeedback) * 100 : 0;
-                              return (
-                                <div key={row.rating} className="flex items-center justify-between gap-3">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <div className="font-medium">{row.rating} star</div>
-                                    <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                                  </div>
-                                  <div className="w-44 flex items-center gap-2">
-                                    <Progress value={percentage} className="h-2" />
-                                    <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
-                                  </div>
+                      <Card className="shadow-sm">
+                        <CardHeader>
+                          <CardTitle>Feedback rating breakdown</CardTitle>
+                          <CardDescription>Distribution of applicant satisfaction scores</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {(data?.feedback.ratingBreakdown ?? []).map((row) => {
+                            const totalFeedback = data?.feedback.totalSubmissions ?? 0;
+                            const percentage = totalFeedback > 0 ? (row.count / totalFeedback) * 100 : 0;
+                            return (
+                              <div key={row.rating} className="flex items-center justify-between gap-3">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <div className="font-medium">{row.rating} star</div>
+                                  <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
                                 </div>
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
-
-                        <Card className="shadow-sm">
-                          <CardHeader>
-                            <CardTitle>Inspection recommendation breakdown</CardTitle>
-                            <CardDescription>No action required, warning/reminder, and sanction outcomes</CardDescription>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            {(data?.compliance.inspections.recommendationBreakdown ?? []).map((row) => {
-                              const totalInspections = data?.compliance.inspections.conducted ?? 0;
-                              const percentage = totalInspections > 0 ? (row.count / totalInspections) * 100 : 0;
-                              return (
-                                <div key={row.key} className="flex items-center justify-between gap-3">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <div className="font-medium">{row.label}</div>
-                                  </div>
-                                  <div className="w-44 flex items-center gap-2">
-                                    <Progress value={percentage} className="h-2" />
-                                    <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
-                                  </div>
+                                <div className="w-44 flex items-center gap-2">
+                                  <Progress value={percentage} className="h-2" />
+                                  <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
                                 </div>
-                              );
-                            })}
-                          </CardContent>
-                        </Card>
-                      </div>
+                              </div>
+                            );
+                          })}
+                        </CardContent>
+                      </Card>
                     </div>
                   </div>
                 ) : null}
@@ -820,7 +813,7 @@ export default function ManagementDashboardPage() {
                     <Card className="shadow-sm">
                       <CardHeader>
                         <CardTitle>Compliance parameters</CardTitle>
-                        <CardDescription>Based on latest completed inspection per application</CardDescription>
+                        <CardDescription>Based on latest completed inspection per permit holder</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         {(data?.compliance.parameters ?? []).length === 0 ? (
@@ -841,6 +834,30 @@ export default function ManagementDashboardPage() {
                             </div>
                           ))
                         )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="shadow-sm">
+                      <CardHeader>
+                        <CardTitle>Inspection recommendation breakdown</CardTitle>
+                        <CardDescription>Distribution of latest inspection recommendations</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {(data?.compliance.inspections.recommendationBreakdown ?? []).map((row) => {
+                          const totalInspections = data?.compliance.inspections.conducted ?? 0;
+                          const percentage = totalInspections > 0 ? (row.count / totalInspections) * 100 : 0;
+                          return (
+                            <div key={row.key} className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <div className="font-medium">{row.label}</div>
+                              </div>
+                              <div className="w-44 flex items-center gap-2">
+                                <Progress value={percentage} className="h-2" />
+                                <div className="text-xs text-muted-foreground w-12 text-right">{formatNumber(row.count)}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </CardContent>
                     </Card>
                   </div>
