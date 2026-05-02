@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { syncPermitToRegistry } from "@/lib/permit/permit-registry-sync";
+// syncPermitToRegistry was removed — permit_registry RLS only allows the
+// service role to UPDATE, so syncs must go through the server-side API route.
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
 import { splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
@@ -144,6 +145,24 @@ function resolveVolumeOrAreaFromAssessor(
   if (Number.isFinite(tfAllowance) && tfAllowance > 0) return tfAllowance;
 
   return 0;
+}
+
+async function syncRegistryViaApi(
+  permitNumber: string,
+  updates: Record<string, unknown>
+): Promise<{ synced: boolean; error?: string }> {
+  try {
+    const resp = await fetch('/api/permit-registry/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permitNumber, updates }),
+    })
+    const json = await resp.json().catch(() => null)
+    if (!resp.ok) return { synced: false, error: json?.message || resp.statusText }
+    return { synced: json?.synced === true }
+  } catch (err) {
+    return { synced: false, error: err instanceof Error ? err.message : 'Unknown error' }
+  }
 }
 
 export default function TermsConditionsPage() {
@@ -944,7 +963,7 @@ export default function TermsConditionsPage() {
 
           const permitNumForSync = currentPermit.permit_number || permitRef?.normalizedPermitNumber;
           if (permitNumForSync) {
-            const syncResult = await syncPermitToRegistry(supabase, permitNumForSync, {
+            const syncResult = await syncRegistryViaApi(permitNumForSync, {
               status: 'active',
               water_source: (permitUpdatePayload.water_source as string) || undefined,
               authorized_activity: (permitUpdatePayload.purpose as string) || undefined,
@@ -978,7 +997,7 @@ export default function TermsConditionsPage() {
 
           console.log('📝 Registry-only modification for permit:', registryPermitNumber);
 
-          const registrySyncResult = await syncPermitToRegistry(supabase, registryPermitNumber, {
+          const registrySyncResult = await syncRegistryViaApi(registryPermitNumber, {
             status: 'active',
             water_source: applicationData.water_source || undefined,
             authorized_activity: applicationData.water_purpose || undefined,
@@ -1096,7 +1115,7 @@ export default function TermsConditionsPage() {
 
         // Forward-sync renewal to permit_registry (non-blocking)
         if (permitData?.permit_number) {
-          syncPermitToRegistry(supabase, permitData.permit_number, {
+          syncRegistryViaApi(permitData.permit_number, {
             status: 'active',
             issuance_date: newIssuedDate,
             expiration_date: newExpiryDate || undefined,
@@ -1151,7 +1170,7 @@ export default function TermsConditionsPage() {
         // `permits.issued_date` — without it, the registry would silently
         // keep the previous owner's issuance date.
         if (permitData?.permit_number) {
-          syncPermitToRegistry(supabase, permitData.permit_number, {
+          syncRegistryViaApi(permitData.permit_number, {
             status: 'active',
             permit_holder: permitHolder,
             location: registrySyncLocation,
@@ -1229,7 +1248,7 @@ export default function TermsConditionsPage() {
 
         // Forward-sync manual transfer to permit_registry (non-blocking)
         if (permitData?.permit_number) {
-          syncPermitToRegistry(supabase, permitData.permit_number, {
+          syncRegistryViaApi(permitData.permit_number, {
             status: 'active',
             permit_holder: permitHolder,
             location: registrySyncLocation,
