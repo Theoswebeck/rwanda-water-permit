@@ -111,7 +111,6 @@ export function CreateInspectionDialog({
               )
             `
             )
-            .eq("status", "active")
             .order("issued_date", { ascending: false }),
           supabase
             .from("permit_registry")
@@ -148,21 +147,10 @@ export function CreateInspectionDialog({
             : null,
         }));
 
-        const ACTIVE_STATUSES = new Set(["active", "operational", "approved", "valid"]);
-        const registryRows: PermitPickRow[] = ((registryResult.data || []) as any[])
-          .filter((r) => {
-            const s = (r.status || "").trim().toLowerCase();
-            if (ACTIVE_STATUSES.has(s)) return true;
-            if (r.expiration_date) {
-              const exp = new Date(r.expiration_date);
-              if (!Number.isNaN(exp.getTime()) && exp >= new Date()) return true;
-            }
-            return false;
-          })
-          .map((r) => ({
+        const registryRows: PermitPickRow[] = ((registryResult.data || []) as any[]).map((r) => ({
             id: r.id,
             permit_number: r.permit_number,
-            status: r.status || "active",
+            status: r.status || "unknown",
             issued_date: r.issuance_date,
             expiry_date: r.expiration_date,
             source: "permit_registry" as const,
@@ -304,7 +292,7 @@ export function CreateInspectionDialog({
         {loading ? (
           <div className="flex flex-col items-center justify-center gap-4 py-20 text-muted-foreground">
             <Loader2 className="h-10 w-10 animate-spin text-primary/60" />
-            <span className="text-base">Loading active permits…</span>
+            <span className="text-base">Loading permits…</span>
           </div>
         ) : (
           <div className="border-t">
@@ -323,7 +311,7 @@ export function CreateInspectionDialog({
               {filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                   <Search className="h-12 w-12 mb-4 opacity-20" />
-                  <p className="text-base font-medium">No active permits found</p>
+                  <p className="text-base font-medium">No permits found</p>
                   <p className="text-sm mt-1 opacity-70">Try adjusting your search criteria</p>
                 </div>
               ) : (

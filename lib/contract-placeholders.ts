@@ -363,18 +363,26 @@ function resolveLatLng(application: ApplicationForContract): { lat: string; lng:
     return null;
   };
 
-  // Priority 1: top-level internal_notes (new-application form path)
+  // Priority 1: assessor-approved adjustment from assessment report
+  const assessorAdjustments = notes?._assessorAdjustments;
+  const adjusted = tryPair(
+    assessorAdjustments?.waterSourceLatitude,
+    assessorAdjustments?.waterSourceLongitude,
+  );
+  if (adjusted) return adjusted;
+
+  // Priority 2: top-level internal_notes (new-application form path)
   const p1 = tryPair(notes?.waterSourceLatitude, notes?.waterSourceLongitude);
   if (p1) return p1;
 
-  // Priority 2: nested under permitDetails (renewal form path)
+  // Priority 3: nested under permitDetails (renewal form path)
   const pd = notes?.permitDetails;
   if (pd && typeof pd === "object") {
     const p2 = tryPair((pd as any).waterSourceLatitude, (pd as any).waterSourceLongitude);
     if (p2) return p2;
   }
 
-  // Priority 3: GeoJSON Point in the coordinates DB column
+  // Priority 4: GeoJSON Point in the coordinates DB column
   const geom: any = application.coordinates as any;
   if (geom && geom.type === "Point" && Array.isArray(geom.coordinates) && geom.coordinates.length >= 2) {
     const [lng, lat] = geom.coordinates;
@@ -567,6 +575,19 @@ function resolveConcessionAreaLabel(
 
   const dbValue = parsePositiveNumber(application.concession_area);
   if (dbValue) return `${formatNumber(dbValue)} Ha`;
+
+  if (notes) {
+    const adjustedPolygon = notes._assessorAdjustments?.waterSourcePolygonPoints;
+    if (Array.isArray(adjustedPolygon) && adjustedPolygon.length > 0) {
+      const feature = polygonsToGeoJSON([adjustedPolygon]);
+      if (feature) {
+        const areaSqMeters = turf.area(feature as any);
+        if (Number.isFinite(areaSqMeters) && areaSqMeters > 0) {
+          return `${formatNumber(areaSqMeters / 10000)} Ha`;
+        }
+      }
+    }
+  }
 
   const geometryValue = areaHaFromGeometry(application.coordinates);
   if (geometryValue) return `${formatNumber(geometryValue)} Ha`;

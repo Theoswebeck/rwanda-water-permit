@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { FileText, Droplet, MapPin, Factory, AlertCircle, ThumbsUp, ThumbsDown, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Droplet, MapPin, Factory, AlertCircle, ThumbsUp, ThumbsDown, CheckCircle, XCircle, Loader2, Save } from "lucide-react";
 import type { AssessmentReportData } from "@/lib/assessment-report-utils";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -22,6 +22,9 @@ interface AssessmentReportFormProps {
   // Recommendation props
   recommendation?: { recommendation: "yes" | "no" | null; explanationText: string };
   onRecommendationChange?: (recommendation: { recommendation: "yes" | "no" | null; explanationText: string }) => void;
+  onSourceCoordinatesSave?: (coords: { latitude: string; longitude: string }) => Promise<void>;
+  onSourcePolygonSave?: (points: Array<{ latitude: string; longitude: string }>) => Promise<void>;
+  coordinatesSaving?: boolean;
 }
 
 export function AssessmentReportForm({
@@ -33,7 +36,10 @@ export function AssessmentReportForm({
   inspectionDate,
   assessmentSubmittedDate,
   recommendation,
-  onRecommendationChange
+  onRecommendationChange,
+  onSourceCoordinatesSave,
+  onSourcePolygonSave,
+  coordinatesSaving = false,
 }: AssessmentReportFormProps) {
   const [localData, setLocalData] = useState<Partial<AssessmentReportData>>(reportData);
 
@@ -76,7 +82,32 @@ export function AssessmentReportForm({
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
   const prefilledClass = `bg-muted/50${readOnly ? " cursor-not-allowed" : ""}`;
+  const coordinateInputClass = readOnly ? prefilledClass : "bg-white";
   const isSurfaceSectionReadOnly = true;
+  const coordinateSaveDisabled =
+    readOnly ||
+    coordinatesSaving ||
+    !String(localData.sourceLatitude || "").trim() ||
+    !String(localData.sourceLongitude || "").trim();
+
+  const updatePolygonPoint = (
+    index: number,
+    field: "latitude" | "longitude",
+    value: string,
+  ) => {
+    const next = [...(localData.sourcePolygonPoints || [])];
+    next[index] = { ...next[index], [field]: value };
+    const beacons = next.map((point, idx) => ({
+      id: `B${idx + 1}`,
+      latitude: point.latitude,
+      longitude: point.longitude,
+    }));
+    setLocalData((prev) => {
+      const updated = { ...prev, sourcePolygonPoints: next, beacons };
+      onReportDataChange(updated);
+      return updated;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -189,21 +220,40 @@ export function AssessmentReportForm({
                         <Label className="text-xs text-muted-foreground">Latitude</Label>
                         <Input
                           value={point.latitude}
-                          readOnly
-                          className={prefilledClass}
+                          onChange={(e) => updatePolygonPoint(index, "latitude", e.target.value)}
+                          readOnly={readOnly}
+                          className={coordinateInputClass}
                         />
                       </div>
                       <div className="col-span-5">
                         <Label className="text-xs text-muted-foreground">Longitude</Label>
                         <Input
                           value={point.longitude}
-                          readOnly
-                          className={prefilledClass}
+                          onChange={(e) => updatePolygonPoint(index, "longitude", e.target.value)}
+                          readOnly={readOnly}
+                          className={coordinateInputClass}
                         />
                       </div>
                     </div>
                   ))}
                 </div>
+                {!readOnly && (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={coordinatesSaving || !localData.sourcePolygonPoints?.length}
+                      onClick={() => onSourcePolygonSave?.(localData.sourcePolygonPoints || [])}
+                    >
+                      {coordinatesSaving ? (
+                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-1.5" />
+                      )}
+                      Save coordinates
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -211,18 +261,40 @@ export function AssessmentReportForm({
                   <Label>Latitude</Label>
                   <Input
                     value={localData.sourceLatitude || ''}
-                    readOnly
-                    className={prefilledClass}
+                    onChange={(e) => updateField('sourceLatitude', e.target.value)}
+                    readOnly={readOnly}
+                    className={coordinateInputClass}
                   />
                 </div>
                 <div>
                   <Label>Longitude</Label>
                   <Input
                     value={localData.sourceLongitude || ''}
-                    readOnly
-                    className={prefilledClass}
+                    onChange={(e) => updateField('sourceLongitude', e.target.value)}
+                    readOnly={readOnly}
+                    className={coordinateInputClass}
                   />
                 </div>
+                {!readOnly && (
+                  <div className="md:col-span-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={coordinateSaveDisabled}
+                      onClick={() => onSourceCoordinatesSave?.({
+                        latitude: String(localData.sourceLatitude || ""),
+                        longitude: String(localData.sourceLongitude || ""),
+                      })}
+                    >
+                      {coordinatesSaving ? (
+                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-1.5" />
+                      )}
+                      Save coordinates
+                    </Button>
+                  </div>
+                )}
               </>
             )}
 

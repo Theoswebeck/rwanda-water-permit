@@ -292,6 +292,14 @@ function extractLatLngFromApp(app: ApplicationForOverrides): { lat: string; lng:
     return null;
   };
   const fromNotes = tryPair(notes.waterSourceLatitude, notes.waterSourceLongitude);
+  const assessorAdjustments = notes._assessorAdjustments;
+  if (assessorAdjustments && typeof assessorAdjustments === "object") {
+    const fromAssessor = tryPair(
+      (assessorAdjustments as any).waterSourceLatitude,
+      (assessorAdjustments as any).waterSourceLongitude,
+    );
+    if (fromAssessor) return fromAssessor;
+  }
   if (fromNotes) return fromNotes;
   const tfd = (notes as any).transferFormData;
   if (tfd && typeof tfd === "object") {

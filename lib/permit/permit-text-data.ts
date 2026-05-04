@@ -217,11 +217,20 @@ export function resolveActivities(app: PermitApplication): string {
 
 export function resolveLatLng(app: PermitApplication): { lat: string; lng: string } {
   const notes = resolveNotes(app);
-  const latVal = notes?.waterSourceLatitude;
-  const lngVal = notes?.waterSourceLongitude;
-  const lat = typeof latVal === "number" ? latVal : typeof latVal === "string" ? parseFloat(latVal) : NaN;
-  const lng = typeof lngVal === "number" ? lngVal : typeof lngVal === "string" ? parseFloat(lngVal) : NaN;
-  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
+  const tryPair = (latVal: unknown, lngVal: unknown): { lat: string; lng: string } | null => {
+    const lat = typeof latVal === "number" ? latVal : typeof latVal === "string" ? parseFloat(latVal) : NaN;
+    const lng = typeof lngVal === "number" ? lngVal : typeof lngVal === "string" ? parseFloat(lngVal) : NaN;
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat: lat.toFixed(6), lng: lng.toFixed(6) };
+    return null;
+  };
+  const assessorAdjustments = notes?._assessorAdjustments;
+  const adjusted = tryPair(
+    assessorAdjustments?.waterSourceLatitude,
+    assessorAdjustments?.waterSourceLongitude,
+  );
+  if (adjusted) return adjusted;
+  const fromNotes = tryPair(notes?.waterSourceLatitude, notes?.waterSourceLongitude);
+  if (fromNotes) return fromNotes;
   return { lat: "N/A", lng: "N/A" };
 }
 

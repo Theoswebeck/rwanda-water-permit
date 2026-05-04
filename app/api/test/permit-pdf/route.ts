@@ -63,7 +63,21 @@ function notesFor(variant: Variant, appType: AppType): Record<string, unknown> {
     waterSourceCell: BASE_LOCATION.cell,
     waterSourceVillage: BASE_LOCATION.village,
     intendedActivities: variant.startsWith("concession") ? ["fish_farming_lakes"] : ["irrigation", "water_supply"],
-    _assessorAdjustments: { permitLengthYears: 5, recommendedVolumeM3: 1200 },
+    _assessorAdjustments: {
+      permitLengthYears: 5,
+      recommendedVolumeM3: 1200,
+      waterSourceLatitude: -1.93433216,
+      waterSourceLongitude: 29.60182031,
+      ...(variant.startsWith("concession")
+        ? {
+            waterSourcePolygonPoints: [
+              { latitude: -1.93433216, longitude: 29.60182031 },
+              { latitude: -1.9345, longitude: 29.6021 },
+              { latitude: -1.9348, longitude: 29.6017 },
+            ],
+          }
+        : {}),
+    },
   };
 
   if (appType === "transfer") {

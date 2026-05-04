@@ -420,6 +420,7 @@ export default function AssessmentApplicationPage() {
   const [permitLengthSaving, setPermitLengthSaving] = useState(false);
   const [assessorRecommendedVolume, setAssessorRecommendedVolume] = useState<number | undefined>(undefined);
   const [volumeSaving, setVolumeSaving] = useState(false);
+  const [coordinatesSaving, setCoordinatesSaving] = useState(false);
   // Bumped after each successful assessor save (document-overrides, duration,
   // or volume) so the permit preview iframe refetches the latest PDF.
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
@@ -1386,7 +1387,13 @@ export default function AssessmentApplicationPage() {
   const persistAssessorAdjustment = useCallback(
     async (
       appId: string,
-      patch: { permitLengthYears?: number; recommendedVolumeM3?: number },
+      patch: {
+        permitLengthYears?: number;
+        recommendedVolumeM3?: number;
+        waterSourceLatitude?: number;
+        waterSourceLongitude?: number;
+        waterSourcePolygonPoints?: Array<{ latitude: number; longitude: number }>;
+      },
     ): Promise<{
       assessorAdjustments: Record<string, unknown>;
       originalRequestedValues: Record<string, unknown> | null;
@@ -1516,6 +1523,130 @@ export default function AssessmentApplicationPage() {
       alert('Failed to save volume adjustment. Please try again.');
     } finally {
       setVolumeSaving(false);
+    }
+  };
+
+  const patchAssessorAdjustmentsIntoApplication = (
+    assessorAdjustments: Record<string, unknown>,
+    originalRequestedValues: Record<string, unknown> | null,
+  ) => {
+    setApplication((prev) => {
+      if (!prev) return prev;
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = prev.internal_notes ? JSON.parse(prev.internal_notes) : {};
+      } catch {
+        parsed = {};
+      }
+      parsed._assessorAdjustments = assessorAdjustments;
+      if (originalRequestedValues) parsed._originalRequestedValues = originalRequestedValues;
+      return {
+        ...prev,
+        internal_notes: JSON.stringify(parsed),
+      } as any;
+    });
+  };
+
+  const saveSourceCoordinatesAdjustment = async (coords: { latitude: string; longitude: string }) => {
+    if (!application) return;
+    if ((application as any).is_renewal) {
+      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
+      return;
+    }
+
+    const latitude = Number.parseFloat(coords.latitude);
+    const longitude = Number.parseFloat(coords.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      alert("Latitude and longitude must both be valid numbers.");
+      return;
+    }
+
+    try {
+      setCoordinatesSaving(true);
+      const { assessorAdjustments, originalRequestedValues } = await persistAssessorAdjustment(
+        application.id,
+        {
+          waterSourceLatitude: latitude,
+          waterSourceLongitude: longitude,
+        },
+      );
+
+      patchAssessorAdjustmentsIntoApplication(assessorAdjustments, originalRequestedValues);
+      setAssessmentReportData((prev) => ({
+        ...prev,
+        sourceLatitude: String(assessorAdjustments.waterSourceLatitude ?? latitude),
+        sourceLongitude: String(assessorAdjustments.waterSourceLongitude ?? longitude),
+      }));
+
+      console.log("✅ Water source coordinates adjusted", { latitude, longitude });
+      bumpPreviewRefresh();
+    } catch (err) {
+      console.error("❌ Error saving water source coordinates:", err);
+      alert("Failed to save water source coordinates. Please try again.");
+    } finally {
+      setCoordinatesSaving(false);
+    }
+  };
+
+  const saveSourcePolygonAdjustment = async (
+    points: Array<{ latitude: string; longitude: string }>,
+  ) => {
+    if (!application) return;
+    if ((application as any).is_renewal) {
+      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
+      return;
+    }
+
+    const parsedPoints = points.map((point) => ({
+      latitude: Number.parseFloat(point.latitude),
+      longitude: Number.parseFloat(point.longitude),
+    }));
+    if (
+      parsedPoints.length === 0 ||
+      parsedPoints.some((point) => !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude))
+    ) {
+      alert("Every polygon point must have a valid latitude and longitude.");
+      return;
+    }
+
+    try {
+      setCoordinatesSaving(true);
+      const { assessorAdjustments, originalRequestedValues } = await persistAssessorAdjustment(
+        application.id,
+        { waterSourcePolygonPoints: parsedPoints },
+      );
+
+      patchAssessorAdjustmentsIntoApplication(assessorAdjustments, originalRequestedValues);
+      const savedPoints = Array.isArray(assessorAdjustments.waterSourcePolygonPoints)
+        ? assessorAdjustments.waterSourcePolygonPoints
+        : parsedPoints;
+      const stringPoints = savedPoints
+        .map((point) => {
+          if (!point || typeof point !== "object") return null;
+          const raw = point as { latitude?: unknown; longitude?: unknown };
+          return {
+            latitude: String(raw.latitude ?? ""),
+            longitude: String(raw.longitude ?? ""),
+          };
+        })
+        .filter((point): point is { latitude: string; longitude: string } => Boolean(point));
+      setAssessmentReportData((prev) => ({
+        ...prev,
+        sourcePolygonPoints: stringPoints,
+        beacons: stringPoints.map((point, index) => ({
+          id: `B${index + 1}`,
+          latitude: point.latitude,
+          longitude: point.longitude,
+        })),
+      }));
+
+      console.log("✅ Water source polygon adjusted", { points: stringPoints.length });
+      bumpPreviewRefresh();
+    } catch (err) {
+      console.error("❌ Error saving water source polygon:", err);
+      alert("Failed to save water source polygon. Please try again.");
+    } finally {
+      setCoordinatesSaving(false);
     }
   };
 
@@ -2313,6 +2444,9 @@ export default function AssessmentApplicationPage() {
                             onReportDataChange={setAssessmentReportData}
                             reportType={rt}
                             readOnly={isReadOnly}
+                            onSourceCoordinatesSave={(application as any).is_renewal ? undefined : saveSourceCoordinatesAdjustment}
+                            onSourcePolygonSave={(application as any).is_renewal ? undefined : saveSourcePolygonAdjustment}
+                            coordinatesSaving={coordinatesSaving}
                             inspectionDate={inspectionDate}
                             assessmentSubmittedDate={assessmentSubmittedDate}
                             recommendation={recommendation}

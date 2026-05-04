@@ -331,6 +331,10 @@ export function prefillAssessmentReportFromApplication(
     application.water_purpose || null,
     (formData as any)?.waterUseCategory ?? null
   );
+  const assessorAdjustments =
+    formData && typeof (formData as any)._assessorAdjustments === "object" && (formData as any)._assessorAdjustments !== null
+      ? ((formData as any)._assessorAdjustments as Record<string, unknown>)
+      : {};
   
   // Get activities
   const activities = (application.intended_activities as string[]) || [];
@@ -430,6 +434,13 @@ export function prefillAssessmentReportFromApplication(
       console.warn('Error extracting coordinates:', error);
     }
   }
+
+  const adjustedLat = pickFirstNumber(assessorAdjustments.waterSourceLatitude);
+  const adjustedLng = pickFirstNumber(assessorAdjustments.waterSourceLongitude);
+  if (typeof adjustedLat === "number" && typeof adjustedLng === "number") {
+    sourceLatitude = String(adjustedLat);
+    sourceLongitude = String(adjustedLng);
+  }
   
   // Extract source location
   const sourceLocation = formatLocationString(
@@ -528,9 +539,8 @@ export function prefillAssessmentReportFromApplication(
   if (reportType === 'abstraction') {
     const detailsUnknown: any = (formData as any).waterAbstractionDetails;
     const abstractionDetail: any = Array.isArray(detailsUnknown) ? detailsUnknown[0] : undefined;
-    const assessorAdjustmentsUnknown = (formData as any)?._assessorAdjustments;
     const recommendedVolumeM3 = pickFirstNumber(
-      assessorAdjustmentsUnknown?.recommendedVolumeM3,
+      assessorAdjustments.recommendedVolumeM3,
       (application as any)?.assessor_recommended_volume_m3
     );
 
@@ -593,10 +603,16 @@ export function prefillAssessmentReportFromApplication(
     
     // Resolve the full polygon (used for both Section 3 polygon and Section 4 beacons)
     const polysUnknown = (formData as any)?.waterSourcePolygons;
+    const adjustedPolygonsUnknown = assessorAdjustments.waterSourcePolygonPoints;
     const normalizedFormPolygons = normalizePolygonsFromUnknown(polysUnknown);
+    const normalizedAdjustedPolygons = normalizePolygonsFromUnknown(
+      Array.isArray(adjustedPolygonsUnknown) ? [adjustedPolygonsUnknown] : adjustedPolygonsUnknown
+    );
     let resolvedPolygon: Array<{ latitude: string; longitude: string }> = [];
 
-    if (normalizedFormPolygons.length > 0 && normalizedFormPolygons[0].length > 0) {
+    if (normalizedAdjustedPolygons.length > 0 && normalizedAdjustedPolygons[0].length > 0) {
+      resolvedPolygon = normalizedAdjustedPolygons[0];
+    } else if (normalizedFormPolygons.length > 0 && normalizedFormPolygons[0].length > 0) {
       resolvedPolygon = normalizedFormPolygons[0];
     } else {
       try {

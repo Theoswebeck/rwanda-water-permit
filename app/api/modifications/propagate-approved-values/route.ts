@@ -79,6 +79,26 @@ function pickDurationYears(...values: unknown[]): number | null {
   return null
 }
 
+function pickCoordinate(value: unknown, min: number, max: number): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) return null
+  return Number(parsed.toFixed(8))
+}
+
+function normalizePolygonPoints(value: unknown): Array<{ latitude: number; longitude: number }> | null {
+  if (!Array.isArray(value) || value.length === 0) return null
+  const points: Array<{ latitude: number; longitude: number }> = []
+  for (const point of value) {
+    if (!point || typeof point !== 'object') return null
+    const raw = point as JsonRecord
+    const latitude = pickCoordinate(raw.latitude, -90, 90)
+    const longitude = pickCoordinate(raw.longitude, -180, 180)
+    if (latitude == null || longitude == null) return null
+    points.push({ latitude, longitude })
+  }
+  return points
+}
+
 function normalizeActivities(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.map(String).filter(Boolean)
   if (typeof raw === 'string' && raw.trim()) {
@@ -220,6 +240,9 @@ export async function POST(req: NextRequest) {
       modificationApplication.estimated_usage_volume,
       modificationApplication.concession_area
     )
+    const adjustedLatitude = pickCoordinate(assessorAdjustments?.waterSourceLatitude, -90, 90)
+    const adjustedLongitude = pickCoordinate(assessorAdjustments?.waterSourceLongitude, -180, 180)
+    const adjustedPolygonPoints = normalizePolygonPoints(assessorAdjustments?.waterSourcePolygonPoints)
     const isConcession = isConcessionApplication(modificationApplication.intended_activities, modNotes)
 
     const originalNotes = parseJsonObject(originalApplication.internal_notes) || {}
@@ -257,6 +280,10 @@ export async function POST(req: NextRequest) {
         : {}),
       ...(resolvedDurationYears != null ? { permitLengthYears: resolvedDurationYears } : {}),
       ...(resolvedVolume != null ? { recommendedVolumeM3: resolvedVolume } : {}),
+      ...(adjustedLatitude != null && adjustedLongitude != null
+        ? { waterSourceLatitude: adjustedLatitude, waterSourceLongitude: adjustedLongitude }
+        : {}),
+      ...(adjustedPolygonPoints != null ? { waterSourcePolygonPoints: adjustedPolygonPoints } : {}),
     }
 
     const mergedNotesText = JSON.stringify(mergedNotes)

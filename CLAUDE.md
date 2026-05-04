@@ -154,7 +154,18 @@ EMAIL_DEV_MODE=false
 | `chore/stage-unstaged-2026-03-01`          | **production** |
 | `chore/stage-unstaged-2026-03-01-uat`      | **staging**    |
 
-Despite the names, `-uat` is staging and the non-`-uat` branch is prod. Push fixes that need to reach production to **both** branches (fast-forward when possible).
+Despite the names, `-uat` is staging and the non-`-uat` branch is prod. Push fixes that need to reach production to **both** branches.
+
+**Updating staging (UAT):** The two branches diverge over time, so a direct push from prod to UAT will be rejected (non-fast-forward). Always cherry-pick onto UAT:
+
+```bash
+git push origin chore/stage-unstaged-2026-03-01          # push prod first
+git fetch origin chore/stage-unstaged-2026-03-01-uat
+git checkout chore/stage-unstaged-2026-03-01-uat
+git cherry-pick <commit-sha>
+git push origin chore/stage-unstaged-2026-03-01-uat
+git checkout chore/stage-unstaged-2026-03-01              # return to prod branch
+```
 
 ---
 

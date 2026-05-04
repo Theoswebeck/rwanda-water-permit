@@ -24,6 +24,14 @@ const SUPERUSER_EMAILS = new Set([
 type AssessorAdjustmentsPatch = {
   permitLengthYears?: number;
   recommendedVolumeM3?: number;
+  waterSourceLatitude?: number;
+  waterSourceLongitude?: number;
+  waterSourcePolygonPoints?: Array<{ latitude: number; longitude: number }>;
+};
+
+type CoordinatePointPatch = {
+  latitude?: number | string;
+  longitude?: number | string;
 };
 
 type RequestedValuesPayload = {
@@ -130,9 +138,57 @@ export async function POST(
       patch.recommendedVolumeM3 = n;
     }
 
-    if (patch.permitLengthYears === undefined && patch.recommendedVolumeM3 === undefined) {
+    const hasLat = body.waterSourceLatitude !== undefined;
+    const hasLng = body.waterSourceLongitude !== undefined;
+    if (hasLat || hasLng) {
+      if (!hasLat || !hasLng) {
+        return NextResponse.json(
+          { success: false, message: "waterSourceLatitude and waterSourceLongitude must be saved together" },
+          { status: 400 },
+        );
+      }
+      const pair = parseLatLngPair(body.waterSourceLatitude, body.waterSourceLongitude);
+      if ("error" in pair) {
+        return NextResponse.json({ success: false, message: pair.error }, { status: 400 });
+      }
+      patch.waterSourceLatitude = pair.lat;
+      patch.waterSourceLongitude = pair.lng;
+    }
+
+    if (body.waterSourcePolygonPoints !== undefined) {
+      if (!Array.isArray(body.waterSourcePolygonPoints) || body.waterSourcePolygonPoints.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "waterSourcePolygonPoints must contain at least one point" },
+          { status: 400 },
+        );
+      }
+
+      const points: Array<{ latitude: number; longitude: number }> = [];
+      for (const rawPoint of body.waterSourcePolygonPoints as CoordinatePointPatch[]) {
+        if (!rawPoint || typeof rawPoint !== "object") {
+          return NextResponse.json(
+            { success: false, message: "Each polygon point must be an object" },
+            { status: 400 },
+          );
+        }
+        const pair = parseLatLngPair(rawPoint.latitude, rawPoint.longitude);
+        if ("error" in pair) {
+          return NextResponse.json({ success: false, message: pair.error }, { status: 400 });
+        }
+        points.push({ latitude: pair.lat, longitude: pair.lng });
+      }
+      patch.waterSourcePolygonPoints = points;
+    }
+
+    if (
+      patch.permitLengthYears === undefined &&
+      patch.recommendedVolumeM3 === undefined &&
+      patch.waterSourceLatitude === undefined &&
+      patch.waterSourceLongitude === undefined &&
+      patch.waterSourcePolygonPoints === undefined
+    ) {
       return NextResponse.json(
-        { success: false, message: "At least one of permitLengthYears or recommendedVolumeM3 is required" },
+        { success: false, message: "At least one assessor adjustment field is required" },
         { status: 400 },
       );
     }
@@ -192,6 +248,15 @@ export async function POST(
       if (patch.recommendedVolumeM3 !== undefined) {
         nextAdjustments.recommendedVolumeM3 = patch.recommendedVolumeM3;
         nextAdjustments.volumeAdjustedAt = nowIso;
+      }
+      if (patch.waterSourceLatitude !== undefined && patch.waterSourceLongitude !== undefined) {
+        nextAdjustments.waterSourceLatitude = patch.waterSourceLatitude;
+        nextAdjustments.waterSourceLongitude = patch.waterSourceLongitude;
+        nextAdjustments.coordinatesAdjustedAt = nowIso;
+      }
+      if (patch.waterSourcePolygonPoints !== undefined) {
+        nextAdjustments.waterSourcePolygonPoints = patch.waterSourcePolygonPoints;
+        nextAdjustments.coordinatesAdjustedAt = nowIso;
       }
 
       // Backfill `_originalRequestedValues` only when the database hasn't
@@ -335,4 +400,36 @@ export async function POST(
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseCoordinateNumber(value: unknown): number | null {
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value.trim())
+        : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
+function roundCoordinate(value: number): number {
+  return Number(value.toFixed(8));
+}
+
+function parseLatLngPair(
+  rawLat: unknown,
+  rawLng: unknown,
+): { lat: number; lng: number } | { error: string } {
+  const lat = parseCoordinateNumber(rawLat);
+  const lng = parseCoordinateNumber(rawLng);
+  if (lat == null || lng == null) {
+    return { error: "Latitude and longitude must both be valid numbers" };
+  }
+  if (lat < -90 || lat > 90) {
+    return { error: "Latitude must be between -90 and 90" };
+  }
+  if (lng < -180 || lng > 180) {
+    return { error: "Longitude must be between -180 and 180" };
+  }
+  return { lat: roundCoordinate(lat), lng: roundCoordinate(lng) };
 }

@@ -623,26 +623,40 @@ function resolveWaterSourceAdminLocation(application: Application): {
 
 function resolveLatLng(application: Application): { lat: string; lng: string } {
   const notes = getInternalNotes(application);
-  const latVal = notes?.waterSourceLatitude;
-  const lngVal = notes?.waterSourceLongitude;
-  const latNum =
-    typeof latVal === "number"
-      ? latVal
-      : typeof latVal === "string" && latVal.trim()
-        ? Number.parseFloat(latVal.trim())
-        : NaN;
-  const lngNum =
-    typeof lngVal === "number"
-      ? lngVal
-      : typeof lngVal === "string" && lngVal.trim()
-        ? Number.parseFloat(lngVal.trim())
-        : NaN;
-  if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-    return { lat: latNum.toFixed(6), lng: lngNum.toFixed(6) };
-  }
+  const tryPair = (latVal: unknown, lngVal: unknown): { lat: string; lng: string } | null => {
+    const latNum =
+      typeof latVal === "number"
+        ? latVal
+        : typeof latVal === "string" && latVal.trim()
+          ? Number.parseFloat(latVal.trim())
+          : NaN;
+    const lngNum =
+      typeof lngVal === "number"
+        ? lngVal
+        : typeof lngVal === "string" && lngVal.trim()
+          ? Number.parseFloat(lngVal.trim())
+          : NaN;
+    if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+      return { lat: latNum.toFixed(6), lng: lngNum.toFixed(6) };
+    }
+    return null;
+  };
+
+  const assessorAdjustments = notes?._assessorAdjustments;
+  const adjustedPair = tryPair(
+    assessorAdjustments?.waterSourceLatitude,
+    assessorAdjustments?.waterSourceLongitude,
+  );
+  if (adjustedPair) return adjustedPair;
+
+  const notesPair = tryPair(notes?.waterSourceLatitude, notes?.waterSourceLongitude);
+  if (notesPair) return notesPair;
 
   // Fallback: if polygons exist in notes, use the first point of the first polygon.
-  const polys = Array.isArray(notes?.waterSourcePolygons) ? (notes?.waterSourcePolygons as any[]) : null;
+  const adjustedPolys = Array.isArray(assessorAdjustments?.waterSourcePolygonPoints)
+    ? [[...(assessorAdjustments?.waterSourcePolygonPoints as any[])]]
+    : null;
+  const polys = adjustedPolys ?? (Array.isArray(notes?.waterSourcePolygons) ? (notes?.waterSourcePolygons as any[]) : null);
   const first = polys?.[0]?.[0];
   if (first) {
     const lat = typeof first.latitude === "string" ? Number.parseFloat(first.latitude) : Number(first.latitude);
