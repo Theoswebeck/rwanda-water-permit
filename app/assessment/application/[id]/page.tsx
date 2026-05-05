@@ -2319,6 +2319,7 @@ export default function AssessmentApplicationPage() {
                     isStaffView={true}
                     isModification={true}
                     modificationChanges={enrichModificationChanges((application as any).modification_changes, originalModificationApp)}
+                    editableFields={["nameSourceWater"]}
                   />
                 ) : null
               ) : (application as any).is_renewal && renewalPermit ? (
@@ -2368,6 +2369,7 @@ export default function AssessmentApplicationPage() {
                   readOnly={true}
                   currentApplication={application}
                   isStaffView={true}
+                  editableFields={["nameSourceWater"]}
                 />
               ) : null}
               

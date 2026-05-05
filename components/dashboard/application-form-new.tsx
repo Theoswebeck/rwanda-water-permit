@@ -973,6 +973,7 @@ interface ApplicationFormProps {
   originalApplicationData?: Partial<FormValues>; // Original data for comparison (modification mode)
   modificationChanges?: Record<string, { previous: any; current: any }>; // Stored changes from DB (staff view)
   excludeApplicationIds?: string[]; // Parent application IDs to exclude from polygon duplicate check (modification/renewal/transfer)
+  editableFields?: string[]; // Field names that remain editable even when readOnly is true
 }
 
 export function ApplicationForm({ 
@@ -989,7 +990,8 @@ export function ApplicationForm({
   isModification: isModificationProp = false,
   originalApplicationData,
   modificationChanges,
-  excludeApplicationIds = []
+  excludeApplicationIds = [],
+  editableFields = []
 }: ApplicationFormProps) {
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
@@ -1516,8 +1518,10 @@ export function ApplicationForm({
     }
   };
 
+  const editableFieldSet = useMemo(() => new Set(editableFields), [editableFields]);
+
   // Helper function to get input props based on readOnly state
-  const getInputProps = (baseProps: any = {}) => {
+  const getInputProps = (baseProps: any = {}, fieldName?: string) => {
     const localizedProps = {
       ...baseProps,
       placeholder:
@@ -1525,7 +1529,7 @@ export function ApplicationForm({
           ? tx(baseProps.placeholder)
           : baseProps.placeholder,
     };
-    if (readOnly) {
+    if (readOnly && !(fieldName && editableFieldSet.has(fieldName))) {
       return {
         ...localizedProps,
         readOnly: true,
@@ -3879,7 +3883,7 @@ export function ApplicationForm({
                           {tx("11. Name of the source of water *")}
                         </FormLabel>
                         <FormControl>
-                          <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" })} />
+                          <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" }, "nameSourceWater")} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
