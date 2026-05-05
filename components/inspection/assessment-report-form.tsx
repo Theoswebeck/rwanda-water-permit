@@ -202,8 +202,9 @@ export function AssessmentReportForm({
               <Label>{reportType === 'concession' ? 'Name of the lake' : 'Name of the source'}</Label>
               <Input
                 value={localData.sourceName || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('sourceName', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
             </div>
 
