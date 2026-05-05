@@ -707,7 +707,6 @@ export function mergeAssessmentReportData(
     "representative",
     "contactTel",
     "contactEmail",
-    "sourceName",
     "sourceLatitude",
     "sourceLongitude",
     "sourceLocation",
