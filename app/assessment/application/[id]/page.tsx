@@ -66,6 +66,13 @@ import {
   normalizeAssessmentReportData,
   prefillAssessmentReportFromApplication,
 } from "@/lib/assessment-report-utils";
+import {
+  getFormattedCellOptions,
+  getFormattedDistrictOptions,
+  getFormattedProvinceOptions,
+  getFormattedSectorOptions,
+  getFormattedVillageOptions,
+} from "@/lib/rwanda-administrative-data";
 import { AssessorRecommendations } from "@/components/inspection/assessor-recommendations";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";
@@ -76,6 +83,47 @@ function toDateInputValue(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return date.toISOString().split("T")[0];
+}
+
+function parseResidenceParts(residence?: string) {
+  const parts = String(residence || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return {
+    province: parts.at(-1) || "",
+    district: parts.at(-2) || "",
+    sector: parts.at(-3) || "",
+    cell: parts.at(-4) || "",
+    village: parts.length > 4 ? parts.slice(0, -4).join(", ") : "",
+  };
+}
+
+function optionExists(options: Array<{ value: string; label: string }>, value: string) {
+  return options.some((option) => option.value === value);
+}
+
+function isValidRwandaResidence(residence?: string) {
+  const parsed = parseResidenceParts(residence);
+  if (!optionExists(getFormattedProvinceOptions(), parsed.province)) return false;
+  if (!optionExists(getFormattedDistrictOptions(parsed.province), parsed.district)) return false;
+  if (!optionExists(getFormattedSectorOptions(parsed.province, parsed.district), parsed.sector)) return false;
+  if (!optionExists(getFormattedCellOptions(parsed.province, parsed.district, parsed.sector), parsed.cell)) return false;
+  if (!optionExists(getFormattedVillageOptions(parsed.province, parsed.district, parsed.sector, parsed.cell), parsed.village)) {
+    return false;
+  }
+  return true;
+}
+
+function hasInvalidPhoneCharacters(value?: string) {
+  const text = String(value || "").trim();
+  return text.length > 0 && /[^0-9+\-()\s]/.test(text);
+}
+
+function isNumericText(value?: string) {
+  const text = String(value || "").trim();
+  return text.length > 0 && Number.isFinite(Number(text));
 }
 
 // Lazy load the ApplicationForm component
@@ -484,8 +532,12 @@ export default function AssessmentApplicationPage() {
     const missing: string[] = [];
 
     if (reportTypeForAssessment === "abstraction") {
-      if (!hasText(assessmentReportData.sourceFlowLps)) missing.push("Section 3: Flow of the water source (L/sec)");
-      if (!hasText(assessmentReportData.sourceFlowM3Day)) missing.push("Section 3: Flow of the water source (m3/day)");
+      const sourceFlowValue = assessmentReportData.sourceFlowValue ?? assessmentReportData.sourceFlowM3Day;
+      const sourceFlowUnit = assessmentReportData.sourceFlowUnit ?? "m3/day";
+      if (!isNumericText(sourceFlowValue)) missing.push("Section 2: Flow of the water source value (number)");
+      if (sourceFlowUnit !== "m3/day" && sourceFlowUnit !== "m3/year") {
+        missing.push("Section 2: Flow of the water source unit (m3/day or m3/year)");
+      }
       if (!hasText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted (m3/year)");
       if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
       if (!hasText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q)");
@@ -505,6 +557,12 @@ export default function AssessmentApplicationPage() {
     }
     if (!hasText(assessmentReportData.pollutionDescription)) {
       missing.push("Section 6: Pollution description");
+    }
+    if (hasInvalidPhoneCharacters(assessmentReportData.contactTel)) {
+      missing.push("Section 1: Contact telephone must not contain letters or other text");
+    }
+    if (!isValidRwandaResidence(assessmentReportData.residence)) {
+      missing.push("Section 1: Residence must use valid Rwanda Province, District, Sector, Cell, and Village values");
     }
     if (!recommendation.recommendation) {
       missing.push("Section 8: Assessor recommendation");

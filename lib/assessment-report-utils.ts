@@ -122,6 +122,8 @@ export interface AssessmentReportData {
   /** Concession: full polygon points from the application (shown instead of single lat/lng) */
   sourcePolygonPoints?: Array<{ latitude: string; longitude: string }>;
   /** Abstraction template: flow of the water source (attach field pictures) */
+  sourceFlowValue?: string;
+  sourceFlowUnit?: "m3/day" | "m3/year";
   sourceFlowLps?: string;
   sourceFlowM3Day?: string;
   

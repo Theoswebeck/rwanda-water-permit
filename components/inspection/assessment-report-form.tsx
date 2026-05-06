@@ -7,9 +7,48 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Droplet, MapPin, Factory, AlertCircle, ThumbsUp, ThumbsDown, CheckCircle, XCircle, Loader2, Save } from "lucide-react";
 import type { AssessmentReportData } from "@/lib/assessment-report-utils";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  getFormattedCellOptions,
+  getFormattedDistrictOptions,
+  getFormattedProvinceOptions,
+  getFormattedSectorOptions,
+  getFormattedVillageOptions,
+} from "@/lib/rwanda-administrative-data";
+
+const SOURCE_FLOW_UNITS = ["m3/day", "m3/year"] as const;
+
+type SourceFlowUnit = (typeof SOURCE_FLOW_UNITS)[number];
+
+function parseResidenceParts(residence?: string) {
+  const parts = String(residence || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return {
+    province: parts.at(-1) || "",
+    district: parts.at(-2) || "",
+    sector: parts.at(-3) || "",
+    cell: parts.at(-4) || "",
+    village: parts.length > 4 ? parts.slice(0, -4).join(", ") : "",
+  };
+}
+
+function buildResidence(parts: {
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
+}) {
+  return [parts.village, parts.cell, parts.sector, parts.district, parts.province]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+}
 
 interface AssessmentReportFormProps {
   reportData: Partial<AssessmentReportData>;
@@ -32,7 +71,6 @@ export function AssessmentReportForm({
   onReportDataChange,
   reportType,
   readOnly = false,
-  applicationActivities,
   inspectionDate,
   assessmentSubmittedDate,
   recommendation,
@@ -42,10 +80,24 @@ export function AssessmentReportForm({
   coordinatesSaving = false,
 }: AssessmentReportFormProps) {
   const [localData, setLocalData] = useState<Partial<AssessmentReportData>>(reportData);
+  const [residenceProvince, setResidenceProvince] = useState("");
+  const [residenceDistrict, setResidenceDistrict] = useState("");
+  const [residenceSector, setResidenceSector] = useState("");
+  const [residenceCell, setResidenceCell] = useState("");
+  const [residenceVillage, setResidenceVillage] = useState("");
 
   useEffect(() => {
     setLocalData(reportData);
   }, [reportData]);
+
+  useEffect(() => {
+    const parsed = parseResidenceParts(reportData.residence);
+    setResidenceProvince(parsed.province);
+    setResidenceDistrict(parsed.district);
+    setResidenceSector(parsed.sector);
+    setResidenceCell(parsed.cell);
+    setResidenceVillage(parsed.village);
+  }, [reportData.residence]);
 
   useEffect(() => {
     const targetDate = assessmentSubmittedDate || inspectionDate;
@@ -67,19 +119,38 @@ export function AssessmentReportForm({
     });
   };
 
-  const toDerivedM3Day = (lpsRaw: string): string => {
-    const parsed = Number(lpsRaw);
-    if (!Number.isFinite(parsed)) return "";
-    // 1 L/s = 86.4 m3/day
-    return (parsed * 86.4).toFixed(2);
+  const updateResidence = (parts: {
+    province: string;
+    district: string;
+    sector: string;
+    cell: string;
+    village: string;
+  }) => {
+    setResidenceProvince(parts.province);
+    setResidenceDistrict(parts.district);
+    setResidenceSector(parts.sector);
+    setResidenceCell(parts.cell);
+    setResidenceVillage(parts.village);
+    updateField("residence", buildResidence(parts));
   };
-  const sourceFlowLpsValue = localData.sourceFlowLps || "";
-  const sourceFlowM3DayValue = localData.sourceFlowM3Day || "";
 
-  useEffect(() => {
-    if (!sourceFlowLpsValue || sourceFlowM3DayValue) return;
-    updateField("sourceFlowM3Day", toDerivedM3Day(sourceFlowLpsValue));
-  }, [sourceFlowLpsValue, sourceFlowM3DayValue]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sourceFlowUnit: SourceFlowUnit =
+    localData.sourceFlowUnit && SOURCE_FLOW_UNITS.includes(localData.sourceFlowUnit)
+      ? localData.sourceFlowUnit
+      : "m3/day";
+  const sourceFlowValue = localData.sourceFlowValue ?? localData.sourceFlowM3Day ?? "";
+  const updateSourceFlow = (value: string, unit: SourceFlowUnit) => {
+    setLocalData((prev) => {
+      const updated: Partial<AssessmentReportData> = {
+        ...prev,
+        sourceFlowValue: value,
+        sourceFlowUnit: unit,
+        sourceFlowM3Day: unit === "m3/day" ? value : prev.sourceFlowM3Day,
+      };
+      onReportDataChange(updated);
+      return updated;
+    });
+  };
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
   const prefilledClass = `bg-muted/50${readOnly ? " cursor-not-allowed" : ""}`;
@@ -145,12 +216,101 @@ export function AssessmentReportForm({
             </div>
             <div className="md:col-span-2">
               <Label>Residence</Label>
-              <Input
-                value={localData.residence || ''}
-                onChange={(e) => updateField('residence', e.target.value)}
-                readOnly={readOnly}
-                className={readOnly ? prefilledClass : "bg-white"}
-              />
+              {readOnly ? (
+                <Input value={localData.residence || ''} readOnly className={prefilledClass} />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  <Select
+                    value={residenceProvince}
+                    onValueChange={(province) => updateResidence({
+                      province,
+                      district: "",
+                      sector: "",
+                      cell: "",
+                      village: "",
+                    })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Province" /></SelectTrigger>
+                    <SelectContent>
+                      {getFormattedProvinceOptions().map((province) => (
+                        <SelectItem key={province.value} value={province.value}>{province.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={residenceDistrict}
+                    onValueChange={(district) => updateResidence({
+                      province: residenceProvince,
+                      district,
+                      sector: "",
+                      cell: "",
+                      village: "",
+                    })}
+                    disabled={!residenceProvince}
+                  >
+                    <SelectTrigger><SelectValue placeholder="District" /></SelectTrigger>
+                    <SelectContent>
+                      {getFormattedDistrictOptions(residenceProvince).map((district) => (
+                        <SelectItem key={district.value} value={district.value}>{district.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={residenceSector}
+                    onValueChange={(sector) => updateResidence({
+                      province: residenceProvince,
+                      district: residenceDistrict,
+                      sector,
+                      cell: "",
+                      village: "",
+                    })}
+                    disabled={!residenceProvince || !residenceDistrict}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Sector" /></SelectTrigger>
+                    <SelectContent>
+                      {getFormattedSectorOptions(residenceProvince, residenceDistrict).map((sector) => (
+                        <SelectItem key={sector.value} value={sector.value}>{sector.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={residenceCell}
+                    onValueChange={(cell) => updateResidence({
+                      province: residenceProvince,
+                      district: residenceDistrict,
+                      sector: residenceSector,
+                      cell,
+                      village: "",
+                    })}
+                    disabled={!residenceProvince || !residenceDistrict || !residenceSector}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Cell" /></SelectTrigger>
+                    <SelectContent>
+                      {getFormattedCellOptions(residenceProvince, residenceDistrict, residenceSector).map((cell) => (
+                        <SelectItem key={cell.value} value={cell.value}>{cell.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={residenceVillage}
+                    onValueChange={(village) => updateResidence({
+                      province: residenceProvince,
+                      district: residenceDistrict,
+                      sector: residenceSector,
+                      cell: residenceCell,
+                      village,
+                    })}
+                    disabled={!residenceProvince || !residenceDistrict || !residenceSector || !residenceCell}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Village" /></SelectTrigger>
+                    <SelectContent>
+                      {getFormattedVillageOptions(residenceProvince, residenceDistrict, residenceSector, residenceCell).map((village) => (
+                        <SelectItem key={village.value} value={village.value}>{village.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <div>
               <Label>Type of activity</Label>
@@ -345,36 +505,31 @@ export function AssessmentReportForm({
                 <Label>Flow of the water source (attach field pictures)</Label>
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground">L/sec</Label>
+                <Label className="text-sm text-muted-foreground">Value</Label>
                 <Input
-                  value={localData.sourceFlowLps || ''}
-                  onChange={(e) => {
-                    const sourceFlowLps = e.target.value;
-                    setLocalData((prev) => {
-                      const updated = {
-                        ...prev,
-                        sourceFlowLps,
-                        sourceFlowM3Day: toDerivedM3Day(sourceFlowLps),
-                      };
-                      onReportDataChange(updated);
-                      return updated;
-                    });
-                  }}
-                  placeholder="L/sec"
+                  type="number"
+                  value={sourceFlowValue}
+                  onChange={(e) => updateSourceFlow(e.target.value, sourceFlowUnit)}
+                  placeholder="Enter source flow"
                   disabled={readOnly}
                   className={readOnlyClass}
                 />
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground">Equivalent to m³/day</Label>
-                <Input
-                  value={localData.sourceFlowM3Day || ''}
-                  onChange={(e) => updateField("sourceFlowM3Day", e.target.value)}
-                  placeholder="m³/day"
-                  readOnly={readOnly}
+                <Label className="text-sm text-muted-foreground">Unit</Label>
+                <Select
+                  value={sourceFlowUnit}
+                  onValueChange={(unit) => updateSourceFlow(sourceFlowValue, unit as SourceFlowUnit)}
                   disabled={readOnly}
-                  className={readOnlyClass}
-                />
+                >
+                  <SelectTrigger className={readOnlyClass}>
+                    <SelectValue placeholder="Select unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="m3/day">m3/day</SelectItem>
+                    <SelectItem value="m3/year">m3/year</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
