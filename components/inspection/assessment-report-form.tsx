@@ -51,6 +51,7 @@ export function AssessmentReportForm({
     const targetDate = assessmentSubmittedDate || inspectionDate;
     if (!targetDate) return;
     setLocalData((prev) => {
+      if (prev.reportDate) return prev;
       if (prev.reportDate === targetDate) return prev;
       const updated = { ...prev, reportDate: targetDate };
       onReportDataChange(updated);
@@ -72,18 +73,18 @@ export function AssessmentReportForm({
     // 1 L/s = 86.4 m3/day
     return (parsed * 86.4).toFixed(2);
   };
-  const sourceFlowLpsValue = ((localData as any).sourceFlowLps as string | undefined) || "";
-  const sourceFlowM3DayValue = ((localData as any).sourceFlowM3Day as string | undefined) || "";
+  const sourceFlowLpsValue = localData.sourceFlowLps || "";
+  const sourceFlowM3DayValue = localData.sourceFlowM3Day || "";
 
   useEffect(() => {
     if (!sourceFlowLpsValue || sourceFlowM3DayValue) return;
-    updateField("sourceFlowM3Day" as any, toDerivedM3Day(sourceFlowLpsValue) as any);
+    updateField("sourceFlowM3Day", toDerivedM3Day(sourceFlowLpsValue));
   }, [sourceFlowLpsValue, sourceFlowM3DayValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
   const prefilledClass = `bg-muted/50${readOnly ? " cursor-not-allowed" : ""}`;
   const coordinateInputClass = readOnly ? prefilledClass : "bg-white";
-  const isSurfaceSectionReadOnly = true;
+  const isSurfaceSectionReadOnly = readOnly;
   const coordinateSaveDisabled =
     readOnly ||
     coordinatesSaving ||
@@ -128,40 +129,45 @@ export function AssessmentReportForm({
               <Label>Name</Label>
               <Input
                 value={localData.applicantName || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('applicantName', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
             </div>
             <div>
               <Label>ID/ TIN</Label>
               <Input
                 value={localData.applicantIdTin || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('applicantIdTin', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
             </div>
             <div className="md:col-span-2">
               <Label>Residence</Label>
               <Input
                 value={localData.residence || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('residence', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
             </div>
             <div>
               <Label>Type of activity</Label>
               <Input
                 value={localData.typeOfActivity || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('typeOfActivity', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
             </div>
             <div>
               <Label>Representative</Label>
               <Input
                 value={localData.representative || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('representative', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
             </div>
             <div>
@@ -169,14 +175,16 @@ export function AssessmentReportForm({
               <div className="space-y-2">
                 <Input
                   value={localData.contactTel || ''}
-                  readOnly
-                  className={prefilledClass}
+                  onChange={(e) => updateField('contactTel', e.target.value)}
+                  readOnly={readOnly}
+                  className={readOnly ? prefilledClass : "bg-white"}
                   placeholder="Tel:"
                 />
                 <Input
                   value={localData.contactEmail || ''}
-                  readOnly
-                  className={prefilledClass}
+                  onChange={(e) => updateField('contactEmail', e.target.value)}
+                  readOnly={readOnly}
+                  className={readOnly ? prefilledClass : "bg-white"}
                   placeholder="e-mail:"
                 />
               </div>
@@ -303,19 +311,30 @@ export function AssessmentReportForm({
               <Label>Location: Coordinates, village, cell, sector, district, level one and level two catchments</Label>
               <Input
                 value={localData.sourceLocation || ''}
-                readOnly
-                className={prefilledClass}
+                onChange={(e) => updateField('sourceLocation', e.target.value)}
+                readOnly={readOnly}
+                className={readOnly ? prefilledClass : "bg-white"}
               />
-              {localData.catchmentLevel1 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Level 1 Catchment: {localData.catchmentLevel1}
-                </p>
-              )}
-              {localData.catchmentLevel2 && (
-                <p className="text-xs text-muted-foreground">
-                  Level 2 Catchment: {localData.catchmentLevel2}
-                </p>
-              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Level 1 Catchment</Label>
+                  <Input
+                    value={localData.catchmentLevel1 || ''}
+                    onChange={(e) => updateField('catchmentLevel1', e.target.value)}
+                    readOnly={readOnly}
+                    className={readOnly ? prefilledClass : "bg-white"}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Level 2 Catchment</Label>
+                  <Input
+                    value={localData.catchmentLevel2 || ''}
+                    onChange={(e) => updateField('catchmentLevel2', e.target.value)}
+                    readOnly={readOnly}
+                    className={readOnly ? prefilledClass : "bg-white"}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -328,7 +347,7 @@ export function AssessmentReportForm({
               <div>
                 <Label className="text-sm text-muted-foreground">L/sec</Label>
                 <Input
-                  value={(localData as any).sourceFlowLps || ''}
+                  value={localData.sourceFlowLps || ''}
                   onChange={(e) => {
                     const sourceFlowLps = e.target.value;
                     setLocalData((prev) => {
@@ -349,10 +368,11 @@ export function AssessmentReportForm({
               <div>
                 <Label className="text-sm text-muted-foreground">Equivalent to m³/day</Label>
                 <Input
-                  value={(localData as any).sourceFlowM3Day || ''}
+                  value={localData.sourceFlowM3Day || ''}
+                  onChange={(e) => updateField("sourceFlowM3Day", e.target.value)}
                   placeholder="m³/day"
-                  readOnly
-                  disabled
+                  readOnly={readOnly}
+                  disabled={readOnly}
                   className={readOnlyClass}
                 />
               </div>
@@ -378,29 +398,32 @@ export function AssessmentReportForm({
                   <Label>Quantity (m³/year)</Label>
                   <Input
                     value={localData.flowRateM3Day || ''}
+                    onChange={(e) => updateField('flowRateM3Day', e.target.value)}
                     placeholder="m³/year"
-                    readOnly
-                    disabled
-                    className={prefilledClass}
+                    readOnly={readOnly}
+                    disabled={readOnly}
+                    className={readOnly ? prefilledClass : "bg-white"}
                   />
                 </div>
                 <div>
                   <Label>Flow rate (m³/s)</Label>
                   <Input
                     value={localData.flowRateLps || ''}
+                    onChange={(e) => updateField('flowRateLps', e.target.value)}
                     placeholder="m³/s"
-                    readOnly
-                    disabled
-                    className={prefilledClass}
+                    readOnly={readOnly}
+                    disabled={readOnly}
+                    className={readOnly ? prefilledClass : "bg-white"}
                   />
                 </div>
                 <div>
                   <Label>Intended abstraction method</Label>
                   <Input
                     value={localData.abstractionMethod || ''}
-                    readOnly
-                    disabled
-                    className={prefilledClass}
+                    onChange={(e) => updateField('abstractionMethod', e.target.value)}
+                    readOnly={readOnly}
+                    disabled={readOnly}
+                    className={readOnly ? prefilledClass : "bg-white"}
                   />
                 </div>
                 <div>
@@ -436,8 +459,8 @@ export function AssessmentReportForm({
               <div>
                 <Label>Description of the water balance</Label>
                 <Textarea
-                  value={(localData as any).waterBalanceDescription || ''}
-                  onChange={(e) => updateField('waterBalanceDescription' as any, e.target.value as any)}
+                  value={localData.waterBalanceDescription || ''}
+                  onChange={(e) => updateField('waterBalanceDescription', e.target.value)}
                   placeholder="Describe the water balance..."
                   rows={3}
                   disabled={readOnly}
@@ -534,18 +557,29 @@ export function AssessmentReportForm({
                   placeholder={localData.surfaceAreaUnit || 'Ha'}
                   readOnly={isSurfaceSectionReadOnly}
                   disabled={isSurfaceSectionReadOnly}
-                  className={prefilledClass}
+                  className={readOnly ? prefilledClass : "bg-white"}
+                />
+              </div>
+              <div>
+                <Label>Surface Area Unit</Label>
+                <Input
+                  value={localData.surfaceAreaUnit || ''}
+                  onChange={(e) => updateField('surfaceAreaUnit', e.target.value)}
+                  placeholder="Ha"
+                  readOnly={readOnly}
+                  disabled={readOnly}
+                  className={readOnly ? prefilledClass : "bg-white"}
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Other people's rights */}
+          {/* Other people&apos;s rights */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <AlertCircle className="h-5 w-5" />
-                4. Other people's rights <span className="text-destructive">*</span>
+                4. Other people&apos;s rights <span className="text-destructive">*</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -633,7 +667,15 @@ export function AssessmentReportForm({
             />
           </div>
           <div className="text-sm text-muted-foreground mt-4">
-            Done at Kigali, on {localData.reportDate || new Date().toLocaleDateString()}
+            <Label>Done at Kigali, on</Label>
+            <Input
+              value={localData.reportDate || ''}
+              onChange={(e) => updateField('reportDate', e.target.value)}
+              placeholder={new Date().toLocaleDateString()}
+              readOnly={readOnly}
+              disabled={readOnly}
+              className={readOnly ? readOnlyClass : "bg-white"}
+            />
           </div>
         </CardContent>
       </Card>
@@ -737,7 +779,7 @@ export function AssessmentReportForm({
                   className={readOnlyClass}
                 />
                 <p className="text-xs text-muted-foreground">
-                  This explanation is provided for the approver's consideration.
+                  This explanation is provided for the approver&apos;s consideration.
                 </p>
               </div>
             )}

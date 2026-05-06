@@ -698,32 +698,6 @@ export function mergeAssessmentReportData(
     beacons: existing.beacons && existing.beacons.length > 0 ? existing.beacons : prefilled.beacons,
   };
 
-  // Always enforce application-derived read-only fields from prefill (prevents stale/blank overrides)
-  const enforcedPrefilledKeys: Array<keyof AssessmentReportData> = [
-    "applicantName",
-    "applicantIdTin",
-    "residence",
-    "typeOfActivity",
-    "representative",
-    "contactTel",
-    "contactEmail",
-    "sourceLatitude",
-    "sourceLongitude",
-    "sourceLocation",
-    "catchmentLevel1",
-    "catchmentLevel2",
-    "sourcePolygonPoints",
-    "surfaceAreaHa",
-    "surfaceAreaUnit",
-    "flowRateLps",
-    "flowRateM3Day",
-  ];
-  for (const k of enforcedPrefilledKeys) {
-    if (prefilled[k] !== undefined) {
-      (merged as any)[k] = (prefilled as any)[k];
-    }
-  }
-
   return merged;
 }
 
