@@ -728,6 +728,197 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   return docToBuffer(doc);
 }
 
+// ─── Bulk water supply renderer ─────────────────────────────────────────────
+
+function resolveBulkNetworks(app: PermitApplication): Array<Record<string, unknown>> {
+  const notes = getEffectiveInternalNotes(app.internal_notes);
+  const adjNetworks = (notes as Record<string, unknown> | null)?._assessorAdjustments as Record<string, unknown> | null | undefined;
+  const adj = adjNetworks?.bulkNetworks;
+  if (Array.isArray(adj) && adj.length > 0) return adj as Array<Record<string, unknown>>;
+  if (Array.isArray(app.bulk_networks) && app.bulk_networks.length > 0) return app.bulk_networks as Array<Record<string, unknown>>;
+  return [];
+}
+
+async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
+  const { application: app, permitNumber, isModified } = opts;
+  const issueDate = opts.issuedDate ?? new Date();
+  const expiryDate =
+    opts.expiryDate ??
+    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
+  const ctx = buildSlotCtx(opts, issueDate, expiryDate);
+
+  const doc = createDoc();
+  await drawWatermark(doc);
+  const logoBottomY = drawLogo(doc);
+
+  // Reuse the abstraction_organization slot key for the bilingual title
+  const titleText = resolveSlotText("permit.abstraction_organization.title.en", ctx);
+  let y = drawTitle(doc, titleText, logoBottomY);
+  if (isModified) drawModifiedBadge(doc, ctx);
+
+  const leftX = PERMIT_MARGIN_X;
+  const maxW = pageWidth(doc) - leftX * 2;
+  const fontSize = 11;
+  const lineGap = 1.0;
+  const paraGap = 4;
+
+  // Reuse the abstraction_organization body slots (same bilingual structure)
+  const englishParagraphs = [
+    resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
+    resolveSlotText("permit.abstraction_organization.en.para_2", ctx),
+    resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
+    "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract. The list of authorized distribution networks is provided in the Annex.",
+  ];
+  const rwParagraphs = [
+    resolveSlotText("permit.abstraction_organization.rw.para_1", ctx),
+    resolveSlotText("permit.abstraction_organization.rw.para_2", ctx),
+    resolveSlotText("permit.abstraction_organization.rw.para_3", ctx),
+    "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye. Urutonde rw'amashyamba y'amazi yemerewe ruragaragara mu Umugereka.",
+  ];
+
+  y += 2;
+  doc.font(FONT_REGULAR).fontSize(fontSize).fillColor("#000000");
+  for (const p of englishParagraphs) {
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
+    y += h + paraGap;
+  }
+
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 4;
+  doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
+  y += 6;
+
+  for (const p of rwParagraphs) {
+    const h = heightOfRichText(doc, p, { width: maxW, lineGap });
+    if (y + h > contentBottomY(doc)) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+    drawRichText(doc, p, leftX, y, { width: maxW, lineGap });
+    y += h + paraGap;
+  }
+
+  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  y += 6;
+  drawClosingLine(doc, y, ctx);
+
+  if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
+
+  // ─── Annex page: distribution networks table ────────────────────────────
+  const networks = resolveBulkNetworks(app);
+  if (networks.length > 0) {
+    doc.addPage();
+    await drawWatermark(doc);
+
+    const annexMarginX = PERMIT_MARGIN_X;
+    const annexMaxW = pageWidth(doc) - annexMarginX * 2;
+    let ay = 20 * PT;
+
+    // Annex title
+    doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
+    doc.text("ANNEX — LIST OF AUTHORIZED DISTRIBUTION NETWORKS", annexMarginX, ay, { width: annexMaxW, align: "center" });
+    ay += doc.heightOfString("ANNEX", { width: annexMaxW }) + 6 * PT;
+    doc.moveTo(annexMarginX, ay).lineTo(annexMarginX + annexMaxW, ay).lineWidth(0.5).stroke("#1f2937");
+    ay += 4 * PT;
+
+    // Column definitions (widths in pt, total = annexMaxW)
+    const cols = [
+      { label: "No.",             width: 16 * PT },
+      { label: "Network Name",    width: 68 * PT },
+      { label: "Sector",          width: 44 * PT },
+      { label: "Cell",            width: 44 * PT },
+      { label: "Coordinates",     width: 56 * PT },
+      { label: "Capacity (m³/d)", width: 44 * PT },
+      { label: "Method",          width: 44 * PT },
+    ];
+    // Distribute remaining width proportionally
+    const colTotal = cols.reduce((s, c) => s + c.width, 0);
+    const scale = annexMaxW / colTotal;
+    const scaledCols = cols.map(c => ({ ...c, width: c.width * scale }));
+
+    const rowH = 14 * PT;
+    const cellPad = 2.5 * PT;
+
+    const drawTableRow = (
+      rowData: string[],
+      rowY: number,
+      bg?: string,
+      bold?: boolean,
+    ) => {
+      let cx = annexMarginX;
+      for (let i = 0; i < scaledCols.length; i++) {
+        const col = scaledCols[i];
+        if (bg) {
+          doc.rect(cx, rowY, col.width, rowH).fill(bg);
+        }
+        doc.rect(cx, rowY, col.width, rowH).lineWidth(0.3).stroke("#9ca3af");
+        doc.font(bold ? FONT_BOLD : FONT_REGULAR).fontSize(7.5).fillColor("#000000");
+        const cellText = rowData[i] ?? "";
+        doc.text(cellText, cx + cellPad, rowY + cellPad, {
+          width: col.width - cellPad * 2,
+          height: rowH - cellPad * 2,
+          ellipsis: true,
+        });
+        cx += col.width;
+      }
+    };
+
+    // Header row
+    drawTableRow(
+      scaledCols.map(c => c.label),
+      ay,
+      "#1f2937",
+      true,
+    );
+    // Override text color for header
+    let hx = annexMarginX;
+    for (let i = 0; i < scaledCols.length; i++) {
+      const col = scaledCols[i];
+      doc.font(FONT_BOLD).fontSize(7.5).fillColor("#ffffff");
+      doc.text(scaledCols[i].label, hx + cellPad, ay + cellPad, {
+        width: col.width - cellPad * 2,
+        height: rowH - cellPad * 2,
+        ellipsis: true,
+      });
+      hx += col.width;
+    }
+    ay += rowH;
+
+    // Data rows
+    for (let i = 0; i < networks.length; i++) {
+      const net = networks[i];
+      if (ay + rowH > contentBottomY(doc)) {
+        doc.addPage();
+        await drawWatermark(doc);
+        ay = 20 * PT;
+      }
+      const coords = typeof net.coordinates === "string" ? net.coordinates : "";
+      const capacity = net.capacity_m3_day != null ? String(net.capacity_m3_day) : "";
+      const method = typeof net.abstraction_method === "string"
+        ? net.abstraction_method.replace(/_/g, " ")
+        : "";
+      drawTableRow(
+        [
+          String(i + 1),
+          typeof net.network_name === "string" ? net.network_name : "",
+          typeof net.sector === "string" ? net.sector : "",
+          typeof net.cell === "string" ? net.cell : "",
+          coords,
+          capacity,
+          method,
+        ],
+        ay,
+        i % 2 === 0 ? "#f8fafc" : "#ffffff",
+        false,
+      );
+      ay += rowH;
+    }
+
+    if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
+  }
+
+  return docToBuffer(doc);
+}
+
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 export async function generatePermitPdfBuffer(opts: PermitRenderOpts): Promise<Buffer> {
@@ -741,6 +932,8 @@ export async function generatePermitPdfBuffer(opts: PermitRenderOpts): Promise<B
       return renderAbstractionIndividual(opts);
     case "abstraction_organization":
       return renderAbstractionOrganization(opts);
+    case "bulk_water_supply":
+      return renderBulkWaterSupply(opts);
     default:
       return renderConcessionIndividual(opts);
   }

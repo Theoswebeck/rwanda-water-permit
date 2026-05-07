@@ -57,6 +57,8 @@ export interface PermitApplication {
   max_yearly_volume_m3?: number;
   internal_notes?: string;
   water_taking_method?: string;
+  is_bulk?: boolean;
+  bulk_networks?: unknown[];
   applicant: {
     first_name?: string;
     last_name?: string;
