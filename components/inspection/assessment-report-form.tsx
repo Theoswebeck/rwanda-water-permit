@@ -10,6 +10,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileText, Droplet, MapPin, Factory, AlertCircle, ThumbsUp, ThumbsDown, CheckCircle, XCircle, Loader2, Save } from "lucide-react";
 import type { AssessmentReportData } from "@/lib/assessment-report-utils";
+import { BulkNetworksTable } from "@/components/dashboard/bulk-networks-table";
+import type { BulkNetworkRow } from "@/types/database";
 import {
   getFormattedCellOptions,
   getFormattedDistrictOptions,
@@ -80,6 +82,11 @@ interface AssessmentReportFormProps {
   onSourceCoordinatesSave?: (coords: { latitude: string; longitude: string }) => Promise<void>;
   onSourcePolygonSave?: (points: Array<{ latitude: string; longitude: string }>) => Promise<void>;
   coordinatesSaving?: boolean;
+  // Bulk water supply props
+  isBulkApplication?: boolean;
+  bulkNetworks?: BulkNetworkRow[];
+  onBulkNetworksSave?: (networks: BulkNetworkRow[]) => Promise<void>;
+  bulkNetworksSaving?: boolean;
 }
 
 export function AssessmentReportForm({
@@ -94,8 +101,13 @@ export function AssessmentReportForm({
   onSourceCoordinatesSave,
   onSourcePolygonSave,
   coordinatesSaving = false,
+  isBulkApplication = false,
+  bulkNetworks,
+  onBulkNetworksSave,
+  bulkNetworksSaving = false,
 }: AssessmentReportFormProps) {
   const [localData, setLocalData] = useState<Partial<AssessmentReportData>>(reportData);
+  const [localBulkNetworks, setLocalBulkNetworks] = useState<BulkNetworkRow[]>(bulkNetworks ?? []);
   const [residenceProvince, setResidenceProvince] = useState("");
   const [residenceDistrict, setResidenceDistrict] = useState("");
   const [residenceSector, setResidenceSector] = useState("");
@@ -105,6 +117,10 @@ export function AssessmentReportForm({
   useEffect(() => {
     setLocalData(reportData);
   }, [reportData]);
+
+  useEffect(() => {
+    setLocalBulkNetworks(bulkNetworks ?? []);
+  }, [bulkNetworks]);
 
   useEffect(() => {
     const parsed = parseResidenceParts(reportData.residence);
@@ -810,6 +826,38 @@ export function AssessmentReportForm({
           </div>
         </CardContent>
       </Card>
+
+      {/* Bulk Water Supply Networks (assessor edits values only) */}
+      {isBulkApplication && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Droplet className="h-5 w-5" />
+              Water Supply Networks
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <BulkNetworksTable
+              rows={localBulkNetworks}
+              onChange={readOnly ? undefined : setLocalBulkNetworks}
+              mode={readOnly ? "readonly" : "assessor"}
+            />
+            {onBulkNetworksSave && !readOnly && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => onBulkNetworksSave(localBulkNetworks)}
+                  disabled={bulkNetworksSaving}
+                >
+                  {bulkNetworksSaving
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <Save className="h-4 w-4 mr-2" />}
+                  Save Network Adjustments
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Section 7: Assessor Recommendation */}
       {recommendation !== undefined && onRecommendationChange && (

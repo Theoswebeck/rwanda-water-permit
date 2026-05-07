@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/session";
 import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 import { parseInternalNotesStrict } from "@/lib/document-overrides";
+import type { BulkNetworkRow } from "@/types/database";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,7 @@ type AssessorAdjustmentsPatch = {
   waterSourceLatitude?: number;
   waterSourceLongitude?: number;
   waterSourcePolygonPoints?: Array<{ latitude: number; longitude: number }>;
+  bulkNetworks?: BulkNetworkRow[];
 };
 
 type CoordinatePointPatch = {
@@ -180,12 +182,23 @@ export async function POST(
       patch.waterSourcePolygonPoints = points;
     }
 
+    if (body.bulkNetworks !== undefined) {
+      if (!Array.isArray(body.bulkNetworks)) {
+        return NextResponse.json(
+          { success: false, message: "bulkNetworks must be an array" },
+          { status: 400 },
+        );
+      }
+      patch.bulkNetworks = body.bulkNetworks as BulkNetworkRow[];
+    }
+
     if (
       patch.permitLengthYears === undefined &&
       patch.recommendedVolumeM3 === undefined &&
       patch.waterSourceLatitude === undefined &&
       patch.waterSourceLongitude === undefined &&
-      patch.waterSourcePolygonPoints === undefined
+      patch.waterSourcePolygonPoints === undefined &&
+      patch.bulkNetworks === undefined
     ) {
       return NextResponse.json(
         { success: false, message: "At least one assessor adjustment field is required" },
@@ -257,6 +270,10 @@ export async function POST(
       if (patch.waterSourcePolygonPoints !== undefined) {
         nextAdjustments.waterSourcePolygonPoints = patch.waterSourcePolygonPoints;
         nextAdjustments.coordinatesAdjustedAt = nowIso;
+      }
+      if (patch.bulkNetworks !== undefined) {
+        nextAdjustments.bulkNetworks = patch.bulkNetworks;
+        nextAdjustments.bulkNetworksAdjustedAt = nowIso;
       }
 
       // Backfill `_originalRequestedValues` only when the database hasn't

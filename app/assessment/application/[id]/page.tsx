@@ -502,6 +502,7 @@ export default function AssessmentApplicationPage() {
   const [assessorRecommendedVolume, setAssessorRecommendedVolume] = useState<number | undefined>(undefined);
   const [volumeSaving, setVolumeSaving] = useState(false);
   const [coordinatesSaving, setCoordinatesSaving] = useState(false);
+  const [bulkNetworksSaving, setBulkNetworksSaving] = useState(false);
   // Bumped after each successful assessor save (document-overrides, duration,
   // or volume) so the permit preview iframe refetches the latest PDF.
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
@@ -515,6 +516,8 @@ export default function AssessmentApplicationPage() {
 
   // Assessment Report State (template-backed)
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
+  // Bulk water supply network rows (assessor can edit values only)
+  const [assessorBulkNetworks, setAssessorBulkNetworks] = useState<import("@/types/database").BulkNetworkRow[]>([]);
 
   // Registry permit verification state
   const [registryPermitAcknowledged, setRegistryPermitAcknowledged] = useState(false);
@@ -1095,6 +1098,13 @@ export default function AssessmentApplicationPage() {
           }
         }
         
+        // Bulk network rows: prefer assessor adjustments, fall back to application's bulk_networks
+        if ((appData as any).is_bulk) {
+          const adjNetworks = Array.isArray(assessorAdjustments.bulkNetworks) ? assessorAdjustments.bulkNetworks : null;
+          const appNetworks = Array.isArray((appData as any).bulk_networks) ? (appData as any).bulk_networks : [];
+          setAssessorBulkNetworks(adjNetworks ?? appNetworks);
+        }
+
         // Store original values if not already stored (first time assessor views this)
         if (!formData._originalRequestedValues && (currentRequestedDuration || currentRequestedVolume)) {
           const originals = {
@@ -1749,6 +1759,27 @@ export default function AssessmentApplicationPage() {
       alert("Failed to save water source polygon. Please try again.");
     } finally {
       setCoordinatesSaving(false);
+    }
+  };
+
+  const saveBulkNetworksAdjustment = async (networks: import("@/types/database").BulkNetworkRow[]) => {
+    if (!application) return;
+    try {
+      setBulkNetworksSaving(true);
+      const { assessorAdjustments, originalRequestedValues } = await persistAssessorAdjustment(
+        application.id,
+        { bulkNetworks: networks },
+      );
+      patchAssessorAdjustmentsIntoApplication(assessorAdjustments, originalRequestedValues);
+      const saved = Array.isArray(assessorAdjustments.bulkNetworks) ? assessorAdjustments.bulkNetworks : networks;
+      setAssessorBulkNetworks(saved as import("@/types/database").BulkNetworkRow[]);
+      console.log("✅ Bulk network rows adjusted", { count: saved.length });
+      bumpPreviewRefresh();
+    } catch (err) {
+      console.error("❌ Error saving bulk network adjustments:", err);
+      alert("Failed to save network adjustments. Please try again.");
+    } finally {
+      setBulkNetworksSaving(false);
     }
   };
 
@@ -2557,6 +2588,10 @@ export default function AssessmentApplicationPage() {
                             assessmentSubmittedDate={assessmentSubmittedDate}
                             recommendation={recommendation}
                             onRecommendationChange={setRecommendation}
+                            isBulkApplication={!!(application as any).is_bulk}
+                            bulkNetworks={assessorBulkNetworks}
+                            onBulkNetworksSave={(application as any).is_renewal ? undefined : saveBulkNetworksAdjustment}
+                            bulkNetworksSaving={bulkNetworksSaving}
                           />
                         </div>
                       }
