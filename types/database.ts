@@ -125,6 +125,21 @@ export type DocumentType =
 
 export type VerificationStatus = 'pending' | 'verified' | 'rejected'
 
+// =============================================
+// BULK APPLICATION
+// =============================================
+
+export interface BulkNetworkRow {
+  number: number;
+  network_name: string;
+  sector: string;
+  cell: string;
+  village?: string;
+  coordinates?: string;
+  capacity_m3_day?: number;
+  abstraction_method?: string;
+}
+
 export type InspectionStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
 export type InspectionType = 'initial' | 'follow_up' | 'annual' | 'complaint' | 'renewal'
 export type InspectionResult = 'passed' | 'failed' | 'conditional'
@@ -219,6 +234,9 @@ export interface User {
   // Resolved from role_delegations (added by /api/auth/me)
   effective_roles?: string[]
   delegated_roles?: string[]
+
+  // Bulk applicant flag (e.g. WASAC GROUP LTD) — set by admin
+  is_bulk_applicant?: boolean
 }
 
 export interface Application {
@@ -358,6 +376,11 @@ export interface Application {
   // Payment waiver for legacy offline-pay applicants (pre-IremboPay)
   payment_waived?: boolean
 
+  // Bulk application fields
+  is_bulk?: boolean
+  bulk_networks?: BulkNetworkRow[]
+  bulk_district?: string
+
   // Renewal tracking
   is_renewal?: boolean
   renewed_from_permit_id?: string
@@ -399,6 +422,10 @@ export interface Permit {
   is_transfer: boolean
   is_modification: boolean
   transfer_reason?: string
+
+  // Bulk permit parent/child relationship
+  parent_permit_id?: string
+  network_sequence_index?: number
   
   // Modification tagging (denormalized for fast UI)
   modification_count?: number
