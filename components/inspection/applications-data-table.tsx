@@ -136,7 +136,12 @@ export function ApplicationsDataTable() {
               {applications.map((application) => (
                 <TableRow key={application.id}>
                   <TableCell>
-                    <div className="font-medium">{application.application_number}</div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">{application.application_number}</span>
+                      {(application as any).is_bulk && (
+                        <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs" variant="outline">BULK</Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{getApplicantName(application)}</div>

@@ -307,6 +307,29 @@ export function UserManagement() {
 
 
 
+  const handleToggleBulkApplicant = async (userId: string) => {
+    try {
+      const user = users.find(u => u.id === userId);
+      if (!user) return;
+      const newValue = !(user as any).is_bulk_applicant;
+      await updateUser(userId, { is_bulk_applicant: newValue } as any);
+      await createAuditLog({
+        action: 'user.updated',
+        entity_type: 'user',
+        table_name: 'users',
+        record_id: userId,
+        old_values: { is_bulk_applicant: !newValue },
+        new_values: { is_bulk_applicant: newValue },
+        description: `${newValue ? 'Enabled' : 'Disabled'} bulk applicant flag for ${user.email}`,
+        severity: 'info',
+        status: 'success',
+      });
+      await fetchUsers();
+    } catch (err) {
+      handleErrorWithBack(err, 'toggle bulk applicant');
+    }
+  };
+
   const handleSuspendUser = async (userId: string) => {
     try {
       const user = users.find(u => u.id === userId);
@@ -686,7 +709,14 @@ export function UserManagement() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{getRoleBadge(user.role)}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1">
+                        {getRoleBadge(user.role)}
+                        {(user as any).is_bulk_applicant && (
+                          <Badge className="bg-violet-100 text-violet-700 border-violet-200 text-xs" variant="outline">BULK</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>{getStatusBadge(user.status)}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -741,6 +771,11 @@ export function UserManagement() {
                           <DropdownMenuItem onClick={() => handleSuspendUser(user.id)}>
                             <AlertTriangle className="mr-2 h-4 w-4" />
                             {user.status === "suspended" ? "Reactivate" : "Suspend"} User
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleToggleBulkApplicant(user.id)}>
+                            <span className="mr-2 text-xs font-bold text-violet-600">BULK</span>
+                            {(user as any).is_bulk_applicant ? "Remove bulk applicant flag" : "Mark as bulk applicant"}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
