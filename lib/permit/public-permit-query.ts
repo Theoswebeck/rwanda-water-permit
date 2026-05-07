@@ -15,6 +15,11 @@ export type PublicPermitRecord = JsonRecord & {
   application: JsonRecord | null;
   latitude: number | null;
   longitude: number | null;
+  parent_permit_id?: string | null;
+  /** Set when the lookup was via a child permit number; holds the original child number. */
+  child_permit_number?: string | null;
+  /** Child permits of a bulk parent permit. */
+  child_permits?: JsonRecord[];
 };
 
 function extractCoordinateFromNotes(
@@ -44,11 +49,13 @@ export async function findPublicPermitByNumber(
   }
 
   const lookup = buildPermitLookupCandidates(normalizedInput);
-  const permitRes = await query(
-    `
+
+  const PERMIT_SELECT = `
     select
       p.id,
       p.permit_number,
+      p.parent_permit_id,
+      p.network_sequence_index,
       p.status::text as status,
       p.water_source::text as water_source,
       p.purpose::text as purpose,
@@ -77,6 +84,10 @@ export async function findPublicPermitByNumber(
     left join public.users u on u.id = a.applicant_id
     left join public.permits op on op.id = p.original_permit_id
     left join public.applications oa on oa.id = op.application_id
+  `;
+
+  const permitRes = await query(
+    `${PERMIT_SELECT}
     where regexp_replace(upper(trim(p.permit_number)), '[^A-Z0-9]', '', 'g') = any($1::text[])
     order by
       case
@@ -91,7 +102,21 @@ export async function findPublicPermitByNumber(
     [lookup.candidateKeys, lookup.raw]
   );
 
-  const permitRow = permitRes.rows[0] as (JsonRecord & { application?: JsonRecord | null; applicant?: JsonRecord | null }) | undefined;
+  let permitRow = permitRes.rows[0] as (JsonRecord & { application?: JsonRecord | null; applicant?: JsonRecord | null }) | undefined;
+  let childPermitNumber: string | null = null;
+
+  // Child permit: resolve to parent so the public view shows the parent permit + annex
+  if (permitRow && typeof permitRow.parent_permit_id === "string" && permitRow.parent_permit_id) {
+    childPermitNumber = typeof permitRow.permit_number === "string" ? permitRow.permit_number : null;
+    const parentRes = await query(
+      `${PERMIT_SELECT} where p.id = $1 limit 1`,
+      [permitRow.parent_permit_id]
+    );
+    if (parentRes.rows[0]) {
+      permitRow = parentRes.rows[0] as typeof permitRow;
+    }
+  }
+
   if (permitRow) {
     const application = permitRow.application
       ? {
@@ -105,6 +130,25 @@ export async function findPublicPermitByNumber(
     const longitude = (typeof permitRow.longitude === "number" ? permitRow.longitude : null)
       ?? extractCoordinateFromNotes(application, "waterSourceLongitude");
 
+    // Fetch child permits when this is a bulk parent (is_bulk on application)
+    let childPermits: JsonRecord[] = [];
+    const isBulk = application && Boolean((application as JsonRecord).is_bulk);
+    if (isBulk && typeof permitRow.id === "string") {
+      try {
+        const childRes = await query<JsonRecord>(
+          `select id, permit_number, network_sequence_index, conditions, water_allowance, allowance_unit
+           from public.permits
+           where parent_permit_id = $1
+           order by network_sequence_index asc nulls last, created_at asc`,
+          [permitRow.id]
+        );
+        childPermits = childRes.rows;
+      } catch {
+        // Non-blocking: column may not exist on older DB
+        childPermits = [];
+      }
+    }
+
     return {
       inputPermitNumber: lookup.raw,
       permit: {
@@ -113,6 +157,8 @@ export async function findPublicPermitByNumber(
         application,
         latitude,
         longitude,
+        child_permit_number: childPermitNumber,
+        child_permits: childPermits.length > 0 ? childPermits : undefined,
       } as PublicPermitRecord,
     };
   }

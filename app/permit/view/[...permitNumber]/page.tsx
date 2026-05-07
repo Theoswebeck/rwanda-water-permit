@@ -422,6 +422,57 @@ export default async function PublicPermitViewPage({
                 polygons={concessionPolygons}
               />
 
+              {/* Child permit lookup notice */}
+              {permit.child_permit_number && (
+                <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                  <span className="font-medium">Network permit </span>
+                  <span className="font-mono">{permit.child_permit_number}</span>
+                  <span> is part of bulk permit </span>
+                  <span className="font-mono">{permit.permit_number}</span>.
+                  The full permit details and annex are shown below.
+                </div>
+              )}
+
+              {/* Bulk annex: list of authorized distribution networks */}
+              {Array.isArray(permit.child_permits) && permit.child_permits.length > 0 && (
+                <div className="mt-8">
+                  <h2 className="text-base font-semibold text-slate-900 mb-3">
+                    Annex — Authorized Distribution Networks
+                  </h2>
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-slate-800 text-white">
+                          <th className="px-3 py-2 text-left font-medium">No.</th>
+                          <th className="px-3 py-2 text-left font-medium">Network Name</th>
+                          <th className="px-3 py-2 text-left font-medium">Sector</th>
+                          <th className="px-3 py-2 text-left font-medium">Cell</th>
+                          <th className="px-3 py-2 text-left font-medium">Permit Number</th>
+                          <th className="px-3 py-2 text-left font-medium">Capacity (m³/day)</th>
+                          <th className="px-3 py-2 text-left font-medium">Method</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(permit.child_permits as Array<Record<string, unknown>>).map((child, idx) => {
+                          const cond = (child.conditions ?? {}) as Record<string, unknown>;
+                          return (
+                            <tr key={String(child.id ?? idx)} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
+                              <td className="px-3 py-2">{(child.network_sequence_index as number | null | undefined) ?? (idx + 1)}</td>
+                              <td className="px-3 py-2 font-medium">{String(cond.network_name ?? "—")}</td>
+                              <td className="px-3 py-2">{String(cond.sector ?? "—")}</td>
+                              <td className="px-3 py-2">{String(cond.cell ?? "—")}</td>
+                              <td className="px-3 py-2 font-mono text-xs">{String(child.permit_number ?? "—")}</td>
+                              <td className="px-3 py-2">{child.water_allowance != null ? String(child.water_allowance) : "—"}</td>
+                              <td className="px-3 py-2">{String(cond.abstraction_method ?? "—").replace(/_/g, " ")}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-8 border-t pt-6 text-xs text-slate-500">
                 <Tx>If you received this link from a QR code on a permit, compare the permit number above with the printed certificate.</Tx>
               </div>
