@@ -17,6 +17,31 @@ function parseSlashPermitNumber(value: string): { seq: string; year: string; has
   return { seq, year, hasWpPrefix: Boolean(m[1]) };
 }
 
+/**
+ * Parses a bulk child permit number: "000918_1/RWB/2026"
+ * Returns null for standard (non-child) permit numbers.
+ */
+export function parseChildPermitNumber(
+  value: string
+): { parentSeq: string; index: number; year: string } | null {
+  const m = value.trim().toUpperCase().match(/^(\d{1,10})_(\d+)\/RWB\/(\d{4})$/);
+  if (!m) return null;
+  return { parentSeq: m[1].padStart(6, "0"), index: parseInt(m[2], 10), year: m[3] };
+}
+
+/**
+ * Given a parent permit number ("000918/RWB/2026") and a row index,
+ * returns the child permit number "000918_1/RWB/2026".
+ */
+export function buildChildPermitNumber(parentPermitNumber: string, index: number): string {
+  const slash = parseSlashPermitNumber(parentPermitNumber);
+  if (slash) {
+    return `${slash.seq}_${index}/RWB/${slash.year}`;
+  }
+  // Fallback: append _index directly
+  return `${parentPermitNumber}_${index}`;
+}
+
 function parseRwbpPermitNumber(value: string): { seq: string; year: string } | null {
   const m = value.trim().toUpperCase().match(/^RWBP-(\d{4})-(\d{1,10})$/);
   if (!m) return null;
@@ -75,6 +100,14 @@ export function buildPermitLookupCandidates(rawPermitNumber: string): { raw: str
     variants.add(cleaned.slice(3));
   } else {
     variants.add(`WP-${cleaned}`);
+  }
+
+  // Child bulk permit: "000918_1/RWB/2026"
+  const child = parseChildPermitNumber(cleaned);
+  if (child) {
+    const seqNoPad = child.parentSeq.replace(/^0+/, "") || "0";
+    variants.add(`${child.parentSeq}_${child.index}/RWB/${child.year}`);
+    variants.add(`${seqNoPad}_${child.index}/RWB/${child.year}`);
   }
 
   const candidateKeys = Array.from(variants)

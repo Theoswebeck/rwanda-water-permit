@@ -3,6 +3,7 @@ export type PermitVariant =
   | "abstraction_organization"
   | "concession_individual"
   | "concession_organization"
+  | "bulk_water_supply"
   | "fallback_generic";
 
 type ApplicantLike = {
@@ -10,6 +11,7 @@ type ApplicantLike = {
 } | null;
 
 type ApplicationLike = {
+  is_bulk?: boolean | null;
   intended_activities?: unknown;
   internal_notes?: unknown;
   applicant?: ApplicantLike;
@@ -61,6 +63,9 @@ export function isConcessionApplication(application: ApplicationLike): boolean {
 }
 
 export function selectPermitVariant(application: ApplicationLike): PermitVariant {
+  // Bulk water supply applications always use the bulk variant
+  if (application.is_bulk) return "bulk_water_supply";
+
   const accountType = application.applicant?.account_type ?? null;
   const isIndividual = accountType === "individual";
   const isConcession = isConcessionApplication(application);
