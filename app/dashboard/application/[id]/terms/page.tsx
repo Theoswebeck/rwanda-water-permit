@@ -27,6 +27,7 @@ import { supabase } from "@/lib/supabase";
 // service role to UPDATE, so syncs must go through the server-side API route.
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
+import { buildChildPermitNumber } from "@/lib/permit-number-utils";
 import { splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import {
   buildContractPlaceholderContext,
@@ -1324,6 +1325,76 @@ export default function TermsConditionsPage() {
         
         permitData = newPermit;
         console.log('✅ Permit created successfully:', permitData.permit_number);
+
+        // Bulk water supply: create child permit records for each network
+        if (applicationData.is_bulk && permitData?.id && permitData?.permit_number) {
+          const adjNetworks = parsedNotes?._assessorAdjustments?.bulkNetworks;
+          const rawNetworks: any[] = Array.isArray(adjNetworks)
+            ? adjNetworks
+            : Array.isArray(applicationData.bulk_networks)
+              ? applicationData.bulk_networks
+              : [];
+
+          if (rawNetworks.length > 0) {
+            console.log(`🔗 Creating ${rawNetworks.length} child permits for bulk application`);
+            for (let i = 0; i < rawNetworks.length; i++) {
+              const network = rawNetworks[i];
+              const childPermitNumber = buildChildPermitNumber(permitData.permit_number, i + 1);
+              try {
+                const { data: childPermit, error: childError } = await supabase
+                  .from('permits')
+                  .insert({
+                    application_id: applicationId,
+                    parent_permit_id: permitData.id,
+                    network_sequence_index: i + 1,
+                    permit_number: childPermitNumber,
+                    status: 'active',
+                    water_source: applicationData.water_source,
+                    purpose: applicationData.water_purpose,
+                    water_allowance: network.capacity_m3_day ?? null,
+                    allowance_unit: 'm³/day',
+                    issuing_authority: 'Rwanda Water Resources Board',
+                    issued_date: newIssuedDate,
+                    expiry_date: newExpiryDate,
+                    conditions: {
+                      network_name: network.network_name,
+                      sector: network.sector,
+                      cell: network.cell,
+                      village: network.village,
+                      coordinates: network.coordinates,
+                      abstraction_method: network.abstraction_method,
+                    },
+                  } as any)
+                  .select('id, permit_number')
+                  .single() as { data: any; error: any };
+
+                if (childError) {
+                  console.warn(`⚠️ Failed to create child permit ${childPermitNumber}:`, childError);
+                } else {
+                  console.log(`✅ Child permit created: ${childPermit?.permit_number}`);
+                  // Sync child to registry (non-blocking) — points to parent for PDF
+                  syncRegistryViaApi(childPermitNumber, {
+                    status: 'active',
+                    permit_holder: permitHolder,
+                    location: network.sector
+                      ? [network.village, network.cell, network.sector].filter(Boolean).join(', ')
+                      : registrySyncLocation,
+                    water_source: applicationData.water_source || undefined,
+                    authorized_activity: applicationData.water_purpose || undefined,
+                    volume_or_area: network.capacity_m3_day ? String(network.capacity_m3_day) : undefined,
+                    issuance_date: newIssuedDate,
+                    expiration_date: newExpiryDate || undefined,
+                    duration: `${resolvedDurationYearsGlobal} years`,
+                    contact: registrySyncContact,
+                    method_of_water_taking: network.abstraction_method || applicationData.water_taking_method || undefined,
+                  }).catch(err => console.warn(`⚠️ registry-sync (child ${childPermitNumber}) failed:`, err));
+                }
+              } catch (childErr) {
+                console.warn(`⚠️ Exception creating child permit ${childPermitNumber}:`, childErr);
+              }
+            }
+          }
+        }
       }
 
       if (permitData?.id && permitData?.permit_number) {
