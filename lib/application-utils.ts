@@ -586,10 +586,15 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       modified_from_application_id: formData.originalApplicationId,
       modification_changes: formData.modificationChanges,
     } : {}),
-    
+
+    // Bulk applicant fields
+    is_bulk: !!(formData as any).bulk_networks,
+    ...(Array.isArray((formData as any).bulk_networks) ? { bulk_networks: (formData as any).bulk_networks } : {}),
+    ...((formData as any).bulk_district ? { bulk_district: (formData as any).bulk_district } : {}),
+
     // SLA tracking
     sla_status: 'on_time' as const,
-    
+
     // Use the actual authenticated user's ID
     applicant_id: userId || '550e8400-e29b-41d4-a716-446655440001', // Fallback to sample ID for development
   };

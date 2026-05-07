@@ -48,6 +48,9 @@ import {
   getFormattedVillageOptions
 } from '@/lib/rwanda-administrative-data';
 
+import { BulkNetworksTable, emptyBulkRow } from "@/components/dashboard/bulk-networks-table";
+import type { BulkNetworkRow } from "@/types/database";
+
 // Form schema based on NEW_WATER_PERMIT_APPLICATION_FORM.md structure
 const formSchema = z.object({
   // SECTION 1: IDENTIFICATION AND ADDRESS OF THE APPLICANT
@@ -291,17 +294,32 @@ interface ApplicationFormProps {
   isLoading: boolean;
   initialData?: Partial<FormValues>;
   mode?: 'create' | 'edit';
+  isBulkApplicant?: boolean;
+  currentApplication?: any;
+  initialDocuments?: any[];
 }
 
-export function ApplicationForm({ 
-  userData, 
-  onSubmit, 
-  onSaveAsDraft, 
-  isLoading, 
-  initialData, 
-  mode = 'create' 
+export function ApplicationForm({
+  userData,
+  onSubmit,
+  onSaveAsDraft,
+  isLoading,
+  initialData,
+  mode = 'create',
+  isBulkApplicant = false,
+  currentApplication,
+  initialDocuments,
 }: ApplicationFormProps) {
   const [activeTab, setActiveTab] = useState("personal");
+  const [bulkNetworks, setBulkNetworks] = useState<BulkNetworkRow[]>(() => {
+    const saved = (initialData as any)?.bulk_networks;
+    if (Array.isArray(saved) && saved.length > 0) return saved;
+    if (!isBulkApplicant) return [];
+    return Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1));
+  });
+  const [bulkDistrict, setBulkDistrict] = useState<string>(
+    (initialData as any)?.bulk_district ?? ""
+  );
   const hasMountedRef = useRef(false);
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
@@ -458,11 +476,15 @@ export function ApplicationForm({
         };
         
         // Save as draft (auto-save)
-        await onSaveAsDraft(formData as any, 'draft', true);
-        
+        await onSaveAsDraft(
+          isBulkApplicant ? { ...formData, bulk_networks: bulkNetworks, bulk_district: bulkDistrict } as any : formData as any,
+          'draft',
+          true
+        );
+
         setLastAutoSave(new Date());
         setAutoSaveStatus('saved');
-        
+
         // Reset status after 2 seconds
         setTimeout(() => setAutoSaveStatus('idle'), 2000);
       } catch (error) {
@@ -489,8 +511,12 @@ export function ApplicationForm({
         ...files,
       };
       
-      await onSaveAsDraft(formData as any, 'draft', true);
-      
+      await onSaveAsDraft(
+        isBulkApplicant ? { ...formData, bulk_networks: bulkNetworks, bulk_district: bulkDistrict } as any : formData as any,
+        'draft',
+        true
+      );
+
       setLastAutoSave(new Date());
       setAutoSaveStatus('saved');
       setTimeout(() => setAutoSaveStatus('idle'), 2000);
@@ -630,7 +656,10 @@ export function ApplicationForm({
       };
       
       // Await the async submit operation
-      await onSubmit(formData, 'submitted');
+      await onSubmit(
+        isBulkApplicant ? { ...formData, bulk_networks: bulkNetworks, bulk_district: bulkDistrict } as any : formData,
+        'submitted'
+      );
     } catch (error) {
       console.error('❌ Error submitting application:', error);
     }
@@ -655,7 +684,11 @@ export function ApplicationForm({
       };
       
       // Await the async save operation (manual save, will redirect)
-      await onSaveAsDraft(formData as any, 'draft', false);
+      await onSaveAsDraft(
+        isBulkApplicant ? { ...formData, bulk_networks: bulkNetworks, bulk_district: bulkDistrict } as any : formData as any,
+        'draft',
+        false
+      );
     } catch (error) {
       console.error('❌ Error saving draft:', error);
       // You could show a toast notification or error message here
@@ -2796,8 +2829,39 @@ export function ApplicationForm({
                       </Button>
                     </div>
                   </div>
+
+                  {/* Bulk applicants only: district + network rows */}
+                  {isBulkApplicant && (
+                    <div className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 p-6 rounded-xl border border-violet-200 dark:border-violet-800 space-y-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-violet-100 dark:bg-violet-900/40 rounded-lg">
+                          <Building className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-violet-900 dark:text-violet-100">Water Supply Networks</h3>
+                          <p className="text-sm text-violet-700 dark:text-violet-300">All networks share the selected district</p>
+                        </div>
+                      </div>
+                      <div className="max-w-xs">
+                        <label className="block text-sm font-medium text-violet-900 dark:text-violet-100 mb-2">
+                          District <span className="text-red-500">*</span>
+                        </label>
+                        <Select value={bulkDistrict} onValueChange={setBulkDistrict}>
+                          <SelectTrigger className="bg-white dark:bg-gray-800">
+                            <SelectValue placeholder="Select district" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getFormattedDistrictOptions("").map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <BulkNetworksTable rows={bulkNetworks} onChange={setBulkNetworks} mode="editable" />
+                    </div>
+                  )}
                 </TabsContent>
-                
+
                 <TabsContent value="location" className="pt-6">
                   <CardTitle className="text-lg mb-2">Project Location</CardTitle>
                   <CardDescription className="mb-6">
@@ -3808,7 +3872,8 @@ export function ApplicationForm({
                       </div>
                     </div>
 
-                    {/* Land Ownership Document */}
+                    {!isBulkApplicant && (
+                    <>{/* Land Ownership Document */}
                     <div className="space-y-3">
                       <Label htmlFor="landOwnershipDoc" className="text-base font-medium text-emerald-900 dark:text-emerald-100">
                         Land Ownership Document
@@ -3859,6 +3924,7 @@ export function ApplicationForm({
                         )}
                       </div>
                     </div>
+                    </>)}
 
                     {/* Technical Drawings */}
                     <div className="space-y-3">

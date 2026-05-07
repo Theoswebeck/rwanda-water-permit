@@ -853,7 +853,9 @@ function NewApplicationContent() {
       company_tin: userProfile.company_tin,
     };
   }, [userProfile]);
-  
+
+  const isBulkApplicant = !!(userProfile as any)?.is_bulk_applicant;
+
   // ⚡ PERFORMANCE: Memoize submit handler to prevent re-renders
   const handleSubmitApplication = useCallback(async (formData: any, status: 'submitted') => {
     try {
@@ -2410,7 +2412,7 @@ function NewApplicationContent() {
             )}
           </div>
           
-          <ApplicationForm 
+          <ApplicationForm
             userData={userData}
             onSubmit={handleSubmitApplication}
             onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, currentApplication?.id || draftId)}
@@ -2419,6 +2421,7 @@ function NewApplicationContent() {
             initialDocuments={initialDocuments}
             mode="edit"
             currentApplication={currentApplication}
+            isBulkApplicant={isBulkApplicant}
           />
         </>
       );
@@ -2568,7 +2571,7 @@ function NewApplicationContent() {
             </div>
           </div>
           
-          <ApplicationForm 
+          <ApplicationForm
             userData={userData}
             onSubmit={handleModificationSubmit}
             onSaveAsDraft={handleModificationSaveAsDraft}
@@ -2580,6 +2583,7 @@ function NewApplicationContent() {
             isModification={true}
             originalApplicationData={originalApplicationData}
             excludeApplicationIds={[selectedPermitForModification?.application_id].filter(Boolean) as string[]}
+            isBulkApplicant={isBulkApplicant}
           />
         </>
       );
@@ -2678,7 +2682,7 @@ function NewApplicationContent() {
           </div>
         </div>
         
-        <ApplicationForm 
+        <ApplicationForm
           userData={userData}
           onSubmit={handleSubmitApplication}
           onSaveAsDraft={(formData, status) => handleSaveAsDraft(formData, status, currentApplication?.id || draftId)}
@@ -2687,6 +2691,7 @@ function NewApplicationContent() {
           initialDocuments={initialDocuments}
           mode="create"
           currentApplication={currentApplication}
+          isBulkApplicant={isBulkApplicant}
         />
       </>
     );
