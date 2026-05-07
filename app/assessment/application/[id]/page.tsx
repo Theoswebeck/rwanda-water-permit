@@ -126,6 +126,39 @@ function isNumericText(value?: string) {
   return text.length > 0 && Number.isFinite(Number(text));
 }
 
+function isVolumeRateUnit(value: unknown) {
+  return value === "m3/day" || value === "m3/year";
+}
+
+function withDefaultVolumeRateUnits(data: Partial<AssessmentReportData>) {
+  const next: Partial<AssessmentReportData> = { ...data };
+  if (!next.sourceFlowValue && next.sourceFlowM3Day) {
+    next.sourceFlowValue = next.sourceFlowM3Day;
+  }
+  if ((next.sourceFlowValue || next.sourceFlowM3Day) && !isVolumeRateUnit(next.sourceFlowUnit)) {
+    next.sourceFlowUnit = "m3/day";
+  }
+  if (next.flowRateM3Day && !isVolumeRateUnit(next.flowRateM3DayUnit)) {
+    next.flowRateM3DayUnit = "m3/year";
+  }
+  if (next.flowRateLps && !isVolumeRateUnit(next.flowRateUnit)) {
+    next.flowRateUnit = "m3/day";
+  }
+  if (next.availableWaterQ && !isVolumeRateUnit(next.availableWaterQUnit)) {
+    next.availableWaterQUnit = "m3/day";
+  }
+  if (next.waterDemandD && !isVolumeRateUnit(next.waterDemandDUnit)) {
+    next.waterDemandDUnit = "m3/day";
+  }
+  if (next.existingDemandED && !isVolumeRateUnit(next.existingDemandEDUnit)) {
+    next.existingDemandEDUnit = "m3/day";
+  }
+  if (next.remainingWater && !isVolumeRateUnit(next.remainingWaterUnit)) {
+    next.remainingWaterUnit = "m3/day";
+  }
+  return next;
+}
+
 // Lazy load the ApplicationForm component
 const ApplicationForm = dynamic(
   () => import("@/components/dashboard/application-form-new"),
@@ -535,16 +568,27 @@ export default function AssessmentApplicationPage() {
       const sourceFlowValue = assessmentReportData.sourceFlowValue ?? assessmentReportData.sourceFlowM3Day;
       const sourceFlowUnit = assessmentReportData.sourceFlowUnit ?? "m3/day";
       if (!isNumericText(sourceFlowValue)) missing.push("Section 2: Flow of the water source value (number)");
-      if (sourceFlowUnit !== "m3/day" && sourceFlowUnit !== "m3/year") {
+      if (!isVolumeRateUnit(sourceFlowUnit)) {
         missing.push("Section 2: Flow of the water source unit (m3/day or m3/year)");
       }
-      if (!hasText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted (m3/year)");
+      if (!isNumericText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted value (number)");
+      if (!isVolumeRateUnit(assessmentReportData.flowRateM3DayUnit ?? "m3/year")) {
+        missing.push("Section 4: Amount of water to be abstracted unit (m3/day or m3/year)");
+      }
+      if (!isNumericText(assessmentReportData.flowRateLps)) missing.push("Section 4: Flow rate value (number)");
+      if (!isVolumeRateUnit(assessmentReportData.flowRateUnit ?? "m3/day")) {
+        missing.push("Section 4: Flow rate unit (m3/day or m3/year)");
+      }
       if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
-      if (!hasText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q)");
-      if (!hasText(assessmentReportData.waterDemandD)) missing.push("Section 5: Water demand (D)");
-      if (!hasText(assessmentReportData.existingDemandED)) missing.push("Section 5: Existing demand (ED)");
-      if (!hasText(assessmentReportData.remainingWater)) missing.push("Section 5: Remaining Water (Q-D-ED)");
-      if (!hasText(assessmentReportData.waterStorage)) missing.push("Section 5: Water Storage");
+      if (!isNumericText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q) value (number)");
+      if (!isVolumeRateUnit(assessmentReportData.availableWaterQUnit ?? "m3/day")) missing.push("Section 5: Available water (Q) unit (m3/day or m3/year)");
+      if (!isNumericText(assessmentReportData.waterDemandD)) missing.push("Section 5: Water demand (D) value (number)");
+      if (!isVolumeRateUnit(assessmentReportData.waterDemandDUnit ?? "m3/day")) missing.push("Section 5: Water demand (D) unit (m3/day or m3/year)");
+      if (!isNumericText(assessmentReportData.existingDemandED)) missing.push("Section 5: Existing demand (ED) value (number)");
+      if (!isVolumeRateUnit(assessmentReportData.existingDemandEDUnit ?? "m3/day")) missing.push("Section 5: Existing demand (ED) unit (m3/day or m3/year)");
+      if (!isNumericText(assessmentReportData.remainingWater)) missing.push("Section 5: Remaining Water (Q-D-ED) value (number)");
+      if (!isVolumeRateUnit(assessmentReportData.remainingWaterUnit ?? "m3/day")) missing.push("Section 5: Remaining Water (Q-D-ED) unit (m3/day or m3/year)");
+      if (!isNumericText(assessmentReportData.waterStorage)) missing.push("Section 5: Water Storage (m3)");
       if (!hasText(assessmentReportData.waterUseConflict)) missing.push("Section 5: Water use conflict");
     } else {
       if (!hasText(assessmentReportData.surfaceAreaHa)) missing.push("Section 4: Surface area");
@@ -1739,6 +1783,7 @@ export default function AssessmentApplicationPage() {
       console.log('💾 Saving assessment report data:', assessmentReportData);
       const hasReportData = assessmentReportData && typeof assessmentReportData === 'object' && Object.keys(assessmentReportData).length > 0;
       console.log('📊 Assessment report data has content:', hasReportData);
+      const assessmentReportDataForSave = withDefaultVolumeRateUnits(assessmentReportData);
 
       const assessmentData = {
         application_id: application.id,
@@ -1758,7 +1803,7 @@ export default function AssessmentApplicationPage() {
         explanation_text: recommendation.explanationText,
         inspector_name: inspectorName,
         inspection_date: inspectionDate,
-        assessment_report_data: assessmentReportData,
+        assessment_report_data: assessmentReportDataForSave,
         status: status,
         ...(status === "forwarded_to_approver" ? { forwarded_at: new Date().toISOString() } : {}),
         updated_at: new Date().toISOString()
@@ -1806,6 +1851,7 @@ export default function AssessmentApplicationPage() {
       
       if (result.data) {
         setAssessmentId(result.data.id);
+        setAssessmentReportData(assessmentReportDataForSave);
         // Verify that assessment_report_data was saved correctly
         const savedData = (result.data as any)?.assessment_report_data;
         console.log('✅ Assessment saved successfully. Saved assessment_report_data:', savedData);

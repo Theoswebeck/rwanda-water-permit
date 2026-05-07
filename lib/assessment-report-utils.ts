@@ -128,14 +128,20 @@ export interface AssessmentReportData {
   sourceFlowM3Day?: string;
   
   // Abstraction-specific fields
+  flowRateUnit?: "m3/day" | "m3/year";
   flowRateLps?: string;
+  flowRateM3DayUnit?: "m3/day" | "m3/year";
   flowRateM3Day?: string;
   abstractionMethod?: string;
   returnFlow?: 'yes' | 'no';
   waterBalanceDescription?: string;
+  availableWaterQUnit?: "m3/day" | "m3/year";
   availableWaterQ?: string;
+  waterDemandDUnit?: "m3/day" | "m3/year";
   waterDemandD?: string;
+  existingDemandEDUnit?: "m3/day" | "m3/year";
   existingDemandED?: string;
+  remainingWaterUnit?: "m3/day" | "m3/year";
   remainingWater?: string;
   waterStorage?: string;
   waterUseConflict?: string;
@@ -549,23 +555,35 @@ export function prefillAssessmentReportFromApplication(
     if (abstractionDetail) {
       abstractionData.abstractionMethod = typeof abstractionDetail.abstractionMethod === "string" ? abstractionDetail.abstractionMethod : "";
 
-      // Keep Section 4 values exactly as submitted in the application.
-      // Do not derive or convert values here.
-      if (typeof abstractionDetail.flowRate === "number") {
-        abstractionData.flowRateLps = String(abstractionDetail.flowRate);
-      } else if (typeof abstractionDetail.flowRate === "string") {
-        abstractionData.flowRateLps = abstractionDetail.flowRate;
+      const flowRateUnit = typeof abstractionDetail.flowRateUnit === "string" ? abstractionDetail.flowRateUnit : "";
+      const flowRateValue =
+        typeof abstractionDetail.flowRate === "number"
+          ? abstractionDetail.flowRate
+          : typeof abstractionDetail.flowRate === "string" && abstractionDetail.flowRate.trim()
+            ? Number(abstractionDetail.flowRate)
+            : undefined;
+      if (typeof flowRateValue === "number" && Number.isFinite(flowRateValue)) {
+        if (flowRateUnit === "m3_per_second") {
+          abstractionData.flowRateLps = String(Number((flowRateValue * 86400).toFixed(2)));
+          abstractionData.flowRateUnit = "m3/day";
+        } else if (flowRateUnit === "m3_per_day") {
+          abstractionData.flowRateLps = String(flowRateValue);
+          abstractionData.flowRateUnit = "m3/day";
+        }
       }
 
       if (typeof abstractionDetail.maxAverageYearly === "number") {
         abstractionData.flowRateM3Day = String(abstractionDetail.maxAverageYearly);
+        abstractionData.flowRateM3DayUnit = "m3/year";
       } else if (typeof abstractionDetail.maxAverageYearly === "string") {
         abstractionData.flowRateM3Day = abstractionDetail.maxAverageYearly;
+        abstractionData.flowRateM3DayUnit = "m3/year";
       }
 
       // If assessor recommended a different yearly amount, it should be used in the assessment report.
       if (typeof recommendedVolumeM3 === "number") {
         abstractionData.flowRateM3Day = String(recommendedVolumeM3);
+        abstractionData.flowRateM3DayUnit = "m3/year";
       }
     } else {
       const fallbackYearlyVolume = pickFirstNumber(
@@ -575,6 +593,7 @@ export function prefillAssessmentReportFromApplication(
       );
       if (typeof fallbackYearlyVolume === "number") {
         abstractionData.flowRateM3Day = String(fallbackYearlyVolume);
+        abstractionData.flowRateM3DayUnit = "m3/year";
       }
     }
   }

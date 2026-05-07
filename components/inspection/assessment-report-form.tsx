@@ -18,9 +18,25 @@ import {
   getFormattedVillageOptions,
 } from "@/lib/rwanda-administrative-data";
 
-const SOURCE_FLOW_UNITS = ["m3/day", "m3/year"] as const;
+const VOLUME_RATE_UNITS = ["m3/day", "m3/year"] as const;
 
-type SourceFlowUnit = (typeof SOURCE_FLOW_UNITS)[number];
+type VolumeRateUnit = (typeof VOLUME_RATE_UNITS)[number];
+type VolumeRateUnitField =
+  | "sourceFlowUnit"
+  | "flowRateUnit"
+  | "flowRateM3DayUnit"
+  | "availableWaterQUnit"
+  | "waterDemandDUnit"
+  | "existingDemandEDUnit"
+  | "remainingWaterUnit";
+type StringReportField =
+  | "sourceFlowValue"
+  | "flowRateLps"
+  | "flowRateM3Day"
+  | "availableWaterQ"
+  | "waterDemandD"
+  | "existingDemandED"
+  | "remainingWater";
 
 function parseResidenceParts(residence?: string) {
   const parts = String(residence || "")
@@ -134,22 +150,67 @@ export function AssessmentReportForm({
     updateField("residence", buildResidence(parts));
   };
 
-  const sourceFlowUnit: SourceFlowUnit =
-    localData.sourceFlowUnit && SOURCE_FLOW_UNITS.includes(localData.sourceFlowUnit)
-      ? localData.sourceFlowUnit
-      : "m3/day";
-  const sourceFlowValue = localData.sourceFlowValue ?? localData.sourceFlowM3Day ?? "";
-  const updateSourceFlow = (value: string, unit: SourceFlowUnit) => {
+  const updateVolumeRateField = (
+    valueField: StringReportField,
+    value: string,
+    unitField: VolumeRateUnitField,
+    unit: VolumeRateUnit,
+  ) => {
     setLocalData((prev) => {
       const updated: Partial<AssessmentReportData> = {
         ...prev,
-        sourceFlowValue: value,
-        sourceFlowUnit: unit,
-        sourceFlowM3Day: unit === "m3/day" ? value : prev.sourceFlowM3Day,
+        [valueField]: value,
+        [unitField]: unit,
       };
+      if (valueField === "sourceFlowValue" && unit === "m3/day") {
+        updated.sourceFlowM3Day = value;
+      }
       onReportDataChange(updated);
       return updated;
     });
+  };
+
+  const renderVolumeRateField = (
+    label: string,
+    valueField: StringReportField,
+    unitField: VolumeRateUnitField,
+    placeholder = "Enter value",
+    defaultUnit: VolumeRateUnit = "m3/day",
+    fallbackValueField?: StringReportField,
+  ) => {
+    const unit = localData[unitField] && VOLUME_RATE_UNITS.includes(localData[unitField])
+      ? localData[unitField]
+      : defaultUnit;
+    const value = String(localData[valueField] ?? (fallbackValueField ? localData[fallbackValueField] : "") ?? "");
+
+    return (
+      <div>
+        <Label className="text-sm text-muted-foreground">{label}</Label>
+        <div className="grid grid-cols-3 gap-2">
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => updateVolumeRateField(valueField, e.target.value, unitField, unit)}
+            placeholder={placeholder}
+            disabled={readOnly}
+            className={`col-span-2 ${readOnlyClass}`}
+          />
+          <Select
+            value={unit}
+            onValueChange={(nextUnit) => updateVolumeRateField(valueField, value, unitField, nextUnit as VolumeRateUnit)}
+            disabled={readOnly}
+          >
+            <SelectTrigger className={readOnlyClass}>
+              <SelectValue placeholder="Unit" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="m3/day">m3/day</SelectItem>
+              <SelectItem value="m3/year">m3/year</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    );
   };
 
   const readOnlyClass = readOnly ? "bg-muted/50 cursor-not-allowed" : "";
@@ -504,33 +565,7 @@ export function AssessmentReportForm({
               <div className="md:col-span-2">
                 <Label>Flow of the water source (attach field pictures)</Label>
               </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">Value</Label>
-                <Input
-                  type="number"
-                  value={sourceFlowValue}
-                  onChange={(e) => updateSourceFlow(e.target.value, sourceFlowUnit)}
-                  placeholder="Enter source flow"
-                  disabled={readOnly}
-                  className={readOnlyClass}
-                />
-              </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">Unit</Label>
-                <Select
-                  value={sourceFlowUnit}
-                  onValueChange={(unit) => updateSourceFlow(sourceFlowValue, unit as SourceFlowUnit)}
-                  disabled={readOnly}
-                >
-                  <SelectTrigger className={readOnlyClass}>
-                    <SelectValue placeholder="Select unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="m3/day">m3/day</SelectItem>
-                    <SelectItem value="m3/year">m3/year</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {renderVolumeRateField("Flow", "sourceFlowValue", "sourceFlowUnit", "Enter source flow", "m3/day", "sourceFlowM3Day")}
             </div>
           )}
         </CardContent>
@@ -549,28 +584,8 @@ export function AssessmentReportForm({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Quantity (m³/year)</Label>
-                  <Input
-                    value={localData.flowRateM3Day || ''}
-                    onChange={(e) => updateField('flowRateM3Day', e.target.value)}
-                    placeholder="m³/year"
-                    readOnly={readOnly}
-                    disabled={readOnly}
-                    className={readOnly ? prefilledClass : "bg-white"}
-                  />
-                </div>
-                <div>
-                  <Label>Flow rate (m³/s)</Label>
-                  <Input
-                    value={localData.flowRateLps || ''}
-                    onChange={(e) => updateField('flowRateLps', e.target.value)}
-                    placeholder="m³/s"
-                    readOnly={readOnly}
-                    disabled={readOnly}
-                    className={readOnly ? prefilledClass : "bg-white"}
-                  />
-                </div>
+                {renderVolumeRateField("Quantity", "flowRateM3Day", "flowRateM3DayUnit", "Enter quantity", "m3/year")}
+                {renderVolumeRateField("Flow rate", "flowRateLps", "flowRateUnit", "Enter flow rate")}
                 <div>
                   <Label>Intended abstraction method</Label>
                   <Input
@@ -622,50 +637,10 @@ export function AssessmentReportForm({
                   className={readOnlyClass}
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Available water (Q)</Label>
-                    <Input
-                      type="number"
-                      value={localData.availableWaterQ || ''}
-                      onChange={(e) => updateField('availableWaterQ', e.target.value)}
-                      placeholder="L/sec equivalent to m³/day"
-                      disabled={readOnly}
-                      className={readOnlyClass}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Water demand (D)</Label>
-                    <Input
-                      type="number"
-                      value={localData.waterDemandD || ''}
-                      onChange={(e) => updateField('waterDemandD', e.target.value)}
-                      placeholder="m³/day"
-                      disabled={readOnly}
-                      className={readOnlyClass}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Existing demand (ED)</Label>
-                    <Input
-                      type="number"
-                      value={localData.existingDemandED || ''}
-                      onChange={(e) => updateField('existingDemandED', e.target.value)}
-                      placeholder="m³/day"
-                      disabled={readOnly}
-                      className={readOnlyClass}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Remaining Water (Q-D-ED)</Label>
-                    <Input
-                      type="number"
-                      value={localData.remainingWater || ''}
-                      onChange={(e) => updateField('remainingWater', e.target.value)}
-                      placeholder="m³/day"
-                      disabled={readOnly}
-                      className={readOnlyClass}
-                    />
-                  </div>
+                  {renderVolumeRateField("Available water (Q)", "availableWaterQ", "availableWaterQUnit")}
+                  {renderVolumeRateField("Water demand (D)", "waterDemandD", "waterDemandDUnit")}
+                  {renderVolumeRateField("Existing demand (ED)", "existingDemandED", "existingDemandEDUnit")}
+                  {renderVolumeRateField("Remaining Water (Q-D-ED)", "remainingWater", "remainingWaterUnit")}
                   <div>
                     <Label className="text-sm text-muted-foreground">Water Storage</Label>
                     <Input
@@ -813,10 +788,11 @@ export function AssessmentReportForm({
         <CardContent className="space-y-4">
           <div>
             <Label>Assessment report completion note</Label>
-            <Input
+            <Textarea
               value={localData.conclusion || ''}
               onChange={(e) => updateField('conclusion', e.target.value)}
               placeholder="Enter completion note"
+              rows={5}
               disabled={readOnly}
               className={readOnlyClass}
             />
