@@ -84,8 +84,21 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const [email, setEmail] = useState(initialData?.email || "");
   const [password, setPassword] = useState(initialData?.password || "");
   const [showPassword, setShowPassword] = useState(false);
-  const [accountType, setAccountType] = useState<SignupAccountType>(initialData?.accountType || "company");
-  const isOrganisationAccount = accountType !== "individual";
+  const [accountKind, setAccountKind] = useState<"individual" | "organisation">(() => {
+    if (initialData?.accountType === "individual") return "individual";
+    return "organisation";
+  });
+  const [organisationLegalType, setOrganisationLegalType] = useState<OrganisationAccountType | null>(() => {
+    const t = initialData?.accountType;
+    if (t && t !== "individual") return t as OrganisationAccountType;
+    return null;
+  });
+
+  const isOnOrganisationTab = accountKind === "organisation";
+  /** True only after explicit organisation subtype selection — never defaults to company. */
+  const isOrganisationAccount =
+    isOnOrganisationTab && organisationLegalType !== null;
+
   
   // Local state
   const [localError, setLocalError] = useState<string>("");
@@ -405,6 +418,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       return;
     }
 
+    if (isOnOrganisationTab) {
+      if (!organisationLegalType) {
+        setLocalError(tx("Please select an organisation type."));
+        return;
+      }
+    }
+
     // Validate account-specific fields
     if (isOrganisationAccount) {
       if (!companyName.trim()) {
@@ -419,7 +439,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
         setLocalError(tx("Organisation address is required."));
         return;
       }
-    } else {
+    } else if (accountKind === "individual") {
       if (!firstName.trim() || !lastName.trim()) {
         setLocalError(tx("First name and last name are required."));
         return;
@@ -434,11 +454,14 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       }
     }
 
+    const resolvedAccountType: SignupAccountType =
+      accountKind === "individual" ? "individual" : organisationLegalType!;
+
     // Build form data
     const formData: SignUpFormData = {
       email,
       password,
-      accountType,
+      accountType: resolvedAccountType,
       ...(isOrganisationAccount 
         ? { 
             companyName, 
@@ -484,6 +507,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
 
   const companyFormReady =
     (!rraEnabled || rraVerified) &&
+    !!organisationLegalType &&
     !!companyName.trim() &&
     !!companyTIN.trim() &&
     companyTIN.replace(/\D/g, "").length === 9 &&
@@ -556,12 +580,13 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     }
   };
 
-  const showNidaFirstStep = accountType === "individual" && nidaEnabled;
+  const showNidaFirstStep = accountKind === "individual" && nidaEnabled;
   const showIndividualDetails = !showNidaFirstStep || nidaVerified;
   const showIndividualCredentials = !showNidaFirstStep || nidaVerified;
 
   const showRraFirstStep = isOrganisationAccount && rraEnabled;
-  const showCompanyDetails = !showRraFirstStep || rraVerified;
+  const showCompanyDetails =
+    organisationLegalType !== null && (!showRraFirstStep || rraVerified);
 
   return (
     <motion.div
@@ -612,12 +637,12 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             </div>
           )}
           <Tabs 
-            value={isOrganisationAccount ? "organisation" : "individual"}
+            value={isOnOrganisationTab ? "organisation" : "individual"}
             onValueChange={(value) => {
               if (value === "individual") {
-                setAccountType("individual");
+                setAccountKind("individual");
               } else {
-                setAccountType((prev) => (prev !== "individual" ? prev : "company"));
+                setAccountKind("organisation");
               }
               if (error) onClearError?.();
             }}
@@ -633,9 +658,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                 <div className="space-y-2">
                   <Label htmlFor="organisationType">{tx("Organisation Type")}</Label>
                   <Select
-                    value={accountType}
+                    value={organisationLegalType ?? undefined}
                     onValueChange={(value) => {
-                      setAccountType(value as OrganisationAccountType);
+                      setOrganisationLegalType(value as OrganisationAccountType);
                       if (error) onClearError?.();
                     }}
                     disabled={isLoading}
