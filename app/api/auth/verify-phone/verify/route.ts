@@ -18,7 +18,7 @@ function normalizeRwandaPhoneToE164(raw: string): string | null {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, phoneNumber, code, requestId } = body;
+    const { userId, phoneNumber, code, requestId, accountType } = body;
 
     console.log('🔍 Simple verify API: Checking code for:', { hasUserId: !!userId, phoneSuffix: String(phoneNumber || '').slice(-3) });
 
@@ -182,11 +182,11 @@ export async function POST(request: NextRequest) {
           phone_verification_expires_at = null,
           phone_verification_attempts = 0,
           phone = coalesce($2, phone),
-          company_phone = case when account_type <> 'individual'::public.account_type then coalesce($2, company_phone) else company_phone end,
+          company_phone = case when $3 = 'company' then coalesce($2, company_phone) else company_phone end,
           updated_at = now()
         where id = $1
         `,
-        [userId, basePhone]
+        [userId, basePhone, accountType || null]
       );
     }
 

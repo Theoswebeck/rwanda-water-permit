@@ -4,15 +4,13 @@ import { verifyTin } from '@/lib/rra/client'
 import { query } from '@/lib/db/postgres'
 import { hashPassword } from '@/lib/auth/password'
 import { formatProvinceForDB } from '@/lib/application-utils'
-import { normalizeSignupAccountType } from '@/lib/auth/account-types'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     // DEBUG: Log the raw body to see exactly what frontend is sending
     console.log('📥 signup raw body:', JSON.stringify(body, null, 2))
-    const { email, password, accountType: rawAccountType, emailCode, ...rest } = body || {}
-    const accountType = normalizeSignupAccountType(rawAccountType)
+    const { email, password, accountType, emailCode, ...rest } = body || {}
 
     if (!email || !password || !accountType) {
       return NextResponse.json({ success: false, message: 'Missing required fields' }, { status: 400 })
@@ -173,7 +171,7 @@ export async function POST(req: NextRequest) {
         `,
         [
           passwordHash,
-          accountType,
+          isIndividual ? 'individual' : 'company',
           isIndividual ? 'national_id' : 'tin',
           isIndividual ? idDigits : String(rest?.companyTIN || ''),
           isIndividual ? String(rest?.firstName || 'User') : null,
@@ -239,7 +237,7 @@ export async function POST(req: NextRequest) {
       [
         emailLower,
         passwordHash,
-        accountType,
+        isIndividual ? 'individual' : 'company',
         isIndividual ? 'national_id' : 'tin',
         isIndividual ? idDigits : String(rest?.companyTIN || ''),
         isIndividual ? String(rest?.firstName || 'User') : null,

@@ -11,7 +11,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:account-types": "node --test scripts/test-account-types.mjs",
     "audit:inspections-schema": "node scripts/audit-inspections-schema.mjs"
   },
   "dependencies": {

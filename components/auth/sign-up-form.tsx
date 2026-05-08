@@ -13,11 +13,6 @@ import { Eye, EyeOff, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  ORGANISATION_ACCOUNT_TYPES,
-  type OrganisationAccountType,
-  type SignupAccountType,
-} from "@/lib/auth/account-types";
-import {
   getFormattedProvinceOptions,
   getFormattedDistrictOptions,
   getFormattedSectorOptions,
@@ -29,7 +24,7 @@ import {
 export interface SignUpFormData {
   email: string;
   password: string;
-  accountType: SignupAccountType;
+  accountType: 'individual' | 'company';
   // Company fields
   companyName?: string;
   companyTIN?: string;
@@ -50,14 +45,6 @@ export interface SignUpFormData {
   village?: string;
   address?: string;
 }
-
-const ORGANISATION_ACCOUNT_TYPE_LABELS: Record<OrganisationAccountType, string> = {
-  company: "Company",
-  cooperative: "Cooperative",
-  organization: "Organization",
-  institution: "Institution",
-  ngo_association: "NGO / Association",
-};
 
 interface SignUpFormProps {
   onContinue: (data: SignUpFormData) => void;
@@ -84,8 +71,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const [email, setEmail] = useState(initialData?.email || "");
   const [password, setPassword] = useState(initialData?.password || "");
   const [showPassword, setShowPassword] = useState(false);
-  const [accountType, setAccountType] = useState<SignupAccountType>(initialData?.accountType || "company");
-  const isOrganisationAccount = accountType !== "individual";
+  const [accountType, setAccountType] = useState<'individual' | 'company'>(initialData?.accountType || "company");
   
   // Local state
   const [localError, setLocalError] = useState<string>("");
@@ -406,7 +392,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     }
 
     // Validate account-specific fields
-    if (isOrganisationAccount) {
+    if (accountType === 'company') {
       if (!companyName.trim()) {
         setLocalError(tx("Organisation name is required."));
         return;
@@ -439,7 +425,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       email,
       password,
       accountType,
-      ...(isOrganisationAccount 
+      ...(accountType === 'company' 
         ? { 
             companyName, 
             companyTIN, 
@@ -560,7 +546,7 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   const showIndividualDetails = !showNidaFirstStep || nidaVerified;
   const showIndividualCredentials = !showNidaFirstStep || nidaVerified;
 
-  const showRraFirstStep = isOrganisationAccount && rraEnabled;
+  const showRraFirstStep = accountType === "company" && rraEnabled;
   const showCompanyDetails = !showRraFirstStep || rraVerified;
 
   return (
@@ -612,46 +598,20 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
             </div>
           )}
           <Tabs 
-            value={isOrganisationAccount ? "organisation" : "individual"}
+            defaultValue={accountType} 
             onValueChange={(value) => {
-              setAccountType(value === "individual" ? "individual" : "company");
+              setAccountType(value as 'individual' | 'company');
               if (error) onClearError?.();
             }} 
             className="w-full"
           >
             <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="organisation">{tx("Organisation")}</TabsTrigger>
+              <TabsTrigger value="company">{tx("Organisation")}</TabsTrigger>
               <TabsTrigger value="individual">{tx("Individual")}</TabsTrigger>
             </TabsList>
             
-            <TabsContent value="organisation">
+            <TabsContent value="company">
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="organisationType">{tx("Organisation Type")}</Label>
-                  <Select
-                    value={accountType}
-                    onValueChange={(value) => {
-                      setAccountType(value as OrganisationAccountType);
-                      if (error) onClearError?.();
-                    }}
-                    disabled={isLoading}
-                  >
-                    <SelectTrigger id="organisationType">
-                      <SelectValue placeholder={tx("Select organisation type")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ORGANISATION_ACCOUNT_TYPES.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {tx(ORGANISATION_ACCOUNT_TYPE_LABELS[type])}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {tx("Choose the legal category that matches your registration certificate.")}
-                  </p>
-                </div>
-
                 {showRraFirstStep && !rraVerified ? (
                   <div className="rounded-xl border bg-muted/30 p-4">
                     <div className="mb-3">

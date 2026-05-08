@@ -17,7 +17,7 @@ export type Json =
 
 export type UserRole = 'applicant' | 'assessor' | 'reviewer' | 'verifier' | 'inspector' | 'admin' | 'approver'
 export type UserStatus = 'active' | 'inactive' | 'suspended'
-export type AccountType = 'individual' | 'company' | 'cooperative' | 'organization' | 'institution' | 'ngo_association'
+export type AccountType = 'individual' | 'company' | 'cooperative' | 'organization' | 'institution'
 export type IdType = 'national_id' | 'tin'
 
 export type ApplicationStatus = 
@@ -968,7 +968,7 @@ export interface RoleDelegation {
   revoker?: User | null
 }
 
-export interface RoleDelegationWithUsers extends Omit<RoleDelegation, 'delegator' | 'delegate' | 'revoker'> {
+export interface RoleDelegationWithUsers extends RoleDelegation {
   delegator: {
     id: string
     email: string

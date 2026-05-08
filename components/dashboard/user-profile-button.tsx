@@ -13,7 +13,6 @@ import { User, FileText, Settings, Shield } from "lucide-react";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
-import { isOrganisationAccountType } from "@/lib/auth/account-types";
 
 export function UserProfileButton() {
   const { user, userProfile, isAuthenticated } = useAuth();
@@ -23,14 +22,14 @@ export function UserProfileButton() {
   }
 
   const getDisplayName = () => {
-    if (isOrganisationAccountType(userProfile.account_type)) {
-      return userProfile.company_name || "Organisation";
+    if (userProfile.account_type === 'company') {
+      return userProfile.company_name || "Company";
     }
     return `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim() || "User";
   };
 
   const getInitials = () => {
-    if (isOrganisationAccountType(userProfile.account_type) && userProfile.company_name) {
+    if (userProfile.account_type === 'company' && userProfile.company_name) {
       return userProfile.company_name.split(' ').map(word => word[0]).join('').slice(0, 2).toUpperCase();
     }
     

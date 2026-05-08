@@ -55,7 +55,7 @@ export default function RegisterPage() {
         readStringProp(formDataRecord, "company_phone_number");
 
       const phoneNumber = normalizeRwandaPhone(
-        formData.accountType !== 'individual' ? rawCompanyPhone : formData.phone
+        formData.accountType === 'company' ? rawCompanyPhone : formData.phone
       );
 
       if (!phoneNumber) {
