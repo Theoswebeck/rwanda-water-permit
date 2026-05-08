@@ -12,6 +12,25 @@ import {
 import { getResolvedContractTerms } from "@/lib/document-slots";
 import type { PermitApplication } from "@/lib/permit/permit-text-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ABSTRACTION_METHODS } from "@/components/dashboard/bulk-networks-table";
+import type { BulkNetworkRow } from "@/types/database";
+
+function resolveBulkNetworks(application: ApplicationForContract | null): BulkNetworkRow[] | null {
+  if (!application) return null;
+  const app = application as Record<string, unknown>;
+  if (!app.is_bulk) return null;
+  const notes = app.internal_notes as Record<string, unknown> | null | undefined;
+  if (notes && typeof notes === "object") {
+    const adj = (notes as Record<string, unknown>)._assessorAdjustments as Record<string, unknown> | null | undefined;
+    if (adj && Array.isArray(adj.bulkNetworks) && adj.bulkNetworks.length > 0) {
+      return adj.bulkNetworks as BulkNetworkRow[];
+    }
+  }
+  if (Array.isArray(app.bulk_networks) && (app.bulk_networks as unknown[]).length > 0) {
+    return app.bulk_networks as BulkNetworkRow[];
+  }
+  return null;
+}
 
 type Mode = "public" | "staff-preview";
 
@@ -160,6 +179,8 @@ export function ContractTermsPreview({
     </div>
   );
 
+  const bulkNetworks = resolveBulkNetworks(application);
+
   const body = (
     <div className="px-8 pb-10 pt-6">
       {error && mode === "public" ? (
@@ -233,6 +254,49 @@ export function ContractTermsPreview({
               <div className="text-sm font-semibold text-amber-900">{importantNotice.title}</div>
               <div className="mt-2 text-sm text-amber-900 whitespace-pre-wrap">
                 {importantNotice.body}
+              </div>
+            </div>
+          ) : null}
+
+          {bulkNetworks && bulkNetworks.length > 0 ? (
+            <div className="space-y-3 pt-2">
+              <div className="border-t pt-4">
+                <div className="text-sm font-bold text-slate-900 mb-1">Annex — Distribution Networks</div>
+                <div className="text-xs text-slate-500 mb-3">
+                  The following water distribution networks are covered under this permit.
+                </div>
+                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 w-8">#</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Network Name</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Sector</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Cell</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Village</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Coordinates</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Capacity (m³/day)</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Abstraction Method</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkNetworks.map((row, i) => (
+                        <tr key={i} className="border-t border-gray-200">
+                          <td className="px-3 py-2 text-gray-500 font-mono">{row.number}</td>
+                          <td className="px-3 py-2">{row.network_name}</td>
+                          <td className="px-3 py-2">{row.sector}</td>
+                          <td className="px-3 py-2">{row.cell}</td>
+                          <td className="px-3 py-2">{row.village ?? ""}</td>
+                          <td className="px-3 py-2 font-mono">{row.coordinates ?? ""}</td>
+                          <td className="px-3 py-2">{row.capacity_m3_day ?? ""}</td>
+                          <td className="px-3 py-2">
+                            {ABSTRACTION_METHODS.find((m) => m.value === row.abstraction_method)?.label ?? row.abstraction_method ?? ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           ) : null}
