@@ -762,18 +762,26 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const lineGap = 1.0;
   const paraGap = 4;
 
+  // Resolve networks early so we can adjust para_4 text accordingly
+  const networks = resolveBulkNetworks(app);
+  const hasNetworks = networks.length > 0;
+
   // Reuse the abstraction_organization body slots (same bilingual structure)
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
     resolveSlotText("permit.abstraction_organization.en.para_2", ctx),
     resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
-    "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract. The list of authorized distribution networks is provided in the Annex.",
+    hasNetworks
+      ? "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract. The list of authorized distribution networks is provided in the Annex."
+      : "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract.",
   ];
   const rwParagraphs = [
     resolveSlotText("permit.abstraction_organization.rw.para_1", ctx),
     resolveSlotText("permit.abstraction_organization.rw.para_2", ctx),
     resolveSlotText("permit.abstraction_organization.rw.para_3", ctx),
-    "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye. Urutonde rw'amashyamba y'amazi yemerewe ruragaragara mu Umugereka.",
+    hasNetworks
+      ? "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye. Urutonde rw'amashyamba y'amazi yemerewe ruragaragara mu Umugereka."
+      : "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye.",
   ];
 
   y += 2;
@@ -804,8 +812,7 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
 
   // ─── Annex page: distribution networks table ────────────────────────────
-  const networks = resolveBulkNetworks(app);
-  if (networks.length > 0) {
+  if (hasNetworks) {
     doc.addPage();
     await drawWatermark(doc);
 

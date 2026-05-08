@@ -2,9 +2,10 @@
 -- 1. users: flag for bulk applicants (e.g. WASAC GROUP LTD)
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS is_bulk_applicant boolean NOT NULL DEFAULT false;
 
--- 2. applications: bulk flag + network rows JSONB array
+-- 2. applications: bulk flag + network rows JSONB array + district selection
 ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS is_bulk boolean NOT NULL DEFAULT false;
 ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS bulk_networks jsonb;
+ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS bulk_district text;
 
 -- 3. permits: parent/child relationship for bulk permits
 ALTER TABLE public.permits ADD COLUMN IF NOT EXISTS parent_permit_id uuid REFERENCES public.permits(id);

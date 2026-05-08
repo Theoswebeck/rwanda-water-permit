@@ -600,6 +600,10 @@ export default function TermsConditionsPage() {
       if (!applicationData) {
         throw new Error('Application not found');
       }
+      // Status gate: only approved_pending_permit applications can proceed to issuance
+      if (applicationData.status !== 'approved_pending_permit') {
+        throw new Error(`Application status is '${applicationData.status}' — only approved_pending_permit applications can have their terms accepted.`);
+      }
       console.log('✅ Application data loaded:', applicationData.application_number);
 
       // Resolve the issuance-date base. Priority: applications.approved_at
@@ -1270,6 +1274,19 @@ export default function TermsConditionsPage() {
         console.log('📝 Creating NEW permit in database...');
         console.log('📊 Using assessor-approved terms — duration:', resolvedDurationYearsGlobal, 'years, volume:', resolvedVolumeM3, 'm³');
 
+        // Validate bulk applications have at least one network before issuing
+        if (applicationData.is_bulk) {
+          const adjNetworks = parsedNotes?._assessorAdjustments?.bulkNetworks;
+          const networkCount = Array.isArray(adjNetworks)
+            ? adjNetworks.length
+            : Array.isArray(applicationData.bulk_networks)
+              ? applicationData.bulk_networks.length
+              : 0;
+          if (networkCount === 0) {
+            throw new Error('Cannot issue a bulk permit with no distribution networks. Please ensure network rows are saved before accepting terms.');
+          }
+        }
+
         const newIssuedDate = issuanceBaseDateOnly;
         const newExpiryDate = computeExpiryDateOnly(resolvedDurationYearsGlobal);
 
@@ -1337,61 +1354,72 @@ export default function TermsConditionsPage() {
 
           if (rawNetworks.length > 0) {
             console.log(`🔗 Creating ${rawNetworks.length} child permits for bulk application`);
+            const createdChildIds: string[] = [];
+            let childCreationFailed = false;
+
             for (let i = 0; i < rawNetworks.length; i++) {
               const network = rawNetworks[i];
               const childPermitNumber = buildChildPermitNumber(permitData.permit_number, i + 1);
-              try {
-                const { data: childPermit, error: childError } = await supabase
-                  .from('permits')
-                  .insert({
-                    application_id: applicationId,
-                    parent_permit_id: permitData.id,
-                    network_sequence_index: i + 1,
-                    permit_number: childPermitNumber,
-                    status: 'active',
-                    water_source: applicationData.water_source,
-                    purpose: applicationData.water_purpose,
-                    water_allowance: network.capacity_m3_day ?? null,
-                    allowance_unit: 'm³/day',
-                    issuing_authority: 'Rwanda Water Resources Board',
-                    issued_date: newIssuedDate,
-                    expiry_date: newExpiryDate,
-                    conditions: {
-                      network_name: network.network_name,
-                      sector: network.sector,
-                      cell: network.cell,
-                      village: network.village,
-                      coordinates: network.coordinates,
-                      abstraction_method: network.abstraction_method,
-                    },
-                  } as any)
-                  .select('id, permit_number')
-                  .single() as { data: any; error: any };
+              const { data: childPermit, error: childError } = await supabase
+                .from('permits')
+                .insert({
+                  application_id: applicationId,
+                  parent_permit_id: permitData.id,
+                  network_sequence_index: i + 1,
+                  permit_number: childPermitNumber,
+                  status: 'active',
+                  water_source: applicationData.water_source,
+                  purpose: applicationData.water_purpose,
+                  water_allowance: network.capacity_m3_day ?? null,
+                  allowance_unit: 'm³/day',
+                  issuing_authority: 'Rwanda Water Resources Board',
+                  issued_date: newIssuedDate,
+                  expiry_date: newExpiryDate,
+                  conditions: {
+                    network_name: network.network_name,
+                    sector: network.sector,
+                    cell: network.cell,
+                    village: network.village,
+                    coordinates: network.coordinates,
+                    abstraction_method: network.abstraction_method,
+                  },
+                } as any)
+                .select('id, permit_number')
+                .single() as { data: any; error: any };
 
-                if (childError) {
-                  console.warn(`⚠️ Failed to create child permit ${childPermitNumber}:`, childError);
-                } else {
-                  console.log(`✅ Child permit created: ${childPermit?.permit_number}`);
-                  // Sync child to registry (non-blocking) — points to parent for PDF
-                  syncRegistryViaApi(childPermitNumber, {
-                    status: 'active',
-                    permit_holder: permitHolder,
-                    location: network.sector
-                      ? [network.village, network.cell, network.sector].filter(Boolean).join(', ')
-                      : registrySyncLocation,
-                    water_source: applicationData.water_source || undefined,
-                    authorized_activity: applicationData.water_purpose || undefined,
-                    volume_or_area: network.capacity_m3_day ? String(network.capacity_m3_day) : undefined,
-                    issuance_date: newIssuedDate,
-                    expiration_date: newExpiryDate || undefined,
-                    duration: `${resolvedDurationYearsGlobal} years`,
-                    contact: registrySyncContact,
-                    method_of_water_taking: network.abstraction_method || applicationData.water_taking_method || undefined,
-                  }).catch(err => console.warn(`⚠️ registry-sync (child ${childPermitNumber}) failed:`, err));
-                }
-              } catch (childErr) {
-                console.warn(`⚠️ Exception creating child permit ${childPermitNumber}:`, childErr);
+              if (childError) {
+                console.error(`❌ Failed to create child permit ${childPermitNumber}:`, childError);
+                childCreationFailed = true;
+                break;
               }
+              createdChildIds.push(childPermit.id);
+              console.log(`✅ Child permit created: ${childPermit?.permit_number}`);
+              // Sync child to registry (non-blocking) — points to parent for PDF
+              syncRegistryViaApi(childPermitNumber, {
+                status: 'active',
+                permit_holder: permitHolder,
+                location: network.sector
+                  ? [network.village, network.cell, network.sector].filter(Boolean).join(', ')
+                  : registrySyncLocation,
+                water_source: applicationData.water_source || undefined,
+                authorized_activity: applicationData.water_purpose || undefined,
+                volume_or_area: network.capacity_m3_day ? String(network.capacity_m3_day) : undefined,
+                issuance_date: newIssuedDate,
+                expiration_date: newExpiryDate || undefined,
+                duration: `${resolvedDurationYearsGlobal} years`,
+                contact: registrySyncContact,
+                method_of_water_taking: network.abstraction_method || applicationData.water_taking_method || undefined,
+              }).catch(err => console.warn(`⚠️ registry-sync (child ${childPermitNumber}) failed:`, err));
+            }
+
+            // Rollback parent + created children if any child insert failed
+            if (childCreationFailed) {
+              const idsToDelete = [permitData.id, ...createdChildIds].filter(Boolean);
+              await supabase.from('permits').delete().in('id', idsToDelete).then(
+                () => console.log(`🧹 Rolled back ${idsToDelete.length} permit(s) after child creation failure`),
+                (err: unknown) => console.error('❌ Rollback failed:', err),
+              );
+              throw new Error('Failed to create all child permits. The permit was rolled back — please try again.');
             }
           }
         }

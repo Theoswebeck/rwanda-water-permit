@@ -587,10 +587,13 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       modification_changes: formData.modificationChanges,
     } : {}),
 
-    // Bulk applicant fields
-    is_bulk: !!(formData as any).bulk_networks,
-    ...(Array.isArray((formData as any).bulk_networks) ? { bulk_networks: (formData as any).bulk_networks } : {}),
-    ...((formData as any).bulk_district ? { bulk_district: (formData as any).bulk_district } : {}),
+    // Bulk applicant fields — only set when bulk_networks is a non-empty array,
+    // preventing non-bulk payloads from accidentally triggering the bulk permit path
+    ...(Array.isArray((formData as any).bulk_networks) && (formData as any).bulk_networks.length > 0 ? {
+      is_bulk: true,
+      bulk_networks: (formData as any).bulk_networks,
+      ...((formData as any).bulk_district ? { bulk_district: (formData as any).bulk_district } : {}),
+    } : {}),
 
     // SLA tracking
     sla_status: 'on_time' as const,

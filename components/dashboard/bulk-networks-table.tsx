@@ -232,7 +232,7 @@ export function BulkNetworksTable({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={showPermitNumbers ? 10 : 9}
+                  colSpan={8 + (showPermitNumbers ? 1 : 0) + (canAddDelete ? 1 : 0)}
                   className="px-3 py-6 text-center text-gray-400 text-sm"
                 >
                   No network rows. Click &quot;Add Row&quot; to add networks.

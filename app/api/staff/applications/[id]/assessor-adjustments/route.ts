@@ -189,7 +189,44 @@ export async function POST(
           { status: 400 },
         );
       }
-      patch.bulkNetworks = body.bulkNetworks as BulkNetworkRow[];
+      if (body.bulkNetworks.length > 500) {
+        return NextResponse.json(
+          { success: false, message: "bulkNetworks may not exceed 500 items" },
+          { status: 400 },
+        );
+      }
+      const truncStr = (v: unknown, max = 255): string =>
+        typeof v === "string" ? v.slice(0, max) : "";
+      let validatedNetworks: BulkNetworkRow[];
+      try {
+        validatedNetworks = (body.bulkNetworks as unknown[]).map((item: unknown, idx: number) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) {
+            throw new Error(`bulkNetworks[${idx}] must be an object`);
+          }
+          const raw = item as Record<string, unknown>;
+          const cap = raw.capacity_m3_day;
+          const capNum = cap != null ? Number(cap) : undefined;
+          if (cap != null && (typeof capNum !== "number" || !Number.isFinite(capNum) || capNum < 0)) {
+            throw new Error(`bulkNetworks[${idx}].capacity_m3_day must be a non-negative number`);
+          }
+          return {
+            number: raw.number != null ? Number(raw.number) : idx + 1,
+            network_name: truncStr(raw.network_name),
+            sector: truncStr(raw.sector),
+            cell: truncStr(raw.cell),
+            village: truncStr(raw.village),
+            coordinates: truncStr(raw.coordinates),
+            capacity_m3_day: cap != null ? capNum : undefined,
+            abstraction_method: truncStr(raw.abstraction_method),
+          };
+        });
+      } catch (valErr) {
+        return NextResponse.json(
+          { success: false, message: valErr instanceof Error ? valErr.message : "Invalid bulkNetworks item" },
+          { status: 400 },
+        );
+      }
+      patch.bulkNetworks = validatedNetworks;
     }
 
     if (

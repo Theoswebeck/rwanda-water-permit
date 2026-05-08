@@ -114,6 +114,10 @@ export async function findPublicPermitByNumber(
     );
     if (parentRes.rows[0]) {
       permitRow = parentRes.rows[0] as typeof permitRow;
+    } else {
+      // Parent was deleted — clear child_permit_number so the view doesn't show a confusing notice
+      childPermitNumber = null;
+      console.warn(`[public-permit-query] Child permit references deleted parent ${permitRow.parent_permit_id}`);
     }
   }
 
