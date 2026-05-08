@@ -59,6 +59,71 @@ const ORGANISATION_ACCOUNT_TYPE_LABELS: Record<OrganisationAccountType, string> 
   ngo_association: "NGO / Association",
 };
 
+/** Signup hints and field labels — keyed by legal entity type (English source strings for i18n). */
+const ORGANISATION_SIGNUP_COPY: Record<
+  OrganisationAccountType,
+  {
+    typeHelper: string;
+    tinIntro: string;
+    nameLabel: string;
+    addressLabel: string;
+    phoneLabel: string;
+    nameRequired: string;
+    addressRequired: string;
+  }
+> = {
+  company: {
+    typeHelper:
+      "Use this for a company (e.g. Ltd, PLC). Enter the registered name, TIN, and address exactly as on your RDB / certificate.",
+    tinIntro: "Enter your company's 9-digit TIN (RRA / tax identification).",
+    nameLabel: "Registered company name",
+    addressLabel: "Registered office address",
+    phoneLabel: "Company phone (main contact)",
+    nameRequired: "Registered company name is required.",
+    addressRequired: "Registered office address is required.",
+  },
+  cooperative: {
+    typeHelper:
+      "For a cooperative, use the legal name and details as registered for the cooperative (e.g. RDB / sector registration).",
+    tinIntro: "Enter the cooperative's 9-digit TIN.",
+    nameLabel: "Cooperative legal name",
+    addressLabel: "Head office / registered address",
+    phoneLabel: "Cooperative main phone",
+    nameRequired: "Cooperative legal name is required.",
+    addressRequired: "Cooperative address is required.",
+  },
+  organization: {
+    typeHelper:
+      "For other organisations (e.g. associations, foundations), match the legal name and documents for that entity type.",
+    tinIntro: "Enter the organisation's 9-digit TIN.",
+    nameLabel: "Organisation legal name",
+    addressLabel: "Registered address",
+    phoneLabel: "Main contact phone",
+    nameRequired: "Organisation legal name is required.",
+    addressRequired: "Organisation address is required.",
+  },
+  institution: {
+    typeHelper:
+      "For public institutions (schools, hospitals, agencies, etc.), use the official registered name and address for the institution.",
+    tinIntro: "Enter the institution's 9-digit TIN.",
+    nameLabel: "Institution legal name",
+    addressLabel: "Institution address (head office)",
+    phoneLabel: "Institution main phone",
+    nameRequired: "Institution legal name is required.",
+    addressRequired: "Institution address is required.",
+  },
+  ngo_association: {
+    typeHelper:
+      "For NGOs and associations, use the legal name and registration details from your recognition or incorporation documents.",
+    tinIntro: "Enter the entity's 9-digit TIN.",
+    nameLabel: "NGO / association legal name",
+    addressLabel: "Registered office address",
+    phoneLabel: "Main contact phone",
+    nameRequired: "Legal name is required.",
+    addressRequired: "Registered address is required.",
+  },
+};
+
 interface SignUpFormProps {
   onContinue: (data: SignUpFormData) => void;
   initialData?: SignUpFormData | null;
@@ -98,6 +163,10 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
   /** True only after explicit organisation subtype selection — never defaults to company. */
   const isOrganisationAccount =
     isOnOrganisationTab && organisationLegalType !== null;
+
+  const orgSignupCopy = organisationLegalType
+    ? ORGANISATION_SIGNUP_COPY[organisationLegalType]
+    : null;
 
   
   // Local state
@@ -428,7 +497,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
     // Validate account-specific fields
     if (isOrganisationAccount) {
       if (!companyName.trim()) {
-        setLocalError(tx("Organisation name is required."));
+        setLocalError(
+          tx(ORGANISATION_SIGNUP_COPY[organisationLegalType!].nameRequired)
+        );
         return;
       }
       if (!validateCompanyTIN(companyTIN)) {
@@ -436,7 +507,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
       }
       if (!validateRwandaPhone(companyPhone, setCompanyPhoneError)) return;
       if (!companyAddress.trim()) {
-        setLocalError(tx("Organisation address is required."));
+        setLocalError(
+          tx(ORGANISATION_SIGNUP_COPY[organisationLegalType!].addressRequired)
+        );
         return;
       }
     } else if (accountKind === "individual") {
@@ -677,7 +750,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    {tx("Choose the legal category that matches your registration certificate.")}
+                    {orgSignupCopy
+                      ? tx(orgSignupCopy.typeHelper)
+                      : tx(
+                          "Select a legal entity type. Labels and guidance below will match your choice."
+                        )}
                   </p>
                 </div>
 
@@ -686,7 +763,11 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                     <div className="mb-3">
                       <p className="text-sm font-semibold text-foreground">{tx("Verify TIN to continue")}</p>
                       <p className="text-xs text-muted-foreground">
-                        {tx("Enter your 9-digit TIN. We will fetch your organisation details automatically.")}
+                        {orgSignupCopy
+                          ? tx(orgSignupCopy.tinIntro)
+                          : tx(
+                              "Enter your 9-digit TIN. We will fetch your organisation details automatically."
+                            )}
                       </p>
                     </div>
                     <div className="space-y-2">
@@ -786,7 +867,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       )}
 
                       <div className="space-y-2">
-                        <Label htmlFor="companyName">{tx("Organisation Name")}</Label>
+                        <Label htmlFor="companyName">
+                          {tx(orgSignupCopy?.nameLabel ?? "Organisation Name")}
+                        </Label>
                         <Input
                           id="companyName"
                           type="text"
@@ -801,7 +884,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="companyAddress">{tx("Organisation Address")}</Label>
+                        <Label htmlFor="companyAddress">
+                          {tx(orgSignupCopy?.addressLabel ?? "Organisation Address")}
+                        </Label>
                         <Input
                           id="companyAddress"
                           type="text"
@@ -816,7 +901,9 @@ export function SignUpForm({ onContinue, initialData, isLoading = false, error, 
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="companyPhone">{tx("Organisation Phone Number")}</Label>
+                        <Label htmlFor="companyPhone">
+                          {tx(orgSignupCopy?.phoneLabel ?? "Organisation Phone Number")}
+                        </Label>
                         <Input
                           id="companyPhone"
                           type="tel"
