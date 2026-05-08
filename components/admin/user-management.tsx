@@ -54,7 +54,7 @@ interface User {
   phone?: string;
   role: "applicant" | "assessor" | "reviewer" | "verifier" | "inspector" | "admin" | "approver";
   status: "active" | "inactive" | "suspended";
-  account_type: "individual" | "company" | "cooperative" | "organization" | "institution";
+  account_type: "individual" | "company" | "cooperative" | "organization" | "institution" | "ngo_association";
   first_name?: string;
   last_name?: string;
   company_name?: string;
@@ -70,7 +70,7 @@ const userValidationSchema = z.object({
   phone: z.string().optional(),
   role: z.enum(["applicant", "assessor", "reviewer", "verifier", "inspector", "admin", "approver"]),
   status: z.enum(["active", "inactive", "suspended"]),
-  account_type: z.enum(["individual", "company", "cooperative", "organization", "institution"]),
+  account_type: z.enum(["individual", "company", "cooperative", "organization", "institution", "ngo_association"]),
   first_name: z.string().optional(),
   last_name: z.string().optional(),
   company_name: z.string().optional(),
@@ -81,7 +81,7 @@ const userValidationSchema = z.object({
            data.last_name && data.last_name.trim() !== '';
   }
   // For organizational accounts, company_name is required  
-  if (['company', 'cooperative', 'organization', 'institution'].includes(data.account_type)) {
+  if (['company', 'cooperative', 'organization', 'institution', 'ngo_association'].includes(data.account_type)) {
     return data.company_name && data.company_name.trim() !== '';
   }
   return true;
@@ -129,7 +129,7 @@ export function UserManagement() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const userData = await getAllUsers();
+      const userData = await getAllUsers() as UserType[];
       setUsers(userData.map((user: UserType) => ({
         id: user.id,
         email: user.email,
@@ -263,7 +263,7 @@ export function UserManagement() {
         // For organizational accounts, ensure company_name is not empty
         first_name: data.account_type === 'individual' ? (data.first_name?.trim() || null) : (data.first_name?.trim() || null),
         last_name: data.account_type === 'individual' ? (data.last_name?.trim() || null) : (data.last_name?.trim() || null),
-        company_name: ['company', 'cooperative', 'organization', 'institution'].includes(data.account_type) 
+        company_name: ['company', 'cooperative', 'organization', 'institution', 'ngo_association'].includes(data.account_type)
           ? (data.company_name?.trim() || null) 
           : null, // Set to null for individual accounts
         phone: data.phone?.trim() || null,
@@ -930,6 +930,7 @@ export function UserManagement() {
                           <SelectItem value="cooperative">Cooperative</SelectItem>
                           <SelectItem value="organization">Organization</SelectItem>
                           <SelectItem value="institution">Institution</SelectItem>
+                          <SelectItem value="ngo_association">NGO / Association</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />

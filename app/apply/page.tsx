@@ -113,7 +113,7 @@ export default function ApplyPage() {
       
       // Store the user data for later use
       const phoneNumber = normalizeRwandaPhone(
-        formData.accountType === 'company' ? formData.companyPhone : formData.phone
+        formData.accountType !== 'individual' ? rawCompanyPhone : formData.phone
       );
 
       setUserData({

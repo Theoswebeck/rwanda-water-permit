@@ -58,6 +58,8 @@ import {
 } from "@/lib/i18n/language";
 import enMessages from "@/messages/en.json";
 import rwMessages from "@/messages/rw.json";
+import { isOrganisationAccountType } from "@/lib/auth/account-types";
+import { applyLockedApplicantProfileFields } from "@/lib/application/profile-locked-fields";
 
 const getTranslationMaps = (locale: AppLanguage) => {
   const source = locale === "rw" ? rwMessages : enMessages;
@@ -418,15 +420,14 @@ const applicationFormSchema = z.object({
     message: "You must certify the information is accurate"
   }),
 }).superRefine((data, ctx) => {
-  // Representative name is required for Company, Cooperative, Organization, Institution
-  const companyTypes = ["company", "cooperative", "organization", "institution"];
-  if (companyTypes.includes(data.categoryApplicant ?? "")) {
+  // Representative name is required for legal-entity applicants.
+  if (isOrganisationAccountType(data.categoryApplicant)) {
     const repName = String(data.nameRepresentative ?? "").trim();
     if (repName === "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["nameRepresentative"],
-        message: "Name of the Representative is required for Company, Cooperative, Organization, or Institution.",
+        message: "Name of the Representative is required for legal-entity applicants.",
       });
     }
 
@@ -435,7 +436,7 @@ const applicationFormSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["representativePosition"],
-        message: "Representative position/title is required for Company, Cooperative, Organization, or Institution.",
+        message: "Representative position/title is required for legal-entity applicants.",
       });
     }
   }
@@ -1436,9 +1437,9 @@ export function ApplicationForm({
       if (userProfile.account_type === 'individual') {
         defaults.fullNameApplicant = `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim();
         defaults.categoryApplicant = "individual";
-      } else if (userProfile.account_type === 'company') {
+      } else if (isOrganisationAccountType(userProfile.account_type)) {
         defaults.fullNameApplicant = userProfile.company_name || "";
-        defaults.categoryApplicant = "company";
+        defaults.categoryApplicant = userProfile.account_type;
         defaults.officeCountry = "Rwanda";
         defaults.officePostalAddress = userProfile.company_address || "";
         defaults.telephoneContactOffice = userProfile.company_phone || "";
@@ -1458,16 +1459,8 @@ export function ApplicationForm({
     // Override with any provided initial data
     const merged = { ...defaults, ...initialData };
 
-    // fullNameApplicant always comes from the logged-in user's profile
-    if (userProfile) {
-      if (userProfile.account_type === 'individual') {
-        merged.fullNameApplicant = `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim() || merged.fullNameApplicant;
-      } else if (userProfile.account_type === 'company') {
-        merged.fullNameApplicant = userProfile.company_name || merged.fullNameApplicant;
-      }
-    }
-
-    return merged;
+    // Locked applicant identity fields always come from the logged-in user's profile.
+    return applyLockedApplicantProfileFields(merged, userProfile);
   }, [initialData, userProfile]);
 
   const form = useForm<FormValues>({
@@ -1745,7 +1738,7 @@ export function ApplicationForm({
   // Tab validation functions
   const validateApplicantTab = async () => {
     const categoryApplicant = String(form.getValues('categoryApplicant') ?? '').trim().toLowerCase();
-    const requiresRepresentativeFields = ["company", "cooperative", "organization", "institution"].includes(categoryApplicant);
+    const requiresRepresentativeFields = isOrganisationAccountType(categoryApplicant);
     const fields = [
       'fullNameApplicant', 'categoryApplicant', 'officeProvince', 
       'officeDistrict', 'officeSector', 'officeCell', 'telephoneContact', 'emailAddress'
@@ -2168,7 +2161,7 @@ export function ApplicationForm({
         const fullNameApplicant = form.watch('fullNameApplicant') || form.getValues('fullNameApplicant') || '';
         const categoryApplicant = form.watch('categoryApplicant') || form.getValues('categoryApplicant') || 'individual';
         const normalizedCategoryApplicant = String(categoryApplicant).trim().toLowerCase();
-        const requiresRepresentativeFields = ["company", "cooperative", "organization", "institution"].includes(normalizedCategoryApplicant);
+        const requiresRepresentativeFields = isOrganisationAccountType(normalizedCategoryApplicant);
         const nameRepresentative = String(form.watch('nameRepresentative') || form.getValues('nameRepresentative') || '').trim();
         const representativePosition = String(form.watch('representativePosition') || form.getValues('representativePosition') || '').trim();
         const officeProvince = form.watch('officeProvince') || form.getValues('officeProvince') || '';
@@ -2441,7 +2434,7 @@ export function ApplicationForm({
           return a;
         });
       }
-      form.reset({
+      const resetValues = applyLockedApplicantProfileFields({
         // Start with defaults
         fullNameApplicant: "",
         categoryApplicant: "individual",
@@ -2540,7 +2533,9 @@ export function ApplicationForm({
         certificationAgreement: true,
         // Override with loaded data
         ...normalizedInitialData
-      });
+      } as Partial<FormValues>, userProfile);
+
+      form.reset(resetValues);
 
       // Backwards compatibility: if older data only has waterSourceCoordinates (single polygon),
       // normalize it into the new waterSourcePolygons field.
@@ -2633,7 +2628,7 @@ export function ApplicationForm({
         console.log('📎 No additionalDocuments in initialData:', { has: !!initialData.additionalDocuments, isArray: Array.isArray(initialData.additionalDocuments) });
       }
     }
-  }, [initialData, form]);
+  }, [initialData, form, userProfile]);
 
   // Load initial documents when provided
   useEffect(() => {
@@ -3431,7 +3426,7 @@ export function ApplicationForm({
                   )}
 
                   {/* 3. Name of Representative */}
-                  {["company", "cooperative", "organization", "institution"].includes(watchedCategoryApplicant) && (
+                  {isOrganisationAccountType(watchedCategoryApplicant) && (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <FormField
                         control={form.control}
