@@ -2,11 +2,12 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { User } from "@/types/database";
+import type { SignupAccountType } from "@/lib/auth/account-types";
 
 interface SignUpData {
   email: string;
   password: string;
-  accountType: "individual" | "company";
+  accountType: SignupAccountType;
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;

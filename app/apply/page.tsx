@@ -89,18 +89,20 @@ export default function ApplyPage() {
         email: formData.email,
         password: formData.password,
         accountType: formData.accountType,
-        ...(formData.accountType === 'individual' ? {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          idNumber: formData.idNumber,
-          idType: formData.idType,
-          phone: normalizeRwandaPhone(formData.phone),
-        } : {
-          companyName: formData.companyName,
-          companyTIN: formData.companyTIN,
-          companyAddress: formData.companyAddress,
-          companyPhone: normalizeRwandaPhone(rawCompanyPhone),
-        })
+        ...(formData.accountType === 'individual'
+          ? {
+              firstName: formData.firstName,
+              lastName: formData.lastName,
+              idNumber: formData.idNumber,
+              idType: formData.idType,
+              phone: normalizeRwandaPhone(formData.phone),
+            }
+          : {
+              companyName: formData.companyName,
+              companyTIN: formData.companyTIN,
+              companyAddress: formData.companyAddress,
+              companyPhone: normalizeRwandaPhone(rawCompanyPhone),
+            })
       };
 
       const result = await signUp(signUpData);
@@ -113,7 +115,7 @@ export default function ApplyPage() {
       
       // Store the user data for later use
       const phoneNumber = normalizeRwandaPhone(
-        formData.accountType === 'company' ? formData.companyPhone : formData.phone
+        formData.accountType !== 'individual' ? rawCompanyPhone : formData.phone
       );
 
       setUserData({
