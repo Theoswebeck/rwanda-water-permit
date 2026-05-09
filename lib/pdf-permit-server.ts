@@ -112,6 +112,16 @@ function contentBottomY(doc: PDFKit.PDFDocument): number {
  */
 const PERMIT_MARGIN_X = 12 * PT;
 
+/**
+ * Extra horizontal inset for "Director General / Umuyobozi Mukuru" below the
+ * body margin so the closing row reads as a formal signature block (nested
+ * under the paragraphs above). Uses the same mm-based `PT` scale as
+ * {@link PERMIT_MARGIN_X}.
+ */
+const CLOSING_SIGNATORY_INDENT = 10 * PT;
+/** Gap between signatory column and date column. */
+const CLOSING_COLUMNS_GAP = 6 * PT;
+
 function drawPageBorder(doc: PDFKit.PDFDocument): void {
   const inset = 5 * PT;
   const borderW = pageWidth(doc) - inset * 2;
@@ -443,10 +453,16 @@ function drawClosingLine(
   ctx: SlotResolverContext,
 ): number {
   const pw = pageWidth(doc);
-  const marginX = 24 * PT;
-  const colW = (pw - marginX * 2) / 2 - 4 * PT;
-  const leftX = marginX;
-  const rightX = pw / 2 + 4 * PT;
+  const m = PERMIT_MARGIN_X;
+  const innerW = pw - 2 * m;
+  const colW = (innerW - CLOSING_COLUMNS_GAP) / 2;
+
+  // Same outer margin as body text; signatory title indented further in for a
+  // clear signature-block alignment (not flush with the paragraph block edge).
+  const signatoryX = m + CLOSING_SIGNATORY_INDENT;
+  const signatoryW = Math.max(40, colW - CLOSING_SIGNATORY_INDENT);
+
+  const dateX = m + colW + CLOSING_COLUMNS_GAP;
 
   doc.fontSize(11).fillColor("#000000");
   // Signatory stays bold (matches the sample's "Director General/ Umuyobozi
@@ -456,12 +472,16 @@ function drawClosingLine(
   doc.font(FONT_BOLD);
   doc.text(
     stripBoldMarkers(resolveSlotText("permit.shared.closing.signatory.bilingual", ctx)),
-    leftX, yPos, { width: colW, align: "left" },
+    signatoryX,
+    yPos,
+    { width: signatoryW, align: "left" },
   );
   doc.font(FONT_REGULAR);
   doc.text(
     stripBoldMarkers(resolveSlotText("permit.shared.closing.date.bilingual", ctx)),
-    rightX, yPos, { width: colW, align: "right" },
+    dateX,
+    yPos,
+    { width: colW, align: "right" },
   );
   return yPos + 16;
 }
