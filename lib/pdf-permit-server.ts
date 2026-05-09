@@ -85,6 +85,15 @@ function pageHeight(doc: PDFKit.PDFDocument): number {
 const FOOTER_TOP_OFFSET = 32 * PT;
 const BODY_BOTTOM_PAD = 2 * PT;
 
+/**
+ * Body vertical rhythm (PDF points, not mm). Smaller = tighter blocks without
+ * changing fonts. Used by all variant renderers so EN/RW spacing stays consistent.
+ */
+const PERMIT_PARA_GAP_PT = 2;
+const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 2;
+const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 3;
+const PERMIT_BEFORE_CLOSING_PT = 4;
+
 function contentBottomY(doc: PDFKit.PDFDocument): number {
   // Reserve = footer height (38pt) + small visual breathing room (2pt).
   // Earlier revisions tightened this to 28pt to win vertical space, but that
@@ -480,7 +489,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 10;
   const lineGap = 1.0;
-  const paraGap = 4;
+  const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
     resolveSlotText("permit.concession_individual.en.para_1", ctx),
@@ -505,9 +514,9 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
+  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
   doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += 6;
+  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -518,7 +527,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
-  y += 6;
+  y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -545,7 +554,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 10;
   const lineGap = 1.0;
-  const paraGap = 4;
+  const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_individual.en.para_1", ctx),
@@ -570,9 +579,9 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
+  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
   doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += 6;
+  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -582,7 +591,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 6;
+  y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -612,7 +621,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   // page 2 after the inline-bold expansion grew them by ~1 line each.
   const fontSize = 11;
   const lineGap = 1.0;
-  const paraGap = 4;
+  const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
@@ -637,9 +646,9 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
+  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
   doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += 6;
+  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -657,7 +666,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     await drawWatermark(doc);
     y = 30 * PT;
   }
-  y += 6;
+  y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -684,7 +693,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 10;
   const lineGap = 1.0;
-  const paraGap = 4;
+  const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
     resolveSlotText("permit.concession_organization.en.para_1", ctx),
@@ -709,9 +718,9 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
+  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
   doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += 6;
+  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -721,7 +730,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 6;
+  y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
@@ -760,7 +769,7 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 11;
   const lineGap = 1.0;
-  const paraGap = 4;
+  const paraGap = PERMIT_PARA_GAP_PT;
 
   // Resolve networks early so we can adjust para_4 text accordingly
   const networks = resolveBulkNetworks(app);
@@ -794,9 +803,9 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 4;
+  y += PERMIT_EN_RW_RULE_PAD_BEFORE_PT;
   doc.moveTo(leftX, y).lineTo(leftX + maxW, y).lineWidth(0.6).stroke("#1f2937");
-  y += 6;
+  y += PERMIT_EN_RW_RULE_PAD_AFTER_PT;
 
   for (const p of rwParagraphs) {
     const h = heightOfRichText(doc, p, { width: maxW, lineGap });
@@ -806,7 +815,7 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   }
 
   if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
-  y += 6;
+  y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
   if (opts.skipQr) { drawPreviewBanner(doc, ctx); } else { await drawQrFooter(doc, permitNumber, ctx); }
