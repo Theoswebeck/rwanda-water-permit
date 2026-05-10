@@ -119,6 +119,7 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/dashboard') &&
       !pathname.startsWith('/dashboard/profile') &&
       !pathname.startsWith('/dashboard/settings') &&
+      !pathname.startsWith('/dashboard/new-application') &&
       normalizedRole !== 'applicant'
     ) {
       return NextResponse.redirect(new URL(ROLE_DASHBOARDS[normalizedRole] || '/dashboard', request.url))
