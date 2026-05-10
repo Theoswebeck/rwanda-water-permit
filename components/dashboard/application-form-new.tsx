@@ -6124,7 +6124,7 @@ export function ApplicationForm({
                           District
                         </label>
                         <div className="px-3 py-2 rounded-md border bg-white/60 text-sm text-violet-900 dark:text-violet-100">
-                          {form.watch("waterSourceDistrict") || <span className="text-violet-400 italic">Set via Water Source → Location (question 13)</span>}
+                          {form.watch("waterSourceDistrict") || <span className="text-violet-400 italic">Not yet selected</span>}
                         </div>
                       </div>
                       <BulkNetworksTable rows={bulkNetworks} onChange={readOnly ? undefined : setBulkNetworks} mode={readOnly ? "readonly" : "editable"} />
