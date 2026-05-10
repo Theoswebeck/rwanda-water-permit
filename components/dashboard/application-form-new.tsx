@@ -1007,7 +1007,6 @@ export function ApplicationForm({
     if (!isBulkApplicant) return [];
     return Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1));
   });
-  const [bulkDistrict, setBulkDistrict] = useState<string>((initialData as any)?.bulk_district ?? "");
   useEffect(() => {
     if (isBulkApplicant && bulkNetworks.length === 0) {
       setBulkNetworks(Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1)));
@@ -2344,7 +2343,13 @@ export function ApplicationForm({
         }
         
         if (!hasActivityFields) return true;
-        
+
+        if (isBulkApplicant) {
+          const district = form.watch('waterSourceDistrict') || form.getValues('waterSourceDistrict') || '';
+          if (!district.trim()) return true;
+          if (!bulkNetworks.some((r) => r.network_name?.trim())) return true;
+        }
+
         const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities'];
         const isPureConcessionAct = intendedActivities.some((a: string) => pureConcessionActs.includes(a));
         const savedCat = form.getValues('waterUseCategory');
@@ -3203,7 +3208,7 @@ export function ApplicationForm({
         ...values,
         ...files,
         additionalDocuments,
-        ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
+        ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
         // Include modification-specific data
         ...(isModification && {
           isModification: true,
@@ -6115,19 +6120,12 @@ export function ApplicationForm({
                         </div>
                       </div>
                       <div className="max-w-xs">
-                        <label className="block text-sm font-medium text-violet-900 dark:text-violet-100 mb-2">
-                          District <span className="text-red-500">*</span>
+                        <label className="block text-sm font-medium text-violet-900 dark:text-violet-100 mb-1">
+                          District
                         </label>
-                        <Select value={bulkDistrict} onValueChange={readOnly ? undefined : setBulkDistrict} disabled={readOnly}>
-                          <SelectTrigger className="bg-white dark:bg-gray-800">
-                            <BaseSelectValue placeholder="Select district" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {getFormattedDistrictOptions("").map((opt) => (
-                              <BaseSelectItem key={opt.value} value={opt.value}>{opt.label}</BaseSelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="px-3 py-2 rounded-md border bg-white/60 text-sm text-violet-900 dark:text-violet-100">
+                          {form.watch("waterSourceDistrict") || <span className="text-violet-400 italic">Set via Water Source → Location (question 13)</span>}
+                        </div>
                       </div>
                       <BulkNetworksTable rows={bulkNetworks} onChange={readOnly ? undefined : setBulkNetworks} mode={readOnly ? "readonly" : "editable"} />
                     </div>
@@ -6520,7 +6518,7 @@ export function ApplicationForm({
                             ...form.getValues(),
                             ...files,
                             additionalDocuments,
-                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
+                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
                             ...(isModification ? {
                               isModification: true,
                               modificationChanges: modificationChangesData,
@@ -6555,7 +6553,7 @@ export function ApplicationForm({
                             ...form.getValues(),
                             ...files,
                             additionalDocuments,
-                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
+                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
                             ...(isModification && {
                               isModification: true,
                               modificationChanges: modificationChangesData,
@@ -6650,7 +6648,7 @@ export function ApplicationForm({
                                 ...form.getValues(),
                                 ...files,
                                 additionalDocuments,
-                                ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
+                                ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
                                 ...(isModification ? {
                                   isModification: true,
                                   modificationChanges: modificationChangesData,
