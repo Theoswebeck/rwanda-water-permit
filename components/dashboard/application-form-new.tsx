@@ -3943,10 +3943,13 @@ export function ApplicationForm({
                         name="waterSourceProvince"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>{tx("Province *")}</FormLabel>
+                            <FormLabel>
+                              {tx("Province *")}
+                              {isBulkApplicant && <span className="ml-2 text-xs text-muted-foreground font-normal">(set in Water Supply Networks)</span>}
+                            </FormLabel>
                             <FormControl>
-                              <Select 
-                                onValueChange={readOnly ? undefined : (value) => {
+                              <Select
+                                onValueChange={readOnly || isBulkApplicant ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceProvince(value);
                                   // Reset dependent fields
@@ -3957,11 +3960,11 @@ export function ApplicationForm({
                                   form.clearErrors(["waterSourceProvince", "waterSourceDistrict", "waterSourceSector", "waterSourceCell"]);
                                   setSelectedWaterSourceDistrict("");
                                   setSelectedWaterSourceSector("");
-                                }} 
+                                }}
                                 value={field.value}
-                                disabled={readOnly}
+                                disabled={readOnly || isBulkApplicant}
                               >
-                                <SelectTrigger className={`bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                <SelectTrigger className={`bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400 ${(readOnly || isBulkApplicant) ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={tx("Select province")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3977,16 +3980,19 @@ export function ApplicationForm({
                           </FormItem>
                         )}
                       />
-                      
+
                       <FormField
                         control={form.control}
                         name="waterSourceDistrict"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>{tx("District *")}</FormLabel>
+                            <FormLabel>
+                              {tx("District *")}
+                              {isBulkApplicant && <span className="ml-2 text-xs text-muted-foreground font-normal">(set in Water Supply Networks)</span>}
+                            </FormLabel>
                             <FormControl>
-                              <Select 
-                                onValueChange={readOnly ? undefined : (value) => {
+                              <Select
+                                onValueChange={readOnly || isBulkApplicant ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceDistrict(value);
                                   // Reset dependent fields
@@ -3997,9 +4003,9 @@ export function ApplicationForm({
                                   setSelectedWaterSourceSector("");
                                 }}
                                 value={field.value}
-                                disabled={readOnly || !selectedWaterSourceProvince}
+                                disabled={readOnly || isBulkApplicant || !selectedWaterSourceProvince}
                               >
-                                <SelectTrigger className={`bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                <SelectTrigger className={`bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400 ${(readOnly || isBulkApplicant) ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={selectedWaterSourceProvince ? tx("Select district") : tx("Select province first")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -6116,18 +6122,78 @@ export function ApplicationForm({
                         </div>
                         <div>
                           <h3 className="text-lg font-semibold text-violet-900 dark:text-violet-100">Water Supply Networks</h3>
-                          <p className="text-sm text-violet-700 dark:text-violet-300">All networks share the selected district</p>
+                          <p className="text-sm text-violet-700 dark:text-violet-300">Select the district for all networks, then fill in each network&apos;s details below.</p>
                         </div>
                       </div>
-                      <div className="max-w-xs">
-                        <label className="block text-sm font-medium text-violet-900 dark:text-violet-100 mb-1">
-                          District
-                        </label>
-                        <div className="px-3 py-2 rounded-md border bg-white/60 text-sm text-violet-900 dark:text-violet-100">
-                          {form.watch("waterSourceDistrict") || <span className="text-violet-400 italic">Not yet selected</span>}
+
+                      {/* Province + District selectors — drive Q13 inheritance and row dropdowns */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-violet-900 dark:text-violet-100">
+                            Province *
+                          </label>
+                          <Select
+                            value={selectedWaterSourceProvince}
+                            onValueChange={readOnly ? undefined : (value) => {
+                              setSelectedWaterSourceProvince(value);
+                              setSelectedWaterSourceDistrict("");
+                              form.setValue("waterSourceProvince", value);
+                              form.setValue("waterSourceDistrict", "");
+                              form.setValue("waterSourceSector", "");
+                              form.setValue("waterSourceCell", "");
+                              form.setValue("waterSourceVillage", "");
+                              // Reset all row sector/cell/village when district changes
+                              setBulkNetworks((prev) => prev.map((r) => ({ ...r, sector: "", cell: "", village: "" })));
+                            }}
+                            disabled={readOnly}
+                          >
+                            <SelectTrigger className="bg-white/70 border-violet-200 focus:border-violet-400">
+                              <SelectValue placeholder="Select province" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getFormattedProvinceOptions().map((p) => (
+                                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-sm font-medium text-violet-900 dark:text-violet-100">
+                            District *
+                          </label>
+                          <Select
+                            value={selectedWaterSourceDistrict}
+                            onValueChange={readOnly ? undefined : (value) => {
+                              setSelectedWaterSourceDistrict(value);
+                              form.setValue("waterSourceDistrict", value);
+                              form.setValue("waterSourceSector", "");
+                              form.setValue("waterSourceCell", "");
+                              form.setValue("waterSourceVillage", "");
+                              // Reset all row sector/cell/village when district changes
+                              setBulkNetworks((prev) => prev.map((r) => ({ ...r, sector: "", cell: "", village: "" })));
+                            }}
+                            disabled={readOnly || !selectedWaterSourceProvince}
+                          >
+                            <SelectTrigger className="bg-white/70 border-violet-200 focus:border-violet-400">
+                              <SelectValue placeholder={selectedWaterSourceProvince ? "Select district" : "Select province first"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {getFormattedDistrictOptions(selectedWaterSourceProvince).map((d) => (
+                                <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      <BulkNetworksTable rows={bulkNetworks} onChange={readOnly ? undefined : setBulkNetworks} mode={readOnly ? "readonly" : "editable"} />
+
+                      <BulkNetworksTable
+                        rows={bulkNetworks}
+                        onChange={readOnly ? undefined : setBulkNetworks}
+                        mode={readOnly ? "readonly" : "editable"}
+                        province={selectedWaterSourceProvince}
+                        district={selectedWaterSourceDistrict}
+                      />
                     </div>
                   )}
                 </TabsContent>
