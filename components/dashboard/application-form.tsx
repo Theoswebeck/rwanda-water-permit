@@ -320,6 +320,12 @@ export function ApplicationForm({
   const [bulkDistrict, setBulkDistrict] = useState<string>(
     (initialData as any)?.bulk_district ?? ""
   );
+  // Profile may not be loaded yet on first render — seed rows when flag arrives late.
+  useEffect(() => {
+    if (isBulkApplicant && bulkNetworks.length === 0) {
+      setBulkNetworks(Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1)));
+    }
+  }, [isBulkApplicant]); // eslint-disable-line react-hooks/exhaustive-deps
   const hasMountedRef = useRef(false);
   const [selectedProvince, setSelectedProvince] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
