@@ -36,7 +36,9 @@ import {
   useFormField
 } from "@/components/ui/form";
 import { Alert, AlertDescription as BaseAlertDescription, AlertTitle as BaseAlertTitle } from "@/components/ui/alert";
-import { Upload, X, FileText, FileEdit, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2, Map, Edit3 } from "lucide-react";
+import { Upload, X, FileText, FileEdit, Check, AlertCircle, Save, Send, User, Globe, Factory, Droplet, CheckCircle, XCircle, Eye, CreditCard, Loader2, Map, Edit3, Building } from "lucide-react";
+import { BulkNetworksTable, emptyBulkRow } from "@/components/dashboard/bulk-networks-table";
+import type { BulkNetworkRow } from "@/types/database";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -974,6 +976,7 @@ interface ApplicationFormProps {
   modificationChanges?: Record<string, { previous: any; current: any }>; // Stored changes from DB (staff view)
   excludeApplicationIds?: string[]; // Parent application IDs to exclude from polygon duplicate check (modification/renewal/transfer)
   editableFields?: string[]; // Field names that remain editable even when readOnly is true
+  isBulkApplicant?: boolean;
 }
 
 export function ApplicationForm({ 
@@ -991,12 +994,25 @@ export function ApplicationForm({
   originalApplicationData,
   modificationChanges,
   excludeApplicationIds = [],
-  editableFields = []
+  editableFields = [],
+  isBulkApplicant = false,
 }: ApplicationFormProps) {
   const router = useRouter();
   const { userProfile, isApplicant } = useAuth();
   const [activeTab, setActiveTab] = useState("applicant-info");
   const hasMountedRef = useRef(false);
+  const [bulkNetworks, setBulkNetworks] = useState<BulkNetworkRow[]>(() => {
+    const saved = (initialData as any)?.bulk_networks;
+    if (Array.isArray(saved) && saved.length > 0) return saved as BulkNetworkRow[];
+    if (!isBulkApplicant) return [];
+    return Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1));
+  });
+  const [bulkDistrict, setBulkDistrict] = useState<string>((initialData as any)?.bulk_district ?? "");
+  useEffect(() => {
+    if (isBulkApplicant && bulkNetworks.length === 0) {
+      setBulkNetworks(Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1)));
+    }
+  }, [isBulkApplicant]); // eslint-disable-line react-hooks/exhaustive-deps
   const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
@@ -3183,10 +3199,11 @@ export function ApplicationForm({
       }
       
       // Include additionalDocuments and modification data in the submission
-      const submissionData = { 
-        ...values, 
-        ...files, 
+      const submissionData = {
+        ...values,
+        ...files,
         additionalDocuments,
+        ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
         // Include modification-specific data
         ...(isModification && {
           isModification: true,
@@ -3332,10 +3349,12 @@ export function ApplicationForm({
                     <Droplet className="h-4 w-4" />
                     <span className="hidden sm:inline">{tx("Water Source")}</span>
                   </TabsTrigger>
-                  <TabsTrigger value="land-ownership" className="flex items-center gap-1 text-xs">
-                    <Globe className="h-4 w-4" />
-                    <span className="hidden sm:inline">{tx("Land")}</span>
-                  </TabsTrigger>
+                  {!isBulkApplicant && (
+                    <TabsTrigger value="land-ownership" className="flex items-center gap-1 text-xs">
+                      <Globe className="h-4 w-4" />
+                      <span className="hidden sm:inline">{tx("Land")}</span>
+                    </TabsTrigger>
+                  )}
                   {/* Show payment tab for editable applicant payment flow, and read-only payment details for applicant/staff views. */}
                   {shouldShowPaymentTab && (
                     <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
@@ -6082,6 +6101,37 @@ export function ApplicationForm({
                   })()}
 
                   {/* 9. Fish farming specific fields are shown above in respective sections */}
+
+                  {/* Bulk applicants: district + distribution networks */}
+                  {isBulkApplicant && (
+                    <div className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 p-6 rounded-xl border border-violet-200 dark:border-violet-800 space-y-4">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-violet-100 dark:bg-violet-900/40 rounded-lg">
+                          <Building className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-violet-900 dark:text-violet-100">Water Supply Networks</h3>
+                          <p className="text-sm text-violet-700 dark:text-violet-300">All networks share the selected district</p>
+                        </div>
+                      </div>
+                      <div className="max-w-xs">
+                        <label className="block text-sm font-medium text-violet-900 dark:text-violet-100 mb-2">
+                          District <span className="text-red-500">*</span>
+                        </label>
+                        <Select value={bulkDistrict} onValueChange={readOnly ? undefined : setBulkDistrict} disabled={readOnly}>
+                          <SelectTrigger className="bg-white dark:bg-gray-800">
+                            <BaseSelectValue placeholder="Select district" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getFormattedDistrictOptions("").map((opt) => (
+                              <BaseSelectItem key={opt.value} value={opt.value}>{opt.label}</BaseSelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <BulkNetworksTable rows={bulkNetworks} onChange={readOnly ? undefined : setBulkNetworks} mode={readOnly ? "readonly" : "editable"} />
+                    </div>
+                  )}
                 </TabsContent>
 
                 {/* OWNERSHIP OF ADJOINING LAND */}
@@ -6470,6 +6520,7 @@ export function ApplicationForm({
                             ...form.getValues(),
                             ...files,
                             additionalDocuments,
+                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
                             ...(isModification ? {
                               isModification: true,
                               modificationChanges: modificationChangesData,
@@ -6500,10 +6551,11 @@ export function ApplicationForm({
                           }
                           
                           // Include additionalDocuments and modification data in the draft save
-                          const draftData = { 
-                            ...form.getValues(), 
-                            ...files, 
+                          const draftData = {
+                            ...form.getValues(),
+                            ...files,
                             additionalDocuments,
+                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
                             ...(isModification && {
                               isModification: true,
                               modificationChanges: modificationChangesData,
@@ -6594,10 +6646,11 @@ export function ApplicationForm({
                               }
 
                               // Automatically save as draft (like airline booking)
-                              const draftData = { 
-                                ...form.getValues(), 
-                                ...files, 
+                              const draftData = {
+                                ...form.getValues(),
+                                ...files,
                                 additionalDocuments,
+                                ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: bulkDistrict }),
                                 ...(isModification ? {
                                   isModification: true,
                                   modificationChanges: modificationChangesData,
