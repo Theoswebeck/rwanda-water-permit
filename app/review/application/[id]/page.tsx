@@ -1348,6 +1348,7 @@ export default function ReviewApplicationPage() {
                     mode="view"
                     readOnly={true}
                     currentApplication={application}
+                    isBulkApplicant={!!(application as any)?.is_bulk}
                     isStaffView={true}
                     isModification={true}
                     modificationChanges={enrichModificationChanges((application as any).modification_changes, originalModificationApp)}
@@ -1399,6 +1400,7 @@ export default function ReviewApplicationPage() {
                   mode="view"
                   readOnly={true}
                   currentApplication={application}
+                  isBulkApplicant={!!(application as any)?.is_bulk}
                   isStaffView={true}
                 />
               ) : null}

@@ -1002,7 +1002,7 @@ export function ApplicationForm({
   const [activeTab, setActiveTab] = useState("applicant-info");
   const hasMountedRef = useRef(false);
   const [bulkNetworks, setBulkNetworks] = useState<BulkNetworkRow[]>(() => {
-    const saved = (initialData as any)?.bulk_networks;
+    const saved = (initialData as any)?.bulk_networks ?? (currentApplication as any)?.bulk_networks;
     if (Array.isArray(saved) && saved.length > 0) return saved as BulkNetworkRow[];
     if (!isBulkApplicant) return [];
     return Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1));
