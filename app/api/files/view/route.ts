@@ -126,6 +126,16 @@ function inferMimeType(filePath: string): string {
   return "application/octet-stream";
 }
 
+function contentDispositionFileName(fileName: string | null | undefined): string {
+  const fallback = "document";
+  const cleaned = String(fileName || fallback)
+    .replace(/[\r\n"]/g, "")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .trim();
+
+  return cleaned || fallback;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const token = readSessionTokenFromRequest(req);
@@ -184,10 +194,10 @@ export async function GET(req: NextRequest) {
       return toError("Document not found", 404);
     }
 
-    return new NextResponse(fileBytes, {
+    return new NextResponse(new Uint8Array(fileBytes), {
       headers: {
         "Content-Type": mimeType || inferMimeType(normalizedPath),
-        "Content-Disposition": `inline; filename="${String(fileName || "document").replace(/"/g, "")}"`,
+        "Content-Disposition": `inline; filename="${contentDispositionFileName(fileName)}"`,
         "Cache-Control": "private, max-age=60",
       },
     });

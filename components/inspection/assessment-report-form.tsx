@@ -87,6 +87,8 @@ interface AssessmentReportFormProps {
   bulkNetworks?: BulkNetworkRow[];
   onBulkNetworksSave?: (networks: BulkNetworkRow[]) => Promise<void>;
   bulkNetworksSaving?: boolean;
+  bulkProvince?: string;
+  bulkDistrict?: string;
 }
 
 export function AssessmentReportForm({
@@ -105,6 +107,8 @@ export function AssessmentReportForm({
   bulkNetworks,
   onBulkNetworksSave,
   bulkNetworksSaving = false,
+  bulkProvince = "",
+  bulkDistrict = "",
 }: AssessmentReportFormProps) {
   const [localData, setLocalData] = useState<Partial<AssessmentReportData>>(reportData);
   const [localBulkNetworks, setLocalBulkNetworks] = useState<BulkNetworkRow[]>(bulkNetworks ?? []);
@@ -841,6 +845,8 @@ export function AssessmentReportForm({
               rows={localBulkNetworks}
               onChange={readOnly ? undefined : setLocalBulkNetworks}
               mode={readOnly ? "readonly" : "assessor"}
+              province={bulkProvince}
+              district={bulkDistrict}
             />
             {onBulkNetworksSave && !readOnly && (
               <div className="flex justify-end">

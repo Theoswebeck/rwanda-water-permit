@@ -439,6 +439,12 @@ export default function InspectorApplicationView() {
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
 
+        // Pass bulk networks from DB column (not stored in internal_notes)
+        if ((appData as any).is_bulk) {
+          formData.bulk_networks = (appData as any).bulk_networks ?? formData.bulk_networks ?? [];
+          formData.bulk_district = (appData as any).bulk_district ?? formData.bulk_district ?? '';
+        }
+
         // Handle transfer/modification applications: load transfer data and original permit details
         const parsedNotes = (() => {
           try {

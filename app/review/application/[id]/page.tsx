@@ -332,6 +332,12 @@ export default function ReviewApplicationPage() {
         const formData = mapApplicationToFormData(appData, null);
         console.log('✅ Form data mapped:', formData);
 
+        // Pass bulk networks from DB column (not stored in internal_notes)
+        if ((appData as any).is_bulk) {
+          formData.bulk_networks = (appData as any).bulk_networks ?? formData.bulk_networks ?? [];
+          formData.bulk_district = (appData as any).bulk_district ?? formData.bulk_district ?? '';
+        }
+
         // Handle transfer applications: load transfer data and original permit details
         const parsedNotes = (() => {
           try {

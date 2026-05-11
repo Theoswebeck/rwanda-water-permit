@@ -919,6 +919,12 @@ export default function AssessmentApplicationPage() {
         // Transform application data to form format
         const formData = mapApplicationToFormData(appData, null);
 
+        // Pass bulk networks from DB column (not stored in internal_notes)
+        if ((appData as any).is_bulk) {
+          formData.bulk_networks = (appData as any).bulk_networks ?? formData.bulk_networks ?? [];
+          formData.bulk_district = (appData as any).bulk_district ?? formData.bulk_district ?? '';
+        }
+
         // Handle transfer/modification applications: load transfer data and original permit details
         const parsedNotes = (() => {
           try {
@@ -2430,11 +2436,11 @@ export default function AssessmentApplicationPage() {
                 )
               ) : isModificationApp ? (
                 initialFormData ? (
-                  <ApplicationForm 
+                  <ApplicationForm
                     userData={{
                       email: application.applicant?.email || "",
-                      name: application.applicant?.company_name || 
-                            (application.applicant?.first_name && application.applicant?.last_name ? 
+                      name: application.applicant?.company_name ||
+                            (application.applicant?.first_name && application.applicant?.last_name ?
                              `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
                       phone: application.applicant?.phone || "",
                       address: application.applicant?.address || "",
@@ -2455,6 +2461,7 @@ export default function AssessmentApplicationPage() {
                     isModification={true}
                     modificationChanges={enrichModificationChanges((application as any).modification_changes, originalModificationApp)}
                     editableFields={["nameSourceWater"]}
+                    isBulkApplicant={!!(application as any)?.is_bulk}
                   />
                 ) : null
               ) : (application as any).is_renewal && renewalPermit ? (
@@ -2482,11 +2489,11 @@ export default function AssessmentApplicationPage() {
                   <span className="ml-3 text-sm text-muted-foreground">Loading renewal details...</span>
                 </div>
               ) : initialFormData ? (
-                <ApplicationForm 
+                <ApplicationForm
                   userData={{
                     email: application.applicant?.email || "",
-                    name: application.applicant?.company_name || 
-                          (application.applicant?.first_name && application.applicant?.last_name ? 
+                    name: application.applicant?.company_name ||
+                          (application.applicant?.first_name && application.applicant?.last_name ?
                            `${application.applicant.first_name} ${application.applicant.last_name}` : ""),
                     phone: application.applicant?.phone || "",
                     address: application.applicant?.address || "",
@@ -2495,7 +2502,7 @@ export default function AssessmentApplicationPage() {
                     id_number: "",
                     company_tin: "",
                   }}
-                  onSubmit={async () => {}} 
+                  onSubmit={async () => {}}
                   onSaveAsDraft={async () => {}}
                   isLoading={false}
                   initialData={initialFormData}
@@ -2505,6 +2512,7 @@ export default function AssessmentApplicationPage() {
                   currentApplication={application}
                   isStaffView={true}
                   editableFields={["nameSourceWater"]}
+                  isBulkApplicant={!!(application as any)?.is_bulk}
                 />
               ) : null}
               
@@ -2592,6 +2600,8 @@ export default function AssessmentApplicationPage() {
                             bulkNetworks={assessorBulkNetworks}
                             onBulkNetworksSave={(application as any).is_renewal ? undefined : saveBulkNetworksAdjustment}
                             bulkNetworksSaving={bulkNetworksSaving}
+                            bulkProvince={initialFormData?.waterSourceProvince ?? ""}
+                            bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
                           />
                         </div>
                       }
