@@ -149,6 +149,13 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
               ]
             ];
     }
+
+    // Bulk application: always pull bulk_networks and bulk_district from the
+    // DB columns (authoritative) — they may not be in internal_notes.
+    if ((application as any).is_bulk) {
+      formData.bulk_networks = (application as any).bulk_networks ?? formData.bulk_networks ?? [];
+      formData.bulk_district = (application as any).bulk_district ?? formData.bulk_district ?? '';
+    }
     
   } else {
     // Legacy format: reconstruct from basic database fields and legacy notes
@@ -1162,7 +1169,7 @@ export default function ApplicationDetailPage() {
               <span className="ml-3 text-sm text-muted-foreground">Loading renewal details...</span>
             </div>
           ) : initialFormData && Object.keys(initialFormData).length > 0 ? (
-            <ApplicationForm 
+            <ApplicationForm
               userData={userData}
               onSubmit={handleSubmitApplication}
               onSaveAsDraft={handleSaveAsDraft}
@@ -1171,7 +1178,8 @@ export default function ApplicationDetailPage() {
               initialDocuments={initialDocuments}
               mode="view"
               readOnly={true}
-              currentApplication={application} // Pass the application object to handle payment tab correctly
+              currentApplication={application}
+              isBulkApplicant={!!(application as any)?.is_bulk}
             />
           ) : null}
 
