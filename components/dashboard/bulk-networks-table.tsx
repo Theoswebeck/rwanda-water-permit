@@ -18,9 +18,14 @@ import {
 } from "@/lib/rwanda-administrative-data";
 
 export const ABSTRACTION_METHODS = [
-  { value: "pumping_system", label: "Abstraction by Pumping System" },
-  { value: "gravity_flow", label: "Gravity Flow" },
-  { value: "other", label: "Other" },
+  { value: "Pumping", label: "Pumping" },
+  { value: "Gravity", label: "Gravity" },
+  { value: "Diversion Channel", label: "Diversion Channel" },
+  { value: "Dam/Reservoir", label: "Dam/Reservoir" },
+  { value: "Borehole", label: "Borehole" },
+  { value: "Spring Capture", label: "Spring Capture" },
+  { value: "Hand Dug Well", label: "Hand Dug Well" },
+  { value: "Other", label: "Other" },
 ];
 
 export type BulkTableMode = "editable" | "assessor" | "readonly";
@@ -34,6 +39,17 @@ interface BulkNetworksTableProps {
   district?: string;
   /** Optional permit numbers to show in first column (issued permits only) */
   permitNumbers?: string[];
+}
+
+function validateCoordinates(value: string): string | null {
+  if (!value.trim()) return null;
+  const parts = value.split(",").map((s) => s.trim());
+  if (parts.length !== 2) return "Format: lat, lng";
+  const [lat, lng] = parts.map(Number);
+  if (isNaN(lat) || isNaN(lng)) return "Must be numbers";
+  if (lat < -3 || lat > 0) return "Lat out of Rwanda range (-3 to 0)";
+  if (lng < 28 || lng > 31) return "Lng out of Rwanda range (28 to 31)";
+  return null;
 }
 
 function renumber(rows: BulkNetworkRow[]): BulkNetworkRow[] {
@@ -220,12 +236,17 @@ export function BulkNetworksTable({
                     {isReadonly ? (
                       <span className="font-mono text-xs">{row.coordinates ?? ""}</span>
                     ) : (
-                      <Input
-                        value={row.coordinates ?? ""}
-                        onChange={(e) => updateRow(i, "coordinates", e.target.value)}
-                        className="h-8 text-sm font-mono min-w-[110px]"
-                        placeholder="lat, lng"
-                      />
+                      <div className="space-y-0.5">
+                        <Input
+                          value={row.coordinates ?? ""}
+                          onChange={(e) => updateRow(i, "coordinates", e.target.value)}
+                          className={`h-8 text-sm font-mono min-w-[110px] ${validateCoordinates(row.coordinates ?? "") ? "border-red-400 focus-visible:ring-red-400" : ""}`}
+                          placeholder="lat, lng"
+                        />
+                        {validateCoordinates(row.coordinates ?? "") && (
+                          <div className="text-xs text-red-500">{validateCoordinates(row.coordinates ?? "")}</div>
+                        )}
+                      </div>
                     )}
                   </td>
 

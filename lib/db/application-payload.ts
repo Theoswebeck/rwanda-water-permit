@@ -4,6 +4,7 @@ const APPLICATION_JSONB_COLUMNS = new Set<string>([
   'intersection_details',
   'intended_activities',
   'modification_changes',
+  'bulk_networks',
 ])
 
 const APPLICATION_MISSING_COLUMN_PATTERNS = [

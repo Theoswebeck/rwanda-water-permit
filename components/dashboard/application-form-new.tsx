@@ -2104,8 +2104,12 @@ export function ApplicationForm({
   };
 
   const getTabs = () => {
-    // Payment tab should only be available for draft/pending_payment AND never for staff views (review/assessment/approver)
-    // Additionally, permit modifications do not require payment.
+    // Bulk applicants skip the land-ownership tab entirely
+    if (isBulkApplicant) {
+      return shouldShowPaymentTab
+        ? ["applicant-info", "intended-activity", "water-source", "payment"]
+        : ["applicant-info", "intended-activity", "water-source"];
+    }
     return shouldShowPaymentTab
       ? ["applicant-info", "intended-activity", "water-source", "land-ownership", "payment"]
       : ["applicant-info", "intended-activity", "water-source", "land-ownership"];
@@ -2223,14 +2227,19 @@ export function ApplicationForm({
         const waterSourceSector = form.watch('waterSourceSector') || form.getValues('waterSourceSector') || '';
         const waterSourceCell = form.watch('waterSourceCell') || form.getValues('waterSourceCell') || '';
         
-        const hasWaterSourceFields = 
-          waterSourceType.trim() !== '' &&
-          nameSourceWater.trim() !== '' &&
-          waterSourceProvince.trim() !== '' &&
-          waterSourceDistrict.trim() !== '' &&
-          waterSourceSector.trim() !== '' &&
-          waterSourceCell.trim() !== '' &&
-          waterReliability.trim() !== '';
+        const hasWaterSourceFields = isBulkApplicant
+          ? waterSourceType.trim() !== '' &&
+            nameSourceWater.trim() !== '' &&
+            waterSourceProvince.trim() !== '' &&
+            waterSourceDistrict.trim() !== '' &&
+            waterReliability.trim() !== ''
+          : waterSourceType.trim() !== '' &&
+            nameSourceWater.trim() !== '' &&
+            waterSourceProvince.trim() !== '' &&
+            waterSourceDistrict.trim() !== '' &&
+            waterSourceSector.trim() !== '' &&
+            waterSourceCell.trim() !== '' &&
+            waterReliability.trim() !== '';
           
         // Check permit length (required for submission)
         const permitLength = form.watch('permitLengthYears') ?? form.getValues('permitLengthYears');
@@ -4022,109 +4031,113 @@ export function ApplicationForm({
                         )}
                       />
                       
-                      <FormField
-                        control={form.control}
-                        name="waterSourceSector"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{tx("Sector *")}</FormLabel>
-                            <FormControl>
-                              <Select 
-                                onValueChange={readOnly ? undefined : (value) => {
-                                  field.onChange(value);
-                                  setSelectedWaterSourceSector(value);
-                                  // Reset cell field
-                                  form.setValue("waterSourceCell", "");
-                                  form.setValue("waterSourceVillage", "");
-                                  form.clearErrors(["waterSourceSector", "waterSourceCell"]);
-                                }}
-                                value={field.value}
-                                disabled={readOnly || !selectedWaterSourceDistrict}
-                              >
-                                <SelectTrigger className={`bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={selectedWaterSourceDistrict ? tx("Select sector") : tx("Select district first")} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {getWaterSourceSectorOptions().map((sector) => (
-                                    <SelectItem key={sector.value} value={sector.value}>
-                                      {sector.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
-                        name="waterSourceCell"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{tx("Cell *")}</FormLabel>
-                            <FormControl>
-                              <Select 
-                                onValueChange={readOnly ? undefined : (value) => {
-                                  field.onChange(value);
-                                  setSelectedWaterSourceCell(value);
-                                  // Reset village when cell changes to avoid invalid combos
-                                  form.setValue("waterSourceVillage", "");
-                                  setSelectedWaterSourceVillage("");
-                                  form.clearErrors("waterSourceCell");
-                                }}
-                                value={field.value}
-                                disabled={readOnly || !selectedWaterSourceSector}
-                              >
-                                <SelectTrigger className={`bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={selectedWaterSourceSector ? tx("Select cell") : tx("Select sector first")} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {getWaterSourceCellOptions().map((cell) => (
-                                    <SelectItem key={cell.value} value={cell.value}>
-                                      {cell.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <FormField
-                        control={form.control}
-                        name="waterSourceVillage"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{tx("Village")}</FormLabel>
-                            <FormControl>
-                              <Select 
-                                onValueChange={readOnly ? undefined : (value) => {
-                                  field.onChange(value);
-                                  setSelectedWaterSourceVillage(value);
-                                }}
-                                value={field.value || ""}
-                                disabled={readOnly || (!selectedWaterSourceCell && !waterSourceCell)}
-                              >
-                                <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
-                                  <SelectValue placeholder={(selectedWaterSourceCell || waterSourceCell) ? tx("Select village (optional)") : tx("Select cell first")} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {getWaterSourceVillageOptions().map((village) => (
-                                    <SelectItem key={village.value} value={village.value}>
-                                      {village.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      {!isBulkApplicant && (
+                        <FormField
+                          control={form.control}
+                          name="waterSourceSector"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{tx("Sector *")}</FormLabel>
+                              <FormControl>
+                                <Select
+                                  onValueChange={readOnly ? undefined : (value) => {
+                                    field.onChange(value);
+                                    setSelectedWaterSourceSector(value);
+                                    form.setValue("waterSourceCell", "");
+                                    form.setValue("waterSourceVillage", "");
+                                    form.clearErrors(["waterSourceSector", "waterSourceCell"]);
+                                  }}
+                                  value={field.value}
+                                  disabled={readOnly || !selectedWaterSourceDistrict}
+                                >
+                                  <SelectTrigger className={`bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 focus:border-indigo-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                    <SelectValue placeholder={selectedWaterSourceDistrict ? tx("Select sector") : tx("Select district first")} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getWaterSourceSectorOptions().map((sector) => (
+                                      <SelectItem key={sector.value} value={sector.value}>
+                                        {sector.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {!isBulkApplicant && (
+                        <FormField
+                          control={form.control}
+                          name="waterSourceCell"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{tx("Cell *")}</FormLabel>
+                              <FormControl>
+                                <Select
+                                  onValueChange={readOnly ? undefined : (value) => {
+                                    field.onChange(value);
+                                    setSelectedWaterSourceCell(value);
+                                    form.setValue("waterSourceVillage", "");
+                                    setSelectedWaterSourceVillage("");
+                                    form.clearErrors("waterSourceCell");
+                                  }}
+                                  value={field.value}
+                                  disabled={readOnly || !selectedWaterSourceSector}
+                                >
+                                  <SelectTrigger className={`bg-gradient-to-r from-rose-50 to-pink-50 border-rose-200 focus:border-rose-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                    <SelectValue placeholder={selectedWaterSourceSector ? tx("Select cell") : tx("Select sector first")} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getWaterSourceCellOptions().map((cell) => (
+                                      <SelectItem key={cell.value} value={cell.value}>
+                                        {cell.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
+
+                      {!isBulkApplicant && (
+                        <FormField
+                          control={form.control}
+                          name="waterSourceVillage"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{tx("Village")}</FormLabel>
+                              <FormControl>
+                                <Select
+                                  onValueChange={readOnly ? undefined : (value) => {
+                                    field.onChange(value);
+                                    setSelectedWaterSourceVillage(value);
+                                  }}
+                                  value={field.value || ""}
+                                  disabled={readOnly || (!selectedWaterSourceCell && !waterSourceCell)}
+                                >
+                                  <SelectTrigger className={`bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200 focus:border-gray-400 ${readOnly ? 'cursor-default opacity-60' : ''}`}>
+                                    <SelectValue placeholder={(selectedWaterSourceCell || waterSourceCell) ? tx("Select village (optional)") : tx("Select cell first")} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getWaterSourceVillageOptions().map((village) => (
+                                      <SelectItem key={village.value} value={village.value}>
+                                        {village.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                     </div>
                   </div>
 
