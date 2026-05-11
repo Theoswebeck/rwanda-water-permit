@@ -28,6 +28,25 @@ export const ABSTRACTION_METHODS = [
   { value: "Other", label: "Other" },
 ];
 
+// Maps legacy snake_case DB values to current display-string values
+const ABSTRACTION_METHOD_LEGACY_MAP: Record<string, string> = {
+  gravity_flow: "Gravity",
+  pumping: "Pumping",
+  pump: "Pumping",
+  diversion_channel: "Diversion Channel",
+  dam_reservoir: "Dam/Reservoir",
+  borehole: "Borehole",
+  spring_capture: "Spring Capture",
+  hand_dug_well: "Hand Dug Well",
+  other: "Other",
+};
+
+function normalizeAbstractionMethod(value: string | undefined): string {
+  if (!value) return "";
+  if (ABSTRACTION_METHODS.some((m) => m.value === value)) return value;
+  return ABSTRACTION_METHOD_LEGACY_MAP[value.toLowerCase()] ?? value;
+}
+
 export type BulkTableMode = "editable" | "assessor" | "readonly";
 
 interface BulkNetworksTableProps {
@@ -276,13 +295,13 @@ export function BulkNetworksTable({
                   <td className="px-3 py-2">
                     {isReadonly ? (
                       <span>
-                        {ABSTRACTION_METHODS.find((m) => m.value === row.abstraction_method)?.label ??
+                        {ABSTRACTION_METHODS.find((m) => m.value === normalizeAbstractionMethod(row.abstraction_method))?.label ??
                           row.abstraction_method ??
                           ""}
                       </span>
                     ) : (
                       <Select
-                        value={row.abstraction_method ?? ""}
+                        value={normalizeAbstractionMethod(row.abstraction_method)}
                         onValueChange={(v) => updateRow(i, "abstraction_method", v)}
                       >
                         <SelectTrigger className="h-8 text-sm min-w-[160px]">
