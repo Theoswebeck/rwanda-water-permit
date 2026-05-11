@@ -1369,9 +1369,9 @@ export const getMonthlyUserStats = async () => {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     const { data: recentLogins } = await supabase
       .from('users')
-      .select('id, last_login')
-      .not('last_login', 'is', null)
-      .gte('last_login', thirtyDaysAgo.toISOString())
+      .select('id, last_login_at')
+      .not('last_login_at', 'is', null)
+      .gte('last_login_at', thirtyDaysAgo.toISOString())
 
     // Get new users this month
     const { count: newThisMonth } = await supabase
