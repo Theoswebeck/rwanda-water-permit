@@ -755,9 +755,11 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       const insertErrorMessage = insertError instanceof Error
         ? insertError.message
         : String((insertError as { message?: unknown } | null)?.message || "");
+      const insertErrorCode = String((insertError as { code?: unknown } | null)?.code || "");
       const isUniqueConflict =
         insertErrorMessage.includes("duplicate key value") ||
-        insertErrorMessage.includes("water_use_reports_unique_permit_year");
+        insertErrorMessage.includes("water_use_reports_unique_permit_year") ||
+        insertErrorCode === "23505";
 
       if (!isUniqueConflict) {
         console.error("❌ Failed to insert water use report:", insertError);
@@ -786,7 +788,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     [userData?.id, permit.id, permit.application_id, permit.application?.applicant?.id, currentApplication?.id, currentApplication?.applicant_id, reportYear, waterUseTemplate, existingWaterUseReport?.id, existingWaterUseReport?.status, existingWaterUseReport?.submitted_at],
   );
 
-  const handleSaveDraft = async (waterUseReportOverride?: any) => {
+  const handleSaveDraft = useCallback(async (waterUseReportOverride?: any) => {
     // Guard: button onClick passes a MouseEvent as the first arg — ignore it
     if (waterUseReportOverride instanceof Event || (waterUseReportOverride && typeof waterUseReportOverride === 'object' && 'nativeEvent' in waterUseReportOverride)) {
       waterUseReportOverride = undefined;
@@ -809,7 +811,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [buildFormData, onSaveAsDraft, router]);
 
   const handleContinueToPayment = async () => {
     if (readOnly) return;
