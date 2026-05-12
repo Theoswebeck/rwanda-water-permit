@@ -568,6 +568,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       allowance_unit: allowanceUnit || permit.allowance_unit,
       application: {
         ...permit.application,
+        applicant: {
+          ...permit.application?.applicant,
+          first_name: userData?.first_name || permit.application?.applicant?.first_name || "",
+          last_name: userData?.last_name || permit.application?.applicant?.last_name || "",
+          company_name: userData?.company_name || permit.application?.applicant?.company_name || "",
+          email: userData?.email || permit.application?.applicant?.email || "",
+        },
         province: permitProvince || permit.application?.province,
         district: permitDistrict || permit.application?.district,
         sector: permitSector || permit.application?.sector,
@@ -583,7 +590,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       },
     };
   }, [
-    isManualPermit, permit,
+    isManualPermit, permit, userData,
     permitIssuedDate, permitExpiryDate,
     waterSourceType, waterPurpose, waterAllowance, allowanceUnit,
     permitProvince, permitDistrict, permitSector, permitCell, permitVillage,
