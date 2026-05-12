@@ -783,7 +783,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       setExistingWaterUseReport(conflictedData as WaterUseReport);
       return conflictedData as WaterUseReport;
     },
-    [userData?.id, permit.id, permit.application_id, permit.application?.applicant?.id, currentApplication?.applicant_id, reportYear, waterUseTemplate, existingWaterUseReport?.id, existingWaterUseReport?.status, existingWaterUseReport?.submitted_at],
+    [userData?.id, permit.id, permit.application_id, permit.application?.applicant?.id, currentApplication?.id, currentApplication?.applicant_id, reportYear, waterUseTemplate, existingWaterUseReport?.id, existingWaterUseReport?.status, existingWaterUseReport?.submitted_at],
   );
 
   const handleSaveDraft = async (waterUseReportOverride?: any) => {
@@ -1492,7 +1492,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     onBack={handleBack}
                     isSavingApplication={isSaving}
                     saveError={saveError}
-                    onRetrySave={handleSaveDraft}
+                    onRetrySave={() => handleSaveDraft()}
                   />
                 )}
                 {!readOnly && !isStaffView && !canProceedToPayment && (
