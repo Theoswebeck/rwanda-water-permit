@@ -14,6 +14,7 @@ import type { PermitApplication } from "@/lib/permit/permit-text-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ABSTRACTION_METHODS } from "@/components/dashboard/bulk-networks-table";
 import type { BulkNetworkRow } from "@/types/database";
+import { buildChildPermitNumber } from "@/lib/permit-number-utils";
 
 function resolveBulkNetworks(application: ApplicationForContract | null): BulkNetworkRow[] | null {
   if (!application) return null;
@@ -269,7 +270,7 @@ export function ContractTermsPreview({
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-left font-medium text-gray-700 w-8">#</th>
+                        <th className="px-3 py-2 text-left font-medium text-gray-700">Permit Number</th>
                         <th className="px-3 py-2 text-left font-medium text-gray-700">Network Name</th>
                         <th className="px-3 py-2 text-left font-medium text-gray-700">Sector</th>
                         <th className="px-3 py-2 text-left font-medium text-gray-700">Cell</th>
@@ -280,9 +281,14 @@ export function ContractTermsPreview({
                       </tr>
                     </thead>
                     <tbody>
-                      {bulkNetworks.map((row, i) => (
+                      {bulkNetworks.map((row, i) => {
+                        const year = new Date().getFullYear();
+                        const childNum = permitNumber
+                          ? buildChildPermitNumber(permitNumber, i + 1)
+                          : `———_${i + 1}/RWB/${year}`;
+                        return (
                         <tr key={i} className="border-t border-gray-200">
-                          <td className="px-3 py-2 text-gray-500 font-mono">{row.number}</td>
+                          <td className="px-3 py-2 font-mono text-xs">{childNum}</td>
                           <td className="px-3 py-2">{row.network_name}</td>
                           <td className="px-3 py-2">{row.sector}</td>
                           <td className="px-3 py-2">{row.cell}</td>
@@ -293,7 +299,8 @@ export function ContractTermsPreview({
                             {ABSTRACTION_METHODS.find((m) => m.value === row.abstraction_method)?.label ?? row.abstraction_method ?? ""}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -20,8 +20,14 @@ import { addYearsSafe } from "./date-math";
 import { getEffectiveInternalNotes } from "./document-overrides";
 import {
   resolvePermitDuration,
+  resolveApplicantName,
+  resolveOrgAddress,
+  resolveOrgAddressKinyarwanda,
+  resolveOrgRep,
+  resolveAdminLocation,
   type PermitApplication,
 } from "@/lib/permit/permit-text-data";
+import { buildChildPermitNumber } from "@/lib/permit-number-utils";
 import { resolveSlotText } from "@/lib/document-slots";
 import type { SlotResolverContext } from "@/lib/document-slots";
 import { parseBoldRuns, stripBoldMarkers } from "@/lib/document-slots/bold-markers";
@@ -795,10 +801,21 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const networks = resolveBulkNetworks(app);
   const hasNetworks = networks.length > 0;
 
-  // Reuse the abstraction_organization body slots (same bilingual structure)
+  // Build bulk-specific para_2 (authorization sentence — no coordinates/sector/cell)
+  const orgName = resolveApplicantName(app);
+  const orgAddr = resolveOrgAddress(app);
+  const orgAddrRw = resolveOrgAddressKinyarwanda(app);
+  const rep = resolveOrgRep(app);
+  const adminLoc = resolveAdminLocation(app);
+  const networkCount = networks.length;
+  const networkCountLabel = `${networkCount} water supply network${networkCount !== 1 ? "s" : ""}`;
+
+  const bulkPara2En = `"${orgName}" with its registered office address as follows: ${orgAddr}; represented by ${rep.name} "${rep.title}", is authorized to abstract water from ${networkCountLabel} located in ${adminLoc.district} District as described in the attached annex. Water abstracted will be used for water supply.`;
+  const bulkPara2Rw = `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe gukoresha amazi y'imiyoboro ${networkCount} iherereye mu Akarere ka ${adminLoc.district} nk'uko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo gukwirakwiza amazi.`;
+
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
-    resolveSlotText("permit.abstraction_organization.en.para_2", ctx),
+    bulkPara2En,
     resolveSlotText("permit.abstraction_organization.en.para_3", ctx),
     hasNetworks
       ? "In addition to the conditions specified in the Law mentioned above, this Authorization is subject to the terms and conditions as defined in the attached contract. The list of authorized distribution networks is provided in the Annex."
@@ -806,7 +823,7 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   ];
   const rwParagraphs = [
     resolveSlotText("permit.abstraction_organization.rw.para_1", ctx),
-    resolveSlotText("permit.abstraction_organization.rw.para_2", ctx),
+    bulkPara2Rw,
     resolveSlotText("permit.abstraction_organization.rw.para_3", ctx),
     hasNetworks
       ? "Uretse ibyemejwe n'itegeko rivugwaho haruguru, uyu Uruhushya rugengwa n'amategeko n'ibisabwa bisobanurwa mu masezerano agenye. Urutonde rw'amashyamba y'amazi yemerewe ruragaragara mu Umugereka."
@@ -858,13 +875,14 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
 
     // Column definitions (widths in pt, total = annexMaxW)
     const cols = [
-      { label: "No.",             width: 16 * PT },
-      { label: "Network Name",    width: 68 * PT },
-      { label: "Sector",          width: 44 * PT },
-      { label: "Cell",            width: 44 * PT },
-      { label: "Coordinates",     width: 56 * PT },
-      { label: "Capacity (m³/d)", width: 44 * PT },
-      { label: "Method",          width: 44 * PT },
+      { label: "Permit Number",   width: 72 * PT },
+      { label: "Network Name",    width: 60 * PT },
+      { label: "Sector",          width: 40 * PT },
+      { label: "Cell",            width: 40 * PT },
+      { label: "Village",         width: 40 * PT },
+      { label: "Coordinates",     width: 52 * PT },
+      { label: "Capacity (m³/d)", width: 40 * PT },
+      { label: "Method",          width: 40 * PT },
     ];
     // Distribute remaining width proportionally
     const colTotal = cols.reduce((s, c) => s + c.width, 0);
@@ -927,6 +945,7 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
         await drawWatermark(doc);
         ay = 20 * PT;
       }
+      const childPermitNum = buildChildPermitNumber(permitNumber, i + 1);
       const coords = typeof net.coordinates === "string" ? net.coordinates : "";
       const capacity = net.capacity_m3_day != null ? String(net.capacity_m3_day) : "";
       const method = typeof net.abstraction_method === "string"
@@ -934,10 +953,11 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
         : "";
       drawTableRow(
         [
-          String(i + 1),
+          childPermitNum,
           typeof net.network_name === "string" ? net.network_name : "",
           typeof net.sector === "string" ? net.sector : "",
           typeof net.cell === "string" ? net.cell : "",
+          typeof net.village === "string" ? net.village : "",
           coords,
           capacity,
           method,

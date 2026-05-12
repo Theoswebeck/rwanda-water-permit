@@ -5,6 +5,7 @@ import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permi
 import { findPublicPermitByNumber } from "@/lib/permit/public-permit-query";
 import { isConcessionApplication } from "@/lib/permit-variant";
 import { resolvePermitIssueDate } from "@/lib/permit/resolve-issue-date";
+import { parseChildPermitNumber } from "@/lib/permit-number-utils";
 
 export const runtime = "nodejs";
 
@@ -126,7 +127,13 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
       return jsonError("Too many PDF requests. Please retry in a minute.", 429);
     }
 
-    const result = await findPublicPermitByNumber(permitNumber, { includeRegistryFallback: false });
+    // If this is a child bulk permit (e.g. "000918_1/RWB/2026"), serve the parent PDF.
+    const childInfo = parseChildPermitNumber(permitNumber);
+    const lookupNumber = childInfo
+      ? `${childInfo.parentSeq}/RWB/${childInfo.year}`
+      : permitNumber;
+
+    const result = await findPublicPermitByNumber(lookupNumber, { includeRegistryFallback: false });
     if (!result.inputPermitNumber) {
       return jsonError("Invalid permit number.", 400);
     }
