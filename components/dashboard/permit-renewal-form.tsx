@@ -697,8 +697,11 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       const applicantId = userData?.id || permit.application?.applicant?.id || currentApplication?.applicant_id;
       if (!applicantId) throw new Error("Missing applicant information for water use report");
 
+      // Manual registry permits use a synthetic "manual-..." id — not a real UUID.
+      // Pass null for permit_id; application_id is the stable identifier for these WURs.
+      const isManualPermit = typeof permit.id === "string" && permit.id.startsWith("manual-");
       const payload = {
-        permit_id: permit.id,
+        permit_id: isManualPermit ? null : permit.id,
         application_id: permit.application_id || currentApplication?.id || null,
         applicant_id: applicantId,
         reporting_year: reportData?.reportingYear || reportYear,
@@ -767,11 +770,12 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         throw new Error(insertMsg);
       }
 
-      const { data: conflictedData, error: conflictUpdateError } = await supabase
-        .from("water_use_reports")
-        .update(payload)
-        .eq("permit_id", payload.permit_id)
-        .eq("reporting_year", payload.reporting_year)
+      // For manual permits permit_id is null — find the conflicting row by application_id instead.
+      const conflictQuery = supabase.from("water_use_reports").update(payload);
+      const filteredConflictQuery = payload.permit_id
+        ? conflictQuery.eq("permit_id", payload.permit_id).eq("reporting_year", payload.reporting_year)
+        : conflictQuery.eq("application_id", payload.application_id).eq("reporting_year", payload.reporting_year);
+      const { data: conflictedData, error: conflictUpdateError } = await filteredConflictQuery
         .select("*")
         .single();
 
