@@ -420,9 +420,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
+      const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"];
       if (!allowedTypes.includes(file.type)) {
-        alert("Please upload a PDF or image file (JPEG, PNG)");
+        alert("Please upload a PDF, Word document (.doc, .docx), or image file (JPEG, PNG)");
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
@@ -1461,7 +1461,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                             <Upload className="h-12 w-12 mx-auto text-gray-400" />
                             <div>
                               <p className="font-medium text-gray-700">Click to upload or drag and drop</p>
-                              <p className="text-sm text-muted-foreground">PDF, JPEG, or PNG (max 10MB)</p>
+                              <p className="text-sm text-muted-foreground">PDF, Word (.docx), JPEG, or PNG (max 10MB)</p>
                             </div>
                             <Button variant="outline" onClick={() => renewalLetterInputRef.current?.click()}>
                               <FileUp className="h-4 w-4 mr-2" />Select File
@@ -1469,7 +1469,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                           </div>
                         )}
                         {!readOnly && (
-                          <input ref={renewalLetterInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
+                          <input ref={renewalLetterInputRef} type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleFileChange} />
                         )}
                       </div>
                     </div>
