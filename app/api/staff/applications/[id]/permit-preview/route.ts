@@ -313,6 +313,22 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         }
       }
 
+      // Step 1b: for renewals, also check permitDetails.issuedDate/expiryDate
+      // (set by PermitRenewalForm — manual registry permits store dates here, not in transferFormData).
+      if (isRenewal && !exactExpiryDate) {
+        const expiryFromDetails = parseFlexDate(notes?.permitDetails?.expiryDate);
+        const issueFromDetails  = parseFlexDate(notes?.permitDetails?.issuedDate);
+        if (expiryFromDetails && issueFromDetails) {
+          const totalYears = Math.round(
+            (expiryFromDetails.getTime() - issueFromDetails.getTime()) / (365.25 * 24 * 3600 * 1000),
+          );
+          if (totalYears >= 1 && totalYears <= 15) {
+            permitValidityYears = totalYears;
+            exactExpiryDate = addYearsSafe(new Date(), totalYears);
+          }
+        }
+      }
+
       // Step 2: if still no exact date, fetch original permit from DB.
       if (!exactExpiryDate && originalPermitId && UUID_RE.test(originalPermitId)) {
         try {

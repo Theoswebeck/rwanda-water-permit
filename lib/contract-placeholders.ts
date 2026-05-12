@@ -532,12 +532,28 @@ function resolveDurationYears(
   }
 
   // Priority 2a: Renewal — inherit the original permit's total duration (expiry − issue).
-  if (isRenewalApplication(application) && transferPermit?.issue_date && transferPermit?.expiry_date) {
-    const issue = new Date(`${transferPermit.issue_date}T00:00:00Z`);
-    const expiry = new Date(`${transferPermit.expiry_date}T00:00:00Z`);
-    if (!Number.isNaN(issue.getTime()) && !Number.isNaN(expiry.getTime())) {
+  // Source A: passed transferPermit context (system-generated permit renewals, DB row available)
+  // Source B: permitDetails in internal_notes (manual/registry permit renewals, no DB row)
+  if (isRenewalApplication(application)) {
+    const parseD = (s: string | null | undefined) => {
+      if (!s) return null;
+      const t = s.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+        const d = new Date(`${t.slice(0, 10)}T00:00:00Z`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      const mm = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (mm) {
+        const d = new Date(`${mm[3]}-${mm[1].padStart(2,"0")}-${mm[2].padStart(2,"0")}T00:00:00Z`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
+    const issueDate  = parseD(transferPermit?.issue_date)  ?? parseD(notes?.permitDetails?.issuedDate);
+    const expiryDate = parseD(transferPermit?.expiry_date) ?? parseD(notes?.permitDetails?.expiryDate);
+    if (issueDate && expiryDate) {
       const years = Math.round(
-        (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),
+        (expiryDate.getTime() - issueDate.getTime()) / (365.25 * 24 * 3600 * 1000),
       );
       if (years >= 1 && years <= 15) return String(years);
     }

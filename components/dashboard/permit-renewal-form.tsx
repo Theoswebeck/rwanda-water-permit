@@ -600,6 +600,21 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
   // ── Build form data ──
   const buildFormData = useCallback(() => {
+    // Compute original permit duration so proposed_duration_years is saved correctly.
+    // For manual registry permits: from the dates the applicant entered in Permit Details.
+    // For system permits: from the permit record's issued_date / expiry_date.
+    const issuedSrc = permitIssuedDate || permit.issued_date || "";
+    const expirySrc = permitExpiryDate || permit.expiry_date || "";
+    let permitLengthYears: number | undefined;
+    if (issuedSrc && expirySrc) {
+      const issueMs = new Date(issuedSrc).getTime();
+      const expiryMs = new Date(expirySrc).getTime();
+      if (!Number.isNaN(issueMs) && !Number.isNaN(expiryMs) && expiryMs > issueMs) {
+        const years = Math.round((expiryMs - issueMs) / (365.25 * 24 * 3600 * 1000));
+        if (years >= 1 && years <= 15) permitLengthYears = years;
+      }
+    }
+
     return {
       permitId: permit.id,
       permitNumber: permit.permit_number,
@@ -608,6 +623,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       applicationType: "renewal",
       isRenewal: true,
       renewed_from_permit_id: permit.id,
+
+      // Duration of the ORIGINAL permit → becomes proposed_duration_years on the renewal application.
+      permitLengthYears,
 
       waterUseReport: waterUseReportData,
       waterUseReportId: existingWaterUseReport?.id,

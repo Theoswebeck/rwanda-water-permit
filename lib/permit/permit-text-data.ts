@@ -317,10 +317,21 @@ export function resolvePermitDuration(app: PermitApplication, fallback = 5): num
       }
       return null;
     };
-    const expiry = parseTfDate(notes?.transferFormData?.expirationDate);
-    const issue  = parseTfDate(notes?.transferFormData?.effectiveDate);
+
+    const isRenewal = appType === "renewal" || notes?.isRenewal === true;
+
+    // For transfers / modifications: use transferFormData dates (original permit validity).
+    // For renewals: prefer permitDetails dates (PermitRenewalForm stores them there);
+    //               fall back to transferFormData for older submissions.
+    const expiryTransfer = parseTfDate(notes?.transferFormData?.expirationDate);
+    const issueTransfer  = parseTfDate(notes?.transferFormData?.effectiveDate);
+    const expiryDetails  = parseTfDate(notes?.permitDetails?.expiryDate);
+    const issueDetails   = parseTfDate(notes?.permitDetails?.issuedDate);
+
+    const expiry = isRenewal ? (expiryDetails ?? expiryTransfer) : expiryTransfer;
+    const issue  = isRenewal ? (issueDetails  ?? issueTransfer)  : issueTransfer;
+
     if (expiry) {
-      const isRenewal = appType === "renewal" || notes?.isRenewal === true;
       if (isRenewal && issue) {
         const totalYears = Math.round(
           (expiry.getTime() - issue.getTime()) / (365.25 * 24 * 3600 * 1000),

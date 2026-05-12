@@ -769,25 +769,52 @@ function resolveKinyarwandaSystemTypeLabel(application: Application): string {
  */
 function resolvePermitDurationYears(application: Application, fallbackYears: number = 5): number {
   const notes = getInternalNotes(application);
-  
+
   // Priority 1: Assessor recommended duration (from assessment adjustments)
   const assessorAdjustments = notes?._assessorAdjustments;
-  if (typeof assessorAdjustments?.permitLengthYears === "number" && 
+  if (typeof assessorAdjustments?.permitLengthYears === "number" &&
       Number.isFinite(assessorAdjustments.permitLengthYears) &&
-      assessorAdjustments.permitLengthYears >= 1 && 
+      assessorAdjustments.permitLengthYears >= 1 &&
       assessorAdjustments.permitLengthYears <= 15) {
     return assessorAdjustments.permitLengthYears;
   }
-  
+
   // Priority 2: proposed_duration_years from the application record (may have been updated by assessor)
-  if (typeof application.proposed_duration_years === "number" && 
+  if (typeof application.proposed_duration_years === "number" &&
       Number.isFinite(application.proposed_duration_years) &&
-      application.proposed_duration_years >= 1 && 
+      application.proposed_duration_years >= 1 &&
       application.proposed_duration_years <= 15) {
     return application.proposed_duration_years;
   }
-  
-  // Priority 3: Fallback to passed value or default
+
+  // Priority 3 (renewals only): compute from original permit dates stored in internal_notes.
+  // PermitRenewalForm saves the original permit's issued/expiry dates in permitDetails;
+  // when proposed_duration_years isn't set (e.g. older submissions), derive it here.
+  const isRenewal =
+    (application as any).is_renewal === true ||
+    (application as any).application_type?.toLowerCase() === "renewal" ||
+    notes?.isRenewal === true;
+  if (isRenewal) {
+    const parseD = (s: unknown): Date | null => {
+      if (typeof s !== "string" || !s.trim()) return null;
+      const t = s.trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+        const d = new Date(`${t.slice(0, 10)}T00:00:00Z`);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+      return null;
+    };
+    const origIssue  = parseD(notes?.permitDetails?.issuedDate);
+    const origExpiry = parseD(notes?.permitDetails?.expiryDate);
+    if (origIssue && origExpiry && origExpiry > origIssue) {
+      const years = Math.round(
+        (origExpiry.getTime() - origIssue.getTime()) / (365.25 * 24 * 3600 * 1000),
+      );
+      if (years >= 1 && years <= 15) return years;
+    }
+  }
+
+  // Priority 4: Fallback to passed value or default
   return fallbackYears;
 }
 
