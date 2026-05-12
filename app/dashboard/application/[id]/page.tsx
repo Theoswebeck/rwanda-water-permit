@@ -26,7 +26,7 @@ import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl, downloadFromDocumentsBucket } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
-import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
+import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
 import { supabase } from "@/lib/supabase";
 import type { Application, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
@@ -701,60 +701,22 @@ export default function ApplicationDetailPage() {
 
         if (permitError) {
           // Manual registry permits have no row in the permits table.
-          // Reconstruct a synthetic permit from the data stored in internal_notes.
+          // Reconstruct a synthetic permit from internal_notes using the shared helper.
           const isManualId = typeof permitId === "string" && permitId.startsWith("manual-");
-          const pd = parsedNotes?.permitDetails || {};
           const permitRef = parsedNotes?.permitReference;
-          const snap = permitRef?.registrySnapshot || {};
           if (isManualId || permitRef) {
-            const syntheticPermit: any = {
-              id: permitId || `manual-${originalPermitNumber}`,
-              application_id: "",
-              permit_number: originalPermitNumber || permitRef?.inputPermitNumber || "",
-              status: "active",
-              water_source: pd.waterSourceType || snap.water_source || "other",
-              purpose: pd.waterPurpose || snap.purpose || "other",
-              water_allowance: pd.waterAllowance || 0,
-              allowance_unit: pd.allowanceUnit || "m³/year",
-              issuing_authority: snap.issuing_authority || "Rwanda Water Resources Board",
-              issued_date: pd.issuedDate || snap.issued_date || "",
-              expiry_date: pd.expiryDate || snap.expiry_date || "",
-              is_renewal: false,
-              is_transfer: false,
-              is_modification: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-              application: {
-                id: "",
-                project_title: "",
-                province: pd.province || "",
-                district: pd.district || "",
-                sector: pd.sector || "",
-                cell: pd.cell || "",
-                village: pd.village || "",
-                water_body_name: pd.waterSourceName || "",
-                water_purpose: pd.waterPurpose || "",
-                water_source: pd.waterSourceType || "",
-                intended_activities: pd.intendedActivity ? [pd.intendedActivity] : [],
-                applicant: {
-                  id: (application as any)?.applicant?.id || userProfile?.id || "",
-                  email: (application as any)?.applicant?.email || userProfile?.email || "",
-                  first_name: (application as any)?.applicant?.first_name || userProfile?.first_name || "",
-                  last_name: (application as any)?.applicant?.last_name || userProfile?.last_name || "",
-                  company_name: (application as any)?.applicant?.company_name || userProfile?.company_name || "",
-                  account_type: (application as any)?.applicant?.account_type || userProfile?.account_type || "individual",
-                },
-              },
-              permitReference: permitRef,
-            };
-            setRenewalPermit(syntheticPermit);
-            console.log('✅ Synthetic renewal permit constructed from internal_notes');
+            const appApplicant = (application as any)?.applicant || null;
+            const syntheticPermit = buildSyntheticRenewalPermit(
+              parsedNotes as Record<string, unknown>,
+              appApplicant,
+              (application as any).id,
+            );
+            setRenewalPermit(syntheticPermit as unknown as PermitWithApplication);
           } else {
             console.error('Error loading renewal permit:', permitError);
           }
         } else {
           setRenewalPermit(permit as PermitWithApplication);
-          console.log('✅ Renewal permit loaded:', permit);
         }
       } catch (err) {
         console.error('Error loading renewal permit:', err);
@@ -770,6 +732,10 @@ export default function ApplicationDetailPage() {
   const userData = {
     email: userProfile?.email || "",
     name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || userProfile?.company_name || "",
+    // Separate fields required by PermitRenewalForm for permit holder name resolution
+    first_name: userProfile?.first_name || "",
+    last_name: userProfile?.last_name || "",
+    company_name: userProfile?.company_name || "",
     phone: userProfile?.phone || userProfile?.company_phone || "",
     address: userProfile?.company_address || "",
     idNumber: userProfile?.id_number || "",

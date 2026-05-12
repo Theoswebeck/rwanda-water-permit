@@ -692,7 +692,6 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         return;
       }
       try {
-        const isManual = typeof permit.id === "string" && permit.id.startsWith("manual-");
         const baseQuery = supabase
           .from("water_use_reports")
           .select("*")
@@ -700,7 +699,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
           .order("updated_at", { ascending: false })
           .limit(1);
         const { data, error } = await (
-          isManual && currentApplication?.id
+          isManualPermit && currentApplication?.id
             ? baseQuery.eq("application_id", currentApplication.id)
             : baseQuery.eq("permit_id", permit.id)
         ).maybeSingle();
@@ -740,7 +739,6 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
       // Manual registry permits use a synthetic "manual-..." id — not a real UUID.
       // Pass null for permit_id; application_id is the stable identifier for these WURs.
-      const isManualPermit = typeof permit.id === "string" && permit.id.startsWith("manual-");
       const payload = {
         permit_id: isManualPermit ? null : permit.id,
         application_id: permit.application_id || currentApplication?.id || null,
@@ -812,6 +810,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       }
 
       // For manual permits permit_id is null — find the conflicting row by application_id instead.
+      // Guard: if both are null we cannot safely target the update.
+      if (!payload.permit_id && !payload.application_id) {
+        throw new Error("Cannot resolve WUR conflict: neither permit_id nor application_id is set");
+      }
       const conflictQuery = supabase.from("water_use_reports").update(payload);
       const filteredConflictQuery = payload.permit_id
         ? conflictQuery.eq("permit_id", payload.permit_id).eq("reporting_year", payload.reporting_year)
@@ -1069,7 +1071,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   </Alert>
                 )}
 
-                {/* Permit Validity */}
+                {/* Permit Validity — only shown for manual registry permits where the applicant enters original permit dates */}
+                {isManualPermit && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -1106,6 +1109,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     </div>
                   </CardContent>
                 </Card>
+                )}
 
                 {/* Location */}
                 <Card>
