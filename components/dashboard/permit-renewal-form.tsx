@@ -35,6 +35,7 @@ import {
   Clock,
   AlertCircle,
   Calendar,
+  CalendarDays,
   MapPin,
   Droplet,
   ArrowRight,
@@ -186,6 +187,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const [waterSourceLatitude, setWaterSourceLatitude] = useState("");
   const [waterSourceLongitude, setWaterSourceLongitude] = useState("");
   const [concessionArea, setConcessionArea] = useState("");
+  const [permitIssuedDate, setPermitIssuedDate] = useState("");
+  const [permitExpiryDate, setPermitExpiryDate] = useState("");
 
   const isConcessionActivity = CONCESSION_ACTIVITIES.includes(intendedActivity);
 
@@ -224,6 +227,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         setWaterSourceLatitude(pd.waterSourceLatitude || "");
         setWaterSourceLongitude(pd.waterSourceLongitude || "");
         setConcessionArea(pd.concessionArea?.toString() || "");
+        setPermitIssuedDate(pd.issuedDate || "");
+        setPermitExpiryDate(pd.expiryDate || "");
         return;
       }
 
@@ -315,6 +320,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         appNotes?.concessionArea?.toString() ||
         ""
       );
+      setPermitIssuedDate(permit.issued_date || "");
+      setPermitExpiryDate(permit.expiry_date || "");
     }
   }, [permit, currentApplication, isManualPermit]);
 
@@ -386,8 +393,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   // ── Tab validation ──
   const permitDetailsComplete = useMemo(() => {
     if (!isManualPermit) return true;
-    return !!(waterSourceType && waterPurpose && permitDistrict);
-  }, [isManualPermit, waterSourceType, waterPurpose, permitDistrict]);
+    return !!(waterSourceType && waterPurpose && permitDistrict && permitIssuedDate && permitExpiryDate);
+  }, [isManualPermit, waterSourceType, waterPurpose, permitDistrict, permitIssuedDate, permitExpiryDate]);
 
   const [tabsCompleted, setTabsCompleted] = useState({
     overview: true,
@@ -553,6 +560,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     if (!isManualPermit) return permit;
     return {
       ...permit,
+      issued_date: permitIssuedDate || permit.issued_date,
+      expiry_date: permitExpiryDate || permit.expiry_date,
       water_source: waterSourceType || permit.water_source,
       purpose: waterPurpose || permit.purpose,
       water_allowance: waterAllowance ? parseFloat(waterAllowance) : permit.water_allowance,
@@ -575,6 +584,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     };
   }, [
     isManualPermit, permit,
+    permitIssuedDate, permitExpiryDate,
     waterSourceType, waterPurpose, waterAllowance, allowanceUnit,
     permitProvince, permitDistrict, permitSector, permitCell, permitVillage,
     waterSourceName, intendedActivity, flowRate, abstractionMethod,
@@ -628,6 +638,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         waterSourceLatitude,
         waterSourceLongitude,
         concessionArea: concessionArea ? parseFloat(concessionArea) : null,
+        issuedDate: permitIssuedDate || null,
+        expiryDate: permitExpiryDate || null,
       },
     };
   }, [
@@ -636,7 +648,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
     waterSourceType, waterSourceName, waterPurpose, intendedActivity,
     waterAllowance, allowanceUnit, maxDailyVolume, maxYearlyVolume,
     abstractionMethod, flowRate, waterSourceLatitude, waterSourceLongitude,
-    concessionArea,
+    concessionArea, permitIssuedDate, permitExpiryDate,
   ]);
 
   // ── Load existing water use report ──
@@ -1027,6 +1039,44 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     </AlertDescription>
                   </Alert>
                 )}
+
+                {/* Permit Validity */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <CalendarDays className="h-5 w-5" />
+                      Permit Validity
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Permit Issue Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
+                        {detailsEditable ? (
+                          <Input
+                            type="date"
+                            value={permitIssuedDate}
+                            onChange={(e) => setPermitIssuedDate(e.target.value)}
+                          />
+                        ) : (
+                          <Input value={permitIssuedDate ? formatDate(permitIssuedDate) : "N/A"} disabled className="bg-gray-100" />
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Permit Expiry Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
+                        {detailsEditable ? (
+                          <Input
+                            type="date"
+                            value={permitExpiryDate}
+                            onChange={(e) => setPermitExpiryDate(e.target.value)}
+                          />
+                        ) : (
+                          <Input value={permitExpiryDate ? formatDate(permitExpiryDate) : "N/A"} disabled className="bg-gray-100" />
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Location */}
                 <Card>
