@@ -728,7 +728,11 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
           .eq("id", existingWaterUseReport.id)
           .select("*")
           .single();
-        if (error) { console.error("❌ Failed to update water use report:", error); throw error; }
+        if (error) {
+          console.error("❌ Failed to update water use report:", error);
+          const msg = (error instanceof Error) ? error.message : String((error as any)?.message || JSON.stringify(error));
+          throw new Error(msg);
+        }
         console.log("✅ Water use report updated:", data?.id);
         setExistingWaterUseReport(data as WaterUseReport);
         return data as WaterUseReport;
@@ -757,7 +761,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
       if (!isUniqueConflict) {
         console.error("❌ Failed to insert water use report:", insertError);
-        throw insertError;
+        const insertMsg = (insertError instanceof Error) ? insertError.message : String((insertError as any)?.message || JSON.stringify(insertError));
+        throw new Error(insertMsg);
       }
 
       const { data: conflictedData, error: conflictUpdateError } = await supabase
@@ -770,7 +775,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
       if (conflictUpdateError) {
         console.error("❌ Failed to update conflicted water use report:", conflictUpdateError);
-        throw conflictUpdateError;
+        const conflictMsg = (conflictUpdateError instanceof Error) ? conflictUpdateError.message : String((conflictUpdateError as any)?.message || JSON.stringify(conflictUpdateError));
+        throw new Error(conflictMsg);
       }
 
       console.log("✅ Water use report updated after unique conflict:", conflictedData?.id);
@@ -781,6 +787,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   );
 
   const handleSaveDraft = async (waterUseReportOverride?: any) => {
+    // Guard: button onClick passes a MouseEvent as the first arg — ignore it
+    if (waterUseReportOverride instanceof Event || (waterUseReportOverride && typeof waterUseReportOverride === 'object' && 'nativeEvent' in waterUseReportOverride)) {
+      waterUseReportOverride = undefined;
+    }
     try {
       setIsSaving(true);
       setSaveError(null);
@@ -979,7 +989,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
                 {!readOnly && (
                   <div className="flex justify-between">
-                    <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving} className="gap-2">
+                    <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                       {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                       Save as Draft
                     </Button>
@@ -1244,7 +1254,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                       Back to Overview
                     </Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving} className="gap-2">
+                      <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                         Save as Draft
                       </Button>
@@ -1306,7 +1316,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                       Back to Permit Details
                     </Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving} className="gap-2">
+                      <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                         Save as Draft
                       </Button>
@@ -1416,7 +1426,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                       <ArrowLeft className="h-4 w-4" />Back
                     </Button>
                     <div className="flex gap-2">
-                      <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving} className="gap-2">
+                      <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                         Save as Draft
                       </Button>
