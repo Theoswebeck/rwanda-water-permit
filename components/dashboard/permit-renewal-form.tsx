@@ -1051,7 +1051,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Permit Issue Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
+                        <Label>Effective Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
                         {detailsEditable ? (
                           <Input
                             type="date"
@@ -1063,7 +1063,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Permit Expiry Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
+                        <Label>Expiration Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
                         {detailsEditable ? (
                           <Input
                             type="date"
