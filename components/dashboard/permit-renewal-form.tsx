@@ -699,7 +699,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
       const payload = {
         permit_id: permit.id,
-        application_id: permit.application_id,
+        application_id: permit.application_id || currentApplication?.id || null,
         applicant_id: applicantId,
         reporting_year: reportData?.reportingYear || reportYear,
         template: waterUseTemplate,
