@@ -674,14 +674,18 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         return;
       }
       try {
-        const { data, error } = await supabase
+        const isManual = typeof permit.id === "string" && permit.id.startsWith("manual-");
+        const baseQuery = supabase
           .from("water_use_reports")
           .select("*")
-          .eq("permit_id", permit.id)
           .eq("reporting_year", reportYear)
           .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
+        const { data, error } = await (
+          isManual && currentApplication?.id
+            ? baseQuery.eq("application_id", currentApplication.id)
+            : baseQuery.eq("permit_id", permit.id)
+        ).maybeSingle();
         if (error) {
           console.error("❌ Error loading renewal water use report:", error);
           return;
