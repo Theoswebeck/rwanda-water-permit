@@ -634,20 +634,29 @@ export default function ApplicationDetailPage() {
   useEffect(() => {
     const loadRenewalPermit = async () => {
       if (!application) return;
-      
-      // Check if this is a renewal application
-      const isRenewal = (application as any).is_renewal;
-      const permitId = (application as any).renewed_from_permit_id;
-      
-      if (!isRenewal || !permitId) {
+
+      let parsedNotes: any = {};
+      try {
+        const raw = (application as any).internal_notes;
+        parsedNotes = typeof raw === "string" ? JSON.parse(raw) : (raw ?? {});
+      } catch { /* ignore */ }
+
+      const isRenewal =
+        (application as any).is_renewal ||
+        parsedNotes?.isRenewal === true;
+      const permitId =
+        (application as any).renewed_from_permit_id || parsedNotes?.originalPermitId;
+      const originalPermitNumber = parsedNotes?.originalPermitNumber as string | undefined;
+
+      if (!isRenewal || (!permitId && !originalPermitNumber)) {
         setRenewalPermit(null);
         return;
       }
-      
+
       try {
         setLoadingRenewalPermit(true);
-        
-        const { data: permit, error: permitError } = await supabase
+
+        let permitQuery = supabase
           .from('permits')
           .select(`
             *,
@@ -680,12 +689,69 @@ export default function ApplicationDetailPage() {
                 account_type
               )
             )
-          `)
-          .eq('id', permitId)
-          .single();
-          
+          `);
+
+        if (permitId) {
+          permitQuery = permitQuery.eq('id', permitId) as typeof permitQuery;
+        } else {
+          permitQuery = permitQuery.eq('permit_number', originalPermitNumber!) as typeof permitQuery;
+        }
+
+        const { data: permit, error: permitError } = await permitQuery.single();
+
         if (permitError) {
-          console.error('Error loading renewal permit:', permitError);
+          // Manual registry permits have no row in the permits table.
+          // Reconstruct a synthetic permit from the data stored in internal_notes.
+          const isManualId = typeof permitId === "string" && permitId.startsWith("manual-");
+          const pd = parsedNotes?.permitDetails || {};
+          const permitRef = parsedNotes?.permitReference;
+          const snap = permitRef?.registrySnapshot || {};
+          if (isManualId || permitRef) {
+            const syntheticPermit: any = {
+              id: permitId || `manual-${originalPermitNumber}`,
+              application_id: "",
+              permit_number: originalPermitNumber || permitRef?.inputPermitNumber || "",
+              status: "active",
+              water_source: pd.waterSourceType || snap.water_source || "other",
+              purpose: pd.waterPurpose || snap.purpose || "other",
+              water_allowance: pd.waterAllowance || 0,
+              allowance_unit: pd.allowanceUnit || "m³/year",
+              issuing_authority: snap.issuing_authority || "Rwanda Water Resources Board",
+              issued_date: pd.issuedDate || snap.issued_date || "",
+              expiry_date: pd.expiryDate || snap.expiry_date || "",
+              is_renewal: false,
+              is_transfer: false,
+              is_modification: false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              application: {
+                id: "",
+                project_title: "",
+                province: pd.province || "",
+                district: pd.district || "",
+                sector: pd.sector || "",
+                cell: pd.cell || "",
+                village: pd.village || "",
+                water_body_name: pd.waterSourceName || "",
+                water_purpose: pd.waterPurpose || "",
+                water_source: pd.waterSourceType || "",
+                intended_activities: pd.intendedActivity ? [pd.intendedActivity] : [],
+                applicant: {
+                  id: (application as any)?.applicant?.id || userProfile?.id || "",
+                  email: (application as any)?.applicant?.email || userProfile?.email || "",
+                  first_name: (application as any)?.applicant?.first_name || userProfile?.first_name || "",
+                  last_name: (application as any)?.applicant?.last_name || userProfile?.last_name || "",
+                  company_name: (application as any)?.applicant?.company_name || userProfile?.company_name || "",
+                  account_type: (application as any)?.applicant?.account_type || userProfile?.account_type || "individual",
+                },
+              },
+              permitReference: permitRef,
+            };
+            setRenewalPermit(syntheticPermit);
+            console.log('✅ Synthetic renewal permit constructed from internal_notes');
+          } else {
+            console.error('Error loading renewal permit:', permitError);
+          }
         } else {
           setRenewalPermit(permit as PermitWithApplication);
           console.log('✅ Renewal permit loaded:', permit);
@@ -696,9 +762,9 @@ export default function ApplicationDetailPage() {
         setLoadingRenewalPermit(false);
       }
     };
-    
+
     loadRenewalPermit();
-  }, [application]);
+  }, [application, userProfile?.id]);
 
   // Create userData object for the form (similar to new-application page)
   const userData = {
