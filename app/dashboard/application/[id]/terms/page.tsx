@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase";
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
 import { buildChildPermitNumber } from "@/lib/permit-number-utils";
+import { addPermitExpiry } from "@/lib/date-math";
 import { splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import {
   buildContractPlaceholderContext,
@@ -646,12 +647,11 @@ export default function TermsConditionsPage() {
         });
         return acceptedAt;
       })();
-      const issuanceBaseDateOnly = issuanceBase.toISOString().split('T')[0];
-      const computeExpiryDateOnly = (durationYears: number) => {
-        const expiry = new Date(issuanceBase);
-        expiry.setFullYear(expiry.getFullYear() + durationYears);
-        return expiry.toISOString().split('T')[0];
-      };
+      const toLocalDateString = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const issuanceBaseDateOnly = toLocalDateString(issuanceBase);
+      const computeExpiryDateOnly = (durationYears: number) =>
+        toLocalDateString(addPermitExpiry(issuanceBase, durationYears));
       console.log('📅 Issuance date locked to approved_at:', issuanceBaseDateOnly);
 
       // Defense-in-depth: transfer terms can only be accepted by the approved transferee.

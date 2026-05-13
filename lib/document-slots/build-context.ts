@@ -12,7 +12,7 @@
  * Spec: docs/superpowers/specs/2026-04-23-document-text-editor-design.md §4.4
  */
 
-import { addYearsSafe } from "@/lib/date-math";
+import { addPermitExpiry } from "@/lib/date-math";
 import { getEffectiveInternalNotes } from "@/lib/document-overrides";
 import {
   resolvePermitDuration,
@@ -58,7 +58,7 @@ export function buildPermitSlotContext(
   const issueDate = input.issueDate ?? new Date();
   const expiryDate =
     input.expiryDate ??
-    addYearsSafe(issueDate, resolvePermitDuration(application));
+    addPermitExpiry(issueDate, resolvePermitDuration(application));
   const headerYear = resolveTimeZoneYear(issueDate);
 
   const permit: PermitSlotContextExtras = {
