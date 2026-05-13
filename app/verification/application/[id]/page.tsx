@@ -31,7 +31,7 @@ import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/li
 import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
-import { getApplicationWorkflowKind } from "@/lib/application-workflow";
+import { getApplicationWorkflowKind, isAssessmentComplete } from "@/lib/application-workflow";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { ArrowLeft, Loader2, XCircle, ClipboardCheck, Check, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
@@ -796,6 +796,8 @@ export default function VerificationApplicationPage() {
     );
   }
 
+  const showPreviews = isAssessmentComplete(application.status);
+
   return (
     <ProtectedRoute allowedRoles={["verifier", "admin"]} requireProfile={true}>
       <DashboardLayout>
@@ -868,7 +870,7 @@ export default function VerificationApplicationPage() {
             )}
 
             <Tabs defaultValue="application_details" className="space-y-6">
-              <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-4' : 'grid-cols-5'} h-auto p-1 bg-muted/80`}>
+              <TabsList className={`grid w-full ${isTransferApp ? (showPreviews ? 'grid-cols-4' : 'grid-cols-2') : (showPreviews ? 'grid-cols-5' : 'grid-cols-3')} h-auto p-1 bg-muted/80`}>
                 <TabsTrigger value="application_details" className="py-2.5">
                   Application Details
                 </TabsTrigger>
@@ -877,12 +879,16 @@ export default function VerificationApplicationPage() {
                   Assessment Report
                 </TabsTrigger>
                 )}
+                {showPreviews && (
                 <TabsTrigger value="contract_preview" className="py-2.5">
                   Contract Preview
                 </TabsTrigger>
+                )}
+                {showPreviews && (
                 <TabsTrigger value="permit_preview" className="py-2.5">
                   Permit Preview
                 </TabsTrigger>
+                )}
                 <TabsTrigger value="internal_notes" className="py-2.5">
                   History & Notes
                 </TabsTrigger>
@@ -1064,6 +1070,7 @@ export default function VerificationApplicationPage() {
             )}
 
 
+            {showPreviews && (
             <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
               <ContractTermsPreview
                 application={application}
@@ -1077,11 +1084,14 @@ export default function VerificationApplicationPage() {
                 } : null)}
               />
             </TabsContent>
+            )}
 
             {/* Permit Preview Tab */}
+            {showPreviews && (
             <TabsContent value="permit_preview" className="focus-visible:outline-none">
               {application.id && <PermitPreviewFrame applicationId={application.id} />}
             </TabsContent>
+            )}
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
               <div className="space-y-6">
