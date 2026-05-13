@@ -190,7 +190,19 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const [permitIssuedDate, setPermitIssuedDate] = useState("");
   const [permitExpiryDate, setPermitExpiryDate] = useState("");
 
-  const isConcessionActivity = CONCESSION_ACTIVITIES.includes(intendedActivity);
+  // Derive from all sources so the correct section shows even before the init effect fires.
+  const isConcessionActivity = useMemo(() => {
+    const findActivity = (arr: unknown) =>
+      Array.isArray(arr)
+        ? (arr as string[]).find((a) => typeof a === "string" && a.trim() !== "")
+        : undefined;
+    const activity =
+      intendedActivity ||
+      findActivity(currentApplication?.intended_activities) ||
+      findActivity(permit.application?.intended_activities) ||
+      "";
+    return CONCESSION_ACTIVITIES.includes(activity);
+  }, [intendedActivity, currentApplication?.intended_activities, permit.application?.intended_activities]);
 
   // Initialize permit details from permit object (system permits) or currentApplication (editing draft)
   const hasInitializedPermitDetails = useRef(false);
