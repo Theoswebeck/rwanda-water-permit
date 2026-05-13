@@ -248,6 +248,8 @@ export default function TermsConditionsPage() {
             water_purpose,
             is_renewal,
             renewed_from_permit_id,
+            is_bulk,
+            bulk_networks,
             applicant:users!applicant_id(account_type, first_name, last_name, company_name, id_number)
           `
           )
@@ -1786,6 +1788,47 @@ export default function TermsConditionsPage() {
                                       {resolvedTerms.importantNotice.body}
                                     </p>
                                   </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {(termsApplication as any)?.is_bulk && Array.isArray((termsApplication as any)?.bulk_networks) && (termsApplication as any).bulk_networks.length > 0 && (
+                              <div className="mt-6">
+                                <Separator className="mb-4" />
+                                <p className="text-sm font-semibold text-gray-800 mb-3">Annex — List of Authorized Distribution Networks</p>
+                                <div className="overflow-x-auto rounded border border-gray-200">
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-gray-800 text-white">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left font-medium">Permit Number</th>
+                                        <th className="px-3 py-2 text-left font-medium">Network Name</th>
+                                        <th className="px-3 py-2 text-left font-medium">Sector</th>
+                                        <th className="px-3 py-2 text-left font-medium">Cell</th>
+                                        <th className="px-3 py-2 text-left font-medium">Village</th>
+                                        <th className="px-3 py-2 text-left font-medium">Coordinates</th>
+                                        <th className="px-3 py-2 text-left font-medium">Capacity (m³/day)</th>
+                                        <th className="px-3 py-2 text-left font-medium">Abstraction Method</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {((termsApplication as any).bulk_networks as any[]).map((net: any, i: number) => {
+                                        const year = new Date().getFullYear();
+                                        const childNum = `―――_${i + 1}/RWB/${year}`;
+                                        return (
+                                          <tr key={i} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
+                                            <td className="px-3 py-2 font-mono text-xs border-t border-gray-200">{childNum}</td>
+                                            <td className="px-3 py-2 border-t border-gray-200">{net.network_name ?? ""}</td>
+                                            <td className="px-3 py-2 border-t border-gray-200">{net.sector ?? ""}</td>
+                                            <td className="px-3 py-2 border-t border-gray-200">{net.cell ?? ""}</td>
+                                            <td className="px-3 py-2 border-t border-gray-200">{net.village ?? ""}</td>
+                                            <td className="px-3 py-2 font-mono border-t border-gray-200">{net.coordinates ?? ""}</td>
+                                            <td className="px-3 py-2 border-t border-gray-200">{net.capacity_m3_day ?? ""}</td>
+                                            <td className="px-3 py-2 border-t border-gray-200">{net.abstraction_method ?? ""}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
                                 </div>
                               </div>
                             )}
