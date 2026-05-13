@@ -146,7 +146,7 @@ const ALLOWANCE_UNIT_OPTIONS = [
   { value: "l/s", label: "l/s" },
 ];
 
-const CONCESSION_ACTIVITIES = ["fish_farming_lakes", "recreation_activities"];
+const CONCESSION_ACTIVITIES = ["fish_farming_lakes", "recreation_activities", "aquaculture"];
 
 export const PermitRenewalForm = memo(function PermitRenewalForm({
   permit,
@@ -339,8 +339,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
   const waterUseTemplate: WaterUseReportTemplate = useMemo(() => {
     const act = intendedActivity || (permit.application?.intended_activities as string[] | undefined)?.[0] || "";
-    if (act === "fish_farming_lakes" || act === "aquaculture") return "concession";
-    return "abstraction";
+    return CONCESSION_ACTIVITIES.includes(act) ? "concession" : "abstraction";
   }, [intendedActivity, permit.application?.intended_activities]);
   const reportYear = useMemo(() => new Date().getFullYear() - 1, []);
 
