@@ -178,6 +178,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
         a.water_taking_method,
         a.is_modification,
         a.approved_at,
+        a.is_bulk,
+        a.bulk_networks,
         u.first_name,
         u.last_name,
         u.email,
@@ -262,6 +264,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     // water_body_name is accessed as (app as any).water_body_name in resolveWaterSourceName
     (application as any).water_body_name =
       row.water_body_name != null ? String(row.water_body_name) : undefined;
+
+    // Bulk water supply — required by selectPermitVariant() and resolveBulkNetworks()
+    (application as any).is_bulk = row.is_bulk === true;
+    (application as any).bulk_networks = Array.isArray(row.bulk_networks)
+      ? row.bulk_networks
+      : [];
 
     // ── Resolve permit number ─────────────────────────────────────────────────
     const isModification =
