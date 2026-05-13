@@ -810,8 +810,8 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const networkCount = networks.length;
   const networkCountLabel = `${networkCount} water supply network${networkCount !== 1 ? "s" : ""}`;
 
-  const bulkPara2En = `"${orgName}" with its registered office address as follows: ${orgAddr}; represented by ${rep.name} "${rep.title}", is authorized to abstract water from ${networkCountLabel} located in ${adminLoc.district} District as described in the attached annex. Water abstracted will be used for water supply.`;
-  const bulkPara2Rw = `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe gukoresha amazi y'imiyoboro ${networkCount} iherereye mu Akarere ka ${adminLoc.district} nk'uko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo gukwirakwiza amazi.`;
+  const bulkPara2En = `"${orgName}" with its registered office address as follows: ${orgAddr}; represented by ${rep.name} "${rep.title}", is authorized to abstract water from ${networkCountLabel} located in ${adminLoc.district} District as specified in the attached annex. Water abstracted will be used for water supply.`;
+  const bulkPara2Rw = `"${orgName}" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "${rep.title}", yemerewe gukoresha amazi y'imiyoboro ${networkCount} iherereye mu Akarere ka ${adminLoc.district} nkuko bigaragara ku mugereka. Aya mazi yemerewe gukoreshwa mu bikorwa byo gukwirakwiza amazi.`;
 
   const englishParagraphs = [
     resolveSlotText("permit.abstraction_organization.en.para_1", ctx),
@@ -866,10 +866,11 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
     const annexMaxW = pageWidth(doc) - annexMarginX * 2;
     let ay = 20 * PT;
 
-    // Annex title
+    // Annex title — matches the official DOCX template: "Annex to the Water Use Permit N° .../RWB/YYYY"
     doc.font(FONT_BOLD).fontSize(12).fillColor("#000000");
-    doc.text("ANNEX — LIST OF AUTHORIZED DISTRIBUTION NETWORKS", annexMarginX, ay, { width: annexMaxW, align: "center" });
-    ay += doc.heightOfString("ANNEX", { width: annexMaxW }) + 6 * PT;
+    const annexTitle = `Annex to the Water Use Permit N° ${permitNumber}`;
+    doc.text(annexTitle, annexMarginX, ay, { width: annexMaxW, align: "center" });
+    ay += doc.heightOfString(annexTitle, { width: annexMaxW }) + 6 * PT;
     doc.moveTo(annexMarginX, ay).lineTo(annexMarginX + annexMaxW, ay).lineWidth(0.5).stroke("#1f2937");
     ay += 4 * PT;
 
