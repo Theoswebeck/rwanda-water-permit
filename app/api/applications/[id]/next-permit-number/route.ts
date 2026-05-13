@@ -1,23 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db/postgres";
-import { readSessionTokenFromRequest, verifySessionToken } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const token = readSessionTokenFromRequest(req);
-  const claims = token ? await verifySessionToken(token) : null;
-  if (!claims?.sub) {
-    return NextResponse.json({ success: false, message: "Not authenticated" }, { status: 401 });
-  }
-
-  const { id } = await ctx.params;
-  if (!id || typeof id !== "string" || id.length < 10) {
-    return NextResponse.json({ success: false, message: "Invalid application id" }, { status: 400 });
-  }
+  await ctx.params; // consume params (required by Next.js even if unused)
 
   // Use Africa/Kigali timezone — same as the DB trigger — so the year matches.
   const year = parseInt(

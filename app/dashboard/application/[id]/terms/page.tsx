@@ -479,7 +479,7 @@ export default function TermsConditionsPage() {
 
         const variant = selectPermitVariant(data as any);
 
-        const isBulk = (data as any).is_bulk === true;
+        const isBulk = !!(data as any).is_bulk;
         const bulkNetworks = Array.isArray((data as any).bulk_networks) ? (data as any).bulk_networks : [];
         if (isBulk && bulkNetworks.length > 0) {
           try {
