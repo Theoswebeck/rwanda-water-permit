@@ -40,7 +40,7 @@ import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { enrichModificationChanges } from "@/lib/application-utils";
-import { getApplicationWorkflowKind } from "@/lib/application-workflow";
+import { getApplicationWorkflowKind, isAssessmentComplete } from "@/lib/application-workflow";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
@@ -1100,6 +1100,7 @@ export default function ReviewApplicationPage() {
 
   // Calculate this once to avoid any re-evaluation issues
   const showReviewActions = shouldShowReviewActions(application.status);
+  const showPreviews = isAssessmentComplete(application.status);
 
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin']} requireProfile={true}>
@@ -1295,13 +1296,13 @@ export default function ReviewApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-            <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-4' : 'grid-cols-5'} h-auto p-1 bg-muted/80`}>
+            <TabsList className={`grid w-full ${isTransferApp ? (showPreviews ? 'grid-cols-4' : 'grid-cols-2') : (showPreviews ? 'grid-cols-5' : 'grid-cols-3')} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details">Application Details</TabsTrigger>
               {!isTransferApp && (
                 <TabsTrigger value="field_report">Assessment Report</TabsTrigger>
               )}
-              <TabsTrigger value="contract_preview">Contract Preview</TabsTrigger>
-              <TabsTrigger value="permit_preview">Permit Preview</TabsTrigger>
+              {showPreviews && <TabsTrigger value="contract_preview">Contract Preview</TabsTrigger>}
+              {showPreviews && <TabsTrigger value="permit_preview">Permit Preview</TabsTrigger>}
               <TabsTrigger value="internal_notes">History & Notes</TabsTrigger>
             </TabsList>
 
@@ -1474,6 +1475,7 @@ export default function ReviewApplicationPage() {
             )}
 
             {/* Contract Preview Tab */}
+            {showPreviews && (
             <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
               <ContractTermsPreview
                 application={application}
@@ -1487,11 +1489,14 @@ export default function ReviewApplicationPage() {
                 } : null)}
               />
             </TabsContent>
+            )}
 
             {/* Permit Preview Tab */}
+            {showPreviews && (
             <TabsContent value="permit_preview" className="focus-visible:outline-none">
               {application.id && <PermitPreviewFrame applicationId={application.id} />}
             </TabsContent>
+            )}
 
             {/* Internal Notes Tab */}
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
