@@ -1,3 +1,5 @@
+import type { ApplicationStatus } from "@/types/database";
+
 type NotesLike = Record<string, unknown>;
 
 export type ApplicationWorkflowKind =
@@ -47,4 +49,15 @@ export function getApplicationWorkflowKind(
   if (isTransfer) return "transfer";
 
   return "standard";
+}
+
+const ASSESSMENT_INCOMPLETE_STATUSES = new Set<ApplicationStatus>([
+  "submitted",
+  "pending_assessment",
+  "returned_to_assessment",
+  "rejected",
+]);
+
+export function isAssessmentComplete(status: ApplicationStatus): boolean {
+  return !ASSESSMENT_INCOMPLETE_STATUSES.has(status);
 }
