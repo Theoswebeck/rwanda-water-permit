@@ -193,6 +193,7 @@ export default function TermsConditionsPage() {
 
   const [applicationNumber, setApplicationNumber] = useState<string>("");
   const [projectTitle, setProjectTitle] = useState<string>("");
+  const [nextPermitNumber, setNextPermitNumber] = useState<string | null>(null);
   const [language, setLanguage] = useState<AppLanguage>("en");
   const tx = useCallback((value: string) => translateText(value, language), [language]);
 
@@ -477,6 +478,23 @@ export default function TermsConditionsPage() {
         }
 
         const variant = selectPermitVariant(data as any);
+
+        const isBulk = (data as any).is_bulk === true;
+        const bulkNetworks = Array.isArray((data as any).bulk_networks) ? (data as any).bulk_networks : [];
+        if (isBulk && bulkNetworks.length > 0) {
+          try {
+            const npResp = await fetch(`/api/applications/${applicationId}/next-permit-number`, { cache: "no-store" });
+            if (npResp.ok) {
+              const npJson = await npResp.json().catch(() => null);
+              if (!cancelled && npJson?.nextPermitNumber) {
+                setNextPermitNumber(npJson.nextPermitNumber);
+              }
+            }
+          } catch {
+            // Non-fatal — annex falls back to placeholder dashes
+          }
+        }
+
         if (!cancelled) {
           setTermsVariant(variant);
           setTermsApplication(data);
@@ -1813,7 +1831,9 @@ export default function TermsConditionsPage() {
                                     <tbody>
                                       {((termsApplication as any).bulk_networks as any[]).map((net: any, i: number) => {
                                         const year = new Date().getFullYear();
-                                        const childNum = `―――_${i + 1}/RWB/${year}`;
+                                        const childNum = nextPermitNumber
+                                          ? buildChildPermitNumber(nextPermitNumber, i + 1)
+                                          : `―――_${i + 1}/RWB/${year}`;
                                         return (
                                           <tr key={i} className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}>
                                             <td className="px-3 py-2 font-mono text-xs border-t border-gray-200">{childNum}</td>
