@@ -32,7 +32,7 @@ import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
 import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
 import { enrichModificationChanges } from "@/lib/application-utils";
-import { getApplicationWorkflowKind } from "@/lib/application-workflow";
+import { getApplicationWorkflowKind, isAssessmentComplete } from "@/lib/application-workflow";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -858,6 +858,8 @@ export default function ApproverApplicationPage() {
     );
   }
   
+  const showPreviews = isAssessmentComplete(application.status);
+
   return (
     <ProtectedRoute allowedRoles={['approver', 'admin']} requireProfile={true}>
       <DashboardLayout>
@@ -956,13 +958,13 @@ export default function ApproverApplicationPage() {
 
           {/* Main Content with Tabs */}
           <Tabs defaultValue="application_details" className="space-y-6">
-          <TabsList className={`grid w-full ${isTransferApp ? 'grid-cols-4' : 'grid-cols-5'} h-auto p-1 bg-muted/80`}>
+          <TabsList className={`grid w-full ${isTransferApp ? (showPreviews ? 'grid-cols-4' : 'grid-cols-2') : (showPreviews ? 'grid-cols-5' : 'grid-cols-3')} h-auto p-1 bg-muted/80`}>
               <TabsTrigger value="application_details" className="py-2.5">Application Details</TabsTrigger>
               {!isTransferApp && (
                 <TabsTrigger value="field_report" className="py-2.5">Assessment Report</TabsTrigger>
               )}
-              <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>
-              <TabsTrigger value="permit_preview" className="py-2.5">Permit Preview</TabsTrigger>
+              {showPreviews && <TabsTrigger value="contract_preview" className="py-2.5">Contract Preview</TabsTrigger>}
+              {showPreviews && <TabsTrigger value="permit_preview" className="py-2.5">Permit Preview</TabsTrigger>}
               <TabsTrigger value="internal_notes" className="py-2.5">History & Notes</TabsTrigger>
         </TabsList>
 
@@ -1146,6 +1148,7 @@ export default function ApproverApplicationPage() {
             )}
 
 
+            {showPreviews && (
             <TabsContent value="contract_preview" className="space-y-6 focus-visible:outline-none">
               <ContractTermsPreview
                 application={application}
@@ -1159,8 +1162,10 @@ export default function ApproverApplicationPage() {
                 } : null)}
               />
             </TabsContent>
+            )}
 
             {/* Permit Preview Tab */}
+            {showPreviews && (
             <TabsContent value="permit_preview" className="space-y-4 focus-visible:outline-none">
               {application.id && (
                 <ApproverChangedSlotsPane
@@ -1170,6 +1175,7 @@ export default function ApproverApplicationPage() {
               )}
               {application.id && <PermitPreviewFrame applicationId={application.id} />}
             </TabsContent>
+            )}
 
             <TabsContent value="internal_notes" className="space-y-6 focus-visible:outline-none">
           {application.id && (
