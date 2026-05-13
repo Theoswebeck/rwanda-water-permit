@@ -1264,8 +1264,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   </CardContent>
                 </Card>
 
-                {/* Volume & Allowance */}
-                <Card>
+                {/* Volume & Allowance — abstraction only */}
+                {!isConcessionActivity && <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <BarChart3 className="h-5 w-5" />
@@ -1299,7 +1299,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                       </div>
                     </div>
                   </CardContent>
-                </Card>
+                </Card>}
 
                 {/* Abstraction Details (non-concession) */}
                 {!isConcessionActivity && (
