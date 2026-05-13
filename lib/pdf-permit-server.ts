@@ -16,7 +16,7 @@ import fs from "node:fs";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import { selectPermitVariant } from "@/lib/permit-variant";
-import { addYearsSafe } from "./date-math";
+import { addPermitExpiry } from "./date-math";
 import { getEffectiveInternalNotes } from "./document-overrides";
 import {
   resolvePermitDuration,
@@ -96,8 +96,8 @@ const BODY_BOTTOM_PAD = 2 * PT;
  * changing fonts. Used by all variant renderers so EN/RW spacing stays consistent.
  */
 const PERMIT_PARA_GAP_PT = 2;
-const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 2;
-const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 3;
+const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 6;
+const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 8;
 const PERMIT_BEFORE_CLOSING_PT = 4;
 
 function contentBottomY(doc: PDFKit.PDFDocument): number {
@@ -124,7 +124,7 @@ const PERMIT_MARGIN_X = 12 * PT;
  * under the paragraphs above). Uses the same mm-based `PT` scale as
  * {@link PERMIT_MARGIN_X}.
  */
-const CLOSING_SIGNATORY_INDENT = 10 * PT;
+const CLOSING_SIGNATORY_INDENT = 0;
 /** Gap between signatory column and date column. */
 const CLOSING_COLUMNS_GAP = 6 * PT;
 
@@ -499,7 +499,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   const issueDate = opts.issuedDate ?? new Date();
   const expiryDate =
     opts.expiryDate ??
-    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
+    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
@@ -566,7 +566,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   const issueDate = opts.issuedDate ?? new Date();
   const expiryDate =
     opts.expiryDate ??
-    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
+    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
@@ -629,7 +629,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   const issueDate = opts.issuedDate ?? new Date();
   const expiryDate =
     opts.expiryDate ??
-    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
+    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
@@ -704,7 +704,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const issueDate = opts.issuedDate ?? new Date();
   const expiryDate =
     opts.expiryDate ??
-    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
+    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
@@ -779,7 +779,7 @@ async function renderBulkWaterSupply(opts: PermitRenderOpts): Promise<Buffer> {
   const issueDate = opts.issuedDate ?? new Date();
   const expiryDate =
     opts.expiryDate ??
-    addYearsSafe(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
+    addPermitExpiry(new Date(issueDate), resolvePermitDuration(app, opts.permitValidityYears));
   const ctx = buildSlotCtx(opts, issueDate, expiryDate);
 
   const doc = createDoc();
