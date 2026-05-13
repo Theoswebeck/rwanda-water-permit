@@ -217,7 +217,14 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         setWaterSourceType(pd.waterSourceType || currentApplication.water_source || "");
         setWaterSourceName(pd.waterSourceName || currentApplication.water_body_name || "");
         setWaterPurpose(pd.waterPurpose || currentApplication.water_purpose || "");
-        setIntendedActivity(pd.intendedActivity || (currentApplication.intended_activities as string[] | undefined)?.[0] || "");
+        setIntendedActivity(
+          pd.intendedActivity ||
+          (currentApplication.intended_activities as string[] | undefined)?.[0] ||
+          (Array.isArray(permit.application?.intended_activities)
+            ? permit.application.intended_activities.find((a): a is string => typeof a === "string" && a.trim() !== "")
+            : undefined) ||
+          ""
+        );
         setWaterAllowance(pd.waterAllowance?.toString() || "");
         setAllowanceUnit(pd.allowanceUnit || "m³/year");
         setMaxDailyVolume(pd.maxDailyVolume?.toString() || "");
@@ -241,7 +248,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       setWaterSourceType(currentApplication.water_source || "");
       setWaterSourceName(currentApplication.water_body_name || "");
       setWaterPurpose(currentApplication.water_purpose || "");
-      setIntendedActivity((currentApplication.intended_activities as string[] | undefined)?.[0] || "");
+      setIntendedActivity(
+        (currentApplication.intended_activities as string[] | undefined)?.[0] ||
+        (Array.isArray(permit.application?.intended_activities)
+          ? permit.application.intended_activities.find((a): a is string => typeof a === "string" && a.trim() !== "")
+          : undefined) ||
+        ""
+      );
       setAbstractionMethod(currentApplication.water_taking_method || "");
       setFlowRate(currentApplication.flow_rate_m3_per_second?.toString() || "");
       return;
