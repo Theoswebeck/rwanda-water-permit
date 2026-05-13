@@ -30,7 +30,7 @@ import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
-import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
+import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import { getApplicationWorkflowKind } from "@/lib/application-workflow";
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
@@ -659,7 +659,21 @@ export default function ApproverApplicationPage() {
         const { data: permit, error: permitError } = await permitQuery.single();
 
         if (permitError) {
-          console.error('Error loading renewal permit:', permitError);
+          // Manual registry permits have no row in the permits table.
+          // Reconstruct a synthetic permit from internal_notes using the shared helper.
+          const isManualId = typeof permitId === "string" && permitId.startsWith("manual-");
+          const permitRef = parsedNotesForRenewal?.permitReference;
+          if (isManualId || permitRef) {
+            const appApplicant = (application as any)?.applicant || null;
+            const syntheticPermit = buildSyntheticRenewalPermit(
+              parsedNotesForRenewal as Record<string, unknown>,
+              appApplicant,
+              (application as any).id,
+            );
+            setRenewalPermit(syntheticPermit as unknown as PermitWithApplication);
+          } else {
+            console.error('Error loading renewal permit:', permitError);
+          }
         } else {
           const typedPermit = permit as PermitWithApplication;
           setRenewalPermit(typedPermit);

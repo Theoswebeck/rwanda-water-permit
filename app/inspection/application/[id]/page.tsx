@@ -46,7 +46,7 @@ import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { resolveDocumentFieldToken } from "@/lib/documents/upload-mapping";
 import { mergeAdditionalDocumentUrls } from "@/lib/documents/additional-documents";
-import { buildSyntheticPermitFromNotes } from "@/lib/permit/build-synthetic-permit";
+import { buildSyntheticPermitFromNotes, buildSyntheticRenewalPermit } from "@/lib/permit/build-synthetic-permit";
 import { enrichModificationChanges } from "@/lib/application-utils";
 import type { Application, ApplicationStatus, User as UserType, Document, Review } from "@/types/database";
 import { ApplicationComments } from "@/components/shared/ApplicationComments";
@@ -598,19 +598,28 @@ export default function InspectorApplicationView() {
   useEffect(() => {
     const loadRenewalPermit = async () => {
       if (!application) return;
-      
-      const isRenewal = (application as any).is_renewal;
-      const permitId = (application as any).renewed_from_permit_id;
-      
-      if (!isRenewal || !permitId) {
+
+      let parsedNotesForRenewal: any = {};
+      try {
+        const raw = (application as any).internal_notes;
+        parsedNotesForRenewal = typeof raw === "string" ? JSON.parse(raw) : (raw ?? {});
+      } catch { /* ignore */ }
+      const isRenewal =
+        (application as any).is_renewal ||
+        (application as any).application_type?.toLowerCase() === "renewal" ||
+        parsedNotesForRenewal?.isRenewal === true;
+      const permitId = (application as any).renewed_from_permit_id || parsedNotesForRenewal?.originalPermitId;
+      const originalPermitNumber = parsedNotesForRenewal?.originalPermitNumber as string | undefined;
+
+      if (!isRenewal || (!permitId && !originalPermitNumber)) {
         setRenewalPermit(null);
         return;
       }
-      
+
       try {
         setLoadingRenewalPermit(true);
-        
-        const { data: permit, error: permitError } = await supabase
+
+        let permitQuery = supabase
           .from('permits')
           .select(`
             *,
@@ -637,18 +646,38 @@ export default function InspectorApplicationView() {
                 phone,
                 first_name,
                 last_name,
+                id_number,
                 company_name,
+                company_tin,
                 company_address,
                 company_phone,
                 account_type
               )
             )
-          `)
-          .eq('id', permitId)
-          .single();
-          
+          `);
+        if (permitId) {
+          permitQuery = permitQuery.eq('id', permitId) as typeof permitQuery;
+        } else {
+          permitQuery = permitQuery.eq('permit_number', originalPermitNumber!) as typeof permitQuery;
+        }
+        const { data: permit, error: permitError } = await permitQuery.single();
+
         if (permitError) {
-          console.error('Error loading renewal permit:', permitError);
+          // Manual registry permits have no row in the permits table.
+          // Reconstruct a synthetic permit from internal_notes using the shared helper.
+          const isManualId = typeof permitId === "string" && permitId.startsWith("manual-");
+          const permitRef = parsedNotesForRenewal?.permitReference;
+          if (isManualId || permitRef) {
+            const appApplicant = (application as any)?.applicant || null;
+            const syntheticPermit = buildSyntheticRenewalPermit(
+              parsedNotesForRenewal as Record<string, unknown>,
+              appApplicant,
+              (application as any).id,
+            );
+            setRenewalPermit(syntheticPermit as unknown as PermitWithApplication);
+          } else {
+            console.error('Error loading renewal permit:', permitError);
+          }
         } else {
           setRenewalPermit(permit as PermitWithApplication);
         }
@@ -658,7 +687,7 @@ export default function InspectorApplicationView() {
         setLoadingRenewalPermit(false);
       }
     };
-    
+
     loadRenewalPermit();
   }, [application]);
 
