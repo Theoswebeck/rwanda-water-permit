@@ -181,13 +181,19 @@ export default async function PublicPermitViewPage({
     // application-column fallback below.
     const notes = parseInternalNotes(app.internal_notes);
 
-    const parts = [
-      notes?.waterSourceVillage ?? app.village,
-      notes?.waterSourceCell ?? app.cell,
-      notes?.waterSourceSector ?? app.sector,
-      notes?.waterSourceDistrict ?? app.district,
-      notes?.waterSourceProvince ?? app.province,
-    ].filter(Boolean);
+    const isBulk = !!(app as any).is_bulk;
+    const parts = isBulk
+      ? [
+          notes?.waterSourceDistrict ?? app.district,
+          notes?.waterSourceProvince ?? app.province,
+        ].filter(Boolean)
+      : [
+          notes?.waterSourceVillage ?? app.village,
+          notes?.waterSourceCell ?? app.cell,
+          notes?.waterSourceSector ?? app.sector,
+          notes?.waterSourceDistrict ?? app.district,
+          notes?.waterSourceProvince ?? app.province,
+        ].filter(Boolean);
     return parts.length ? parts.join(", ") : "N/A";
   })();
 
