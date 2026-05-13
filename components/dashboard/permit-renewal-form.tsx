@@ -219,7 +219,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
         setWaterPurpose(pd.waterPurpose || currentApplication.water_purpose || "");
         setIntendedActivity(
           pd.intendedActivity ||
-          (currentApplication.intended_activities as string[] | undefined)?.[0] ||
+          (Array.isArray(currentApplication.intended_activities)
+            ? (currentApplication.intended_activities as string[]).find((a) => typeof a === "string" && a.trim() !== "")
+            : undefined) ||
           (Array.isArray(permit.application?.intended_activities)
             ? permit.application.intended_activities.find((a): a is string => typeof a === "string" && a.trim() !== "")
             : undefined) ||
@@ -249,7 +251,9 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
       setWaterSourceName(currentApplication.water_body_name || "");
       setWaterPurpose(currentApplication.water_purpose || "");
       setIntendedActivity(
-        (currentApplication.intended_activities as string[] | undefined)?.[0] ||
+        (Array.isArray(currentApplication.intended_activities)
+          ? (currentApplication.intended_activities as string[]).find((a) => typeof a === "string" && a.trim() !== "")
+          : undefined) ||
         (Array.isArray(permit.application?.intended_activities)
           ? permit.application.intended_activities.find((a): a is string => typeof a === "string" && a.trim() !== "")
           : undefined) ||
@@ -351,7 +355,12 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const [existingWaterUseReport, setExistingWaterUseReport] = useState<WaterUseReport | null>(null);
 
   const waterUseTemplate: WaterUseReportTemplate = useMemo(() => {
-    const act = intendedActivity || (permit.application?.intended_activities as string[] | undefined)?.[0] || "";
+    const act =
+      intendedActivity ||
+      (Array.isArray(permit.application?.intended_activities)
+        ? permit.application.intended_activities.find((a): a is string => typeof a === "string" && a.trim() !== "")
+        : undefined) ||
+      "";
     return CONCESSION_ACTIVITIES.includes(act) ? "concession" : "abstraction";
   }, [intendedActivity, permit.application?.intended_activities]);
   const reportYear = useMemo(() => new Date().getFullYear() - 1, []);
