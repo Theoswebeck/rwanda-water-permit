@@ -32,6 +32,15 @@ export function getAnnexRequirementForActivity(
             : [req(applicationLetterLabel, "irrigationGeneralRequirements")],
       };
 
+    // Annex B (District Water Supply — application letter only, no feasibility study)
+    case "district_water_supply":
+      return {
+        annexTitle: "ANNEX B (Only for Water Supply)",
+        attachments: [
+          req(applicationLetterLabel, "waterSupplyGeneralRequirements"),
+        ],
+      };
+
     // Annex B (Water Supply)
     case "water_supply":
       return {

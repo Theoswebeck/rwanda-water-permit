@@ -1641,6 +1641,8 @@ export function ApplicationForm({
     ? "concession"
     : (watchedWaterUseCategory ?? "abstraction");
 
+  const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
+
   // Auto-reset waterUseCategory to abstraction when activities change away from concession types.
   // This prevents "Coffee Washing" or other abstraction activities from showing concession UI
   // after the user had previously selected "Concession" for a different activity.
@@ -1809,7 +1811,7 @@ export function ApplicationForm({
     const savedCategory = form.getValues('waterUseCategory');
     const effectiveCat = isPureConcessionAct ? 'concession' : (savedCategory ?? 'abstraction');
     const requiresConcessionPolygons = effectiveCat === 'concession';
-    const requiresAbstractionDetails = effectiveCat === 'abstraction';
+    const requiresAbstractionDetails = effectiveCat === 'abstraction' && selectedActivity !== 'district_water_supply';
     const requiresRecreationDetails = intended.includes('recreation_activities');
 
     const hasText = (value: unknown) => String(value ?? '').trim() !== '';
@@ -1845,6 +1847,9 @@ export function ApplicationForm({
           !requireTextField('irrigationMethod', form.getValues('irrigationMethod'), 'Irrigation method is required.') ||
           !requireNumberField('irrigationTotalArea', form.getValues('irrigationTotalArea'), 'Total irrigated area must be a number greater than 0.') ||
           !requireNumberField('irrigationWaterDemand', form.getValues('irrigationWaterDemand'), 'Irrigation water demand must be a number greater than 0.');
+        break;
+      case 'district_water_supply':
+        // No activity-specific numeric fields — district + networks are validated below.
         break;
       case 'water_supply':
         hasMissingActivityFields =
@@ -1918,6 +1923,23 @@ export function ApplicationForm({
     if (hasMissingActivityFields) {
       setValidationError('Please complete all required fields for the selected activity before proceeding.');
       return false;
+    }
+
+    if (selectedActivity === 'district_water_supply') {
+      const district = form.getValues('waterSourceDistrict') || '';
+      if (!district.trim()) {
+        setValidationError('Please select a district for the water supply networks.');
+        return false;
+      }
+      if (!bulkNetworks.some((r: any) => r.network_name?.trim())) {
+        setValidationError('Please add at least one network with a network name.');
+        return false;
+      }
+      if (!checkRequiredDocuments()) {
+        setValidationError("Please upload all required documents for your selected activities before proceeding.");
+        return false;
+      }
+      return true;
     }
 
     if (requiresRecreationDetails) {
@@ -2227,7 +2249,7 @@ export function ApplicationForm({
         const waterSourceSector = form.watch('waterSourceSector') || form.getValues('waterSourceSector') || '';
         const waterSourceCell = form.watch('waterSourceCell') || form.getValues('waterSourceCell') || '';
         
-        const hasWaterSourceFields = isBulkApplicant
+        const hasWaterSourceFields = isDistrictWaterSupply
           ? waterSourceType.trim() !== '' &&
             nameSourceWater.trim() !== '' &&
             waterSourceProvince.trim() !== '' &&
@@ -2353,10 +2375,13 @@ export function ApplicationForm({
         
         if (!hasActivityFields) return true;
 
-        if (isBulkApplicant) {
+        const isDistrictWS = intendedActivities[0] === 'district_water_supply';
+
+        if (isDistrictWS) {
           const district = form.watch('waterSourceDistrict') || form.getValues('waterSourceDistrict') || '';
           if (!district.trim()) return true;
           if (!bulkNetworks.some((r) => r.network_name?.trim())) return true;
+          return !hasRequiredDocs;
         }
 
         const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities'];
@@ -3217,7 +3242,7 @@ export function ApplicationForm({
         ...values,
         ...files,
         additionalDocuments,
-        ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
+        ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
         // Include modification-specific data
         ...(isModification && {
           isModification: true,
@@ -3954,11 +3979,11 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>
                               {tx("Province *")}
-                              {isBulkApplicant && <span className="ml-2 text-xs text-muted-foreground font-normal">(set in Water Supply Networks)</span>}
+                              {isDistrictWaterSupply && <span className="ml-2 text-xs text-muted-foreground font-normal">(set in Water Supply Networks)</span>}
                             </FormLabel>
                             <FormControl>
                               <Select
-                                onValueChange={readOnly || isBulkApplicant ? undefined : (value) => {
+                                onValueChange={readOnly || isDistrictWaterSupply ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceProvince(value);
                                   // Reset dependent fields
@@ -3971,9 +3996,9 @@ export function ApplicationForm({
                                   setSelectedWaterSourceSector("");
                                 }}
                                 value={field.value}
-                                disabled={readOnly || isBulkApplicant}
+                                disabled={readOnly || isDistrictWaterSupply}
                               >
-                                <SelectTrigger className={`bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400 ${(readOnly || isBulkApplicant) ? 'cursor-default opacity-60' : ''}`}>
+                                <SelectTrigger className={`bg-gradient-to-r from-cyan-50 to-blue-50 border-cyan-200 focus:border-cyan-400 ${(readOnly || isDistrictWaterSupply) ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={tx("Select province")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -3997,11 +4022,11 @@ export function ApplicationForm({
                           <FormItem>
                             <FormLabel>
                               {tx("District *")}
-                              {isBulkApplicant && <span className="ml-2 text-xs text-muted-foreground font-normal">(set in Water Supply Networks)</span>}
+                              {isDistrictWaterSupply && <span className="ml-2 text-xs text-muted-foreground font-normal">(set in Water Supply Networks)</span>}
                             </FormLabel>
                             <FormControl>
                               <Select
-                                onValueChange={readOnly || isBulkApplicant ? undefined : (value) => {
+                                onValueChange={readOnly || isDistrictWaterSupply ? undefined : (value) => {
                                   field.onChange(value);
                                   setSelectedWaterSourceDistrict(value);
                                   // Reset dependent fields
@@ -4012,9 +4037,9 @@ export function ApplicationForm({
                                   setSelectedWaterSourceSector("");
                                 }}
                                 value={field.value}
-                                disabled={readOnly || isBulkApplicant || !selectedWaterSourceProvince}
+                                disabled={readOnly || isDistrictWaterSupply || !selectedWaterSourceProvince}
                               >
-                                <SelectTrigger className={`bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400 ${(readOnly || isBulkApplicant) ? 'cursor-default opacity-60' : ''}`}>
+                                <SelectTrigger className={`bg-gradient-to-r from-teal-50 to-emerald-50 border-teal-200 focus:border-teal-400 ${(readOnly || isDistrictWaterSupply) ? 'cursor-default opacity-60' : ''}`}>
                                   <SelectValue placeholder={selectedWaterSourceProvince ? tx("Select district") : tx("Select province first")} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -4031,7 +4056,7 @@ export function ApplicationForm({
                         )}
                       />
                       
-                      {!isBulkApplicant && (
+                      {!isDistrictWaterSupply && (
                         <FormField
                           control={form.control}
                           name="waterSourceSector"
@@ -4068,7 +4093,7 @@ export function ApplicationForm({
                         />
                       )}
 
-                      {!isBulkApplicant && (
+                      {!isDistrictWaterSupply && (
                         <FormField
                           control={form.control}
                           name="waterSourceCell"
@@ -4105,7 +4130,7 @@ export function ApplicationForm({
                         />
                       )}
 
-                      {!isBulkApplicant && (
+                      {!isDistrictWaterSupply && (
                         <FormField
                           control={form.control}
                           name="waterSourceVillage"
@@ -4256,6 +4281,7 @@ export function ApplicationForm({
                               { value: "mining", label: tx("Mining") },
                               { value: "recreation_activities", label: tx("Recreational activities") },
                               { value: "water_supply", label: tx("Water supply") },
+                              ...(isBulkApplicant ? [{ value: "district_water_supply", label: tx("District Water Supply") }] : []),
                               { value: "other", label: tx("Other (specify)") },
                             ].map((opt) => (
                               <div key={opt.value} className="flex items-center gap-3">
@@ -4272,8 +4298,8 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Use Category selector – shown for activities that are not pure-concession */}
-                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isPureConcession && (
+                  {/* Water Use Category selector – shown for activities that are not pure-concession or district water supply */}
+                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isPureConcession && !isDistrictWaterSupply && (
                     <FormField
                       control={form.control}
                       name="waterUseCategory"
@@ -4311,8 +4337,8 @@ export function ApplicationForm({
                     />
                   )}
 
-                  {/* Water Abstraction Point (LAT, LONG) - shown for abstraction water use category */}
-                  {effectiveWaterUseCategory === "abstraction" && watchedIntendedActivities && watchedIntendedActivities.length > 0 && (
+                  {/* Water Abstraction Point (LAT, LONG) - shown for abstraction water use category, not for district water supply */}
+                  {effectiveWaterUseCategory === "abstraction" && watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isDistrictWaterSupply && (
                   <div className="space-y-4">
                         <Label className="text-base font-medium">
                           {tx("8. Water Abstraction Point * (LAT, LONG)")}
@@ -6126,8 +6152,8 @@ export function ApplicationForm({
 
                   {/* 9. Fish farming specific fields are shown above in respective sections */}
 
-                  {/* Bulk applicants: district + distribution networks */}
-                  {isBulkApplicant && (
+                  {/* District Water Supply: district + distribution networks */}
+                  {isDistrictWaterSupply && (
                     <div className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 p-6 rounded-xl border border-violet-200 dark:border-violet-800 space-y-4">
                       <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-violet-100 dark:bg-violet-900/40 rounded-lg">
@@ -6207,6 +6233,8 @@ export function ApplicationForm({
                         province={selectedWaterSourceProvince}
                         district={selectedWaterSourceDistrict}
                       />
+
+                      {renderRequiredAttachmentsForActivity("district_water_supply")}
                     </div>
                   )}
                 </TabsContent>
@@ -6597,7 +6625,7 @@ export function ApplicationForm({
                             ...form.getValues(),
                             ...files,
                             additionalDocuments,
-                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
+                            ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
                             ...(isModification ? {
                               isModification: true,
                               modificationChanges: modificationChangesData,
@@ -6632,7 +6660,7 @@ export function ApplicationForm({
                             ...form.getValues(),
                             ...files,
                             additionalDocuments,
-                            ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
+                            ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
                             ...(isModification && {
                               isModification: true,
                               modificationChanges: modificationChangesData,
@@ -6727,7 +6755,7 @@ export function ApplicationForm({
                                 ...form.getValues(),
                                 ...files,
                                 additionalDocuments,
-                                ...(isBulkApplicant && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict") }),
+                                ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
                                 ...(isModification ? {
                                   isModification: true,
                                   modificationChanges: modificationChangesData,
