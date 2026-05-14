@@ -469,6 +469,9 @@ const applicationFormSchema = z.object({
   // Single activity selection is enforced by schema (.max(1))
   // No need to check for mixing concession and abstraction activities
 
+  // District water supply has its own validation path (district + networks); skip abstraction/concession checks.
+  if (selectedActivities[0] === "district_water_supply") return;
+
   const pureConcessionActs = ["fish_farming_lakes", "recreation_activities"];
   const isPureConcessionAct = selectedActivities.some((a) => pureConcessionActs.includes(a));
   const effectiveCategory = isPureConcessionAct ? "concession" : (data.waterUseCategory ?? "abstraction");
@@ -1931,7 +1934,7 @@ export function ApplicationForm({
         setValidationError('Please select a district for the water supply networks.');
         return false;
       }
-      if (!bulkNetworks.some((r: any) => r.network_name?.trim())) {
+      if (!bulkNetworks.some((r) => r.network_name?.trim())) {
         setValidationError('Please add at least one network with a network name.');
         return false;
       }
@@ -2375,9 +2378,7 @@ export function ApplicationForm({
         
         if (!hasActivityFields) return true;
 
-        const isDistrictWS = intendedActivities[0] === 'district_water_supply';
-
-        if (isDistrictWS) {
+        if (isDistrictWaterSupply) {
           const district = form.watch('waterSourceDistrict') || form.getValues('waterSourceDistrict') || '';
           if (!district.trim()) return true;
           if (!bulkNetworks.some((r) => r.network_name?.trim())) return true;
