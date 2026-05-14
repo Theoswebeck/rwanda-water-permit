@@ -1786,13 +1786,11 @@ export function ApplicationForm({
   };
 
   const validateWaterSourceTab = async () => {
-    // Only validate Water Source tab fields - LAT/LONG are validated in Activity tab
-    const fields = [
-      'waterSourceType', 'nameSourceWater', 'waterSourceProvince',
-      'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability',
-      'permitLengthYears'
-    ];
-    
+    // Sector/cell are not shown for district water supply — skip their validation.
+    const fields = isDistrictWaterSupply
+      ? ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterReliability', 'permitLengthYears']
+      : ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterSourceSector', 'waterSourceCell', 'waterReliability', 'permitLengthYears'];
+
     const errors = await form.trigger(fields as any);
     return errors;
   };
