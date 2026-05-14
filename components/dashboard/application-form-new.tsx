@@ -6059,7 +6059,7 @@ export function ApplicationForm({
                   {(() => {
                     const selected = watchedIntendedActivities || [];
                     const hasActivity = selected.some((a) => a && a.trim() !== "");
-                    return hasActivity && effectiveWaterUseCategory === "abstraction" ? (
+                    return hasActivity && effectiveWaterUseCategory === "abstraction" && !isDistrictWaterSupply ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           9. Water Abstraction Details *
