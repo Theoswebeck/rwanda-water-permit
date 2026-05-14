@@ -1934,8 +1934,20 @@ export function ApplicationForm({
         setValidationError('Please select a district for the water supply networks.');
         return false;
       }
-      if (!bulkNetworks.some((r) => r.network_name?.trim())) {
-        setValidationError('Please add at least one network with a network name.');
+      const nonEmptyRows = bulkNetworks.filter((r) =>
+        r.network_name?.trim() || r.sector?.trim() || r.cell?.trim() ||
+        r.coordinates?.trim() || r.capacity_m3_day || r.abstraction_method?.trim()
+      );
+      if (nonEmptyRows.length === 0) {
+        setValidationError('Please add at least one network with all required fields filled.');
+        return false;
+      }
+      const incompleteRows = nonEmptyRows.filter((r) =>
+        !r.network_name?.trim() || !r.sector?.trim() || !r.cell?.trim() ||
+        !r.coordinates?.trim() || !r.capacity_m3_day || !r.abstraction_method?.trim()
+      );
+      if (incompleteRows.length > 0) {
+        setValidationError('Each network row must have Network Name, Sector, Cell, Coordinates, Capacity, and Abstraction Method filled in.');
         return false;
       }
       if (!checkRequiredDocuments()) {
@@ -2381,7 +2393,16 @@ export function ApplicationForm({
         if (isDistrictWaterSupply) {
           const district = form.watch('waterSourceDistrict') || form.getValues('waterSourceDistrict') || '';
           if (!district.trim()) return true;
-          if (!bulkNetworks.some((r) => r.network_name?.trim())) return true;
+          const nonEmptyRows = bulkNetworks.filter((r) =>
+            r.network_name?.trim() || r.sector?.trim() || r.cell?.trim() ||
+            r.coordinates?.trim() || r.capacity_m3_day || r.abstraction_method?.trim()
+          );
+          if (nonEmptyRows.length === 0) return true;
+          const allComplete = nonEmptyRows.every((r) =>
+            r.network_name?.trim() && r.sector?.trim() && r.cell?.trim() &&
+            r.coordinates?.trim() && r.capacity_m3_day && r.abstraction_method?.trim()
+          );
+          if (!allComplete) return true;
           return !hasRequiredDocs;
         }
 
