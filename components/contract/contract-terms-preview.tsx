@@ -44,6 +44,18 @@ type ContractTermsPreviewProps = {
   transferPermit?: TransferPermitContext | null;
 };
 
+function renderInlineBold(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    ),
+  );
+}
+
 function isSignatureSection(title: string): boolean {
   const normalized = title.trim().toLowerCase();
   return normalized.includes("signature") || normalized.includes("imikono");
@@ -240,7 +252,7 @@ export function ContractTermsPreview({
                     <div className="space-y-2 text-sm text-slate-700">
                       {section.paragraphs.map((p, pIdx) => (
                         <p key={pIdx} className="whitespace-pre-wrap leading-relaxed">
-                          {p}
+                          {renderInlineBold(p)}
                         </p>
                       ))}
                     </div>

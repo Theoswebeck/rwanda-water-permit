@@ -41,6 +41,18 @@ import type { AppLanguage } from "@/lib/i18n/language";
 import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 
+function renderInlineBold(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : (
+      part
+    ),
+  );
+}
+
 function parseInternalNotes(input: unknown): Record<string, any> | null {
   if (typeof input !== "string" || !input.trim()) return null;
   try {
@@ -1675,7 +1687,7 @@ export default function TermsConditionsPage() {
           <div className="space-y-2.5">
             {section.paragraphs.map((p, pIdx) => (
               <p key={pIdx} className="text-sm leading-relaxed text-muted-foreground">
-                {p}
+                {renderInlineBold(p)}
               </p>
             ))}
           </div>
