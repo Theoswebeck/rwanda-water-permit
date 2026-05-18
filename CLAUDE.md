@@ -4,6 +4,18 @@ This file provides persistent context for Claude Code sessions working on this p
 
 ---
 
+## Session Start Protocol
+
+Before grepping or reading files, always search claude-mem for prior context using relevant keywords:
+
+```
+mcp__plugin_claude-mem_mcp-search__search(query="<keywords>", limit=15)
+```
+
+Use the same 3-step workflow: search → timeline (if needed) → get_observations for relevant IDs. Only then proceed to grep/read files. This surfaces past decisions, bugs, and architecture notes that would otherwise require re-discovery.
+
+---
+
 ## Project Overview
 
 **Name:** Water Permit Application System
