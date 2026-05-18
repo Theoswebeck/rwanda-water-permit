@@ -113,7 +113,7 @@ function templateFromPermit(intendedActivities?: unknown, purpose?: string, regi
   if (regime?.toLowerCase() === "concession") return "concession";
   const activities = Array.isArray(intendedActivities) ? intendedActivities.map(String) : [];
   const primary = (activities[0] || purpose || "").toLowerCase();
-  if (primary === "fish_farming_lakes" || primary.includes("fish farming") || primary.includes("aquaculture")) return "concession";
+  if (primary === "fish_farming_lakes" || primary === "fish farming in lakes" || primary.includes("aquaculture")) return "concession";
   return "authorization";
 }
 
