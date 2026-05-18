@@ -109,11 +109,11 @@ function toNumberOrUndefined(v: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function templateFromPermit(intendedActivities?: unknown, purpose?: string): InspectionTemplate {
+function templateFromPermit(intendedActivities?: unknown, purpose?: string, regime?: string): InspectionTemplate {
+  if (regime?.toLowerCase() === "concession") return "concession";
   const activities = Array.isArray(intendedActivities) ? intendedActivities.map(String) : [];
   const primary = (activities[0] || purpose || "").toLowerCase();
-  // Only fish farming in lakes is a concession; ponds is abstraction (single point)
-  if (primary === "fish_farming_lakes" || primary.includes("aquaculture")) return "concession";
+  if (primary === "fish_farming_lakes" || primary.includes("fish farming") || primary.includes("aquaculture")) return "concession";
   return "authorization";
 }
 
@@ -249,7 +249,7 @@ export default function PermitInspectionUnifiedPage() {
           return;
         }
 
-        const tpl = templateFromPermit(data?.application?.intended_activities, data?.permit?.purpose);
+        const tpl = templateFromPermit(data?.application?.intended_activities, data?.permit?.purpose, data?.registryEntry?.regime);
         setTemplate(tpl);
 
         // Registry permits keep data.source === "permit_registry" and
@@ -319,7 +319,7 @@ export default function PermitInspectionUnifiedPage() {
                 : ((existing as any).inspection_documents as any[]) || prev.inspection_documents,
               locked_field_overrides: ((existing as any).locked_field_overrides as Record<string, string>) || prev.locked_field_overrides,
             }));
-            setTemplate(((existing as any).inspection_template as InspectionTemplate) || tpl);
+            setTemplate(tpl);
             return;
           }
         }
