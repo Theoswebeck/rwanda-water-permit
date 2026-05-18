@@ -56,6 +56,7 @@ const ASSESSMENT_INCOMPLETE_STATUSES = new Set<ApplicationStatus>([
   "pending_assessment",
   "returned_to_assessment",
   "rejected",
+  "revision_required",
 ]);
 
 export function isAssessmentComplete(status: ApplicationStatus): boolean {
