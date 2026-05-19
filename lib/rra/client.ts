@@ -25,6 +25,14 @@ type RraErrorResponse = {
 type RraResponse = RraSuccessResponse | RraErrorResponse
 
 type RraAuthResponse = {
+  MessageCode?: number
+  ResponseObject?: {
+    AccessToken?: string
+    RefreshToken?: string
+    access_token?: string
+    refresh_token?: string
+    token?: string
+  }
   access_token?: string
   refresh_token?: string
   token?: string
@@ -77,13 +85,23 @@ async function authenticate(): Promise<TokenCache> {
     throw new Error(`RRA authentication failed (${res.status})`)
   }
 
-  const rawAccessToken = json?.access_token ?? json?.token ?? ''
+  const rawAccessToken =
+    json?.ResponseObject?.AccessToken ??
+    json?.ResponseObject?.access_token ??
+    json?.access_token ??
+    json?.token ??
+    ''
   const accessToken = normalizeToken(rawAccessToken)
   if (!accessToken) {
     throw new Error('RRA authentication succeeded but no access token was returned')
   }
 
-  const refreshToken = normalizeToken(json?.refresh_token ?? '')
+  const refreshToken = normalizeToken(
+    json?.ResponseObject?.RefreshToken ??
+    json?.ResponseObject?.refresh_token ??
+    json?.refresh_token ??
+    ''
+  )
 
   const expiresAtMs = Date.now() + 23 * 60 * 60 * 1000
   return { accessToken, refreshToken, expiresAtMs }
@@ -107,13 +125,24 @@ async function refreshAccessToken(refreshTok: string): Promise<TokenCache> {
     throw new Error(`RRA token refresh failed (${res.status})`)
   }
 
-  const rawAccessToken = json?.access_token ?? json?.token ?? ''
+  const rawAccessToken =
+    json?.ResponseObject?.AccessToken ??
+    json?.ResponseObject?.access_token ??
+    json?.access_token ??
+    json?.token ??
+    ''
   const accessToken = normalizeToken(rawAccessToken)
   if (!accessToken) {
     throw new Error('RRA token refresh succeeded but no access token was returned')
   }
 
-  const newRefreshToken = normalizeToken(json?.refresh_token ?? '') || refreshTok
+  const newRefreshToken =
+    normalizeToken(
+      json?.ResponseObject?.RefreshToken ??
+      json?.ResponseObject?.refresh_token ??
+      json?.refresh_token ??
+      ''
+    ) || refreshTok
 
   const expiresAtMs = Date.now() + 23 * 60 * 60 * 1000
   return { accessToken, refreshToken: newRefreshToken, expiresAtMs }
