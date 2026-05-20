@@ -663,14 +663,19 @@ export function AssessmentReportForm({
                   {renderVolumeRateField("Remaining Water (Q-D-ED)", "remainingWater", "remainingWaterUnit")}
                   <div>
                     <Label className="text-sm text-muted-foreground">Water Storage</Label>
-                    <Input
-                      type="number"
-                      value={localData.waterStorage || ''}
-                      onChange={(e) => updateField('waterStorage', e.target.value)}
-                      placeholder="m³"
-                      disabled={readOnly}
-                      className={readOnlyClass}
-                    />
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        type="number"
+                        value={localData.waterStorage || ''}
+                        onChange={(e) => updateField('waterStorage', e.target.value)}
+                        placeholder="Enter value"
+                        disabled={readOnly}
+                        className={`col-span-2 ${readOnlyClass}`}
+                      />
+                      <div className="flex items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground">
+                        <span>m3</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
