@@ -80,12 +80,11 @@ function buildUnifiedCte(schema: RegistrySchema): string {
       -- System-generated permits that have no registry entry yet
       SELECT
         p.id,
-        null::integer as row_index,
-        CASE
-          WHEN p.permit_number::text ~ '^\d+/'
-          THEN split_part(p.permit_number::text, '/', 1)::integer
-          ELSE NULL
-        END as serial_number,
+        (
+          SELECT COALESCE(MAX(row_index), 0) FROM public.permit_registry
+          ${schema.hasDeletedAt ? `WHERE deleted_at IS NULL` : ``}
+        ) + ROW_NUMBER() OVER (ORDER BY p.issued_date ASC, p.created_at ASC) AS row_index,
+        null::integer as serial_number,
         coalesce(a.project_title, 'Unknown Permit Holder') as permit_holder,
         p.permit_number::text as permit_number,
         ${regimeCase} as regime,
