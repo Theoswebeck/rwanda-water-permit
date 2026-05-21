@@ -88,7 +88,7 @@ function pageHeight(doc: PDFKit.PDFDocument): number {
 // drift below the QR/DRAFT band. The old bottom page row ("Document ID" and
 // "Page 1 of 1") has been removed, so the QR/DRAFT band can sit lower and
 // return more body space to the bilingual content.
-const FOOTER_TOP_OFFSET = 32 * PT;
+const FOOTER_TOP_OFFSET = 44 * PT;
 const BODY_BOTTOM_PAD = 2 * PT;
 
 /**
@@ -375,7 +375,7 @@ async function drawQrFooter(
   // be set to a value that would let body text overlap the footer chrome.
   const marginX = 15 * PT;
   const footerW = pw - marginX * 2;
-  const footerH = 16 * PT;
+  const footerH = 28 * PT;
   const footerY = ph - FOOTER_TOP_OFFSET; // top of the QR footer band
 
   // QR box on the left side of the footer.
