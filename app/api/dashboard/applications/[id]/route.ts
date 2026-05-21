@@ -108,7 +108,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         [id]
       )
       transfereeEmail = (trRes.rows[0]?.transferee_email as string | undefined) ?? null
-    } catch { /* transfer_requests table may not exist */ }
+    } catch (trErr) {
+      if (!isMissingTransferRequestsTable(trErr)) throw trErr
+    }
 
     const [applicantRes, docsRes, reviewsRes, inspectionsRes, permitsRes] = await Promise.all([
       query(

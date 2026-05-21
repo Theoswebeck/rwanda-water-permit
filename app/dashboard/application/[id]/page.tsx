@@ -603,12 +603,13 @@ export default function ApplicationDetailPage() {
               router.push(`/dashboard/application/${params.id}/terms`);
             } else {
               const approval = parsedNotes?.transferApproval;
-              // Already accepted — transferee has completed this step
+              // Transfer already formally approved — redirect directly to terms page
               if (approval?.transfereeApproved === true) {
                 setTransferTermsBlocked(false);
+                router.push(`/dashboard/application/${params.id}/terms`);
                 return;
               }
-              // Not yet accepted — only the designated transferee (matched by email) may proceed
+              // Not yet approved — only the designated transferee (matched by email) may proceed
               const transfereeEmail = (appWithRelations as any).transferee_email as string | null | undefined;
               const currentEmail = (userProfile?.email || '').toLowerCase().trim();
               const isDesignatedTransferee = transfereeEmail
@@ -625,15 +626,24 @@ export default function ApplicationDetailPage() {
                   const pendingTransfer = (incomingJson?.transfers ?? []).find(
                     (t: { application_id?: string }) => t.application_id === params.id
                   );
-                  if (pendingTransfer?.id) {
-                    await fetch('/api/transfers/approve', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ transferRequestId: pendingTransfer.id }),
-                    });
+                  if (!pendingTransfer?.id) {
+                    setError('Transfer request not found. Please contact RWB support.');
+                    return;
+                  }
+                  const approveResp = await fetch('/api/transfers/approve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ transferRequestId: pendingTransfer.id }),
+                  });
+                  if (!approveResp.ok) {
+                    const approveJson = await approveResp.json().catch(() => null);
+                    setError(approveJson?.message ?? 'Could not initiate transfer approval. Please contact RWB support.');
+                    return;
                   }
                 } catch (autoApproveErr) {
-                  console.warn('⚠️ Auto-approve failed, continuing to terms:', autoApproveErr);
+                  console.error('❌ Auto-approve failed:', autoApproveErr);
+                  setError('Could not initiate transfer approval. Please contact RWB support.');
+                  return;
                 }
                 setTransferTermsBlocked(false);
                 router.push(`/dashboard/application/${params.id}/terms`);
