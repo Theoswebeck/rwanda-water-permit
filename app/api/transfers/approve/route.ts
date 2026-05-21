@@ -26,12 +26,16 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const transferRequestId = body?.transferRequestId as string
-    if (!isNonEmpty(transferRequestId)) {
-      return NextResponse.json({ success: false, message: 'transferRequestId is required' }, { status: 400 })
+    const transferRequestId = body?.transferRequestId as string | undefined
+    const applicationId = body?.applicationId as string | undefined
+
+    // Must provide either transferRequestId (external transferee, requires email+phone)
+    // or applicationId (applicant-is-transferee, requires email + applicant_id ownership).
+    if (!isNonEmpty(transferRequestId) && !isNonEmpty(applicationId)) {
+      return NextResponse.json({ success: false, message: 'transferRequestId or applicationId is required' }, { status: 400 })
     }
 
-    // Load current user's profile to match phone/email.
+    // Load current user's profile for email matching.
     const profileRes = await query<UserContactProfile>(
       `
       select id, email, phone, mobile_phone, company_phone, landline_phone
@@ -51,19 +55,35 @@ export async function POST(req: NextRequest) {
     const rawPhone = p.phone || p.mobile_phone || p.company_phone || p.landline_phone || ''
     const phoneKey = normalizeRwandaPhoneKey(rawPhone)
 
-    // Load transfer request
+    // Load transfer request — either by its own ID or by application_id.
     let tr: Record<string, unknown> | undefined
+    // When looking up by applicationId, also verify the caller is the applicant (ownership proof).
+    let callerIsApplicant = false
     try {
-      const trRes = await query(
-        `
-        select *
-        from public.transfer_requests
-        where id = $1
-        limit 1
-        `,
-        [transferRequestId]
-      )
-      tr = trRes.rows[0]
+      if (isNonEmpty(transferRequestId)) {
+        const trRes = await query(
+          `select * from public.transfer_requests where id = $1 limit 1`,
+          [transferRequestId]
+        )
+        tr = trRes.rows[0]
+      } else {
+        // Look up by application — take the most recent pending request.
+        const trRes = await query(
+          `
+          select tr.*
+          from public.transfer_requests tr
+          join public.applications a on a.id = tr.application_id
+          where tr.application_id = $1
+            and tr.status = 'pending'
+            and a.applicant_id = $2
+          order by tr.created_at desc
+          limit 1
+          `,
+          [applicationId, userId]
+        )
+        tr = trRes.rows[0]
+        callerIsApplicant = true
+      }
     } catch (trErr) {
       if (isMissingTransferRequestsTable(trErr)) {
         return NextResponse.json(
@@ -83,15 +103,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: `Transfer request is not pending (status=${tr.status})` }, { status: 400 })
     }
 
-    if (normalizeEmail(tr.transferee_email) !== emailLower || String(tr.transferee_phone) !== phoneKey) {
-      console.warn('⚠️ transfers/approve identity mismatch for transfer request', {
-        transferRequestId,
-        expectedEmail: normalizeEmail(tr.transferee_email),
-        providedEmail: emailLower,
-        expectedPhoneKey: String(tr.transferee_phone),
-        providedPhoneKey: phoneKey,
+    // Identity check: email must always match.
+    // Phone is additionally required when the caller is an external transferee (not the applicant).
+    // When the caller IS the applicant (callerIsApplicant), applicant_id ownership already proves identity.
+    const emailMatches = normalizeEmail(tr.transferee_email) === emailLower
+    const phoneMatches = Boolean(phoneKey) && String(tr.transferee_phone) === phoneKey
+    if (!emailMatches || (!callerIsApplicant && !phoneMatches)) {
+      console.warn('⚠️ transfers/approve identity mismatch', {
+        transferRequestId: tr.id,
+        callerIsApplicant,
+        emailMatches,
+        phoneMatches,
       })
-      return NextResponse.json({ success: false, message: 'Forbidden: this transfer request does not match your email/phone' }, { status: 403 })
+      return NextResponse.json({ success: false, message: 'Forbidden: this transfer request does not match your identity' }, { status: 403 })
     }
 
     // Validate application state

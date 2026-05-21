@@ -619,21 +619,13 @@ export default function ApplicationDetailPage() {
                 setTransferTermsBlocked(true);
               } else {
                 // User is the designated transferee but hasn't formally approved the transfer
-                // request yet. Auto-approve so the terms page guard passes.
+                // request yet. Auto-approve using applicationId — applicant_id ownership proves
+                // identity server-side, no phone match required.
                 try {
-                  const incomingResp = await fetch('/api/transfers/incoming', { cache: 'no-store' });
-                  const incomingJson = await incomingResp.json().catch(() => null);
-                  const pendingTransfer = (incomingJson?.transfers ?? []).find(
-                    (t: { application_id?: string }) => t.application_id === params.id
-                  );
-                  if (!pendingTransfer?.id) {
-                    setError('Transfer request not found. Please contact RWB support.');
-                    return;
-                  }
                   const approveResp = await fetch('/api/transfers/approve', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ transferRequestId: pendingTransfer.id }),
+                    body: JSON.stringify({ applicationId: params.id }),
                   });
                   if (!approveResp.ok) {
                     const approveJson = await approveResp.json().catch(() => null);
