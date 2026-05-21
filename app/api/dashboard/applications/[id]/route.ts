@@ -101,6 +101,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
       return NextResponse.json({ success: false, message: 'Application not found' }, { status: 404 })
     }
 
+    let transfereeEmail: string | null = null
+    try {
+      const trRes = await query(
+        `select transferee_email from public.transfer_requests where application_id = $1 limit 1`,
+        [id]
+      )
+      transfereeEmail = (trRes.rows[0]?.transferee_email as string | undefined) ?? null
+    } catch { /* transfer_requests table may not exist */ }
+
     const [applicantRes, docsRes, reviewsRes, inspectionsRes, permitsRes] = await Promise.all([
       query(
         `
@@ -151,6 +160,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
 
     const full = {
       ...application,
+      transferee_email: transfereeEmail,
       applicant: applicantRes.rows[0] || null,
       documents: docsRes.rows,
       reviews: reviewsRes.rows,

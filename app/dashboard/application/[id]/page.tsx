@@ -603,13 +603,39 @@ export default function ApplicationDetailPage() {
               router.push(`/dashboard/application/${params.id}/terms`);
             } else {
               const approval = parsedNotes?.transferApproval;
-              const transfereeApproved =
-                approval?.transfereeApproved === true &&
-                typeof approval?.transfereeUserId === 'string' &&
-                approval.transfereeUserId === userProfile?.id;
-
-              setTransferTermsBlocked(!transfereeApproved);
-              if (transfereeApproved) {
+              // Already accepted — transferee has completed this step
+              if (approval?.transfereeApproved === true) {
+                setTransferTermsBlocked(false);
+                return;
+              }
+              // Not yet accepted — only the designated transferee (matched by email) may proceed
+              const transfereeEmail = (appWithRelations as any).transferee_email as string | null | undefined;
+              const currentEmail = (userProfile?.email || '').toLowerCase().trim();
+              const isDesignatedTransferee = transfereeEmail
+                ? Boolean(currentEmail && currentEmail === transfereeEmail.toLowerCase().trim())
+                : false;
+              if (!isDesignatedTransferee) {
+                setTransferTermsBlocked(true);
+              } else {
+                // User is the designated transferee but hasn't formally approved the transfer
+                // request yet. Auto-approve so the terms page guard passes.
+                try {
+                  const incomingResp = await fetch('/api/transfers/incoming', { cache: 'no-store' });
+                  const incomingJson = await incomingResp.json().catch(() => null);
+                  const pendingTransfer = (incomingJson?.transfers ?? []).find(
+                    (t: { application_id?: string }) => t.application_id === params.id
+                  );
+                  if (pendingTransfer?.id) {
+                    await fetch('/api/transfers/approve', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ transferRequestId: pendingTransfer.id }),
+                    });
+                  }
+                } catch (autoApproveErr) {
+                  console.warn('⚠️ Auto-approve failed, continuing to terms:', autoApproveErr);
+                }
+                setTransferTermsBlocked(false);
                 router.push(`/dashboard/application/${params.id}/terms`);
               }
             }

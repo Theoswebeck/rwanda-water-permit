@@ -344,12 +344,15 @@ export function ApplicationsList({
     const isTransfer = app.application_type === "transfer" || notes?.isTransfer === true;
     if (!isTransfer) return true;
 
+    // If already accepted, the transferee has completed this step — no further action
     const approval = notes?.transferApproval;
-    return (
-      approval?.transfereeApproved === true &&
-      typeof approval?.transfereeUserId === "string" &&
-      approval.transfereeUserId === userProfile?.id
-    );
+    if (approval?.transfereeApproved === true) return false;
+
+    // Not yet accepted — show "Accept Terms" only to the designated transferee (matched by email)
+    const transfereeEmail = (app as { transferee_email?: string | null }).transferee_email;
+    if (!transfereeEmail) return false;
+    const currentEmail = (userProfile?.email || "").toLowerCase().trim();
+    return Boolean(currentEmail && currentEmail === transfereeEmail.toLowerCase().trim());
   };
 
   const getLocationDisplay = (app: DashboardListApplication): string => {

@@ -107,13 +107,20 @@ export async function GET(req: NextRequest) {
         `
         select
           a.*,
-          coalesce(last_status_action.last_action_at, a.created_at) as last_action_at
+          coalesce(last_status_action.last_action_at, a.created_at) as last_action_at,
+          tr_contact.transferee_email
         from public.applications a
         left join lateral (
           select max(wh.created_at) as last_action_at
           from public.workflow_history wh
           where wh.application_id = a.id
         ) as last_status_action on true
+        left join lateral (
+          select tr.transferee_email
+          from public.transfer_requests tr
+          where tr.application_id = a.id
+          limit 1
+        ) as tr_contact on true
         where ${conditions.join(' and ')}
         order by a.created_at desc
         `,
