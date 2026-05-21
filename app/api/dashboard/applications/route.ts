@@ -119,6 +119,7 @@ export async function GET(req: NextRequest) {
           select tr.transferee_email
           from public.transfer_requests tr
           where tr.application_id = a.id
+          order by tr.created_at desc
           limit 1
         ) as tr_contact on true
         where ${conditions.join(' and ')}

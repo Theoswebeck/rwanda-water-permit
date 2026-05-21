@@ -104,7 +104,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     let transfereeEmail: string | null = null
     try {
       const trRes = await query(
-        `select transferee_email from public.transfer_requests where application_id = $1 limit 1`,
+        `select transferee_email from public.transfer_requests where application_id = $1 order by created_at desc limit 1`,
         [id]
       )
       transfereeEmail = (trRes.rows[0]?.transferee_email as string | undefined) ?? null
