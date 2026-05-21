@@ -81,7 +81,11 @@ function buildUnifiedCte(schema: RegistrySchema): string {
       SELECT
         p.id,
         null::integer as row_index,
-        null::integer as serial_number,
+        CASE
+          WHEN p.permit_number::text ~ '^\d+/'
+          THEN split_part(p.permit_number::text, '/', 1)::integer
+          ELSE NULL
+        END as serial_number,
         coalesce(a.project_title, 'Unknown Permit Holder') as permit_holder,
         p.permit_number::text as permit_number,
         ${regimeCase} as regime,
