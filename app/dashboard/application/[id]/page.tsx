@@ -320,6 +320,7 @@ export default function ApplicationDetailPage() {
   const { getApplication, loading, refresh } = useApplications();
   const { getDocuments } = useDocuments();
   const loadedTransferPermitKeyRef = useRef<string | null>(null);
+  const isApprovingTransferRef = useRef(false);
   const profileDependencyKey = `${userProfile?.id ?? ""}|${userProfile?.email ?? ""}|${userProfile?.phone ?? ""}|${userProfile?.company_phone ?? ""}`;
 
   const downloadBlobAsFile = (blob: Blob, filename: string) => {
@@ -621,6 +622,8 @@ export default function ApplicationDetailPage() {
                 // User is the designated transferee but hasn't formally approved the transfer
                 // request yet. Auto-approve using applicationId — applicant_id ownership proves
                 // identity server-side, no phone match required.
+                if (isApprovingTransferRef.current) return;
+                isApprovingTransferRef.current = true;
                 try {
                   const approveResp = await fetch('/api/transfers/approve', {
                     method: 'POST',
@@ -630,11 +633,13 @@ export default function ApplicationDetailPage() {
                   if (!approveResp.ok) {
                     const approveJson = await approveResp.json().catch(() => null);
                     setError(approveJson?.message ?? 'Could not initiate transfer approval. Please contact RWB support.');
+                    isApprovingTransferRef.current = false;
                     return;
                   }
                 } catch (autoApproveErr) {
                   console.error('❌ Auto-approve failed:', autoApproveErr);
                   setError('Could not initiate transfer approval. Please contact RWB support.');
+                  isApprovingTransferRef.current = false;
                   return;
                 }
                 setTransferTermsBlocked(false);

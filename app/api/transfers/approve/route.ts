@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           [applicationId, userId]
         )
         tr = trRes.rows[0]
-        callerIsApplicant = true
+        if (tr) callerIsApplicant = true
       }
     } catch (trErr) {
       if (isMissingTransferRequestsTable(trErr)) {
@@ -97,7 +97,12 @@ export async function POST(req: NextRequest) {
       }
       throw trErr
     }
-    if (!tr) return NextResponse.json({ success: false, message: 'Transfer request not found' }, { status: 404 })
+    if (!tr) {
+      const notFoundMessage = isNonEmpty(applicationId)
+        ? 'Transfer approval has already been processed or no pending transfer request exists for this application. Please refresh the page.'
+        : 'Transfer request not found'
+      return NextResponse.json({ success: false, message: notFoundMessage }, { status: 404 })
+    }
 
     if (String(tr.status) !== 'pending') {
       return NextResponse.json({ success: false, message: `Transfer request is not pending (status=${tr.status})` }, { status: 400 })
@@ -152,7 +157,7 @@ export async function POST(req: NextRequest) {
     }
     if (app.status !== 'approved_pending_permit') {
       return NextResponse.json(
-        { success: false, message: 'Transfer can only be approved at Pending Terms Acceptance stage' },
+        { success: false, message: 'This application is no longer awaiting transfer acceptance. Please refresh the page or contact RWB support.' },
         { status: 400 }
       )
     }
