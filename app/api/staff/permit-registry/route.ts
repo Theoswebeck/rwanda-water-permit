@@ -87,7 +87,7 @@ function buildUnifiedCte(schema: RegistrySchema): string {
         ${regimeCase} as regime,
         p.water_source::text as water_source,
         null::text as volume_or_area,
-        null::text as method_of_water_taking,
+        a.water_taking_method as method_of_water_taking,
         a.project_description as authorized_activity,
         concat_ws(', ', a.district, a.province::text) as location,
         ${latExpr} as latitude,
@@ -95,7 +95,13 @@ function buildUnifiedCte(schema: RegistrySchema): string {
         p.issued_date as issuance_date,
         null::text as issuance_date_raw,
         null::text as expiration_date_raw,
-        null::text as duration,
+        CASE
+          WHEN a.proposed_duration_years IS NOT NULL AND a.proposed_duration_years > 0
+            THEN a.proposed_duration_years::text || ' year' || CASE WHEN a.proposed_duration_years = 1 THEN '' ELSE 's' END
+          WHEN a.proposed_duration_months IS NOT NULL AND a.proposed_duration_months > 0
+            THEN a.proposed_duration_months::text || ' month' || CASE WHEN a.proposed_duration_months = 1 THEN '' ELSE 's' END
+          ELSE null
+        END as duration,
         p.expiry_date as expiration_date,
         CASE
           WHEN p.status = 'expired'::permit_status     THEN 'EXPIRED'
