@@ -53,6 +53,47 @@ export function isDateBearingSlot(slot: DocumentTextSlot): boolean {
 }
 
 /**
+ * Matches every permit-number format the renderer or assessors might type:
+ *   `0918/RWB/2026`, `918/RWB/2026`, `WP-0918/RWB/2026`, `RWBP-2026-0918`.
+ *
+ * Used to canonicalise override text at render time. An assessor who pre-typed
+ * a permit number into a contract/permit body slot (e.g. on 2026-05-06 for
+ * UFURATE LIFE INDUSTRY → `918/RWB/2026`) used to win over the actual number
+ * assigned by the DB trigger at terms acceptance (`0920/RWB/2026`), causing
+ * the applicant's PDF and the staff registry to show different numbers.
+ * Substituting any pattern match with the canonical `ctx.permit.permitNumber`
+ * guarantees that — no matter what's in the override — the rendered PDF and
+ * the DB agree.
+ */
+const PERMIT_NUMBER_PATTERN = /(?:WP-)?\d{1,6}\/RWB\/\d{4}|RWBP-\d{4}-\d{1,6}/gi;
+
+/** Pull the 4-digit year segment out of any supported permit-number format,
+ *  or `null` if the input isn't a recognisable permit number. */
+function extractPermitNumberYear(value: string): string | null {
+  const slash = value.match(/^(?:WP-)?\d{1,6}\/RWB\/(\d{4})$/i);
+  if (slash) return slash[1];
+  const rwbp = value.match(/^RWBP-(\d{4})-\d{1,6}$/i);
+  if (rwbp) return rwbp[1];
+  return null;
+}
+
+function canonicaliseEmbeddedPermitNumber(text: string, canonical: string | undefined): string {
+  if (!canonical) return text;
+  const canonicalYear = extractPermitNumberYear(canonical);
+  if (!canonicalYear) return text;
+  // Only rewrite matches that belong to the same issuance year as the
+  // canonical permit number. Renewal/transfer/modification documents
+  // legitimately reference the ORIGINAL permit (different year) in section
+  // body text — those references must be preserved verbatim. The bug we are
+  // guarding against is an assessor pre-typing the wrong digits for the
+  // permit being issued *right now*, which is always the same-year number.
+  return text.replace(PERMIT_NUMBER_PATTERN, (match) => {
+    const matchYear = extractPermitNumberYear(match);
+    return matchYear === canonicalYear ? canonical : match;
+  });
+}
+
+/**
  * Returns the text the renderer should emit for the given slot id. Override
  * wins when present; otherwise the slot's own `defaultResolver` runs.
  *
@@ -73,11 +114,12 @@ export function resolveSlotText(slotId: string, ctx: SlotResolverContext): strin
   }
   const env = getDocumentTextOverridesEnvelope(ctx.application.internal_notes);
   const override = env.values[slotId];
-  // Explicit `!== ""` so that any future code path that bypasses
-  // `coerceEntry` and writes an empty string still falls back to the default
-  // (an empty override is never a valid edit per spec §4.3).
-  if (override && override.text !== "") return override.text;
-  return slot.defaultResolver(ctx);
+  const baseText =
+    override && override.text !== "" ? override.text : slot.defaultResolver(ctx);
+  // Canonical permit number always wins over any number an assessor typed.
+  // See PERMIT_NUMBER_PATTERN docblock above for the historical incident this
+  // guards against.
+  return canonicaliseEmbeddedPermitNumber(baseText, ctx.permit?.permitNumber);
 }
 
 /** Resolved entry returned by {@link resolveSlotsForEditor}. */

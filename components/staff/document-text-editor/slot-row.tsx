@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, CheckCircle2, Clock, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Eye, EyeOff, Hash, RotateCcw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,12 @@ const HINT_MIN_SOFT_MAX = 200;
  * not pull in the entire server-side document-slots module just to check a
  * structuredField marker. */
 const DATE_BEARING_STRUCTURED_FIELDS = new Set(["issue_date", "expiry_date"]);
+
+// Mirrors PERMIT_NUMBER_PATTERN in lib/document-slots/resolver.ts. Kept as a
+// local literal so the editor bundle doesn't import the server-only resolver
+// module. If the resolver pattern changes, update this one too — there's a
+// test (or should be) that asserts they stay aligned.
+const PERMIT_NUMBER_PATTERN = /(?:WP-)?\d{1,6}\/RWB\/\d{4}|RWBP-\d{4}-\d{1,6}/i;
 
 export interface SlotRowProps {
   resolved: ClientResolvedSlot;
@@ -65,6 +71,12 @@ export function SlotRow({
     slot.structuredField &&
       DATE_BEARING_STRUCTURED_FIELDS.has(slot.structuredField),
   );
+  // The default text the renderer would emit already has the canonical permit
+  // number substituted in. If the assessor sees a permit-number-shaped token
+  // here, anything they retype will be normalised back to the same canonical
+  // value at PDF render time — so we surface that as a hint instead of letting
+  // them think they're authoritative.
+  const embedsPermitNumber = PERMIT_NUMBER_PATTERN.test(defaultText);
   const effectiveReadOnly = Boolean(readOnly) || isDateBearing;
 
   // The text shown in the textarea: latest draft if one exists, else the
@@ -133,6 +145,16 @@ export function SlotRow({
           >
             <Clock className="mr-1 h-3 w-3" />
             Auto from system date
+          </Badge>
+        )}
+        {embedsPermitNumber && !isDateBearing && (
+          <Badge
+            variant="outline"
+            className="border-slate-300 bg-slate-100 text-slate-700"
+            title="The permit number in this text is auto-managed. The PDF renderer always substitutes the official permit number assigned by the system at issuance, so any number you type here will be normalised on render."
+          >
+            <Hash className="mr-1 h-3 w-3" />
+            Permit number auto-managed
           </Badge>
         )}
         {isOverridden && (
