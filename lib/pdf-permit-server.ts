@@ -98,7 +98,7 @@ const BODY_BOTTOM_PAD = 2 * PT;
 const PERMIT_PARA_GAP_PT = 1;
 const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 3;
 const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 3;
-const PERMIT_BEFORE_CLOSING_PT = 1;
+const PERMIT_BEFORE_CLOSING_PT = 8;
 
 function contentBottomY(doc: PDFKit.PDFDocument): number {
   // Reserve = footer height (38pt) + small visual breathing room (2pt).
