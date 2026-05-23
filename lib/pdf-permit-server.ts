@@ -96,8 +96,8 @@ const BODY_BOTTOM_PAD = 2 * PT;
  * changing fonts. Used by all variant renderers so EN/RW spacing stays consistent.
  */
 const PERMIT_PARA_GAP_PT = 2;
-const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 6;
-const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 8;
+const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 5;
+const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 5;
 const PERMIT_BEFORE_CLOSING_PT = 4;
 
 function contentBottomY(doc: PDFKit.PDFDocument): number {
