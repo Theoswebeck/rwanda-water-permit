@@ -95,10 +95,10 @@ const BODY_BOTTOM_PAD = 2 * PT;
  * Body vertical rhythm (PDF points, not mm). Smaller = tighter blocks without
  * changing fonts. Used by all variant renderers so EN/RW spacing stays consistent.
  */
-const PERMIT_PARA_GAP_PT = 2;
-const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 5;
-const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 5;
-const PERMIT_BEFORE_CLOSING_PT = 4;
+const PERMIT_PARA_GAP_PT = 1;
+const PERMIT_EN_RW_RULE_PAD_BEFORE_PT = 3;
+const PERMIT_EN_RW_RULE_PAD_AFTER_PT = 3;
+const PERMIT_BEFORE_CLOSING_PT = 1;
 
 function contentBottomY(doc: PDFKit.PDFDocument): number {
   // Reserve = footer height (38pt) + small visual breathing room (2pt).
@@ -514,7 +514,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
   const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 10;
-  const lineGap = 1.0;
+  const lineGap = 0.5;
   const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
@@ -579,7 +579,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
   const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 10;
-  const lineGap = 1.0;
+  const lineGap = 0.5;
   const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
@@ -646,7 +646,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
   // sample uses a single page; paragraphs were previously spilling onto
   // page 2 after the inline-bold expansion grew them by ~1 line each.
   const fontSize = 11;
-  const lineGap = 1.0;
+  const lineGap = 0.5;
   const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
@@ -718,7 +718,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
   const leftX = PERMIT_MARGIN_X;
   const maxW = pageWidth(doc) - leftX * 2;
   const fontSize = 10;
-  const lineGap = 1.0;
+  const lineGap = 0.5;
   const paraGap = PERMIT_PARA_GAP_PT;
 
   const englishParagraphs = [
