@@ -35,6 +35,10 @@ export type GetResolvedContractTermsInput = {
   /** Forwarded to `buildContractPlaceholderContext`. Optional — when omitted
    *  we fall back to `application.application_number ?? ""`. */
   applicationNumber?: string;
+  /** The real issued permit number (e.g. "0920/RWB/2026"). When provided,
+   *  this is used for slot canonicalization so stale placeholders in saved
+   *  overrides are rewritten to the correct number. */
+  permitNumber?: string | null;
   transferPermit?: TransferPermitContext | null;
   /** Override the inferred variant (rare — used by dev/preview tooling). */
   variantOverride?: PermitVariant | null;
@@ -56,17 +60,8 @@ export function getResolvedContractTerms(
   const template = contractTermsByVariant[variant];
   if (!template) return null;
 
-  // Derive the canonical permit number from the application number so
-  // canonicaliseEmbeddedPermitNumber can rewrite any stale placeholder
-  // (e.g. XXXXXX/RWB/2026) stored in slot overrides.
-  const appNo = (input.applicationNumber ?? "").trim();
-  const pnMatch = appNo.match(/^RWB-(\d{4})-(\d+)$/i);
-  const derivedPermitNumber = pnMatch
-    ? `${pnMatch[2].padStart(6, "0")}/RWB/${pnMatch[1]}`
-    : undefined;
-
   const ctx = buildContractSlotContext(input.application, {
-    permitNumber: derivedPermitNumber,
+    permitNumber: input.permitNumber ?? undefined,
   });
   // Surface transferPermit + applicationNumber to the placeholder cache used
   // by the slot resolver. We funnel them through `extras` rather than

@@ -84,6 +84,7 @@ export function ContractTermsPreview({
     ? getResolvedContractTerms({
         application: application as ApplicationForContract & PermitApplication,
         applicationNumber: application.application_number ?? undefined,
+        permitNumber: permitNumber ?? null,
         transferPermit,
         variantOverride: variantOverride ?? null,
       })
