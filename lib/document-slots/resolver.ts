@@ -55,6 +55,10 @@ export function isDateBearingSlot(slot: DocumentTextSlot): boolean {
 /**
  * Matches every permit-number format the renderer or assessors might type:
  *   `0918/RWB/2026`, `918/RWB/2026`, `WP-0918/RWB/2026`, `RWBP-2026-0918`.
+ * Also matches the `XXXXXX/RWB/2026` placeholder stored in slot overrides
+ * when an assessor saved the contract before the real permit number was
+ * assigned by the DB trigger — those X-placeholder strings were never caught
+ * by the original `\d{1,6}` pattern and leaked to the applicant's view.
  *
  * Used to canonicalise override text at render time. An assessor who pre-typed
  * a permit number into a contract/permit body slot (e.g. on 2026-05-06 for
@@ -65,14 +69,14 @@ export function isDateBearingSlot(slot: DocumentTextSlot): boolean {
  * guarantees that — no matter what's in the override — the rendered PDF and
  * the DB agree.
  */
-const PERMIT_NUMBER_PATTERN = /(?:WP-)?\d{1,6}\/RWB\/\d{4}|RWBP-\d{4}-\d{1,6}/gi;
+const PERMIT_NUMBER_PATTERN = /(?:WP-)?(?:\d|X){1,6}\/RWB\/\d{4}|RWBP-\d{4}-(?:\d|X){1,6}/gi;
 
 /** Pull the 4-digit year segment out of any supported permit-number format,
  *  or `null` if the input isn't a recognisable permit number. */
 function extractPermitNumberYear(value: string): string | null {
-  const slash = value.match(/^(?:WP-)?\d{1,6}\/RWB\/(\d{4})$/i);
+  const slash = value.match(/^(?:WP-)?(?:\d|X){1,6}\/RWB\/(\d{4})$/i);
   if (slash) return slash[1];
-  const rwbp = value.match(/^RWBP-(\d{4})-\d{1,6}$/i);
+  const rwbp = value.match(/^RWBP-(\d{4})-(?:\d|X){1,6}$/i);
   if (rwbp) return rwbp[1];
   return null;
 }
