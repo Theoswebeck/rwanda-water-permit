@@ -551,7 +551,7 @@ async function renderConcessionIndividual(opts: PermitRenderOpts): Promise<Buffe
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 22) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
 
   y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
@@ -616,7 +616,7 @@ async function renderAbstractionIndividual(opts: PermitRenderOpts): Promise<Buff
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 22) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
@@ -687,7 +687,7 @@ async function renderAbstractionOrganization(opts: PermitRenderOpts): Promise<Bu
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 50) {
+  if (y > contentBottomY(doc) - 22) {
     doc.addPage();
     await drawWatermark(doc);
     y = 30 * PT;
@@ -755,7 +755,7 @@ async function renderConcessionOrganization(opts: PermitRenderOpts): Promise<Buf
     y += h + paraGap;
   }
 
-  if (y > contentBottomY(doc) - 50) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
+  if (y > contentBottomY(doc) - 22) { doc.addPage(); await drawWatermark(doc); y = 30 * PT; }
   y += PERMIT_BEFORE_CLOSING_PT;
   drawClosingLine(doc, y, ctx);
 
