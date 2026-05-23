@@ -92,15 +92,27 @@ export function buildPermitSlotContext(
  */
 export function buildContractSlotContext(
   application: PermitApplication,
+  opts?: { permitNumber?: string },
 ): SlotResolverContext {
   const variant = selectPermitVariant(
     application as Parameters<typeof selectPermitVariant>[0],
   );
-  return {
+  const ctx: SlotResolverContext = {
     application: application as unknown as SlotResolverContext["application"],
     applicant:
       (application.applicant as unknown as Record<string, unknown>) ?? null,
     effectiveNotes: getEffectiveInternalNotes(application.internal_notes),
     variant,
   };
+  if (opts?.permitNumber) {
+    ctx.permit = {
+      permitNumber: opts.permitNumber,
+      issueDate: new Date(),
+      expiryDate: new Date(),
+      isModified: false,
+      skipQr: true,
+      headerYear: new Date().getFullYear(),
+    };
+  }
+  return ctx;
 }

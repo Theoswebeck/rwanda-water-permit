@@ -56,7 +56,18 @@ export function getResolvedContractTerms(
   const template = contractTermsByVariant[variant];
   if (!template) return null;
 
-  const ctx = buildContractSlotContext(input.application);
+  // Derive the canonical permit number from the application number so
+  // canonicaliseEmbeddedPermitNumber can rewrite any stale placeholder
+  // (e.g. XXXXXX/RWB/2026) stored in slot overrides.
+  const appNo = (input.applicationNumber ?? "").trim();
+  const pnMatch = appNo.match(/^RWB-(\d{4})-(\d+)$/i);
+  const derivedPermitNumber = pnMatch
+    ? `${pnMatch[2].padStart(6, "0")}/RWB/${pnMatch[1]}`
+    : undefined;
+
+  const ctx = buildContractSlotContext(input.application, {
+    permitNumber: derivedPermitNumber,
+  });
   // Surface transferPermit + applicationNumber to the placeholder cache used
   // by the slot resolver. We funnel them through `extras` rather than
   // mutating the application so the resolver path stays pure.
