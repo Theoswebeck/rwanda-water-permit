@@ -85,7 +85,9 @@ Skip these validations when `isDistrictWaterSupply`:
 Add these validations when `isDistrictWaterSupply`:
 
 - `waterSourceDistrict` must be selected (province + district dropdowns)
-- `bulkNetworks` must have at least one row with `networkName` filled
+- `bulkNetworks` must have at least one non-empty row, and every non-empty row must have ALL mandatory fields filled: `network_name`, `sector`, `cell`, `coordinates`, `capacity_m3_day`, `abstraction_method` (partial rows block the Next button)
+
+Note: sector/cell are skipped from the water source tab's `form.trigger()` call when `isDistrictWaterSupply` (those fields are hidden in favour of the networks table).
 
 ---
 

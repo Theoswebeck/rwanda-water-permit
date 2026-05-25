@@ -470,7 +470,12 @@ const applicationFormSchema = z.object({
   // No need to check for mixing concession and abstraction activities
 
   // District water supply has its own validation path (district + networks); skip abstraction/concession checks.
-  if (selectedActivities[0] === "district_water_supply") return;
+  if (selectedActivities[0] === "district_water_supply") {
+    if (!String(data.waterSourceDistrict ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceDistrict"], message: "District is required for District Water Supply." });
+    }
+    return;
+  }
 
   const pureConcessionActs = ["fish_farming_lakes", "recreation_activities"];
   const isPureConcessionAct = selectedActivities.some((a) => pureConcessionActs.includes(a));
