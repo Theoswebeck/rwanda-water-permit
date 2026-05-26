@@ -220,4 +220,20 @@ export function getInspectionBasePath(role: string | undefined): string {
   }
 }
 
+export function getApplicationBasePath(role: string | undefined): string {
+  switch (role) {
+    case "reviewer":
+    case "admin":
+      return "/review/application";
+    case "assessor":
+      return "/assessment/application";
+    case "verifier":
+      return "/verification/application";
+    case "approver":
+      return "/approver/application";
+    default:
+      return "/inspection/application";
+  }
+}
+
 export type { WorkflowTransition };

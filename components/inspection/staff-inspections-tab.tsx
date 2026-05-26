@@ -19,7 +19,7 @@ import {
   getInspectionWorkflowClassName,
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
-import { getInspectionBasePath } from "@/lib/inspection-workflow";
+import { getInspectionBasePath, getApplicationBasePath } from "@/lib/inspection-workflow";
 
 type ApplicantInfo = {
   first_name?: string;
@@ -191,6 +191,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const { userProfile, loading: authLoading } = useAuth();
   const currentUserId = userProfile?.id ?? null;
   const basePath = getInspectionBasePath(roleContext || userProfile?.role);
+  const appBasePath = getApplicationBasePath(roleContext || userProfile?.role);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -614,7 +615,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                               {r.application?.application_number ? (
                                 <DropdownMenuItem asChild>
                                   <Link
-                                    href={`/inspection/application/${encodeURIComponent(r.application.application_number)}`}
+                                    href={`${appBasePath}/${encodeURIComponent(r.application.application_number)}`}
                                     className="flex items-center gap-2"
                                   >
                                     <Eye className="h-4 w-4" />
