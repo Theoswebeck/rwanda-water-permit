@@ -168,6 +168,8 @@ EMAIL_DEV_MODE=false
 
 Despite the names, `-uat` is staging and the non-`-uat` branch is prod. Push fixes that need to reach production to **both** branches.
 
+**CRITICAL — never merge or push one branch directly into the other.** The two branches have intentional differences (e.g. UAT uses a sandbox IremboPay fee of 20 RWF vs prod's 35,000 RWF). A direct push or merge would overwrite those differences. Always use cherry-pick.
+
 **Updating staging (UAT):** The two branches diverge over time, so a direct push from prod to UAT will be rejected (non-fast-forward). Always cherry-pick onto UAT:
 
 ```bash
