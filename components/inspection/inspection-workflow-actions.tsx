@@ -383,31 +383,15 @@ export function InspectionWorkflowActions({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Textarea
-              placeholder="Notes for forwarding/returns (required where applicable)..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-            />
-
             <div className="flex flex-wrap items-center gap-2">
               {transitions.map((t) => (
                 <Button
                   key={t.action}
                   type="button"
                   variant={t.variant}
-                  disabled={loading || (t.requiresNotes && !notes.trim())}
-                  onClick={() => {
-                    if (t.action === "approve" || t.action === "reject") {
-                      setConfirmDialog({ open: true, transition: t });
-                    } else {
-                      handleTransition(t);
-                    }
-                  }}
+                  disabled={loading}
+                  onClick={() => setConfirmDialog({ open: true, transition: t })}
                 >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : null}
                   {t.label}
                 </Button>
               ))}
@@ -421,29 +405,32 @@ export function InspectionWorkflowActions({
       <Dialog
         open={confirmDialog.open}
         onOpenChange={(open) => {
-          if (!open) setConfirmDialog({ open: false, transition: null });
+          if (!open) {
+            setConfirmDialog({ open: false, transition: null });
+            setNotes("");
+          }
         }}
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {confirmDialog.transition?.action === "approve"
-                ? "Approve Inspection"
-                : "Reject Inspection"}
-            </DialogTitle>
-            <DialogDescription>
-              {confirmDialog.transition?.action === "approve"
-                ? "Are you sure you want to approve this inspection? This action is final."
-                : "Are you sure you want to reject this inspection? This action is final."}
-            </DialogDescription>
+            <DialogTitle>{confirmDialog.transition?.label}</DialogTitle>
+            {(confirmDialog.transition?.action === "approve" ||
+              confirmDialog.transition?.action === "reject") && (
+              <DialogDescription>
+                {confirmDialog.transition.action === "approve"
+                  ? "Are you sure you want to approve this inspection? This action is final."
+                  : "Are you sure you want to reject this inspection? This action is final."}
+              </DialogDescription>
+            )}
           </DialogHeader>
-          {confirmDialog.transition?.requiresNotes && (
+          {(confirmDialog.transition?.requiresNotes ||
+            confirmDialog.transition?.showNotes) && (
             <div className="py-2">
               <Textarea
                 placeholder={
-                  confirmDialog.transition.action === "reject"
-                    ? "Reason for rejection (required)..."
-                    : "Approval notes..."
+                  confirmDialog.transition.requiresNotes
+                    ? "Comment is required..."
+                    : "Add a comment (optional)..."
                 }
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -454,22 +441,18 @@ export function InspectionWorkflowActions({
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() =>
-                setConfirmDialog({ open: false, transition: null })
-              }
+              onClick={() => {
+                setConfirmDialog({ open: false, transition: null });
+                setNotes("");
+              }}
             >
               Cancel
             </Button>
             <Button
-              variant={
-                confirmDialog.transition?.action === "reject"
-                  ? "destructive"
-                  : "default"
-              }
+              variant={confirmDialog.transition?.variant === "destructive" ? "destructive" : "default"}
               disabled={
                 loading ||
-                (confirmDialog.transition?.action === "reject" &&
-                  !notes.trim())
+                (!!confirmDialog.transition?.requiresNotes && !notes.trim())
               }
               onClick={() => {
                 if (confirmDialog.transition) {
@@ -480,9 +463,7 @@ export function InspectionWorkflowActions({
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {confirmDialog.transition?.action === "approve"
-                ? "Confirm Approval"
-                : "Confirm Rejection"}
+              Confirm
             </Button>
           </DialogFooter>
         </DialogContent>

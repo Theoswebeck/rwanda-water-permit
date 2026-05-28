@@ -10,6 +10,7 @@ interface WorkflowTransition {
   label: string;
   variant: "default" | "outline" | "destructive";
   requiresNotes?: boolean;
+  showNotes?: boolean;
 }
 
 const INSPECTION_WORKFLOW_ROLES: ReadonlySet<UserRole> = new Set([
@@ -35,6 +36,7 @@ const REVIEW_TRANSITIONS: WorkflowTransition[] = [
     action: "forward_to_verification",
     label: "Forward to Verifier",
     variant: "default",
+    showNotes: true,
   },
   {
     target: "returned_to_assessment",
@@ -51,6 +53,7 @@ const VERIFICATION_TRANSITIONS: WorkflowTransition[] = [
     action: "forward_to_approval",
     label: "Forward to Approver",
     variant: "default",
+    showNotes: true,
   },
   {
     target: "returned_to_review",
@@ -90,6 +93,7 @@ const ASSESSMENT_TRANSITIONS: WorkflowTransition[] = [
     action: "forward_to_review",
     label: "Forward to Reviewer",
     variant: "default",
+    showNotes: true,
   },
 ];
 
