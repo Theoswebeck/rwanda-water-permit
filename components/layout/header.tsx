@@ -20,6 +20,7 @@ import {
 import { translateText } from "@/lib/i18n/translator";
 
 const navItems = [
+  { label: "User Manual", href: "/assets/User_Manual_Guide_Rwanda_Water_Permit_Application_Portal.pdf", newTab: true },
   { label: "Guidelines", href: "https://www.waterpermit.rwb.rw/Water_Use_Permitting_Guidelines.pdf" },
   { label: "Water Use Dashboard", href: "/water-use-dashboard" },
   { label: "Contact", href: "https://waterpermit.rwb.rw/contact" },
@@ -102,8 +103,8 @@ export function Header() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: index * 0.1 }}
                 >
-                  {item.href.startsWith('http') ? (
-                    <a 
+                  {item.href.startsWith('http') || item.newTab ? (
+                    <a
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -112,7 +113,7 @@ export function Header() {
                       {tx(item.label)}
                     </a>
                   ) : (
-                    <Link 
+                    <Link
                       href={item.href}
                       className="text-muted-foreground hover:text-primary transition-colors text-sm font-medium"
                     >
@@ -231,8 +232,8 @@ export function Header() {
 
                 <nav className="flex flex-col space-y-6 mt-8">
                   {navItems.map((item) => {
-                    return item.href.startsWith('http') ? (
-                      <a 
+                    return item.href.startsWith('http') || item.newTab ? (
+                      <a
                         key={item.label}
                         href={item.href}
                         target="_blank"
@@ -240,10 +241,10 @@ export function Header() {
                         className="text-foreground hover:text-primary transition-colors text-base font-medium"
                         onClick={() => setIsOpen(false)}
                       >
-                          {tx(item.label)}
+                        {tx(item.label)}
                       </a>
                     ) : (
-                      <Link 
+                      <Link
                         key={item.label}
                         href={item.href}
                         className="text-foreground hover:text-primary transition-colors text-base font-medium"
