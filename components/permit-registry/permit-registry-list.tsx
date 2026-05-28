@@ -387,7 +387,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleDateString("en-RW", {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -1350,8 +1350,8 @@ function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
           <p><span className="text-muted-foreground">Activity:</span> {formatActivityLabel(values.authorized_activity)}</p>
           <p><span className="text-muted-foreground">Location:</span> {values.location || "N/A"}</p>
           <p><span className="text-muted-foreground">Coordinates:</span> {formatCoord(values.latitude, values.longitude)}</p>
-          <p><span className="text-muted-foreground">Issued:</span> {values.issuance_date ? new Date(values.issuance_date).toLocaleDateString() : "N/A"}</p>
-          <p><span className="text-muted-foreground">Expires:</span> {values.expiration_date ? new Date(values.expiration_date).toLocaleDateString() : "N/A"}</p>
+          <p><span className="text-muted-foreground">Issued:</span> {values.issuance_date ? new Date(values.issuance_date).toLocaleDateString("en-RW", { year: "numeric", month: "short", day: "numeric" }) : "N/A"}</p>
+          <p><span className="text-muted-foreground">Expires:</span> {values.expiration_date ? new Date(values.expiration_date).toLocaleDateString("en-RW", { year: "numeric", month: "short", day: "numeric" }) : "N/A"}</p>
         </div>
       )}
     </div>
