@@ -36,7 +36,7 @@ function excelSerialToISODate(serial: number): string | null {
   return toISODate(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
 }
 
-/** Parse a date string in DD/MM/YYYY or YYYY-MM-DD format. */
+/** Parse a date string in DD/MM/YYYY, DD/MM/YY, or YYYY-MM-DD format. */
 function parseDateString(raw: string): string | null {
   const cleaned = raw.trim();
   if (!cleaned) return null;
@@ -46,17 +46,22 @@ function parseDateString(raw: string): string | null {
     return toISODate(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
   }
 
-  const slashMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  // Match DD/MM/YYYY or D/M/YY (2-digit year from Excel w field)
+  const slashMatch = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
   if (!slashMatch) return null;
 
   const first = Number(slashMatch[1]);
   const second = Number(slashMatch[2]);
-  const year = Number(slashMatch[3]);
+  const rawYear = Number(slashMatch[3]);
+  // Expand 2-digit year: 00-49 → 2000-2049, 50-99 → 1950-1999
+  const year = slashMatch[3].length === 2
+    ? (rawYear < 50 ? 2000 + rawYear : 1900 + rawYear)
+    : rawYear;
 
   if (first > 12 && second <= 12) return toISODate(year, second, first);
   if (second > 12 && first <= 12) return toISODate(year, first, second);
 
-  // Ambiguous — default to DD/MM/YYYY (legacy dataset expectation).
+  // Ambiguous — default to DD/MM/YYYY (Rwanda convention).
   return toISODate(year, second, first);
 }
 
@@ -232,7 +237,11 @@ function normalizeMapPurpose(activity: string | undefined, waterSource: string |
 function cellText(ws: XLSX.WorkSheet, cellRef: string): string {
   const cell = ws[cellRef];
   if (!cell) return "";
-  // For dates stored as numbers, prefer the raw value so our parser handles it
+  // For numeric cells that have a formatted display string (e.g. Excel date serials
+  // entered in DD/MM format on a US-locale Excel), prefer cell.w so parseDateString
+  // can re-interpret it as DD/MM rather than trusting the serial (which would have
+  // the month/day swapped by Excel at entry time).
+  if (cell.t === "n" && cell.w) return String(cell.w).trim();
   if (cell.t === "n") return String(cell.v ?? "");
   // Use SheetJS formatted text for everything else
   return String(cell.w ?? cell.v ?? "").trim();
