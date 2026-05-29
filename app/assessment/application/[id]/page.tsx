@@ -567,6 +567,8 @@ export default function AssessmentApplicationPage() {
     if (isReadOnly || isTransferApp) return [] as string[];
     const missing: string[] = [];
 
+    if (!inspectionDate) missing.push("Field Visit Details: Assessment date is required");
+
     if (reportTypeForAssessment === "abstraction") {
       const sourceFlowValue = assessmentReportData.sourceFlowValue ?? assessmentReportData.sourceFlowM3Day;
       const sourceFlowUnit = assessmentReportData.sourceFlowUnit ?? "m3/day";
