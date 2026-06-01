@@ -1689,11 +1689,12 @@ export function ApplicationForm({
     form.setValue('_isBulk', isBulkApplicant);
   }, [isBulkApplicant, form]);
 
-  // Auto-reset waterUseCategory to abstraction when activities change away from concession types.
-  // This prevents "Coffee Washing" or other abstraction activities from showing concession UI
-  // after the user had previously selected "Concession" for a different activity.
+  // Auto-set waterUseCategory based on selected activity — concession activities lock to "concession",
+  // all others lock to "abstraction". No manual override allowed.
   useEffect(() => {
-    if (!isPureConcession && form.getValues('waterUseCategory') === 'concession') {
+    if (isPureConcession) {
+      form.setValue('waterUseCategory', 'concession', { shouldDirty: false, shouldTouch: false, shouldValidate: false });
+    } else if (form.getValues('waterUseCategory') === 'concession') {
       form.setValue('waterUseCategory', 'abstraction', { shouldDirty: false, shouldTouch: false, shouldValidate: false });
     }
   }, [isPureConcession, form]);
@@ -4371,43 +4372,23 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Use Category selector – shown for activities that are not pure-concession or district water supply */}
-                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isPureConcession && !isDistrictWaterSupply && (
-                    <FormField
-                      control={form.control}
-                      name="waterUseCategory"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-base font-medium">
-                            {tx("Water Use Category *")}
-                          </FormLabel>
-                          <p className="text-sm text-muted-foreground mb-2">
-                            {tx("Select whether this activity involves water abstraction or a water concession.")}
-                          </p>
-                          <FormControl>
-                            <RadioGroup
-                              value={field.value || "abstraction"}
-                              onValueChange={(value) => {
-                                if (readOnly) return;
-                                field.onChange(value);
-                              }}
-                              disabled={readOnly}
-                              className={`flex gap-6 ${readOnly ? "cursor-default opacity-60" : ""}`}
-                            >
-                              <div className="flex items-center gap-2">
-                                <RadioGroupItem value="abstraction" id="wuc-abstraction" />
-                                <Label htmlFor="wuc-abstraction" className="cursor-pointer">{tx("Abstraction")}</Label>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <RadioGroupItem value="concession" id="wuc-concession" />
-                                <Label htmlFor="wuc-concession" className="cursor-pointer">{tx("Concession")}</Label>
-                              </div>
-                            </RadioGroup>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  {/* Water Use Category – auto-derived from selected activity, read-only */}
+                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-base font-medium">{tx("Water Use Category")}</p>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {tx("Automatically determined by the selected activity.")}
+                      </p>
+                      <span
+                        className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${
+                          effectiveWaterUseCategory === "concession"
+                            ? "bg-teal-100 text-teal-800"
+                            : "bg-blue-100 text-blue-800"
+                        }`}
+                      >
+                        {effectiveWaterUseCategory === "concession" ? tx("Concession") : tx("Abstraction")}
+                      </span>
+                    </div>
                   )}
 
                   {/* Water Abstraction Point (LAT, LONG) - shown for abstraction water use category, not for district water supply */}
