@@ -186,7 +186,7 @@
       "Location": "Aho hantu",
       "Project title": "Izina ry'umushinga",
       "Active": "Rikora",
-      "Expired": "Ryarangiye",
+      "Expired": "Byarangiye",
       "Expiring soon": "Rigiye kurangira",
       "Suspended": "Ryahagaritswe",
       "Revoked": "Ryakuweho",
@@ -243,7 +243,7 @@
       "Full Name *": "Amazina yombi *",
       "Enter your full name": "Injiza amazina yawe yombi",
       "Email Address *": "Aderesi ya imeyili *",
-      "Organization": "Ikigo",
+      "Organization": "Umuryango",
       "Company or organization name": "Izina ry'ikigo cyangwa sosiyete",
       "Category *": "Icyiciro *",
       "Select inquiry type": "Hitamo ubwoko bw'ikibazo",
@@ -432,10 +432,8 @@
       "Generating PDF...": "Gutegura PDF...",
       "View hosted terms": "Reba amabwiriza",
       "This permit exists in the public registry, but a system-issued PDF is not available for this record.": "Uru ruhushya ruraboneka mu gitabo rusange, ariko PDF yatanzwe na sisitemu ntiboneka kuri uru ruhushya.",
-
       "Your Water Use Reports": "Raporo zawe z'ikoreshwa ry'amazi",
       "View and manage your annual water use reports": "Reba kandi ucunge raporo zawe z'umwaka z'ikoreshwa ry'amazi",
-
       "Back": "Gusubira",
       "Profile Management": "Gucunga umwirondoro",
       "Manage your account information and security settings": "Gucunga amakuru y'konti yawe n'igenamiterere ry'umutekano",
@@ -498,7 +496,6 @@
       "You can request a copy of your personal data or delete your account at any time.": "Ushobora gusaba kopi y'amakuru yawe bwite cyangwa gusiba konti yawe igihe icyo ari cyo cyose.",
       "Download My Data": "Gukurura amakuru yanjye",
       "Delete Account": "Siba konti",
-
       "Water Use Reports": "Raporo z'ikoreshwa ry'amazi",
       "Total Reports": "Raporo zose",
       "All water use reports": "Raporo zose z'ikoreshwa ry'amazi",
@@ -536,7 +533,6 @@
       "Showing": "Kwerekana",
       "Previous": "Ibanze",
       "Next": "Ibikurikira",
-
       "Annual Water Use Report": "Raporo y'umwaka y'ikoreshwa ry'amazi",
       "Submit your annual water resources use report as required by Ministerial Order No 001/MoE/24 of 02/04/2024.": "Ohereza raporo y'umwaka y'ikoreshwa ry'amazi nk'uko bisabwa n'Iteka rya Minisitiri No 001/MoE/24 ryo ku wa 02/04/2024.",
       "Permit:": "Uruhushya:",
@@ -551,7 +547,6 @@
       "Loading report form...": "Gutegura ifishi y'iraporo...",
       "Draft saved successfully.": "Inyandiko y'agateganyo yabitswe neza.",
       "This report has already been submitted. You can view it but cannot make changes.": "Iyi raporo yamaze koherezwa. Ushobora kuyireba ariko ntushobora guhindura.",
-
       "Individual": "Umuntu ku giti cye",
       "OR CONTINUE WITH": "CYANGWA KOMEZA NA",
       "By registering, you agree to our terms and privacy practices.": "Mu kwiyandikisha, wemera amabwiriza n'imikorere yacu y'ibanga.",
@@ -572,13 +567,11 @@
       "Hide confirm password": "Hisha emeza ijambo ry'ibanga",
       "Show confirm password": "Erekana emeza ijambo ry'ibanga",
       "Failed to resend code. Please try again.": "Kohereza kode bundi bushye byanze. Nyamuneka ongera ugerageze.",
-
       "Search applications...": "Shakisha ubusabe...",
       "All Activities": "Ibikorwa byose",
       "Returned for Review": "Byasubijwe kugenzurwa",
       "Rejected": "Byanzwe",
       "Pending Payment": "Hategerejwe ubwishyu",
-      "Expired": "Byarangiye",
       "Clear selection": "Siba ihitamo",
       "Deleting...": "Birimo gusibwa...",
       "Edit Application": "Hindura ubusabe",
@@ -597,7 +590,6 @@
       "applications selected": "ubusabe bwahisemo",
       "Delete": "Siba",
       "application(s)": "ubusabe",
-
       "1. Full Name of the Applicant *": "1. Amazina Yuzuye y'Usaba *",
       "2. Category of the Applicant *": "2. Icyiciro cy'Usaba *",
       "3. Name of the Representative *": "3. Amazina y'Uhagarariye *",
@@ -614,22 +606,18 @@
       "12. Tributary to (main river/lake)": "12. Ishami rya (uruzi/ikiyaga nyamukuru)",
       "13. Location of water source * (Province, District, Sector, Cell, Village)": "13. Aho Isoko y'Amazi Iherereye * (Intara, Akarere, Umurenge, Akagari, Umudugudu)",
       "14. Reliability of water source *": "14. Ubuhoraho bw'Isoko y'Amazi *",
-
       "Company": "Sosiyete",
       "Cooperative": "Koperative",
-      "Institution": "Inzego",
+      "Institution": "Ikigo",
       "NGO / Association": "ONG / Ishyirahamwe",
-
-      "Borehole": "Kuvomera mu butaka",
+      "Borehole": "Umwozo w'amazi",
       "Dam": "Urugomero",
       "Lake": "Ikiyaga",
       "Spring": "Isoko",
       "Stream/River": "Inzuzi/Uruzi",
-
       "Water always available": "Amazi ateganye igihe cyose",
       "Dry during certain season": "Igaharana mu gihe runaka",
       "Frequently dry": "Igaharana inshuro nyinshi",
-
       "Telephone Contact *": "Telefoni yo Kuvugana *",
       "Water Use Category": "Icyiciro cy'Ikoreshwa ry'Amazi",
       "Identification document": "Inyandiko y'Irangamuntu",
@@ -640,12 +628,10 @@
       "Sector *": "Umurenge *",
       "Cell *": "Akagari *",
       "Village": "Umudugudu",
-
       "Enter representative name": "Injiza amazina y'uhagarariye",
       "Enter representative position or title": "Injiza umwanya cyangwa umutwe w'uhagarariye",
       "Enter name of water source": "Injiza izina ry'isoko y'amazi",
       "Enter main river/lake (if applicable)": "Injiza uruzi/ikiyaga nyamukuru (niba birebana)",
-
       "Enter population": "Injiza umubare w'abaturage",
       "Enter per capita demand": "Injiza igiciro cy'amazi ku muntu umwe",
       "Total daily demand (m³)": "Igiteranyo cy'amazi asabwa ku munsi (m³)",
@@ -653,24 +639,19 @@
       "Storage capacity (m³)": "Ubushobozi bwo kubika amazi (m³)",
       "Enter storage capacity (m³)": "Injiza ubushobozi bwo kubika (m³)",
       "Describe storage facilities...": "Sobanura udushya two kubika amazi...",
-
       "Type of crops": "Ubwoko bw'imyaka",
       "Area in ha": "Ubuso mu hegitari",
       "Water demand (m³)": "Amazi asabwa (m³)",
-
       "Lake name": "Izina ry'ikiyaga",
       "Number of cages": "Umubare w'ibonga",
       "Fishes per cage": "Umubare w'ifi mu bonga",
-      "Surface area": "Ubuso bw'ubutaka",
+      "Surface area": "Ubuso",
       "Capacity (m³)": "Ubushobozi (m³)",
-
       "Monthly usage (m³)": "Ikoreshwa ry'amazi mu kwezi (m³)",
-
       "Annual washing capacity": "Ubushobozi bwo gusukura ku mwaka",
       "Daily quantity (m³)": "Ingano ku munsi (m³)",
       "Monthly quantity (m³)": "Ingano mu kwezi (m³)",
       "Annual quantity (m³)": "Ingano ku mwaka (m³)",
-
       "Daily (m³)": "Ku munsi (m³)",
       "Monthly (m³)": "Mu kwezi (m³)",
       "Distance": "Intera",
@@ -678,47 +659,37 @@
       "e.g., 120": "nk'urugero, 120",
       "e.g., 3500": "nk'urugero, 3500",
       "e.g., 10000": "nk'urugero, 10000",
-
       "Capacity in MW": "Ubushobozi muri MW",
       "Enter flow rate (m³/s)": "Injiza intera y'amazi (m³/s)",
-
       "Describe purpose of construction": "Sobanura intego y'ubwubatsi",
       "Describe purpose of construction or installation": "Sobanura intego y'ubwubatsi cyangwa gushyiraho ibikorwa remezo",
       "Detailed project description...": "Ibisobanuro birambuye by'umushinga...",
       "Enter concession area in m²": "Injiza ubuso bwemewe muri m²",
-
       "Describe the recreational project...": "Sobanura umushinga w'ibikorwa byo kuryoherereza...",
       "Specify recreation type": "Sobanura ubwoko bw'ibikorwa byo kuryoherereza",
       "Area": "Ubuso",
       "Yearly average": "Igipimo cya buri mwaka",
-
       "Describe plans and alterations...": "Sobanura imigambi n'impinduka zateganyijwe...",
       "Select abstraction method": "Hitamo uburyo bwo gukuramo amazi",
-
       "e.g., -1.9441": "nk'urugero, -1.9441",
       "e.g., 29.8739": "nk'urugero, 29.8739",
-
       "e.g., Site Plan, Water Quality Report": "nk'urugero, Igishusho cy'Ahantu, Raporo y'Ubwiza bw'Amazi",
       "Brief description of the document...": "Incamake y'inyandiko...",
       "PDF, JPG, PNG, DOC (max 10MB)": "PDF, JPG, PNG, DOC (ntarenze 10MB)",
-
       "Automatically determined by the selected activity.": "Gishyirwaho ku buryo bwikora hashingiwe ku gikorwa wahisemo.",
       "This information is pulled from your account profile and cannot be edited here.": "Iyi makuru ivuye kuri konti yawe kandi ntishobora guhindurwa hano.",
-      "Fill out all required fields to submit your water permit application. Fields marked with * are required.": "Uzuza ibibanza byose bisabwa kugira ngo uohereze ubusabe bw'uruhushya rw'amazi. Ibibanza bifite (*) ni ngombwa.",
+      "Fill out all required fields to submit your water permit application. Fields marked with * are required.": "Uzuza ibibanza byose bisabwa kugira ngo uhereze ubusabe bw'uruhushya rw'amazi. Ibibanza bifite (*) ni ngombwa.",
       "For water abstraction activities, only a single point is required (LAT/LONG).": "Ku bikorwa byo gukuramo amazi, ahantu hamwe (LAT/LONG) gusa harasabwa.",
       "Please provide a clear justification for why you are requesting this permit modification. This will be reviewed by RWB staff.": "Nyamuneka tanga impamvu igaragara yo gusaba guhindura uruhushya. Izasuzumwa n'abakozi ba RWB.",
       "Review the submitted water permit application details below.": "Suzuma ibisobanuro by'ubusabe bw'uruhushya rw'amazi byoherejwe hepfo.",
       "Select the duration for which you are requesting the water permit (1-15 years). This may be adjusted by the assessor based on your use case.": "Hitamo igihe usaba uruhushya rw'amazi (imyaka 1-15). Umusuzumi ashobora guhindura hashingiwe ku buryo ubukoresha.",
       "Use the Map View tab to click on the map to set your abstraction location.": "Koresha ikarita kugira ngo ugaragaze ahantu ugenda gukuramo amazi.",
-
       "years": "imyaka",
       "Do you have access to the land?": "Mbese ufite uburenganzira bwo gukoresha ubutaka?",
       "Do you own all the required land?": "Mbese ufite ubutaka bwose busabwa?",
-
       "MINISTERIAL ORDER NO 001/MOE/24 OF 02/04/2024 RELATING TO WATER RESOURCES USE PERMIT": "ITEKA RYA MINISITIRI NO 001/MOE/24 RYO KU WA 02/04/2024 RIREBANA N'URUHUSHYA RWO GUKORESHA AMAZI",
       "REFER TO THE LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA": "REBA ITEGEKO N°49/2018 RYO KU WA 13/08/2018 RIGENA IKORESHWA N'IMICUNGIRE Y'AMAZI MU RWANDA",
       "Explain the reason for your modification request (e.g., change in water usage requirements, updated project scope, change of location, etc.)": "Sobanura impamvu y'ubusabe bwo guhindura (nk'urugero, guhindura uburyo bwo gukoresha amazi, agaciro k'umushinga, aho hantu, n'ibindi)",
-
       "💾 Manual save only - use \"Save as Draft\" button or \"Next\" to save progress": "💾 Kubika ku buryo bwa intoki gusa - koresha buto ya \"Bika inyandiko ituzuye\" cyangwa \"Ibikurikira\" kugira ngo ubike aho ugeze"
     },
     "words": {
