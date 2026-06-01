@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,6 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 
 interface DashboardHeaderProps {
   activeTab: "applications";
@@ -19,6 +22,13 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   // For demo purposes - in a real app, this would come from auth state
   const user = {
     name: "Jane Doe",
@@ -48,7 +58,7 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
                 onClick={() => onTabChange("applications")}
                 className="inline-flex items-center px-1 pt-1 text-sm font-medium"
               >
-                Applications
+                {tx("Applications")}
               </Button>
             </div>
           </div>
@@ -77,26 +87,26 @@ export function DashboardHeader({ activeTab, onTabChange }: DashboardHeaderProps
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/profile" className="flex items-center cursor-pointer">
                     <User className="mr-2 h-4 w-4" />
-                    <span>My Profile</span>
+                    <span>{tx("My Profile")}</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/applications" className="flex items-center cursor-pointer">
                     <FileText className="mr-2 h-4 w-4" />
-                    <span>My Applications</span>
+                    <span>{tx("My Applications")}</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/dashboard/settings" className="flex items-center cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
-                    <span>Account Settings</span>
+                    <span>{tx("Account Settings")}</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/login" className="flex items-center cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Log out</span>
+                    <span>{tx("Log out")}</span>
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>

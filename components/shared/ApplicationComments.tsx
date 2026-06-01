@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,6 +63,13 @@ export function ApplicationComments({
   applicationCreatedAt,
   applicantName 
 }: ApplicationCommentsProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
@@ -373,19 +382,19 @@ export function ApplicationComments({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Internal Notes & History</CardTitle>
+        <CardTitle>{tx("Internal Notes & History")}</CardTitle>
         <CardDescription className="text-muted-foreground text-[1.05rem] text-balance sm:text-base">
-          Comments are visible to all RWB staff
+          {tx("Comments are visible to all RWB staff")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="timeline" className="w-full">
           <TabsList className="w-fit justify-start">
             <TabsTrigger value="timeline" className="flex-none px-4">
-              Timeline
+              {tx("Timeline")}
             </TabsTrigger>
             <TabsTrigger value="notes" className="flex-none px-4">
-              Internal notes
+              {tx("Internal notes")}
             </TabsTrigger>
           </TabsList>
 
@@ -393,12 +402,12 @@ export function ApplicationComments({
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium">Timestamp timeline</h3>
+                <h3 className="text-sm font-medium">{tx("Timestamp timeline")}</h3>
               </div>
 
               {eventsError ? <p className="text-sm text-red-600">{eventsError}</p> : null}
               {eventsLoading ? (
-                <div className="text-center py-6 text-muted-foreground">Loading timeline...</div>
+                <div className="text-center py-6 text-muted-foreground">{tx("Loading timeline...")}</div>
               ) : events.length > 0 ? (
                 <div className="space-y-4">
                   {events.map((evt, idx) => (
@@ -440,7 +449,7 @@ export function ApplicationComments({
                   ))}
                 </div>
               ) : (
-                <div className="text-sm text-muted-foreground">No workflow events yet.</div>
+                <div className="text-sm text-muted-foreground">{tx("No workflow events yet.")}</div>
               )}
             </div>
           </TabsContent>
@@ -449,7 +458,7 @@ export function ApplicationComments({
             <div className="space-y-6">
               {error ? <p className="text-sm text-red-600">{error}</p> : null}
               {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading comments...</div>
+                <div className="text-center py-8 text-muted-foreground">{tx("Loading comments...")}</div>
               ) : comments.length > 0 ? (
                 comments.map((comment) => (
                   <div key={comment.id} className="flex gap-4">
@@ -473,7 +482,7 @@ export function ApplicationComments({
                                   disabled={rowBusyId === comment.id || !editingText.trim()}
                                   onClick={() => saveEdit(comment)}
                                 >
-                                  Save
+                                  {tx("Save")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -481,7 +490,7 @@ export function ApplicationComments({
                                   disabled={rowBusyId === comment.id}
                                   onClick={cancelEdit}
                                 >
-                                  Cancel
+                                  {tx("Cancel")}
                                 </Button>
                               </>
                             ) : (
@@ -492,7 +501,7 @@ export function ApplicationComments({
                                   disabled={rowBusyId === comment.id}
                                   onClick={() => startEdit(comment)}
                                 >
-                                  Edit
+                                  {tx("Edit")}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -500,7 +509,7 @@ export function ApplicationComments({
                                   disabled={rowBusyId === comment.id}
                                   onClick={() => deleteComment(comment)}
                                 >
-                                  Delete
+                                  {tx("Delete")}
                                 </Button>
                               </>
                             )}
@@ -525,7 +534,7 @@ export function ApplicationComments({
               ) : (
                 <div className="text-center py-8">
                   <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No comments yet</p>
+                  <p className="text-muted-foreground">{tx("No comments yet")}</p>
                 </div>
               )}
             </div>
@@ -536,10 +545,10 @@ export function ApplicationComments({
         <div className="w-full space-y-4">
           <Separator />
           <div className="space-y-3">
-            <Label htmlFor="new-note" className="text-sm font-medium">Add a new note</Label>
+            <Label htmlFor="new-note" className="text-sm font-medium">{tx("Add a new note")}</Label>
             <Textarea
               id="new-note"
-              placeholder="Type your internal note here..."
+              placeholder={tx("Type your internal note here...")}
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               className="min-h-[100px]"
@@ -552,7 +561,7 @@ export function ApplicationComments({
               className="gap-2"
             >
               <Send className="h-4 w-4" />
-              Post Note
+              {tx("Post Note")}
             </Button>
           </div>
         </div>

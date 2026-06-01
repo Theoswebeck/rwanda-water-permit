@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -235,6 +237,12 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
   const [coordinateValidation, setCoordinateValidation] = useState<any>(null);
   const isManualPermit = permit.id?.startsWith("manual-");
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   const fileInputRefs = {
     certifiedLetter: useRef<HTMLInputElement>(null),
@@ -824,10 +832,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   onClick={readOnly ? undefined : () => fileInputRefs[fieldName as keyof typeof fileInputRefs]?.current?.click()}
                   disabled={readOnly}
                 >
-                  Choose File
+                  {tx("Choose File")}
                 </Button>
               </div>
-              <p className="text-xs text-gray-500">PDF, JPG, PNG, DOC (max 10MB)</p>
+              <p className="text-xs text-gray-500">{tx("PDF, JPG, PNG, DOC (max 10MB)")}</p>
             </div>
           )}
           
@@ -857,7 +865,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                 rel="noopener noreferrer"
                 className="hover:underline truncate max-w-xs"
               >
-                View uploaded document
+                {tx("View uploaded document")}
               </a>
               <Button
                 type="button"
@@ -1111,22 +1119,22 @@ export const PermitTransferForm = memo(function PermitTransferForm({
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-blue-900">
             <ArrowLeftRight className="h-5 w-5" />
-            TRANSFER OF WATER USE PERMIT AND RELATED CONTRACT
+            {tx("TRANSFER OF WATER USE PERMIT AND RELATED CONTRACT")}
           </CardTitle>
           <CardDescription className="space-y-2 text-blue-800">
-            <p><strong>Contact Email:</strong> info@rwb.rw</p>
-            <p><strong>Legal Reference:</strong> LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA</p>
+            <p><strong>{tx("Contact Email:")}</strong> info@rwb.rw</p>
+            <p><strong>{tx("Legal Reference:")}</strong> {tx("LAW N°49/2018 OF 13/08/2018 DETERMINING THE USE AND MANAGEMENT OF WATER RESOURCES IN RWANDA")}</p>
           </CardDescription>
         </CardHeader>
       </Card>
 
       <Card className="border-gray-200 dark:border-gray-800">
         <CardHeader>
-          <CardTitle>Permit Transfer Application</CardTitle>
+          <CardTitle>{tx("Permit Transfer Application")}</CardTitle>
           <CardDescription>
             {readOnly 
-              ? "Review the permit transfer application details below."
-              : "Complete all sections to transfer this water use permit. Fields marked with * are required."
+              ? tx("Review the permit transfer application details below.")
+              : tx("Complete all sections to transfer this water use permit. Fields marked with * are required.")
             }
           </CardDescription>
         </CardHeader>
@@ -1158,23 +1166,23 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                 <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="permit-info" className="flex items-center gap-1 text-xs">
                     <FileCheck className="h-4 w-4" />
-                    <span className="hidden sm:inline">Permit</span>
+                    <span className="hidden sm:inline">{tx("Permit")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="transferor" className="flex items-center gap-1 text-xs">
                     <User className="h-4 w-4" />
-                    <span className="hidden sm:inline">Transferor</span>
+                    <span className="hidden sm:inline">{tx("Transferor")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="transferee" className="flex items-center gap-1 text-xs">
                     <Building2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Transferee</span>
+                    <span className="hidden sm:inline">{tx("Transferee")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="documents" className="flex items-center gap-1 text-xs">
                     <FileText className="h-4 w-4" />
-                    <span className="hidden sm:inline">Documents</span>
+                    <span className="hidden sm:inline">{tx("Documents")}</span>
                   </TabsTrigger>
                   <TabsTrigger value="payment" className="flex items-center gap-1 text-xs">
                     <CreditCard className="h-4 w-4" />
-                    <span className="hidden sm:inline">Payment</span>
+                    <span className="hidden sm:inline">{tx("Payment")}</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -1183,10 +1191,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <FileCheck className="h-5 w-5" />
-                      Part 1: Particulars of the Permit
+                      {tx("Part 1: Particulars of the Permit")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Information about the permit being transferred.
+                      {tx("Information about the permit being transferred.")}
                     </p>
                   </div>
 
@@ -1194,8 +1202,8 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     <AlertCircle className="h-4 w-4 text-blue-600" />
                     <AlertDescription className="text-blue-800">
                       {isManualPermit
-                        ? "This permit was entered manually. Complete all permit particulars carefully before submission."
-                        : "These details are pre-filled from the selected permit and cannot be modified."}
+                        ? tx("This permit was entered manually. Complete all permit particulars carefully before submission.")
+                        : tx("These details are pre-filled from the selected permit and cannot be modified.")}
                     </AlertDescription>
                   </Alert>
 
@@ -1205,7 +1213,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="permitNumber"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Permit Number</FormLabel>
+                          <FormLabel>{tx("Permit Number")}</FormLabel>
                           <FormControl>
                             <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
@@ -1219,7 +1227,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="facilityProjectName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Name of Facility/Project</FormLabel>
+                          <FormLabel>{tx("Name of Facility/Project")}</FormLabel>
                           <FormControl>
                             <Input {...field} disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
@@ -1233,7 +1241,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="effectiveDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Effective Date</FormLabel>
+                          <FormLabel>{tx("Effective Date")}</FormLabel>
                           <FormControl>
                             <Input {...field} type="date" disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
@@ -1247,7 +1255,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="expirationDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Expiration Date</FormLabel>
+                          <FormLabel>{tx("Expiration Date")}</FormLabel>
                           <FormControl>
                             <Input {...field} type="date" disabled={readOnly || !isManualPermit} className={readOnly || !isManualPermit ? "bg-gray-100" : ""} />
                           </FormControl>
@@ -1258,7 +1266,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Permit Location</h4>
+                    <h4 className="font-medium">{tx("Permit Location")}</h4>
                     {isManualPermit ? (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
@@ -1266,7 +1274,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="permitLocationProvince"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Province / City of Kigali</FormLabel>
+                              <FormLabel>{tx("Province / City of Kigali")}</FormLabel>
                               {!readOnly ? (
                                 <Select
                                   onValueChange={(value) => {
@@ -1286,7 +1294,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                 >
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder="Select province" />
+                                      <SelectValue placeholder={tx("Select province")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
@@ -1312,7 +1320,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="permitLocationDistrict"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>District</FormLabel>
+                              <FormLabel>{tx("District")}</FormLabel>
                               {!readOnly ? (
                                 <Select
                                   onValueChange={(value) => {
@@ -1330,7 +1338,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                 >
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder={selectedPermitProvince ? "Select district" : "Select province first"} />
+                                      <SelectValue placeholder={selectedPermitProvince ? tx("Select district") : tx("Select province first")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
@@ -1356,7 +1364,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="permitLocationSector"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Sector</FormLabel>
+                              <FormLabel>{tx("Sector")}</FormLabel>
                               {!readOnly ? (
                                 <Select
                                   onValueChange={(value) => {
@@ -1372,7 +1380,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                 >
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder={selectedPermitDistrict ? "Select sector" : "Select district first"} />
+                                      <SelectValue placeholder={selectedPermitDistrict ? tx("Select sector") : tx("Select district first")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
@@ -1398,7 +1406,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="permitLocationCell"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Cell</FormLabel>
+                              <FormLabel>{tx("Cell")}</FormLabel>
                               {!readOnly ? (
                                 <Select
                                   onValueChange={(value) => {
@@ -1412,7 +1420,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                 >
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder={selectedPermitSector ? "Select cell" : "Select sector first"} />
+                                      <SelectValue placeholder={selectedPermitSector ? tx("Select cell") : tx("Select sector first")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
@@ -1438,7 +1446,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="permitLocationVillage"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Village</FormLabel>
+                              <FormLabel>{tx("Village")}</FormLabel>
                               {!readOnly ? (
                                 <Select
                                   onValueChange={(value) => {
@@ -1450,7 +1458,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                 >
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder={selectedPermitCell ? "Select village (optional)" : "Select cell first"} />
+                                      <SelectValue placeholder={selectedPermitCell ? tx("Select village (optional)") : tx("Select cell first")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
@@ -1499,34 +1507,34 @@ export const PermitTransferForm = memo(function PermitTransferForm({
 
                   {/* Water Source & Purpose */}
                   <div className="space-y-4">
-                    <h4 className="font-medium">Water Source &amp; Purpose</h4>
+                    <h4 className="font-medium">{tx("Water Source & Purpose")}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="waterSourceType"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Water Source Type</FormLabel>
+                            <FormLabel>{tx("Water Source Type")}</FormLabel>
                             {isManualPermit && !readOnly ? (
                               <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select water source type" />
+                                    <SelectValue placeholder={tx("Select water source type")} />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="lake">Lake</SelectItem>
-                                  <SelectItem value="dam">Dam</SelectItem>
-                                  <SelectItem value="spring">Spring</SelectItem>
-                                  <SelectItem value="borehole">Borehole</SelectItem>
-                                  <SelectItem value="stream_river">Stream/River</SelectItem>
-                                  <SelectItem value="river">River</SelectItem>
-                                  <SelectItem value="surface_water">Surface Water</SelectItem>
-                                  <SelectItem value="groundwater">Groundwater</SelectItem>
-                                  <SelectItem value="swamp">Swamp</SelectItem>
-                                  <SelectItem value="reservoir">Reservoir</SelectItem>
-                                  <SelectItem value="wetland">Wetland</SelectItem>
-                                  <SelectItem value="other">Other</SelectItem>
+                                  <SelectItem value="lake">{tx("Lake")}</SelectItem>
+                                  <SelectItem value="dam">{tx("Dam")}</SelectItem>
+                                  <SelectItem value="spring">{tx("Spring")}</SelectItem>
+                                  <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
+                                  <SelectItem value="stream_river">{tx("Stream/River")}</SelectItem>
+                                  <SelectItem value="river">{tx("River")}</SelectItem>
+                                  <SelectItem value="surface_water">{tx("Surface Water")}</SelectItem>
+                                  <SelectItem value="groundwater">{tx("Groundwater")}</SelectItem>
+                                  <SelectItem value="swamp">{tx("Swamp")}</SelectItem>
+                                  <SelectItem value="reservoir">{tx("Reservoir")}</SelectItem>
+                                  <SelectItem value="wetland">{tx("Wetland")}</SelectItem>
+                                  <SelectItem value="other">{tx("Other")}</SelectItem>
                                 </SelectContent>
                               </Select>
                             ) : (
@@ -1549,12 +1557,12 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         name="waterSourceName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Water Source Name</FormLabel>
+                            <FormLabel>{tx("Water Source Name")}</FormLabel>
                             <FormControl>
                               <Input
                                 {...field}
                                 value={field.value || ""}
-                                placeholder="e.g., Lake Kivu, Nyabarongo River"
+                                placeholder={tx("e.g., Lake Kivu, Nyabarongo River")}
                                 disabled={readOnly || !isManualPermit}
                                 className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
                               />
@@ -1569,30 +1577,30 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         name="waterPurpose"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Water Use / Purpose</FormLabel>
+                            <FormLabel>{tx("Water Use / Purpose")}</FormLabel>
                             {isManualPermit && !readOnly ? (
                               <Select onValueChange={field.onChange} value={field.value || ""}>
                                 <FormControl>
                                   <SelectTrigger>
-                                    <SelectValue placeholder="Select water purpose" />
+                                    <SelectValue placeholder={tx("Select water purpose")} />
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="coffee_washing">Coffee Washing</SelectItem>
-                                  <SelectItem value="construction_of_dam">Construction of Dam</SelectItem>
-                                  <SelectItem value="construction_of_infrastructures">Construction of Infrastructure</SelectItem>
-                                  <SelectItem value="domestic">Water Supply</SelectItem>
-                                  <SelectItem value="electricity_generation">Electricity Generation</SelectItem>
-                                  <SelectItem value="fish_farming_lakes">Fish Farming (Lakes)</SelectItem>
-                                  <SelectItem value="fish_farming_ponds">Fish Farming (Ponds)</SelectItem>
-                                  <SelectItem value="gaz_extraction">Gaz Extraction</SelectItem>
-                                  <SelectItem value="industrial">Industrial</SelectItem>
-                                  <SelectItem value="irrigation">Irrigation</SelectItem>
-                                  <SelectItem value="livestock">Livestock</SelectItem>
-                                  <SelectItem value="mining">Mining</SelectItem>
-                                  <SelectItem value="municipal_supply">Municipal Supply</SelectItem>
-                                  <SelectItem value="recreation">Recreation</SelectItem>
-                                  <SelectItem value="water_supply">Water Supply</SelectItem>
+                                  <SelectItem value="coffee_washing">{tx("Coffee Washing")}</SelectItem>
+                                  <SelectItem value="construction_of_dam">{tx("Construction of Dam")}</SelectItem>
+                                  <SelectItem value="construction_of_infrastructures">{tx("Construction of Infrastructure")}</SelectItem>
+                                  <SelectItem value="domestic">{tx("Water Supply")}</SelectItem>
+                                  <SelectItem value="electricity_generation">{tx("Electricity Generation")}</SelectItem>
+                                  <SelectItem value="fish_farming_lakes">{tx("Fish Farming (Lakes)")}</SelectItem>
+                                  <SelectItem value="fish_farming_ponds">{tx("Fish Farming (Ponds)")}</SelectItem>
+                                  <SelectItem value="gaz_extraction">{tx("Gaz Extraction")}</SelectItem>
+                                  <SelectItem value="industrial">{tx("Industrial")}</SelectItem>
+                                  <SelectItem value="irrigation">{tx("Irrigation")}</SelectItem>
+                                  <SelectItem value="livestock">{tx("Livestock")}</SelectItem>
+                                  <SelectItem value="mining">{tx("Mining")}</SelectItem>
+                                  <SelectItem value="municipal_supply">{tx("Municipal Supply")}</SelectItem>
+                                  <SelectItem value="recreation">{tx("Recreation")}</SelectItem>
+                                  <SelectItem value="water_supply">{tx("Water Supply")}</SelectItem>
                                   <SelectItem value="other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -1613,21 +1621,21 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   {/* Concession Information — shown when effectiveWaterUseCategory is concession */}
                   {effectiveWaterUseCategory === "concession" && (
                     <div className="space-y-4">
-                      <h4 className="font-medium">Concession Information</h4>
+                      <h4 className="font-medium">{tx("Concession Information")}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
                           name="concessionArea"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Concession Area *</FormLabel>
+                              <FormLabel>{tx("Concession Area")} *</FormLabel>
                               <FormControl>
                                 <Input
                                   {...field}
                                   value={field.value || ""}
                                   type="number"
                                   step="0.01"
-                                  placeholder="Enter concession area"
+                                  placeholder={tx("Enter concession area")}
                                   disabled={readOnly || !isManualPermit}
                                   className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
                                 />
@@ -1642,18 +1650,18 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="concessionAreaUnit"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Concession Area Unit</FormLabel>
+                              <FormLabel>{tx("Concession Area Unit")}</FormLabel>
                               {isManualPermit && !readOnly ? (
                                 <Select onValueChange={field.onChange} value={field.value || "ha"}>
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder="Select unit" />
+                                      <SelectValue placeholder={tx("Select unit")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="ha">Hectares (ha)</SelectItem>
-                                    <SelectItem value="m²">Square meters (m²)</SelectItem>
-                                    <SelectItem value="acres">Acres</SelectItem>
+                                    <SelectItem value="ha">{tx("Hectares (ha)")}</SelectItem>
+                                    <SelectItem value="m²">{tx("Square meters (m²)")}</SelectItem>
+                                    <SelectItem value="acres">{tx("Acres")}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               ) : (
@@ -1668,7 +1676,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       </div>
                       <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-sm text-blue-800">
-                          <strong>Note:</strong> For concession permits (fish farming in lakes, recreational activities), the authorized surface area is used instead of water volume.
+                          <strong>{tx("Note:")}</strong> {tx("For concession permits (fish farming in lakes, recreational activities), the authorized surface area is used instead of water volume.")}
                         </p>
                       </div>
 
@@ -1713,21 +1721,21 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   {/* Abstraction & Volume — shown when effectiveWaterUseCategory is abstraction */}
                   {effectiveWaterUseCategory === "abstraction" && (
                     <div className="space-y-4">
-                      <h4 className="font-medium">Abstraction &amp; Volume</h4>
+                      <h4 className="font-medium">{tx("Abstraction & Volume")}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
                           name="waterAllowance"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Water Allowance</FormLabel>
+                              <FormLabel>{tx("Water Allowance")}</FormLabel>
                               <FormControl>
                                 <Input
                                   {...field}
                                   value={field.value || ""}
                                   type="number"
                                   step="0.01"
-                                  placeholder="Permitted volume"
+                                  placeholder={tx("Permitted volume")}
                                   disabled={readOnly || !isManualPermit}
                                   className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
                                 />
@@ -1742,19 +1750,19 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="allowanceUnit"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Allowance Unit</FormLabel>
+                              <FormLabel>{tx("Allowance Unit")}</FormLabel>
                               {isManualPermit && !readOnly ? (
                                 <Select onValueChange={field.onChange} value={field.value || "m³/year"}>
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder="Unit" />
+                                      <SelectValue placeholder={tx("Unit")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="m³/year">m³/year</SelectItem>
-                                    <SelectItem value="m³/day">m³/day</SelectItem>
-                                    <SelectItem value="m³/month">m³/month</SelectItem>
-                                    <SelectItem value="l/s">l/s</SelectItem>
+                                    <SelectItem value="m³/year">{tx("m³/year")}</SelectItem>
+                                    <SelectItem value="m³/day">{tx("m³/day")}</SelectItem>
+                                    <SelectItem value="m³/month">{tx("m³/month")}</SelectItem>
+                                    <SelectItem value="l/s">{tx("l/s")}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               ) : (
@@ -1772,23 +1780,23 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="abstractionMethod"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Method of Abstraction</FormLabel>
+                              <FormLabel>{tx("Method of Abstraction")}</FormLabel>
                               {isManualPermit && !readOnly ? (
                                 <Select onValueChange={field.onChange} value={field.value || ""}>
                                   <FormControl>
                                     <SelectTrigger>
-                                      <SelectValue placeholder="Select method" />
+                                      <SelectValue placeholder={tx("Select method")} />
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    <SelectItem value="Pumping">Pumping</SelectItem>
-                                    <SelectItem value="Gravity">Gravity</SelectItem>
-                                    <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
-                                    <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
-                                    <SelectItem value="Borehole">Borehole</SelectItem>
-                                    <SelectItem value="Spring Capture">Spring Capture</SelectItem>
-                                    <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
-                                    <SelectItem value="Other">Other</SelectItem>
+                                    <SelectItem value="Pumping">{tx("Pumping")}</SelectItem>
+                                    <SelectItem value="Gravity">{tx("Gravity")}</SelectItem>
+                                    <SelectItem value="Diversion Channel">{tx("Diversion Channel")}</SelectItem>
+                                    <SelectItem value="Dam/Reservoir">{tx("Dam/Reservoir")}</SelectItem>
+                                    <SelectItem value="Borehole">{tx("Borehole")}</SelectItem>
+                                    <SelectItem value="Spring Capture">{tx("Spring Capture")}</SelectItem>
+                                    <SelectItem value="Hand Dug Well">{tx("Hand Dug Well")}</SelectItem>
+                                    <SelectItem value="Other">{tx("Other")}</SelectItem>
                                   </SelectContent>
                                 </Select>
                               ) : (
@@ -1806,14 +1814,14 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="flowRate"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Flow Rate (m³/s)</FormLabel>
+                              <FormLabel>{tx("Flow Rate (m³/s)")}</FormLabel>
                               <FormControl>
                                 <Input
                                   {...field}
                                   value={field.value || ""}
                                   type="number"
                                   step="0.001"
-                                  placeholder="Enter flow rate"
+                                  placeholder={tx("Enter flow rate")}
                                   disabled={readOnly || !isManualPermit}
                                   className={readOnly || !isManualPermit ? "bg-gray-100" : ""}
                                 />
@@ -1829,9 +1837,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   {/* Water Source Coordinates — only for abstraction permits */}
                   {effectiveWaterUseCategory === "abstraction" && (
                     <div className="space-y-4">
-                      <h4 className="font-medium">Water Source Coordinates</h4>
+                      <h4 className="font-medium">{tx("Water Source Coordinates")}</h4>
                       <p className="text-xs text-muted-foreground">
-                        For single-point abstraction, enter latitude and longitude of the water intake point.
+                        {tx("For single-point abstraction, enter latitude and longitude of the water intake point.")}
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
@@ -1839,7 +1847,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="waterSourceLatitude"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Latitude</FormLabel>
+                              <FormLabel>{tx("Latitude")}</FormLabel>
                               <FormControl>
                                 <Input
                                   {...field}
@@ -1859,7 +1867,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="waterSourceLongitude"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Longitude</FormLabel>
+                              <FormLabel>{tx("Longitude")}</FormLabel>
                               <FormControl>
                                 <Input
                                   {...field}
@@ -1886,7 +1894,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       className="bg-blue-600 hover:bg-blue-700"
                       disabled={!canAdvanceFromActiveTab || isTabSwitching}
                     >
-                      Next: Transferor Details
+                      {tx("Next: Transferor Details")}
                     </Button>
                   </div>
                 </TabsContent>
@@ -1896,17 +1904,17 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <User className="h-5 w-5" />
-                      Part 2: Your Information (Transferor)
+                      {tx("Part 2: Your Information (Transferor)")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Your information as the current permit holder who is transferring the permit.
+                      {tx("Your information as the current permit holder who is transferring the permit.")}
                     </p>
                   </div>
 
                   <Alert className="border-blue-200 bg-blue-50">
                     <AlertCircle className="h-4 w-4 text-blue-600" />
                     <AlertDescription className="text-blue-800">
-                      Your details are pre-filled from your account profile. You must sign the physical transfer form.
+                      {tx("Your details are pre-filled from your account profile. You must sign the physical transfer form.")}
                     </AlertDescription>
                   </Alert>
 
@@ -1916,11 +1924,11 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="transferorName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Your Name *</FormLabel>
+                          <FormLabel>{tx("Your Name")} *</FormLabel>
                           <FormControl>
                             <Input {...field} disabled className="bg-gray-100" />
                           </FormControl>
-                          <FormDescription>Pre-filled from your account profile (not editable)</FormDescription>
+                          <FormDescription>{tx("Pre-filled from your account profile (not editable)")}</FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1932,7 +1940,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         name="transferorRepresentativeName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Representative Name</FormLabel>
+                            <FormLabel>{tx("Representative Name")}</FormLabel>
                             <FormControl>
                               <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
@@ -1945,7 +1953,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         name="transferorRepresentativePosition"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Position</FormLabel>
+                            <FormLabel>{tx("Position")}</FormLabel>
                             <FormControl>
                               <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                             </FormControl>
@@ -1957,7 +1965,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Office Address</h4>
+                    <h4 className="font-medium">{tx("Office Address")}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -1983,7 +1991,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             >
                               <FormControl>
                                 <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
-                                  <SelectValue placeholder="Select Province" />
+                                  <SelectValue placeholder={tx("Select Province")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -2020,7 +2028,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             >
                               <FormControl>
                                 <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
-                                  <SelectValue placeholder="Select District" />
+                                  <SelectValue placeholder={tx("Select District")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -2055,7 +2063,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             >
                               <FormControl>
                                 <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
-                                  <SelectValue placeholder="Select Sector" />
+                                  <SelectValue placeholder={tx("Select Sector")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -2088,7 +2096,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             >
                               <FormControl>
                                 <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
-                                  <SelectValue placeholder="Select Cell" />
+                                  <SelectValue placeholder={tx("Select Cell")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -2119,7 +2127,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             >
                               <FormControl>
                                 <SelectTrigger className={readOnly ? "bg-gray-100" : ""}>
-                                  <SelectValue placeholder="Select Village (optional)" />
+                                  <SelectValue placeholder={tx("Select Village (optional)")} />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
@@ -2143,7 +2151,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="transferorEmail"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel>{tx("Email")}</FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                           </FormControl>
@@ -2156,7 +2164,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="transferorPhone"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Telephone Number</FormLabel>
+                          <FormLabel>{tx("Telephone Number")}</FormLabel>
                           <FormControl>
                             <Input {...field} value={field.value || ""} disabled={readOnly} className={readOnly ? "bg-gray-100" : ""} />
                           </FormControl>
@@ -2169,15 +2177,15 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   {/* Certification */}
                   <Card className="border-gray-200 bg-gray-50">
                     <CardHeader>
-                      <CardTitle className="text-base">Transferor Certification</CardTitle>
+                      <CardTitle className="text-base">{tx("Transferor Certification")}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="p-4 bg-white rounded-md border text-sm">
-                        <p className="font-medium mb-2">CERTIFICATION:</p>
+                        <p className="font-medium mb-2">{tx("CERTIFICATION:")}</p>
                         <p>
-                          This is to certify that ownership and operation for facility identified in Part 1 of this form 
-                          was transferred to <strong>{form.watch('transfereeName') || '[Transferee Name]'}</strong> (Transferee). 
-                          I affirm that this transfer includes rights and obligations of the permit and related contract.
+                          {tx("This is to certify that ownership and operation for facility identified in Part 1 of this form")}
+                          {tx("was transferred to")} <strong>{form.watch('transfereeName') || tx('[Transferee Name]')}</strong> {tx("(Transferee).")}
+                          {tx("I affirm that this transfer includes rights and obligations of the permit and related contract.")}
                         </p>
                       </div>
 
@@ -2195,10 +2203,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             </FormControl>
                             <div className="space-y-1 leading-none">
                               <FormLabel>
-                                I certify that I am transferring this permit and its obligations *
+                                {tx("I certify that I am transferring this permit and its obligations")} *
                               </FormLabel>
                               <FormDescription>
-                                You must also sign the physical transfer form.
+                                {tx("You must also sign the physical transfer form.")}
                               </FormDescription>
                             </div>
                             <FormMessage />
@@ -2212,9 +2220,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="transferorTitlePosition"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Title/Position</FormLabel>
+                              <FormLabel>{tx("Title/Position")}</FormLabel>
                               <FormControl>
-                                <Input {...field} value={field.value || ""} placeholder="e.g., Director, Owner" disabled={readOnly} />
+                                <Input {...field} value={field.value || ""} placeholder={tx("e.g., Director, Owner")} disabled={readOnly} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -2225,7 +2233,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           name="transferorSignatureDate"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Date *</FormLabel>
+                              <FormLabel>{tx("Date")} *</FormLabel>
                               <FormControl>
                                 <Input {...field} type="date" disabled={readOnly} />
                               </FormControl>
@@ -2244,7 +2252,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       variant="outline"
                       onClick={() => setActiveTab("permit-info")}
                     >
-                      Previous
+                      {tx("Previous")}
                     </Button>
                     <Button
                       type="button"
@@ -2252,7 +2260,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       className="bg-blue-600 hover:bg-blue-700"
                       disabled={!canAdvanceFromActiveTab || isTabSwitching}
                     >
-                      Next: Transferee Details
+                      {tx("Next: Transferee Details")}
                     </Button>
                   </div>
                 </TabsContent>
@@ -2262,10 +2270,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <Building2 className="h-5 w-5" />
-                      Part 3: New Owner (Transferee)
+                      {tx("Part 3: New Owner (Transferee)")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Enter the information of the person or organization who will receive this permit.
+                      {tx("Enter the information of the person or organization who will receive this permit.")}
                     </p>
                   </div>
 
@@ -2273,7 +2281,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                     <Alert className="border-green-200 bg-green-50 mb-4">
                       <AlertCircle className="h-4 w-4 text-green-600" />
                       <AlertDescription className="text-green-800">
-                        Enter the details of the new owner who will take over this permit.
+                        {tx("Enter the details of the new owner who will take over this permit.")}
                       </AlertDescription>
                     </Alert>
                   )}
@@ -2284,9 +2292,9 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       name="transfereeName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Name of New Owner *</FormLabel>
+                          <FormLabel>{tx("Name of New Owner")} *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="Full name or company name" disabled={readOnly} />
+                            <Input {...field} placeholder={tx("Full name or company name")} disabled={readOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2301,7 +2309,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Representative Name</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} placeholder="If applicable" disabled={readOnly} />
+                              <Input {...field} value={field.value || ""} placeholder={tx("If applicable")} disabled={readOnly} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2314,7 +2322,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           <FormItem>
                             <FormLabel>Position</FormLabel>
                             <FormControl>
-                              <Input {...field} value={field.value || ""} placeholder="e.g., Manager" disabled={readOnly} />
+                              <Input {...field} value={field.value || ""} placeholder={tx("e.g., Manager")} disabled={readOnly} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2324,7 +2332,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="font-medium">Office Address *</h4>
+                    <h4 className="font-medium">{tx("Office Address")} *</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -2516,7 +2524,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Email *</FormLabel>
                           <FormControl>
-                            <Input {...field} type="email" placeholder="transferee@example.com" disabled={readOnly} />
+                            <Input {...field} type="email" placeholder={tx("transferee@example.com")} disabled={readOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2529,7 +2537,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                         <FormItem>
                           <FormLabel>Telephone Number *</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="0786123456 or 786123456" disabled={readOnly} />
+                            <Input {...field} placeholder={tx("0786123456 or 786123456")} disabled={readOnly} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -2540,16 +2548,13 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   {/* Certification - Note: The new owner must acknowledge, but this is being filled by the transferor */}
                   <Card className="border-amber-200 bg-amber-50">
                     <CardHeader>
-                      <CardTitle className="text-base text-amber-900">Transferee Acknowledgement</CardTitle>
+                      <CardTitle className="text-base text-amber-900">{tx("Transferee Acknowledgement")}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="p-4 bg-white rounded-md border text-sm">
-                        <p className="font-medium mb-2">TRANSFEREE CERTIFICATION:</p>
+                        <p className="font-medium mb-2">{tx("TRANSFEREE CERTIFICATION:")}</p>
                         <p>
-                          The new owner acknowledges full responsibility for complying with the terms and conditions of the Permit and 
-                          related contract transferred from <strong>{form.watch('transferorName') || '[Your Name]'}</strong> (Transferor) 
-                          and any applicable standards and requirements. The operations/project will remain the same as authorized 
-                          and any modification will require approval of the Director General of Rwanda Water Resources Board.
+                          {tx("The new owner acknowledges full responsibility for complying with the terms and conditions of the Permit and related contract transferred from")} <strong>{form.watch('transferorName') || tx('[Your Name]')}</strong> {tx("(Transferor)")} {tx("and any applicable standards and requirements. The operations/project will remain the same as authorized and any modification will require approval of the Director General of Rwanda Water Resources Board.")}
                         </p>
                       </div>
 
@@ -2567,10 +2572,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                             </FormControl>
                             <div className="space-y-1 leading-none">
                               <FormLabel className="text-amber-900">
-                                I confirm the new owner has agreed to accept this transfer *
+                                {tx("I confirm the new owner has agreed to accept this transfer")} *
                               </FormLabel>
                               <FormDescription>
-                                The transferee must sign the physical transfer form to confirm acceptance.
+                                {tx("The transferee must sign the physical transfer form to confirm acceptance.")}
                               </FormDescription>
                             </div>
                             <FormMessage />
@@ -2616,7 +2621,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       variant="outline"
                       onClick={() => setActiveTab("transferor")}
                     >
-                      Previous
+                      {tx("Previous")}
                     </Button>
                     <Button
                       type="button"
@@ -2624,7 +2629,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       className="bg-blue-600 hover:bg-blue-700"
                       disabled={!canAdvanceFromActiveTab || isTabSwitching}
                     >
-                      Next: Required Documents
+                      {tx("Next: Required Documents")}
                     </Button>
                   </div>
                 </TabsContent>
@@ -2634,42 +2639,42 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                   <div>
                     <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                       <FileText className="h-5 w-5" />
-                      Part 4: Required Documents
+                      {tx("Part 4: Required Documents")}
                     </h3>
                     <p className="text-muted-foreground mb-6">
-                      Upload all required documents for the permit transfer.
+                      {tx("Upload all required documents for the permit transfer.")}
                     </p>
                   </div>
 
                   <Alert className="border-blue-200 bg-blue-50 mb-6">
                     <AlertCircle className="h-4 w-4 text-blue-600" />
-                    <AlertTitle className="text-blue-900">Required Documents for Water Permit Transfer</AlertTitle>
+                    <AlertTitle className="text-blue-900">{tx("Required Documents for Water Permit Transfer")}</AlertTitle>
                     <AlertDescription className="text-blue-800">
                       <ul className="mt-2 space-y-1 list-disc list-inside">
-                        <li>Permit Transfer Letter of Request</li>
-                        <li>Agreement between Transferor and Transferee, signed and notified by both parties</li>
-                        <li>New owner's registration certificate or ID</li>
+                        <li>{tx("Permit Transfer Letter of Request")}</li>
+                        <li>{tx("Agreement between Transferor and Transferee, signed and notified by both parties")}</li>
+                        <li>{tx("New owner's registration certificate or ID")}</li>
                       </ul>
-                      <p className="mt-2 text-sm italic">Note: Transfer fee payment is handled in the next step via IremboPay.</p>
+                      <p className="mt-2 text-sm italic">{tx("Note: Transfer fee payment is handled in the next step via IremboPay.")}</p>
                     </AlertDescription>
                   </Alert>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <DocumentUploadField
                       fieldName="certifiedLetter"
-                      label="Permit Transfer Letter of Request"
+                      label={tx("Permit Transfer Letter of Request")}
                       required
                     />
 
                     <DocumentUploadField
                       fieldName="notifiedAgreement"
-                      label="Agreement between Transferor and Transferee, signed and notified by both parties"
+                      label={tx("Agreement between Transferor and Transferee, signed and notified by both parties")}
                       required
                     />
 
                     <DocumentUploadField
                       fieldName="registrationCertificate"
-                      label="New owner's registration certificate or ID"
+                      label={tx("New owner's registration certificate or ID")}
                       required
                     />
                   </div>
@@ -2681,7 +2686,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       variant="outline"
                       onClick={() => setActiveTab("transferee")}
                     >
-                      Previous
+                      {tx("Previous")}
                     </Button>
 
                     <div className="flex gap-3">
@@ -2698,7 +2703,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           ) : (
                             <Save className="h-4 w-4" />
                           )}
-                          {isSavingDraft ? 'Saving...' : 'Save as Draft'}
+                          {isSavingDraft ? tx('Saving...') : tx('Save as Draft')}
                         </Button>
                       )}
                       {!isStaffView && (
@@ -2736,10 +2741,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                           {isLoading ? (
                             <>
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Saving...
+                              {tx("Saving...")}
                             </>
                           ) : (
-                            'Proceed to Payment'
+                            tx('Proceed to Payment')
                           )}
                         </Button>
                       )}
@@ -2763,10 +2768,10 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                       <div>
                         <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
                           <CreditCard className="h-5 w-5" />
-                          Part 5: Transfer Application Fee Payment
+                          {tx("Part 5: Transfer Application Fee Payment")}
                         </h3>
                         <p className="text-muted-foreground mb-6">
-                          Pay the non-refundable transfer application fee to complete your submission.
+                          {tx("Pay the non-refundable transfer application fee to complete your submission.")}
                         </p>
                       </div>
 

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +39,13 @@ import { DelegationDialog } from "@/components/admin/delegation-dialog";
 
 export function MyDelegations() {
   const { userProfile } = useAuth();
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const [delegations, setDelegations] = useState<RoleDelegationWithUsers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,21 +136,21 @@ export function MyDelegations() {
         return (
           <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
             <CheckCircle className="w-3 h-3 mr-1" />
-            Active
+            {tx("Active")}
           </Badge>
         );
       case "revoked":
         return (
           <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
             <XCircle className="w-3 h-3 mr-1" />
-            Revoked
+            {tx("Revoked")}
           </Badge>
         );
       case "expired":
         return (
           <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
             <Clock className="w-3 h-3 mr-1" />
-            Expired
+            {tx("Expired")}
           </Badge>
         );
       default:
@@ -197,9 +206,9 @@ export function MyDelegations() {
       <Card>
         <CardContent className="py-12 text-center">
           <Info className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-medium mb-2">Delegation Not Available</h3>
+          <h3 className="text-lg font-medium mb-2">{tx("Delegation Not Available")}</h3>
           <p className="text-muted-foreground">
-            Role delegation is only available for staff members (reviewers, verifiers, approvers, etc.)
+            {tx("Role delegation is only available for staff members (reviewers, verifiers, approvers, etc.)")}
           </p>
         </CardContent>
       </Card>
@@ -239,11 +248,9 @@ export function MyDelegations() {
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">About Role Delegation</p>
+              <p className="font-medium mb-1">{tx("About Role Delegation")}</p>
               <p>
-                When you&apos;re out of office, you can appoint another staff member to act on your behalf 
-                for your role ({userProfile?.role}). They will be able to perform all tasks associated 
-                with your role until the delegation ends or is revoked.
+                {tx("When you're out of office, you can appoint another staff member to act on your behalf for your role")} ({userProfile?.role}). {tx("They will be able to perform all tasks associated with your role until the delegation ends or is revoked.")}
               </p>
             </div>
           </div>
@@ -256,10 +263,10 @@ export function MyDelegations() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-emerald-700">
               <UserCheck className="h-5 w-5" />
-              You Are Currently Acting As
+              {tx("You Are Currently Acting As")}
             </CardTitle>
             <CardDescription>
-              You have been delegated the following roles and can perform tasks on behalf of these staff members
+              {tx("You have been delegated the following roles and can perform tasks on behalf of these staff members")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -275,15 +282,15 @@ export function MyDelegations() {
                       <AvatarFallback>{getUserInitials(delegation.delegator)}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <p className="font-medium">Acting as {getRoleBadge(delegation.delegated_role)}</p>
+                      <p className="font-medium">{tx("Acting as")} {getRoleBadge(delegation.delegated_role)}</p>
                       <p className="text-sm text-muted-foreground">
-                        On behalf of {getUserDisplayName(delegation.delegator)}
+                        {tx("On behalf of")} {getUserDisplayName(delegation.delegator)}
                       </p>
                     </div>
                   </div>
                   <div className="text-right text-sm">
                     <p className="text-muted-foreground">
-                      {delegation.end_date ? `Until ${formatDate(delegation.end_date)}` : "Indefinite"}
+                      {delegation.end_date ? `${tx("Until")} ${formatDate(delegation.end_date)}` : tx("Indefinite")}
                     </p>
                   </div>
                 </div>
@@ -300,20 +307,20 @@ export function MyDelegations() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <UserMinus className="h-5 w-5" />
-                My Role Delegations
+                {tx("My Role Delegations")}
               </CardTitle>
               <CardDescription>
-                Staff members you have appointed to act on your behalf
+                {tx("Staff members you have appointed to act on your behalf")}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={fetchDelegations} disabled={loading}>
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-                Refresh
+                {tx("Refresh")}
               </Button>
               <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <UserPlus className="h-4 w-4 mr-2" />
-                Appoint Acting Staff
+                {tx("Appoint Acting Staff")}
               </Button>
             </div>
           </div>
@@ -322,13 +329,13 @@ export function MyDelegations() {
           {delegationsIMade.length === 0 ? (
             <div className="text-center py-8">
               <UserCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No Delegations</h3>
+              <h3 className="text-lg font-medium mb-2">{tx("No Delegations")}</h3>
               <p className="text-muted-foreground mb-4">
-                You haven&apos;t appointed anyone to act on your behalf yet.
+                {tx("You haven't appointed anyone to act on your behalf yet.")}
               </p>
               <Button onClick={() => setIsCreateDialogOpen(true)}>
                 <UserPlus className="h-4 w-4 mr-2" />
-                Appoint Acting Staff
+                {tx("Appoint Acting Staff")}
               </Button>
             </div>
           ) : (
@@ -354,7 +361,7 @@ export function MyDelegations() {
                       </p>
                       {delegation.reason && (
                         <p className="text-sm text-muted-foreground mt-1">
-                          Reason: {delegation.reason}
+                          {tx("Reason")}: {delegation.reason}
                         </p>
                       )}
                     </div>
@@ -366,7 +373,7 @@ export function MyDelegations() {
                         {formatDate(delegation.start_date)}
                       </div>
                       <p className="text-muted-foreground">
-                        {delegation.end_date ? `to ${formatDate(delegation.end_date)}` : "Indefinite"}
+                        {delegation.end_date ? `${tx("to")} ${formatDate(delegation.end_date)}` : tx("Indefinite")}
                       </p>
                     </div>
                     {delegation.status === "active" && (
@@ -380,7 +387,7 @@ export function MyDelegations() {
                         }}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
-                        Revoke
+                        {tx("Revoke")}
                       </Button>
                     )}
                   </div>
@@ -397,10 +404,10 @@ export function MyDelegations() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserCheck className="h-5 w-5" />
-              Delegations Received
+              {tx("Delegations Received")}
             </CardTitle>
             <CardDescription>
-              Roles that have been delegated to you by other staff members
+              {tx("Roles that have been delegated to you by other staff members")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -433,7 +440,7 @@ export function MyDelegations() {
                       {formatDate(delegation.start_date)}
                     </div>
                     <p className="text-muted-foreground">
-                      {delegation.end_date ? `to ${formatDate(delegation.end_date)}` : "Indefinite"}
+                      {delegation.end_date ? `${tx("to")} ${formatDate(delegation.end_date)}` : tx("Indefinite")}
                     </p>
                   </div>
                 </div>
@@ -456,10 +463,10 @@ export function MyDelegations() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <XCircle className="h-5 w-5" />
-              Revoke Delegation
+              {tx("Revoke Delegation")}
             </DialogTitle>
             <DialogDescription>
-              Are you sure you want to revoke this delegation? {getUserDisplayName(selectedDelegation?.delegate || null)} will no longer be able to act on your behalf.
+              {tx("Are you sure you want to revoke this delegation?")} {getUserDisplayName(selectedDelegation?.delegate || null)} {tx("will no longer be able to act on your behalf.")}
             </DialogDescription>
           </DialogHeader>
 
@@ -467,25 +474,25 @@ export function MyDelegations() {
             <div className="py-4">
               <div className="bg-gray-50 rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Acting Staff:</span>
+                  <span className="text-sm text-muted-foreground">{tx("Acting Staff")}:</span>
                   <span className="font-medium">{getUserDisplayName(selectedDelegation.delegate)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Role:</span>
+                  <span className="text-sm text-muted-foreground">{tx("Role")}:</span>
                   {getRoleBadge(selectedDelegation.delegated_role)}
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Since:</span>
+                  <span className="text-sm text-muted-foreground">{tx("Since")}:</span>
                   <span>{formatDate(selectedDelegation.start_date)}</span>
                 </div>
               </div>
 
               <div className="mt-4">
                 <label className="text-sm font-medium mb-2 block">
-                  Revocation Reason (optional)
+                  {tx("Revocation Reason (optional)")}
                 </label>
                 <Input
-                  placeholder="e.g., Returned from leave..."
+                  placeholder={tx("e.g., Returned from leave...")}
                   value={revokeReason}
                   onChange={(e) => setRevokeReason(e.target.value)}
                 />
@@ -503,7 +510,7 @@ export function MyDelegations() {
               }}
               disabled={isRevoking}
             >
-              Cancel
+              {tx("Cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -513,12 +520,12 @@ export function MyDelegations() {
               {isRevoking ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Revoking...
+                  {tx("Revoking...")}
                 </>
               ) : (
                 <>
                   <XCircle className="h-4 w-4 mr-2" />
-                  Revoke Delegation
+                  {tx("Revoke Delegation")}
                 </>
               )}
             </Button>

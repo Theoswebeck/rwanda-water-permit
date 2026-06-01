@@ -18,6 +18,8 @@ import { usePayment } from '@/hooks/usePayment';
 import { getApplicationFee } from '@/lib/payment-utils';
 import type { Application } from '@/types/database';
 import type { InitiatePaymentRequest } from '@/types/payment';
+import { translateText } from '@/lib/i18n/translator';
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from '@/lib/i18n/language';
 
 // Get public key from environment
 const IREMBOPAY_PUBLIC_KEY = process.env.NEXT_PUBLIC_IREMBOPAY_PUBLIC_KEY || '';
@@ -110,6 +112,13 @@ export function PaymentTab({
   completionRedirectPath = '/dashboard?tab=applications',
 }: PaymentTabProps) {
   const router = useRouter();
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const [showWidget, setShowWidget] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [customerValidationError, setCustomerValidationError] = useState<string | null>(null);
@@ -521,25 +530,25 @@ export function PaymentTab({
         </motion.div>
         
         <div className="text-center space-y-2">
-          <h2 className="text-3xl font-bold text-green-800">Payment Successful!</h2>
+          <h2 className="text-3xl font-bold text-green-800">{tx("Payment Successful!")}</h2>
           <p className="text-lg text-gray-700">
-            Your application <strong className="text-green-700">#{completedApplication.application_number}</strong> has been submitted.
+            {tx("Your application")} <strong className="text-green-700">#{completedApplication.application_number}</strong> {tx("has been submitted.")}
           </p>
           <p className="text-sm text-gray-600">
-            Amount paid: <strong>{formatAmount(payment?.amount || 0, payment?.currency)}</strong>
+            {tx("Amount paid:")} <strong>{formatAmount(payment?.amount || 0, payment?.currency)}</strong>
           </p>
         </div>
 
         <Alert className="bg-green-50 border-green-200 max-w-md">
           <CheckCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            Your application is now being reviewed. You will receive updates via email at <strong>{completedApplication.applicant?.email || payment?.customer_email}</strong>
+            {tx("Your application is now being reviewed. You will receive updates via email at")} <strong>{completedApplication.applicant?.email || payment?.customer_email}</strong>
           </AlertDescription>
         </Alert>
 
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <Loader2 className="h-4 w-4 animate-spin" />
-          <span>{autoRedirectOnCompletion ? 'Redirecting to dashboard...' : 'Payment confirmation complete.'}</span>
+          <span>{autoRedirectOnCompletion ? tx('Redirecting to dashboard...') : tx('Payment confirmation complete.')}</span>
         </div>
       </motion.div>
     );
@@ -555,9 +564,9 @@ export function PaymentTab({
       >
         <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
         <div className="text-center space-y-2">
-          <p className="text-lg font-medium">Saving your application…</p>
+          <p className="text-lg font-medium">{tx("Saving your application…")}</p>
           <p className="text-sm text-muted-foreground">
-            Please wait — we’re preparing payment.
+            {tx("Please wait — we’re preparing payment.")}
           </p>
         </div>
       </motion.div>
@@ -574,9 +583,9 @@ export function PaymentTab({
       >
         <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
         <div className="text-center space-y-2">
-          <p className="text-lg font-medium">Verifying payment...</p>
+          <p className="text-lg font-medium">{tx("Verifying payment...")}</p>
           <p className="text-sm text-muted-foreground">
-            This may take a few seconds. Please do not close this page.
+            {tx("This may take a few seconds. Please do not close this page.")}
           </p>
         </div>
       </motion.div>
@@ -592,9 +601,9 @@ export function PaymentTab({
       >
         <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
         <div className="text-center space-y-2">
-          <p className="text-lg font-medium">Confirming payment with gateway...</p>
+          <p className="text-lg font-medium">{tx("Confirming payment with gateway...")}</p>
           <p className="text-sm text-muted-foreground">
-            We received a success callback. Final confirmation can take a few seconds.
+            {tx("We received a success callback. Final confirmation can take a few seconds.")}
           </p>
         </div>
       </motion.div>
@@ -611,20 +620,20 @@ export function PaymentTab({
       {customerValidationError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Missing applicant details</AlertTitle>
+          <AlertTitle>{tx("Missing applicant details")}</AlertTitle>
           <AlertDescription>{customerValidationError}</AlertDescription>
         </Alert>
       )}
       {saveError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Couldn’t save your application</AlertTitle>
+          <AlertTitle>{tx("Couldn’t save your application")}</AlertTitle>
           <AlertDescription className="space-y-2">
             <div>{saveError}</div>
             {onRetrySave && (
               <Button type="button" variant="outline" onClick={onRetrySave} className="mt-2">
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Retry save
+                {tx("Retry save")}
               </Button>
             )}
           </AlertDescription>
@@ -633,15 +642,15 @@ export function PaymentTab({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Payment</h2>
+          <h2 className="text-2xl font-bold tracking-tight">{tx("Payment")}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Complete payment to proceed with your application
+            {tx("Complete payment to proceed with your application")}
           </p>
         </div>
         {onBack && (
           <Button type="button" variant="ghost" onClick={onBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+            {tx("Back")}
           </Button>
         )}
       </div>
@@ -650,25 +659,25 @@ export function PaymentTab({
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
+          <AlertTitle>{tx("Error")}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
       {gatewayError && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Gateway Error</AlertTitle>
+          <AlertTitle>{tx("Gateway Error")}</AlertTitle>
           <AlertDescription className="space-y-3">
             <div>{gatewayError}</div>
             <div className="text-sm">
-              Automatic status polling has been paused so the application is not submitted after a widget error.
+              {tx("Automatic status polling has been paused so the application is not submitted after a widget error.")}
             </div>
             <div className="flex flex-col sm:flex-row gap-2 pt-1">
               <Button type="button" variant="outline" onClick={handleManualStatusCheck}>
-                Check payment status
+                {tx("Check payment status")}
               </Button>
               <Button type="button" onClick={handleRetryPayment}>
-                Retry payment
+                {tx("Retry payment")}
               </Button>
             </div>
           </AlertDescription>
@@ -679,19 +688,19 @@ export function PaymentTab({
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">
-            {isPaymentCompleted ? 'Payment Completed' : 'Payment Required'}
+            {isPaymentCompleted ? tx('Payment Completed') : tx('Payment Required')}
           </CardTitle>
           <CardDescription>
             {isPaymentCompleted
-              ? 'Your payment has been processed successfully'
-              : 'Pay the application fee to submit your application'}
+              ? tx('Your payment has been processed successfully')
+              : tx('Pay the application fee to submit your application')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {loading && !payment ? (
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="h-6 w-6 animate-spin text-blue-600" />
-              <span className="ml-3 text-sm text-muted-foreground">Loading payment information...</span>
+              <span className="ml-3 text-sm text-muted-foreground">{tx("Loading payment information...")}</span>
             </div>
           ) : isPaymentCompleted ? (
             // Show payment success status
@@ -703,18 +712,18 @@ export function PaymentTab({
               ) : (
                 <Alert className="bg-green-50 border-green-200">
                   <CheckCircle className="h-4 w-4 text-green-600" />
-                  <AlertTitle className="text-green-800">Payment Complete</AlertTitle>
+                  <AlertTitle className="text-green-800">{tx("Payment Complete")}</AlertTitle>
                   <AlertDescription className="text-green-700">
-                    Your payment was processed successfully.
+                    {tx("Your payment was processed successfully.")}
                   </AlertDescription>
                 </Alert>
               )}
               
               <Alert className="bg-green-50 border-green-200">
                 <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertTitle className="text-green-800">Application Submitted</AlertTitle>
+                <AlertTitle className="text-green-800">{tx("Application Submitted")}</AlertTitle>
                 <AlertDescription className="text-green-700">
-                  Your application has been submitted for review. You will receive updates via email and can track progress in your dashboard.
+                  {tx("Your application has been submitted for review. You will receive updates via email and can track progress in your dashboard.")}
                 </AlertDescription>
               </Alert>
 
@@ -723,7 +732,7 @@ export function PaymentTab({
                 onClick={() => router.push(completionRedirectPath)}
                 className="w-full"
               >
-                View My Applications
+                {tx("View My Applications")}
               </Button>
             </div>
           ) : isBalanceDue ? (
@@ -731,17 +740,17 @@ export function PaymentTab({
             <div className="space-y-6">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Balance Due</AlertTitle>
+                <AlertTitle>{tx("Balance Due")}</AlertTitle>
                 <AlertDescription className="space-y-1">
                   <div>
-                    A billing correction was applied to your application. The correct fee is{' '}
+                    {tx("A billing correction was applied to your application. The correct fee is")}{' '}
                     <strong>{formatAmount(correctedTotalFee)}</strong>.
                   </div>
                   <div>
-                    Already paid: <strong>{formatAmount(previouslyPaidAmount)}</strong>
+                    {tx("Already paid:")} <strong>{formatAmount(previouslyPaidAmount)}</strong>
                   </div>
                   <div>
-                    Remaining balance: <strong>{formatAmount(balanceDueAmount)}</strong>
+                    {tx("Remaining balance:")} <strong>{formatAmount(balanceDueAmount)}</strong>
                   </div>
                 </AlertDescription>
               </Alert>
@@ -756,12 +765,12 @@ export function PaymentTab({
                 {isInitializing ? (
                   <>
                     <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                    Initializing Payment...
+                    {tx("Initializing Payment...")}
                   </>
                 ) : (
                   <>
                     <CheckCircle className="h-5 w-5 mr-2" />
-                    Pay Balance ({formatAmount(balanceDueAmount)})
+                    {tx("Pay Balance")} ({formatAmount(balanceDueAmount)})
                   </>
                 )}
               </Button>
@@ -794,30 +803,30 @@ export function PaymentTab({
             <div className="space-y-6">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Application Fee Required</AlertTitle>
+                <AlertTitle>{tx("Application Fee Required")}</AlertTitle>
                 <AlertDescription>
-                  A non-refundable application fee of <strong>{formatAmount(applicationFee)}</strong> is required to process your water permit application.
+                  {tx("A non-refundable application fee of")} <strong>{formatAmount(applicationFee)}</strong> {tx("is required to process your water permit application.")}
                 </AlertDescription>
               </Alert>
 
               <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                <h3 className="text-sm font-medium mb-4">What happens after payment?</h3>
+                <h3 className="text-sm font-medium mb-4">{tx("What happens after payment?")}</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>Your application will be submitted for review</span>
+                    <span>{tx("Your application will be submitted for review")}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>You will receive a payment receipt via email</span>
+                    <span>{tx("You will receive a payment receipt via email")}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>Track your application status in your dashboard</span>
+                    <span>{tx("Track your application status in your dashboard")}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <span>Receive updates throughout the review process</span>
+                    <span>{tx("Receive updates throughout the review process")}</span>
                   </li>
                 </ul>
               </div>
@@ -832,12 +841,12 @@ export function PaymentTab({
                 {isInitializing ? (
                   <>
                     <RefreshCw className="h-5 w-5 mr-2 animate-spin" />
-                    Initializing Payment...
+                    {tx("Initializing Payment...")}
                   </>
                 ) : (
                   <>
                     <CheckCircle className="h-5 w-5 mr-2" />
-                    Proceed to Payment
+                    {tx("Proceed to Payment")}
                   </>
                 )}
               </Button>
@@ -861,13 +870,13 @@ export function PaymentTab({
       {/* Help Section */}
       <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Need Help?</AlertTitle>
+        <AlertTitle>{tx("Need Help?")}</AlertTitle>
         <AlertDescription className="text-xs">
-          If you encounter any issues with payment, please contact support at{' '}
+          {tx("If you encounter any issues with payment, please contact support at")}{' '}
           <a href="mailto:info@rwb.rw" className="text-blue-600 hover:underline">
             info@rwb.rw
           </a>{' '}
-          or call <strong>+250 782 985 880</strong>
+          {tx("or call")} <strong>+250 782 985 880</strong>
         </AlertDescription>
       </Alert>
     </motion.div>

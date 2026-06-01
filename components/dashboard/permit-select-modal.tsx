@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +43,12 @@ export function PermitSelectModal({
 }: PermitSelectModalProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   const filteredPermits = useMemo(() => {
     if (!searchTerm.trim()) return permits;
@@ -60,11 +68,11 @@ export function PermitSelectModal({
     const thirtyDaysFromNow = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
 
     if (expiryDate < now) {
-      return <Badge variant="destructive">Expired</Badge>;
+      return <Badge variant="destructive">{tx("Expired")}</Badge>;
     } else if (expiryDate <= thirtyDaysFromNow) {
-      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Expiring Soon</Badge>;
+      return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">{tx("Expiring Soon")}</Badge>;
     }
-    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Active</Badge>;
+    return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">{tx("Active")}</Badge>;
   };
 
   const parseInternalNotes = (permit: PermitWithApplication) => {
@@ -99,7 +107,7 @@ export function PermitSelectModal({
       permit.application?.province,
     ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
 
-    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : tx("Unknown location");
   };
 
   const getIntendedActivityLabel = (permit: PermitWithApplication) => {
@@ -115,7 +123,7 @@ export function PermitSelectModal({
       return getActivityLabel(permit.purpose);
     }
 
-    return "Unknown activity";
+    return tx("Unknown activity");
   };
 
   const handleSelectPermit = (permit: PermitWithApplication) => {
@@ -144,11 +152,11 @@ export function PermitSelectModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-blue-600" />
-            Select Permit for Water Use Reporting
+            {tx("Select Permit for Water Use Reporting")}
           </DialogTitle>
           <DialogDescription>
-            Choose the permit you want to submit an annual water use report for.
-            Only active permits are shown.
+            {tx("Choose the permit you want to submit an annual water use report for.")}
+            {" "}{tx("Only active permits are shown.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -156,7 +164,7 @@ export function PermitSelectModal({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by permit number, purpose, or location..."
+            placeholder={tx("Search by permit number, purpose, or location...")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -168,20 +176,20 @@ export function PermitSelectModal({
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-              <span className="ml-3 text-sm text-muted-foreground">Loading permits...</span>
+              <span className="ml-3 text-sm text-muted-foreground">{tx("Loading permits...")}</span>
             </div>
           ) : activePermits.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <AlertCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground font-medium">
-                {permits.length === 0 
-                  ? "No active permits found" 
-                  : "No permits match your search"}
+                {permits.length === 0
+                  ? tx("No active permits found")
+                  : tx("No permits match your search")}
               </p>
               <p className="text-sm text-muted-foreground/70 mt-1">
-                {permits.length === 0 
-                  ? "You need an approved permit to submit water use reports" 
-                  : "Try a different search term"}
+                {permits.length === 0
+                  ? tx("You need an approved permit to submit water use reports")
+                  : tx("Try a different search term")}
               </p>
             </div>
           ) : (
@@ -222,8 +230,8 @@ export function PermitSelectModal({
                       <div className="flex items-center gap-2 text-sm text-slate-500">
                         <Calendar className="h-4 w-4 shrink-0" />
                         <span>
-                          Issued: {formatDate(permit.issued_date)} • 
-                          Expires: {formatDate(permit.expiry_date)}
+                          {tx("Issued:")} {formatDate(permit.issued_date)} •
+                          {tx("Expires:")} {formatDate(permit.expiry_date)}
                         </span>
                       </div>
 

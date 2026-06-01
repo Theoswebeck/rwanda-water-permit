@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { 
   Card,
@@ -84,6 +86,12 @@ export function PermitSelectForTransfer({
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
   const [permitConflicts, setPermitConflicts] = useState<Record<string, PermitConflictSummary>>({});
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   useEffect(() => {
     fetchPermits();
@@ -206,9 +214,9 @@ export function PermitSelectForTransfer({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+        return <Badge className="bg-green-100 text-green-800">{tx("Active")}</Badge>;
       case 'expiring_soon':
-        return <Badge className="bg-amber-100 text-amber-800">Expiring Soon</Badge>;
+        return <Badge className="bg-amber-100 text-amber-800">{tx("Expiring Soon")}</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -270,7 +278,7 @@ export function PermitSelectForTransfer({
       permit.application?.province,
     ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
 
-    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : tx("Unknown location");
   };
 
   const getIntendedActivityLabel = (permit: PermitWithApplication) => {
@@ -294,7 +302,7 @@ export function PermitSelectForTransfer({
       return getActivityLabel(permit.purpose);
     }
 
-    return "Unknown activity";
+    return tx("Unknown activity");
   };
 
   const handleSelectPermit = () => {
@@ -321,10 +329,10 @@ export function PermitSelectForTransfer({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileCheck className="h-5 w-5 text-blue-600" />
-            Select Permit to Transfer
+            {tx("Select Permit to Transfer")}
           </CardTitle>
           <CardDescription>
-            Choose the water use permit you want to transfer. Only active permits can be transferred.
+            {tx("Choose the water use permit you want to transfer. Only active permits can be transferred.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -332,7 +340,7 @@ export function PermitSelectForTransfer({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search by permit number, project name, or holder..."
+              placeholder={tx("Search by permit number, project name, or holder...")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -351,7 +359,7 @@ export function PermitSelectForTransfer({
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <span className="ml-3 text-muted-foreground">Loading permits...</span>
+              <span className="ml-3 text-muted-foreground">{tx("Loading permits...")}</span>
             </div>
           )}
 
@@ -359,9 +367,9 @@ export function PermitSelectForTransfer({
           {!loading && permits.length === 0 && (
             <div className="text-center py-12">
               <FileCheck className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Permits Available</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{tx("No Permits Available")}</h3>
               <p className="text-muted-foreground">
-                There are no active permits available for transfer.
+                {tx("There are no active permits available for transfer.")}
               </p>
             </div>
           )}
@@ -370,7 +378,7 @@ export function PermitSelectForTransfer({
           {!loading && permits.length > 0 && filteredPermits.length === 0 && (
             <div className="text-center py-8">
               <Search className="h-8 w-8 mx-auto text-gray-400 mb-3" />
-              <p className="text-muted-foreground">No permits match your search.</p>
+              <p className="text-muted-foreground">{tx("No permits match your search.")}</p>
             </div>
           )}
 
@@ -412,12 +420,12 @@ export function PermitSelectForTransfer({
                         )}
 
                         <p className="font-medium text-gray-900">
-                          {permit.application?.project_title || 'Untitled Project'}
+                          {permit.application?.project_title || tx('Untitled Project')}
                         </p>
 
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <span className="font-medium">Holder:</span>
+                            <span className="font-medium">{tx("Holder:")}</span>
                             {getPermitHolderName(permit)}
                           </span>
                         </div>
@@ -436,11 +444,11 @@ export function PermitSelectForTransfer({
                         <div className="flex gap-4 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            Issued: {formatDate(permit.issued_date)}
+                            {tx("Issued:")} {formatDate(permit.issued_date)}
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            Expires: {formatDate(permit.expiry_date)}
+                            {tx("Expires:")} {formatDate(permit.expiry_date)}
                           </span>
                         </div>
                       </div>
@@ -453,8 +461,8 @@ export function PermitSelectForTransfer({
 
           {onManualPermitSelect && (
             <ManualPermitEntryCard
-              title="Permit Not Listed?"
-              description="If your old permit is not linked to your account, enter it manually. We will capture baseline details for staff verification."
+              title={tx("Permit Not Listed?")}
+              description={tx("If your old permit is not linked to your account, enter it manually. We will capture baseline details for staff verification.")}
               onContinue={onManualPermitSelect}
             />
           )}
@@ -462,14 +470,14 @@ export function PermitSelectForTransfer({
           {/* Actions */}
           <div className="flex justify-between pt-4 border-t">
             <Button variant="outline" onClick={onCancel}>
-              Cancel
+              {tx("Cancel")}
             </Button>
             <Button
               onClick={handleSelectPermit}
               disabled={!selectedPermitId || Boolean(selectedPermitConflict)}
               className="bg-blue-600 hover:bg-blue-700 gap-2"
             >
-              Continue with Transfer
+              {tx("Continue with Transfer")}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>

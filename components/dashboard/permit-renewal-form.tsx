@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import {
@@ -165,6 +167,12 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [tabValidationError, setTabValidationError] = useState<string | null>(null);
   const [draftSavedMessage, setDraftSavedMessage] = useState<string | null>(null);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   const isManualPermit = permit.id?.startsWith("manual-");
 
@@ -481,11 +489,11 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
 
   const TAB_ORDER = ["overview", "permit-details", "water-use-report", "attachments", "payment"];
   const TAB_LABELS: Record<string, string> = {
-    overview: "Overview",
-    "permit-details": "Permit Details",
-    "water-use-report": "Water Use Report",
-    attachments: "Attachments",
-    payment: "Payment",
+    overview: tx("Overview"),
+    "permit-details": tx("Permit Details"),
+    "water-use-report": tx("Water Use Report"),
+    attachments: tx("Attachments"),
+    payment: tx("Payment"),
   };
 
   const canProceedToPayment =
@@ -929,20 +937,20 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <RefreshCw className="h-5 w-5 text-green-600" />
-                <h2 className="text-xl font-semibold text-green-800">Permit Renewal</h2>
+                <h2 className="text-xl font-semibold text-green-800">{tx("Permit Renewal")}</h2>
               </div>
               <p className="text-sm text-green-700">
-                Renewing permit <span className="font-mono font-semibold">{permit.permit_number}</span>
+                {tx("Renewing permit")} <span className="font-mono font-semibold">{permit.permit_number}</span>
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               {daysUntilExpiry !== null && (
                 <Badge className={daysUntilExpiry < 0 ? "bg-red-100 text-red-800" : daysUntilExpiry <= 30 ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}>
                   <Clock className="h-3 w-3 mr-1" />
-                  {daysUntilExpiry < 0 ? `Expired ${Math.abs(daysUntilExpiry)} days ago` : `Expires in ${daysUntilExpiry} days`}
+                  {daysUntilExpiry < 0 ? `${tx("Expired")} ${Math.abs(daysUntilExpiry)} ${tx("days ago")}` : `${tx("Expires in")} ${daysUntilExpiry} ${tx("days")}`}
                 </Badge>
               )}
-              <Badge className="bg-blue-100 text-blue-800">Fee: {RENEWAL_FEE.toLocaleString()} RWF</Badge>
+              <Badge className="bg-blue-100 text-blue-800">{tx("Fee:")} {RENEWAL_FEE.toLocaleString()} RWF</Badge>
             </div>
           </div>
         </CardContent>
@@ -974,26 +982,26 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview" className="flex items-center gap-1 text-xs">
                 <Info className="h-4 w-4" />
-                <span className="hidden sm:inline">Overview</span>
+                <span className="hidden sm:inline">{tx("Overview")}</span>
               </TabsTrigger>
               <TabsTrigger value="permit-details" className="flex items-center gap-1 text-xs">
                 <ClipboardList className="h-4 w-4" />
-                <span className="hidden sm:inline">Permit Details</span>
+                <span className="hidden sm:inline">{tx("Permit Details")}</span>
                 {tabsCompleted["permit-details"] && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
               </TabsTrigger>
               <TabsTrigger value="water-use-report" className="flex items-center gap-1 text-xs">
                 <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Water Use Report</span>
+                <span className="hidden sm:inline">{tx("Water Use Report")}</span>
                 {tabsCompleted["water-use-report"] && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
               </TabsTrigger>
               <TabsTrigger value="attachments" className="flex items-center gap-1 text-xs">
                 <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">Attachments</span>
+                <span className="hidden sm:inline">{tx("Attachments")}</span>
                 {tabsCompleted.attachments && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
               </TabsTrigger>
               <TabsTrigger value="payment" className="flex items-center gap-1 text-xs" disabled={!isStaffView && !canProceedToPayment}>
                 <CreditCard className="h-4 w-4" />
-                <span className="hidden sm:inline">Payment</span>
+                <span className="hidden sm:inline">{tx("Payment")}</span>
               </TabsTrigger>
             </TabsList>
 
@@ -1004,20 +1012,20 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-blue-800">
                       <Info className="h-5 w-5" />
-                      Welcome to the Permit Renewal Process
+                      {tx("Welcome to the Permit Renewal Process")}
                     </CardTitle>
-                    <CardDescription>Here&apos;s what you need to know about renewing your water use permit</CardDescription>
+<CardDescription>{tx("Here's what you need to know about renewing your water use permit")}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-4">
-                      <h3 className="font-semibold text-gray-900">Renewal Steps</h3>
+                      <h3 className="font-semibold text-gray-900">{tx("Renewal Steps")}</h3>
                       <div className="grid gap-4">
                         {[
-                          { step: 1, title: "Enter Permit Details", description: "Confirm or enter your permit details including location, water source, and abstraction information.", icon: ClipboardList },
-                          { step: 2, title: "Submit Water Use Report", description: "Provide details about your water usage during the permit period.", icon: BarChart3 },
-                          { step: 3, title: "Upload Renewal Request Letter", description: "Submit a formal letter requesting the renewal of your water use permit.", icon: FileText },
-                          { step: 4, title: "Pay Renewal Fee", description: `Pay the renewal fee of ${RENEWAL_FEE.toLocaleString()} RWF through IremboPay.`, icon: CreditCard },
-                          { step: 5, title: "Application Review", description: "Your renewal application will go through the standard review process.", icon: CheckSquare },
+                          { step: 1, title: tx("Enter Permit Details"), description: tx("Confirm or enter your permit details including location, water source, and abstraction information."), icon: ClipboardList },
+                          { step: 2, title: tx("Submit Water Use Report"), description: tx("Provide details about your water usage during the permit period."), icon: BarChart3 },
+                          { step: 3, title: tx("Upload Renewal Request Letter"), description: tx("Submit a formal letter requesting the renewal of your water use permit."), icon: FileText },
+                          { step: 4, title: tx("Pay Renewal Fee"), description: `${tx("Pay the renewal fee of")} ${RENEWAL_FEE.toLocaleString()} RWF ${tx("through IremboPay.")}`, icon: CreditCard },
+                          { step: 5, title: tx("Application Review"), description: tx("Your renewal application will go through the standard review process."), icon: CheckSquare },
                         ].map((item) => (
                           <div key={item.step} className="flex gap-4 p-4 bg-white rounded-lg border">
                             <div className="flex-shrink-0">
@@ -1027,7 +1035,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs">Step {item.step}</Badge>
+                                <Badge variant="outline" className="text-xs">{tx("Step")} {item.step}</Badge>
                                 <h4 className="font-medium">{item.title}</h4>
                               </div>
                               <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
@@ -1040,13 +1048,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     <Separator />
 
                     <div className="space-y-3">
-                      <h3 className="font-semibold text-gray-900">Important Notes</h3>
+                      <h3 className="font-semibold text-gray-900">{tx("Important Notes")}</h3>
                       <div className="space-y-2">
                         {!isManualPermit && (
                           <Alert className="border-amber-200 bg-amber-50">
                             <AlertCircle className="h-4 w-4 text-amber-600" />
                             <AlertDescription className="text-amber-800">
-                              <strong>No Changes to Permit Details:</strong> Renewal extends the validity period only. All existing permit details (water source, usage volumes, location) will remain unchanged.
+                              <strong>{tx("No Changes to Permit Details:")}</strong> {tx("Renewal extends the validity period only. All existing permit details (water source, usage volumes, location) will remain unchanged.")}
                             </AlertDescription>
                           </Alert>
                         )}
@@ -1054,14 +1062,14 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                           <Alert className="border-indigo-200 bg-indigo-50">
                             <Info className="h-4 w-4 text-indigo-600" />
                             <AlertDescription className="text-indigo-800">
-                              <strong>Manual Permit:</strong> This permit is not linked in the system. Please enter all permit details in the next tab. Staff will verify against registry records.
+                              <strong>{tx("Manual Permit:")}</strong> {tx("This permit is not linked in the system. Please enter all permit details in the next tab. Staff will verify against registry records.")}
                             </AlertDescription>
                           </Alert>
                         )}
                         <Alert className="border-green-200 bg-green-50">
                           <Info className="h-4 w-4 text-green-600" />
                           <AlertDescription className="text-green-800">
-                            <strong>Validity Period:</strong> Upon approval, your permit will be renewed for another 5 years from the renewal approval date.
+                            <strong>{tx("Validity Period:")}</strong> {tx("Upon approval, your permit will be renewed for another 5 years from the renewal approval date.")}
                           </AlertDescription>
                         </Alert>
                       </div>
@@ -1073,10 +1081,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                       {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                      Save as Draft
+                      {tx("Save as Draft")}
                     </Button>
                     <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700 gap-2">
-                      Continue to Permit Details
+                      {tx("Continue to Permit Details")}
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1091,7 +1099,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <Alert className="border-indigo-200 bg-indigo-50">
                     <ClipboardList className="h-4 w-4 text-indigo-700" />
                     <AlertDescription className="text-indigo-800">
-                      Enter all permit details below. These will be used for the water use report and staff review.
+                      {tx("Enter all permit details below. These will be used for the water use report and staff review.")}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1099,7 +1107,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <Alert className="border-blue-200 bg-blue-50">
                     <Info className="h-4 w-4 text-blue-700" />
                     <AlertDescription className="text-blue-800">
-                      These details are pre-filled from the selected permit and cannot be modified.
+                      {tx("These details are pre-filled from the selected permit and cannot be modified.")}
                     </AlertDescription>
                   </Alert>
                 )}
@@ -1110,13 +1118,13 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <CalendarDays className="h-5 w-5" />
-                      Permit Validity
+                      {tx("Permit Validity")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Effective Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
+                        <Label>{tx("Effective Date")} {detailsEditable && <span className="text-red-500">*</span>}</Label>
                         {detailsEditable ? (
                           <Input
                             type="date"
@@ -1128,7 +1136,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Expiration Date {detailsEditable && <span className="text-red-500">*</span>}</Label>
+                        <Label>{tx("Expiration Date")} {detailsEditable && <span className="text-red-500">*</span>}</Label>
                         {detailsEditable ? (
                           <Input
                             type="date"
@@ -1149,16 +1157,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <MapPin className="h-5 w-5" />
-                      Location
+                      {tx("Location")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-2">
-                        <Label>Province *</Label>
+<Label>{tx("Province")} *</Label>
                         {detailsEditable ? (
                           <Select value={permitProvince} onValueChange={(v) => { setPermitProvince(v); setPermitDistrict(""); setPermitSector(""); setPermitCell(""); setPermitVillage(""); }}>
-                            <SelectTrigger><SelectValue placeholder="Select province" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select province")} /></SelectTrigger>
                             <SelectContent>{provinces.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1166,10 +1174,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>District *</Label>
+<Label>{tx("District")} *</Label>
                         {detailsEditable ? (
                           <Select value={permitDistrict} onValueChange={(v) => { setPermitDistrict(v); setPermitSector(""); setPermitCell(""); setPermitVillage(""); }} disabled={!permitProvince}>
-                            <SelectTrigger><SelectValue placeholder="Select district" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select district")} /></SelectTrigger>
                             <SelectContent>{districts.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1177,10 +1185,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Sector</Label>
+<Label>{tx("Sector")}</Label>
                         {detailsEditable ? (
                           <Select value={permitSector} onValueChange={(v) => { setPermitSector(v); setPermitCell(""); setPermitVillage(""); }} disabled={!permitDistrict}>
-                            <SelectTrigger><SelectValue placeholder="Select sector" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select sector")} /></SelectTrigger>
                             <SelectContent>{sectors.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1188,10 +1196,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Cell</Label>
+<Label>{tx("Cell")}</Label>
                         {detailsEditable ? (
                           <Select value={permitCell} onValueChange={(v) => { setPermitCell(v); setPermitVillage(""); }} disabled={!permitSector}>
-                            <SelectTrigger><SelectValue placeholder="Select cell" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select cell")} /></SelectTrigger>
                             <SelectContent>{cells.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1199,10 +1207,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Village</Label>
+<Label>{tx("Village")}</Label>
                         {detailsEditable ? (
                           <Select value={permitVillage} onValueChange={setPermitVillage} disabled={!permitCell}>
-                            <SelectTrigger><SelectValue placeholder="Select village" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select village")} /></SelectTrigger>
                             <SelectContent>{villages.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1218,16 +1226,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Droplet className="h-5 w-5" />
-                      Water Source &amp; Purpose
+                      {tx("Water Source & Purpose")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Water Source Type *</Label>
+<Label>{tx("Water Source Type")} *</Label>
                         {detailsEditable ? (
                           <Select value={waterSourceType} onValueChange={setWaterSourceType}>
-                            <SelectTrigger><SelectValue placeholder="Select water source" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select water source")} /></SelectTrigger>
                             <SelectContent>{WATER_SOURCE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1235,14 +1243,14 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Name of Water Body</Label>
-                        <Input value={waterSourceName} onChange={(e) => setWaterSourceName(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. Lake Kivu" />
+<Label>{tx("Name of Water Body")}</Label>
+                        <Input value={waterSourceName} onChange={(e) => setWaterSourceName(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder={tx("e.g. Lake Kivu")} />
                       </div>
                       <div className="space-y-2">
-                        <Label>Water Purpose *</Label>
+<Label>{tx("Water Purpose")} *</Label>
                         {detailsEditable ? (
                           <Select value={waterPurpose} onValueChange={setWaterPurpose}>
-                            <SelectTrigger><SelectValue placeholder="Select purpose" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select purpose")} /></SelectTrigger>
                             <SelectContent>{WATER_PURPOSE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1250,10 +1258,10 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Intended Activity</Label>
+<Label>{tx("Intended Activity")}</Label>
                         {detailsEditable ? (
                           <Select value={intendedActivity} onValueChange={setIntendedActivity}>
-                            <SelectTrigger><SelectValue placeholder="Select activity" /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder={tx("Select activity")} /></SelectTrigger>
                             <SelectContent>{INTENDED_ACTIVITY_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                           </Select>
                         ) : (
@@ -1269,17 +1277,17 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <BarChart3 className="h-5 w-5" />
-                      Volume &amp; Allowance
+                      {tx("Volume & Allowance")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Water Allowance</Label>
+<Label>{tx("Water Allowance")}</Label>
                         <Input type="number" value={waterAllowance} onChange={(e) => setWaterAllowance(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 2446" />
                       </div>
                       <div className="space-y-2">
-                        <Label>Allowance Unit</Label>
+<Label>{tx("Allowance Unit")}</Label>
                         {detailsEditable ? (
                           <Select value={allowanceUnit} onValueChange={setAllowanceUnit}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1290,11 +1298,11 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         )}
                       </div>
                       <div className="space-y-2">
-                        <Label>Max Daily Volume (m³/day)</Label>
+<Label>{tx("Max Daily Volume (m³/day)")}</Label>
                         <Input type="number" value={maxDailyVolume} onChange={(e) => setMaxDailyVolume(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 6.7" />
                       </div>
                       <div className="space-y-2">
-                        <Label>Max Yearly Volume (m³/year)</Label>
+<Label>{tx("Max Yearly Volume (m³/year)")}</Label>
                         <Input type="number" value={maxYearlyVolume} onChange={(e) => setMaxYearlyVolume(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 2446" />
                       </div>
                     </div>
@@ -1307,16 +1315,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Droplet className="h-5 w-5" />
-                        Abstraction Details
+                        {tx("Abstraction Details")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Method of Abstraction</Label>
+<Label>{tx("Method of Abstraction")}</Label>
                           {detailsEditable ? (
                             <Select value={abstractionMethod} onValueChange={setAbstractionMethod}>
-                              <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
+                              <SelectTrigger><SelectValue placeholder={tx("Select method")} /></SelectTrigger>
                               <SelectContent>{ABSTRACTION_METHOD_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
                             </Select>
                           ) : (
@@ -1324,15 +1332,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label>Flow Rate (m³/s)</Label>
+<Label>{tx("Flow Rate (m³/s)")}</Label>
                           <Input type="number" step="0.001" value={flowRate} onChange={(e) => setFlowRate(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 0.005" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Water Source Latitude</Label>
+<Label>{tx("Water Source Latitude")}</Label>
                           <Input value={waterSourceLatitude} onChange={(e) => setWaterSourceLatitude(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. -1.9403" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Water Source Longitude</Label>
+<Label>{tx("Water Source Longitude")}</Label>
                           <Input value={waterSourceLongitude} onChange={(e) => setWaterSourceLongitude(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 29.8739" />
                         </div>
                       </div>
@@ -1346,21 +1354,21 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <MapPin className="h-5 w-5" />
-                        Concession Details
+                        {tx("Concession Details")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Concession Area (hectares)</Label>
+<Label>{tx("Concession Area (hectares)")}</Label>
                           <Input type="number" step="0.01" value={concessionArea} onChange={(e) => setConcessionArea(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 5.0" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Latitude (reference point)</Label>
+<Label>{tx("Latitude (reference point)")}</Label>
                           <Input value={waterSourceLatitude} onChange={(e) => setWaterSourceLatitude(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. -1.9403" />
                         </div>
                         <div className="space-y-2">
-                          <Label>Longitude (reference point)</Label>
+<Label>{tx("Longitude (reference point)")}</Label>
                           <Input value={waterSourceLongitude} onChange={(e) => setWaterSourceLongitude(e.target.value)} disabled={!detailsEditable} className={!detailsEditable ? "bg-gray-100" : ""} placeholder="e.g. 29.8739" />
                         </div>
                       </div>
@@ -1373,15 +1381,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={handleBack} className="gap-2">
                       <ArrowLeft className="h-4 w-4" />
-                      Back to Overview
+                      {tx("Back to Overview")}
                     </Button>
                     <div className="flex gap-2">
                       <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                        Save as Draft
+                        {tx("Save as Draft")}
                       </Button>
                       <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700 gap-2" disabled={!permitDetailsComplete}>
-                        Continue to Water Use Report
+                        {tx("Continue to Water Use Report")}
                         <ArrowRight className="h-4 w-4" />
                       </Button>
                     </div>
@@ -1435,16 +1443,16 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <div className="flex justify-between pt-4 border-t">
                     <Button variant="outline" onClick={handleBack} className="gap-2">
                       <ArrowLeft className="h-4 w-4" />
-                      Back to Permit Details
+                      {tx("Back to Permit Details")}
                     </Button>
                     <div className="flex gap-2">
                       <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                        Save as Draft
+                        {tx("Save as Draft")}
                       </Button>
                       {waterUseReportSubmitted && (
                         <Button onClick={handleNext} className="bg-green-600 hover:bg-green-700 gap-2">
-                          Continue to Attachments
+                          {tx("Continue to Attachments")}
                           <ArrowRight className="h-4 w-4" />
                         </Button>
                       )}
@@ -1461,22 +1469,22 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <FileText className="h-5 w-5" />
-                      Required Attachments
+                      {tx("Required Attachments")}
                     </CardTitle>
-                    <CardDescription>Upload the required documents for your renewal application.</CardDescription>
+                    <CardDescription>{tx("Upload the required documents for your renewal application.")}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="space-y-4">
                       <div>
-                        <Label className="text-base font-semibold">Letter Requesting Renewal *</Label>
-                        <p className="text-sm text-muted-foreground mt-1">Upload a formal letter requesting the renewal of your water use permit.</p>
+                        <Label className="text-base font-semibold">{tx("Letter Requesting Renewal")} *</Label>
+                        <p className="text-sm text-muted-foreground mt-1">{tx("Upload a formal letter requesting the renewal of your water use permit.")}</p>
                       </div>
                       <div className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${renewalLetter || existingRenewalLetterUrl ? "border-green-300 bg-green-50" : "border-gray-300 hover:border-gray-400"}`}>
                         {renewalLetter ? (
                           <div className="space-y-3">
                             <div className="flex items-center justify-center gap-2 text-green-600">
                               <CheckCircle className="h-8 w-8" />
-                              <span className="font-medium">File Selected</span>
+                              <span className="font-medium">{tx("File Selected")}</span>
                             </div>
                             <div className="flex items-center justify-center gap-2 text-sm">
                               <FileText className="h-4 w-4" />
@@ -1485,7 +1493,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                             </div>
                             {!readOnly && (
                               <Button variant="outline" size="sm" onClick={handleRemoveFile} className="text-red-600 hover:text-red-700">
-                                <X className="h-4 w-4 mr-1" />Remove
+                                <X className="h-4 w-4 mr-1" />{tx("Remove")}
                               </Button>
                             )}
                           </div>
@@ -1493,15 +1501,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                           <div className="space-y-3">
                             <div className="flex items-center justify-center gap-2 text-green-600">
                               <CheckCircle className="h-8 w-8" />
-                              <span className="font-medium">Document Uploaded</span>
+                              <span className="font-medium">{tx("Document Uploaded")}</span>
                             </div>
                             <Button variant="outline" size="sm" onClick={() => window.open(existingRenewalLetterUrl, "_blank")}>
-                              <Eye className="h-4 w-4 mr-1" />View Document
+                              <Eye className="h-4 w-4 mr-1" />{tx("View Document")}
                             </Button>
                             {!readOnly && (
                               <div className="pt-2">
                                 <Button variant="ghost" size="sm" onClick={() => renewalLetterInputRef.current?.click()}>
-                                  <Upload className="h-4 w-4 mr-1" />Replace Document
+                                  <Upload className="h-4 w-4 mr-1" />{tx("Replace Document")}
                                 </Button>
                               </div>
                             )}
@@ -1509,17 +1517,17 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                         ) : readOnly ? (
                           <div className="space-y-3">
                             <FileText className="h-12 w-12 mx-auto text-gray-400" />
-                            <p className="text-sm text-muted-foreground">No renewal letter uploaded</p>
+                            <p className="text-sm text-muted-foreground">{tx("No renewal letter uploaded")}</p>
                           </div>
                         ) : (
                           <div className="space-y-3">
                             <Upload className="h-12 w-12 mx-auto text-gray-400" />
                             <div>
-                              <p className="font-medium text-gray-700">Click to upload or drag and drop</p>
-                              <p className="text-sm text-muted-foreground">PDF, Word (.docx), JPEG, or PNG (max 10MB)</p>
+                              <p className="font-medium text-gray-700">{tx("Click to upload or drag and drop")}</p>
+                              <p className="text-sm text-muted-foreground">{tx("PDF, Word (.docx), JPEG, or PNG (max 10MB)")}</p>
                             </div>
                             <Button variant="outline" onClick={() => renewalLetterInputRef.current?.click()}>
-                              <FileUp className="h-4 w-4 mr-2" />Select File
+                              <FileUp className="h-4 w-4 mr-2" />{tx("Select File")}
                             </Button>
                           </div>
                         )}
@@ -1531,12 +1539,12 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                     <Separator />
                     <div className="space-y-4">
                       <div>
-                        <Label className="text-base font-semibold">Existing Permit Documents</Label>
-                        <p className="text-sm text-muted-foreground mt-1">These are the documents from your original application. They are preserved and cannot be modified during renewal.</p>
+                        <Label className="text-base font-semibold">{tx("Existing Permit Documents")}</Label>
+                        <p className="text-sm text-muted-foreground mt-1">{tx("These are the documents from your original application. They are preserved and cannot be modified during renewal.")}</p>
                       </div>
                       <Alert className="border-slate-200 bg-slate-50">
                         <Info className="h-4 w-4" />
-                        <AlertDescription>All existing documents from your original permit application will be retained.</AlertDescription>
+                        <AlertDescription>{tx("All existing documents from your original permit application will be retained.")}</AlertDescription>
                       </Alert>
                     </div>
                   </CardContent>
@@ -1545,15 +1553,15 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                 {!readOnly && (
                   <div className="flex justify-between">
                     <Button variant="outline" onClick={handleBack} className="gap-2">
-                      <ArrowLeft className="h-4 w-4" />Back
+                      <ArrowLeft className="h-4 w-4" />{tx("Back")}
                     </Button>
                     <div className="flex gap-2">
                       <Button variant="outline" onClick={() => handleSaveDraft()} disabled={isSaving} className="gap-2">
                         {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                        Save as Draft
+                        {tx("Save as Draft")}
                       </Button>
                       <Button onClick={handleContinueToPayment} className="bg-green-600 hover:bg-green-700 gap-2" disabled={!tabsCompleted.attachments || isSaving}>
-                        Continue to Payment
+                        {tx("Continue to Payment")}
                         <ArrowRight className="h-4 w-4" />
                       </Button>
                     </div>
@@ -1578,24 +1586,24 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <CreditCard className="h-5 w-5" />Payment Information
+                        <CreditCard className="h-5 w-5" />{tx("Payment Information")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
                         <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                          <span className="font-medium">Renewal Fee</span>
+                          <span className="font-medium">{tx("Renewal Fee")}</span>
                           <span className="text-lg font-bold text-green-600">{RENEWAL_FEE.toLocaleString()} RWF</span>
                         </div>
                         {currentApplication?.payment_status === "paid" ? (
                           <Alert className="border-green-200 bg-green-50">
                             <CheckCircle className="h-4 w-4 text-green-600" />
-                            <AlertDescription className="text-green-800">Payment has been completed for this renewal application.</AlertDescription>
+                            <AlertDescription className="text-green-800">{tx("Payment has been completed for this renewal application.")}</AlertDescription>
                           </Alert>
                         ) : (
                           <Alert className="border-amber-200 bg-amber-50">
                             <Clock className="h-4 w-4 text-amber-600" />
-                            <AlertDescription className="text-amber-800">Payment is pending for this renewal application.</AlertDescription>
+                            <AlertDescription className="text-amber-800">{tx("Payment is pending for this renewal application.")}</AlertDescription>
                           </Alert>
                         )}
                       </div>
@@ -1604,8 +1612,8 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                 ) : !canProceedToPayment ? (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Cannot Proceed to Payment</AlertTitle>
-                    <AlertDescription>Please complete the Permit Details, Water Use Report, and upload the required Renewal Letter before proceeding to payment.</AlertDescription>
+                    <AlertTitle>{tx("Cannot Proceed to Payment")}</AlertTitle>
+                    <AlertDescription>{tx("Please complete the Permit Details, Water Use Report, and upload the required Renewal Letter before proceeding to payment.")}</AlertDescription>
                   </Alert>
                 ) : (
                   <PaymentTab
@@ -1620,7 +1628,7 @@ export const PermitRenewalForm = memo(function PermitRenewalForm({
                 {!readOnly && !isStaffView && !canProceedToPayment && (
                   <div className="flex justify-start">
                     <Button variant="outline" onClick={handleBack} className="gap-2">
-                      <ArrowLeft className="h-4 w-4" />Back to Attachments
+                      <ArrowLeft className="h-4 w-4" />{tx("Back to Attachments")}
                     </Button>
                   </div>
                 )}

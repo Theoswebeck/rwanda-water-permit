@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,6 +13,8 @@ import {
   TrendingDown
 } from "lucide-react";
 import type { Application } from "@/types/database";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 
 interface ApplicationStatusProps {
   applications: Application[];
@@ -27,6 +30,13 @@ export function ApplicationStatus({
   activeFilter = "all",
   onFilterChange,
 }: ApplicationStatusProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const getDisplayStatus = (app: Application): string => {
     // UI-only status mapping from parent (e.g., applicant dashboard).
     // Fall back to raw status if not provided.
@@ -59,12 +69,12 @@ export function ApplicationStatus({
   const statusCards = [
     {
       key: "all" as const,
-      title: "Total Applications",
+      title: tx("Total Applications"),
       value: stats.total,
-      description: "All applications submitted",
-      detail: "Complete application history",
+      description: tx("All applications submitted"),
+      detail: tx("Complete application history"),
       change: thisMonthApps > 0 ? `+${thisMonthApps}` : "0",
-      changeLabel: "This month",
+      changeLabel: tx("This month"),
       trend: thisMonthApps > 0 ? "up" : "neutral",
       icon: FileText,
       color: "text-blue-600",
@@ -72,12 +82,12 @@ export function ApplicationStatus({
     },
     {
       key: "draft" as const,
-      title: "Draft",
+      title: tx("Draft"),
       value: stats.draft,
-      description: "Saved draft applications",
-      detail: "Not yet submitted",
+      description: tx("Saved draft applications"),
+      detail: tx("Not yet submitted"),
       change: stats.draft > 0 ? `${Math.round((stats.draft / stats.total) * 100)}%` : "0%",
-      changeLabel: "Of total applications",
+      changeLabel: tx("Of total applications"),
       trend: stats.draft > 0 ? "neutral" : "up",
       icon: Clock,
       color: "text-amber-600",
@@ -85,12 +95,12 @@ export function ApplicationStatus({
     },
     {
       key: "approved" as const,
-      title: "Approved",
+      title: tx("Approved"),
       value: stats.approved,
-      description: "Successfully approved applications",
-      detail: "Ready for permit issuance",
+      description: tx("Successfully approved applications"),
+      detail: tx("Ready for permit issuance"),
       change: approvedRateOfTotal > 0 ? `${approvedRateOfTotal}%` : "0%",
-      changeLabel: "Of total applications",
+      changeLabel: tx("Of total applications"),
       trend: approvedRateOfTotal > 80 ? "up" : approvedRateOfTotal > 60 ? "neutral" : "down",
       icon: CheckCircle,
       color: "text-green-600",
@@ -98,12 +108,12 @@ export function ApplicationStatus({
     },
     {
       key: "rejected" as const,
-      title: "Rejected",
+      title: tx("Rejected"),
       value: stats.rejected,
-      description: "Rejected applications",
-      detail: "Not approved",
+      description: tx("Rejected applications"),
+      detail: tx("Not approved"),
       change: stats.rejected > 0 ? `${Math.round((stats.rejected / stats.total) * 100)}%` : "0%",
-      changeLabel: "Of total applications",
+      changeLabel: tx("Of total applications"),
       trend: stats.rejected > 0 ? "down" : "neutral",
       icon: AlertCircle,
       color: "text-red-600",
@@ -111,12 +121,12 @@ export function ApplicationStatus({
     },
     {
       key: "expired" as const,
-      title: "Expired",
+      title: tx("Expired"),
       value: stats.expired,
-      description: "Expired applications",
-      detail: "Past validity period",
+      description: tx("Expired applications"),
+      detail: tx("Past validity period"),
       change: stats.expired > 0 ? `${Math.round((stats.expired / stats.total) * 100)}%` : "0%",
-      changeLabel: "Of total applications",
+      changeLabel: tx("Of total applications"),
       trend: stats.expired > 0 ? "down" : "neutral",
       icon: AlertCircle,
       color: "text-slate-700",

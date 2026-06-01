@@ -1,15 +1,25 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, AlertCircle, Shield, Calendar } from "lucide-react";
 import { Permit } from "./permits-list";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 
 interface PermitStatusProps {
   permits: Permit[];
 }
 
 export function PermitStatus({ permits }: PermitStatusProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const getDaysUntilExpiry = (expiryDate: string) => {
     const today = new Date();
     const expiry = new Date(expiryDate);
@@ -39,31 +49,31 @@ export function PermitStatus({ permits }: PermitStatusProps) {
   
   const statusItems = [
     {
-      title: "Active Permits",
+      title: tx("Active Permits"),
       value: active.toString(),
-      description: "Currently valid permits",
-      detail: "In good standing and operational",
+      description: tx("Currently valid permits"),
+      detail: tx("In good standing and operational"),
       icon: <CheckCircle className="h-5 w-5" />,
     },
     {
-      title: "Expiring Soon",
+      title: tx("Expiring Soon"),
       value: expiringSoon.toString(),
-      description: "Permits expiring within 30 days",
-      detail: "Renewal action required",
+      description: tx("Permits expiring within 30 days"),
+      detail: tx("Renewal action required"),
       icon: <AlertCircle className="h-5 w-5" />,
     },
     {
-      title: "Total Permits",
+      title: tx("Total Permits"),
       value: total.toString(),
-      description: "All permits issued to you",
-      detail: "Complete permit portfolio",
+      description: tx("All permits issued to you"),
+      detail: tx("Complete permit portfolio"),
       icon: <Shield className="h-5 w-5" />,
     },
     {
-      title: "Issued This Year",
+      title: tx("Issued This Year"),
       value: thisYearPermits.toString(),
-      description: "Permits issued in current year",
-      detail: "Recent permit activity",
+      description: tx("Permits issued in current year"),
+      detail: tx("Recent permit activity"),
       icon: <Calendar className="h-5 w-5" />,
     },
   ];

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { 
   Card,
@@ -84,6 +86,12 @@ export function PermitSelectForModification({
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
   const [permitConflicts, setPermitConflicts] = useState<Record<string, PermitConflictSummary>>({});
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   useEffect(() => {
     fetchPermits();
@@ -207,9 +215,9 @@ export function PermitSelectForModification({
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+        return <Badge className="bg-green-100 text-green-800">{tx("Active")}</Badge>;
       case 'expiring_soon':
-        return <Badge className="bg-amber-100 text-amber-800">Expiring Soon</Badge>;
+        return <Badge className="bg-amber-100 text-amber-800">{tx("Expiring Soon")}</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -283,7 +291,7 @@ export function PermitSelectForModification({
       permit.application?.province,
     ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
 
-    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : tx("Unknown location");
   };
 
   const getIntendedActivityLabel = (permit: PermitWithApplication) => {
@@ -307,7 +315,7 @@ export function PermitSelectForModification({
       return getActivityLabel(permit.purpose);
     }
 
-    return "Unknown activity";
+    return tx("Unknown activity");
   };
 
   const handleSelectPermit = () => {
@@ -334,11 +342,10 @@ export function PermitSelectForModification({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileEdit className="h-5 w-5 text-amber-600" />
-            Select Permit to Modify
+            {tx("Select Permit to Modify")}
           </CardTitle>
           <CardDescription>
-            Choose the water use permit you want to modify. Only your active permits can be modified. 
-            The permit number will remain the same after modification.
+            {tx("Choose the water use permit you want to modify. Only your active permits can be modified. The permit number will remain the same after modification.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -346,8 +353,7 @@ export function PermitSelectForModification({
           <Alert className="border-amber-200 bg-amber-50">
             <FileEdit className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-800">
-              <strong>Permit Modification:</strong> You can update details of your existing permit. 
-              Changes will go through the standard review process.
+              <strong>{tx("Permit Modification:")}</strong> {tx("You can update details of your existing permit. Changes will go through the standard review process.")}
             </AlertDescription>
           </Alert>
 
@@ -355,7 +361,7 @@ export function PermitSelectForModification({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search by permit number, project name..."
+              placeholder={tx("Search by permit number, project name...")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -374,7 +380,7 @@ export function PermitSelectForModification({
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-              <span className="ml-3 text-muted-foreground">Loading your permits...</span>
+              <span className="ml-3 text-muted-foreground">{tx("Loading your permits...")}</span>
             </div>
           )}
 
@@ -382,9 +388,9 @@ export function PermitSelectForModification({
           {!loading && permits.length === 0 && (
             <div className="text-center py-12">
               <FileEdit className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Permits Available</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{tx("No Permits Available")}</h3>
               <p className="text-muted-foreground">
-                You don&apos;t have any active permits that can be modified.
+                {tx("You don't have any active permits that can be modified.")}
               </p>
             </div>
           )}
@@ -393,7 +399,7 @@ export function PermitSelectForModification({
           {!loading && permits.length > 0 && filteredPermits.length === 0 && (
             <div className="text-center py-8">
               <Search className="h-8 w-8 mx-auto text-gray-400 mb-3" />
-              <p className="text-muted-foreground">No permits match your search.</p>
+              <p className="text-muted-foreground">{tx("No permits match your search.")}</p>
             </div>
           )}
 
@@ -427,7 +433,7 @@ export function PermitSelectForModification({
                           </span>
                           {getStatusBadge(permit.status)}
                           {permit.is_modification && (
-                            <Badge className="bg-blue-100 text-blue-800">Previously Modified</Badge>
+                            <Badge className="bg-blue-100 text-blue-800">{tx("Previously Modified")}</Badge>
                           )}
                           {selectedPermitId === permit.id && (
                             <CheckCircle className="h-5 w-5 text-amber-600" />
@@ -438,12 +444,12 @@ export function PermitSelectForModification({
                         )}
 
                         <p className="font-medium text-gray-900">
-                          {permit.application?.project_title || 'Untitled Project'}
+                          {permit.application?.project_title || tx('Untitled Project')}
                         </p>
 
                         <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
-                            <span className="font-medium">Holder:</span>
+                            <span className="font-medium">{tx("Holder:")}</span>
                             {getPermitHolderName(permit)}
                           </span>
                         </div>
@@ -462,11 +468,11 @@ export function PermitSelectForModification({
                         <div className="flex gap-4 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            Issued: {formatDate(permit.issued_date)}
+                            {tx("Issued:")} {formatDate(permit.issued_date)}
                           </span>
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            Expires: {formatDate(permit.expiry_date)}
+                            {tx("Expires:")} {formatDate(permit.expiry_date)}
                           </span>
                         </div>
                       </div>
@@ -479,8 +485,8 @@ export function PermitSelectForModification({
 
           {onManualPermitSelect && (
             <ManualPermitEntryCard
-              title="Permit Not Listed?"
-              description="If your permit exists in registry but is not linked to your profile, enter the old permit number. You will complete full permit details in the modification form."
+              title={tx("Permit Not Listed?")}
+              description={tx("If your permit exists in registry but is not linked to your profile, enter the old permit number. You will complete full permit details in the modification form.")}
               onContinue={onManualPermitSelect}
             />
           )}
@@ -488,14 +494,14 @@ export function PermitSelectForModification({
           {/* Actions */}
           <div className="flex justify-between pt-4 border-t">
             <Button variant="outline" onClick={onCancel}>
-              Cancel
+              {tx("Cancel")}
             </Button>
             <Button
               onClick={handleSelectPermit}
               disabled={!selectedPermitId || Boolean(selectedPermitConflict)}
               className="bg-amber-600 hover:bg-amber-700 gap-2"
             >
-              Continue with Modification
+              {tx("Continue with Modification")}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>

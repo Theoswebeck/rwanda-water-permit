@@ -1,5 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,9 +26,16 @@ interface SuspensionNoticeProps {
 }
 
 export function SuspensionNotice({ user, onLogout, onContactSupport }: SuspensionNoticeProps) {
-  const displayName = user.first_name && user.last_name 
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
+  const displayName = user.first_name && user.last_name
     ? `${user.first_name} ${user.last_name}`
-    : user.company_name || 'User';
+    : user.company_name || tx("User");
 
   const userInitials = user.first_name?.[0] || user.company_name?.[0] || user.email[0];
 
@@ -92,10 +102,10 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
             {/* Main Message */}
             <div className="text-center">
               <h2 className="text-xl font-bold text-red-800 mb-2">
-                Account Suspended
+                {tx("Account Suspended")}
               </h2>
               <p className="text-gray-700 text-sm leading-relaxed">
-                Your account has been temporarily suspended. You cannot access the Rwanda Water Resources Board portal at this time.
+                {tx("Your account has been temporarily suspended. You cannot access the Rwanda Water Resources Board portal at this time.")}
               </p>
             </div>
 
@@ -104,9 +114,9 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
               <div className="flex items-start gap-3">
                 <Clock className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="font-medium text-red-800 mb-1">Suspension Status</h4>
+                  <h4 className="font-medium text-red-800 mb-1">{tx("Suspension Status")}</h4>
                   <p className="text-sm text-red-700">
-                    Access to all system features has been restricted pending review.
+                    {tx("Access to all system features has been restricted pending review.")}
                   </p>
                 </div>
               </div>
@@ -114,19 +124,19 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
 
             {/* What to do */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-medium text-blue-800 mb-2">What you can do:</h4>
+              <h4 className="font-medium text-blue-800 mb-2">{tx("What you can do:")}</h4>
               <ul className="text-sm text-blue-700 space-y-1">
                 <li className="flex items-center gap-2">
                   <MessageCircle className="w-4 h-4" />
-                  Contact our support team for assistance
+                  {tx("Contact our support team for assistance")}
                 </li>
                 <li className="flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  Check your email for additional information
+                  {tx("Check your email for additional information")}
                 </li>
                 <li className="flex items-center gap-2">
                   <Phone className="w-4 h-4" />
-                  Call us at +250 252 123 456
+                  {tx("Call us at +250 252 123 456")}
                 </li>
               </ul>
             </div>
@@ -138,26 +148,26 @@ export function SuspensionNotice({ user, onLogout, onContactSupport }: Suspensio
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
                 <MessageCircle className="w-4 h-4 mr-2" />
-                Contact Support
+                {tx("Contact Support")}
               </Button>
-              
-              <Button 
+
+              <Button
                 onClick={handleLogout}
                 variant="outline"
                 className="w-full border-gray-300 text-gray-700 hover:bg-gray-50"
               >
                 <LogOut className="w-4 h-4 mr-2" />
-                Log Out
+                {tx("Log Out")}
               </Button>
             </div>
 
             {/* Footer */}
             <div className="text-center pt-4 border-t border-gray-200">
               <p className="text-xs text-gray-500">
-                Rwanda Water Resources Board Portal
+                {tx("Rwanda Water Resources Board Portal")}
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                For assistance: info@rwb.rw
+                {tx("For assistance: info@rwb.rw")}
               </p>
             </div>
           </CardContent>

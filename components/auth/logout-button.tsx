@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { Button } from "@/components/ui/button";
 import { 
   AlertDialog,
@@ -42,6 +44,12 @@ export function LogoutButton({
   const { signOut } = useAuth();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -64,12 +72,12 @@ export function LogoutButton({
       {isLoggingOut ? (
         <>
           {showIcon && <RefreshCw className="h-4 w-4 animate-spin" />}
-          {showText && <span className={showIcon ? "ml-2" : ""}>Signing out...</span>}
+          {showText && <span className={showIcon ? "ml-2" : ""}>{tx("Signing out...")}</span>}
         </>
       ) : (
         <>
           {showIcon && <LogOut className="h-4 w-4" />}
-          {showText && <span className={showIcon ? "ml-2" : ""}>Sign Out</span>}
+          {showText && <span className={showIcon ? "ml-2" : ""}>{tx("Sign Out")}</span>}
         </>
       )}
     </>
@@ -88,22 +96,22 @@ export function LogoutButton({
             </div>
             <div className="flex-1">
               <AlertDialogTitle className="text-lg font-semibold">
-                Sign Out Confirmation
+                {tx("Sign Out Confirmation")}
               </AlertDialogTitle>
               <AlertDialogDescription className="text-sm text-gray-600 mt-1">
-                Are you sure you want to sign out? You'll need to log in again to access your account.
+                {tx("Are you sure you want to sign out? You'll need to log in again to access your account.")}
               </AlertDialogDescription>
             </div>
           </div>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2">
-          <AlertDialogCancel 
+          <AlertDialogCancel
             className="sm:flex-none"
             disabled={isLoggingOut}
           >
-            Cancel
+            {tx("Cancel")}
           </AlertDialogCancel>
-          <AlertDialogAction 
+          <AlertDialogAction
             onClick={handleLogout}
             className="bg-red-600 hover:bg-red-700 text-white sm:flex-none"
             disabled={isLoggingOut}
@@ -111,12 +119,12 @@ export function LogoutButton({
             {isLoggingOut ? (
               <>
                 <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Signing out...
+                {tx("Signing out...")}
               </>
             ) : (
               <>
                 <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+                {tx("Sign Out")}
               </>
             )}
           </AlertDialogAction>

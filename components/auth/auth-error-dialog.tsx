@@ -1,8 +1,11 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { AlertTriangle, UserX, WifiOff, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 
 interface AuthErrorDialogProps {
   isOpen: boolean;
@@ -17,13 +20,20 @@ interface AuthErrorDialogProps {
   };
 }
 
-export function AuthErrorDialog({ 
-  isOpen, 
-  onClose, 
-  onRetry, 
+export function AuthErrorDialog({
+  isOpen,
+  onClose,
+  onRetry,
   onLogout,
-  error 
+  error
 }: AuthErrorDialogProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const getIcon = () => {
     switch (error.type) {
       case 'connection':
@@ -51,11 +61,11 @@ export function AuthErrorDialog({
 
   const getPrimaryActionText = () => {
     if (error.retryable && onRetry) {
-      return "Try Again";
+      return tx("Try Again");
     } else if (onLogout && (error.type === 'session_expired' || error.type === 'account_deleted' || error.type === 'profile_missing')) {
-      return "Go to Login";
+      return tx("Go to Login");
     }
-    return "OK";
+    return tx("OK");
   };
 
   return (
@@ -75,7 +85,7 @@ export function AuthErrorDialog({
         <AlertDialogFooter className="flex flex-col sm:flex-row gap-2">
           {error.retryable && onRetry && (
             <Button variant="outline" onClick={onClose} className="sm:mr-auto">
-              Cancel
+              {tx("Cancel")}
             </Button>
           )}
           <AlertDialogAction asChild>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { useDocuments } from "@/hooks/useDocuments";
 import { getDocumentUrl } from "@/lib/supabase-storage";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +31,13 @@ export function ApplicationDocuments({
   showRefresh = true,
   className = ""
 }: ApplicationDocumentsProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const { documents, loading, error, getDocuments } = useDocuments();
   const [documentsLoaded, setDocumentsLoaded] = useState(false);
 
@@ -119,17 +128,17 @@ export function ApplicationDocuments({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Application Documents
+            {tx("Application Documents")}
           </CardTitle>
           <CardDescription>
-            Documents submitted with this application
+            {tx("Documents submitted with this application")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p className="text-muted-foreground">Loading documents...</p>
+              <p className="text-muted-foreground">{tx("Loading documents...")}</p>
             </div>
           </div>
         </CardContent>
@@ -143,10 +152,10 @@ export function ApplicationDocuments({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Application Documents
+            {tx("Application Documents")}
           </CardTitle>
           <CardDescription>
-            Documents submitted with this application
+            {tx("Documents submitted with this application")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -154,7 +163,7 @@ export function ApplicationDocuments({
             <AlertCircle className="h-4 w-4 text-red-600" />
             <AlertDescription>
               <div className="space-y-2">
-                <p className="font-medium text-red-800">Error Loading Documents</p>
+                <p className="font-medium text-red-800">{tx("Error Loading Documents")}</p>
                 <p className="text-red-700">{error}</p>
                 <Button 
                   variant="outline" 
@@ -163,7 +172,7 @@ export function ApplicationDocuments({
                   className="mt-2"
                 >
                   <RefreshCw className="h-4 w-4 mr-2" />
-                  Retry
+                  {tx("Retry")}
                 </Button>
               </div>
             </AlertDescription>
@@ -201,7 +210,7 @@ export function ApplicationDocuments({
                 className="gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
+                {tx("Refresh")}
               </Button>
             )}
           </div>
@@ -210,10 +219,10 @@ export function ApplicationDocuments({
           {filteredDocuments.length === 0 ? (
             <div className="text-center py-8">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No documents uploaded yet</p>
+              <p className="text-muted-foreground">{tx("No documents uploaded yet")}</p>
               {userRole === 'applicant' && (
                 <p className="text-sm text-muted-foreground mt-2">
-                  Upload documents through the application form
+                  {tx("Upload documents through the application form")}
                 </p>
               )}
             </div>
@@ -250,11 +259,11 @@ export function ApplicationDocuments({
                         <span>{doc.type?.replace('_', ' ')}</span>
                         <span>•</span>
                         <span>
-                          {doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : 'Size unknown'}
+                          {doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(1)} MB` : tx('Size unknown')}
                         </span>
                         <span>•</span>
                         <span>
-                          Uploaded {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
+                          {tx("Uploaded")} {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'N/A'}
                         </span>
                       </div>
                     </div>
@@ -272,10 +281,10 @@ export function ApplicationDocuments({
                             window.open(url, "_blank", "noopener,noreferrer");
                           }
                         }}
-                        title="View document"
+                        title={tx("View document")}
                       >
                         <FileText className="h-4 w-4" />
-                        View
+                        {tx("View")}
                       </Button>
                     )}
                     
@@ -294,10 +303,10 @@ export function ApplicationDocuments({
                             link.click();
                           }
                         }}
-                        title="Download document"
+                        title={tx("Download document")}
                       >
                         <Download className="h-4 w-4" />
-                        Download
+                        {tx("Download")}
                       </Button>
                     )}
                   </div>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import {
   Card,
@@ -87,6 +89,13 @@ export function WaterUseReportForm({
   isLoading = false,
   isReadOnly = false,
 }: WaterUseReportFormProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const [activeTab, setActiveTab] = useState("section1");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -789,15 +798,15 @@ export function WaterUseReportForm({
 
   // Tab configuration based on template
   const tabs = [
-    { id: 'section1', label: 'General Info', icon: User },
-    { id: 'section2', label: 'Permitted Use', icon: Droplets },
-    { id: 'section3', label: 'Actual Use', icon: BarChart3 },
-    { id: 'section4', label: 'Efficiency', icon: Leaf },
-    { id: 'section5', label: 'Environmental', icon: Leaf },
-    { id: 'section6', label: 'Social/Gender', icon: Users },
-    { id: 'section7', label: 'Compliance', icon: CheckSquare },
-    { id: 'section8', label: 'Future Plans', icon: Calendar },
-    { id: 'section9', label: 'Declaration', icon: FileSignature },
+    { id: 'section1', label: tx('General Info'), icon: User },
+    { id: 'section2', label: tx('Permitted Use'), icon: Droplets },
+    { id: 'section3', label: tx('Actual Use'), icon: BarChart3 },
+    { id: 'section4', label: tx('Efficiency'), icon: Leaf },
+    { id: 'section5', label: tx('Environmental'), icon: Leaf },
+    { id: 'section6', label: tx('Social/Gender'), icon: Users },
+    { id: 'section7', label: tx('Compliance'), icon: CheckSquare },
+    { id: 'section8', label: tx('Future Plans'), icon: Calendar },
+    { id: 'section9', label: tx('Declaration'), icon: FileSignature },
   ];
 
   return (
@@ -805,17 +814,17 @@ export function WaterUseReportForm({
       <CardHeader className="bg-blue-50 border-b border-blue-200">
         <CardTitle className="flex items-center gap-2 text-blue-900">
           <BarChart3 className="h-5 w-5" />
-          Annual Water Use Report - {reportingYear}
+          {tx("Annual Water Use Report")} - {reportingYear}
         </CardTitle>
         <CardDescription className="text-blue-700">
-          Complete all 9 sections below. Click each tab to fill in the required information.
+          {tx("Complete all 9 sections below. Click each tab to fill in the required information.")}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
         <Tabs value={activeTab} onValueChange={attemptTabChange} className="w-full">
           {/* Water Use Report Section Tabs - Made prominent */}
           <div className="mb-6 p-4 bg-slate-50 rounded-lg border">
-            <p className="text-sm font-medium text-slate-700 mb-3">📋 Report Sections (click to navigate):</p>
+            <p className="text-sm font-medium text-slate-700 mb-3">📋 {tx("Report Sections (click to navigate)")}:</p>
             <TabsList className="flex flex-wrap gap-2 h-auto p-0 bg-transparent w-full">
               {tabs.map((tab, index) => (
                 <TabsTrigger 
@@ -837,58 +846,58 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <User className="h-5 w-5" />
-                Section 1: General Information
+                {tx("Section 1: General Information")}
               </CardTitle>
               <CardDescription>
-                This information is automatically populated from your permit. It cannot be edited.
+                {tx("This information is automatically populated from your permit. It cannot be edited.")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Name of Permit Holder</Label>
+                  <Label className="text-muted-foreground">{tx("Name of Permit Holder")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border">
                     {permitHolderName}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Water Use Permit Number</Label>
+                  <Label className="text-muted-foreground">{tx("Water Use Permit Number")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border font-mono">
                     {permit.permit_number}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Permit Issue Date</Label>
+                  <Label className="text-muted-foreground">{tx("Permit Issue Date")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border">
                     {formatDate(permit.issued_date)}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Permit Expiry Date</Label>
+                  <Label className="text-muted-foreground">{tx("Permit Expiry Date")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border">
                     {formatDate(permit.expiry_date)}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Reporting Year</Label>
+                  <Label className="text-muted-foreground">{tx("Reporting Year")}</Label>
                   <div className="p-3 bg-blue-50 rounded-md border border-blue-200 font-semibold text-blue-800">
                     {reportingYear}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Type of Water Use</Label>
+                  <Label className="text-muted-foreground">{tx("Type of Water Use")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border capitalize">
                     {permit.purpose?.replace(/_/g, ' ') || 'N/A'}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Water Source Type</Label>
+                  <Label className="text-muted-foreground">{tx("Water Source Type")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border capitalize">
                     {permit.water_source?.replace(/_/g, ' ') || 'N/A'}
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-muted-foreground">Name of Water Body</Label>
+                  <Label className="text-muted-foreground">{tx("Name of Water Body")}</Label>
                   <div className="p-3 bg-slate-50 rounded-md border">
                     {permit.application?.water_body_name || 'N/A'}
                   </div>
@@ -897,34 +906,34 @@ export function WaterUseReportForm({
 
               {/* Administrative Location */}
               <div className="pt-4 border-t">
-                <Label className="text-muted-foreground mb-3 block">Administrative Location</Label>
+                <Label className="text-muted-foreground mb-3 block">{tx("Administrative Location")}</Label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Province</span>
+                    <span className="text-xs text-muted-foreground">{tx("Province")}</span>
                     <div className="p-2 bg-slate-50 rounded-md border text-sm">
                       {permit.application?.province || 'N/A'}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">District</span>
+                    <span className="text-xs text-muted-foreground">{tx("District")}</span>
                     <div className="p-2 bg-slate-50 rounded-md border text-sm">
                       {permit.application?.district || 'N/A'}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Sector</span>
+                    <span className="text-xs text-muted-foreground">{tx("Sector")}</span>
                     <div className="p-2 bg-slate-50 rounded-md border text-sm">
                       {permit.application?.sector || 'N/A'}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Cell</span>
+                    <span className="text-xs text-muted-foreground">{tx("Cell")}</span>
                     <div className="p-2 bg-slate-50 rounded-md border text-sm">
                       {permit.application?.cell || 'N/A'}
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <span className="text-xs text-muted-foreground">Village</span>
+                    <span className="text-xs text-muted-foreground">{tx("Village")}</span>
                     <div className="p-2 bg-slate-50 rounded-md border text-sm">
                       {permit.application?.village || 'N/A'}
                     </div>
@@ -941,39 +950,39 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Droplets className="h-5 w-5" />
-                Section 2: Permitted Water Use Summary
+                {tx("Section 2: Permitted Water Use Summary")}
               </CardTitle>
               <CardDescription>
-                Authorized values from your permit. These are read-only.
+                {tx("Authorized values from your permit. These are read-only.")}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {template === 'abstraction' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Maximum Abstraction Rate (m³/day)</Label>
+                    <Label className="text-muted-foreground">{tx("Maximum Abstraction Rate (m³/day)")}</Label>
                     <div className="p-3 bg-slate-50 rounded-md border">
                       {permit.application?.max_daily_volume_m3 
                         ? `${permit.application.max_daily_volume_m3.toLocaleString()} m³/day`
                         : permit.water_allowance 
                           ? `${permit.water_allowance.toLocaleString()} ${permit.allowance_unit || 'm³'}`
-                          : 'Not specified in permit'}
+                          : tx('Not specified in permit')}
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Authorized Annual Volume (m³/year)</Label>
+                    <Label className="text-muted-foreground">{tx("Authorized Annual Volume (m³/year)")}</Label>
                     <div className="p-3 bg-slate-50 rounded-md border">
                       {permit.application?.max_yearly_volume_m3 
                         ? `${permit.application.max_yearly_volume_m3.toLocaleString()} m³/year`
                         : permit.water_allowance && permit.allowance_unit?.includes('year')
                           ? `${permit.water_allowance.toLocaleString()} ${permit.allowance_unit}`
-                          : 'Not specified in permit'}
+                          : tx('Not specified in permit')}
                     </div>
                   </div>
                   {/* Show permit allowance if available as additional info */}
                   {permit.water_allowance && (
                     <div className="space-y-2 md:col-span-2">
-                      <Label className="text-muted-foreground">Permit Water Allowance</Label>
+                      <Label className="text-muted-foreground">{tx("Permit Water Allowance")}</Label>
                       <div className="p-3 bg-blue-50 rounded-md border border-blue-200">
                         {permit.water_allowance.toLocaleString()} {permit.allowance_unit || 'm³'}
                       </div>
@@ -983,19 +992,19 @@ export function WaterUseReportForm({
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground">Authorized Lake Surface Area (Ha)</Label>
+                    <Label className="text-muted-foreground">{tx("Authorized Lake Surface Area (Ha)")}</Label>
                     <div className="p-3 bg-slate-50 rounded-md border">
                       {permit.application?.concession_area 
                         ? `${permit.application.concession_area.toLocaleString()} Ha`
                         : permit.water_allowance 
                           ? `${permit.water_allowance.toLocaleString()} ${permit.allowance_unit || 'Ha'}`
-                          : 'Not specified in permit'}
+                          : tx('Not specified in permit')}
                     </div>
                   </div>
                   {/* Show permit allowance if available */}
                   {permit.water_allowance && (
                     <div className="space-y-2">
-                      <Label className="text-muted-foreground">Permit Allowance</Label>
+                      <Label className="text-muted-foreground">{tx("Permit Allowance")}</Label>
                       <div className="p-3 bg-blue-50 rounded-md border border-blue-200">
                         {permit.water_allowance.toLocaleString()} {permit.allowance_unit || 'Ha'}
                       </div>
@@ -1013,13 +1022,13 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
-                Section 3: Actual Water Use During Reporting Year
+                {tx("Section 3: Actual Water Use During Reporting Year")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Operational Status */}
               <div className="space-y-3">
-                <Label>Operational Status *</Label>
+                <Label>{tx("Operational Status")} *</Label>
                 <RadioGroup
                   value={formData.section3.operationalStatus}
                   onValueChange={(value) => updateFormData('section3', 'operationalStatus', value)}
@@ -1030,26 +1039,26 @@ export function WaterUseReportForm({
                     <>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="operational" id="operational" />
-                        <Label htmlFor="operational">Operational</Label>
+                        <Label htmlFor="operational">{tx("Operational")}</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="non_operational" id="non_operational" />
-                        <Label htmlFor="non_operational">Non-operational</Label>
+                        <Label htmlFor="non_operational">{tx("Non-operational")}</Label>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="fully" id="fully" />
-                        <Label htmlFor="fully">Fully Operational</Label>
+                        <Label htmlFor="fully">{tx("Fully Operational")}</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="partial" id="partial" />
-                        <Label htmlFor="partial">Partial</Label>
+                        <Label htmlFor="partial">{tx("Partial")}</Label>
                       </div>
                       <div className="flex items-center space-x-2">
                         <RadioGroupItem value="non_operational" id="non_operational" />
-                        <Label htmlFor="non_operational">Non-Operational</Label>
+                        <Label htmlFor="non_operational">{tx("Non-Operational")}</Label>
                       </div>
                     </>
                   )}
@@ -1060,7 +1069,7 @@ export function WaterUseReportForm({
               {template === 'concession' && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="totalSurface">Total Surface Area Occupied (Ha)</Label>
+                    <Label htmlFor="totalSurface">{tx("Total Surface Area Occupied (Ha)")}</Label>
                     <Input
                       id="totalSurface"
                       type="number"
@@ -1068,7 +1077,7 @@ export function WaterUseReportForm({
                       value={formData.section3.totalSurfaceAreaOccupied}
                       onChange={(e) => updateFormData('section3', 'totalSurfaceAreaOccupied', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Enter surface area in hectares"
+                      placeholder={tx("Enter surface area in hectares")}
                     />
                   </div>
                   <div className="space-y-3">
@@ -1079,14 +1088,14 @@ export function WaterUseReportForm({
                         onCheckedChange={(checked) => updateFormData('section3', 'changesduringYear', checked)}
                         disabled={isReadOnly}
                       />
-                      <Label htmlFor="changesYear">Changes During Reporting Year?</Label>
+                      <Label htmlFor="changesYear">{tx("Changes During Reporting Year?")}</Label>
                     </div>
                     {formData.section3.changesduringYear && (
                       <Textarea
                         value={formData.section3.changesDescription}
                         onChange={(e) => updateFormData('section3', 'changesDescription', e.target.value)}
                         disabled={isReadOnly}
-                        placeholder="Describe the changes..."
+                        placeholder={tx("Describe the changes...")}
                         rows={3}
                       />
                     )}
@@ -1096,20 +1105,20 @@ export function WaterUseReportForm({
 
               {/* Water Use Conflicts */}
               <div className="space-y-2">
-                <Label htmlFor="conflicts">Water Use-Related Conflict or Challenges in the Area</Label>
+                <Label htmlFor="conflicts">{tx("Water Use-Related Conflict or Challenges in the Area")}</Label>
                 <Textarea
                   id="conflicts"
                   value={formData.section3.waterUseConflicts}
                   onChange={(e) => updateFormData('section3', 'waterUseConflicts', e.target.value)}
                   disabled={isReadOnly}
-                  placeholder="Describe any conflicts or challenges..."
+                  placeholder={tx("Describe any conflicts or challenges...")}
                   rows={3}
                 />
               </div>
 
               {/* Payment Status */}
               <div className="space-y-3">
-                <Label>Payment of Water Fees</Label>
+                <Label>{tx("Payment of Water Fees")}</Label>
                 <RadioGroup
                   value={formData.section3.paymentStatus}
                   onValueChange={(value) => updateFormData('section3', 'paymentStatus', value)}
@@ -1118,11 +1127,11 @@ export function WaterUseReportForm({
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="paid" id="paid" />
-                    <Label htmlFor="paid">Paid</Label>
+                    <Label htmlFor="paid">{tx("Paid")}</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="not_paid" id="not_paid" />
-                    <Label htmlFor="not_paid">Not Paid</Label>
+                    <Label htmlFor="not_paid">{tx("Not Paid")}</Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -1130,14 +1139,14 @@ export function WaterUseReportForm({
               {/* Quarterly Data Table - Abstraction */}
               {template === 'abstraction' && (
                 <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">Monthly/Quarterly Water Use Data</h4>
+                  <h4 className="font-medium mb-4">{tx("Monthly/Quarterly Water Use Data")}</h4>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Quarter</TableHead>
-                        <TableHead>Volume Used (m³)</TableHead>
-                        <TableHead>Avg Daily Use (m³/day)</TableHead>
-                        <TableHead>Measurement Method</TableHead>
+                        <TableHead>{tx("Quarter")}</TableHead>
+                        <TableHead>{tx("Volume Used (m³)")}</TableHead>
+                        <TableHead>{tx("Avg Daily Use (m³/day)")}</TableHead>
+                        <TableHead>{tx("Measurement Method")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1174,16 +1183,16 @@ export function WaterUseReportForm({
                                 <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="meter">Meter Reading</SelectItem>
-                                <SelectItem value="calculation">Calculation</SelectItem>
-                                <SelectItem value="estimation">Estimation</SelectItem>
+                                <SelectItem value="meter">{tx("Meter Reading")}</SelectItem>
+                                <SelectItem value="calculation">{tx("Calculation")}</SelectItem>
+                                <SelectItem value="estimation">{tx("Estimation")}</SelectItem>
                               </SelectContent>
                             </Select>
                           </TableCell>
                         </TableRow>
                       ))}
                       <TableRow className="bg-slate-50">
-                        <TableCell className="font-bold">Total</TableCell>
+                        <TableCell className="font-bold">{tx("Total")}</TableCell>
                         <TableCell className="font-bold">{quarterlyTotal.toFixed(2)} m³</TableCell>
                         <TableCell></TableCell>
                         <TableCell></TableCell>
@@ -1196,14 +1205,14 @@ export function WaterUseReportForm({
               {/* Quarterly Data Table - Concession Fish Farming */}
               {template === 'concession' && permit.purpose?.includes('fish') && (
                 <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">Quarterly Fish Farming Data</h4>
+                  <h4 className="font-medium mb-4">{tx("Quarterly Fish Farming Data")}</h4>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Quarter</TableHead>
-                        <TableHead>Number of Cages</TableHead>
-                        <TableHead>Capacity (fish/cage)</TableHead>
-                        <TableHead>Used Surface (Ha)</TableHead>
+                        <TableHead>{tx("Quarter")}</TableHead>
+                        <TableHead>{tx("Number of Cages")}</TableHead>
+                        <TableHead>{tx("Capacity (fish/cage)")}</TableHead>
+                        <TableHead>{tx("Used Surface (Ha)")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1254,37 +1263,37 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Leaf className="h-5 w-5" />
-                Section 4: Water Use Efficiency and Management
+                {tx("Section 4: Water Use Efficiency and Management")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {template === 'abstraction' ? (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="efficiency">Water Efficiency Measures Implemented</Label>
+                    <Label htmlFor="efficiency">{tx("Water Efficiency Measures Implemented")}</Label>
                     <Textarea
                       id="efficiency"
                       value={formData.section4.efficiencyMeasures}
                       onChange={(e) => updateFormData('section4', 'efficiencyMeasures', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe water efficiency measures..."
+                      placeholder={tx("Describe water efficiency measures...")}
                       rows={3}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="recycling">Recycling / Reuse Practices</Label>
+                    <Label htmlFor="recycling">{tx("Recycling / Reuse Practices")}</Label>
                     <Textarea
                       id="recycling"
                       value={formData.section4.recyclingPractices}
                       onChange={(e) => updateFormData('section4', 'recyclingPractices', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe recycling practices..."
+                      placeholder={tx("Describe recycling practices...")}
                       rows={3}
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="waterSaved">Estimated Water Saved (m³/year)</Label>
+                      <Label htmlFor="waterSaved">{tx("Estimated Water Saved (m³/year)")}</Label>
                       <Input
                         id="waterSaved"
                         type="number"
@@ -1295,7 +1304,7 @@ export function WaterUseReportForm({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="reduction">Reduction Compared to Previous Year (%)</Label>
+                      <Label htmlFor="reduction">{tx("Reduction Compared to Previous Year (%)")}</Label>
                       <Input
                         id="reduction"
                         type="number"
@@ -1309,13 +1318,13 @@ export function WaterUseReportForm({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="losses">Identified Losses (Leakage, Evaporation, etc.)</Label>
+                    <Label htmlFor="losses">{tx("Identified Losses (Leakage, Evaporation, etc.)")}</Label>
                     <Textarea
                       id="losses"
                       value={formData.section4.identifiedLosses}
                       onChange={(e) => updateFormData('section4', 'identifiedLosses', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe identified water losses..."
+                      placeholder={tx("Describe identified water losses...")}
                       rows={3}
                     />
                   </div>
@@ -1323,40 +1332,40 @@ export function WaterUseReportForm({
               ) : (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="prodOutput">Water Efficiency Measures - Production (Outputs)</Label>
+                    <Label htmlFor="prodOutput">{tx("Water Efficiency Measures - Production (Outputs)")}</Label>
                     <Textarea
                       id="prodOutput"
                       value={formData.section4.productionOutputMeasures}
                       onChange={(e) => updateFormData('section4', 'productionOutputMeasures', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe production efficiency measures..."
+                      placeholder={tx("Describe production efficiency measures...")}
                       rows={3}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="ecological">Water Efficiency Measures - Ecological Impacts</Label>
+                    <Label htmlFor="ecological">{tx("Water Efficiency Measures - Ecological Impacts")}</Label>
                     <Textarea
                       id="ecological"
                       value={formData.section4.ecologicalImpactMeasures}
                       onChange={(e) => updateFormData('section4', 'ecologicalImpactMeasures', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe ecological impact measures..."
+                      placeholder={tx("Describe ecological impact measures...")}
                       rows={3}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="spatial">Water Efficiency Measures - Spatial Occupation</Label>
+                    <Label htmlFor="spatial">{tx("Water Efficiency Measures - Spatial Occupation")}</Label>
                     <Textarea
                       id="spatial"
                       value={formData.section4.spatialOccupationMeasures}
                       onChange={(e) => updateFormData('section4', 'spatialOccupationMeasures', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe spatial occupation measures..."
+                      placeholder={tx("Describe spatial occupation measures...")}
                       rows={3}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="reductionConc">Reduction Compared to Previous Year (%)</Label>
+                    <Label htmlFor="reductionConc">{tx("Reduction Compared to Previous Year (%)")}</Label>
                     <Input
                       id="reductionConc"
                       type="number"
@@ -1380,7 +1389,7 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Leaf className="h-5 w-5" />
-                Section 5: Environmental Compliance and Monitoring
+                {tx("Section 5: Environmental Compliance and Monitoring")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1388,7 +1397,7 @@ export function WaterUseReportForm({
               {template === 'concession' && (
                 <>
                   <div className="space-y-3">
-                    <Label>Nature/Property of Used Infrastructure/Equipment Offshore</Label>
+                    <Label>{tx("Nature/Property of Used Infrastructure/Equipment Offshore")}</Label>
                     <div className="flex flex-wrap gap-4">
                       {['Stainless steel', 'Wood', 'Galvanized', 'Plastic'].map((item) => (
                         <div key={item} className="flex items-center space-x-2">
@@ -1410,13 +1419,13 @@ export function WaterUseReportForm({
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="pollution">Pollution Prevention & Control Practices</Label>
+                    <Label htmlFor="pollution">{tx("Pollution Prevention & Control Practices")}</Label>
                     <Textarea
                       id="pollution"
                       value={formData.section5_monitoring.pollutionPrevention}
                       onChange={(e) => updateFormData('section5_monitoring', 'pollutionPrevention', e.target.value)}
                       disabled={isReadOnly}
-                      placeholder="Describe pollution prevention practices..."
+                      placeholder={tx("Describe pollution prevention practices...")}
                       rows={3}
                     />
                   </div>
@@ -1425,20 +1434,20 @@ export function WaterUseReportForm({
 
               {/* Environmental Monitoring Results */}
               <div className="pt-4 border-t">
-                <h4 className="font-medium mb-4">5.{template === 'concession' ? '2' : '1'} Environmental Monitoring Results</h4>
+                <h4 className="font-medium mb-4">5.{template === 'concession' ? '2' : '1'} {tx("Environmental Monitoring Results")}</h4>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Parameter</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead>Min</TableHead>
-                      <TableHead>Max</TableHead>
-                      <TableHead>Average</TableHead>
+                      <TableHead>{tx("Parameter")}</TableHead>
+                      <TableHead>{tx("Unit")}</TableHead>
+                      <TableHead>{tx("Min")}</TableHead>
+                      <TableHead>{tx("Max")}</TableHead>
+                      <TableHead>{tx("Average")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     <TableRow>
-                      <TableCell>Water Temperature</TableCell>
+                      <TableCell>{tx("Water Temperature")}</TableCell>
                       <TableCell>°C</TableCell>
                       <TableCell>
                         <Input
@@ -1473,7 +1482,7 @@ export function WaterUseReportForm({
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Dissolved Oxygen</TableCell>
+                      <TableCell>{tx("Dissolved Oxygen")}</TableCell>
                       <TableCell>mg/L</TableCell>
                       <TableCell>
                         <Input
@@ -1508,7 +1517,7 @@ export function WaterUseReportForm({
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Turbidity</TableCell>
+                      <TableCell>{tx("Turbidity")}</TableCell>
                       <TableCell>NTU</TableCell>
                       <TableCell>
                         <Input
@@ -1580,7 +1589,7 @@ export function WaterUseReportForm({
                           </TableCell>
                         </TableRow>
                         <TableRow>
-                          <TableCell>Nutrients (P & N)</TableCell>
+                          <TableCell>{tx("Nutrients (P & N)")}</TableCell>
                           <TableCell>mg/L</TableCell>
                           <TableCell>
                             <Input
@@ -1657,7 +1666,7 @@ export function WaterUseReportForm({
 
               {/* Environmental Incidents */}
               <div className="pt-4 border-t">
-                <h4 className="font-medium mb-4">5.{template === 'concession' ? '3' : '2'} Environmental Incidents</h4>
+                <h4 className="font-medium mb-4">5.{template === 'concession' ? '3' : '2'} {tx("Environmental Incidents")}</h4>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -1666,13 +1675,13 @@ export function WaterUseReportForm({
                       onCheckedChange={(checked) => updateFormData('section5_incidents', 'hasIncidents', checked)}
                       disabled={isReadOnly}
                     />
-                    <Label htmlFor="hasIncidents">Any pollution, spills, or accidents?</Label>
+                    <Label htmlFor="hasIncidents">{tx("Any pollution, spills, or accidents?")}</Label>
                   </div>
                   {formData.section5_incidents.hasIncidents && (
                     <div className="space-y-4 pl-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="incidentDate">Date of Incident</Label>
+                          <Label htmlFor="incidentDate">{tx("Date of Incident")}</Label>
                           <Input
                             id="incidentDate"
                             type="date"
@@ -1683,7 +1692,7 @@ export function WaterUseReportForm({
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="reportedDate">Date Reported to Authority</Label>
+                          <Label htmlFor="reportedDate">{tx("Date Reported to Authority")}</Label>
                           <Input
                             id="reportedDate"
                             type="date"
@@ -1695,7 +1704,7 @@ export function WaterUseReportForm({
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="incidentDesc">Description</Label>
+                        <Label htmlFor="incidentDesc">{tx("Description")}</Label>
                         <Textarea
                           id="incidentDesc"
                           value={formData.section5_incidents.incidentDescription}
@@ -1705,7 +1714,7 @@ export function WaterUseReportForm({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="corrective">Corrective Actions Taken</Label>
+                        <Label htmlFor="corrective">{tx("Corrective Actions Taken")}</Label>
                         <Textarea
                           id="corrective"
                           value={formData.section5_incidents.correctiveActions}
@@ -1728,25 +1737,25 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
-                Section 6: Social and Gender-Disaggregated Information
+                {tx("Section 6: Social and Gender-Disaggregated Information")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Employment Table */}
               <div>
-                <h4 className="font-medium mb-4">6.1 Employment Related to Water Use Activity</h4>
+                <h4 className="font-medium mb-4">{tx("6.1 Employment Related to Water Use Activity")}</h4>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Male</TableHead>
-                      <TableHead>Female</TableHead>
-                      <TableHead>Total</TableHead>
+                      <TableHead>{tx("Category")}</TableHead>
+                      <TableHead>{tx("Male")}</TableHead>
+                      <TableHead>{tx("Female")}</TableHead>
+                      <TableHead>{tx("Total")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     <TableRow>
-                      <TableCell>Permanent Employees</TableCell>
+                      <TableCell>{tx("Permanent Employees")}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
@@ -1768,7 +1777,7 @@ export function WaterUseReportForm({
                       <TableCell className="font-medium">{employmentTotals.permanent}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Temporary / Seasonal Workers</TableCell>
+                      <TableCell>{tx("Temporary / Seasonal Workers")}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
@@ -1790,7 +1799,7 @@ export function WaterUseReportForm({
                       <TableCell className="font-medium">{employmentTotals.temporary}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Technical / Skilled Staff</TableCell>
+                      <TableCell>{tx("Technical / Skilled Staff")}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
@@ -1812,7 +1821,7 @@ export function WaterUseReportForm({
                       <TableCell className="font-medium">{employmentTotals.technical}</TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell>Unskilled / Support Staff</TableCell>
+                      <TableCell>{tx("Unskilled / Support Staff")}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
@@ -1834,7 +1843,7 @@ export function WaterUseReportForm({
                       <TableCell className="font-medium">{employmentTotals.unskilled}</TableCell>
                     </TableRow>
                     <TableRow className="bg-slate-50 font-bold">
-                      <TableCell>Total Workforce</TableCell>
+                      <TableCell>{tx("Total Workforce")}</TableCell>
                       <TableCell>{employmentTotals.totalMale}</TableCell>
                       <TableCell>{employmentTotals.totalFemale}</TableCell>
                       <TableCell>{employmentTotals.total}</TableCell>
@@ -1846,10 +1855,10 @@ export function WaterUseReportForm({
               {/* Concession-specific: Community Engagement */}
               {template === 'concession' && (
                 <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-4">6.2 Community Engagement and Benefits</h4>
+                  <h4 className="font-medium mb-4">{tx("6.2 Community Engagement and Benefits")}</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="communityEngaged">Local Community Members Engaged</Label>
+                      <Label htmlFor="communityEngaged">{tx("Local Community Members Engaged")}</Label>
                       <Input
                         id="communityEngaged"
                         value={formData.section6_employment.communityEngaged}
@@ -1858,7 +1867,7 @@ export function WaterUseReportForm({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="womenConsult">Women Participating in Consultations (Number / %)</Label>
+                      <Label htmlFor="womenConsult">{tx("Women Participating in Consultations (Number / %)")}</Label>
                       <Input
                         id="womenConsult"
                         value={formData.section6_employment.womenInConsultations}
@@ -1869,7 +1878,7 @@ export function WaterUseReportForm({
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                     <div className="space-y-2">
-                      <Label htmlFor="communityBenefits">Community Benefits Linked to Water Use</Label>
+                      <Label htmlFor="communityBenefits">{tx("Community Benefits Linked to Water Use")}</Label>
                       <Textarea
                         id="communityBenefits"
                         value={formData.section6_employment.communityBenefits}
@@ -1879,7 +1888,7 @@ export function WaterUseReportForm({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="genderSupport">Gender-Specific Support Measures</Label>
+                      <Label htmlFor="genderSupport">{tx("Gender-Specific Support Measures")}</Label>
                       <Textarea
                         id="genderSupport"
                         value={formData.section6_employment.genderSupportMeasures}
@@ -1894,7 +1903,7 @@ export function WaterUseReportForm({
 
               {/* OHS */}
               <div className="pt-4 border-t">
-                <h4 className="font-medium mb-4">6.{template === 'concession' ? '3' : '2'} Occupational Health and Safety (Gender-Sensitive)</h4>
+                <h4 className="font-medium mb-4">6.{template === 'concession' ? '3' : '2'} {tx("Occupational Health and Safety (Gender-Sensitive)")}</h4>
                 <div className="space-y-4">
                   <div className="flex items-start space-x-4">
                     <div className="flex items-center space-x-2 min-w-[250px]">
@@ -1904,10 +1913,10 @@ export function WaterUseReportForm({
                         onCheckedChange={(checked) => updateFormData('section6_ohs', 'genderInclusiveSafety', checked)}
                         disabled={isReadOnly}
                       />
-                      <Label htmlFor="genderSafety">Gender-inclusive safety measures in place</Label>
+                      <Label htmlFor="genderSafety">{tx("Gender-inclusive safety measures in place")}</Label>
                     </div>
                     <Input
-                      placeholder="Remarks"
+                      placeholder={tx("Remarks")}
                       value={formData.section6_ohs.genderInclusiveSafetyRemarks}
                       onChange={(e) => updateFormData('section6_ohs', 'genderInclusiveSafetyRemarks', e.target.value)}
                       disabled={isReadOnly}
@@ -1922,10 +1931,10 @@ export function WaterUseReportForm({
                         onCheckedChange={(checked) => updateFormData('section6_ohs', 'separateSanitation', checked)}
                         disabled={isReadOnly}
                       />
-                      <Label htmlFor="sanitation">Separate sanitation facilities</Label>
+                      <Label htmlFor="sanitation">{tx("Separate sanitation facilities")}</Label>
                     </div>
                     <Input
-                      placeholder="Remarks"
+                      placeholder={tx("Remarks")}
                       value={formData.section6_ohs.separateSanitationRemarks}
                       onChange={(e) => updateFormData('section6_ohs', 'separateSanitationRemarks', e.target.value)}
                       disabled={isReadOnly}
@@ -1940,10 +1949,10 @@ export function WaterUseReportForm({
                         onCheckedChange={(checked) => updateFormData('section6_ohs', 'genderGrievance', checked)}
                         disabled={isReadOnly}
                       />
-                      <Label htmlFor="grievance">Gender-responsive grievance mechanism</Label>
+                      <Label htmlFor="grievance">{tx("Gender-responsive grievance mechanism")}</Label>
                     </div>
                     <Input
-                      placeholder="Remarks"
+                      placeholder={tx("Remarks")}
                       value={formData.section6_ohs.genderGrievanceRemarks}
                       onChange={(e) => updateFormData('section6_ohs', 'genderGrievanceRemarks', e.target.value)}
                       disabled={isReadOnly}
@@ -1962,7 +1971,7 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckSquare className="h-5 w-5" />
-                Section 7: Compliance Status
+                {tx("Section 7: Compliance Status")}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1975,10 +1984,10 @@ export function WaterUseReportForm({
                       onCheckedChange={(checked) => updateFormData('section7', 'permitLimitsCompliance', checked)}
                       disabled={isReadOnly}
                     />
-                    <Label htmlFor="permitLimits">Compliance with permit limits</Label>
+                    <Label htmlFor="permitLimits">{tx("Compliance with permit limits")}</Label>
                   </div>
                   <Input
-                    placeholder="Remarks"
+                    placeholder={tx("Remarks")}
                     value={formData.section7.permitLimitsRemarks}
                     onChange={(e) => updateFormData('section7', 'permitLimitsRemarks', e.target.value)}
                     disabled={isReadOnly}
@@ -1995,10 +2004,10 @@ export function WaterUseReportForm({
                         onCheckedChange={(checked) => updateFormData('section7', 'zoningCompliance', checked)}
                         disabled={isReadOnly}
                       />
-                      <Label htmlFor="zoning">Compliance with zoning restrictions</Label>
+                      <Label htmlFor="zoning">{tx("Compliance with zoning restrictions")}</Label>
                     </div>
                     <Input
-                      placeholder="Remarks"
+                      placeholder={tx("Remarks")}
                       value={formData.section7.zoningRemarks}
                       onChange={(e) => updateFormData('section7', 'zoningRemarks', e.target.value)}
                       disabled={isReadOnly}
@@ -2015,10 +2024,10 @@ export function WaterUseReportForm({
                       onCheckedChange={(checked) => updateFormData('section7', 'environmentalApprovalCompliance', checked)}
                       disabled={isReadOnly}
                     />
-                    <Label htmlFor="envApproval">Environmental approval compliance</Label>
+                    <Label htmlFor="envApproval">{tx("Environmental approval compliance")}</Label>
                   </div>
                   <Input
-                    placeholder="Remarks"
+                    placeholder={tx("Remarks")}
                     value={formData.section7.environmentalApprovalRemarks}
                     onChange={(e) => updateFormData('section7', 'environmentalApprovalRemarks', e.target.value)}
                     disabled={isReadOnly}
@@ -2034,10 +2043,10 @@ export function WaterUseReportForm({
                       onCheckedChange={(checked) => updateFormData('section7', 'monitoringReportsCompliance', checked)}
                       disabled={isReadOnly}
                     />
-                    <Label htmlFor="monitoring">Submission of monitoring reports</Label>
+                    <Label htmlFor="monitoring">{tx("Submission of monitoring reports")}</Label>
                   </div>
                   <Input
-                    placeholder="Remarks"
+                    placeholder={tx("Remarks")}
                     value={formData.section7.monitoringReportsRemarks}
                     onChange={(e) => updateFormData('section7', 'monitoringReportsRemarks', e.target.value)}
                     disabled={isReadOnly}
@@ -2053,10 +2062,10 @@ export function WaterUseReportForm({
                       onCheckedChange={(checked) => updateFormData('section7', 'waterFeesCompliance', checked)}
                       disabled={isReadOnly}
                     />
-                    <Label htmlFor="fees">Payment of water use fees</Label>
+                    <Label htmlFor="fees">{tx("Payment of water use fees")}</Label>
                   </div>
                   <Input
-                    placeholder="Remarks"
+                    placeholder={tx("Remarks")}
                     value={formData.section7.waterFeesRemarks}
                     onChange={(e) => updateFormData('section7', 'waterFeesRemarks', e.target.value)}
                     disabled={isReadOnly}
@@ -2074,23 +2083,23 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5" />
-                Section 8: Future Plans (Next Reporting Year)
+                {tx("Section 8: Future Plans (Next Reporting Year)")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="plannedChanges">Planned Changes in Water Use</Label>
+                <Label htmlFor="plannedChanges">{tx("Planned Changes in Water Use")}</Label>
                 <Textarea
                   id="plannedChanges"
                   value={formData.section8.plannedChanges}
                   onChange={(e) => updateFormData('section8', 'plannedChanges', e.target.value)}
                   disabled={isReadOnly}
-                  placeholder="Describe any planned changes..."
+                  placeholder={tx("Describe any planned changes...")}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="expectedChange">Expected Increase/Decrease (%)</Label>
+                <Label htmlFor="expectedChange">{tx("Expected Increase/Decrease (%)")}</Label>
                 <Input
                   id="expectedChange"
                   type="number"
@@ -2103,35 +2112,35 @@ export function WaterUseReportForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="infrastructure">Planned Infrastructure Upgrades</Label>
+                <Label htmlFor="infrastructure">{tx("Planned Infrastructure Upgrades")}</Label>
                 <Textarea
                   id="infrastructure"
                   value={formData.section8.plannedInfrastructureUpgrades}
                   onChange={(e) => updateFormData('section8', 'plannedInfrastructureUpgrades', e.target.value)}
                   disabled={isReadOnly}
-                  placeholder="Describe planned upgrades..."
+                  placeholder={tx("Describe planned upgrades...")}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="envImprove">Environmental Improvement Measures</Label>
+                <Label htmlFor="envImprove">{tx("Environmental Improvement Measures")}</Label>
                 <Textarea
                   id="envImprove"
                   value={formData.section8.environmentalImprovements}
                   onChange={(e) => updateFormData('section8', 'environmentalImprovements', e.target.value)}
                   disabled={isReadOnly}
-                  placeholder="Describe environmental improvements..."
+                  placeholder={tx("Describe environmental improvements...")}
                   rows={3}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="genderActions">Planned Actions to Enhance Gender Inclusion</Label>
+                <Label htmlFor="genderActions">{tx("Planned Actions to Enhance Gender Inclusion")}</Label>
                 <Textarea
                   id="genderActions"
                   value={formData.section8.genderInclusionActions}
                   onChange={(e) => updateFormData('section8', 'genderInclusionActions', e.target.value)}
                   disabled={isReadOnly}
-                  placeholder="Describe gender inclusion plans..."
+                  placeholder={tx("Describe gender inclusion plans...")}
                   rows={3}
                 />
               </div>
@@ -2145,30 +2154,29 @@ export function WaterUseReportForm({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileSignature className="h-5 w-5" />
-                Section 9: Declaration
+                {tx("Section 9: Declaration")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-800">
-                  I hereby certify that the information provided in this report is true, accurate, 
-                  complete, and complies with the conditions of the Water Use Permit.
+                  {tx("I hereby certify that the information provided in this report is true, accurate, complete, and complies with the conditions of the Water Use Permit.")}
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="declarantName">Full Name *</Label>
+                  <Label htmlFor="declarantName">{tx("Full Name")} *</Label>
                   <Input
                     id="declarantName"
                     value={formData.section9_declaration.declarantName}
                     onChange={(e) => updateFormData('section9_declaration', 'declarantName', e.target.value)}
                     disabled={isReadOnly}
-                    placeholder="Enter your full name"
+                    placeholder={tx("Enter your full name")}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="declarationDate">Date *</Label>
+                  <Label htmlFor="declarationDate">{tx("Date")} *</Label>
                   <Input
                     id="declarationDate"
                     type="date"
@@ -2187,7 +2195,7 @@ export function WaterUseReportForm({
                   disabled={isReadOnly}
                 />
                 <Label htmlFor="agreed" className="text-sm">
-                  I confirm that all information provided is accurate and I agree to the declaration above.
+                  {tx("I confirm that all information provided is accurate and I agree to the declaration above.")}
                 </Label>
               </div>
             </CardContent>
@@ -2202,11 +2210,11 @@ export function WaterUseReportForm({
             onClick={handlePreviousSection}
             disabled={activeTab === tabOrder[0]}
           >
-            Previous Section
+            {tx("Previous Section")}
           </Button>
           {activeTab !== tabOrder[tabOrder.length - 1] && (
             <Button onClick={handleNextSection}>
-              Next Section
+              {tx("Next Section")}
             </Button>
           )}
         </div>
@@ -2239,7 +2247,7 @@ export function WaterUseReportForm({
             ) : (
               <Save className="mr-2 h-4 w-4" />
             )}
-            {isSavingDraft ? 'Saving...' : 'Save as Draft'}
+            {isSavingDraft ? tx('Saving...') : tx('Save as Draft')}
           </Button>
           <Button
             onClick={handleSubmitForm}
@@ -2250,7 +2258,7 @@ export function WaterUseReportForm({
             ) : (
               <Send className="mr-2 h-4 w-4" />
             )}
-            Submit Report
+            {tx("Submit Report")}
           </Button>
           </div>
         </div>
@@ -2260,7 +2268,7 @@ export function WaterUseReportForm({
         {isReadOnly && (
           <div className="flex items-center justify-center p-4 bg-amber-50 border border-amber-200 rounded-lg">
             <Info className="h-5 w-5 text-amber-600 mr-2" />
-            <span className="text-amber-800">This report has been submitted and cannot be edited.</span>
+            <span className="text-amber-800">{tx("This report has been submitted and cannot be edited.")}</span>
           </div>
         )}
       </CardContent>

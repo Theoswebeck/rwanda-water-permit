@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, CheckCircle2, FileSearch, Loader2 } from "lucide-react";
 import type { ManualPermitSelectionPayload, PermitReference, PermitRegistrySnapshot } from "@/lib/permit/permit-reference";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 
 interface LookupResponse {
   success: boolean;
@@ -36,6 +38,13 @@ interface ManualPermitEntryCardProps {
 }
 
 export function ManualPermitEntryCard({ title, description, onContinue }: ManualPermitEntryCardProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   const [permitNumber, setPermitNumber] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -111,15 +120,15 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label>Old Permit Number</Label>
+          <Label>{tx("Old Permit Number")}</Label>
           <div className="flex gap-2">
             <Input
               value={permitNumber}
               onChange={(event) => setPermitNumber(event.target.value)}
-              placeholder="Example: 000001/RWB/2026"
+              placeholder={tx("Example: 000001/RWB/2026")}
             />
             <Button type="button" variant="outline" onClick={handleLookup} disabled={lookupLoading || !permitNumber.trim()}>
-              {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Lookup"}
+              {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : tx("Lookup")}
             </Button>
           </div>
         </div>
@@ -128,14 +137,14 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
           <Alert className="border-green-200 bg-green-50">
             <CheckCircle2 className="h-4 w-4 text-green-700" />
             <AlertDescription className="text-green-800">
-              Registry match found for <strong>{lookupResult.inputPermitNumber}</strong>.
+              {tx("Registry match found for")} <strong>{lookupResult.inputPermitNumber}</strong>.
             </AlertDescription>
           </Alert>
         ) : lookupResult && !lookupResult.found ? (
           <Alert className="border-amber-200 bg-amber-50">
             <AlertTriangle className="h-4 w-4 text-amber-700" />
             <AlertDescription className="text-amber-800">
-              Permit not found in registry. You can still continue; staff will verify against registry records manually.
+              {tx("Permit not found in registry. You can still continue; staff will verify against registry records manually.")}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -144,14 +153,14 @@ export function ManualPermitEntryCard({ title, description, onContinue }: Manual
           <Alert className="border-amber-200 bg-amber-50">
             <AlertTriangle className="h-4 w-4 text-amber-700" />
             <AlertDescription className="text-amber-800">
-              Lookup could not be completed ({lookupError}). You can continue with manual details.
+              {tx("Lookup could not be completed")} ({lookupError}). {tx("You can continue with manual details.")}
             </AlertDescription>
           </Alert>
         )}
 
         <div className="flex justify-end">
           <Button type="button" onClick={handleContinue} disabled={!canContinue}>
-            Continue
+            {tx("Continue")}
           </Button>
         </div>
       </CardContent>

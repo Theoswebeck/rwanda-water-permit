@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { motion } from "framer-motion";
 import { 
   Card,
@@ -87,6 +89,12 @@ export function PermitSelectForRenewal({
   const [selectedPermitId, setSelectedPermitId] = useState<string | null>(null);
   const [holderProfile, setHolderProfile] = useState<HolderProfile | null>(null);
   const [permitConflicts, setPermitConflicts] = useState<Record<string, PermitConflictSummary>>({});
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
 
   useEffect(() => {
     fetchPermits();
@@ -230,7 +238,7 @@ export function PermitSelectForRenewal({
       return (
         <Badge className="bg-red-100 text-red-800 flex items-center gap-1">
           <AlertTriangle className="h-3 w-3" />
-          Expired
+          {tx("Expired")}
         </Badge>
       );
     }
@@ -240,14 +248,14 @@ export function PermitSelectForRenewal({
         <Badge className="bg-amber-100 text-amber-800 flex items-center gap-1">
           <Clock className="h-3 w-3" />
           {daysUntilExpiry !== null && daysUntilExpiry > 0 
-            ? `Expires in ${daysUntilExpiry} days`
-            : 'Expiring Soon'
+            ? `${tx("Expires in")} ${daysUntilExpiry} ${tx("days")}`
+            : tx('Expiring Soon')
           }
         </Badge>
       );
     }
     
-    return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+    return <Badge className="bg-green-100 text-green-800">{tx("Active")}</Badge>;
   };
 
   const getExpiryUrgency = (permit: PermitWithApplication) => {
@@ -332,7 +340,7 @@ export function PermitSelectForRenewal({
       permit.application?.province,
     ].filter((part): part is string => typeof part === "string" && part.trim().length > 0);
 
-    return fallbackParts.length > 0 ? fallbackParts.join(", ") : "Unknown location";
+    return fallbackParts.length > 0 ? fallbackParts.join(", ") : tx("Unknown location");
   };
 
   const getIntendedActivityLabel = (permit: PermitWithApplication) => {
@@ -356,7 +364,7 @@ export function PermitSelectForRenewal({
       return getActivityLabel(permit.purpose);
     }
 
-    return "Unknown activity";
+    return tx("Unknown activity");
   };
 
   const handleSelectPermit = () => {
@@ -409,11 +417,10 @@ export function PermitSelectForRenewal({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <RefreshCw className="h-5 w-5 text-green-600" />
-            Select Permit to Renew
+            {tx("Select Permit to Renew")}
           </CardTitle>
           <CardDescription>
-            Choose the water use permit you want to renew. Permits nearing expiration or recently expired 
-            are shown with urgency indicators. The permit number will remain the same after renewal.
+            {tx("Choose the water use permit you want to renew. Permits nearing expiration or recently expired are shown with urgency indicators. The permit number will remain the same after renewal.")}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -421,9 +428,8 @@ export function PermitSelectForRenewal({
           <Alert className="border-green-200 bg-green-50">
             <RefreshCw className="h-4 w-4 text-green-600" />
             <AlertDescription className="text-green-800">
-              <strong>Permit Renewal:</strong> Renewing your permit will extend its validity for another 5 years. 
-              You will need to submit a water use report, a letter requesting renewal, and pay the renewal fee of <strong>{renewalFeeText}</strong>.
-              All existing permit details will remain unchanged.
+              <strong>{tx("Permit Renewal:")}</strong> {tx("Renewing your permit will extend its validity for another 5 years. You will need to submit a water use report, a letter requesting renewal, and pay the renewal fee of")} <strong>{renewalFeeText}</strong>.
+              {tx("All existing permit details will remain unchanged.")}
             </AlertDescription>
           </Alert>
 
@@ -431,7 +437,7 @@ export function PermitSelectForRenewal({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
-              placeholder="Search by permit number, project name..."
+              placeholder={tx("Search by permit number, project name...")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -450,7 +456,7 @@ export function PermitSelectForRenewal({
           {loading && (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-green-600" />
-              <span className="ml-3 text-muted-foreground">Loading your permits...</span>
+              <span className="ml-3 text-muted-foreground">{tx("Loading your permits...")}</span>
             </div>
           )}
 
@@ -458,9 +464,9 @@ export function PermitSelectForRenewal({
           {!loading && permits.length === 0 && (
             <div className="text-center py-12">
               <RefreshCw className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Permits Available</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{tx("No Permits Available")}</h3>
               <p className="text-muted-foreground">
-                You don&apos;t have any permits that can be renewed.
+                {tx("You don't have any permits that can be renewed.")}
               </p>
             </div>
           )}
@@ -469,7 +475,7 @@ export function PermitSelectForRenewal({
           {!loading && permits.length > 0 && filteredPermits.length === 0 && (
             <div className="text-center py-8">
               <Search className="h-8 w-8 mx-auto text-gray-400 mb-3" />
-              <p className="text-muted-foreground">No permits match your search.</p>
+              <p className="text-muted-foreground">{tx("No permits match your search.")}</p>
             </div>
           )}
 
@@ -500,7 +506,7 @@ export function PermitSelectForRenewal({
                             </span>
                             {getStatusBadge(permit)}
                             {permit.is_renewal && (
-                              <Badge className="bg-blue-100 text-blue-800">Previously Renewed</Badge>
+                              <Badge className="bg-blue-100 text-blue-800">{tx("Previously Renewed")}</Badge>
                             )}
                             {selectedPermitId === permit.id && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
@@ -511,12 +517,12 @@ export function PermitSelectForRenewal({
                           )}
 
                           <p className="font-medium text-gray-900">
-                            {permit.application?.project_title || 'Untitled Project'}
+                            {permit.application?.project_title || tx('Untitled Project')}
                           </p>
 
                           <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              <span className="font-medium">Holder:</span>
+                              <span className="font-medium">{tx("Holder:")}</span>
                               {getPermitHolderName(permit)}
                             </span>
                           </div>
@@ -535,7 +541,7 @@ export function PermitSelectForRenewal({
                           <div className="flex gap-4 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              Issued: {formatDate(permit.issued_date)}
+                              {tx("Issued:")} {formatDate(permit.issued_date)}
                             </span>
                             <span className={`flex items-center gap-1 ${
                               urgency === 'expired' ? 'text-red-600 font-semibold' :
@@ -543,9 +549,9 @@ export function PermitSelectForRenewal({
                               urgency === 'warning' ? 'text-amber-500' : ''
                             }`}>
                               <Calendar className="h-3 w-3" />
-                              {urgency === 'expired' 
-                                ? `Expired: ${formatDate(permit.expiry_date)} (${Math.abs(daysUntilExpiry || 0)} days ago)`
-                                : `Expires: ${formatDate(permit.expiry_date)}`
+                              {urgency === 'expired'
+                                ? `${tx("Expired:")} ${formatDate(permit.expiry_date)} (${Math.abs(daysUntilExpiry || 0)} ${tx("days ago")})`
+                                : `${tx("Expires:")} ${formatDate(permit.expiry_date)}`
                               }
                             </span>
                           </div>
@@ -560,8 +566,8 @@ export function PermitSelectForRenewal({
 
           {onManualPermitSelect && (
             <ManualPermitEntryCard
-              title="Permit Not Listed?"
-              description="If your permit is only in registry, enter the old permit number and your baseline details to continue with renewal."
+              title={tx("Permit Not Listed?")}
+              description={tx("If your permit is only in registry, enter the old permit number and your baseline details to continue with renewal.")}
               onContinue={onManualPermitSelect}
             />
           )}
@@ -569,14 +575,14 @@ export function PermitSelectForRenewal({
           {/* Actions */}
           <div className="flex justify-between pt-4 border-t">
             <Button variant="outline" onClick={onCancel}>
-              Cancel
+              {tx("Cancel")}
             </Button>
             <Button
               onClick={handleSelectPermit}
               disabled={!selectedPermitId || Boolean(selectedPermitConflict)}
               className="bg-green-600 hover:bg-green-700 gap-2"
             >
-              Continue with Renewal
+              {tx("Continue with Renewal")}
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>

@@ -2,13 +2,22 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
+import { translateText } from "@/lib/i18n/translator";
+import { AppLanguage, getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 
 interface AuthLayoutProps {
   children: ReactNode;
 }
 
 export function AuthLayout({ children }: AuthLayoutProps) {
+  const [language, setLanguage] = useState<AppLanguage>("en");
+  useEffect(() => {
+    setLanguage(getPreferredLanguage());
+    return subscribeToLanguageChanges(setLanguage);
+  }, []);
+  const tx = (value: string) => translateText(value, language);
+
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
       {/* Left side - Dark themed sidebar with brand info */}
@@ -87,7 +96,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
               />
             </motion.svg>
             <Link href="/" className="text-xl font-bold">
-              Rwanda Water Resources Board
+              {tx("Rwanda Water Resources Board")}
             </Link>
           </motion.div>
         </div>
@@ -104,13 +113,13 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             transition={{ duration: 0.5, delay: 0.7 }}
           >
             <blockquote className="text-xl font-medium mb-4">
-              "The mission of RWB is to ensure the availability of enough and well managed water resources for sustainable development."
+              {tx("\"The mission of RWB is to ensure the availability of enough and well managed water resources for sustainable development.\"")}
             </blockquote>
           </motion.div>
         </motion.div>
         
         <div className="text-sm opacity-70">
-          &copy; {new Date().getFullYear()} Rwanda Water Resources Board. All rights reserved.
+          &copy; {new Date().getFullYear()} {tx("Rwanda Water Resources Board. All rights reserved.")}
         </div>
       </div>
 
