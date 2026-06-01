@@ -1014,7 +1014,7 @@ interface ApplicationFormProps {
   modificationChanges?: Record<string, { previous: any; current: any }>; // Stored changes from DB (staff view)
   excludeApplicationIds?: string[]; // Parent application IDs to exclude from polygon duplicate check (modification/renewal/transfer)
   editableFields?: string[]; // Field names that remain editable even when readOnly is true
-  isBulkApplicant?: boolean;
+  isBulkApplicant?: boolean; // True for bulk applicants (water utilities) — simplifies Water Source tab
 }
 
 export function ApplicationForm({ 
