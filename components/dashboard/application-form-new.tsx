@@ -182,14 +182,16 @@ const applicationFormSchema = z.object({
   // SECTION 2: SOURCE OF WATER
   waterSourceType: z.enum(["lake", "dam", "spring", "borehole", "stream_river", "other"]).or(z.literal("")),
   waterSourceOther: z.string().optional(),
-  nameSourceWater: z.string().min(1, { message: "Water source name is required" }),
+  nameSourceWater: z.string(),
   tributaryToMain: z.string().optional(),
-  
+
   // Location of water source
-  waterSourceProvince: z.string().min(1, { message: "Water source province is required" }),
-  waterSourceDistrict: z.string().min(1, { message: "Water source district is required" }),
-  waterSourceSector: z.string().min(1, { message: "Water source sector is required" }),
-  waterSourceCell: z.string().min(1, { message: "Water source cell is required" }),
+  // min(1) requirements are enforced in superRefine for non-bulk applicants
+  // (bulk applicants hide these fields and use network-level location data instead)
+  waterSourceProvince: z.string(),
+  waterSourceDistrict: z.string(),
+  waterSourceSector: z.string(),
+  waterSourceCell: z.string(),
   waterSourceVillage: z.string().optional(),
   
   // Water abstraction point (LAT/LONG) - used for non-concession activities
@@ -214,6 +216,9 @@ const applicationFormSchema = z.object({
   
   // Permit Length (1-15 years)
   permitLengthYears: z.number().min(1).max(15).optional(),
+
+  // Hidden flag: set to true for bulk applicants so superRefine can skip water-source field checks
+  _isBulk: z.boolean().optional(),
   
   // SECTION 3: INTENDED ACTIVITY
   intendedActivities: z.array(z.string()).min(1, { message: "Select an activity" }).max(1, { message: "Only one activity can be selected per application" }),
@@ -465,7 +470,30 @@ const applicationFormSchema = z.object({
   // Note: This validation only runs on form submission, not on individual tab validation
   const selectedActivities = Array.isArray(data.intendedActivities) ? data.intendedActivities : [];
   if (!selectedActivities.length) return; // No validation if no activity selected
-  
+
+  // Water source fields (province, district, sector, cell, name) are required for non-bulk applicants.
+  // Bulk applicants hide those fields in the UI and use network-level location data instead.
+  const isBulkSubmit = data._isBulk === true;
+  if (!isBulkSubmit) {
+    if (!String(data.nameSourceWater ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nameSourceWater"], message: "Water source name is required." });
+    }
+    if (!String(data.waterSourceProvince ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceProvince"], message: "Water source province is required." });
+    }
+    if (!String(data.waterSourceDistrict ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceDistrict"], message: "Water source district is required." });
+    }
+    if (selectedActivities[0] !== "district_water_supply") {
+      if (!String(data.waterSourceSector ?? "").trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceSector"], message: "Water source sector is required." });
+      }
+      if (!String(data.waterSourceCell ?? "").trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceCell"], message: "Water source cell is required." });
+      }
+    }
+  }
+
   // Single activity selection is enforced by schema (.max(1))
   // No need to check for mixing concession and abstraction activities
 
@@ -1651,6 +1679,11 @@ export function ApplicationForm({
 
   const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
 
+  // Keep the hidden _isBulk flag in sync so superRefine can skip water-source field checks for bulk applicants.
+  useEffect(() => {
+    form.setValue('_isBulk', isBulkApplicant);
+  }, [isBulkApplicant, form]);
+
   // Auto-reset waterUseCategory to abstraction when activities change away from concession types.
   // This prevents "Coffee Washing" or other abstraction activities from showing concession UI
   // after the user had previously selected "Concession" for a different activity.
@@ -1791,6 +1824,10 @@ export function ApplicationForm({
   };
 
   const validateWaterSourceTab = async () => {
+    // Bulk applicants only see permit duration on this tab — skip all other water source fields.
+    if (isBulkApplicant) {
+      return form.trigger(['permitLengthYears'] as any);
+    }
     // Sector/cell are not shown for district water supply — skip their validation.
     const fields = isDistrictWaterSupply
       ? ['waterSourceType', 'nameSourceWater', 'waterSourceProvince', 'waterSourceDistrict', 'waterReliability', 'permitLengthYears']
@@ -2256,9 +2293,13 @@ export function ApplicationForm({
       }
         
       case "water-source": {
-        // Check required fields for water source tab only
-        // LAT/LONG are validated in Activity tab, not here
-        // Note: waterSourceType must be explicitly selected (no default), waterReliability has a default
+        const permitLength = form.watch('permitLengthYears') ?? form.getValues('permitLengthYears');
+        const hasPermitLength = typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15;
+
+        // Bulk applicants only see permit duration — that's the only gate.
+        if (isBulkApplicant) return !hasPermitLength;
+
+        // Non-bulk: check all visible water source fields.
         const waterSourceType = form.watch('waterSourceType') || form.getValues('waterSourceType') || '';
         const waterReliability = form.watch('waterReliability') || form.getValues('waterReliability') || 'water_always_available';
         const nameSourceWater = form.watch('nameSourceWater') || form.getValues('nameSourceWater') || '';
@@ -2266,7 +2307,7 @@ export function ApplicationForm({
         const waterSourceDistrict = form.watch('waterSourceDistrict') || form.getValues('waterSourceDistrict') || '';
         const waterSourceSector = form.watch('waterSourceSector') || form.getValues('waterSourceSector') || '';
         const waterSourceCell = form.watch('waterSourceCell') || form.getValues('waterSourceCell') || '';
-        
+
         const hasWaterSourceFields = isDistrictWaterSupply
           ? waterSourceType.trim() !== '' &&
             nameSourceWater.trim() !== '' &&
@@ -2280,10 +2321,6 @@ export function ApplicationForm({
             waterSourceSector.trim() !== '' &&
             waterSourceCell.trim() !== '' &&
             waterReliability.trim() !== '';
-          
-        // Check permit length (required for submission)
-        const permitLength = form.watch('permitLengthYears') ?? form.getValues('permitLengthYears');
-        const hasPermitLength = typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15;
 
         return !hasWaterSourceFields || !hasPermitLength;
       }
@@ -3910,6 +3947,9 @@ export function ApplicationForm({
                     </p>
                   </div>
 
+                  {/* Fields 10-14 hidden for bulk applicants — they use network-level data instead */}
+                  {!isBulkApplicant && (<>
+
                   {/* 10. Source of Water */}
                   <FormField
                     control={form.control}
@@ -4217,6 +4257,7 @@ export function ApplicationForm({
                     )}
                   />
 
+                  </>)}
                   {/* Requested Permit Duration */}
                   <FormField
                     control={form.control}
@@ -4224,7 +4265,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {tx("15. Requested Permit Duration (Years) *")}
+                          {tx(isBulkApplicant ? "10. Requested Permit Duration (Years) *" : "15. Requested Permit Duration (Years) *")}
                         </FormLabel>
                         <FormControl>
                           <Select 
