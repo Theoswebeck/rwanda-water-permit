@@ -37,7 +37,7 @@ export function getAnnexRequirementForActivity(
       return {
         annexTitle: "ANNEX B (Only for Water Supply)",
         attachments: [
-          req(applicationLetterLabel, "waterSupplyGeneralRequirements"),
+          req("Application letter addressed to RWB", "waterSupplyGeneralRequirements"),
         ],
       };
 
