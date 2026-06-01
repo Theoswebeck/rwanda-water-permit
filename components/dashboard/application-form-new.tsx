@@ -499,7 +499,9 @@ const applicationFormSchema = z.object({
 
   // District water supply has its own validation path (district + networks); skip abstraction/concession checks.
   if (selectedActivities[0] === "district_water_supply") {
-    if (!String(data.waterSourceDistrict ?? "").trim()) {
+    // For bulk applicants the non-bulk block above was skipped, so check district here.
+    // For non-bulk the non-bulk block already checked it — don't add a duplicate issue.
+    if (isBulkSubmit && !String(data.waterSourceDistrict ?? "").trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceDistrict"], message: "District is required for District Water Supply." });
     }
     return;
@@ -1480,6 +1482,9 @@ export function ApplicationForm({
         { latitude: "", longitude: "" },
         { latitude: "", longitude: "" },
       ]],
+      // Hidden flag read by superRefine to skip water-source field checks for bulk applicants.
+      // Initialised here to avoid a race window before the useEffect fires.
+      _isBulk: isBulkApplicant,
     };
 
     // Auto-fill from current user profile if available
@@ -1519,7 +1524,7 @@ export function ApplicationForm({
     }
 
     return merged;
-  }, [initialData, userProfile]);
+  }, [initialData, userProfile, isBulkApplicant]);
 
   const form = useForm<FormValues>({
     // Skip validation resolver in read-only mode - not needed and can cause initialization issues
@@ -3299,9 +3304,11 @@ export function ApplicationForm({
         console.log('📝 Modification changes detected:', modificationChangesData);
       }
       
-      // Include additionalDocuments and modification data in the submission
+      // Include additionalDocuments and modification data in the submission.
+      // Strip _isBulk — it's a client-side superRefine flag only, not a DB field.
+      const { _isBulk: _stripped, ...valuesWithoutInternalFlags } = values;
       const submissionData = {
-        ...values,
+        ...valuesWithoutInternalFlags,
         ...files,
         additionalDocuments,
         ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
@@ -6687,8 +6694,9 @@ export function ApplicationForm({
                           if (isModification && originalApplicationData) {
                             modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
                           }
+                          const { _isBulk: _s1, ...draftValues1 } = form.getValues();
                           const draftData = {
-                            ...form.getValues(),
+                            ...draftValues1,
                             ...files,
                             additionalDocuments,
                             ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
@@ -6721,9 +6729,11 @@ export function ApplicationForm({
                             modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
                           }
                           
-                          // Include additionalDocuments and modification data in the draft save
+                          // Include additionalDocuments and modification data in the draft save.
+                          // Strip _isBulk — it's a client-side superRefine flag only, not a DB field.
+                          const { _isBulk: _s2, ...draftValues2 } = form.getValues();
                           const draftData = {
-                            ...form.getValues(),
+                            ...draftValues2,
                             ...files,
                             additionalDocuments,
                             ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
@@ -6816,9 +6826,11 @@ export function ApplicationForm({
                                 modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
                               }
 
-                              // Automatically save as draft (like airline booking)
+                              // Automatically save as draft (like airline booking).
+                              // Strip _isBulk — it's a client-side superRefine flag only, not a DB field.
+                              const { _isBulk: _s3, ...draftValues3 } = form.getValues();
                               const draftData = {
-                                ...form.getValues(),
+                                ...draftValues3,
                                 ...files,
                                 additionalDocuments,
                                 ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
