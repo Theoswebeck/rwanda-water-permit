@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, Eye, Loader2 } from "lucide-react";
+import { AlertCircle, Download, Eye, Loader2 } from "lucide-react";
 import { InspectionDetail } from "@/components/inspection/inspection-detail";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
 import { InspectionWorkflowTimeline } from "@/components/inspection/inspection-workflow-timeline";
@@ -242,6 +242,12 @@ export function InspectionDetailTabs({ inspectionId, roleContext }: { inspection
                 Permit
               </Button>
             </Link>
+          ) : null}
+          {workflowStatus === "approved" ? (
+            <Button variant="outline" className="gap-2" onClick={() => window.print()}>
+              <Download className="h-4 w-4" />
+              Download Report
+            </Button>
           ) : null}
         </div>
       </div>

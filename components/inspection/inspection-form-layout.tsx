@@ -668,42 +668,33 @@ export function InspectionFormLayout({
           </div>
 
           <TabsContent value="identification" className="pt-6 space-y-6">
-            <SectionShell title="1. Permit Holder Identification">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <EditableLockedField label="Name" lockedValue={locked.permitHolderName} overrideKey="permitHolderName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField label="ID/TIN" lockedValue={locked.permitHolderId} overrideKey="permitHolderId" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                <EditableLockedField
-                  label="Residence"
-                  description="Permit holder's head office address"
-                  lockedValue={locked.residence}
-                  overrideKey="residence"
-                  overrides={overrides}
-                  canEdit={canEdit}
-                  onOverride={handleOverride}
-                />
-              </div>
-            </SectionShell>
+            {!manualInspection && (
+              <>
+                <SectionShell title="1. Permit Holder Identification">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <EditableLockedField label="Name" lockedValue={locked.permitHolderName} overrideKey="permitHolderName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                    <EditableLockedField label="ID/TIN" lockedValue={locked.permitHolderId} overrideKey="permitHolderId" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                    <EditableLockedField
+                      label="Residence"
+                      description="Permit holder's head office address"
+                      lockedValue={locked.residence}
+                      overrideKey="residence"
+                      overrides={overrides}
+                      canEdit={canEdit}
+                      onOverride={handleOverride}
+                    />
+                  </div>
+                </SectionShell>
 
-            <SectionShell title="2. Permit Particulars">
-              <div className={cn("grid grid-cols-1 gap-6", manualInspection ? "md:grid-cols-1" : "md:grid-cols-3")}>
-                {manualInspection ? (
-                  <EditableLockedField
-                    label="Permit number, if any"
-                    lockedValue={locked.permitNumber}
-                    overrideKey="permitNumber"
-                    overrides={overrides}
-                    canEdit={canEdit}
-                    onOverride={handleOverride}
-                  />
-                ) : (
-                  <>
+                <SectionShell title="2. Permit Particulars">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <ReadonlyField label="Number" value={locked.permitNumber} />
                     <ReadonlyField label="Issuance date" value={fmtPermitDate(locked.issuanceDate)} />
                     <ReadonlyField label="Expiration date" value={fmtPermitDate(locked.expirationDate)} />
-                  </>
-                )}
-              </div>
-            </SectionShell>
+                  </div>
+                </SectionShell>
+              </>
+            )}
 
             <SectionShell title="2.1 Project Location" description="Where the activity actually takes place. The project site can sit far from the water source.">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -776,47 +767,11 @@ export function InspectionFormLayout({
 
           <TabsContent value="specifics" className="pt-6 space-y-6">
             {template === "authorization" ? (
-              <SectionShell title="3. Water Abstraction (Authorization)" description="As per the official RWB checklist.">
+              <SectionShell title="3. Water Use Details" description="As per the official RWB checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <EditableLockedField label="Allowed quantity" lockedValue={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} overrideKey="allowedQuantity" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Allowed unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Authorized abstraction method" lockedValue={form.authorized_abstraction_method} overrideKey="authorizedAbstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <NumberField label="Actual quantity" value={form.actual_quantity ?? null} disabled={!canEdit} onChange={(v) => setField("actual_quantity", (v ?? undefined) as any)} />
-                  <div className="space-y-2">
-                    <Label className="text-sm">Actual unit</Label>
-                    <Select value={form.actual_unit ?? ""} onValueChange={(v) => setField("actual_unit", v as any)} disabled={!canEdit}>
-                      <SelectTrigger className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
-                        <SelectValue placeholder="Select unit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="m³/year">m³/year</SelectItem>
-                        <SelectItem value="m³/month">m³/month</SelectItem>
-                        <SelectItem value="m³/day">m³/day</SelectItem>
-                        <SelectItem value="l/s">l/s</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Actual method</Label>
-                    <Select value={form.actual_abstraction_method ?? ""} onValueChange={(v) => setField("actual_abstraction_method", v as any)} disabled={!canEdit}>
-                      <SelectTrigger className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800">
-                        <SelectValue placeholder="Select method" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pumping">Pumping</SelectItem>
-                        <SelectItem value="Gravity">Gravity</SelectItem>
-                        <SelectItem value="Diversion Channel">Diversion Channel</SelectItem>
-                        <SelectItem value="Dam/Reservoir">Dam/Reservoir</SelectItem>
-                        <SelectItem value="Borehole">Borehole</SelectItem>
-                        <SelectItem value="Spring Capture">Spring Capture</SelectItem>
-                        <SelectItem value="Hand Dug Well">Hand Dug Well</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <EditableLockedField label="Abstracted quantity" lockedValue={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} overrideKey="allowedQuantity" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Abstraction method" lockedValue={form.authorized_abstraction_method} overrideKey="authorizedAbstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 </div>
 
                 <div className="mt-6">
