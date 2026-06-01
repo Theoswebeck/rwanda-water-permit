@@ -170,9 +170,16 @@ Despite the names, `-uat` is staging and the non-`-uat` branch is prod. Push fix
 
 **CRITICAL — never merge or push one branch directly into the other.** The two branches have intentional differences (e.g. UAT uses a sandbox IremboPay fee of 20 RWF vs prod's 35,000 RWF). A direct push or merge would overwrite those differences. Always use cherry-pick.
 
+**MANDATORY: Run `npm run build` locally before every push.** A passing TypeScript check (`npx tsc --noEmit`) is not enough — Next.js webpack can catch additional errors (duplicate variable declarations, missing modules, etc.) that tsc misses. A broken build breaks the live site immediately.
+
+```bash
+npm run build          # must pass with no errors before any git push
+```
+
 **Updating staging (UAT):** The two branches diverge over time, so a direct push from prod to UAT will be rejected (non-fast-forward). Always cherry-pick onto UAT:
 
 ```bash
+npm run build                                              # verify build passes first
 git push origin chore/stage-unstaged-2026-03-01          # push prod first
 git fetch origin chore/stage-unstaged-2026-03-01-uat
 git checkout chore/stage-unstaged-2026-03-01-uat
