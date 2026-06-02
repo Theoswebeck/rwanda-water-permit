@@ -38,7 +38,14 @@ export function buildChildPermitNumber(parentPermitNumber: string, index: number
   if (slash) {
     return `${slash.seq}_${index}/RWB/${slash.year}`;
   }
-  // Fallback: append _index directly
+  // Generic fallback for non-numeric sequences such as the unassigned placeholder
+  // "XXXX/RWB/2026": insert the network index after the sequence segment (before
+  // "/RWB/"), producing "XXXX_1/RWB/2026" rather than appending it to the end.
+  const m = parentPermitNumber.trim().match(/^(.+?)\/RWB\/(.+)$/i);
+  if (m) {
+    return `${m[1]}_${index}/RWB/${m[2]}`;
+  }
+  // Last-resort fallback: append _index directly
   return `${parentPermitNumber}_${index}`;
 }
 
