@@ -464,11 +464,11 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ReadonlyField
-                label="Abstracted quantity"
-                value={inspection.allowed_quantity != null ? `${formatNum(inspection.allowed_quantity)} ${inspection.allowed_unit || 'm³/year'}` : null}
+              <ReadonlyField 
+                label="Allowed quantity" 
+                value={inspection.allowed_quantity != null ? `${formatNum(inspection.allowed_quantity)} ${inspection.allowed_unit || 'm³/year'}` : null} 
               />
-              <ReadonlyField label="Abstraction method" value={inspection.authorized_abstraction_method} />
+              <ReadonlyField label="Authorized abstraction method" value={inspection.authorized_abstraction_method} />
               <ReadonlyField 
                 label="Actual quantity" 
                 value={inspection.actual_quantity != null ? `${formatNum(inspection.actual_quantity)} ${inspection.actual_unit || 'm³/year'}` : null} 

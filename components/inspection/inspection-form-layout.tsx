@@ -696,7 +696,7 @@ export function InspectionFormLayout({
               </>
             )}
 
-            <SectionShell title={manualInspection ? "1. Project Location" : "2.1 Project Location"} description="Where the activity actually takes place. The project site can sit far from the water source.">
+            <SectionShell title="2.1 Project Location" description="Where the activity actually takes place. The project site can sit far from the water source.">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <EditableLockedField label="Province / City of Kigali" lockedValue={locked.permitLocationProvince} overrideKey="permitLocationProvince" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="District" lockedValue={locked.permitLocationDistrict} overrideKey="permitLocationDistrict" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
@@ -720,7 +720,7 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title={manualInspection ? "2. Water Source & Purpose" : "2.2 Water Source & Purpose"}>
+            <SectionShell title="2.2 Water Source & Purpose">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <EditableLockedField label="Water Source Type" lockedValue={locked.waterSourceType} overrideKey="waterSourceType" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Water Source Name" lockedValue={locked.waterSourceName} overrideKey="waterSourceName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
@@ -756,7 +756,7 @@ export function InspectionFormLayout({
             </SectionShell>
 
             {template === "concession" ? (
-              <SectionShell title={manualInspection ? "3. Concession Area" : "2.3 Concession Area"}>
+              <SectionShell title="2.3 Concession Area">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <EditableLockedField label="Concession Area (Ha)" lockedValue={locked.concessionAreaHa !== undefined ? String(locked.concessionAreaHa) : undefined} overrideKey="concessionAreaHa" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                   <EditableLockedField label="Boundary Points" lockedValue={locked.concessionBoundaries && locked.concessionBoundaries.length > 0 ? `${locked.concessionBoundaries.length} points defined` : undefined} overrideKey="concessionBoundaryPoints" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
