@@ -1467,6 +1467,14 @@ export default function ReviewApplicationPage() {
                       assessmentSubmittedDate={assessmentSubmittedDate}
                       recommendation={recommendation}
                       onRecommendationChange={() => {}}
+                      isBulkApplication={!!(application as any)?.is_bulk}
+                      bulkNetworks={
+                        (Array.isArray((initialFormData as any)?._assessorAdjustments?.bulkNetworks)
+                          ? (initialFormData as any)._assessorAdjustments.bulkNetworks
+                          : (application as any)?.bulk_networks) ?? []
+                      }
+                      bulkProvince={initialFormData?.waterSourceProvince ?? ""}
+                      bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
                     />
                   </div>
                 }
