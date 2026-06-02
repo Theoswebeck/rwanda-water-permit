@@ -854,12 +854,7 @@ function NewApplicationContent() {
     };
   }, [userProfile]);
 
-  // Bulk-ness comes from the user's profile flag for new applications, but a saved
-  // application also carries its own is_bulk flag. Fall back to it (mirroring the
-  // staff/view pages) so a previously-created bulk application still simplifies the
-  // Water Source tab even if the profile flag is unset at load time.
-  const isBulkApplicant =
-    !!(userProfile as any)?.is_bulk_applicant || !!(currentApplication as any)?.is_bulk;
+  const isBulkApplicant = !!(userProfile as any)?.is_bulk_applicant;
 
   // ⚡ PERFORMANCE: Memoize submit handler to prevent re-renders
   const handleSubmitApplication = useCallback(async (formData: any, status: 'submitted') => {
