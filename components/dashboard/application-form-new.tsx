@@ -1544,13 +1544,17 @@ export function ApplicationForm({
     try {
       console.log('💾 Saving application after payment success...');
       
-      // Prepare complete form data
+      // Prepare complete form data.
+      // NOTE: bulkNetworks/bulk_district/is_bulk are NOT form fields (bulkNetworks is
+      // separate React state), so they must be merged in explicitly — otherwise
+      // district water supply / bulk data is lost on payment submission.
       const formData = {
         ...form.getValues(),
         ...files,
-        additionalDocuments
+        additionalDocuments,
+        ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
       };
-      
+
       // Call API to save application and link to payment
       const response = await fetch(`/api/payments/${paymentId}/complete`, {
         method: 'POST',
@@ -6661,7 +6665,8 @@ export function ApplicationForm({
                         formData={!currentApplication?.id ? {
                           ...form.getValues(),
                           ...files,
-                          additionalDocuments
+                          additionalDocuments,
+                          ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
                         } : undefined}
                         onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
                         isSavingApplication={isLoading}
