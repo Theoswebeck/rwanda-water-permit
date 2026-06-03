@@ -6818,18 +6818,18 @@ export function ApplicationForm({
                                 } : {}),
                               };
 
-                              // Navigate to payment tab immediately; save happens in the background
+                              // Persist the draft BEFORE navigating to payment.
+                              // onSaveAsDraft creates the application AND awaits the document
+                              // upload (uploadApplicationDocuments). Navigating/paying before it
+                              // finishes loses files — the payment payload is JSON and cannot
+                              // carry File objects, so documents must be persisted via the save.
                               setPaymentPrepError(null);
-                              setActiveTab('payment');
-                              
-                              // Scroll to top for better UX
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              await onSaveAsDraft(draftData, 'draft');
 
-                              // Save in background (do not block navigation)
-                              void onSaveAsDraft(draftData, 'draft').catch((error) => {
-                                console.error('Error saving application:', error);
-                                setPaymentPrepError('Please try saving your application again before proceeding to payment.');
-                              });
+                              // Only after everything (incl. documents + bulk networks) is saved
+                              // do we move to payment, which then uses the saved application id.
+                              setActiveTab('payment');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
                             } catch (error) {
                               console.error('Error saving application:', error);
                               alert('Please try saving your application again before proceeding to payment.');
