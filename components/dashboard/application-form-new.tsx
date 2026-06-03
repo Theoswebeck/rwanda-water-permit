@@ -471,10 +471,11 @@ const applicationFormSchema = z.object({
   const selectedActivities = Array.isArray(data.intendedActivities) ? data.intendedActivities : [];
   if (!selectedActivities.length) return; // No validation if no activity selected
 
-  // Water source fields (province, district, sector, cell, name) are required for non-bulk applicants.
-  // Bulk applicants hide those fields in the UI and use network-level location data instead.
-  const isBulkSubmit = data._isBulk === true;
-  if (!isBulkSubmit) {
+  // Water source fields (name, province, district, sector, cell) are required for every
+  // activity EXCEPT District Water Supply, which hides those fields and uses network-level
+  // location data instead. Keyed on the selected activity, not the bulk profile flag.
+  const isDistrictWaterSupplySubmit = selectedActivities[0] === "district_water_supply";
+  if (!isDistrictWaterSupplySubmit) {
     if (!String(data.nameSourceWater ?? "").trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nameSourceWater"], message: "Water source name is required." });
     }
@@ -484,13 +485,11 @@ const applicationFormSchema = z.object({
     if (!String(data.waterSourceDistrict ?? "").trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceDistrict"], message: "Water source district is required." });
     }
-    if (selectedActivities[0] !== "district_water_supply") {
-      if (!String(data.waterSourceSector ?? "").trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceSector"], message: "Water source sector is required." });
-      }
-      if (!String(data.waterSourceCell ?? "").trim()) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceCell"], message: "Water source cell is required." });
-      }
+    if (!String(data.waterSourceSector ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceSector"], message: "Water source sector is required." });
+    }
+    if (!String(data.waterSourceCell ?? "").trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceCell"], message: "Water source cell is required." });
     }
   }
 
@@ -499,9 +498,8 @@ const applicationFormSchema = z.object({
 
   // District water supply has its own validation path (district + networks); skip abstraction/concession checks.
   if (selectedActivities[0] === "district_water_supply") {
-    // For bulk applicants the non-bulk block above was skipped, so check district here.
-    // For non-bulk the non-bulk block already checked it — don't add a duplicate issue.
-    if (isBulkSubmit && !String(data.waterSourceDistrict ?? "").trim()) {
+    // The block above is skipped for district, so validate the district selection here (for everyone).
+    if (!String(data.waterSourceDistrict ?? "").trim()) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["waterSourceDistrict"], message: "District is required for District Water Supply." });
     }
     return;
@@ -1042,14 +1040,10 @@ export function ApplicationForm({
   const [bulkNetworks, setBulkNetworks] = useState<BulkNetworkRow[]>(() => {
     const saved = (initialData as any)?.bulk_networks ?? (currentApplication as any)?.bulk_networks;
     if (Array.isArray(saved) && saved.length > 0) return saved as BulkNetworkRow[];
-    if (!isBulkApplicant) return [];
-    return Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1));
+    return [];
   });
-  useEffect(() => {
-    if (isBulkApplicant && bulkNetworks.length === 0) {
-      setBulkNetworks(Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1)));
-    }
-  }, [isBulkApplicant]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Seeding of empty rows happens once the District Water Supply activity is selected;
+  // see the isDistrictWaterSupply-driven effect below (declared after isDistrictWaterSupply).
   const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
@@ -1684,10 +1678,13 @@ export function ApplicationForm({
 
   const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
 
-  // Keep the hidden _isBulk flag in sync so superRefine can skip water-source field checks for bulk applicants.
+  // Seed 5 empty network rows when District Water Supply is selected and the table is empty.
+  // Keyed on the selected activity (not the bulk profile flag) so any user gets the rows.
   useEffect(() => {
-    form.setValue('_isBulk', isBulkApplicant);
-  }, [isBulkApplicant, form]);
+    if (isDistrictWaterSupply && bulkNetworks.length === 0 && !readOnly) {
+      setBulkNetworks(Array.from({ length: 5 }, (_, i) => emptyBulkRow(i + 1)));
+    }
+  }, [isDistrictWaterSupply]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-set waterUseCategory based on selected activity — concession activities lock to "concession",
   // all others lock to "abstraction". No manual override allowed.
@@ -1830,8 +1827,8 @@ export function ApplicationForm({
   };
 
   const validateWaterSourceTab = async () => {
-    // Bulk applicants only see permit duration on this tab — skip all other water source fields.
-    if (isBulkApplicant) {
+    // District Water Supply only shows permit duration on this tab — skip all other water source fields.
+    if (isDistrictWaterSupply) {
       return form.trigger(['permitLengthYears'] as any);
     }
     // Sector/cell are not shown for district water supply — skip their validation.
@@ -2187,8 +2184,8 @@ export function ApplicationForm({
   };
 
   const getTabs = () => {
-    // Bulk applicants skip the land-ownership tab entirely
-    if (isBulkApplicant) {
+    // District Water Supply skips the land-ownership tab entirely
+    if (isDistrictWaterSupply) {
       return shouldShowPaymentTab
         ? ["applicant-info", "intended-activity", "water-source", "payment"]
         : ["applicant-info", "intended-activity", "water-source"];
@@ -2302,10 +2299,10 @@ export function ApplicationForm({
         const permitLength = form.watch('permitLengthYears') ?? form.getValues('permitLengthYears');
         const hasPermitLength = typeof permitLength === 'number' && permitLength >= 1 && permitLength <= 15;
 
-        // Bulk applicants only see permit duration — that's the only gate.
-        if (isBulkApplicant) return !hasPermitLength;
+        // District Water Supply only shows permit duration — that's the only gate.
+        if (isDistrictWaterSupply) return !hasPermitLength;
 
-        // Non-bulk: check all visible water source fields.
+        // Non-district: check all visible water source fields.
         const waterSourceType = form.watch('waterSourceType') || form.getValues('waterSourceType') || '';
         const waterReliability = form.watch('waterReliability') || form.getValues('waterReliability') || 'water_always_available';
         const nameSourceWater = form.watch('nameSourceWater') || form.getValues('nameSourceWater') || '';
@@ -3458,7 +3455,7 @@ export function ApplicationForm({
                     <Droplet className="h-4 w-4" />
                     <span className="hidden sm:inline">{tx("Water Source")}</span>
                   </TabsTrigger>
-                  {!isBulkApplicant && (
+                  {!isDistrictWaterSupply && (
                     <TabsTrigger value="land-ownership" className="flex items-center gap-1 text-xs">
                       <Globe className="h-4 w-4" />
                       <span className="hidden sm:inline">{tx("Land")}</span>
@@ -3955,8 +3952,8 @@ export function ApplicationForm({
                     </p>
                   </div>
 
-                  {/* Fields 10-14 hidden for bulk applicants — they use network-level data instead */}
-                  {!isBulkApplicant && (<>
+                  {/* Fields 10-14 hidden for District Water Supply — it uses network-level data instead */}
+                  {!isDistrictWaterSupply && (<>
 
                   {/* 10. Source of Water */}
                   <FormField
@@ -4273,7 +4270,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {tx(isBulkApplicant ? "10. Requested Permit Duration (Years) *" : "15. Requested Permit Duration (Years) *")}
+                          {tx(isDistrictWaterSupply ? "10. Requested Permit Duration (Years) *" : "15. Requested Permit Duration (Years) *")}
                         </FormLabel>
                         <FormControl>
                           <Select 
@@ -4355,7 +4352,7 @@ export function ApplicationForm({
                               { value: "mining", label: tx("Mining") },
                               { value: "recreation_activities", label: tx("Recreational activities") },
                               { value: "water_supply", label: tx("Water supply") },
-                              ...(isBulkApplicant ? [{ value: "district_water_supply", label: tx("District Water Supply") }] : []),
+                              { value: "district_water_supply", label: tx("District Water Supply") },
                               { value: "other", label: tx("Other (specify)") },
                             ].map((opt) => (
                               <div key={opt.value} className="flex items-center gap-3">
@@ -4372,8 +4369,8 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* Water Use Category – auto-derived from selected activity, read-only */}
-                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && (
+                  {/* Water Use Category – auto-derived from selected activity, read-only. Hidden for District Water Supply. */}
+                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isDistrictWaterSupply && (
                     <div className="space-y-1">
                       <p className="text-base font-medium">{tx("Water Use Category")}</p>
                       <p className="text-sm text-muted-foreground mb-2">
