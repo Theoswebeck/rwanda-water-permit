@@ -1046,6 +1046,9 @@ export function ApplicationForm({
   // see the isDistrictWaterSupply-driven effect below (declared after isDistrictWaterSupply).
   const [isTabSwitching, setIsTabSwitching] = useState(false);
   const [paymentPrepError, setPaymentPrepError] = useState<string | null>(null);
+  // The application saved just before entering the payment tab. Fed to PaymentTab directly so
+  // it always pays by application_id (never the application_data JSON path, which drops files).
+  const [paymentApplication, setPaymentApplication] = useState<any>(null);
   const [files, setFiles] = useState<Record<string, File | null>>({});
   const [uploadedFileUrls, setUploadedFileUrls] = useState<Record<string, string>>({});
   const [locale, setLocale] = useState<AppLanguage>("en");
@@ -1681,6 +1684,11 @@ export function ApplicationForm({
     : (watchedWaterUseCategory ?? "abstraction");
 
   const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
+
+  // Application used by the payment tab: the page-owned currentApplication if present, else the
+  // draft we persisted just before navigating to payment. Guarantees PaymentTab has an id to pay
+  // against (application_id) instead of falling back to the application_data JSON path.
+  const effectivePaymentApplication = currentApplication ?? paymentApplication;
 
   // Seed 5 empty network rows when District Water Supply is selected and the table is empty.
   // Keyed on the selected activity (not the bulk profile flag) so any user gets the rows.
@@ -2520,14 +2528,39 @@ export function ApplicationForm({
     }
   };
 
+  // Persist the draft (creating the application AND awaiting document upload) before the
+  // payment tab is shown, then capture the saved application so PaymentTab pays by
+  // application_id. Returns the saved application, or throws on failure.
+  const persistDraftBeforePayment = async () => {
+    let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
+    if (isModification && originalApplicationData) {
+      modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
+    }
+    // Strip _isBulk — it's a client-side superRefine flag only, not a DB field.
+    const { _isBulk: _omit, ...draftValues } = form.getValues();
+    const draftData = {
+      ...draftValues,
+      ...files,
+      additionalDocuments,
+      ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
+      ...(isModification ? {
+        isModification: true,
+        modificationChanges: modificationChangesData,
+      } : {}),
+    };
+    const saved = await onSaveAsDraft(draftData, 'draft');
+    if (saved?.id) setPaymentApplication(saved);
+    return saved;
+  };
+
   const handleNextTab = async () => {
     const tabs = getTabs();
     const currentIndex = tabs.indexOf(activeTab);
-    
+
     if (currentIndex >= tabs.length - 1) return;
 
     let isValid = false;
-    
+
     // Validate current tab before proceeding
     switch (activeTab) {
       case "applicant-info":
@@ -2546,10 +2579,27 @@ export function ApplicationForm({
         isValid = true;
     }
 
-    if (isValid) {
-      setValidationError(null);
-      setActiveTab(tabs[currentIndex + 1]);
+    if (!isValid) return;
+
+    setValidationError(null);
+    const nextTab = tabs[currentIndex + 1];
+
+    // When the NEXT tab is payment in an applicant payment-widget flow, persist the draft
+    // (incl. document upload) first so PaymentTab pays by application_id and never via the
+    // application_data JSON path (which cannot carry uploaded files). Some flows — notably
+    // District Water Supply — skip land-ownership and reach payment via this Next button.
+    if (nextTab === 'payment' && shouldShowApplicantPaymentWidgetTab && !readOnly) {
+      setPaymentPrepError(null);
+      try {
+        await persistDraftBeforePayment();
+      } catch (error) {
+        console.error('Error saving application before payment:', error);
+        setValidationError('Please try saving your application again before proceeding to payment.');
+        return; // Do not enter payment without a persisted application
+      }
     }
+
+    setActiveTab(nextTab);
   };
 
   // Reset form with initial data when it becomes available
@@ -6658,37 +6708,23 @@ export function ApplicationForm({
                       />
                     ) : (
                       <PaymentTab
-                        application={currentApplication}
-                        formData={!currentApplication?.id ? {
+                        application={effectivePaymentApplication}
+                        formData={!effectivePaymentApplication?.id ? {
                           ...form.getValues(),
                           ...files,
                           additionalDocuments,
                           ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
                         } : undefined}
-                        onPaymentComplete={!currentApplication?.id ? handlePaymentComplete : undefined}
+                        onPaymentComplete={!effectivePaymentApplication?.id ? handlePaymentComplete : undefined}
                         isSavingApplication={isLoading}
                         saveError={paymentPrepError}
                         autoRedirectOnCompletion={!readOnly && mode !== "view"}
                         completionRedirectPath={mode === "create" && !isModification ? "/dashboard" : "/dashboard?tab=applications"}
                         onRetrySave={() => {
                           setPaymentPrepError(null);
-                          // Compute modification changes if in modification mode
-                          let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
-                          if (isModification && originalApplicationData) {
-                            modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
-                          }
-                          const { _isBulk: _s1, ...draftValues1 } = form.getValues();
-                          const draftData = {
-                            ...draftValues1,
-                            ...files,
-                            additionalDocuments,
-                            ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
-                            ...(isModification ? {
-                              isModification: true,
-                              modificationChanges: modificationChangesData,
-                            } : {}),
-                          };
-                          void onSaveAsDraft(draftData, 'draft').catch((error) => {
+                          // Re-persist the draft (incl. documents) and capture the saved app so
+                          // payment uses application_id, not the application_data JSON path.
+                          void persistDraftBeforePayment().catch((error) => {
                             console.error('Error saving application:', error);
                             setPaymentPrepError('Please try saving your application again before proceeding to payment.');
                           });
@@ -6803,33 +6839,12 @@ export function ApplicationForm({
                                 return;
                               }
 
-                              // Compute modification changes if in modification mode
-                              let modificationChangesData: Record<string, { previous: any; current: any }> | undefined;
-                              if (isModification && originalApplicationData) {
-                                modificationChangesData = computeModificationChanges(originalApplicationData, form.getValues());
-                              }
-
-                              // Automatically save as draft (like airline booking).
-                              // Strip _isBulk — it's a client-side superRefine flag only, not a DB field.
-                              const { _isBulk: _s3, ...draftValues3 } = form.getValues();
-                              const draftData = {
-                                ...draftValues3,
-                                ...files,
-                                additionalDocuments,
-                                ...(isDistrictWaterSupply && { bulk_networks: bulkNetworks, bulk_district: form.getValues("waterSourceDistrict"), is_bulk: true }),
-                                ...(isModification ? {
-                                  isModification: true,
-                                  modificationChanges: modificationChangesData,
-                                } : {}),
-                              };
-
-                              // Persist the draft BEFORE navigating to payment.
-                              // onSaveAsDraft creates the application AND awaits the document
-                              // upload (uploadApplicationDocuments). Navigating/paying before it
-                              // finishes loses files — the payment payload is JSON and cannot
-                              // carry File objects, so documents must be persisted via the save.
+                              // Persist the draft BEFORE navigating to payment, capturing the
+                              // saved application so PaymentTab pays by application_id. The save
+                              // awaits the document upload, so files are persisted first; the
+                              // payment payload is JSON and cannot carry File objects.
                               setPaymentPrepError(null);
-                              await onSaveAsDraft(draftData, 'draft');
+                              await persistDraftBeforePayment();
 
                               // Only after everything (incl. documents + bulk networks) is saved
                               // do we move to payment, which then uses the saved application id.
