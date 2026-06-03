@@ -2264,6 +2264,20 @@ export function ApplicationForm({
         }
       }
 
+      // Entering payment (e.g. clicking the Payment tab header directly): persist the draft
+      // — incl. document upload — first, so PaymentTab pays by application_id, never the
+      // application_data JSON path that drops uploaded files. readOnly already returned above.
+      if (nextTab === 'payment' && shouldShowApplicantPaymentWidgetTab) {
+        setPaymentPrepError(null);
+        try {
+          await persistDraftBeforePayment();
+        } catch (error) {
+          console.error('Error saving application before payment:', error);
+          setValidationError('Please try saving your application again before proceeding to payment.');
+          return;
+        }
+      }
+
       setActiveTab(nextTab);
     } finally {
       setIsTabSwitching(false);
@@ -3335,6 +3349,16 @@ export function ApplicationForm({
       // This also closes the "press Enter to submit" loophole.
       if (!isStaffView && shouldShowApplicantPaymentWidgetTab) {
         setValidationError("Payment is required before submission. Please continue to the Payment tab to complete payment.");
+        // Persist the draft (incl. document upload) before showing payment so PaymentTab pays
+        // by application_id, never the application_data JSON path that drops uploaded files.
+        setPaymentPrepError(null);
+        try {
+          await persistDraftBeforePayment();
+        } catch (error) {
+          console.error('Error saving application before payment:', error);
+          setValidationError('Please try saving your application again before proceeding to payment.');
+          return;
+        }
         setActiveTab("payment");
         window.scrollTo({ top: 0, behavior: "smooth" });
         setTimeout(() => setValidationError(null), 7000);
