@@ -53,14 +53,19 @@ and the `application_data` fallback.
 
 1. **New local state:** `const [paymentApplication, setPaymentApplication] = useState<any>(null)`.
 
-2. **Save-before-payment on the "Next" path:** in `handleNextTab`, when the next tab is
-   `payment` and it's an applicant payment-widget flow (`shouldShowApplicantPaymentWidgetTab`
-   && `!readOnly`), build the draft payload, `await onSaveAsDraft(...)`, capture the returned
-   app via `setPaymentApplication(saved)`, and only then navigate. If the save throws, show an
-   error and do **not** navigate.
+2. **Single helper `persistDraftBeforePayment()`** builds the draft payload, `await
+   onSaveAsDraft(...)`, captures the returned app via `setPaymentApplication(saved)`, returns it.
 
-3. **Capture on the "Continue to Payment" button:** the existing land-ownership → payment
-   handler already awaits the save; capture its return value into `paymentApplication` too.
+3. **Guard EVERY path that enters the payment tab** so it persists first (and aborts on save
+   failure). There are five:
+   - `handleNextTab` — the **Next** button (District Water Supply skips land-ownership and
+     reaches payment here).
+   - `handleTabChange` — clicking the **Payment tab header** directly.
+   - `handleFormSubmit` — the **Enter-key** submit guard for payment-required apps.
+   - the land-ownership **"Continue to Payment"** button.
+   - `onRetrySave` inside PaymentTab.
+   All are gated on `shouldShowApplicantPaymentWidgetTab` (and `!readOnly`, already handled in
+   `handleTabChange`/`handleFormSubmit`).
 
 4. **Effective application:** define
    `const effectivePaymentApplication = currentApplication ?? paymentApplication;`
