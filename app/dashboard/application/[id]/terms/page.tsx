@@ -27,7 +27,7 @@ import { supabase } from "@/lib/supabase";
 // service role to UPDATE, so syncs must go through the server-side API route.
 import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
-import { buildChildPermitNumber } from "@/lib/permit-number-utils";
+import { buildChildPermitNumber, isRealNetworkRow } from "@/lib/permit-number-utils";
 import { addPermitExpiry } from "@/lib/date-math";
 import { splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import {
@@ -40,20 +40,6 @@ import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import type { AppLanguage } from "@/lib/i18n/language";
 import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
-
-/**
- * A real distribution network row (vs. an empty seeded placeholder). The networks table seeds
- * blank rows; the applicant fills however many they need. Only rows with a name AND a capacity
- * become child permits — permits.water_allowance (= capacity) is NOT NULL, so a blank row would
- * 500 on insert. Filled rows are validated complete at submission, so this only drops blanks.
- */
-function isRealNetworkRow(n: any): boolean {
-  if (!n) return false;
-  const hasName = String(n.network_name ?? "").trim() !== "";
-  const cap = n.capacity_m3_day;
-  const hasCapacity = cap != null && String(cap).trim() !== "" && Number.isFinite(Number(cap));
-  return hasName && hasCapacity;
-}
 
 function renderInlineBold(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
@@ -1840,7 +1826,7 @@ export default function TermsConditionsPage() {
                               </div>
                             )}
 
-                            {(termsApplication as any)?.is_bulk && Array.isArray((termsApplication as any)?.bulk_networks) && (termsApplication as any).bulk_networks.length > 0 && (
+                            {(termsApplication as any)?.is_bulk && Array.isArray((termsApplication as any)?.bulk_networks) && (termsApplication as any).bulk_networks.filter(isRealNetworkRow).length > 0 && (
                               <div className="mt-6">
                                 <Separator className="mb-4" />
                                 <p className="text-sm font-semibold text-gray-800 mb-3">Annex — List of Authorized Distribution Networks</p>

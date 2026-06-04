@@ -27,7 +27,7 @@ import {
   resolveAdminLocation,
   type PermitApplication,
 } from "@/lib/permit/permit-text-data";
-import { buildChildPermitNumber } from "@/lib/permit-number-utils";
+import { buildChildPermitNumber, isRealNetworkRow } from "@/lib/permit-number-utils";
 import { resolveSlotText } from "@/lib/document-slots";
 import type { SlotResolverContext } from "@/lib/document-slots";
 import { parseBoldRuns, stripBoldMarkers } from "@/lib/document-slots/bold-markers";
@@ -769,8 +769,10 @@ function resolveBulkNetworks(app: PermitApplication): Array<Record<string, unkno
   const notes = getEffectiveInternalNotes(app.internal_notes);
   const adjNetworks = (notes as Record<string, unknown> | null)?._assessorAdjustments as Record<string, unknown> | null | undefined;
   const adj = adjNetworks?.bulkNetworks;
-  if (Array.isArray(adj) && adj.length > 0) return adj as Array<Record<string, unknown>>;
-  if (Array.isArray(app.bulk_networks) && app.bulk_networks.length > 0) return app.bulk_networks as Array<Record<string, unknown>>;
+  // Filter out empty placeholder rows so the PDF annex + child-permit numbering match the
+  // child permits actually issued by the terms page (both use isRealNetworkRow).
+  if (Array.isArray(adj) && adj.length > 0) return (adj as Array<Record<string, unknown>>).filter(isRealNetworkRow);
+  if (Array.isArray(app.bulk_networks) && app.bulk_networks.length > 0) return (app.bulk_networks as Array<Record<string, unknown>>).filter(isRealNetworkRow);
   return [];
 }
 

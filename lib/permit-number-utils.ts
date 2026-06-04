@@ -30,6 +30,22 @@ export function parseChildPermitNumber(
 }
 
 /**
+ * A real distribution network row, vs. an empty seeded placeholder. The bulk networks table
+ * seeds blank rows; the applicant fills only what they need. Only rows with a name AND a numeric
+ * capacity become child permits — permits.water_allowance (= capacity) is NOT NULL, so a blank
+ * row would 500 on insert. Filled rows are validated complete at submission, so this only drops
+ * blank seeded rows. Used by BOTH the terms page (DB child permits) and the permit PDF so their
+ * annexes and child-permit numbering stay in sync.
+ */
+export function isRealNetworkRow(n: any): boolean {
+  if (!n) return false;
+  const hasName = String(n.network_name ?? "").trim() !== "";
+  const cap = n.capacity_m3_day;
+  const hasCapacity = cap != null && String(cap).trim() !== "" && Number.isFinite(Number(cap));
+  return hasName && hasCapacity;
+}
+
+/**
  * Given a parent permit number ("000918/RWB/2026") and a row index,
  * returns the child permit number "000918_1/RWB/2026".
  */
