@@ -1126,6 +1126,7 @@ export default function ApproverApplicationPage() {
                           recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : recommendedVolumeM3}
                           readOnly={true}
                           isConcession={rt === "concession"}
+                          isBulk={!!(application as any)?.is_bulk}
                         />
                         
                         {/* Assessment Report Form */}

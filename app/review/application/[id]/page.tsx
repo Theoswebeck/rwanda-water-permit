@@ -1455,6 +1455,7 @@ export default function ReviewApplicationPage() {
                       recommendedVolumeM3={(application as any).is_renewal ? renewalRecommendedVolumeM3 : recommendedVolumeM3}
                       readOnly={true}
                       isConcession={reportType === "concession"}
+                      isBulk={!!(application as any)?.is_bulk}
                     />
                     
                     {/* Assessment Report Form */}

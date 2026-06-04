@@ -2602,6 +2602,7 @@ export default function AssessmentApplicationPage() {
                             durationSaving={permitLengthSaving}
                             volumeSaving={volumeSaving}
                             isConcession={rt === "concession"}
+                            isBulk={!!(application as any)?.is_bulk}
                           />
                           
                           {/* Assessment Report Form */}

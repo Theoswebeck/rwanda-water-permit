@@ -44,6 +44,9 @@ interface AssessorRecommendationsProps {
 
   /** When true, show "Surface concession area" labels instead of volume labels. */
   isConcession?: boolean;
+
+  /** When true (District Water Supply), hide the output volume row — volume is per-network. */
+  isBulk?: boolean;
 }
 
 type ConfirmState =
@@ -62,6 +65,7 @@ export function AssessorRecommendations({
   durationSaving = false,
   volumeSaving = false,
   isConcession = false,
+  isBulk = false,
 }: AssessorRecommendationsProps) {
   // Draft state — what the user has typed/picked but not yet saved.
   const savedDurationStr = recommendedDurationYears != null ? String(recommendedDurationYears) : "";
@@ -213,7 +217,8 @@ export function AssessorRecommendations({
             </div>
           </div>
 
-          {/* Volume row */}
+          {/* Volume row — hidden for District Water Supply (volume is captured per-network) */}
+          {!isBulk && (
           <div className="grid grid-cols-3">
             <div className="px-4 py-4 flex items-center">
               <Label className="text-sm font-medium">{volumeFieldLabel}</Label>
@@ -269,6 +274,7 @@ export function AssessorRecommendations({
               )}
             </div>
           </div>
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground mt-3">
