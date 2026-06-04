@@ -566,9 +566,13 @@ export default function AssessmentApplicationPage() {
   const missingFieldReportRequirements = (() => {
     if (isReadOnly || isTransferApp) return [] as string[];
     const missing: string[] = [];
+    // District Water Supply (is_bulk) hides assessment sections 2–5, so the fields in those
+    // sections are not required to complete the report.
+    const isBulk = !!(application as any)?.is_bulk;
 
     if (!inspectionDate) missing.push("Field Visit Details: Assessment date is required");
 
+    if (!isBulk) {
     if (reportTypeForAssessment === "abstraction") {
       const sourceFlowValue = assessmentReportData.sourceFlowValue ?? assessmentReportData.sourceFlowM3Day;
       const sourceFlowUnit = assessmentReportData.sourceFlowUnit ?? "m3/day";
@@ -607,6 +611,7 @@ export default function AssessmentApplicationPage() {
     if (!hasText(assessmentReportData.pollutionDescription)) {
       missing.push("Section 6: Pollution description");
     }
+    } // end !isBulk: assessment sections 2–5 are hidden for District Water Supply
     if (hasInvalidPhoneCharacters(assessmentReportData.contactTel)) {
       missing.push("Section 1: Contact telephone must not contain letters or other text");
     }

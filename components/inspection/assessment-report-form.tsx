@@ -434,7 +434,43 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Section 2: Water Source */}
+      {/* 2. Water Supply Networks (District Water Supply only) — moved here so district
+          reports read 1 → 2 → 3 → 4. Hidden for every other activity (isBulkApplication). */}
+      {isBulkApplication && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Droplet className="h-5 w-5" />
+              2. Water Supply Networks
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <BulkNetworksTable
+              rows={localBulkNetworks}
+              onChange={readOnly ? undefined : setLocalBulkNetworks}
+              mode={readOnly ? "readonly" : "assessor"}
+              province={bulkProvince}
+              district={bulkDistrict}
+            />
+            {onBulkNetworksSave && !readOnly && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => onBulkNetworksSave(localBulkNetworks)}
+                  disabled={bulkNetworksSaving}
+                >
+                  {bulkNetworksSaving
+                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    : <Save className="h-4 w-4 mr-2" />}
+                  Save Network Adjustments
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Section 2: Water Source — hidden for District Water Supply */}
+      {!isBulkApplication && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -590,9 +626,10 @@ export function AssessmentReportForm({
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* Section 3: Activity-Specific Fields */}
-      {reportType === 'abstraction' ? (
+      {/* Section 3 & 4: Activity-Specific Fields — hidden for District Water Supply */}
+      {!isBulkApplication && (reportType === 'abstraction' ? (
         <>
           {/* Amount of water to be abstracted */}
           <Card>
@@ -763,9 +800,10 @@ export function AssessmentReportForm({
             </CardContent>
           </Card>
         </>
-      )}
+      ))}
 
-      {/* Section 5: Planned wastewater management system */}
+      {/* Section 5: Planned wastewater management system — hidden for District Water Supply */}
+      {!isBulkApplication && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -798,13 +836,14 @@ export function AssessmentReportForm({
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {/* Section 6: Assessment Report Summary */}
+      {/* Section 6: Assessment Report Summary (renumbered to 3 for District Water Supply) */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            6. Assessment Report Completion
+            {isBulkApplication ? "3" : "6"}. Assessment Report Completion
           </CardTitle>
           <CardDescription>
             Report completion details
@@ -836,47 +875,13 @@ export function AssessmentReportForm({
         </CardContent>
       </Card>
 
-      {/* Bulk Water Supply Networks (assessor edits values only) */}
-      {isBulkApplication && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Droplet className="h-5 w-5" />
-              Water Supply Networks
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <BulkNetworksTable
-              rows={localBulkNetworks}
-              onChange={readOnly ? undefined : setLocalBulkNetworks}
-              mode={readOnly ? "readonly" : "assessor"}
-              province={bulkProvince}
-              district={bulkDistrict}
-            />
-            {onBulkNetworksSave && !readOnly && (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() => onBulkNetworksSave(localBulkNetworks)}
-                  disabled={bulkNetworksSaving}
-                >
-                  {bulkNetworksSaving
-                    ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    : <Save className="h-4 w-4 mr-2" />}
-                  Save Network Adjustments
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Section 7: Assessor Recommendation */}
       {recommendation !== undefined && onRecommendationChange && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ThumbsUp className="h-5 w-5" />
-              7. Assessor Recommendation <span className="text-destructive">*</span>
+              {isBulkApplication ? "4" : "7"}. Assessor Recommendation <span className="text-destructive">*</span>
             </CardTitle>
             <CardDescription>
               Based on your field assessment, provide your recommendation
