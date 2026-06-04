@@ -41,6 +41,20 @@ import type { AppLanguage } from "@/lib/i18n/language";
 import { getPreferredLanguage, subscribeToLanguageChanges } from "@/lib/i18n/language";
 import { translateText } from "@/lib/i18n/translator";
 
+/**
+ * A real distribution network row (vs. an empty seeded placeholder). The networks table seeds
+ * blank rows; the applicant fills however many they need. Only rows with a name AND a capacity
+ * become child permits — permits.water_allowance (= capacity) is NOT NULL, so a blank row would
+ * 500 on insert. Filled rows are validated complete at submission, so this only drops blanks.
+ */
+function isRealNetworkRow(n: any): boolean {
+  if (!n) return false;
+  const hasName = String(n.network_name ?? "").trim() !== "";
+  const cap = n.capacity_m3_day;
+  const hasCapacity = cap != null && String(cap).trim() !== "" && Number.isFinite(Number(cap));
+  return hasName && hasCapacity;
+}
+
 function renderInlineBold(text: string): React.ReactNode {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   if (parts.length === 1) return text;
@@ -1309,11 +1323,12 @@ export default function TermsConditionsPage() {
         // Validate bulk applications have at least one network before issuing
         if (applicationData.is_bulk) {
           const adjNetworks = parsedNotes?._assessorAdjustments?.bulkNetworks;
-          const networkCount = Array.isArray(adjNetworks)
-            ? adjNetworks.length
+          const networkSource = Array.isArray(adjNetworks)
+            ? adjNetworks
             : Array.isArray(applicationData.bulk_networks)
-              ? applicationData.bulk_networks.length
-              : 0;
+              ? applicationData.bulk_networks
+              : [];
+          const networkCount = networkSource.filter(isRealNetworkRow).length;
           if (networkCount === 0) {
             throw new Error('Cannot issue a bulk permit with no distribution networks. Please ensure network rows are saved before accepting terms.');
           }
@@ -1378,11 +1393,14 @@ export default function TermsConditionsPage() {
         // Bulk water supply: create child permit records for each network
         if (applicationData.is_bulk && permitData?.id && permitData?.permit_number) {
           const adjNetworks = parsedNotes?._assessorAdjustments?.bulkNetworks;
-          const rawNetworks: any[] = Array.isArray(adjNetworks)
+          const rawNetworksAll: any[] = Array.isArray(adjNetworks)
             ? adjNetworks
             : Array.isArray(applicationData.bulk_networks)
               ? applicationData.bulk_networks
               : [];
+          // Only issue child permits for real networks — empty placeholder rows have no capacity
+          // and would violate the NOT NULL water_allowance constraint (500 → full rollback).
+          const rawNetworks: any[] = rawNetworksAll.filter(isRealNetworkRow);
 
           if (rawNetworks.length > 0) {
             console.log(`🔗 Creating ${rawNetworks.length} child permits for bulk application`);
@@ -1841,7 +1859,7 @@ export default function TermsConditionsPage() {
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {((termsApplication as any).bulk_networks as any[]).map((net: any, i: number) => {
+                                      {((termsApplication as any).bulk_networks as any[]).filter(isRealNetworkRow).map((net: any, i: number) => {
                                         const year = new Date().getFullYear();
                                         const childNum = nextPermitNumber
                                           ? buildChildPermitNumber(nextPermitNumber, i + 1)
