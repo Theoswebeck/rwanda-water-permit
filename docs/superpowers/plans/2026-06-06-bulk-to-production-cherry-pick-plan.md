@@ -114,6 +114,33 @@ gating with the activity-keyed approach (open to all users).
 enumerated by archaeology, the **`npm run build` gate on the integration branch is authoritative**
 — any missing dependency surfaces there and is added before merge.
 
+## 7. Second-pass review — annex surfaces + document infra (2026-06-07)
+
+Verified **every** bulk-annex surface maps to a commit in the list (none left out):
+
+| Surface (real / preview / copy) | File | Commit(s) — all in plan |
+|---|---|---|
+| Permit PDF (real + download copy) | `lib/pdf-permit-server.ts` `renderBulkWaterSupply` | `3e20f9d`,`9f3533e`,`6172541`,`ba2b3a4`,`7af45a9` |
+| Permit preview | `app/api/staff/applications/[id]/permit-preview/route.ts` | `b27848d` |
+| Public permit view (copy) | `app/permit/view/...`, `lib/permit/public-permit-query.ts` | `4566c3a`,`49acfb0`,`ba2b3a4` |
+| Contract preview (applicant T&C + staff) | `components/contract/contract-terms-preview.tsx` | `9aea920`,`9f3533e` |
+| Applicant T&C annex table | `app/dashboard/application/[id]/terms/page.tsx` | `742259b`,`d9cb53c`,`b0fd2e9`,`8b857b3`,`7af45a9` |
+| Assessment simplified (hide §2–5, volume row, show networks) | `assessment-report-form.tsx`, `assessor-recommendations.tsx`, staff pages | `955dc5e`,`cc073fe`,`fbee55a`,`a875271` |
+
+**Document infrastructure dependency (corrected):** the bulk permit PDF + contract render
+through the **`lib/document-slots/` subsystem** (`resolveSlotText`, `SlotResolverContext`,
+`bold-markers`, `buildSlotCtx`). **Prod already has this subsystem** (all 10 files), but ~18
+commits older than UAT. So the bulk renderer cherry-pick will reference document-slots APIs that
+**probably** exist on prod's copy; if the build flags a missing slot API, add the specific
+(non-bulk) document-slots commit it needs — do NOT bulk-import the whole `feat/unify-permit-pdf`
+refactor. `lib/date-math.ts` (`addYearsSafe`) remains a likely missing file → bring it.
+
+**Bug-avoidance gates (must pass before prod merge):** `npm run build` green; a real bulk
+issuance smoke test renders **all five** surfaces (T&C annex, contract preview, permit preview,
+issued permit PDF + its downloaded copy, public permit view) with matching child-permit numbers
+and no empty rows; a non-district application still renders a single-permit PDF unchanged; and
+`git diff prod..integration -- lib/payment-utils.ts` is empty (fee preserved).
+
 ## Appendix A — ordered cherry-pick list (54 + 2 missed = 56; bring lib/date-math.ts too)
 
 ```
