@@ -80,7 +80,41 @@ columns are additive and unused until the code ships).
 
 ---
 
-## Appendix A — ordered cherry-pick list (54)
+## 6. Walkthrough corrections (exhaustive file + content cross-check, 2026-06-07)
+
+A content-based scan (not just commit messages) of **every** UAT-not-prod commit whose diff
+contains bulk identifiers found gaps the message-keyword list missed:
+
+**MISSED bulk commits — ADD to the list (insert after `a053193`, before `fbee55a`):**
+- `b77291a` fix(payment): persist draft + capture app before payment so documents save
+  — the core district document-save fix (`persistDraftBeforePayment` / `paymentApplication`).
+- `c4d7532` fix(payment): guard remaining payment-entry paths (tab header, Enter key) — its
+  review follow-up. (Message says "payment", not "bulk", so the keyword pass missed both.)
+- `829fb45` docs note (optional, harmless).
+
+**Hard dependency prod LACKS — must bring:**
+- `lib/date-math.ts` (`addYearsSafe`) — the bulk PDF renderer imports/calls it; prod has **no
+  `lib/date-math.ts`**. Bring the file (it is effectively new on prod). The `npm run build` gate
+  will flag it if missed.
+
+**Soft dependency / known conflict (NOT bulk, do not import the feature):**
+- `3c2e144` "auto-derive water use category" replaced the manual radio with a read-only badge;
+  prod still has the **manual radio**. `45873d3`'s hunk that re-adds `!isDistrictWaterSupply` to
+  the *badge* will conflict — resolve by gating prod's **radio** with `!isDistrictWaterSupply`
+  instead. The district category-hiding still works via the original radio gating.
+
+**Prod already contains an EARLY, OLD-gated slice of the feature** (pushed earlier this session):
+`330bc01` (simplify Water Source tab), `305a729`, `8ce91bb` (annex label), `3f10d5f`,
+`a76e490` (isBulkApplicant prop). The plan commits `3096040`, `3a9f60d`, `cb16cad`, `8be8a67`
+are their UAT equivalents → expect **empty/conflict** cherry-picks; resolve by recognizing prod
+already has them. The de-gating commit `45873d3` then supersedes prod's old `isBulkApplicant`
+gating with the activity-keyed approach (open to all users).
+
+**Net safety net:** because bulk transitively touches non-bulk infra that can't be fully
+enumerated by archaeology, the **`npm run build` gate on the integration branch is authoritative**
+— any missing dependency surfaces there and is added before merge.
+
+## Appendix A — ordered cherry-pick list (54 + 2 missed = 56; bring lib/date-math.ts too)
 
 ```
 d5c1dcc 1747fb6 d37b0a6 af72a5b 596190c 6b7623e 955dc5e 742259b 3e20f9d 4566c3a
@@ -88,5 +122,7 @@ d5c1dcc 1747fb6 d37b0a6 af72a5b 596190c 6b7623e 955dc5e 742259b 3e20f9d 4566c3a
 756d903 1977f56 54bb5e9 3f97be0 9f3533e b27848d 6172541 d9cb53c b0fd2e9 8fb0fb8
 abd8f27 49acfb0 1ae9b5b c4e3194 bd8e1ba 11248df ec05f1c 9e794ec bfead59 60d079e
 cb16cad 3096040 3a9f60d 8be8a67 d6e952d cc073fe 0c30bbb 45873d3 c3d30f0 a053193
-fbee55a a875271 8b857b3 7af45a9
+b77291a c4d7532 fbee55a a875271 8b857b3 7af45a9
 ```
+Plus: bring `lib/date-math.ts` from UAT (bulk-PDF dependency), and handle the `3c2e144`
+auto-derive conflict on `45873d3` as described in §6.
