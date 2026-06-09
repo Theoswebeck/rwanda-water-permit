@@ -4,11 +4,28 @@ import { buildApplicationUpdateParts, getMissingApplicationColumnFromError } fro
 import { sanitizeApplicationEnumPayload } from '@/lib/db/application-enum-sanitizer'
 import { clearSessionCookie, readSessionTokenFromRequest, verifySessionToken } from '@/lib/auth/session'
 
+// Emails that are always treated as superusers (kept in sync with middleware.ts).
+const SUPERUSER_EMAILS = new Set(['nizzogentl1@gmail.com', 'nshutidavy@gmail.com'])
+
 async function getAuthenticatedUserId(req: NextRequest): Promise<string | null> {
   const token = readSessionTokenFromRequest(req)
   if (!token) return null
   const claims = await verifySessionToken(token)
   return claims?.sub || null
+}
+
+// Returns the authenticated user's id plus whether they may read any application
+// (admins / superusers), not just the ones they personally submitted.
+async function getAuthenticatedActor(
+  req: NextRequest
+): Promise<{ userId: string; canReadAny: boolean } | null> {
+  const token = readSessionTokenFromRequest(req)
+  if (!token) return null
+  const claims = await verifySessionToken(token)
+  if (!claims?.sub) return null
+  const email = String(claims.email || '').toLowerCase()
+  const canReadAny = claims.role === 'admin' || SUPERUSER_EMAILS.has(email)
+  return { userId: claims.sub, canReadAny }
 }
 
 function isMissingTransferRequestsTable(err: unknown): boolean {
@@ -50,51 +67,65 @@ function toSafeApplicationPayload(input: Record<string, unknown>): Record<string
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const userId = await getAuthenticatedUserId(req)
-    if (!userId) {
+    const actor = await getAuthenticatedActor(req)
+    if (!actor) {
       return NextResponse.json({ success: false, message: 'Not authenticated' }, { status: 401 })
     }
+    const { userId, canReadAny } = actor
 
     const { id } = await context.params
 
     let appRes
-    try {
-      appRes = await query(
-        `
-        select *
-        from public.applications a
-        where
-          a.id = $1
-          and (
-            a.applicant_id = $2
-            or (
-              (a.application_type = 'transfer' or (a.internal_notes is not null and a.internal_notes::text like '%"isTransfer":true%'))
-              and exists (
-                select 1
-                from public.transfer_requests tr
-                where tr.application_id = a.id
-                  and tr.transferor_user_id = $2
-              )
-            )
-          )
-        limit 1
-        `,
-        [id, userId]
-      )
-    } catch (appErr) {
-      if (!isMissingTransferRequestsTable(appErr)) {
-        throw appErr
-      }
-
+    if (canReadAny) {
+      // Admins / superusers may open any application, not just their own.
       appRes = await query(
         `
         select *
         from public.applications
-        where id = $1 and applicant_id = $2
+        where id = $1
         limit 1
         `,
-        [id, userId]
+        [id]
       )
+    } else {
+      try {
+        appRes = await query(
+          `
+          select *
+          from public.applications a
+          where
+            a.id = $1
+            and (
+              a.applicant_id = $2
+              or (
+                (a.application_type = 'transfer' or (a.internal_notes is not null and a.internal_notes::text like '%"isTransfer":true%'))
+                and exists (
+                  select 1
+                  from public.transfer_requests tr
+                  where tr.application_id = a.id
+                    and tr.transferor_user_id = $2
+                )
+              )
+            )
+          limit 1
+          `,
+          [id, userId]
+        )
+      } catch (appErr) {
+        if (!isMissingTransferRequestsTable(appErr)) {
+          throw appErr
+        }
+
+        appRes = await query(
+          `
+          select *
+          from public.applications
+          where id = $1 and applicant_id = $2
+          limit 1
+          `,
+          [id, userId]
+        )
+      }
     }
     const application = appRes.rows[0]
     if (!application) {
