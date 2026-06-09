@@ -621,7 +621,8 @@ const applicationFormSchema = z.object({
         });
       }
 
-      if (!isFilled(detail?.abstractionMethod)) {
+      // Method of Water Abstraction is removed from section 9 for groundwater applications.
+      if (data.methodOfWaterAbstraction !== "groundwater" && !isFilled(detail?.abstractionMethod)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["waterAbstractionDetails", index, "abstractionMethod"],
@@ -1853,7 +1854,8 @@ export function ApplicationForm({
       return (
         isFilled(detail?.flowRate) &&
         isFilled(detail?.maxAverageYearly) &&
-        isFilled(detail?.abstractionMethod)
+        // Method of Water Abstraction is hidden/not required for groundwater applications.
+        (isGroundwater || isFilled(detail?.abstractionMethod))
       );
     });
   };
@@ -2120,7 +2122,7 @@ export function ApplicationForm({
                 message: "Maximum average yearly abstraction is required."
               });
             }
-            if (!isFilled(detail?.abstractionMethod)) {
+            if (!isGroundwater && !isFilled(detail?.abstractionMethod)) {
               form.setError(`waterAbstractionDetails.${index}.abstractionMethod` as any, {
                 type: "manual",
                 message: "Method of water abstraction is required."
