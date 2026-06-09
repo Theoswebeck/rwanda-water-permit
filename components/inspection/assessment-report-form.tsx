@@ -84,6 +84,7 @@ interface AssessmentReportFormProps {
   coordinatesSaving?: boolean;
   // Bulk water supply props
   isBulkApplication?: boolean;
+  isGroundwater?: boolean;
   bulkNetworks?: BulkNetworkRow[];
   onBulkNetworksSave?: (networks: BulkNetworkRow[]) => Promise<void>;
   bulkNetworksSaving?: boolean;
@@ -104,6 +105,7 @@ export function AssessmentReportForm({
   onSourcePolygonSave,
   coordinatesSaving = false,
   isBulkApplication = false,
+  isGroundwater = false,
   bulkNetworks,
   onBulkNetworksSave,
   bulkNetworksSaving = false,
@@ -631,7 +633,8 @@ export function AssessmentReportForm({
       {/* Section 3 & 4: Activity-Specific Fields — hidden for District Water Supply */}
       {!isBulkApplication && (reportType === 'abstraction' ? (
         <>
-          {/* Amount of water to be abstracted */}
+          {/* Amount of water to be abstracted — hidden for groundwater */}
+          {!isGroundwater && (
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -673,13 +676,14 @@ export function AssessmentReportForm({
               </div>
             </CardContent>
           </Card>
+          )}
 
           {/* Water balance assessment */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Droplet className="h-5 w-5" />
-                4. Water balance assessment <span className="text-destructive">*</span>
+                {isGroundwater ? "3" : "4"}. Water balance assessment <span className="text-destructive">*</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -808,7 +812,7 @@ export function AssessmentReportForm({
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Factory className="h-5 w-5" />
-            5. Planned wastewater management system <span className="text-destructive">*</span>
+            {isGroundwater ? "4" : "5"}. Planned wastewater management system <span className="text-destructive">*</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -843,7 +847,7 @@ export function AssessmentReportForm({
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <FileText className="h-5 w-5" />
-            {isBulkApplication ? "3" : "6"}. Assessment Report Completion
+            {isBulkApplication ? "3" : isGroundwater ? "5" : "6"}. Assessment Report Completion
           </CardTitle>
           <CardDescription>
             Report completion details
@@ -881,7 +885,7 @@ export function AssessmentReportForm({
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ThumbsUp className="h-5 w-5" />
-              {isBulkApplication ? "4" : "7"}. Assessor Recommendation <span className="text-destructive">*</span>
+              {isBulkApplication ? "4" : isGroundwater ? "6" : "7"}. Assessor Recommendation <span className="text-destructive">*</span>
             </CardTitle>
             <CardDescription>
               Based on your field assessment, provide your recommendation

@@ -471,6 +471,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       intendedActivityOther: formData.intendedActivityOther,
       
       // Water Abstraction
+      methodOfWaterAbstraction: formData.methodOfWaterAbstraction,
       waterAbstractionDetails: formData.waterAbstractionDetails,
       
       // Water Supply Details (structured fields)

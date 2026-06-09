@@ -47,12 +47,20 @@ interface AssessorRecommendationsProps {
 
   /** When true (District Water Supply), hide the output volume row — volume is per-network. */
   isBulk?: boolean;
+
+  // Groundwater pumping rate (m³/day)
+  isGroundwater?: boolean;
+  requestedPumpingRateM3Day?: number | null;
+  recommendedPumpingRateM3Day?: number | null;
+  onPumpingRateSave?: (value: number) => void | Promise<void>;
+  pumpingRateSaving?: boolean;
 }
 
 type ConfirmState =
   | { kind: "none" }
   | { kind: "duration"; nextYears: number }
-  | { kind: "volume"; nextVolume: number };
+  | { kind: "volume"; nextVolume: number }
+  | { kind: "pumpingRate"; nextRate: number };
 
 export function AssessorRecommendations({
   requestedDurationYears,
@@ -66,13 +74,20 @@ export function AssessorRecommendations({
   volumeSaving = false,
   isConcession = false,
   isBulk = false,
+  isGroundwater = false,
+  requestedPumpingRateM3Day,
+  recommendedPumpingRateM3Day,
+  onPumpingRateSave,
+  pumpingRateSaving = false,
 }: AssessorRecommendationsProps) {
   // Draft state — what the user has typed/picked but not yet saved.
   const savedDurationStr = recommendedDurationYears != null ? String(recommendedDurationYears) : "";
   const savedVolumeStr = recommendedVolumeM3 != null ? String(recommendedVolumeM3) : "";
+  const savedPumpingRateStr = recommendedPumpingRateM3Day != null ? String(recommendedPumpingRateM3Day) : "";
 
   const [draftDuration, setDraftDuration] = useState<string>(savedDurationStr);
   const [draftVolume, setDraftVolume] = useState<string>(savedVolumeStr);
+  const [draftPumpingRate, setDraftPumpingRate] = useState<string>(savedPumpingRateStr);
   const [confirm, setConfirm] = useState<ConfirmState>({ kind: "none" });
 
   // When the saved values change (e.g. parent state refresh after a save),
@@ -83,6 +98,9 @@ export function AssessorRecommendations({
   useEffect(() => {
     setDraftVolume(savedVolumeStr);
   }, [savedVolumeStr]);
+  useEffect(() => {
+    setDraftPumpingRate(savedPumpingRateStr);
+  }, [savedPumpingRateStr]);
 
   const formatVolume = (vol: number | null | undefined): string => {
     if (vol == null) return "Not specified";
@@ -96,6 +114,11 @@ export function AssessorRecommendations({
     return `${years} ${years === 1 ? "year" : "years"}`;
   };
 
+  const formatPumpingRate = (rate: number | null | undefined): string => {
+    if (rate == null) return "Not specified";
+    return `${rate.toLocaleString()} m³/day`;
+  };
+
   const parsedDraftDuration = (() => {
     const n = parseInt(draftDuration, 10);
     return Number.isFinite(n) && n > 0 ? n : null;
@@ -105,10 +128,17 @@ export function AssessorRecommendations({
     return Number.isFinite(n) && n > 0 ? n : null;
   })();
 
+  const parsedDraftPumpingRate = (() => {
+    const n = parseFloat(draftPumpingRate);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+
   const durationDirty =
     parsedDraftDuration != null && parsedDraftDuration !== (recommendedDurationYears ?? null);
   const volumeDirty =
     parsedDraftVolume != null && parsedDraftVolume !== (recommendedVolumeM3 ?? null);
+  const pumpingRateDirty =
+    parsedDraftPumpingRate != null && parsedDraftPumpingRate !== (recommendedPumpingRateM3Day ?? null);
 
   const requestSaveDuration = () => {
     if (!parsedDraftDuration || !durationDirty) return;
@@ -120,8 +150,13 @@ export function AssessorRecommendations({
     setConfirm({ kind: "volume", nextVolume: parsedDraftVolume });
   };
 
+  const requestSavePumpingRate = () => {
+    if (parsedDraftPumpingRate == null || !pumpingRateDirty) return;
+    setConfirm({ kind: "pumpingRate", nextRate: parsedDraftPumpingRate });
+  };
+
   const closeConfirm = () => {
-    if (durationSaving || volumeSaving) return;
+    if (durationSaving || volumeSaving || pumpingRateSaving) return;
     setConfirm({ kind: "none" });
   };
 
@@ -130,6 +165,8 @@ export function AssessorRecommendations({
       await onDurationChange?.(confirm.nextYears);
     } else if (confirm.kind === "volume") {
       await onVolumeChange?.(confirm.nextVolume);
+    } else if (confirm.kind === "pumpingRate") {
+      await onPumpingRateSave?.(confirm.nextRate);
     }
     setConfirm({ kind: "none" });
   };
@@ -219,7 +256,7 @@ export function AssessorRecommendations({
 
           {/* Volume row — hidden for District Water Supply (volume is captured per-network) */}
           {!isBulk && (
-          <div className="grid grid-cols-3">
+          <div className={`grid grid-cols-3${isGroundwater ? " border-b" : ""}`}>
             <div className="px-4 py-4 flex items-center">
               <Label className="text-sm font-medium">{volumeFieldLabel}</Label>
             </div>
@@ -275,6 +312,65 @@ export function AssessorRecommendations({
             </div>
           </div>
           )}
+
+          {/* Pumping rate row — shown only for groundwater applications */}
+          {isGroundwater && (
+          <div className="grid grid-cols-3">
+            <div className="px-4 py-4 flex items-center">
+              <Label className="text-sm font-medium">Pumping rate (m³/day)</Label>
+            </div>
+            <div className="px-4 py-4 flex items-center justify-center border-l bg-muted/20">
+              <span className="text-sm text-muted-foreground">
+                {formatPumpingRate(requestedPumpingRateM3Day)}
+              </span>
+            </div>
+            <div className="px-4 py-4 flex items-center justify-center border-l gap-2 flex-wrap">
+              {readOnly ? (
+                <span className="text-sm font-medium">
+                  {formatPumpingRate(recommendedPumpingRateM3Day)}
+                </span>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={draftPumpingRate}
+                      onChange={(e) => setDraftPumpingRate(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          requestSavePumpingRate();
+                        }
+                      }}
+                      placeholder="Enter rate"
+                      className="w-32 bg-white"
+                      disabled={pumpingRateSaving}
+                    />
+                    <span className="text-sm text-muted-foreground">m³/day</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={requestSavePumpingRate}
+                    disabled={!pumpingRateDirty || pumpingRateSaving}
+                  >
+                    {pumpingRateSaving ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1.5" />
+                    )}
+                    Save
+                  </Button>
+                  {!pumpingRateSaving && !pumpingRateDirty && recommendedPumpingRateM3Day != null && (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          )}
         </div>
 
         <p className="text-xs text-muted-foreground mt-3">
@@ -296,7 +392,9 @@ export function AssessorRecommendations({
                 ? "Update permit duration?"
                 : confirm.kind === "volume"
                   ? `Update ${volumeFieldLabel.toLowerCase()}?`
-                  : "Confirm change"}
+                  : confirm.kind === "pumpingRate"
+                    ? "Update pumping rate?"
+                    : "Confirm change"}
             </AlertDialogTitle>
             <AlertDialogDescription>
               This value will be used in the permit and terms & conditions, and the
@@ -313,29 +411,36 @@ export function AssessorRecommendations({
                   </span>
                   <span className="font-medium">→ {formatDuration(confirm.nextYears)}</span>
                 </p>
-              ) : (
+              ) : confirm.kind === "volume" ? (
                 <p>
                   <span className="text-muted-foreground line-through mr-2">
                     {formatVolume(recommendedVolumeM3)}
                   </span>
                   <span className="font-medium">→ {formatVolume(confirm.nextVolume)}</span>
                 </p>
+              ) : (
+                <p>
+                  <span className="text-muted-foreground line-through mr-2">
+                    {formatPumpingRate(recommendedPumpingRateM3Day)}
+                  </span>
+                  <span className="font-medium">→ {formatPumpingRate(confirm.nextRate)}</span>
+                </p>
               )}
             </div>
           )}
 
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={durationSaving || volumeSaving}>
+            <AlertDialogCancel disabled={durationSaving || volumeSaving || pumpingRateSaving}>
               Keep editing
             </AlertDialogCancel>
             <AlertDialogAction
-              disabled={durationSaving || volumeSaving}
+              disabled={durationSaving || volumeSaving || pumpingRateSaving}
               onClick={async (e) => {
                 e.preventDefault();
                 await performConfirmedSave();
               }}
             >
-              {durationSaving || volumeSaving ? (
+              {durationSaving || volumeSaving || pumpingRateSaving ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
                   Saving…

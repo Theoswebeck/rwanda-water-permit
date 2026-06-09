@@ -501,6 +501,8 @@ export default function AssessmentApplicationPage() {
   const [permitLengthSaving, setPermitLengthSaving] = useState(false);
   const [assessorRecommendedVolume, setAssessorRecommendedVolume] = useState<number | undefined>(undefined);
   const [volumeSaving, setVolumeSaving] = useState(false);
+  const [assessorRecommendedPumpingRateM3Day, setAssessorRecommendedPumpingRateM3Day] = useState<number | undefined>(undefined);
+  const [pumpingRateSaving, setPumpingRateSaving] = useState(false);
   const [coordinatesSaving, setCoordinatesSaving] = useState(false);
   const [bulkNetworksSaving, setBulkNetworksSaving] = useState(false);
   // Bumped after each successful assessor save (document-overrides, duration,
@@ -513,6 +515,7 @@ export default function AssessmentApplicationPage() {
   // Original requested values (from applicant submission - read-only)
   const [requestedDurationYears, setRequestedDurationYears] = useState<number | undefined>(undefined);
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
+  const [requestedPumpingRateM3Day, setRequestedPumpingRateM3Day] = useState<number | undefined>(undefined);
 
   // Assessment Report State (template-backed)
   const [assessmentReportData, setAssessmentReportData] = useState<Partial<AssessmentReportData>>({});
@@ -542,6 +545,17 @@ export default function AssessmentApplicationPage() {
 
   const permitRef = application ? getPermitReferenceFromApplication(application) : null;
   const isUnlinkedPermit = permitRef?.source === "registry_unlinked";
+
+  // Groundwater detection: derived from the loaded application's internal_notes.
+  const isGroundwater = (() => {
+    try {
+      const raw = application?.internal_notes;
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : (raw && typeof raw === "object" ? raw : null);
+      return (parsed as any)?.methodOfWaterAbstraction === "groundwater";
+    } catch {
+      return false;
+    }
+  })();
 
   const defaultTabValue = "application_details";
   const docReviewLocked = !!docReviewMeta.completenessConfirmed;
@@ -623,6 +637,16 @@ export default function AssessmentApplicationPage() {
     }
     if (recommendation.recommendation === "no" && !hasText(recommendation.explanationText)) {
       missing.push("Section 8: Explanation for recommendation");
+    }
+    // Groundwater applications require the assessor to explicitly set a recommended pumping rate.
+    if (isGroundwater) {
+      const hasPumpingRate =
+        typeof assessorRecommendedPumpingRateM3Day === 'number' &&
+        Number.isFinite(assessorRecommendedPumpingRateM3Day) &&
+        assessorRecommendedPumpingRateM3Day > 0;
+      if (!hasPumpingRate) {
+        missing.push("Assessor Recommendations: Recommended pumping rate (m³/day) is required for groundwater applications");
+      }
     }
     return missing;
   })();
@@ -1085,20 +1109,38 @@ export default function AssessmentApplicationPage() {
           setRequestedVolumeM3(currentRequestedVolume);
         }
 
+        // Requested pumping rate (groundwater only): flowRate on waterAbstractionDetails[0]
+        const currentRequestedPumpingRate = (() => {
+          const n = Number(formData.waterAbstractionDetails?.[0]?.flowRate);
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        })();
+        if (currentRequestedPumpingRate !== undefined) {
+          setRequestedPumpingRateM3Day(currentRequestedPumpingRate);
+        }
+
         // ASSESSOR RECOMMENDED VALUES (can be modified by assessor — only pre-fill when assessment exists)
         if (hasAssessmentForThisApp) {
           // Assessor permit length: use adjustment if available, otherwise default to original
-          const assessorDuration = assessorAdjustments.permitLengthYears 
+          const assessorDuration = assessorAdjustments.permitLengthYears
             || (typeof currentRequestedDuration === 'number' ? currentRequestedDuration : undefined);
           if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
             setAssessorPermitLength(assessorDuration);
           }
-          
+
           // Assessor recommended volume: use adjustment if available, otherwise default to original
-          const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+          const assessorVolume = assessorAdjustments.recommendedVolumeM3
             || (typeof currentRequestedVolume === 'number' ? currentRequestedVolume : undefined);
           if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
             setAssessorRecommendedVolume(assessorVolume);
+          }
+
+          // Assessor recommended pumping rate: ONLY seed from a previously-saved assessor adjustment.
+          // Do NOT fall back to the applicant's requested rate — the assessor must explicitly set
+          // this value (it appears on the permit & contract). Without an explicit save, the gate
+          // at approval-check time must remain blocked.
+          const assessorPumpingRate = assessorAdjustments.recommendedPumpingRateM3Day;
+          if (typeof assessorPumpingRate === 'number' && Number.isFinite(assessorPumpingRate) && assessorPumpingRate > 0) {
+            setAssessorRecommendedPumpingRateM3Day(assessorPumpingRate);
           }
         } else {
           console.log('⚠️ No assessment filed yet for this application — assessor recommended values start fresh');
@@ -1109,6 +1151,8 @@ export default function AssessmentApplicationPage() {
           if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume)) {
             setAssessorRecommendedVolume(currentRequestedVolume);
           }
+          // Recommended pumping rate intentionally NOT pre-seeded from the requested value.
+          // The assessor must explicitly enter & save it before approval is allowed.
         }
         
         // Bulk network rows: prefer assessor adjustments, fall back to application's bulk_networks
@@ -1529,6 +1573,7 @@ export default function AssessmentApplicationPage() {
       patch: {
         permitLengthYears?: number;
         recommendedVolumeM3?: number;
+        recommendedPumpingRateM3Day?: number;
         waterSourceLatitude?: number;
         waterSourceLongitude?: number;
         waterSourcePolygonPoints?: Array<{ latitude: number; longitude: number }>;
@@ -1662,6 +1707,48 @@ export default function AssessmentApplicationPage() {
       alert('Failed to save volume adjustment. Please try again.');
     } finally {
       setVolumeSaving(false);
+    }
+  };
+
+  // Save assessor's recommended pumping rate adjustment via the race-safe endpoint.
+  const savePumpingRateAdjustment = async (newRate: number) => {
+    if (!application) return;
+    if ((application as any).is_renewal) {
+      alert("⚠️ Renewal applications inherit assessor recommendations from the previous permit and they cannot be edited.");
+      return;
+    }
+
+    try {
+      setPumpingRateSaving(true);
+      const { assessorAdjustments, originalRequestedValues } = await persistAssessorAdjustment(
+        application.id,
+        { recommendedPumpingRateM3Day: newRate },
+      );
+
+      setApplication((prev) => {
+        if (!prev) return prev;
+        let parsed: Record<string, unknown> = {};
+        try {
+          parsed = prev.internal_notes ? JSON.parse(prev.internal_notes) : {};
+        } catch {
+          parsed = {};
+        }
+        parsed._assessorAdjustments = assessorAdjustments;
+        if (originalRequestedValues) parsed._originalRequestedValues = originalRequestedValues;
+        return {
+          ...prev,
+          internal_notes: JSON.stringify(parsed),
+        } as any;
+      });
+      setAssessorRecommendedPumpingRateM3Day(newRate);
+
+      console.log('✅ Pumping rate adjusted to', newRate, 'm³/day');
+      bumpPreviewRefresh();
+    } catch (err) {
+      console.error('❌ Error saving pumping rate adjustment:', err);
+      alert('Failed to save pumping rate adjustment. Please try again.');
+    } finally {
+      setPumpingRateSaving(false);
     }
   };
 
@@ -2603,6 +2690,11 @@ export default function AssessmentApplicationPage() {
                             volumeSaving={volumeSaving}
                             isConcession={rt === "concession"}
                             isBulk={!!(application as any)?.is_bulk}
+                            isGroundwater={isGroundwater}
+                            requestedPumpingRateM3Day={requestedPumpingRateM3Day}
+                            recommendedPumpingRateM3Day={assessorRecommendedPumpingRateM3Day}
+                            onPumpingRateSave={(application as any).is_renewal ? undefined : savePumpingRateAdjustment}
+                            pumpingRateSaving={pumpingRateSaving}
                           />
                           
                           {/* Assessment Report Form */}
@@ -2624,6 +2716,7 @@ export default function AssessmentApplicationPage() {
                             bulkNetworksSaving={bulkNetworksSaving}
                             bulkProvince={initialFormData?.waterSourceProvince ?? ""}
                             bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
+                            isGroundwater={isGroundwater}
                           />
                         </div>
                       }

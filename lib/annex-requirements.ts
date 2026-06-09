@@ -11,10 +11,12 @@ export type AnnexRequirement = {
 
 export function getAnnexRequirementForActivity(
   activity: string,
-  ctx: { irrigationTotalArea?: number }
+  ctx: { irrigationTotalArea?: number; isGroundwater?: boolean }
 ): AnnexRequirement {
   const irrigationArea = ctx.irrigationTotalArea ?? 0;
+  const groundwater = ctx.isGroundwater === true;
   const req = (label: string, fieldName: string): AnnexRequiredAttachment => ({ label, fieldName, required: true });
+  const opt = (label: string, fieldName: string): AnnexRequiredAttachment => ({ label, fieldName, required: false });
   const applicationLetterLabel = "Application letter addressed to RWB DG through District Mayor";
 
   switch (activity) {
@@ -28,8 +30,12 @@ export function getAnnexRequirementForActivity(
                 req(applicationLetterLabel, "irrigationGeneralRequirements"),
                 req("Environmental Impact Assessment certificate", "irrigationEIA"),
                 req("Feasibility study", "irrigationFeasibilityStudy"),
+                ...(groundwater ? [opt("Geophysical Survey", "irrigationGeophysicalSurvey")] : []),
               ]
-            : [req(applicationLetterLabel, "irrigationGeneralRequirements")],
+            : [
+                req(applicationLetterLabel, "irrigationGeneralRequirements"),
+                ...(groundwater ? [opt("Geophysical Survey", "irrigationGeophysicalSurvey")] : []),
+              ],
       };
 
     // Annex B (District Water Supply — application letter only, no feasibility study)
@@ -48,6 +54,7 @@ export function getAnnexRequirementForActivity(
         attachments: [
           req(applicationLetterLabel, "waterSupplyGeneralRequirements"),
           req("Feasibility study", "waterSupplyFeasibilityStudy"),
+          ...(groundwater ? [opt("Geophysical Survey", "waterSupplyGeophysicalSurvey")] : []),
         ],
       };
 
@@ -67,7 +74,9 @@ export function getAnnexRequirementForActivity(
         attachments: [
           req(applicationLetterLabel, "aquacultureGeneralRequirements"),
           req("Recommendation Letter from MINAGRI/RAB", "aquacultureRecommendationLetter"),
-          req("Hydrological report", "aquacultureHydrologicalReport"),
+          groundwater
+            ? req("Geophysical Survey", "aquacultureHydrologicalReport")
+            : req("Hydrological report", "aquacultureHydrologicalReport"),
         ],
       };
 
@@ -77,7 +86,9 @@ export function getAnnexRequirementForActivity(
         annexTitle: "ANNEX D (Only for Coffee Washing)",
         attachments: [
           req(applicationLetterLabel, "coffeeWashingGeneralRequirements"),
-          req("Hydrological report", "coffeeWashingHydrologicalReport"),
+          groundwater
+            ? req("Geophysical Survey", "coffeeWashingHydrologicalReport")
+            : req("Hydrological report", "coffeeWashingHydrologicalReport"),
         ],
       };
 
@@ -88,7 +99,9 @@ export function getAnnexRequirementForActivity(
         attachments: [
           req(applicationLetterLabel, "industrialGeneralRequirements"),
           req("Environmental Impact Assessment certificate", "industrialEIA"),
-          req("Hydrological report", "industrialHydrologicalReport"),
+          groundwater
+            ? req("Geophysical Survey", "industrialHydrologicalReport")
+            : req("Hydrological report", "industrialHydrologicalReport"),
         ],
       };
 
@@ -111,7 +124,9 @@ export function getAnnexRequirementForActivity(
           req(applicationLetterLabel, "miningGeneralRequirements"),
           req("Mining license", "miningLicense"),
           req("Environmental Impact Assessment certificate", "miningEIA"),
-          req("Hydrological report", "miningHydrologicalReport"),
+          groundwater
+            ? req("Geophysical Survey", "miningHydrologicalReport")
+            : req("Hydrological report", "miningHydrologicalReport"),
         ],
       };
 
@@ -164,6 +179,7 @@ export function getAnnexRequirementForActivity(
         attachments: [
           req(applicationLetterLabel, "livestockGeneralRequirements"),
           req("Feasibility study", "livestockFeasibilityStudy"),
+          ...(groundwater ? [opt("Geophysical Survey", "livestockGeophysicalSurvey")] : []),
         ],
       };
 
@@ -177,7 +193,7 @@ export function getAnnexRequirementForActivity(
 
 export function getAnnexRequirementsForSelection(
   selectedActivities: string[] | undefined,
-  ctx: { irrigationTotalArea?: number }
+  ctx: { irrigationTotalArea?: number; isGroundwater?: boolean }
 ) {
   const selected = Array.isArray(selectedActivities) ? selectedActivities : [];
   return selected
@@ -188,7 +204,7 @@ export function getAnnexRequirementsForSelection(
 
 export function getRequiredAttachmentFieldNames(
   selectedActivities: string[] | undefined,
-  ctx: { irrigationTotalArea?: number }
+  ctx: { irrigationTotalArea?: number; isGroundwater?: boolean }
 ) {
   const requirements = getAnnexRequirementsForSelection(selectedActivities, ctx);
   const fieldNames = new Set<string>();

@@ -25,6 +25,7 @@ const SUPERUSER_EMAILS = new Set([
 type AssessorAdjustmentsPatch = {
   permitLengthYears?: number;
   recommendedVolumeM3?: number;
+  recommendedPumpingRateM3Day?: number;
   waterSourceLatitude?: number;
   waterSourceLongitude?: number;
   waterSourcePolygonPoints?: Array<{ latitude: number; longitude: number }>;
@@ -140,6 +141,17 @@ export async function POST(
       patch.recommendedVolumeM3 = n;
     }
 
+    if (body.recommendedPumpingRateM3Day !== undefined) {
+      const n = Number(body.recommendedPumpingRateM3Day);
+      if (!Number.isFinite(n) || n <= 0) {
+        return NextResponse.json(
+          { success: false, message: "recommendedPumpingRateM3Day must be a positive number" },
+          { status: 400 },
+        );
+      }
+      patch.recommendedPumpingRateM3Day = n;
+    }
+
     const hasLat = body.waterSourceLatitude !== undefined;
     const hasLng = body.waterSourceLongitude !== undefined;
     if (hasLat || hasLng) {
@@ -232,6 +244,7 @@ export async function POST(
     if (
       patch.permitLengthYears === undefined &&
       patch.recommendedVolumeM3 === undefined &&
+      patch.recommendedPumpingRateM3Day === undefined &&
       patch.waterSourceLatitude === undefined &&
       patch.waterSourceLongitude === undefined &&
       patch.waterSourcePolygonPoints === undefined &&
@@ -298,6 +311,10 @@ export async function POST(
       if (patch.recommendedVolumeM3 !== undefined) {
         nextAdjustments.recommendedVolumeM3 = patch.recommendedVolumeM3;
         nextAdjustments.volumeAdjustedAt = nowIso;
+      }
+      if (patch.recommendedPumpingRateM3Day !== undefined) {
+        nextAdjustments.recommendedPumpingRateM3Day = patch.recommendedPumpingRateM3Day;
+        nextAdjustments.pumpingRateAdjustedAt = nowIso;
       }
       if (patch.waterSourceLatitude !== undefined && patch.waterSourceLongitude !== undefined) {
         nextAdjustments.waterSourceLatitude = patch.waterSourceLatitude;

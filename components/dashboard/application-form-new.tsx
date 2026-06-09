@@ -222,6 +222,8 @@ const applicationFormSchema = z.object({
   
   // SECTION 3: INTENDED ACTIVITY
   intendedActivities: z.array(z.string()).min(1, { message: "Select an activity" }).max(1, { message: "Only one activity can be selected per application" }),
+  // Groundwater support: surface-water vs groundwater branch for eligible activities.
+  methodOfWaterAbstraction: z.enum(["surface_water", "groundwater"]).optional(),
   intendedActivityOther: z.string().optional(),
   
   // Water Abstraction - optional, required only for abstraction activities
@@ -370,6 +372,11 @@ const applicationFormSchema = z.object({
   industrialEIA: z.any().optional(),
   industrialWasteManagementPlan: z.any().optional(),
   industrialHydrologicalReport: z.any().optional(),
+
+  // Groundwater-only geophysical survey uploads
+  irrigationGeophysicalSurvey: z.any().optional(),
+  livestockGeophysicalSurvey: z.any().optional(),
+  waterSupplyGeophysicalSurvey: z.any().optional(),
   
   // Hydropower/Electricity
   hydropowerGeneralRequirements: z.any().optional(),
@@ -985,6 +992,12 @@ const INDUSTRY_SUB_LABELS: Record<string, string> = {
   monthlyQuantity: 'Industry Monthly Quantity',
 };
 
+// Activities eligible for the groundwater abstraction method option.
+const GROUNDWATER_ELIGIBLE_ACTIVITIES = [
+  "coffee_washing", "fish_farming_ponds", "industry",
+  "irrigation", "livestock", "mining", "water_supply",
+] as const;
+
 function getFieldLabel(fieldName: string): string {
   if (FIELD_LABELS[fieldName]) return FIELD_LABELS[fieldName];
   const industryMatch = fieldName.match(/^industry_(\w+)_(\d+)$/);
@@ -1375,6 +1388,10 @@ export function ApplicationForm({
     // Livestock documents
     livestockGeneralRequirements: useRef<HTMLInputElement>(null),
     livestockFeasibilityStudy: useRef<HTMLInputElement>(null),
+    // Groundwater-only geophysical survey uploads
+    irrigationGeophysicalSurvey: useRef<HTMLInputElement>(null),
+    livestockGeophysicalSurvey: useRef<HTMLInputElement>(null),
+    waterSupplyGeophysicalSurvey: useRef<HTMLInputElement>(null),
   };
 
   // State for cascading dropdowns
@@ -1425,6 +1442,7 @@ export function ApplicationForm({
       waterAbstractionDetails: [{ flowRate: undefined, flowRateUnit: "m3_per_second", maxAverageYearly: undefined, abstractionMethod: "" }],
       intendedActivities: [],
       intendedActivityOther: "",
+      methodOfWaterAbstraction: undefined,
       ownsAllLand: null,
       hasLandAccess: null,
       certificationAgreement: false,
@@ -1685,10 +1703,34 @@ export function ApplicationForm({
 
   const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
 
+  // Groundwater eligibility helpers (consumed by later tasks).
+  const primarySelectedActivity = watchedIntendedActivities?.[0];
+  const isGroundwaterEligible =
+    !!primarySelectedActivity &&
+    (GROUNDWATER_ELIGIBLE_ACTIVITIES as readonly string[]).includes(primarySelectedActivity);
+  const watchedMethodOfWaterAbstraction = form.watch("methodOfWaterAbstraction");
+  const isGroundwater = isGroundwaterEligible && watchedMethodOfWaterAbstraction === "groundwater";
+  const showGroundwaterDependentContent =
+    !isGroundwaterEligible || !!watchedMethodOfWaterAbstraction;
+
   // Application used by the payment tab: the page-owned currentApplication if present, else the
   // draft we persisted just before navigating to payment. Guarantees PaymentTab has an id to pay
   // against (application_id) instead of falling back to the application_data JSON path.
   const effectivePaymentApplication = currentApplication ?? paymentApplication;
+
+  // Clear stale methodOfWaterAbstraction when the selected activity is no longer groundwater-eligible.
+  useEffect(() => {
+    if (!isGroundwaterEligible && form.getValues("methodOfWaterAbstraction") !== undefined) {
+      form.setValue("methodOfWaterAbstraction", undefined, { shouldDirty: false });
+    }
+  }, [isGroundwaterEligible]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-set waterSourceType to borehole when groundwater is selected.
+  useEffect(() => {
+    if (!readOnly && isGroundwater && form.getValues("waterSourceType") !== "borehole") {
+      form.setValue("waterSourceType", "borehole", { shouldDirty: false });
+    }
+  }, [isGroundwater]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seed 5 empty network rows when District Water Supply is selected and the table is empty.
   // Keyed on the selected activity (not the bulk profile flag) so any user gets the rows.
@@ -1774,9 +1816,10 @@ export function ApplicationForm({
     const intendedActivities = form.getValues("intendedActivities") || [];
     const irrigationArea = form.getValues("irrigationTotalArea") || 0;
 
-    const requirements = getAnnexRequirementsForSelection(intendedActivities, { irrigationTotalArea: irrigationArea });
+    const requirements = getAnnexRequirementsForSelection(intendedActivities, { irrigationTotalArea: irrigationArea, isGroundwater });
     for (const { requirement } of requirements) {
       for (const att of requirement.attachments) {
+        if (!att.required) continue;
         const hasFile = Boolean(files[att.fieldName] || uploadedFileUrls[att.fieldName]);
         if (!hasFile) return false;
       }
@@ -1980,6 +2023,12 @@ export function ApplicationForm({
 
     if (hasMissingActivityFields) {
       setValidationError('Please complete all required fields for the selected activity before proceeding.');
+      return false;
+    }
+
+    // Method of Water Abstraction is required for groundwater-eligible activities
+    if (isGroundwaterEligible && !form.getValues("methodOfWaterAbstraction")) {
+      setValidationError('Method of Water Abstraction is required.');
       return false;
     }
 
@@ -2662,6 +2711,7 @@ export function ApplicationForm({
         permitLengthYears: 5,
         intendedActivities: ["water_supply"],
         intendedActivityOther: "",
+        methodOfWaterAbstraction: undefined,
         waterAbstractionDetails: [{
           flowRate: undefined,
           flowRateUnit: "m³/s",
@@ -3015,7 +3065,7 @@ export function ApplicationForm({
   };
 
   const renderRequiredAttachmentsForActivity = (activity: string) => {
-    const req = getAnnexRequirementForActivity(activity, { irrigationTotalArea: watchedIrrigationTotalArea });
+    const req = getAnnexRequirementForActivity(activity, { irrigationTotalArea: watchedIrrigationTotalArea, isGroundwater });
     if (!req.attachments.length) return null;
 
     return (
@@ -4048,12 +4098,18 @@ export function ApplicationForm({
                               <SelectValue placeholder={tx("Select water source type")} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="lake">{tx("Lake")}</SelectItem>
-                              <SelectItem value="dam">{tx("Dam")}</SelectItem>
-                              <SelectItem value="spring">{tx("Spring")}</SelectItem>
-                              <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
-                              <SelectItem value="stream_river">{tx("Stream/River")}</SelectItem>
-                              <SelectItem value="other">{tx("Other (specify)")}</SelectItem>
+                              {isGroundwater ? (
+                                <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
+                              ) : (
+                                <>
+                                  <SelectItem value="lake">{tx("Lake")}</SelectItem>
+                                  <SelectItem value="dam">{tx("Dam")}</SelectItem>
+                                  <SelectItem value="spring">{tx("Spring")}</SelectItem>
+                                  <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
+                                  <SelectItem value="stream_river">{tx("Stream/River")}</SelectItem>
+                                  <SelectItem value="other">{tx("Other (specify)")}</SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
                         </FormControl>
@@ -4086,7 +4142,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {tx("11. Name of the source of water *")}
+                          {isGroundwater ? tx("11. Name of the borehole *") : tx("11. Name of the source of water *")}
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" }, "nameSourceWater")} />
@@ -4096,7 +4152,8 @@ export function ApplicationForm({
                     )}
                   />
 
-                  {/* 12. Tributary to (main river/lake) */}
+                  {/* 12. Tributary to (main river/lake) — hidden for groundwater */}
+                  {!isGroundwater && (
                   <FormField
                     control={form.control}
                     name="tributaryToMain"
@@ -4112,6 +4169,7 @@ export function ApplicationForm({
                       </FormItem>
                     )}
                   />
+                  )}
 
                   {/* 13. Location of water source */}
                   <div className="space-y-4">
@@ -4447,8 +4505,55 @@ export function ApplicationForm({
                     )}
                   />
 
+                  {/* Method of Water Abstraction – shown only for groundwater-eligible activities */}
+                  {isGroundwaterEligible && (
+                    <FormField
+                      control={form.control}
+                      name="methodOfWaterAbstraction"
+                      render={({ field }) => (
+                        <FormItem className="space-y-2">
+                          <FormLabel className="text-base font-medium">
+                            {tx("Method of Water Abstraction *")}
+                          </FormLabel>
+                          <FormControl>
+                            <RadioGroup
+                              onValueChange={
+                                readOnly
+                                  ? undefined
+                                  : (val) => {
+                                      // Flow Rate (m³/s, surface) and Pumping Rate (m³/day, groundwater)
+                                      // share the waterAbstractionDetails[0].flowRate field. Clear it when the
+                                      // method actually changes so a value entered under one unit can't be
+                                      // mislabeled as the other. Only fires on user interaction, so a saved
+                                      // application's value is preserved on load.
+                                      if (val !== field.value) {
+                                        form.setValue("waterAbstractionDetails.0.flowRate", undefined, { shouldDirty: true });
+                                      }
+                                      field.onChange(val);
+                                    }
+                              }
+                              value={field.value || ""}
+                              className="flex flex-col gap-2"
+                              disabled={readOnly}
+                            >
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="surface_water" id="moa-surface" />
+                                <Label htmlFor="moa-surface" className="cursor-pointer">{tx("Surface Water")}</Label>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="groundwater" id="moa-ground" />
+                                <Label htmlFor="moa-ground" className="cursor-pointer">{tx("Groundwater")}</Label>
+                              </div>
+                            </RadioGroup>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
                   {/* Water Use Category – auto-derived from selected activity, read-only. Hidden for District Water Supply. */}
-                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isDistrictWaterSupply && (
+                  {showGroundwaterDependentContent && watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isDistrictWaterSupply && (
                     <div className="space-y-1">
                       <p className="text-base font-medium">{tx("Water Use Category")}</p>
                       <p className="text-sm text-muted-foreground mb-2">
@@ -4461,16 +4566,18 @@ export function ApplicationForm({
                             : "bg-blue-100 text-blue-800"
                         }`}
                       >
-                        {effectiveWaterUseCategory === "concession" ? tx("Concession") : tx("Abstraction")}
+                        {isGroundwater
+                          ? tx("Groundwater")
+                          : (effectiveWaterUseCategory === "concession" ? tx("Concession") : tx("Abstraction"))}
                       </span>
                     </div>
                   )}
 
                   {/* Water Abstraction Point (LAT, LONG) - shown for abstraction water use category, not for district water supply */}
-                  {effectiveWaterUseCategory === "abstraction" && watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isDistrictWaterSupply && (
+                  {showGroundwaterDependentContent && effectiveWaterUseCategory === "abstraction" && watchedIntendedActivities && watchedIntendedActivities.length > 0 && !isDistrictWaterSupply && (
                   <div className="space-y-4">
                         <Label className="text-base font-medium">
-                          {tx("8. Water Abstraction Point * (LAT, LONG)")}
+                          {isGroundwater ? tx("8. Coordinates *") : tx("8. Water Abstraction Point * (LAT, LONG)")}
                         </Label>
 
                         <Tabs defaultValue="manual" className="w-full">
@@ -6203,7 +6310,7 @@ export function ApplicationForm({
                                 name="waterAbstractionDetails.0.flowRate"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel>Flow Rate (m³/s)</FormLabel>
+                                    <FormLabel>{isGroundwater ? "Pumping Rate (m³/day)" : "Flow Rate (m³/s)"}</FormLabel>
                                     <FormControl>
                                       <Input
                                         type="number"
@@ -6211,7 +6318,7 @@ export function ApplicationForm({
                                         {...field}
                                         value={field.value ?? ""}
                                         onChange={(e) => !readOnly && field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                                        placeholder="Enter flow rate (m³/s)"
+                                        placeholder={isGroundwater ? "Enter pumping rate (m³/day)" : "Enter flow rate (m³/s)"}
                                         disabled={readOnly}
                                         readOnly={readOnly}
                                         className={readOnly ? "bg-gray-50 border-gray-200 cursor-default opacity-60" : ""}
@@ -6245,6 +6352,7 @@ export function ApplicationForm({
                                 )}
                               />
                               
+                              {!isGroundwater && (
                               <FormField
                                 control={form.control}
                                 name="waterAbstractionDetails.0.abstractionMethod"
@@ -6272,6 +6380,7 @@ export function ApplicationForm({
                                   </FormItem>
                                 )}
                               />
+                              )}
                             </div>
                           </div>
                         </div>

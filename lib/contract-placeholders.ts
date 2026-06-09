@@ -30,6 +30,7 @@ export type ContractPlaceholderContext = {
   lat: string;
   lng: string;
   volumeLabel: string; // e.g. "12,000 m³/year" or "100 m³/day"
+  isGroundwater: boolean; // true when methodOfWaterAbstraction === "groundwater"
   durationYearsLabel: string; // e.g. "5"
   concessionAreaLabel: string; // e.g. "12 Ha"
   activityLabel: string; // e.g. "Fish farming in lakes"
@@ -460,8 +461,28 @@ function hasActivity(application: ApplicationForContract, activity: string): boo
   return noteActs.includes(activity);
 }
 
+function isGroundwaterApplication(application: ApplicationForContract): boolean {
+  const notes = getInternalNotes(application);
+  return notes?.methodOfWaterAbstraction === "groundwater";
+}
+
+function resolvePumpingRateM3Day(application: ApplicationForContract): number | undefined {
+  const notes = getInternalNotes(application);
+  const rec = (notes?._assessorAdjustments as Record<string, any> | undefined)?.recommendedPumpingRateM3Day;
+  if (typeof rec === "number" && Number.isFinite(rec) && rec > 0) return rec;
+  const requested = notes?.waterAbstractionDetails?.[0]?.flowRate;
+  if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) return requested;
+  return undefined;
+}
+
 function resolveVolumeLabel(application: ApplicationForContract): string {
   const notes = getInternalNotes(application);
+
+  // Groundwater: return pumping rate in m³/day (overrides all other logic)
+  if (isGroundwaterApplication(application)) {
+    const pr = resolvePumpingRateM3Day(application);
+    if (pr !== undefined) return `${formatNumber(pr)} m³/day`;
+  }
 
   // The contract template says "with a flow rate of {{VOLUME_LABEL}}",
   // so when a real flow rate exists it should take priority.
@@ -840,6 +861,7 @@ export function buildContractPlaceholderContext(
     lat,
     lng,
     volumeLabel: resolveVolumeLabel(application),
+    isGroundwater: isGroundwaterApplication(application),
     durationYearsLabel: resolveDurationYears(application, transferPermit),
     concessionAreaLabel: resolveConcessionAreaLabel(application, transferPermit),
     activityLabel: resolveActivityLabel(application),
@@ -881,6 +903,10 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("{{LAT}}", ctx.lat);
   s = s.replaceAll("{{LNG}}", ctx.lng);
   s = s.replaceAll("{{VOLUME_LABEL}}", ctx.volumeLabel);
+  // Groundwater: change "flow rate" wording to "pumping rate" in the English template
+  if (ctx.isGroundwater) {
+    s = s.replace(/flow rate of/gi, "pumping rate of");
+  }
   s = s.replaceAll("{{DURATION_YEARS}}", ctx.durationYearsLabel);
   s = s.replaceAll("{{CONCESSION_AREA}}", ctx.concessionAreaLabel);
   s = s.replaceAll("{{ACTIVITY_LABEL}}", ctx.activityLabel);
