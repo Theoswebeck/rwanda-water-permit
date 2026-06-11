@@ -4176,7 +4176,7 @@ export function ApplicationForm({
                   {/* 13. Location of water source */}
                   <div className="space-y-4">
                     <Label className="text-base font-medium">
-                      {tx("13. Location of water source * (Province, District, Sector, Cell, Village)")}
+                      {tx(isGroundwater ? "12. Location of water source * (Province, District, Sector, Cell, Village)" : "13. Location of water source * (Province, District, Sector, Cell, Village)")}
                     </Label>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4381,7 +4381,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {tx("14. Reliability of water source *")}
+                          {tx(isGroundwater ? "13. Reliability of water source *" : "14. Reliability of water source *")}
                         </FormLabel>
                         <FormControl>
                           <Select onValueChange={readOnly ? undefined : field.onChange} value={field.value || ""} disabled={readOnly}>
@@ -4408,7 +4408,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {tx(isDistrictWaterSupply ? "10. Requested Permit Duration (Years) *" : "15. Requested Permit Duration (Years) *")}
+                          {tx(isDistrictWaterSupply ? "10. Requested Permit Duration (Years) *" : isGroundwater ? "14. Requested Permit Duration (Years) *" : "15. Requested Permit Duration (Years) *")}
                         </FormLabel>
                         <FormControl>
                           <Select 
@@ -6499,7 +6499,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          16. Do you own all the land required for this water use? *
+                          {isGroundwater ? "15" : "16"}. Do you own all the land required for this water use? *
                         </FormLabel>
                         <FormControl>
                           <Select
