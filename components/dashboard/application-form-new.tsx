@@ -4780,8 +4780,9 @@ export function ApplicationForm({
                     />
                   )}
 
-                  {/* Activity-specific sections */}
-                  {watchedIntendedActivities && watchedIntendedActivities.length > 0 && (
+                  {/* Activity-specific sections — for groundwater-eligible activities these stay
+                      hidden until a Method of Water Abstraction is chosen. */}
+                  {showGroundwaterDependentContent && watchedIntendedActivities && watchedIntendedActivities.length > 0 && (
                     <div className="space-y-6 mt-8">
 
                       {/* Irrigation Details */}
@@ -6296,7 +6297,7 @@ export function ApplicationForm({
                   {(() => {
                     const selected = watchedIntendedActivities || [];
                     const hasActivity = selected.some((a) => a && a.trim() !== "");
-                    return hasActivity && effectiveWaterUseCategory === "abstraction" && !isDistrictWaterSupply ? (
+                    return showGroundwaterDependentContent && hasActivity && effectiveWaterUseCategory === "abstraction" && !isDistrictWaterSupply ? (
                       <div className="space-y-4">
                         <Label className="text-base font-medium">
                           9. Water Abstraction Details *
