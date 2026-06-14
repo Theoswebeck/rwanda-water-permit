@@ -248,6 +248,8 @@ export default function ReviewApplicationPage() {
   const [requestedVolumeM3, setRequestedVolumeM3] = useState<number | undefined>(undefined);
   const [recommendedDurationYears, setRecommendedDurationYears] = useState<number | undefined>(undefined);
   const [recommendedVolumeM3, setRecommendedVolumeM3] = useState<number | undefined>(undefined);
+  const [requestedPumpingRateM3Day, setRequestedPumpingRateM3Day] = useState<number | undefined>(undefined);
+  const [recommendedPumpingRateM3Day, setRecommendedPumpingRateM3Day] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     // Restore any persisted banner after a router.refresh()
@@ -597,18 +599,32 @@ export default function ReviewApplicationPage() {
         if (typeof currentRequestedVolume === 'number' && Number.isFinite(currentRequestedVolume) && currentRequestedVolume > 0) {
           setRequestedVolumeM3(currentRequestedVolume);
         }
+        // Requested pumping rate (groundwater only): flowRate on waterAbstractionDetails[0]
+        const currentRequestedPumpingRate = (() => {
+          const n = Number(formData.waterAbstractionDetails?.[0]?.flowRate);
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        })();
+        if (currentRequestedPumpingRate !== undefined) {
+          setRequestedPumpingRateM3Day(currentRequestedPumpingRate);
+        }
 
         // ASSESSOR RECOMMENDED VALUES (from assessor adjustments — only when assessment exists)
         if (hasAssessmentForThisApp) {
-          const assessorDuration = assessorAdjustments.permitLengthYears 
+          const assessorDuration = assessorAdjustments.permitLengthYears
             || (typeof currentRequestedDuration === 'number' ? currentRequestedDuration : undefined);
           if (typeof assessorDuration === 'number' && assessorDuration >= 1 && assessorDuration <= 15) {
             setRecommendedDurationYears(assessorDuration);
           }
-          const assessorVolume = assessorAdjustments.recommendedVolumeM3 
+          const assessorVolume = assessorAdjustments.recommendedVolumeM3
             || (typeof currentRequestedVolume === 'number' ? currentRequestedVolume : undefined);
           if (typeof assessorVolume === 'number' && Number.isFinite(assessorVolume)) {
             setRecommendedVolumeM3(assessorVolume);
+          }
+          // Recommended pumping rate is ONLY what the assessor explicitly saved — never fall back to the
+          // applicant's requested value (mirrors the no-fallback rule on the assessment page).
+          const assessorPumpingRate = assessorAdjustments.recommendedPumpingRateM3Day;
+          if (typeof assessorPumpingRate === 'number' && Number.isFinite(assessorPumpingRate) && assessorPumpingRate > 0) {
+            setRecommendedPumpingRateM3Day(assessorPumpingRate);
           }
         } else {
           console.log('⚠️ No assessment filed yet for this application — skipping assessor recommended values');
@@ -1102,6 +1118,16 @@ export default function ReviewApplicationPage() {
   const showReviewActions = shouldShowReviewActions(application.status);
   const showPreviews = isAssessmentComplete(application.status);
 
+  const isGroundwater = (() => {
+    try {
+      const raw = application?.internal_notes;
+      const parsed = typeof raw === "string" ? JSON.parse(raw) : (raw && typeof raw === "object" ? raw : null);
+      return (parsed as any)?.methodOfWaterAbstraction === "groundwater";
+    } catch {
+      return false;
+    }
+  })();
+
   return (
     <ProtectedRoute allowedRoles={['reviewer', 'admin']} requireProfile={true}>
       <DashboardLayout>
@@ -1456,8 +1482,11 @@ export default function ReviewApplicationPage() {
                       readOnly={true}
                       isConcession={reportType === "concession"}
                       isBulk={!!(application as any)?.is_bulk}
+                      isGroundwater={isGroundwater}
+                      requestedPumpingRateM3Day={requestedPumpingRateM3Day}
+                      recommendedPumpingRateM3Day={recommendedPumpingRateM3Day}
                     />
-                    
+
                     {/* Assessment Report Form */}
                     <AssessmentReportForm
                       reportData={assessmentReportData}
@@ -1476,6 +1505,7 @@ export default function ReviewApplicationPage() {
                       }
                       bulkProvince={initialFormData?.waterSourceProvince ?? ""}
                       bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
+                      isGroundwater={isGroundwater}
                     />
                   </div>
                 }

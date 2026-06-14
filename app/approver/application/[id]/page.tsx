@@ -1180,6 +1180,7 @@ export default function ApproverApplicationPage() {
                           }
                           bulkProvince={initialFormData?.waterSourceProvince ?? ""}
                           bulkDistrict={initialFormData?.waterSourceDistrict ?? ""}
+                          isGroundwater={isGroundwater}
                         />
                       </div>
                     }
