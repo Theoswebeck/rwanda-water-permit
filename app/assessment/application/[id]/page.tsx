@@ -594,13 +594,17 @@ export default function AssessmentApplicationPage() {
       if (!isVolumeRateUnit(sourceFlowUnit)) {
         missing.push("Section 2: Flow of the water source unit (m3/day or m3/year)");
       }
-      if (!isNumericText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted value (number)");
-      if (!isVolumeRateUnit(assessmentReportData.flowRateM3DayUnit ?? "m3/year")) {
-        missing.push("Section 4: Amount of water to be abstracted unit (m3/day or m3/year)");
-      }
-      if (!isNumericText(assessmentReportData.flowRateLps)) missing.push("Section 4: Flow rate value (number)");
-      if (!isVolumeRateUnit(assessmentReportData.flowRateUnit ?? "m3/day")) {
-        missing.push("Section 4: Flow rate unit (m3/day or m3/year)");
+      // "Amount of water to be abstracted" (Section 3) is removed from the groundwater assessment
+      // report, so its fields are not rendered and must not be required for groundwater.
+      if (!isGroundwater) {
+        if (!isNumericText(assessmentReportData.flowRateM3Day)) missing.push("Section 4: Amount of water to be abstracted value (number)");
+        if (!isVolumeRateUnit(assessmentReportData.flowRateM3DayUnit ?? "m3/year")) {
+          missing.push("Section 4: Amount of water to be abstracted unit (m3/day or m3/year)");
+        }
+        if (!isNumericText(assessmentReportData.flowRateLps)) missing.push("Section 4: Flow rate value (number)");
+        if (!isVolumeRateUnit(assessmentReportData.flowRateUnit ?? "m3/day")) {
+          missing.push("Section 4: Flow rate unit (m3/day or m3/year)");
+        }
       }
       if (!hasText(assessmentReportData.waterBalanceDescription)) missing.push("Section 5: Description of the water balance");
       if (!isNumericText(assessmentReportData.availableWaterQ)) missing.push("Section 5: Available water (Q) value (number)");
@@ -2725,7 +2729,17 @@ export default function AssessmentApplicationPage() {
                       afterDocuments={
                         isReadOnly ? null : (() => {
                           return (
-                            <div className="flex justify-end">
+                            <div className="flex flex-col items-end gap-2">
+                              {!canSendForReview && missingFieldReportRequirements.length > 0 && (
+                                <div className="w-full rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                                  <p className="font-medium mb-1">Complete the following before sending for review:</p>
+                                  <ul className="list-disc pl-5 space-y-0.5">
+                                    {missingFieldReportRequirements.map((m) => (
+                                      <li key={m}>{m}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
                               <Button
                                 size="lg"
                                 onClick={handleOpenSendToReviewDialog}
