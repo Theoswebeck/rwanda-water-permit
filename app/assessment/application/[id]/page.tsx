@@ -110,7 +110,9 @@ function isValidRwandaResidence(residence?: string) {
   if (!optionExists(getFormattedDistrictOptions(parsed.province), parsed.district)) return false;
   if (!optionExists(getFormattedSectorOptions(parsed.province, parsed.district), parsed.sector)) return false;
   if (!optionExists(getFormattedCellOptions(parsed.province, parsed.district, parsed.sector), parsed.cell)) return false;
-  if (!optionExists(getFormattedVillageOptions(parsed.province, parsed.district, parsed.sector, parsed.cell), parsed.village)) {
+  // Village is optional: applicants may leave the office-address village blank, so it isn't always
+  // present to prefill here. Only validate it when a value is provided.
+  if (parsed.village && !optionExists(getFormattedVillageOptions(parsed.province, parsed.district, parsed.sector, parsed.cell), parsed.village)) {
     return false;
   }
   return true;
@@ -634,7 +636,7 @@ export default function AssessmentApplicationPage() {
       missing.push("Section 1: Contact telephone must not contain letters or other text");
     }
     if (!isValidRwandaResidence(assessmentReportData.residence)) {
-      missing.push("Section 1: Residence must use valid Rwanda Province, District, Sector, Cell, and Village values");
+      missing.push("Section 1: Residence must use valid Rwanda Province, District, Sector, and Cell values (Village optional)");
     }
     if (!recommendation.recommendation) {
       missing.push("Section 8: Assessor recommendation");
