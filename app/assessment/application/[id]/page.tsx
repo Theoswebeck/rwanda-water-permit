@@ -639,7 +639,9 @@ export default function AssessmentApplicationPage() {
       missing.push("Section 8: Explanation for recommendation");
     }
     // Groundwater applications require the assessor to explicitly set a recommended pumping rate.
-    if (isGroundwater) {
+    // Renewals are exempt: their recommended values are inherited from the source permit and the
+    // pumping-rate save handler is disabled for renewals (requiring it here would deadlock).
+    if (isGroundwater && !(application as any).is_renewal) {
       const hasPumpingRate =
         typeof assessorRecommendedPumpingRateM3Day === 'number' &&
         Number.isFinite(assessorRecommendedPumpingRateM3Day) &&

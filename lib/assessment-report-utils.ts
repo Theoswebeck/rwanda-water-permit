@@ -545,6 +545,10 @@ export function prefillAssessmentReportFromApplication(
   // Extract abstraction-specific data if applicable
   const abstractionData: Partial<AssessmentReportData> = {};
   if (reportType === 'abstraction') {
+    // Groundwater stores the pumping rate (m³/day) in the same flowRate field surface water uses
+    // for m³/s. flowRateUnit is left at its m3_per_second default, so detect groundwater explicitly
+    // to avoid the m³/s→m³/day (×86400) conversion mislabeling the pumping rate.
+    const isGroundwater = (formData as any)?.methodOfWaterAbstraction === "groundwater";
     const detailsUnknown: any = (formData as any).waterAbstractionDetails;
     const abstractionDetail: any = Array.isArray(detailsUnknown) ? detailsUnknown[0] : undefined;
     const recommendedVolumeM3 = pickFirstNumber(
@@ -563,11 +567,12 @@ export function prefillAssessmentReportFromApplication(
             ? Number(abstractionDetail.flowRate)
             : undefined;
       if (typeof flowRateValue === "number" && Number.isFinite(flowRateValue)) {
-        if (flowRateUnit === "m3_per_second") {
-          abstractionData.flowRateLps = String(Number((flowRateValue * 86400).toFixed(2)));
-          abstractionData.flowRateUnit = "m3/day";
-        } else if (flowRateUnit === "m3_per_day") {
+        if (isGroundwater || flowRateUnit === "m3_per_day") {
+          // Groundwater pumping rate is already m³/day — no conversion.
           abstractionData.flowRateLps = String(flowRateValue);
+          abstractionData.flowRateUnit = "m3/day";
+        } else if (flowRateUnit === "m3_per_second") {
+          abstractionData.flowRateLps = String(Number((flowRateValue * 86400).toFixed(2)));
           abstractionData.flowRateUnit = "m3/day";
         }
       }

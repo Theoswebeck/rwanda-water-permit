@@ -6630,7 +6630,7 @@ export function ApplicationForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-base font-medium">
-                              17. If no, do you have access to the land?
+                              {isGroundwater ? "16" : "17"}. If no, do you have access to the land?
                             </FormLabel>
                             <FormControl>
                               <Select
@@ -6682,7 +6682,7 @@ export function ApplicationForm({
                         render={() => (
                           <FormItem className="space-y-4">
                             <FormLabel className="text-base font-medium">
-                              18. Attach proof of land access (easement, consent, lease, etc.) <span className="text-red-500">*</span>
+                              {isGroundwater ? "17" : "18"}. Attach proof of land access (easement, consent, lease, etc.) <span className="text-red-500">*</span>
                             </FormLabel>
 
                             <div>
