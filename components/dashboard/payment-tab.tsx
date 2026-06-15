@@ -261,15 +261,15 @@ export function PaymentTab({
           customerSnapshot?.name
         );
 
-        if (!email || !phone || !name) {
-          setCustomerValidationError(
-            "Missing payer contact details. Please update your profile or transferor details (name, email, phone) before initiating payment."
-          );
-          return;
-        }
-
         requestData.application_id = application.id;
-        requestData.customer = { email, phone, name };
+        // Only forward customer details when all three resolved on the client.
+        // Otherwise let the server resolve them from the application's applicant
+        // record — the initiate route joins the user row and fills name/email/phone
+        // (including company_name / company_phone). This prevents a missing
+        // client-side applicant join from blocking payment for valid applicants.
+        if (email && phone && name) {
+          requestData.customer = { email, phone, name };
+        }
       } else if (formData) {
         const email = String(formData.emailAddress || "").trim();
         const phone = String(formData.telephoneContact || "").trim();
