@@ -145,6 +145,12 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       miningEIA: 'environmental_impact_doc',
       miningHydrologicalReport: 'geological_survey',
       miningGeneralRequirements: 'other',
+      // Groundwater: Geophysical Survey for the eligible activities that have no existing
+      // hydrological-report field (the others reuse their *HydrologicalReport key above).
+      // Without these entries the upload loop skips them and the file never persists.
+      irrigationGeophysicalSurvey: 'geological_survey',
+      livestockGeophysicalSurvey: 'geological_survey',
+      waterSupplyGeophysicalSurvey: 'geological_survey',
       // Renewal documents
       renewalRequestLetter: 'renewal_request_letter',
       // Irrigation documents
