@@ -264,7 +264,35 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
           console.warn('⚠️ dashboard applications PATCH ignored unknown columns:', droppedColumns)
         }
 
-        return NextResponse.json({ success: true, application: updated.rows[0] || null })
+        const updatedApplication = updated.rows[0] || null
+
+        // Attach the applicant (user) record so the response shape matches GET.
+        // Consumers (e.g. the edit form's setApplication / payment tab) replace their
+        // in-state application with this response; without the join, downstream code
+        // that resolves payer contact details from `application.applicant`
+        // (email/phone/name) would see undefined and block payment.
+        let applicant = null
+        if (updatedApplication?.applicant_id) {
+          try {
+            const applicantRes = await query(
+              `
+              select *
+              from public.users
+              where id = $1
+              limit 1
+              `,
+              [String(updatedApplication.applicant_id)]
+            )
+            applicant = applicantRes.rows[0] || null
+          } catch (applicantErr) {
+            console.warn('⚠️ dashboard applications PATCH could not load applicant for response:', applicantErr)
+          }
+        }
+
+        return NextResponse.json({
+          success: true,
+          application: updatedApplication ? { ...updatedApplication, applicant } : null,
+        })
       } catch (updateErr) {
         const missingColumn = getMissingApplicationColumnFromError(updateErr)
         if (!missingColumn || !(missingColumn in updatePayload)) {
