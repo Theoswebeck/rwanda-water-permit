@@ -909,10 +909,6 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   s = s.replaceAll("{{LAT}}", ctx.lat);
   s = s.replaceAll("{{LNG}}", ctx.lng);
   s = s.replaceAll("{{VOLUME_LABEL}}", ctx.volumeLabel);
-  // Groundwater: change "flow rate" wording to "pumping rate" in the English template
-  if (ctx.isGroundwater) {
-    s = s.replace(/flow rate of/gi, "pumping rate of");
-  }
   s = s.replaceAll("{{DURATION_YEARS}}", ctx.durationYearsLabel);
   s = s.replaceAll("{{CONCESSION_AREA}}", ctx.concessionAreaLabel);
   s = s.replaceAll("{{ACTIVITY_LABEL}}", ctx.activityLabel);
@@ -1022,6 +1018,13 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   // Volume / flow rate
   s = s.replace(/flow rate of\s+XXX\s+m3\/year\s+OR\s+m3\/day/gi, `flow rate of ${ctx.volumeLabel}`);
   s = s.replace(/flow rate of\s+XXXX\s+m3\/day\s+OR\s+m3\/year/gi, `flow rate of ${ctx.volumeLabel}`);
+
+  // Groundwater: relabel "flow rate" → "pumping rate" AFTER all flow-rate value substitutions
+  // (both the {{VOLUME_LABEL}} token and the legacy "flow rate of XXX …" literals) so those
+  // replacements still match. Running it earlier breaks the legacy regex and leaves XXX.
+  if (ctx.isGroundwater) {
+    s = s.replace(/flow rate of/gi, "pumping rate of");
+  }
   s = s.replace(/angana na m3\s+XXX\s+ku mwaka/gi, `angana na ${ctx.volumeLabel.replaceAll("m³", "m3")} ku mwaka`);
   s = s.replace(/angana na\s+m³?\s+XXX\s+ku munsi/gi, `angana na ${ctx.volumeLabel.replaceAll("m³", "m3")} ku munsi`);
 
