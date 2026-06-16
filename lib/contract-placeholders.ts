@@ -420,6 +420,9 @@ function resolveSystemTypeLabels(application: ApplicationForContract): {
 
   const normalized = rawMethod.toLowerCase();
   if (!normalized) {
+    if (isGroundwaterApplication(application)) {
+      return { english: "Pumping system", kinyarwanda: "gupompa" };
+    }
     return { english: "N/A", kinyarwanda: "N/A" };
   }
 
@@ -468,11 +471,14 @@ function isGroundwaterApplication(application: ApplicationForContract): boolean 
 
 function resolvePumpingRateM3Day(application: ApplicationForContract): number | undefined {
   const notes = getInternalNotes(application);
-  const rec = (notes?._assessorAdjustments as Record<string, any> | undefined)?.recommendedPumpingRateM3Day;
-  if (typeof rec === "number" && Number.isFinite(rec) && rec > 0) return rec;
-  const requested = notes?.waterAbstractionDetails?.[0]?.flowRate;
-  if (typeof requested === "number" && Number.isFinite(requested) && requested > 0) return requested;
-  return undefined;
+  const toNum = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  return (
+    toNum((notes?._assessorAdjustments as Record<string, any> | undefined)?.recommendedPumpingRateM3Day) ??
+    toNum(notes?.waterAbstractionDetails?.[0]?.flowRate)
+  );
 }
 
 function resolveVolumeLabel(application: ApplicationForContract): string {

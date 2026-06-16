@@ -47,7 +47,9 @@ import {
   resolveFlowRate,
   resolveFlowRateKinyarwanda,
   resolveIdNumber,
+  resolveIsGroundwater,
   resolveKinyarwandaSystemType,
+  resolvePumpingRateM3Day,
   resolveLakeName,
   resolveLatLng,
   resolveNotes,
@@ -342,7 +344,11 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const vols = resolveVolumes(app);
       const yearlyStr = vols.yearly != null ? `${fmtNum(vols.yearly)} m³/year` : "N/A m³/year";
       const acts = resolveActivities(app);
-      return `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a flow rate of ${yearlyStr}. Water abstracted will be used for ${acts}.`;
+      const isGw = resolveIsGroundwater(app);
+      const prGw = isGw ? resolvePumpingRateM3Day(app) : undefined;
+      const rateWord = isGw ? "pumping rate" : "flow rate";
+      const rateStr = isGw && prGw != null ? `${fmtNum(prGw)} m³/day` : yearlyStr;
+      return `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of ${rateStr}. Water abstracted will be used for ${acts}.`;
     },
   },
   {
@@ -629,11 +635,12 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const acts = resolveActivities(app);
       const provLabel =
         loc.province.toLowerCase() === "kigali" ? "City OF Kigali" : `${loc.province} Province`;
+      const isGw = resolveIsGroundwater(app);
       // Dynamic values are wrapped in `**…**` so the renderer emits them
       // bold inline (matches the official RWB sample). The office address
       // itself is intentionally NOT bold — only org name, rep title, water
       // source, flow rate, and activities are emphasised.
-      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a flow rate of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
+      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a ${isGw ? "pumping rate" : "flow rate"} of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
     },
   },
   {

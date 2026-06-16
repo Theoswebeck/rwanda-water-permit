@@ -256,7 +256,7 @@ export function resolveAbstractionMethodRaw(app: PermitApplication): string {
 export function resolveSystemType(app: PermitApplication): string {
   const raw = resolveAbstractionMethodRaw(app);
   const normalized = raw.toLowerCase();
-  if (!normalized) return "GRAVITY SYSTEM";
+  if (!normalized) return resolveIsGroundwater(app) ? "PUMPING SYSTEM" : "GRAVITY SYSTEM";
   if (normalized.includes("pump")) return "PUMPING SYSTEM";
   if (normalized.includes("grav")) return "GRAVITY SYSTEM";
   if (normalized.includes("diversion") || normalized === "diversion_channel") return "DIVERSION CHANNEL";
@@ -270,7 +270,7 @@ export function resolveSystemType(app: PermitApplication): string {
 export function resolveEnglishSystemLabel(app: PermitApplication): string {
   const raw = resolveAbstractionMethodRaw(app);
   const normalized = raw.toLowerCase();
-  if (!normalized) return "GRAVITY system";
+  if (!normalized) return resolveIsGroundwater(app) ? "PUMPING system" : "GRAVITY system";
   if (normalized.includes("pump")) return "PUMPING system";
   if (normalized.includes("grav")) return "GRAVITY system";
   if (normalized.includes("diversion") || normalized === "diversion_channel") return "Diversion Channel";
@@ -279,6 +279,23 @@ export function resolveEnglishSystemLabel(app: PermitApplication): string {
   if (normalized.includes("spring")) return "Spring Capture";
   if (normalized.includes("hand") || (normalized.includes("dug") && normalized.includes("well"))) return "Hand Dug Well";
   return raw.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "GRAVITY system";
+}
+
+export function resolveIsGroundwater(app: PermitApplication): boolean {
+  const notes = resolveNotes(app);
+  return (notes as any)?.methodOfWaterAbstraction === "groundwater";
+}
+
+export function resolvePumpingRateM3Day(app: PermitApplication): number | undefined {
+  const notes = resolveNotes(app);
+  const toNum = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  return (
+    toNum((notes as any)?._assessorAdjustments?.recommendedPumpingRateM3Day) ??
+    toNum((notes as any)?.waterAbstractionDetails?.[0]?.flowRate)
+  );
 }
 
 export function resolveVolumes(app: PermitApplication): { yearly: number | null; daily: number | null } {
@@ -446,6 +463,10 @@ export function resolveOrgRep(app: PermitApplication): { name: string; title: st
 }
 
 export function resolveFlowRate(app: PermitApplication): string {
+  if (resolveIsGroundwater(app)) {
+    const pr = resolvePumpingRateM3Day(app);
+    if (pr != null) return `${fmtNum(pr)} M3/day`;
+  }
   const v = resolveVolumes(app);
   if (v.yearly != null) return `${fmtNum(v.yearly)} M3/year`;
   if (v.daily != null) return `${fmtNum(v.daily)} M3/day`;
@@ -516,6 +537,10 @@ function formatFlowRateUnitKinyarwanda(unitRaw: string): string {
 }
 
 export function resolveFlowRateKinyarwanda(app: PermitApplication): string {
+  if (resolveIsGroundwater(app)) {
+    const pr = resolvePumpingRateM3Day(app);
+    if (pr != null) return `${fmtNum(pr)} m3 ku munsi`;
+  }
   const v = resolveVolumes(app);
   if (v.yearly != null) return `${fmtNum(v.yearly)} m3 ku mwaka`;
   if (v.daily != null) return `${fmtNum(v.daily)} m3 ku munsi`;
@@ -593,7 +618,7 @@ export function resolveActivitiesKinyarwanda(app: PermitApplication): string {
 export function resolveKinyarwandaSystemType(app: PermitApplication): string {
   const raw = resolveAbstractionMethodRaw(app);
   const n = raw.toLowerCase();
-  if (!n) return "GUKORESHA";
+  if (!n) return resolveIsGroundwater(app) ? "GUPOMPA" : "GUKORESHA";
   if (n.includes("pump")) return "GUPOMPA";
   if (n.includes("grav")) return "GUKORESHA";
   if (n.includes("diversion") || n === "diversion_channel") return "gukoresha umuyoboro w'amazi";
