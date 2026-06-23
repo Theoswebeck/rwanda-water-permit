@@ -16,7 +16,7 @@ import { CalendarIcon } from "lucide-react";
 import { format, parse, isValid } from "date-fns";
 import { cn } from "@/lib/utils";
 import { InspectionDocumentsUpload, type InspectionDocumentFile } from "@/components/inspection/inspection-documents-upload";
-import { CatchmentAutocomplete } from "@/components/inspection/catchment-autocomplete";
+import { CatchmentSelect } from "@/components/inspection/catchment-select";
 import {
   INSPECTION_RECOMMENDATION_OPTIONS,
   RECOMMENDATION_DETAIL_HINTS,
@@ -726,28 +726,18 @@ export function InspectionFormLayout({
                 <EditableLockedField label="Water Source Name" lockedValue={locked.waterSourceName} overrideKey="waterSourceName" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Water Use / Purpose" lockedValue={locked.waterPurpose} overrideKey="waterPurpose" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 <EditableLockedField label="Location" lockedValue={locked.waterSourceLocation} overrideKey="waterSourceLocation" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                {!isFieldEmpty(locked.catchmentLevel1) ? (
-                  <ReadonlyField label="Level I Catchment" value={locked.catchmentLevel1} />
-                ) : (
-                  <CatchmentAutocomplete
-                    label="Level I Catchment"
-                    level="level1"
-                    value={overrides?.catchmentLevel1 ?? ""}
-                    disabled={!canEdit}
-                    onChange={(v) => handleOverride("catchmentLevel1", v)}
-                  />
-                )}
-                {!isFieldEmpty(locked.catchmentLevel2) ? (
-                  <ReadonlyField label="Level II Catchment" value={locked.catchmentLevel2} />
-                ) : (
-                  <CatchmentAutocomplete
-                    label="Level II Catchment"
-                    level="level2"
-                    value={overrides?.catchmentLevel2 ?? ""}
-                    disabled={!canEdit}
-                    onChange={(v) => handleOverride("catchmentLevel2", v)}
-                  />
-                )}
+                <CatchmentSelect
+                  level1Value={overrides?.catchmentLevel1 ?? locked.catchmentLevel1 ?? ""}
+                  level2Value={overrides?.catchmentLevel2 ?? locked.catchmentLevel2 ?? ""}
+                  disabled={!canEdit}
+                  onChange={({ level1, level2 }) =>
+                    setField("locked_field_overrides", {
+                      ...overrides,
+                      catchmentLevel1: level1,
+                      catchmentLevel2: level2,
+                    } as any)
+                  }
+                />
               </div>
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <EditableLockedField label="Water Source Latitude" lockedValue={locked.waterSourceLatitude} overrideKey="waterSourceLatitude" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />

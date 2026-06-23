@@ -413,9 +413,10 @@ export default function PermitInspectionUnifiedPage() {
         reviewed_by: null,
         reviewed_at: null,
 
-        // Locked fields (stored but not editable)
-        catchment_level1: locked?.catchmentLevel1 ?? form.locked_field_overrides?.catchmentLevel1 ?? null,
-        catchment_level2: locked?.catchmentLevel2 ?? form.locked_field_overrides?.catchmentLevel2 ?? null,
+        // Catchment: prefer the inspector's override (catchment dropdowns) over the
+        // permit's locked value so an override wins even when a value already exists.
+        catchment_level1: form.locked_field_overrides?.catchmentLevel1 ?? locked?.catchmentLevel1 ?? null,
+        catchment_level2: form.locked_field_overrides?.catchmentLevel2 ?? locked?.catchmentLevel2 ?? null,
       };
 
       const payload: any = {
