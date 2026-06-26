@@ -425,7 +425,29 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     // Certification
     formData.certificationAgreement = true;
   }
-  
+
+  // Backfill applicant category from the account profile when the stored form
+  // value is missing/empty/invalid. Some older submissions persisted an empty
+  // categoryApplicant in internal_notes (save-time race before the profile
+  // loaded), which fails the form's enum validation. The applicant's
+  // account_type is the source of truth, so trust it over a blank stored value.
+  const VALID_CATEGORIES = [
+    "individual",
+    "company",
+    "cooperative",
+    "organization",
+    "institution",
+    "ngo_association",
+    "other",
+  ];
+  const storedCategory = String(formData.categoryApplicant ?? "").trim();
+  if (!VALID_CATEGORIES.includes(storedCategory)) {
+    const accountType = String(application.applicant?.account_type ?? "").trim();
+    if (VALID_CATEGORIES.includes(accountType)) {
+      formData.categoryApplicant = accountType;
+    }
+  }
+
   return formData;
 }
 

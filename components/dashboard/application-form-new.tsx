@@ -1553,6 +1553,35 @@ export function ApplicationForm({
     reValidateMode: "onChange"
   });
 
+  // Ensure the applicant category is populated from the account profile once it
+  // loads. getDefaultValues runs at mount — if userProfile arrives afterwards
+  // (auth still loading), the memo recomputes but react-hook-form keeps the
+  // stale empty value, which previously got persisted as an empty
+  // categoryApplicant and then failed enum validation downstream. This
+  // re-applies account_type whenever the current value is empty/invalid.
+  useEffect(() => {
+    if (readOnly || !isApplicant || !userProfile) return;
+    const orgTypes = ["company", "cooperative", "organization", "institution", "ngo_association"];
+    const accountType = String(userProfile.account_type ?? "").trim();
+    const current = String(form.getValues("categoryApplicant") ?? "").trim();
+    if (accountType === "individual") {
+      if (!current || current === "individual") {
+        form.setValue("categoryApplicant", "individual", { shouldValidate: false });
+        if (!String(form.getValues("fullNameApplicant") ?? "").trim()) {
+          const fullName = `${userProfile.first_name || ""} ${userProfile.last_name || ""}`.trim();
+          if (fullName) form.setValue("fullNameApplicant", fullName, { shouldValidate: false });
+        }
+      }
+    } else if (orgTypes.includes(accountType)) {
+      if (current !== accountType) {
+        form.setValue("categoryApplicant", accountType, { shouldValidate: false });
+      }
+      if (!String(form.getValues("fullNameApplicant") ?? "").trim() && userProfile.company_name) {
+        form.setValue("fullNameApplicant", userProfile.company_name, { shouldValidate: false });
+      }
+    }
+  }, [userProfile, readOnly, isApplicant, form]);
+
   /**
    * Handle payment completion - save application after successful payment
    */
