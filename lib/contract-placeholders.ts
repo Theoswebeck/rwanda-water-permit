@@ -1103,6 +1103,47 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   stripXPrefixBeforeValue(ctx.cell);
   stripXPrefixBeforeValue(ctx.village);
 
+  // ── Groundwater-only Kinyarwanda rewrites ─────────────────────────────────
+  // Run AFTER all token substitutions and X-prefix cleanup so the water-source
+  // name and volume value are already in their final resolved form.
+  // Surface-water sentences are byte-unchanged by this block (block is skipped).
+  if (ctx.isGroundwater) {
+    // Strip "borehole" or leading "Nayikondo ya" from a source name so the
+    // rendered phrase reads cleanly as "Nayikondo ya <name>" without duplication.
+    const gwSourceClean = (raw: string): string =>
+      raw
+        .replace(/\s*\bborehole\b/gi, "")
+        .replace(/^\s*Nayikondo\s+ya\s*/i, "")
+        .trim() || raw.trim();
+
+    // VALUE (abstraction_individual legacy template):
+    // After line ~1030 the string reads "angana na 19 m3/day ku mwaka"
+    // → "angana na m3 19 ku munsi"  (unit before number, ku munsi)
+    s = s.replace(
+      /\bangana na ([\d,.]+)\s+m3\/day\s+ku mwaka/gi,
+      (_, n) => `angana na m3 ${n} ku munsi`,
+    );
+    // VALUE (abstraction_organization modern template):
+    // After {{VOLUME_LABEL}} substitution the string reads "ku gipimo cya 19 m³/day"
+    // → "ku gipimo cya m3 19 ku munsi"
+    s = s.replace(
+      /ku gipimo cya ([\d,.]+)\s+m[³3]\/day/gi,
+      (_, n) => `ku gipimo cya m3 ${n} ku munsi`,
+    );
+    // LOCATION (abstraction_individual legacy):
+    // "ava mu <source> gaherereye mu" → "ava muri Nayikondo ya <source> iherereye mu"
+    s = s.replace(
+      /ava mu ([^,]+?)\s+gaherereye mu\b/g,
+      (_, src) => `ava muri Nayikondo ya ${gwSourceClean(src)} iherereye mu`,
+    );
+    // LOCATION (abstraction_organization modern):
+    // "ava mu <source> mu gice cyacyo giherereye" → "ava muri Nayikondo ya <source> iherereye"
+    s = s.replace(
+      /ava mu ([^,]+?)\s+mu gice cyacyo giherereye/g,
+      (_, src) => `ava muri Nayikondo ya ${gwSourceClean(src)} iherereye`,
+    );
+  }
+
   return s;
 }
 

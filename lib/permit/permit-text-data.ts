@@ -539,7 +539,8 @@ function formatFlowRateUnitKinyarwanda(unitRaw: string): string {
 export function resolveFlowRateKinyarwanda(app: PermitApplication): string {
   if (resolveIsGroundwater(app)) {
     const pr = resolvePumpingRateM3Day(app);
-    if (pr != null) return `${fmtNum(pr)} m3 ku munsi`;
+    // Groundwater: unit before number, per official RWB format — "m3 <N> ku munsi"
+    if (pr != null) return `m3 ${fmtNum(pr)} ku munsi`;
   }
   const v = resolveVolumes(app);
   if (v.yearly != null) return `${fmtNum(v.yearly)} m3 ku mwaka`;

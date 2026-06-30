@@ -404,7 +404,15 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const systemTypeRw = resolveKinyarwandaSystemType(app);
       const yearlyStr = resolveFlowRateKinyarwanda(app);
       const actsRw = resolveActivitiesKinyarwanda(app);
-      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ava ku ${wsName} iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya ${yearlyStr}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+      const isGw = resolveIsGroundwater(app);
+      // Groundwater: strip "borehole"/"Nayikondo ya" so the phrase reads
+      // "Nayikondo ya <name>" without duplication.
+      const gwClean = (n: string) =>
+        n.replace(/\s*\bborehole\b/gi, "").replace(/^\s*Nayikondo\s+ya\s*/i, "").trim() || n;
+      const wsLocPhrase = isGw
+        ? `ava muri Nayikondo ya ${gwClean(wsName)} iherereye mu`
+        : `ava ku ${wsName} iherereye mu`;
+      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya ${yearlyStr}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
     },
   },
   {
@@ -698,13 +706,22 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       const systemTypeRw = resolveKinyarwandaSystemType(app);
       const flowRate = resolveFlowRateKinyarwanda(app);
       const actsRw = resolveActivitiesKinyarwanda(app);
+      const isGw = resolveIsGroundwater(app);
+      // Groundwater: strip "borehole"/"Nayikondo ya" so the phrase reads
+      // "Nayikondo ya <name>" without duplication.
+      const gwClean = (n: string) =>
+        n.replace(/\s*\bborehole\b/gi, "").replace(/^\s*Nayikondo\s+ya\s*/i, "").trim() || n;
+      const wsDisplay = isGw ? gwClean(wsName) : wsName;
       // Dynamic values are wrapped in `**…**` so the renderer emits them
       // bold inline (matches the official RWB sample). The office address
       // itself is intentionally NOT bold — only org name, rep title, water
       // source, flow rate, and activities are emphasised. Bold parity with
       // the English paragraph is required.
+      const wsLocPhrase = isGw
+        ? `ava muri Nayikondo ya **${wsDisplay}** iherereye mu`
+        : `ava ku **${wsName}** iherereye mu`;
       return `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
-        `ava ku **${wsName}** iherereye mu ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
+        `${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
         `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
         `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
     },
