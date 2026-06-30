@@ -1134,13 +1134,13 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
     // "ava mu <source> gaherereye mu" → "ava muri Nayikondo ya <source> iherereye mu"
     s = s.replace(
       /ava mu ([^,]+?)\s+gaherereye mu\b/g,
-      (_, src) => `ava muri Nayikondo ya ${gwSourceClean(src)} iherereye mu`,
+      (_, src) => `ava muri Nayikondo ya ${gwSourceClean(src)}, iherereye mu`,
     );
     // LOCATION (abstraction_organization modern):
-    // "ava mu <source> mu gice cyacyo giherereye" → "ava muri Nayikondo ya <source> iherereye"
+    // "ava mu <source> mu gice cyacyo giherereye" → "ava muri Nayikondo ya <source>, iherereye"
     s = s.replace(
       /ava mu ([^,]+?)\s+mu gice cyacyo giherereye/g,
-      (_, src) => `ava muri Nayikondo ya ${gwSourceClean(src)} iherereye`,
+      (_, src) => `ava muri Nayikondo ya ${gwSourceClean(src)}, iherereye`,
     );
   }
 

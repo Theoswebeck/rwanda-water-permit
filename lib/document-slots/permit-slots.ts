@@ -410,13 +410,15 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const gwClean = (n: string) =>
         n.replace(/\s*\bborehole\b/gi, "").replace(/^\s*Nayikondo\s+ya\s*/i, "").trim() || n;
       const wsLocPhrase = isGw
-        ? `ava muri Nayikondo ya ${gwClean(wsName)} iherereye mu`
+        ? `ava muri Nayikondo ya ${gwClean(wsName)}, iherereye mu`
         : `ava ku ${wsName} iherereye mu`;
       // Groundwater: value comes first ("angana na <rate> ku munsi, ava muri Nayikondo ya …"),
       // matching the organization/sample wording. Surface keeps the trailing "ku gipimo cya …".
       const rwValuePrefix = isGw ? `angana na ${yearlyStr}, ` : ``;
       const rwValueSuffix = isGw ? `` : `, ku gipimo cya ${yearlyStr}`;
-      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+      // Groundwater uses "gukoresha" (to use) rather than the pumping-system verb.
+      const rwVerb = isGw ? "gukoresha" : systemTypeRw;
+      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${rwVerb} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
     },
   },
   {
@@ -722,9 +724,11 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       // source, flow rate, and activities are emphasised. Bold parity with
       // the English paragraph is required.
       const wsLocPhrase = isGw
-        ? `ava muri Nayikondo ya **${wsDisplay}** iherereye mu`
+        ? `ava muri Nayikondo ya **${wsDisplay}**, iherereye mu`
         : `ava ku **${wsName}** iherereye mu`;
-      return `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${systemTypeRw} amazi angana na **${flowRate}**, ` +
+      // Groundwater uses "gukoresha" (to use) rather than the pumping-system verb.
+      const rwVerb = isGw ? "gukoresha" : systemTypeRw;
+      return `"**${orgName}**" ifite ibiro biherereye mu ${orgAddrRw}; ihagarariwe na ${rep.name} "**${rep.title}**", yemerewe ${rwVerb} amazi angana na **${flowRate}**, ` +
         `${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, ` +
         `Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, ` +
         `Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}. Aya mazi yemerewe gukoreshwa mu **${actsRw}**.`;
