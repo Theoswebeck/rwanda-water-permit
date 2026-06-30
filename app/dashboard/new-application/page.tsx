@@ -1126,7 +1126,7 @@ function NewApplicationContent() {
       const resolvedActivities = originalActivities.length > 0 ? originalActivities : manualActivities;
 
       // Concession area from form (used for concession permits: fish farming in lakes, recreation)
-      const pureConcessionPurposes = ["fish_farming_lakes", "recreation_activities"];
+      const pureConcessionPurposes = ["fish_farming_lakes", "recreation_activities", "port_construction"];
       const isConcessionTransfer = pureConcessionPurposes.includes(formData.waterPurpose || "") ||
         formData.waterUseCategory === "concession";
       const concessionAreaValue = formData.concessionArea ? parseFloat(formData.concessionArea) : undefined;
@@ -1251,7 +1251,7 @@ function NewApplicationContent() {
       const draftManualActivities = isDraftManualPermit && formData.waterPurpose ? [formData.waterPurpose] : [];
       const draftResolvedActivities = draftOriginalActivities.length > 0 ? draftOriginalActivities : draftManualActivities;
 
-      const draftPureConcessionPurposes = ["fish_farming_lakes", "recreation_activities"];
+      const draftPureConcessionPurposes = ["fish_farming_lakes", "recreation_activities", "port_construction"];
       const isDraftConcession = draftPureConcessionPurposes.includes(formData.waterPurpose || "") ||
         formData.waterUseCategory === "concession";
       const draftConcessionArea = formData.concessionArea ? parseFloat(formData.concessionArea) : undefined;

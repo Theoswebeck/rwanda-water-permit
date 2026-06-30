@@ -92,7 +92,7 @@ do $$ begin
   create type public.verification_status as enum ('pending', 'verified', 'rejected');
 exception when duplicate_object then null; end $$;
 do $$ begin
-  create type public.water_purpose as enum ('domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation_activities', 'recreation', 'electricity_generation', 'mining', 'municipal_supply', 'other');
+  create type public.water_purpose as enum ('domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation_activities', 'recreation', 'electricity_generation', 'mining', 'municipal_supply', 'port_construction', 'other');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create type public.water_reliability as enum ('always_available', 'frequently_dry', 'seasonal_dry');

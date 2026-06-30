@@ -54,7 +54,7 @@ export function formatWaterSourceForDB(waterSourceType: string): Application['wa
 }
 
 // Helper function to map form activity types to database water_purpose enum values
-// Database enum: 'domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation', 'recreation_activities', 'electricity_generation', 'mining', 'municipal_supply', 'water_supply', 'coffee_washing', 'gaz_extraction', 'construction_of_dam', 'construction_of_infrastructures', 'navigation', 'other'
+// Database enum: 'domestic', 'irrigation', 'industrial', 'livestock', 'fish_farming_lakes', 'fish_farming_ponds', 'recreation', 'recreation_activities', 'electricity_generation', 'mining', 'municipal_supply', 'water_supply', 'coffee_washing', 'gaz_extraction', 'construction_of_dam', 'construction_of_infrastructures', 'navigation', 'port_construction', 'other'
 export function formatWaterPurposeForDB(activity: string): Application['water_purpose'] {
   if (!activity) return 'other';
   const purposeMap: Record<string, Application['water_purpose']> = {
@@ -77,6 +77,7 @@ export function formatWaterPurposeForDB(activity: string): Application['water_pu
     'construction_of_dam': 'construction_of_dam',
     'construction_of_infrastructures': 'construction_of_infrastructures',
     'navigation': 'navigation',
+    'port_construction': 'port_construction',
     'industry': 'industrial',
     'electricity': 'electricity_generation',
     'construction': 'industrial',
@@ -111,6 +112,7 @@ export function formatApplicationTypeForDB(activity: string): Application['appli
     'construction_of_dam': 'industrial',
     'construction_of_infrastructures': 'industrial',
     'navigation': 'commercial',
+    'port_construction': 'commercial',
     'recreation': 'commercial',
     'recreation_activities': 'commercial',
     'livestock': 'agricultural',
@@ -235,6 +237,9 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     const recreationM2 = parsePositiveNumber(formData.recreationConcessionAreaM2);
     if (recreationM2) return Number((recreationM2 / 10000).toFixed(4));
 
+    const portConstructionM2 = parsePositiveNumber(formData.portConstructionConcessionAreaM2);
+    if (portConstructionM2) return Number((portConstructionM2 / 10000).toFixed(4));
+
     const explicit = parsePositiveNumber(formData.concessionArea);
     if (explicit) {
       const unit = String(formData.concessionAreaUnit || '').toLowerCase();
@@ -289,6 +294,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'construction_of_dam': 'industrial',
     'construction_of_infrastructures': 'industrial',
     'navigation': 'commercial', // navigation is commercial activity
+    'port_construction': 'commercial',
     'recreation': 'commercial', // legacy
     'recreation_activities': 'commercial',
     'livestock': 'agricultural',
@@ -311,6 +317,7 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
     'construction_of_dam': 'construction_of_dam',
     'construction_of_infrastructures': 'construction_of_infrastructures',
     'navigation': 'navigation',
+    'port_construction': 'port_construction',
     'recreation': 'recreation', // legacy
     'recreation_activities': 'recreation',
     'livestock': 'livestock',
@@ -546,7 +553,13 @@ export function mapFormDataToApplication(formData: any, status: 'draft' | 'submi
       recreationType: formData.recreationType,
       recreationProjectDescription: formData.recreationProjectDescription,
       recreationConcessionAreaM2: formData.recreationConcessionAreaM2,
-      
+
+      // Port construction fields
+      portConstructionPurpose: formData.portConstructionPurpose,
+      portConstructionDescription: formData.portConstructionDescription,
+      portConstructionConcessionAreaM2: formData.portConstructionConcessionAreaM2,
+      portConstructionDuration: formData.portConstructionDuration,
+
       // Irrigation structured fields
       irrigationCropType: formData.irrigationCropType,
       irrigationGrowingSeasonFrom: formData.irrigationGrowingSeasonFrom,

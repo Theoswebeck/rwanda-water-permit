@@ -150,6 +150,17 @@ export function getAnnexRequirementForActivity(
         ],
       };
 
+    // Annex (Port Construction)
+    case "port_construction":
+      return {
+        annexTitle: "ANNEX (Only for Port Construction)",
+        attachments: [
+          req(applicationLetterLabel, "portConstructionGeneralRequirements"),
+          req("Environmental Impact Assessment Certificate", "portConstructionEIA"),
+          req("Project Feasibility Study", "portConstructionFeasibilityStudy"),
+        ],
+      };
+
     // Annex I (Recreational activities)
     case "recreation_activities":
       return {

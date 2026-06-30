@@ -33,6 +33,7 @@ const ADDITIONAL_DOCUMENT_CATEGORY_PREFIXES: Array<[string, string]> = [
   ["construction_dam_", "construction_dam"],
   ["construction_of_infrastructures_", "infrastructure"],
   ["infrastructure_", "infrastructure"],
+  ["port_construction_", "port_construction"],
   ["recreation_activities_", "recreation"],
   ["recreation_", "recreation"],
   ["gaz_extraction_", "gaz_extraction"],

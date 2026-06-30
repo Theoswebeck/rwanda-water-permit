@@ -123,6 +123,7 @@ const INTENDED_ACTIVITY_OPTIONS = [
   { value: "fish_farming_lakes", label: "Fish Farming (Lakes)" },
   { value: "fish_farming_ponds", label: "Fish Farming (Ponds)" },
   { value: "recreation_activities", label: "Recreation Activities" },
+  { value: "port_construction", label: "Port Construction" },
   { value: "industrial_use", label: "Industrial Use" },
   { value: "hydropower_generation", label: "Hydropower Generation" },
   { value: "mining_operations", label: "Mining Operations" },
@@ -148,7 +149,7 @@ const ALLOWANCE_UNIT_OPTIONS = [
   { value: "l/s", label: "l/s" },
 ];
 
-const CONCESSION_ACTIVITIES = ["fish_farming_lakes", "recreation_activities", "aquaculture"];
+const CONCESSION_ACTIVITIES = ["fish_farming_lakes", "recreation_activities", "aquaculture", "port_construction"];
 
 export const PermitRenewalForm = memo(function PermitRenewalForm({
   permit,

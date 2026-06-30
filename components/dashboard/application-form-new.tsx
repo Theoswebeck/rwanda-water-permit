@@ -317,7 +317,13 @@ const applicationFormSchema = z.object({
   recreationType: z.string().optional(),
   recreationProjectDescription: z.string().optional(),
   recreationConcessionAreaM2: optionalNumberField,
-  
+
+  // Port construction fields
+  portConstructionPurpose: z.string().optional(),
+  portConstructionDescription: z.string().optional(),
+  portConstructionConcessionAreaM2: optionalNumberField,
+  portConstructionDuration: z.string().optional(),
+
   // Irrigation specific fields
   irrigationCropType: z.string().optional(),
   irrigationGrowingSeasonFrom: z.string().optional(),
@@ -405,6 +411,11 @@ const applicationFormSchema = z.object({
   recreationEIA: z.any().optional(),
   recreationManagementPlan: z.any().optional(),
   recreationPolygonAreaMap: z.any().optional(),
+
+  // Port construction
+  portConstructionGeneralRequirements: z.any().optional(),
+  portConstructionEIA: z.any().optional(),
+  portConstructionFeasibilityStudy: z.any().optional(),
 
   // Gaz extraction
   gazExtractionGeneralRequirements: z.any().optional(),
@@ -512,7 +523,7 @@ const applicationFormSchema = z.object({
     return;
   }
 
-  const pureConcessionActs = ["fish_farming_lakes", "recreation_activities"];
+  const pureConcessionActs = ["fish_farming_lakes", "recreation_activities", "port_construction"];
   const isPureConcessionAct = selectedActivities.some((a) => pureConcessionActs.includes(a));
   const effectiveCategory = isPureConcessionAct ? "concession" : (data.waterUseCategory ?? "abstraction");
 
@@ -647,6 +658,41 @@ const applicationFormSchema = z.object({
         code: z.ZodIssueCode.custom,
         path: ["recreationConcessionAreaM2"],
         message: "Concession area (m²) must be a number greater than 0 for recreational activities."
+      });
+    }
+  }
+
+  const hasPortConstructionActivity = selectedActivities.includes("port_construction");
+  if (hasPortConstructionActivity) {
+    if (!String(data.portConstructionPurpose ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["portConstructionPurpose"],
+        message: "Purpose of construction is required."
+      });
+    }
+
+    if (!String(data.portConstructionDescription ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["portConstructionDescription"],
+        message: "Brief description of the project is required."
+      });
+    }
+
+    if (!isValidNumber(data.portConstructionConcessionAreaM2) || data.portConstructionConcessionAreaM2 <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["portConstructionConcessionAreaM2"],
+        message: "Concession area (m²) must be a number greater than 0 for port construction."
+      });
+    }
+
+    if (!String(data.portConstructionDuration ?? "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["portConstructionDuration"],
+        message: "Expected period of time required for construction is required."
       });
     }
   }
@@ -833,6 +879,11 @@ function computeModificationChanges(
     'recreationType',
     'recreationProjectDescription',
     'recreationConcessionAreaM2',
+    // Port construction
+    'portConstructionPurpose',
+    'portConstructionDescription',
+    'portConstructionConcessionAreaM2',
+    'portConstructionDuration',
   ];
   
   for (const field of fieldsToCompare) {
@@ -984,6 +1035,10 @@ const FIELD_LABELS: Record<string, string> = {
   recreationType: 'Recreation Type',
   recreationProjectDescription: 'Recreation Project Description',
   recreationConcessionAreaM2: 'Recreation Concession Area (m²)',
+  portConstructionPurpose: 'Purpose of construction',
+  portConstructionDescription: 'Brief description of the project',
+  portConstructionConcessionAreaM2: 'Concession area (m²)',
+  portConstructionDuration: 'Expected period of time required for construction',
 };
 
 // Industry sub-field base labels (row index is dynamic)
@@ -1378,6 +1433,10 @@ export function ApplicationForm({
     recreationEIA: useRef<HTMLInputElement>(null),
     recreationManagementPlan: useRef<HTMLInputElement>(null),
     recreationPolygonAreaMap: useRef<HTMLInputElement>(null),
+    // Port construction documents
+    portConstructionGeneralRequirements: useRef<HTMLInputElement>(null),
+    portConstructionEIA: useRef<HTMLInputElement>(null),
+    portConstructionFeasibilityStudy: useRef<HTMLInputElement>(null),
     // Navigation documents
     navigationGeneralRequirements: useRef<HTMLInputElement>(null),
     navigationEIA: useRef<HTMLInputElement>(null),
@@ -1481,6 +1540,10 @@ export function ApplicationForm({
       recreationType: "",
       recreationProjectDescription: "",
       recreationConcessionAreaM2: undefined,
+      portConstructionPurpose: "",
+      portConstructionDescription: "",
+      portConstructionConcessionAreaM2: undefined,
+      portConstructionDuration: "",
       irrigationCropType: "",
       irrigationGrowingSeasonFrom: "",
       irrigationGrowingSeasonTo: "",
@@ -1725,13 +1788,14 @@ export function ApplicationForm({
   // Derived: effective water use category.
   // Fish farming in lakes & recreational activities → always concession.
   // All other activities → user-selectable, defaulting to abstraction.
-  const pureConcessionActivities = ["fish_farming_lakes", "recreation_activities"];
+  const pureConcessionActivities = ["fish_farming_lakes", "recreation_activities", "port_construction"];
   const isPureConcession = watchedIntendedActivities?.some((a: string) => pureConcessionActivities.includes(a)) ?? false;
   const effectiveWaterUseCategory: "abstraction" | "concession" = isPureConcession
     ? "concession"
     : (watchedWaterUseCategory ?? "abstraction");
 
   const isDistrictWaterSupply = watchedIntendedActivities?.includes("district_water_supply") ?? false;
+  const isPortConstruction = watchedIntendedActivities?.includes("port_construction") ?? false;
 
   // Groundwater eligibility helpers (consumed by later tasks).
   const primarySelectedActivity = watchedIntendedActivities?.[0];
@@ -1761,6 +1825,13 @@ export function ApplicationForm({
       form.setValue("waterSourceType", "borehole", { shouldDirty: false });
     }
   }, [isGroundwater]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Port construction is always lake-based: lock waterSourceType to lake.
+  useEffect(() => {
+    if (!readOnly && isPortConstruction && form.getValues("waterSourceType") !== "lake") {
+      form.setValue("waterSourceType", "lake", { shouldDirty: false });
+    }
+  }, [isPortConstruction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Seed 5 empty network rows when District Water Supply is selected and the table is empty.
   // Keyed on the selected activity (not the bulk profile flag) so any user gets the rows.
@@ -1938,13 +2009,14 @@ export function ApplicationForm({
 
     const intended = form.getValues('intendedActivities') || [];
     const selectedActivity = intended[0];
-    const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities'];
+    const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction'];
     const isPureConcessionAct = intended.some((a: string) => pureConcessionActs.includes(a));
     const savedCategory = form.getValues('waterUseCategory');
     const effectiveCat = isPureConcessionAct ? 'concession' : (savedCategory ?? 'abstraction');
     const requiresConcessionPolygons = effectiveCat === 'concession';
     const requiresAbstractionDetails = effectiveCat === 'abstraction' && selectedActivity !== 'district_water_supply';
     const requiresRecreationDetails = intended.includes('recreation_activities');
+    const requiresPortConstructionDetails = intended.includes('port_construction');
 
     const hasText = (value: unknown) => String(value ?? '').trim() !== '';
     const isPositiveNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0;
@@ -2119,7 +2191,44 @@ export function ApplicationForm({
         return false;
       }
     }
-    
+
+    if (requiresPortConstructionDetails) {
+      const portConstructionPurpose = String(form.getValues('portConstructionPurpose') ?? '').trim();
+      const portConstructionDescription = String(form.getValues('portConstructionDescription') ?? '').trim();
+      const portConstructionConcessionAreaM2 = form.getValues('portConstructionConcessionAreaM2');
+      const portConstructionDuration = String(form.getValues('portConstructionDuration') ?? '').trim();
+      const validPortArea = typeof portConstructionConcessionAreaM2 === 'number' && Number.isFinite(portConstructionConcessionAreaM2) && portConstructionConcessionAreaM2 > 0;
+
+      if (!portConstructionPurpose) {
+        form.setError('portConstructionPurpose', { type: 'manual', message: 'Purpose of construction is required.' });
+      } else {
+        form.clearErrors('portConstructionPurpose');
+      }
+
+      if (!portConstructionDescription) {
+        form.setError('portConstructionDescription', { type: 'manual', message: 'Brief description of the project is required.' });
+      } else {
+        form.clearErrors('portConstructionDescription');
+      }
+
+      if (!validPortArea) {
+        form.setError('portConstructionConcessionAreaM2', { type: 'manual', message: 'Concession area (m²) must be a number greater than 0.' });
+      } else {
+        form.clearErrors('portConstructionConcessionAreaM2');
+      }
+
+      if (!portConstructionDuration) {
+        form.setError('portConstructionDuration', { type: 'manual', message: 'Expected period of time required for construction is required.' });
+      } else {
+        form.clearErrors('portConstructionDuration');
+      }
+
+      if (!portConstructionPurpose || !portConstructionDescription || !validPortArea || !portConstructionDuration) {
+        setValidationError("Please fill in all Port Construction Details before proceeding.");
+        return false;
+      }
+    }
+
     // For abstraction activities, LAT/LONG and water abstraction details are required
     if (requiresAbstractionDetails) {
       // Validate LAT/LONG
@@ -2441,6 +2550,10 @@ export function ApplicationForm({
         const waterAbstractionDetails = form.watch('waterAbstractionDetails') || form.getValues('waterAbstractionDetails') || [];
         const recreationProjectDescription = String(form.watch('recreationProjectDescription') || form.getValues('recreationProjectDescription') || '').trim();
         const recreationConcessionAreaM2 = form.watch('recreationConcessionAreaM2') ?? form.getValues('recreationConcessionAreaM2');
+        const portConstructionPurpose = String(form.watch('portConstructionPurpose') || form.getValues('portConstructionPurpose') || '').trim();
+        const portConstructionDescription = String(form.watch('portConstructionDescription') || form.getValues('portConstructionDescription') || '').trim();
+        const portConstructionConcessionAreaM2 = form.watch('portConstructionConcessionAreaM2') ?? form.getValues('portConstructionConcessionAreaM2');
+        const portConstructionDuration = String(form.watch('portConstructionDuration') || form.getValues('portConstructionDuration') || '').trim();
         const hasRequiredDocs = checkRequiredDocuments();
         
         // Must have at least one activity selected
@@ -2555,7 +2668,7 @@ export function ApplicationForm({
           return !hasRequiredDocs;
         }
 
-        const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities'];
+        const pureConcessionActs = ['fish_farming_lakes', 'recreation_activities', 'port_construction'];
         const isPureConcessionAct = intendedActivities.some((a: string) => pureConcessionActs.includes(a));
         const savedCat = form.getValues('waterUseCategory');
         const effectiveCat = isPureConcessionAct ? 'concession' : (savedCat ?? 'abstraction');
@@ -2581,7 +2694,16 @@ export function ApplicationForm({
               typeof recreationConcessionAreaM2 === 'number' &&
               Number.isFinite(recreationConcessionAreaM2) &&
               recreationConcessionAreaM2 > 0);
-          return !hasRequiredDocs || !hasValidPolygons || !hasRecreationDetails;
+          const hasPortConstructionActivity = intendedActivities.includes('port_construction');
+          const hasPortConstructionDetails =
+            !hasPortConstructionActivity ||
+            (portConstructionPurpose !== '' &&
+              portConstructionDescription !== '' &&
+              portConstructionDuration !== '' &&
+              typeof portConstructionConcessionAreaM2 === 'number' &&
+              Number.isFinite(portConstructionConcessionAreaM2) &&
+              portConstructionConcessionAreaM2 > 0);
+          return !hasRequiredDocs || !hasValidPolygons || !hasRecreationDetails || !hasPortConstructionDetails;
         }
         
         // For abstraction activities, water abstraction details and LAT/LONG are required
@@ -2797,6 +2919,10 @@ export function ApplicationForm({
         recreationType: "",
         recreationProjectDescription: "",
         recreationConcessionAreaM2: undefined,
+        portConstructionPurpose: "",
+        portConstructionDescription: "",
+        portConstructionConcessionAreaM2: undefined,
+        portConstructionDuration: "",
         irrigationCropType: "",
         irrigationGrowingSeasonFrom: "",
         irrigationGrowingSeasonTo: "",
@@ -4131,6 +4257,8 @@ export function ApplicationForm({
                             <SelectContent>
                               {isGroundwater ? (
                                 <SelectItem value="borehole">{tx("Borehole")}</SelectItem>
+                              ) : isPortConstruction ? (
+                                <SelectItem value="lake">{tx("Lake")}</SelectItem>
                               ) : (
                                 <>
                                   <SelectItem value="lake">{tx("Lake")}</SelectItem>
@@ -4173,7 +4301,7 @@ export function ApplicationForm({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-base font-medium">
-                          {isGroundwater ? tx("11. Name of the borehole *") : tx("11. Name of the source of water *")}
+                          {isPortConstruction ? tx("11. Name of the lake *") : isGroundwater ? tx("11. Name of the borehole *") : tx("11. Name of the source of water *")}
                         </FormLabel>
                         <FormControl>
                           <Input {...field} {...getInputProps({ value: field.value || "", placeholder: "Enter name of water source" }, "nameSourceWater")} />
@@ -4517,6 +4645,7 @@ export function ApplicationForm({
                               { value: "irrigation", label: tx("Irrigation") },
                               { value: "livestock", label: tx("Livestock") },
                               { value: "mining", label: tx("Mining") },
+                              { value: "port_construction", label: tx("Port Construction") },
                               { value: "recreation_activities", label: tx("Recreational activities") },
                               { value: "water_supply", label: tx("Water supply") },
                               { value: "district_water_supply", label: tx("District Water Supply") },
@@ -6287,9 +6416,131 @@ export function ApplicationForm({
 
                           {renderRequiredAttachmentsForActivity("recreation_activities")}
 
-                          <AdditionalDocumentsSection 
-                            category="recreation" 
-                            activityType="recreation_activities" 
+                          <AdditionalDocumentsSection
+                            category="recreation"
+                            activityType="recreation_activities"
+                          />
+                        </div>
+                      )}
+
+                      {/* Port Construction Details */}
+                      {watchedIntendedActivities?.includes("port_construction") && (
+                        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
+                          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
+                            Port Construction Details
+                          </h4>
+
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 mb-6">
+                              <tbody>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Purpose of construction <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="portConstructionPurpose"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseInput
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            placeholder="Purpose of construction"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Brief description of the project <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="portConstructionDescription"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseTextarea
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            placeholder="Describe the port construction project..."
+                                            className={`border-0 bg-transparent min-h-[120px] ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Concession area (m²) <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="portConstructionConcessionAreaM2"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseInput
+                                            {...field}
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                              if (readOnly) return;
+                                              const v = e.target.value;
+                                              field.onChange(v === "" ? undefined : Number(v));
+                                            }}
+                                            placeholder="Enter concession area in m²"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-3 text-sm font-medium">Expected period of time required for construction <span className="text-red-500">*</span></td>
+                                  <td className="border border-gray-300 dark:border-gray-600 p-2">
+                                    <FormField
+                                      control={form.control}
+                                      name="portConstructionDuration"
+                                      render={({ field }) => (
+                                        <FormControl>
+                                          <BaseInput
+                                            {...field}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => field.onChange(e.target.value)}
+                                            placeholder="e.g., 18 months"
+                                            className={`border-0 bg-transparent ${readOnly ? "bg-gray-50 cursor-default opacity-60" : ""}`}
+                                            disabled={readOnly}
+                                            readOnly={readOnly}
+                                            required
+                                          />
+                                        </FormControl>
+                                      )}
+                                    />
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {renderRequiredAttachmentsForActivity("port_construction")}
+
+                          <AdditionalDocumentsSection
+                            category="port_construction"
+                            activityType="port_construction"
                           />
                         </div>
                       )}

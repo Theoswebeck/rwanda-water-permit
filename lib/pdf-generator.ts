@@ -311,6 +311,7 @@ function getActivityLabel(activity: string): string {
     construction_of_dam: "Construction of Dam",
     construction_of_infrastructures: "Construction or installation of infrastructure",
     navigation: "Navigation",
+    port_construction: "Port Construction",
     recreation_activities: "Recreational Activities",
     gaz_extraction: "Gaz Extraction",
     livestock: "Livestock",

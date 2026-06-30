@@ -75,6 +75,7 @@ export const INTENDED_ACTIVITY_OPTIONS: { value: string; label: string }[] = [
   { value: "irrigation", label: "Irrigation" },
   { value: "livestock", label: "Livestock" },
   { value: "mining", label: "Mining" },
+  { value: "port_construction", label: "Port Construction" },
   { value: "recreation_activities", label: "Recreational activities" },
   { value: "water_supply", label: "Water supply" },
   { value: "other", label: "Other" },

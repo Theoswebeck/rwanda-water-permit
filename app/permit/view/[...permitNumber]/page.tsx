@@ -238,7 +238,7 @@ export default async function PublicPermitViewPage({
   })();
   const issueDate = getCanonicalIssueDate(permit as Record<string, unknown>);
   const normalizedPurpose = typeof permit.purpose === "string" ? permit.purpose.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
-  const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities"]);
+  const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities", "port_construction"]);
   const isConcessionPermit = (application ? isConcessionApplication(application) : false) || concessionPurposeHints.has(normalizedPurpose);
 
   const abstractionValue = (() => {
@@ -291,6 +291,9 @@ export default async function PublicPermitViewPage({
 
     const recreationM2 = parsePositiveNumber(internalNotes?.recreationConcessionAreaM2);
     if (recreationM2) return `${(recreationM2 / 10000).toLocaleString()} ha`;
+
+    const portConstructionM2 = parsePositiveNumber(internalNotes?.portConstructionConcessionAreaM2);
+    if (portConstructionM2) return `${(portConstructionM2 / 10000).toLocaleString()} ha`;
 
     if (permit.source === "permit_registry") {
       const registryRaw = typeof permit.water_allowance === "string" ? permit.water_allowance.trim() : "";

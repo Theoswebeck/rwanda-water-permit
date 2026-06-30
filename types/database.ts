@@ -89,6 +89,7 @@ export type WaterPurpose =
   | 'construction_of_dam'
   | 'construction_of_infrastructures'
   | 'navigation'
+  | 'port_construction'
   | 'other'
 
 export type WaterReliability = 'always_available' | 'frequently_dry' | 'seasonal_dry'

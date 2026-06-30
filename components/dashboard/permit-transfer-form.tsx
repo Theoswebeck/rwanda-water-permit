@@ -494,7 +494,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const watchedPolygons = form.watch('waterSourcePolygons');
 
   // Activity/purpose automatically determines abstraction vs concession — no manual choice
-  const CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities"];
+  const CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities", "port_construction"];
   const effectiveWaterUseCategory: "abstraction" | "concession" = CONCESSION_PURPOSES.includes(waterPurpose || "")
     ? "concession"
     : "abstraction";

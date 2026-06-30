@@ -180,6 +180,7 @@ export function determineReportType(
     const pureConcessionActivities = new Set([
       "fish_farming_lakes",
       "recreation_activities",
+      "port_construction",
     ]);
     const hasPureConcessionActivity = cleaned.some((a) => pureConcessionActivities.has(a));
     if (hasPureConcessionActivity) {
@@ -193,7 +194,7 @@ export function determineReportType(
   }
 
   // Fallback to water_purpose (legacy format)
-  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities') {
+  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities' || waterPurpose === 'port_construction') {
     return 'concession';
   }
 
@@ -262,6 +263,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   construction_of_dam: "Construction of Dam",
   construction_of_infrastructures: "Construction or installation of infrastructure",
   navigation: "Navigation",
+  port_construction: "Port Construction",
   recreation_activities: "Recreational Activities",
   recreation: "Recreational Activities",
   gaz_extraction: "Gaz Extraction",

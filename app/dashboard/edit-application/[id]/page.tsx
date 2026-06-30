@@ -213,7 +213,8 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     'industrial': 'industry',
     'electricity_generation': 'electricity_generation',
     'mining': 'mining',
-    'recreation': 'recreation_activities'
+    'recreation': 'recreation_activities',
+    'port_construction': 'port_construction'
   };
   
   // Prefer the explicit persisted multi-select list if present.
