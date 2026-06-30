@@ -412,7 +412,11 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const wsLocPhrase = isGw
         ? `ava muri Nayikondo ya ${gwClean(wsName)} iherereye mu`
         : `ava ku ${wsName} iherereye mu`;
-      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}, ku gipimo cya ${yearlyStr}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
+      // Groundwater: value comes first ("angana na <rate> ku munsi, ava muri Nayikondo ya …"),
+      // matching the organization/sample wording. Surface keeps the trailing "ku gipimo cya …".
+      const rwValuePrefix = isGw ? `angana na ${yearlyStr}, ` : ``;
+      const rwValueSuffix = isGw ? `` : `, ku gipimo cya ${yearlyStr}`;
+      return `"${name}", ufite Indangamuntu nimero: ${idNum}, yemerewe ${systemTypeRw} amazi ${rwValuePrefix}${wsLocPhrase} ${formatIntaraOrUmujyiWaKigali(loc.province)}, Akarere ka ${loc.district}, Umurenge wa ${loc.sector}, Akagari ka ${loc.cell}, Umudugudu wa ${loc.village} kuri Latitide (Latitude): ${lat}${lat !== "N/A" ? "°" : ""}, Lonjitide (Longitude): ${lng}${lng !== "N/A" ? "°" : ""}${rwValueSuffix}. Aya mazi yemerewe gukoreshwa mu ${actsRw}.`;
     },
   },
   {
