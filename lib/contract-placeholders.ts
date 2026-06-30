@@ -1024,6 +1024,8 @@ export function fillContractText(raw: string, ctx: ContractPlaceholderContext): 
   // replacements still match. Running it earlier breaks the legacy regex and leaves XXX.
   if (ctx.isGroundwater) {
     s = s.replace(/flow rate of/gi, "pumping rate of");
+    // Groundwater is abstracted from a borehole — "abstract water" → "abstract ground water".
+    s = s.replace(/abstract water from/gi, "abstract ground water from");
   }
   s = s.replace(/angana na m3\s+XXX\s+ku mwaka/gi, `angana na ${ctx.volumeLabel.replaceAll("m³", "m3")} ku mwaka`);
   s = s.replace(/angana na\s+m³?\s+XXX\s+ku munsi/gi, `angana na ${ctx.volumeLabel.replaceAll("m³", "m3")} ku munsi`);

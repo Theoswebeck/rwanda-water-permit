@@ -348,7 +348,7 @@ const abstractionIndividualSlots: DocumentTextSlot[] = [
       const prGw = isGw ? resolvePumpingRateM3Day(app) : undefined;
       const rateWord = isGw ? "pumping rate" : "flow rate";
       const rateStr = isGw && prGw != null ? `${fmtNum(prGw)} m³/day` : yearlyStr;
-      return `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract water from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of ${rateStr}. Water abstracted will be used for ${acts}.`;
+      return `\u201C${name}\u201D, with ID Number: ${idNum}, is authorized to abstract ${isGw ? "ground water" : "water"} from ${wsName} located in ${loc.province} Province, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysType} with a ${rateWord} of ${rateStr}. Water abstracted will be used for ${acts}.`;
     },
   },
   {
@@ -640,7 +640,7 @@ const abstractionOrganizationSlots: DocumentTextSlot[] = [
       // bold inline (matches the official RWB sample). The office address
       // itself is intentionally NOT bold — only org name, rep title, water
       // source, flow rate, and activities are emphasised.
-      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract water from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a ${isGw ? "pumping rate" : "flow rate"} of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
+      return `\u201C**${orgName}**\u201D with its registered office address as follows: ${orgAddr}; represented by ${rep.name} \u201C**${rep.title}**\u201D, is authorized to abstract ${isGw ? "ground water" : "water"} from **${wsName}** located in ${provLabel}, ${loc.district} District, ${loc.sector} Sector, ${loc.cell} Cell, ${loc.village} Village at Latitude: ${lat}${lat !== "N/A" ? "°" : ""}, Longitude: ${lng}${lng !== "N/A" ? "°" : ""}, by a ${sysLabel} at a ${isGw ? "pumping rate" : "flow rate"} of **${flowRate}**. Water abstracted will be used for **${acts}**.`;
     },
   },
   {
