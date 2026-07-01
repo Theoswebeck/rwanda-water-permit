@@ -20,7 +20,11 @@ type StaffEventType =
   | 'wur_returned_to_verification'
   | 'inspection_assigned_to_assessor'
   | 'inspection_forwarded_to_review'
+  | 'inspection_forwarded_to_verification'
+  | 'inspection_forwarded_to_approval'
   | 'inspection_returned_to_assessment'
+  | 'inspection_returned_to_review'
+  | 'inspection_returned_to_verification'
 
 type EntityType = 'application' | 'water_use_report' | 'inspection'
 
@@ -162,7 +166,7 @@ const EVENT_REGISTRY: Record<StaffEventType, EventConfig> = {
     title: 'Staff: Inspection Assigned to Assessor',
     emailSubjectPrefix: 'Inspection Assigned for Assessment',
     emailBody: 'An inspection has been assigned to you for assessment.',
-    dashboardPath: (id) => `/inspection/assessment/${id}`,
+    dashboardPath: (id) => `/assessment/inspection/permit/${id}`,
   },
   inspection_forwarded_to_review: {
     targetRole: 'reviewer',
@@ -172,13 +176,45 @@ const EVENT_REGISTRY: Record<StaffEventType, EventConfig> = {
     emailBody: 'An inspection has been forwarded to you for review.',
     dashboardPath: (id) => `/review/inspection/permit/${id}`,
   },
+  inspection_forwarded_to_verification: {
+    targetRole: 'verifier',
+    entityType: 'inspection',
+    title: 'Staff: Inspection Forwarded to Verification',
+    emailSubjectPrefix: 'Inspection Ready for Verification',
+    emailBody: 'An inspection has been forwarded to you for verification.',
+    dashboardPath: (id) => `/verification/inspection/permit/${id}`,
+  },
+  inspection_forwarded_to_approval: {
+    targetRole: 'approver',
+    entityType: 'inspection',
+    title: 'Staff: Inspection Forwarded to Approval',
+    emailSubjectPrefix: 'Inspection Ready for Final Approval',
+    emailBody: 'An inspection has been forwarded to you for final approval.',
+    dashboardPath: (id) => `/approver/inspection/permit/${id}`,
+  },
   inspection_returned_to_assessment: {
     targetRole: 'assessor',
     entityType: 'inspection',
     title: 'Staff: Inspection Returned to Assessment',
     emailSubjectPrefix: 'Inspection Returned for Re-assessment',
     emailBody: 'An inspection has been returned to you for re-assessment.',
-    dashboardPath: (id) => `/inspection/assessment/${id}`,
+    dashboardPath: (id) => `/assessment/inspection/permit/${id}`,
+  },
+  inspection_returned_to_review: {
+    targetRole: 'reviewer',
+    entityType: 'inspection',
+    title: 'Staff: Inspection Returned to Review',
+    emailSubjectPrefix: 'Inspection Returned for Review',
+    emailBody: 'An inspection has been returned to you for further review. Please review the verifier comments.',
+    dashboardPath: (id) => `/review/inspection/permit/${id}`,
+  },
+  inspection_returned_to_verification: {
+    targetRole: 'verifier',
+    entityType: 'inspection',
+    title: 'Staff: Inspection Returned to Verification',
+    emailSubjectPrefix: 'Inspection Returned for Verification',
+    emailBody: 'An inspection has been returned to you for further verification. Please review the approver comments.',
+    dashboardPath: (id) => `/verification/inspection/permit/${id}`,
   },
 }
 
