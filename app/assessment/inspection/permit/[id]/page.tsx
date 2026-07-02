@@ -544,7 +544,7 @@ export default function PermitInspectionUnifiedPage() {
               entityType: 'inspection',
               entityId: inspectionId,
             }),
-          }).catch(() => null)
+          }).then(r => r.json()).then(j => console.log('[NOTIFY] staff result:', j)).catch(e => console.error('[NOTIFY] staff error:', e))
           alert("✅ Inspection submitted. You can now use workflow actions below.");
         } else {
           alert("✅ Draft saved");
