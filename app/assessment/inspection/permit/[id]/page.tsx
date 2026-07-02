@@ -20,7 +20,7 @@ import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-badge";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
-import { isAssessorOwnedWorkflow } from "@/lib/inspection-workflow";
+import { isAssessorOwnedWorkflow, isTerminalStatus } from "@/lib/inspection-workflow";
 import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
 import { assertInspectionPayloadKeys } from "@/lib/inspections/payload-columns";
 import { runInspectionSaveWithSafetyNet } from "@/lib/inspections/safe-payload-retry";
@@ -298,7 +298,7 @@ export default function PermitInspectionUnifiedPage() {
           // this permit"), so that lookup always binds directly regardless
           // of status — there is no "permit" to re-inspect there.
           const existingWorkflowStatus = (existing as { workflow_status?: string | null } | undefined)?.workflow_status;
-          const existingIsTerminal = existingWorkflowStatus === "approved" || existingWorkflowStatus === "rejected";
+          const existingIsTerminal = isTerminalStatus(existingWorkflowStatus ?? "");
           const existingIsReinspectable = !!existing && existingIsTerminal && data.source !== "manual_unpermitted";
 
           if (existingIsReinspectable) {
