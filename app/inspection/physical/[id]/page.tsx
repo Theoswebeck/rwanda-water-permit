@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import { fetchInspectionData, isInspectionComplete, type PermitInspectionData } from "@/lib/inspection-utils";
+import { fetchInspectionData, isInspectionComplete, capUnitForVarchar20, type PermitInspectionData } from "@/lib/inspection-utils";
 
 // Import section components
 import { PermitHolderSection } from "@/components/inspection/checklist/section-permit-holder";
@@ -262,12 +262,12 @@ export default function PermitInspectionPage() {
           
           // Allowed abstraction (from permit)
           allowed_quantity: formData.allowedQuantity,
-          allowed_unit: formData.allowedUnit,
+          allowed_unit: capUnitForVarchar20(formData.allowedUnit),
           authorized_abstraction_method: formData.authorizedAbstractionMethod,
           
           // Actual abstraction (inspector input)
           actual_quantity: formData.actualQuantity,
-          actual_unit: formData.actualUnit,
+          actual_unit: capUnitForVarchar20(formData.actualUnit),
           actual_abstraction_method: formData.actualAbstractionMethod,
           measurement_device_type: formData.measurementDeviceType,
           measurement_device_notes: formData.measurementDeviceNotes,

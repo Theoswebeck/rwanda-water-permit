@@ -214,6 +214,7 @@ function EditableLockedField({
   onOverride,
   description,
   placeholder,
+  maxLength,
 }: {
   label: string;
   lockedValue?: string | null;
@@ -223,6 +224,7 @@ function EditableLockedField({
   onOverride: (key: string, value: string) => void;
   description?: string;
   placeholder?: string;
+  maxLength?: number;
 }) {
   const hasRealValue = !isFieldEmpty(lockedValue);
   const overrideValue = overrides?.[overrideKey];
@@ -245,6 +247,7 @@ function EditableLockedField({
       <Input
         disabled={!canEdit}
         value={overrideValue ?? ""}
+        maxLength={maxLength}
         placeholder={canEdit ? (placeholder ?? `Enter ${label.toLowerCase()}…`) : "N/A"}
         className={cn(
           "h-11 border-slate-200 dark:border-slate-800",
@@ -760,7 +763,7 @@ export function InspectionFormLayout({
               <SectionShell title="3. Water Use Details" description="As per the official RWB checklist.">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                   <EditableLockedField label="Abstracted quantity" lockedValue={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} overrideKey="allowedQuantity" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+                  <EditableLockedField label="Unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} maxLength={20} />
                   <EditableLockedField label="Abstraction method" lockedValue={form.authorized_abstraction_method} overrideKey="authorizedAbstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
                 </div>
 

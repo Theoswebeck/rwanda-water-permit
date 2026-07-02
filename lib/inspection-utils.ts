@@ -1219,6 +1219,19 @@ function prepareRegistryInspectionData(registry: any): PrepopulatedInspectionDat
   };
 }
 
+/**
+ * inspections.allowed_unit / inspections.actual_unit are both
+ * character varying(20). Call this at every point a unit string is about
+ * to be persisted (not just where it's parsed) so a raw Postgres
+ * "value too long for type character varying(20)" error can never reach
+ * the user, regardless of which code path produced the value.
+ */
+export function capUnitForVarchar20(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.slice(0, 20).trim();
+  return trimmed || null;
+}
+
 function parseVolumeOrArea(value: unknown): { allowedQuantity: number | null; allowedUnit: string | null } {
   const raw = String(value ?? "").trim();
   if (!raw) return { allowedQuantity: null, allowedUnit: null };
@@ -1228,7 +1241,11 @@ function parseVolumeOrArea(value: unknown): { allowedQuantity: number | null; al
 
   const num = Number(match[0].replace(/,/g, ""));
   const allowedQuantity = Number.isFinite(num) ? num : null;
-  const allowedUnit = raw.replace(match[0], "").trim() || null;
+  // inspections.allowed_unit is character varying(20); legacy registry text
+  // (e.g. "160 m3/day for irrigation and domestic use") can be far longer
+  // than an actual unit, so cap it to fit the column and avoid a Postgres
+  // "value too long for type character varying(20)" error on save.
+  const allowedUnit = capUnitForVarchar20(raw.replace(match[0], "").trim());
   return { allowedQuantity, allowedUnit };
 }
 

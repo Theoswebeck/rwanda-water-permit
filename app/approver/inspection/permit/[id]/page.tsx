@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { fetchInspectionData } from "@/lib/inspection-utils";
+import { fetchInspectionData, capUnitForVarchar20 } from "@/lib/inspection-utils";
 
 import type { Inspection } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -476,10 +476,10 @@ export default function PermitInspectionUnifiedPage() {
       if (template === "authorization") {
         Object.assign(payload, {
           allowed_quantity: form.allowed_quantity ?? locked?.allowedQuantity ?? null,
-          allowed_unit: form.allowed_unit ?? locked?.allowedUnit ?? null,
+          allowed_unit: capUnitForVarchar20(form.allowed_unit ?? locked?.allowedUnit ?? null),
           authorized_abstraction_method: form.authorized_abstraction_method ?? locked?.authorizedMethod ?? null,
           actual_quantity: form.actual_quantity ?? null,
-          actual_unit: form.actual_unit ?? null,
+          actual_unit: capUnitForVarchar20(form.actual_unit ?? null),
           actual_abstraction_method: form.actual_abstraction_method ?? null,
           measurement_device_type: form.measurement_device_type ?? null,
         });
