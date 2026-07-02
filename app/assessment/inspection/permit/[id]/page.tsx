@@ -536,6 +536,15 @@ export default function PermitInspectionUnifiedPage() {
         }));
         if (mode === "submit") {
           setCanEditForm(false);
+          fetch('/api/notifications/staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: 'inspection_forwarded_to_review',
+              entityType: 'inspection',
+              entityId: inspectionId,
+            }),
+          }).catch(() => null)
           alert("✅ Inspection submitted. You can now use workflow actions below.");
         } else {
           alert("✅ Draft saved");
@@ -556,6 +565,15 @@ export default function PermitInspectionUnifiedPage() {
         }
         if (mode === "submit") {
           setCanEditForm(false);
+          fetch('/api/notifications/staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventType: 'inspection_forwarded_to_review',
+              entityType: 'inspection',
+              entityId: data!.id,
+            }),
+          }).catch(() => null)
           alert("✅ Inspection submitted. You can now use workflow actions below.");
         } else {
           alert("✅ Draft created");
