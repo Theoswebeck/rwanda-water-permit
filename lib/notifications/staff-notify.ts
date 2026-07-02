@@ -290,10 +290,13 @@ const ASSIGNMENT_COLUMN: Record<TargetRole, string> = {
   approver: 'assigned_approver_id',
 }
 
-async function resolveStaffUser(
+// Returns [assignedUser] when the entity has a specific assignment, or ALL
+// users with targetRole when no one is assigned (so every eligible staff
+// member receives the notification, not a random limit-1 pick).
+async function resolveStaffUsers(
   targetRole: TargetRole,
   entity: Record<string, unknown>,
-): Promise<StaffUser | null> {
+): Promise<StaffUser[]> {
   const col = ASSIGNMENT_COLUMN[targetRole]
   const assignedUserId = entity[col] as string | null
 
@@ -303,15 +306,16 @@ async function resolveStaffUser(
        from public.users where id = $1 limit 1`,
       [assignedUserId],
     )
-    if (res.rows[0]) return res.rows[0]
+    if (res.rows[0]) return [res.rows[0]]
   }
 
+  // No specific assignment — broadcast to every active user with this role.
   const res = await query<StaffUser>(
     `select id, email, first_name, last_name, role
-     from public.users where lower(role::text) = $1 limit 1`,
+     from public.users where lower(role::text) = $1 order by created_at asc`,
     [targetRole],
   )
-  return res.rows[0] || null
+  return res.rows
 }
 
 // ---------------------------------------------------------------------------
@@ -363,7 +367,7 @@ function buildStaffEmailCopy(
 // ---------------------------------------------------------------------------
 
 type StaffNotifyResult =
-  | { ok: true; status: 'sent' | 'skipped_already_sent' | 'skipped_no_staff' }
+  | { ok: true; status: 'sent' | 'skipped_already_sent' | 'skipped_no_staff'; recipients?: number }
   | { ok: false; status: 'error'; message: string }
 
 export async function notifyStaffOnEvent(
@@ -396,21 +400,22 @@ export async function notifyStaffOnEvent(
       return { ok: false, status: 'error', message: `Entity not found: ${entityType}/${entityId}` }
     }
 
-    let staffUser: StaffUser | null = null
+    let staffUsers: StaffUser[] = []
     try {
-      staffUser = await resolveStaffUser(config.targetRole, entity)
+      staffUsers = await resolveStaffUsers(config.targetRole, entity)
     } catch (dbErr) {
       const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
-      console.error(`❌ [STAFF-NOTIFY] resolveStaffUser failed: ${msg}`)
+      console.error(`❌ [STAFF-NOTIFY] resolveStaffUsers failed: ${msg}`)
       return { ok: false, status: 'error', message: `DB error resolving staff: ${msg}` }
     }
 
-    if (!staffUser || !staffUser.email) {
-      console.warn(`⚠️ [STAFF-NOTIFY] No staff user found for role=${config.targetRole}, event=${eventType}`)
+    const eligibleUsers = staffUsers.filter(u => u.email)
+    if (eligibleUsers.length === 0) {
+      console.warn(`⚠️ [STAFF-NOTIFY] No staff users found for role=${config.targetRole}, event=${eventType}`)
       return { ok: true, status: 'skipped_no_staff' }
     }
 
-    console.log(`📧 [STAFF-NOTIFY] Target: ${staffUser.email} (${staffUser.first_name} ${staffUser.last_name})`)
+    console.log(`📧 [STAFF-NOTIFY] Sending to ${eligibleUsers.length} recipient(s) for ${eventType}`)
 
     // Only applications have a valid FK in notifications.application_id.
     // For WUR/inspection we leave both FK columns NULL and use a
@@ -418,93 +423,106 @@ export async function notifyStaffOnEvent(
     const useAppFk = config.entityType === 'application'
     const idempotencyMarker = `staff:${eventType}:${entityId}`
 
-    let existing: { id: string; email_sent: boolean | null } | undefined
-    try {
-      const existingRes = useAppFk
-        ? await query<{ id: string; email_sent: boolean | null }>(
-            `select id, email_sent from public.notifications
-             where application_id = $1 and title = $2 and user_id = $3
-             order by created_at desc limit 1`,
-            [entityId, config.title, staffUser.id],
-          )
-        : await query<{ id: string; email_sent: boolean | null }>(
-            `select id, email_sent from public.notifications
-             where title = $1 and user_id = $2
-               and message like $3
-             order by created_at desc limit 1`,
-            [config.title, staffUser.id, `${idempotencyMarker}%`],
-          )
-      existing = existingRes.rows[0]
-    } catch (dbErr) {
-      const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
-      console.error(`❌ [STAFF-NOTIFY] idempotency check failed: ${msg}`)
-      return { ok: false, status: 'error', message: `DB error checking existing: ${msg}` }
-    }
+    let sentCount = 0
+    let allSkipped = true
 
-    if (existing?.email_sent) {
-      return { ok: true, status: 'skipped_already_sent' }
-    }
-
-    let lockId = existing?.id || null
-    if (!lockId) {
+    for (const staffUser of eligibleUsers) {
+      let existing: { id: string; email_sent: boolean | null } | undefined
       try {
-        const lockRes = useAppFk
-          ? await query<{ id: string }>(
-              `insert into public.notifications (
-                user_id, title, message, type, application_id, email_sent, sms_sent, created_at, updated_at
-              ) values ($1, $2, $3, 'info', $4, false, false, now(), now())
-              returning id`,
-              [staffUser.id, config.title, idempotencyMarker, entityId],
+        const existingRes = useAppFk
+          ? await query<{ id: string; email_sent: boolean | null }>(
+              `select id, email_sent from public.notifications
+               where application_id = $1 and title = $2 and user_id = $3
+               order by created_at desc limit 1`,
+              [entityId, config.title, staffUser.id],
             )
-          : await query<{ id: string }>(
-              `insert into public.notifications (
-                user_id, title, message, type, email_sent, sms_sent, created_at, updated_at
-              ) values ($1, $2, $3, 'info', false, false, now(), now())
-              returning id`,
-              [staffUser.id, config.title, idempotencyMarker],
+          : await query<{ id: string; email_sent: boolean | null }>(
+              `select id, email_sent from public.notifications
+               where title = $1 and user_id = $2
+                 and message like $3
+               order by created_at desc limit 1`,
+              [config.title, staffUser.id, `${idempotencyMarker}%`],
             )
-        lockId = lockRes.rows[0]?.id || null
+        existing = existingRes.rows[0]
       } catch (dbErr) {
         const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
-        console.error(`❌ [STAFF-NOTIFY] lock row insert failed: ${msg}`)
-        return { ok: false, status: 'error', message: `DB error creating lock: ${msg}` }
-      }
-    }
-    if (!lockId) {
-      return { ok: false, status: 'error', message: 'Failed to create notification lock row' }
-    }
-
-    try {
-      const copy = buildStaffEmailCopy(config, staffUser, entity, entityId)
-
-      const emailResult = await sendSmtpEmail({
-        to: staffUser.email,
-        subject: copy.subject,
-        title: copy.title,
-        text: copy.text,
-      })
-
-      const emailSent = Boolean(emailResult.delivered)
-
-      await query(
-        `update public.notifications
-         set message = $2, email_sent = $3, sms_sent = false, updated_at = now()
-         where id = $1`,
-        [lockId, copy.text, emailSent],
-      )
-
-      if (emailSent) {
-        console.log(`✅ [STAFF-NOTIFY] Email sent to ${staffUser.email} for ${eventType} on ${entityId}`)
-        return { ok: true, status: 'sent' }
+        console.error(`❌ [STAFF-NOTIFY] idempotency check failed for ${staffUser.email}: ${msg}`)
+        continue
       }
 
-      return { ok: false, status: 'error', message: 'Email delivery failed (skipped or not delivered)' }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error(`❌ [STAFF-NOTIFY] Email send error: ${msg}`)
-      await query(`delete from public.notifications where id = $1`, [lockId]).catch(() => undefined)
-      return { ok: false, status: 'error', message: `Email error: ${msg}` }
+      if (existing?.email_sent) {
+        console.log(`⏭️ [STAFF-NOTIFY] Already sent to ${staffUser.email}, skipping`)
+        continue
+      }
+
+      allSkipped = false
+
+      let lockId = existing?.id || null
+      if (!lockId) {
+        try {
+          const lockRes = useAppFk
+            ? await query<{ id: string }>(
+                `insert into public.notifications (
+                  user_id, title, message, type, application_id, email_sent, sms_sent, created_at, updated_at
+                ) values ($1, $2, $3, 'info', $4, false, false, now(), now())
+                returning id`,
+                [staffUser.id, config.title, idempotencyMarker, entityId],
+              )
+            : await query<{ id: string }>(
+                `insert into public.notifications (
+                  user_id, title, message, type, email_sent, sms_sent, created_at, updated_at
+                ) values ($1, $2, $3, 'info', false, false, now(), now())
+                returning id`,
+                [staffUser.id, config.title, idempotencyMarker],
+              )
+          lockId = lockRes.rows[0]?.id || null
+        } catch (dbErr) {
+          const msg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+          console.error(`❌ [STAFF-NOTIFY] lock row insert failed for ${staffUser.email}: ${msg}`)
+          continue
+        }
+      }
+      if (!lockId) continue
+
+      try {
+        const copy = buildStaffEmailCopy(config, staffUser, entity, entityId)
+
+        const emailResult = await sendSmtpEmail({
+          to: staffUser.email,
+          subject: copy.subject,
+          title: copy.title,
+          text: copy.text,
+        })
+
+        const emailSent = Boolean(emailResult.delivered)
+
+        await query(
+          `update public.notifications
+           set message = $2, email_sent = $3, sms_sent = false, updated_at = now()
+           where id = $1`,
+          [lockId, copy.text, emailSent],
+        )
+
+        if (emailSent) {
+          console.log(`✅ [STAFF-NOTIFY] Email sent to ${staffUser.email} for ${eventType} on ${entityId}`)
+          sentCount++
+        } else {
+          console.error(`❌ [STAFF-NOTIFY] Email delivery failed for ${staffUser.email}`)
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`❌ [STAFF-NOTIFY] Email send error for ${staffUser.email}: ${msg}`)
+        await query(`delete from public.notifications where id = $1`, [lockId]).catch(() => undefined)
+      }
     }
+
+    if (allSkipped) {
+      return { ok: true, status: 'skipped_already_sent' }
+    }
+    if (sentCount > 0) {
+      return { ok: true, status: 'sent', recipients: sentCount }
+    }
+    return { ok: false, status: 'error', message: 'Email delivery failed for all recipients' }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error(`❌ [STAFF-NOTIFY] Unexpected error: ${message}`)
