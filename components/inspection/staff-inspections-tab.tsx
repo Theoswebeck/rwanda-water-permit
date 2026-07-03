@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { AlertCircle, Eye, Loader2, MoreHorizontal, Search } from "lucide-react";
+import { AlertCircle, Eye, Loader2, MoreHorizontal, Search, Trash2 } from "lucide-react";
 import { CreateInspectionDialog } from "@/components/inspection/create-inspection-dialog";
 import { StatusFilterChips, type StatusChipDef } from "@/components/shared/status-filter-chips";
 import {
@@ -94,6 +94,7 @@ function statusPill(status: InspectionWorkflowStatus | string) {
 }
 
 function getDisplayStatus(row: InspectionRow): string {
+  if (row.status === "in_progress") return "draft";
   if (row.status !== "completed") return row.status;
   return row.workflow_status || "submitted";
 }
@@ -200,6 +201,21 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const [permitHolderByNumber, setPermitHolderByNumber] = useState<Record<string, string>>({});
   const [registryByInspectionId, setRegistryByInspectionId] = useState<Record<string, { permit_number: string; permit_holder: string | null } | undefined>>({});
   const [activeChipId, setActiveChipId] = useState("all");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this draft inspection? This cannot be undone.")) return;
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from("inspections").delete().eq("id", id);
+      if (error) throw error;
+      setInspections((prev) => prev.filter((r) => r.id !== id));
+    } catch (e: any) {
+      alert(e?.message || "Failed to delete inspection");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -630,6 +646,19 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                                     View permit
                                   </Link>
                                 </DropdownMenuItem>
+                              ) : null}
+                              {r.status === "in_progress" && r.inspector_id === currentUserId ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="flex items-center gap-2 text-red-600 focus:text-red-600"
+                                    disabled={deletingId === r.id}
+                                    onClick={() => handleDelete(r.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    {deletingId === r.id ? "Deleting…" : "Delete draft"}
+                                  </DropdownMenuItem>
+                                </>
                               ) : null}
                             </DropdownMenuContent>
                           </DropdownMenu>
