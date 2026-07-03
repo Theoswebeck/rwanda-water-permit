@@ -69,6 +69,23 @@ const ACTION_LABELS: Record<string, string> = {
   return_to_verification: "Returned to Verification",
 };
 
+function ReturnReasonCard({ workflowStatus, notes }: { workflowStatus: string; notes?: string | null }) {
+  if (!notes || !workflowStatus.startsWith("returned_to_")) return null;
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          Reason for Return
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm whitespace-pre-wrap">{notes}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function WorkflowHistoryCard({ entries, loading: histLoading }: { entries: HistoryEntry[]; loading: boolean }) {
   if (histLoading) {
     return (
@@ -366,6 +383,7 @@ export function InspectionWorkflowActions({
             </div>
           </CardContent>
         </Card>
+        <ReturnReasonCard workflowStatus={workflowStatus} notes={inspection?.internal_notes} />
         <WorkflowHistoryCard entries={historyEntries} loading={historyLoading} />
       </div>
     );
@@ -403,6 +421,7 @@ export function InspectionWorkflowActions({
           </CardContent>
         </Card>
 
+        <ReturnReasonCard workflowStatus={workflowStatus} notes={inspection?.internal_notes} />
         <WorkflowHistoryCard entries={historyEntries} loading={historyLoading} />
       </div>
 
