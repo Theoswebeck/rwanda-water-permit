@@ -63,6 +63,7 @@ export async function sendSmtpEmail(params: SendSmtpEmailParams) {
     replyTo: replyTo || undefined,
     to: params.to,
     subject: params.subject,
+    text: params.text,
     html,
   })
 
