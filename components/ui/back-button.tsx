@@ -55,8 +55,11 @@ export function SmartBackButton({
       } catch {
         sameOrigin = false
       }
-      // Came from an in-app page → real browser-back preserves scroll & prior filters.
-      if (sameOrigin) {
+      // Real browser-back only when we came from an in-app page AND this tab
+      // has a prior history entry to return to. A cmd-click "open in new tab"
+      // sets a same-origin referrer but has no usable history, so it must fall
+      // through to the fallback rather than dead-ending on router.back().
+      if (sameOrigin && window.history.length > 1) {
         router.back()
         return
       }
