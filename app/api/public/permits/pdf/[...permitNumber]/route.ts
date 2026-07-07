@@ -166,12 +166,35 @@ export async function GET(req: NextRequest, context: { params: Promise<{ permitN
             ? application.approved_at
             : null,
       });
+
+      // Signing/execution date for "Done at … On" — the day the DG signed.
+      // A modification keeps the original validity window (issuedDate above)
+      // but is signed when the modification is approved, recorded as the
+      // latest conditions.modification_history[].modified_at. For a
+      // non-modification permit there is no history, so this resolves to
+      // approved_at (== issuedDate).
+      const conditions = permit.conditions as Record<string, unknown> | null | undefined;
+      const modHistory = Array.isArray(conditions?.modification_history)
+        ? (conditions!.modification_history as Array<Record<string, unknown>>)
+        : [];
+      const lastModifiedAt = modHistory.length
+        ? modHistory[modHistory.length - 1]?.modified_at
+        : null;
+      const signingDate = resolvePermitIssueDate({
+        permitIssuedDate: typeof lastModifiedAt === "string" ? lastModifiedAt : null,
+        approvedAt:
+          typeof application?.approved_at === "string"
+            ? application.approved_at
+            : null,
+      });
+
       const pdfBuffer = await generatePermitPdfBuffer({
         application: applicationForPdf,
         permitNumber: permitNumberValue,
         permitValidityYears: 5,
         isModified: Boolean(permit.is_modification),
         issuedDate,
+        signingDate,
         expiryDate: parseIsoLikeDate((permit.expiry_date as string | undefined) || undefined),
       });
 

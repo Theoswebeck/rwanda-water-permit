@@ -147,6 +147,13 @@ export interface PermitRenderOpts {
   permitValidityYears?: number;
   issuedDate?: Date;
   expiryDate?: Date;
+  /**
+   * Signing/execution date for the "Done at Kigali, On …" line. Defaults to
+   * `issuedDate` when omitted (new/renewal/transfer, where they coincide). For
+   * a modification this is the approval date, distinct from the preserved
+   * validity `issuedDate`.
+   */
+  signingDate?: Date;
   isModified?: boolean;
   /** When true, omits the QR code and replaces the footer with a DRAFT banner. */
   skipQr?: boolean;
@@ -171,6 +178,7 @@ function buildSlotCtx(opts: PermitRenderOpts, issueDate: Date, expiryDate: Date)
       permitNumber: opts.permitNumber,
       issueDate,
       expiryDate,
+      signingDate: opts.signingDate ?? issueDate,
       isModified: !!opts.isModified,
       skipQr: !!opts.skipQr,
       headerYear: issueDate.getFullYear(),

@@ -134,7 +134,10 @@ const sharedSlots: DocumentTextSlot[] = [
       if (!p) {
         return "Done at Kigali/Bikorewe i Kigali, On/kuwa [ISSUE_DATE]";
       }
-      return `Done at Kigali/Bikorewe i Kigali, On/kuwa ${fmtDMY(p.issueDate)}`;
+      // Signing/execution date = approval date (or today in preview), NOT the
+      // validity start. A modification keeps the original validity window but
+      // is signed on the day its modification is approved.
+      return `Done at Kigali/Bikorewe i Kigali, On/kuwa ${fmtDMY(p.signingDate)}`;
     },
   },
   {

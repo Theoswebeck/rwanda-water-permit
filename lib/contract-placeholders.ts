@@ -1,6 +1,7 @@
 import type { Json } from "@/types/database";
 import { polygonsToGeoJSON } from "@/lib/geoUtils";
 import { getEffectiveInternalNotes } from "@/lib/document-overrides";
+import { resolveOriginalPermitNumber } from "@/lib/permit/resolve-preview-permit-number";
 import * as turf from "@turf/turf";
 
 export type ContractPlaceholderContext = {
@@ -820,13 +821,18 @@ export function buildContractPlaceholderContext(
   const contractNumber = (() => {
     // For transfers/renewals/modifications passed via prop, the contract reuses the existing permit number.
     if (transferredPermitNumber) return transferredPermitNumber;
-    // For renewals and modifications: originalPermitNumber is stored synchronously in internal_notes —
-    // read it directly so the contract number is correct even if async prop hasn't loaded.
-    if (isRenewalApplication(application) || isModificationApplication(application)) {
-      const notes = getInternalNotes(application);
-      const stored =
-        typeof notes?.originalPermitNumber === "string" ? notes.originalPermitNumber.trim() : "";
-      if (stored) return stored;
+    // For renewals / modifications / transfers, the original permit number is
+    // stored in internal_notes — resolve it via the shared 6-key chain (it may
+    // live under permitReference.registrySnapshot / transferFormData for
+    // manually-captured or registry permits, not just originalPermitNumber), so
+    // the contract shows the real permit number instead of an app-derived one.
+    if (
+      isRenewalApplication(application) ||
+      isModificationApplication(application) ||
+      isTransferApplication(application)
+    ) {
+      const original = resolveOriginalPermitNumber(getInternalNotes(application));
+      if (original) return original;
     }
     if (!appNo) return "N/A";
     // Common format: "RWB-2025-000025" -> "000025/RWB/2025"

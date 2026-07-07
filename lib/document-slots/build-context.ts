@@ -32,6 +32,8 @@ export type BuildPermitContextInput = {
   issueDate?: Date;
   /** When omitted, computed from issueDate + resolvePermitDuration. */
   expiryDate?: Date;
+  /** Signing date for "Done at … On". When omitted, defaults to issueDate. */
+  signingDate?: Date;
   /** When omitted, derived from application_type / notes flags. */
   isModified?: boolean;
   /** Always true for editor previews (no QR is generated). */
@@ -65,6 +67,7 @@ export function buildPermitSlotContext(
     permitNumber: input.permitNumber ?? `XXXX/RWB/${headerYear}`,
     issueDate,
     expiryDate,
+    signingDate: input.signingDate ?? issueDate,
     isModified: Boolean(input.isModified),
     skipQr: input.skipQr ?? true,
     headerYear,
@@ -109,6 +112,7 @@ export function buildContractSlotContext(
       permitNumber: opts.permitNumber,
       issueDate: new Date(),
       expiryDate: new Date(),
+      signingDate: new Date(),
       isModified: false,
       skipQr: true,
       headerYear: new Date().getFullYear(),

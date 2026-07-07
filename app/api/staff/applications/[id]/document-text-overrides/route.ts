@@ -46,6 +46,7 @@ import {
 } from "@/lib/document-slots/build-context";
 import type { PermitApplication } from "@/lib/permit/permit-text-data";
 import { selectPermitVariant } from "@/lib/permit-variant";
+import { resolvePermitRenderDatesFromNotes } from "@/lib/permit/resolve-render-dates-from-notes";
 
 export const runtime = "nodejs";
 
@@ -163,6 +164,10 @@ function rowToPermitApplication(row: Record<string, unknown>): PermitApplication
     row.company_phone != null ? String(row.company_phone) : undefined;
   (application as unknown as Record<string, unknown>).water_body_name =
     row.water_body_name != null ? String(row.water_body_name) : undefined;
+  // Carry `is_modification` so the editor payload can preserve the original
+  // validity window when the application is amending an existing permit.
+  (application as unknown as Record<string, unknown>).is_modification =
+    row.is_modification === true;
   return application;
 }
 
@@ -173,11 +178,56 @@ type EditorPayload = {
   contractSlots: ResolvedSlotForEditor[];
 };
 
+function parseNotes(raw: unknown): Record<string, any> | null {
+  if (!raw) return null;
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw as Record<string, any>;
+  if (typeof raw === "string" && raw.trim()) {
+    try {
+      const v = JSON.parse(raw);
+      if (v && typeof v === "object" && !Array.isArray(v)) return v;
+    } catch {
+      // ignore malformed JSON
+    }
+  }
+  return null;
+}
+
 function buildEditorPayload(application: PermitApplication): EditorPayload {
   const variant = selectPermitVariant(
     application as Parameters<typeof selectPermitVariant>[0],
   );
-  const permitCtx = buildPermitSlotContext({ application });
+
+  // Resolve the four render fields (permit number + validity + signing) so
+  // the editor's snapshot matches what the PDF renderer will emit — no more
+  // XXXX / today / today+duration defaults for modification/renewal/transfer.
+  // See docs/superpowers/specs/2026-07-07-modification-permit-identity-and-signing-date-design.md.
+  const notes = parseNotes(application.internal_notes);
+  const isModification =
+    (application as { is_modification?: unknown }).is_modification === true ||
+    notes?.isModification === true;
+  const isRenewal =
+    application.application_type === "renewal" || notes?.isRenewal === true;
+  const isTransfer =
+    application.application_type === "transfer" || notes?.isTransfer === true;
+  const rendered = resolvePermitRenderDatesFromNotes({
+    notes,
+    // Editor is only accessible in assessment statuses (approved_at is null
+    // by definition), so signingDate always resolves to today for the editor
+    // snapshot — same as the preview PDF before approval.
+    approvedAt: null,
+    isModification,
+    isRenewal,
+    isTransfer,
+  });
+
+  const permitCtx = buildPermitSlotContext({
+    application,
+    permitNumber: rendered.permitNumber,
+    ...(rendered.issueDate  && { issueDate: rendered.issueDate }),
+    ...(rendered.expiryDate && { expiryDate: rendered.expiryDate }),
+    signingDate: rendered.signingDate,
+    isModified: isModification,
+  });
   const contractCtx = buildContractSlotContext(application);
   return {
     // Same best-effort reader the resolver chain uses, so a corrupt

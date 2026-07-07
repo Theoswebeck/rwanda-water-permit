@@ -13,6 +13,7 @@ import {
   resolveModificationValidity,
   type ValiditySource,
 } from "@/lib/permit/resolve-modification-validity";
+import { resolvePreviewPermitNumber } from "@/lib/permit/resolve-preview-permit-number";
 
 export const runtime = "nodejs";
 
@@ -88,49 +89,6 @@ function resolvePreviewErrorMessage(err: unknown): string {
     return "Could not render permit preview PDF";
   }
   return "Failed to generate permit preview";
-}
-
-/**
- * Resolve the permit number to show on the draft preview.
- * - Renewals / modifications / transfers: always the original permit number from internal_notes.
- * - New (standard) applications: placeholder since the number isn't assigned until issuance.
- */
-function resolvePreviewPermitNumber(
-  notes: Record<string, any> | null,
-): string {
-  // Renewals / modifications / transfers reference an existing permit. Its
-  // number can be stored under several keys depending on whether the original
-  // was a linked digital permit or a manually-captured / registry permit:
-  //   - originalPermitNumber                            (linked: permit.permit_number)
-  //   - permitReference.normalizedPermitNumber          (manual entry, normalised)
-  //   - permitReference.inputPermitNumber               (manual entry, as typed)
-  //   - permitReference.registrySnapshot.permit_number  (registry lookup)
-  //   - transferFormData.permitNumber                   (legacy transfer form)
-  // This mirrors the resolution chain the terms/issuance page already uses, so
-  // the preview header shows the real number instead of the XXXX placeholder
-  // whenever the original was not a linked permit with a stored number.
-  const candidates: unknown[] = [
-    notes?.originalPermitNumber,
-    notes?.permitReference?.normalizedPermitNumber,
-    notes?.permitReference?.inputPermitNumber,
-    notes?.permitReference?.registrySnapshot?.permit_number,
-    notes?.transferFormData?.permitNumber,
-    notes?.transferFormData?.originalPermitNumber,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  // New permit (or an original whose number was never captured) — the number
-  // is assigned by the DB trigger at issuance, not predictable yet.
-  const now = new Date();
-  // Use Africa/Kigali timezone so the year matches what the DB trigger would use.
-  const year = new Date(
-    now.toLocaleString("en-US", { timeZone: "Africa/Kigali" }),
-  ).getFullYear();
-  return `XXXX/RWB/${year}`;
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -469,11 +427,19 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       approvedAt: approvedAtRaw,
     });
 
+    // ── Resolve signing date (the "Done at … On" line) ────────────────────────
+    // This is the date the Director General signs — the approval date, or
+    // today while still in preview. It is NOT the validity start: a
+    // modification keeps the original validity window but is executed on the
+    // day its modification is approved.
+    const signingDate = resolvePermitIssueDate({ approvedAt: approvedAtRaw });
+
     // ── Generate PDF ──────────────────────────────────────────────────────────
     const pdfBuffer = await generatePermitPdfBuffer({
       application,
       permitNumber,
       issuedDate,
+      signingDate,
       skipQr: true,
       isModified: Boolean(isModification),
       ...(exactExpiryDate   !== undefined && { expiryDate: exactExpiryDate }),

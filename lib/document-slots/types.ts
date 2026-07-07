@@ -42,8 +42,15 @@ export type StructuredFieldKey =
  */
 export type PermitSlotContextExtras = {
   permitNumber: string;
+  /** Validity start ("valid from …"). Preserved from the original permit for modifications. */
   issueDate: Date;
   expiryDate: Date;
+  /**
+   * Signing/execution date ("Done at Kigali, On …"). The approval date (or
+   * today in preview) — NOT the validity start. For a modification the permit
+   * keeps its original validity window but is signed on its approval day.
+   */
+  signingDate: Date;
   isModified: boolean;
   /** True for the assessor preview (no QR code, DRAFT banner shown). */
   skipQr: boolean;
