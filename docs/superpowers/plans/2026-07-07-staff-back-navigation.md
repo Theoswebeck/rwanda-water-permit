@@ -447,17 +447,18 @@ All four currently render an identical ghost button calling `router.back()`. Rep
 **Interfaces:**
 - Consumes: `SmartBackButton` (Task 2).
 
-- [ ] **Step 1: Add the import in each file**
+- [ ] **Step 1: Add the imports in each file**
 
-In each of the 4 files, add after the existing `Button` import:
+In each of the 4 files, add after the existing `Button` import (the `ArrowLeft` icon import on line 19 stays — it is still used elsewhere in these pages):
 
 ```tsx
 import { SmartBackButton } from "@/components/ui/back-button";
+import { staffListHref } from "@/lib/staff-nav";
 ```
 
 - [ ] **Step 2: Replace the back button JSX in each file**
 
-In every one of the 4 files, replace this block (the `ArrowLeft` icon import on line 19 stays — it is still used elsewhere in these pages):
+In every one of the 4 files, replace this block:
 
 ```tsx
       <Button
@@ -471,13 +472,13 @@ In every one of the 4 files, replace this block (the `ArrowLeft` icon import on 
       </Button>
 ```
 
-with the panel-appropriate `SmartBackButton`:
+with the panel-appropriate `SmartBackButton` (the `staffListHref` call is the single source of truth for the URL shape):
 
 - `app/review/inspection/permit/[id]/page.tsx`:
 
 ```tsx
       <SmartBackButton
-        fallbackHref="/review?tab=inspections"
+        fallbackHref={staffListHref("review", "inspections")}
         size="sm"
         className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
       />
@@ -487,7 +488,7 @@ with the panel-appropriate `SmartBackButton`:
 
 ```tsx
       <SmartBackButton
-        fallbackHref="/assessment?tab=inspections"
+        fallbackHref={staffListHref("assessment", "inspections")}
         size="sm"
         className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
       />
@@ -497,7 +498,7 @@ with the panel-appropriate `SmartBackButton`:
 
 ```tsx
       <SmartBackButton
-        fallbackHref="/approver?tab=inspections"
+        fallbackHref={staffListHref("approver", "inspections")}
         size="sm"
         className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
       />
@@ -507,7 +508,7 @@ with the panel-appropriate `SmartBackButton`:
 
 ```tsx
       <SmartBackButton
-        fallbackHref="/verification?tab=inspections"
+        fallbackHref={staffListHref("verification", "inspections")}
         size="sm"
         className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
       />
@@ -542,12 +543,13 @@ Replace the primary header back button (`<Link href="/{panel}"><Button ...>Back 
 **Interfaces:**
 - Consumes: `SmartBackButton` (Task 2).
 
-- [ ] **Step 1: Add the import in each file**
+- [ ] **Step 1: Add the imports in each file**
 
 Add after the existing `Button` import in each of the 4 files:
 
 ```tsx
 import { SmartBackButton } from "@/components/ui/back-button";
+import { staffListHref } from "@/lib/staff-nav";
 ```
 
 - [ ] **Step 2: Replace the header back block in each file**
@@ -566,7 +568,7 @@ import { SmartBackButton } from "@/components/ui/back-button";
 with:
 
 ```tsx
-              <SmartBackButton fallbackHref="/review" label="Back to Dashboard" size="sm" className="gap-2" />
+              <SmartBackButton fallbackHref={staffListHref("review", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
 ```
 
 - `app/assessment/application/[id]/page.tsx` — replace:
@@ -583,7 +585,7 @@ with:
 with:
 
 ```tsx
-              <SmartBackButton fallbackHref="/assessment" label="Back to Dashboard" size="sm" className="gap-2" />
+              <SmartBackButton fallbackHref={staffListHref("assessment", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
 ```
 
 - `app/approver/application/[id]/page.tsx` — replace (note this file's irregular indentation):
@@ -600,7 +602,7 @@ with:
 with:
 
 ```tsx
-        <SmartBackButton fallbackHref="/approver" label="Back to Dashboard" size="sm" className="gap-2" />
+        <SmartBackButton fallbackHref={staffListHref("approver", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
 ```
 
 - `app/verification/application/[id]/page.tsx` — replace:
@@ -617,7 +619,7 @@ with:
 with:
 
 ```tsx
-                <SmartBackButton fallbackHref="/verification" label="Back to Dashboard" size="sm" className="gap-2" />
+                <SmartBackButton fallbackHref={staffListHref("verification", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
 ```
 
 - [ ] **Step 3: Type-check**
@@ -647,7 +649,7 @@ All four render `<BackButton />` (no props, `history.back()`). Swap to `SmartBac
 **Interfaces:**
 - Consumes: `SmartBackButton` (Task 2).
 
-- [ ] **Step 1: Update import in each file**
+- [ ] **Step 1: Update imports in each file**
 
 In each file, replace:
 
@@ -659,6 +661,7 @@ with:
 
 ```tsx
 import { SmartBackButton } from "@/components/ui/back-button";
+import { staffListHref } from "@/lib/staff-nav";
 ```
 
 - [ ] **Step 2: Replace the usage in each file**
@@ -668,25 +671,25 @@ Replace `<BackButton />` with the panel-appropriate button:
 - `app/review/water-use-report/[id]/page.tsx`:
 
 ```tsx
-          <SmartBackButton fallbackHref="/review?tab=water-reports" label="Go Back" variant="outline" />
+          <SmartBackButton fallbackHref={staffListHref("review", "water-reports")} label="Go Back" variant="outline" />
 ```
 
 - `app/assessment/water-use-report/[id]/page.tsx`:
 
 ```tsx
-          <SmartBackButton fallbackHref="/assessment?tab=water-reports" label="Go Back" variant="outline" />
+          <SmartBackButton fallbackHref={staffListHref("assessment", "water-reports")} label="Go Back" variant="outline" />
 ```
 
 - `app/approver/water-use-report/[id]/page.tsx`:
 
 ```tsx
-          <SmartBackButton fallbackHref="/approver?tab=water-reports" label="Go Back" variant="outline" />
+          <SmartBackButton fallbackHref={staffListHref("approver", "water-reports")} label="Go Back" variant="outline" />
 ```
 
 - `app/verification/water-use-report/[id]/page.tsx`:
 
 ```tsx
-          <SmartBackButton fallbackHref="/verification?tab=water-reports" label="Go Back" variant="outline" />
+          <SmartBackButton fallbackHref={staffListHref("verification", "water-reports")} label="Go Back" variant="outline" />
 ```
 
 (`variant="outline"` + `label="Go Back"` preserves the current `BackButton` look, which defaulted to outline/"Go Back".)
@@ -753,6 +756,6 @@ git commit -m "chore: verification fixes for staff back navigation"
 
 ## Self-Review Notes
 
-- **Spec coverage:** Piece 1 (tab-in-URL) → Tasks 3, 4. Piece 2 (SmartBackButton) → Task 2 + Tasks 5–7. Piece 3 (`staffListHref`) → Task 1 (used as literal fallback strings in Tasks 5–7, matching the helper's output; the helper is the tested source of truth for the URL shapes). Out-of-scope items excluded and verified in Task 8 Step 4.
-- **Type consistency:** `SmartBackButton` prop names (`fallbackHref`, `label`, `variant`, `size`, `className`) are identical across Tasks 2, 5, 6, 7. `useTabParam(defaultTab, validTabs)` signature identical across Task 3 and all Task 4 call sites. `staffListHref` output strings (`/review?tab=inspections`, etc.) match the literal `fallbackHref` values used in Tasks 5–7.
+- **Spec coverage:** Piece 1 (tab-in-URL) → Tasks 3, 4. Piece 2 (SmartBackButton) → Task 2 + Tasks 5–7. Piece 3 (`staffListHref`) → Task 1, imported and called by every detail page in Tasks 5–7 (single source of truth; no unused code). Out-of-scope items excluded and verified in Task 8 Step 4.
+- **Type consistency:** `SmartBackButton` prop names (`fallbackHref`, `label`, `variant`, `size`, `className`) are identical across Tasks 2, 5, 6, 7. `useTabParam(defaultTab, validTabs)` signature identical across Task 3 and all Task 4 call sites. `staffListHref(panel, section)` is called with `panel ∈ {review, assessment, approver, verification}` and `section ∈ {primary, inspections, water-reports}` across Tasks 5–7, matching its Task 1 signature.
 - **No placeholders:** every step has concrete code and exact commands.
