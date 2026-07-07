@@ -180,8 +180,11 @@ export function SmartBackButton({
       } catch {
         sameOrigin = false
       }
-      // Came from an in-app page → real browser-back preserves scroll & prior filters.
-      if (sameOrigin) {
+      // Real browser-back only when we came from an in-app page AND this tab
+      // has a prior history entry to return to. A cmd-click "open in new tab"
+      // sets a same-origin referrer but has no usable history, so it must fall
+      // through to the fallback rather than dead-ending on router.back().
+      if (sameOrigin && window.history.length > 1) {
         router.back()
         return
       }
@@ -278,7 +281,7 @@ git commit -m "feat: add useTabParam URL-backed tab hook"
 
 ## Task 4: Wire tab-in-URL into the 4 dashboards
 
-Each dashboard currently holds `topTab` in `useState` with the panel's primary default. Replace that with `useTabParam`, and add `export const dynamic = "force-dynamic";` (required because `useSearchParams` opts the page out of static prerendering — without it the build throws "useSearchParams() should be wrapped in a suspense boundary").
+Each dashboard currently holds `topTab` in `useState` with the panel's primary default. Replace that with `useTabParam`. Because `useSearchParams` triggers a static-prerender bailout, the page's default export must wrap the content in a `<Suspense>` boundary — **`export const dynamic = "force-dynamic"` alone is NOT sufficient** (Next 15 still throws "useSearchParams() should be wrapped in a suspense boundary" during export). Implementation applied: rename the page function to `XDashboardContent`, and add a new default export `XDashboard` that renders `<Suspense fallback={<centered Loader2 />}><XDashboardContent /></Suspense>`. `force-dynamic` is kept (harmless) but the Suspense wrapper is what fixes the build.
 
 **Files:**
 - Modify: `app/review/page.tsx`
