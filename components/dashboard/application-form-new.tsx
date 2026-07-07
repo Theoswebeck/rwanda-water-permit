@@ -6427,7 +6427,7 @@ export function ApplicationForm({
                       {watchedIntendedActivities?.includes("port_construction") && (
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border shadow-sm">
                           <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-4 text-lg border-b pb-2">
-                            Port Construction Details
+                            8. Port Construction Details
                           </h4>
 
                           <div className="overflow-x-auto">
