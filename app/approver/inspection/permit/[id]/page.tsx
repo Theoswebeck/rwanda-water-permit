@@ -17,6 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
+import { SmartBackButton } from "@/components/ui/back-button";
+import { staffListHref } from "@/lib/staff-nav";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-badge";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
@@ -579,15 +581,11 @@ export default function PermitInspectionUnifiedPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
-      <Button
-        variant="ghost"
+      <SmartBackButton
+        fallbackHref={staffListHref("approver", "inspections")}
         size="sm"
         className="gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
-        onClick={() => router.back()}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Button>
+      />
 
       <div className="flex items-start justify-between gap-4">
         <div>
