@@ -195,6 +195,10 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       recreationEIA: 'environmental_impact_doc',
       recreationManagementPlan: 'other',
       recreationPolygonAreaMap: 'intake_discharge_map',
+      // Port construction documents
+      portConstructionGeneralRequirements: 'other',
+      portConstructionEIA: 'environmental_impact_doc',
+      portConstructionFeasibilityStudy: 'other',
       // Gaz extraction documents
       gazExtractionGeneralRequirements: 'other',
       gazExtractionEIA: 'environmental_impact_doc',
