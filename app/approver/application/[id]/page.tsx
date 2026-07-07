@@ -25,6 +25,8 @@ import {
   ChevronDown
 } from "lucide-react";
 import Link from "next/link";
+import { SmartBackButton } from "@/components/ui/back-button";
+import { staffListHref } from "@/lib/staff-nav";
 import { UserProfileButton } from "@/components/dashboard/user-profile-button";
 import { supabase } from "@/lib/supabase";
 import { getDocumentUrl } from "@/lib/supabase-storage";
@@ -907,12 +909,7 @@ export default function ApproverApplicationPage() {
           {/* Header */}
           <div className="space-y-6">
             <div className="flex items-center">
-        <Link href="/approver">
-                <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-                  Back to Dashboard
-          </Button>
-        </Link>
+        <SmartBackButton fallbackHref={staffListHref("approver", "primary")} label="Back to Dashboard" size="sm" className="gap-2" />
       </div>
       
             <div className="space-y-2">
