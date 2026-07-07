@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Search, XCircle, MapPin, FileCheck } from "lucide-react";
+import { Eye, Search, XCircle, MapPin, FileCheck, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
@@ -26,6 +26,7 @@ import { sortBySubmissionDateDescending } from "@/lib/application-sorting";
 import { calculateDaysRemainingTo90DayDeadline } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
@@ -56,14 +57,19 @@ const ASSESSOR_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export default function AssessmentDashboard() {
+export const dynamic = "force-dynamic";
+
+function AssessmentDashboardContent() {
   const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [allApplications, setAllApplications] = useState<AssessmentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"assessment" | "inspections" | "water-reports" | "permit-registry">("assessment");
+  const [topTab, setTopTab] = useTabParam<"assessment" | "inspections" | "water-reports" | "permit-registry">(
+    "assessment",
+    ["assessment", "inspections", "water-reports", "permit-registry"]
+  );
   const [activeChipId, setActiveChipId] = useState("pending_assessment");
   const [activeInnerTab, setActiveInnerTab] = useState<"all_applications" | "map">("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
@@ -481,5 +487,19 @@ export default function AssessmentDashboard() {
         </div>
       </motion.div>
     </DashboardLayout>
+  );
+}
+
+export default function AssessmentDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <AssessmentDashboardContent />
+    </Suspense>
   );
 }

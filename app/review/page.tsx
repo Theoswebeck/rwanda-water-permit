@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { ProtectedRoute } from "@/components/auth/protected-route";
@@ -49,6 +49,7 @@ import Link from "next/link";
 import { supabase, createAuditLog } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
@@ -115,9 +116,14 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export default function ReviewerDashboard() {
+export const dynamic = "force-dynamic";
+
+function ReviewerDashboardContent() {
   const router = useRouter();
-  const [topTab, setTopTab] = useState<"review" | "inspections" | "water-reports" | "permit-registry">("review");
+  const [topTab, setTopTab] = useTabParam<"review" | "inspections" | "water-reports" | "permit-registry">(
+    "review",
+    ["review", "inspections", "water-reports", "permit-registry"]
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [reviewApplications, setReviewApplications] = useState<ReviewApplication[]>([]);
@@ -1185,3 +1191,17 @@ export default function ReviewerDashboard() {
     </ProtectedRoute>
   );
 } 
+
+export default function ReviewerDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <ReviewerDashboardContent />
+    </Suspense>
+  );
+}

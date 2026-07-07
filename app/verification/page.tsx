@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, Suspense } from "react";
 import { motion } from "framer-motion";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { DashboardLayout } from "@/components/dashboard/dashboard-layout";
@@ -17,6 +17,7 @@ import { supabase } from "@/lib/supabase";
 import type { Application } from "@/types/database";
 import { WaterConcessionMap } from "@/components/shared/water-concession-map";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
@@ -46,13 +47,18 @@ const VERIFIER_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export default function VerificationDashboard() {
+export const dynamic = "force-dynamic";
+
+function VerificationDashboardContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [applications, setApplications] = useState<VerificationApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [topTab, setTopTab] = useState<"verification" | "inspections" | "water-reports" | "permit-registry">("verification");
+  const [topTab, setTopTab] = useTabParam<"verification" | "inspections" | "water-reports" | "permit-registry">(
+    "verification",
+    ["verification", "inspections", "water-reports", "permit-registry"]
+  );
   const [activeChipId, setActiveChipId] = useState("pending_verification");
   const [activeInnerTab, setActiveInnerTab] = useState<string>("all_applications");
   const [workflowDatesMap, setWorkflowDatesMap] = useState<Record<string, WorkflowDates>>({});
@@ -426,5 +432,19 @@ export default function VerificationDashboard() {
         </motion.div>
     </DashboardLayout>
     </ProtectedRoute>
+  );
+}
+
+export default function VerificationDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <VerificationDashboardContent />
+    </Suspense>
   );
 }

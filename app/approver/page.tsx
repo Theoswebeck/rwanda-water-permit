@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +14,7 @@ import { AllApplicationsList } from "@/components/approver/all-applications-list
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { StaffTopTabs } from "@/components/shared/staff-top-tabs";
+import { useTabParam } from "@/hooks/use-tab-param";
 import { InspectionsWorkbench } from "@/components/inspection/inspections-workbench";
 import { WaterUseReportsList } from "@/components/water-use-reports/water-use-reports-list";
 import { PermitRegistryList } from "@/components/permit-registry/permit-registry-list";
@@ -31,11 +32,16 @@ const APPROVER_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export default function ApproverDashboard() {
+export const dynamic = "force-dynamic";
+
+function ApproverDashboardContent() {
   const isTopTab = (v: string): v is "approval" | "inspections" | "water-reports" | "permit-registry" =>
     v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry";
   const [loading, setLoading] = useState(true);
-  const [topTab, setTopTab] = useState<"approval" | "inspections" | "water-reports" | "permit-registry">("approval");
+  const [topTab, setTopTab] = useTabParam<"approval" | "inspections" | "water-reports" | "permit-registry">(
+    "approval",
+    ["approval", "inspections", "water-reports", "permit-registry"]
+  );
   const [activeChipId, setActiveChipId] = useState("pending_approval");
   const [activeApprovalTab, setActiveApprovalTab] = useState("all_applications");
   // All applications for chip count computation
@@ -177,5 +183,19 @@ export default function ApproverDashboard() {
         </motion.div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function ApproverDashboard() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <ApproverDashboardContent />
+    </Suspense>
   );
 }
