@@ -62,6 +62,31 @@ import { RowActions } from "@/components/permit-registry/row-actions";
 import { EditRegistryDrawer } from "@/components/permit-registry/edit-registry-drawer";
 import { DeleteRegistryDialog } from "@/components/permit-registry/delete-registry-dialog";
 
+/**
+ * Format a permit calendar date (issuance / expiration) for display.
+ *
+ * Permit dates are fixed calendar days — "22 Aug 2023" is the same day for
+ * everyone, everywhere. They must NOT be re-interpreted through the viewer's
+ * (or the server's) timezone, or the shown day drifts by ±1. We therefore
+ * pull the literal Y-M-D out of the incoming value (the API returns a plain
+ * `YYYY-MM-DD` string; an ISO timestamp is tolerated too) and render it in a
+ * fixed UTC frame so the output is identical on any device or server.
+ */
+function formatRegistryDate(dateString: string | null | undefined): string {
+  if (!dateString) return "N/A";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString.trim());
+  const d = m
+    ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+    : new Date(dateString);
+  if (Number.isNaN(d.getTime())) return "N/A";
+  return d.toLocaleDateString("en-RW", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 const MapContainer = dynamic(() => import("react-leaflet").then((m) => m.MapContainer), { ssr: false });
 const TileLayer = dynamic(() => import("react-leaflet").then((m) => m.TileLayer), { ssr: false });
 const CircleMarker = dynamic(() => import("react-leaflet").then((m) => m.CircleMarker), { ssr: false });
@@ -385,14 +410,7 @@ export function PermitRegistryList({ showCard = true }: PermitRegistryListProps)
     }
   };
 
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("en-RW", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const formatDate = formatRegistryDate;
 
   const getStatusBadge = (status: string | null | undefined) => {
     const raw = (status || "").trim();
@@ -1350,8 +1368,8 @@ function SourceComparison({ entry }: { entry: PermitRegistryEntry }) {
           <p><span className="text-muted-foreground">Activity:</span> {formatActivityLabel(values.authorized_activity)}</p>
           <p><span className="text-muted-foreground">Location:</span> {values.location || "N/A"}</p>
           <p><span className="text-muted-foreground">Coordinates:</span> {formatCoord(values.latitude, values.longitude)}</p>
-          <p><span className="text-muted-foreground">Issued:</span> {values.issuance_date ? new Date(values.issuance_date).toLocaleDateString("en-RW", { year: "numeric", month: "short", day: "numeric" }) : "N/A"}</p>
-          <p><span className="text-muted-foreground">Expires:</span> {values.expiration_date ? new Date(values.expiration_date).toLocaleDateString("en-RW", { year: "numeric", month: "short", day: "numeric" }) : "N/A"}</p>
+          <p><span className="text-muted-foreground">Issued:</span> {formatRegistryDate(values.issuance_date)}</p>
+          <p><span className="text-muted-foreground">Expires:</span> {formatRegistryDate(values.expiration_date)}</p>
         </div>
       )}
     </div>

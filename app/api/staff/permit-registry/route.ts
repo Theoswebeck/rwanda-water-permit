@@ -58,10 +58,10 @@ function buildUnifiedCte(schema: RegistrySchema): string {
         pr.location,
         pr.latitude,
         pr.longitude,
-        pr.issuance_date,
+        pr.issuance_date::text as issuance_date,
         ${schema.hasRawDateColumns ? `pr.issuance_date_raw, pr.expiration_date_raw,` : `null::text as issuance_date_raw, null::text as expiration_date_raw,`}
         pr.duration,
-        pr.expiration_date,
+        pr.expiration_date::text as expiration_date,
         upper(coalesce(pr.status, 'OPERATIONAL')) as status,
         pr.contact,
         ${schema.hasDocColumns
@@ -95,7 +95,7 @@ function buildUnifiedCte(schema: RegistrySchema): string {
         concat_ws(', ', a.district, a.province::text) as location,
         ${latExpr} as latitude,
         ${lngExpr} as longitude,
-        p.issued_date as issuance_date,
+        p.issued_date::text as issuance_date,
         null::text as issuance_date_raw,
         null::text as expiration_date_raw,
         CASE
@@ -105,7 +105,7 @@ function buildUnifiedCte(schema: RegistrySchema): string {
             THEN a.proposed_duration_months::text || ' month' || CASE WHEN a.proposed_duration_months = 1 THEN '' ELSE 's' END
           ELSE null
         END as duration,
-        p.expiry_date as expiration_date,
+        p.expiry_date::text as expiration_date,
         CASE
           WHEN p.status = 'expired'::permit_status     THEN 'EXPIRED'
           WHEN p.status = 'expiring_soon'::permit_status THEN 'EXPIRING_SOON'
