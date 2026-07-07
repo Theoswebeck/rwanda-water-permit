@@ -193,6 +193,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   construction_of_dam: "Construction of Dam",
   construction_of_infrastructures: "Construction or installation of infrastructure",
   navigation: "Navigation", recreation_activities: "Recreational Activities",
+  port_construction: "Port Construction",
   gaz_extraction: "Gaz Extraction", livestock: "Livestock", other: "Other",
 };
 
@@ -573,6 +574,7 @@ export function getActivityLabelKinyarwanda(activity: string): string {
     livestock: "ubworozi",
     mining: "ubucukuzi bw'amabuye y'agaciro",
     recreation_activities: "imyidagaduro",
+    port_construction: "byo kubaka icyambu",
     water_supply: "gutanga amazi",
     other: "ibindi",
     domestic: "gukoresha mu rugo",
