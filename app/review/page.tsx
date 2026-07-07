@@ -116,8 +116,6 @@ const REVIEWER_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export const dynamic = "force-dynamic";
-
 function ReviewerDashboardContent() {
   const router = useRouter();
   const [topTab, setTopTab] = useTabParam<"review" | "inspections" | "water-reports" | "permit-registry">(

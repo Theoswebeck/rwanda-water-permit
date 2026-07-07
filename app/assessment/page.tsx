@@ -57,8 +57,6 @@ const ASSESSOR_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export const dynamic = "force-dynamic";
-
 function AssessmentDashboardContent() {
   const { user, loading: authLoading } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");

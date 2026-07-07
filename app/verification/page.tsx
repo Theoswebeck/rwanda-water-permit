@@ -47,8 +47,6 @@ const VERIFIER_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export const dynamic = "force-dynamic";
-
 function VerificationDashboardContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");

@@ -35,7 +35,7 @@ import type { Application, ApplicationStatus, User as UserType, Document, Review
 import { geometryToCoordinatePolygons } from "@/lib/geoUtils";
 import { getApplicationWorkflowKind, isAssessmentComplete } from "@/lib/application-workflow";
 import type { RecommendationData } from "@/components/inspection/verification-summary";
-import { ArrowLeft, Loader2, XCircle, ClipboardCheck, Check, X, CheckCircle, AlertTriangle } from "lucide-react";
+import { Loader2, XCircle, ClipboardCheck, Check, X, CheckCircle, AlertTriangle } from "lucide-react";
 import { type PermitWithApplication } from "@/components/dashboard/permit-select-for-renewal";
 import { RegistryPermitComparisonCard } from "@/components/inspection/registry-permit-comparison-card";
 import { PermitPreviewFrame } from "@/components/staff/permit-preview-frame";

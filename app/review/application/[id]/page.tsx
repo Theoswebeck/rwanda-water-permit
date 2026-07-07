@@ -23,7 +23,6 @@ import { AssessorRecommendations } from "@/components/inspection/assessor-recomm
 import type { RecommendationData } from "@/components/inspection/verification-summary";
 import { cn } from "@/lib/utils";
 import { 
-  ArrowLeft, 
   Check, 
   X, 
   FileText, 

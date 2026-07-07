@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, AlertCircle, Save, Send, Eye, ArrowLeft } from "lucide-react";
+import { Loader2, AlertCircle, Save, Send, Eye } from "lucide-react";
 import { SmartBackButton } from "@/components/ui/back-button";
 import { staffListHref } from "@/lib/staff-nav";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";

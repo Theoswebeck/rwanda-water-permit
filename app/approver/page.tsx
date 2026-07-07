@@ -32,8 +32,6 @@ const APPROVER_CHIPS: StatusChipDef[] = [
   { id: "all_applications", label: "All Applications", statuses: [], priority: "primary" },
 ];
 
-export const dynamic = "force-dynamic";
-
 function ApproverDashboardContent() {
   const isTopTab = (v: string): v is "approval" | "inspections" | "water-reports" | "permit-registry" =>
     v === "approval" || v === "inspections" || v === "water-reports" || v === "permit-registry";
