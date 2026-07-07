@@ -29,6 +29,10 @@ import { getApplicationExpiration } from "@/lib/application-expiration";
 import { selectPermitVariant, isConcessionApplication, type PermitVariant } from "@/lib/permit-variant";
 import { buildChildPermitNumber, isRealNetworkRow } from "@/lib/permit-number-utils";
 import { addPermitExpiry } from "@/lib/date-math";
+import {
+  resolveModificationValidity,
+  type ValiditySource,
+} from "@/lib/permit/resolve-modification-validity";
 import { splitContractSectionsByLanguage, parseSectionHeading } from "@/lib/contract-terms";
 import {
   buildContractPlaceholderContext,
@@ -912,6 +916,26 @@ export default function TermsConditionsPage() {
             expiry_date: currentPermit.expiry_date,
           });
 
+          // A modification amends the permit's terms but NEVER resets its
+          // validity window. `currentPermit` already holds the authoritative
+          // issued_date / expiry_date, so pass them through VERBATIM (no
+          // reparse → no timezone round-trip drift) and never recompute a
+          // fresh today+duration window. If the original row is missing a
+          // date (legacy data) we leave it untouched rather than inventing a
+          // new one — recomputing here is exactly the bug this guards against.
+          const preservedIssuedDate: string | null =
+            typeof currentPermit.issued_date === 'string' && currentPermit.issued_date
+              ? currentPermit.issued_date
+              : null;
+          const preservedExpiryDate: string | null =
+            typeof currentPermit.expiry_date === 'string' && currentPermit.expiry_date
+              ? currentPermit.expiry_date
+              : null;
+          console.log('🔒 Modification preserving original validity window:', {
+            issued_date: preservedIssuedDate,
+            expiry_date: preservedExpiryDate,
+          });
+
           const permitUpdatePayload: Record<string, unknown> = {
             status: 'active',
             is_modification: true,
@@ -930,9 +954,13 @@ export default function TermsConditionsPage() {
             permitUpdatePayload.water_allowance = applicationData.estimated_usage_volume;
           }
           permitUpdatePayload.allowance_unit = resolvedAllowanceUnit || applicationData.usage_unit || 'm³';
-          permitUpdatePayload.issued_date = newIssuedDate;
-          if (resolvedDurationYears) {
-            permitUpdatePayload.expiry_date = newExpiryDate;
+          // Only write the dates when the original row actually has them —
+          // otherwise leave the existing DB values untouched (never reset).
+          if (preservedIssuedDate) {
+            permitUpdatePayload.issued_date = preservedIssuedDate;
+          }
+          if (preservedExpiryDate) {
+            permitUpdatePayload.expiry_date = preservedExpiryDate;
           }
 
           permitUpdatePayload.conditions = {
@@ -1005,8 +1033,8 @@ export default function TermsConditionsPage() {
               water_source: (permitUpdatePayload.water_source as string) || undefined,
               authorized_activity: (permitUpdatePayload.purpose as string) || undefined,
               volume_or_area: permitUpdatePayload.water_allowance != null ? String(permitUpdatePayload.water_allowance) : undefined,
-              issuance_date: newIssuedDate,
-              expiration_date: newExpiryDate || undefined,
+              issuance_date: preservedIssuedDate || undefined,
+              expiration_date: preservedExpiryDate || undefined,
               location: registrySyncLocation,
               permit_holder: permitHolder,
               latitude: _registryLat,
@@ -1034,13 +1062,51 @@ export default function TermsConditionsPage() {
 
           console.log('📝 Registry-only modification for permit:', registryPermitNumber);
 
+          // A modification never resets the validity window. Source the
+          // original issue/expiry from the authoritative permit_registry row
+          // first, then the snapshot captured at creation. Only fall back to
+          // the freshly-computed dates if neither exists.
+          const registrySnap = permitRef?.registrySnapshot as
+            | { issued_date?: string | null; expiry_date?: string | null }
+            | undefined;
+          let registryRowDates: { issued?: string | null; expiry?: string | null } = {};
+          try {
+            const { data: registryRow } = await supabase
+              .from('permit_registry')
+              .select('issuance_date, expiration_date')
+              .eq('permit_number', registryPermitNumber)
+              .maybeSingle() as { data: { issuance_date?: string | null; expiration_date?: string | null } | null };
+            if (registryRow) {
+              registryRowDates = {
+                issued: registryRow.issuance_date,
+                expiry: registryRow.expiration_date,
+              };
+            }
+          } catch (regLookupErr) {
+            console.warn('⚠️ permit_registry date lookup failed (non-blocking):', regLookupErr);
+          }
+          const preservedRegValidity = resolveModificationValidity([
+            registryRowDates as ValiditySource,
+            { issued: registrySnap?.issued_date, expiry: registrySnap?.expiry_date },
+          ]);
+          const preservedRegIssuedDate = preservedRegValidity.issuedDate
+            ? toLocalDateString(preservedRegValidity.issuedDate)
+            : newIssuedDate;
+          const preservedRegExpiryDate = preservedRegValidity.expiryDate
+            ? toLocalDateString(preservedRegValidity.expiryDate)
+            : (newExpiryDate || computeExpiryDateOnly(resolvedDurationYearsGlobal));
+          console.log('🔒 Registry-only modification preserving validity window:', {
+            issued_date: preservedRegIssuedDate,
+            expiry_date: preservedRegExpiryDate,
+          });
+
           const registrySyncResult = await syncRegistryViaApi(registryPermitNumber, {
             status: 'active',
             water_source: applicationData.water_source || undefined,
             authorized_activity: applicationData.water_purpose || undefined,
             volume_or_area: resolvedVolumeM3 > 0 ? String(resolvedVolumeM3) : (applicationData.estimated_usage_volume ? String(applicationData.estimated_usage_volume) : undefined),
-            issuance_date: newIssuedDate,
-            expiration_date: newExpiryDate || undefined,
+            issuance_date: preservedRegIssuedDate,
+            expiration_date: preservedRegExpiryDate || undefined,
             location: registrySyncLocation,
             permit_holder: permitHolder,
             latitude: _registryLat,
@@ -1065,8 +1131,8 @@ export default function TermsConditionsPage() {
             water_allowance: resolvedVolumeM3 > 0 ? resolvedVolumeM3 : (applicationData.estimated_usage_volume || 0),
             allowance_unit: resolvedAllowanceUnit || 'm³/year',
             issuing_authority: 'Rwanda Water Resources Board',
-            issued_date: newIssuedDate,
-            expiry_date: newExpiryDate || computeExpiryDateOnly(resolvedDurationYearsGlobal),
+            issued_date: preservedRegIssuedDate,
+            expiry_date: preservedRegExpiryDate,
             is_modification: true,
             conditions: {
               conditions: [

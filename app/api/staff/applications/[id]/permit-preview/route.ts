@@ -9,6 +9,10 @@ import { hasAnyRole, resolveEffectiveRoles } from "@/lib/auth/effective-roles";
 import { generatePermitPdfBuffer, type PermitApplication } from "@/lib/pdf-permit-server";
 import { addPermitExpiry } from "@/lib/date-math";
 import { resolvePermitIssueDate } from "@/lib/permit/resolve-issue-date";
+import {
+  resolveModificationValidity,
+  type ValiditySource,
+} from "@/lib/permit/resolve-modification-validity";
 
 export const runtime = "nodejs";
 
@@ -293,13 +297,82 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     // We pass expiryDate directly so the renderers use it verbatim instead of
     // computing issueDate + resolvePermitDuration().
     let exactExpiryDate: Date | undefined;
+    // Modifications additionally preserve the ORIGINAL issue date — a
+    // modification never resets the validity window, so the rendered issue
+    // date must be the original permit's, not the modification's approval day.
+    let exactIssuedDate: Date | undefined;
     let permitValidityYears: number | undefined;
 
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const originalPermitId =
       typeof notes?.originalPermitId === "string" ? notes.originalPermitId.trim() : null;
+    const originalPermitNumber =
+      typeof notes?.originalPermitNumber === "string"
+        ? notes.originalPermitNumber.trim()
+        : "";
 
-    if (isRenewal || isModification || isTransfer) {
+    if (isModification) {
+      // ── Modification: keep the ORIGINAL validity window (issue + expiry).
+      // Gather every source that might hold the original permit's dates, in
+      // priority order, and let the resolver pick the first with a real
+      // expiry. Never fall back to a duration — that is the "treated like a
+      // new permit" bug. If nothing resolves, the renderer default applies.
+      const sources: ValiditySource[] = [];
+
+      // 1. Linked digital permit (public.permits) by UUID.
+      if (originalPermitId && UUID_RE.test(originalPermitId)) {
+        try {
+          const pRes = await query<{ issued_date: string | null; expiry_date: string | null }>(
+            `SELECT issued_date, expiry_date FROM public.permits WHERE id = $1 LIMIT 1`,
+            [originalPermitId],
+          );
+          if (pRes.rows.length) {
+            sources.push({
+              issued: pRes.rows[0].issued_date,
+              expiry: pRes.rows[0].expiry_date,
+            });
+          }
+        } catch {
+          // Non-fatal — try the next source.
+        }
+      }
+
+      // 2. Authoritative permit_registry row, matched by permit number.
+      if (originalPermitNumber) {
+        try {
+          const rRes = await query<{ issuance_date: string | null; expiration_date: string | null }>(
+            `SELECT issuance_date, expiration_date FROM public.permit_registry WHERE permit_number = $1 LIMIT 1`,
+            [originalPermitNumber],
+          );
+          if (rRes.rows.length) {
+            sources.push({
+              issued: rRes.rows[0].issuance_date,
+              expiry: rRes.rows[0].expiration_date,
+            });
+          }
+        } catch {
+          // Non-fatal — try the next source.
+        }
+      }
+
+      // 3. Registry snapshot captured on the application at creation time.
+      const snap = notes?.permitReference?.registrySnapshot as
+        | { issued_date?: string | null; expiry_date?: string | null }
+        | undefined;
+      if (snap) {
+        sources.push({ issued: snap.issued_date, expiry: snap.expiry_date });
+      }
+
+      // 4. Legacy transferFormData dates (older manual entries).
+      sources.push({
+        issued: notes?.transferFormData?.effectiveDate,
+        expiry: notes?.transferFormData?.expirationDate,
+      });
+
+      const resolved = resolveModificationValidity(sources);
+      if (resolved.expiryDate) exactExpiryDate = resolved.expiryDate;
+      if (resolved.issuedDate) exactIssuedDate = resolved.issuedDate;
+    } else if (isRenewal || isTransfer) {
       // Step 1: try transferFormData (registry/manual permits + any transfer where
       // the applicant entered the original permit's dates in the form).
       const expiryFromNotes = parseFlexDate(notes?.transferFormData?.expirationDate);
@@ -382,6 +455,9 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
           ? row.approved_at.toISOString()
           : null;
     const issuedDate = resolvePermitIssueDate({
+      // Modifications keep the original permit's issue date; every other type
+      // locks to approved_at (or today before approval).
+      permitIssuedDate: exactIssuedDate,
       approvedAt: approvedAtRaw,
     });
 
