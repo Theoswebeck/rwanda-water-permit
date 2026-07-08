@@ -244,7 +244,7 @@ export function buildRegistryWhere(
       where.push(`upper(coalesce(pr.status, '')) like '%CANCEL%' and upper(coalesce(pr.status, '')) not like '%EXPIRED%'`);
     } else if (normalizedStatus === "__ABOUT_TO_EXPIRE__") {
       where.push(
-        `pr.expiration_date is not null and pr.expiration_date >= current_date and pr.expiration_date <= (current_date + interval '3 months')`
+        `pr.expiration_date is not null and pr.expiration_date::date >= current_date and pr.expiration_date::date <= (current_date + interval '3 months')`
       );
     } else {
       where.push(`upper(coalesce(pr.status, '')) = ${p(normalizedStatus)}`);
