@@ -128,6 +128,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       setUser((data.user || null) as AuthUser | null);
+      // A new authenticated identity — drop any cached query data from a prior
+      // user so a shared-workstation account switch never renders stale lists.
+      try {
+        getQueryClient().clear();
+      } catch {
+        // no-op — cache clearing is best-effort
+      }
       await refreshProfile();
       return { mustChangePassword: Boolean(data.mustChangePassword) };
     } catch (err) {

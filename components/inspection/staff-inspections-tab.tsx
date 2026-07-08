@@ -200,7 +200,7 @@ interface StaffInspectionsTabProps {
 }
 
 export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
-  const { userProfile } = useAuth();
+  const { userProfile, loading: authLoading } = useAuth();
   const currentUserId = userProfile?.id ?? null;
   const basePath = getInspectionBasePath(roleContext || userProfile?.role);
   const appBasePath = getApplicationBasePath(roleContext || userProfile?.role);
@@ -213,10 +213,9 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   // Cached, background-revalidated list data — mirrors the react-query caching the
   // Water Use Reports and Permit Registry tabs already use, so returning here after
   // a detail-page visit shows the previous rows instantly instead of re-hitting the
-  // DB. The user id in the key isolates cached rows per staffer (prevents one user's
-  // list briefly leaking to the next after a client-side login switch). Data swaps
-  // atomically on success, so the list is never rendered as a partial snapshot, and
-  // a failed background refresh keeps the last-good rows while exposing isError.
+  // DB. Data swaps atomically on success (never a partial snapshot); a failed
+  // background refresh keeps the last-good rows while exposing isError. The cache is
+  // cleared on login AND logout (AuthContext), so it can't carry across users.
   const {
     data,
     isLoading,
@@ -225,7 +224,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   } = useQuery<InspectionsData>({
     // Stable key (same shape the Water Use Reports / Permit Registry tabs use) so a
     // remount after a detail-page visit hits the persisted cache instead of showing
-    // a spinner. Cross-user isolation is handled by clearing the cache on logout.
+    // a spinner.
     queryKey: [INSPECTIONS_QUERY_KEY],
     queryFn: fetchInspections,
     staleTime: 60_000,
@@ -521,7 +520,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     return result;
   }, [visibleInspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2">
