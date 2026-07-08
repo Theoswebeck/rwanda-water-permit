@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +20,17 @@ import {
   type InspectionWorkflowStatus,
 } from "@/types/inspection-workflow";
 import { getInspectionBasePath, getApplicationBasePath } from "@/lib/inspection-workflow";
+import { staffDashboardBaseForRole } from "@/lib/staff-nav";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+
+const INSPECTIONS_QUERY_KEY = "staff-inspections";
+
+type InspectionsData = {
+  inspections: InspectionRow[];
+  permitByAppId: Record<string, PermitLite | undefined>;
+  permitHolderByNumber: Record<string, string>;
+  registryByInspectionId: Record<string, { permit_number: string; permit_holder: string | null } | undefined>;
+};
 
 type ApplicantInfo = {
   first_name?: string;
@@ -193,13 +204,34 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   const currentUserId = userProfile?.id ?? null;
   const basePath = getInspectionBasePath(roleContext || userProfile?.role);
   const appBasePath = getApplicationBasePath(roleContext || userProfile?.role);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Return target threaded into every row action so a detail-page "Back" lands
+  // on this exact list (right tab) even on a cold load.
+  const backParam = `?back=${encodeURIComponent(`${staffDashboardBaseForRole(roleContext || userProfile?.role)}?tab=inspections`)}`;
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [inspections, setInspections] = useState<InspectionRow[]>([]);
-  const [permitByAppId, setPermitByAppId] = useState<Record<string, PermitLite | undefined>>({});
-  const [permitHolderByNumber, setPermitHolderByNumber] = useState<Record<string, string>>({});
-  const [registryByInspectionId, setRegistryByInspectionId] = useState<Record<string, { permit_number: string; permit_holder: string | null } | undefined>>({});
+
+  // Cached, background-revalidated list data — mirrors the react-query caching the
+  // Water Use Reports and Permit Registry tabs already use, so returning here after
+  // a detail-page visit shows the previous rows instantly instead of re-hitting the
+  // DB. The user id in the key isolates cached rows per staffer (prevents one user's
+  // list briefly leaking to the next after a client-side login switch). Data swaps
+  // atomically on success, so the list is never rendered as a partial snapshot, and
+  // a failed background refresh keeps the last-good rows while exposing isError.
+  const {
+    data,
+    isPending,
+    isError,
+    error: queryError,
+  } = useQuery<InspectionsData>({
+    queryKey: [INSPECTIONS_QUERY_KEY, currentUserId],
+    queryFn: fetchInspections,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+  const inspections = data?.inspections ?? [];
+  const permitByAppId = data?.permitByAppId ?? {};
+  const permitHolderByNumber = data?.permitHolderByNumber ?? {};
+  const registryByInspectionId = data?.registryByInspectionId ?? {};
   const [activeChipId, setActiveChipId] = useState("all");
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -209,7 +241,9 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     try {
       const { error } = await supabase.from("inspections").delete().eq("id", id);
       if (error) throw error;
-      setInspections((prev) => prev.filter((r) => r.id !== id));
+      queryClient.setQueryData<InspectionsData>([INSPECTIONS_QUERY_KEY, currentUserId], (old) =>
+        old ? { ...old, inspections: old.inspections.filter((r) => r.id !== id) } : old
+      );
     } catch (e: any) {
       alert(e?.message || "Failed to delete inspection");
     } finally {
@@ -217,12 +251,10 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     }
   };
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
+  // Fetches everything the list renders as ONE atomic result (react-query swaps it
+  // in on success), so the table is never shown as a partial snapshot. Hoisted, so
+  // the useQuery above can reference it. Throws on error → react-query surfaces it.
+  async function fetchInspections(): Promise<InspectionsData> {
         const { data, error: inspErr } = await supabase
           .from("inspections")
           .select(
@@ -262,7 +294,6 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
 
         if (inspErr) throw inspErr;
         const rows = (data || []) as unknown as InspectionRow[];
-        setInspections(rows);
 
         // Registry-backed inspections: resolve permit via polymorphic owner_kind/owner_id
         const registryOwnerIds = Array.from(
@@ -323,25 +354,20 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             registryByInspection[r.id] = registryById[r.owner_id];
           }
         }
-        setRegistryByInspectionId(registryByInspection);
 
         const appIds = rows.map(r => r.application?.id).filter(Boolean) as string[];
         if (appIds.length === 0) {
-          setPermitByAppId({});
           // Still collect holders from registry for search/row rendering
-          const regPermitNos = Array.from(
-            new Set(Object.values(registryByInspection).map((v) => v?.permit_number).filter((p): p is string => Boolean(p)))
-          );
-          if (regPermitNos.length > 0) {
-            const holderMap: Record<string, string> = {};
-            for (const v of Object.values(registryByInspection)) {
-              if (v?.permit_number && v.permit_holder) holderMap[v.permit_number] = v.permit_holder;
-            }
-            setPermitHolderByNumber(holderMap);
-          } else {
-            setPermitHolderByNumber({});
+          const holderMap: Record<string, string> = {};
+          for (const v of Object.values(registryByInspection)) {
+            if (v?.permit_number && v.permit_holder) holderMap[v.permit_number] = v.permit_holder;
           }
-          return;
+          return {
+            inspections: rows,
+            permitByAppId: {},
+            permitHolderByNumber: holderMap,
+            registryByInspectionId: registryByInspection,
+          };
         }
 
         const { data: permits, error: permitErr } = await supabase
@@ -372,8 +398,6 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           }
         }
 
-        setPermitByAppId(map);
-
         // Collect all permit numbers (from permits table + registry stubs)
         const permitNumbers = Array.from(
           new Set(
@@ -383,6 +407,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
           )
         );
 
+        const holderMap: Record<string, string> = {};
         if (permitNumbers.length > 0) {
           const [registryResult, permitsResult] = await Promise.all([
             supabase
@@ -394,8 +419,6 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
               .select("permit_number, applicant")
               .in("permit_number", permitNumbers),
           ]);
-
-          const holderMap: Record<string, string> = {};
 
           if (!permitsResult.error) {
             for (const row of (permitsResult.data || []) as any[]) {
@@ -424,24 +447,19 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
             }
           }
 
-          setPermitHolderByNumber(holderMap);
         } else {
-          const holderMap: Record<string, string> = {};
           for (const v of Object.values(registryByInspection)) {
             if (v?.permit_number && v.permit_holder) holderMap[v.permit_number] = v.permit_holder;
           }
-          setPermitHolderByNumber(holderMap);
         }
-      } catch (e: any) {
-        console.error("❌ Failed to load inspections:", e);
-        setError(e?.message || "Failed to load inspections");
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    load();
-  }, []);
+        return {
+          inspections: rows,
+          permitByAppId: map,
+          permitHolderByNumber: holderMap,
+          registryByInspectionId: registryByInspection,
+        };
+  }
 
   const visibleInspections = useMemo(() => {
     return inspections.filter((r) => {
@@ -500,7 +518,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     return result;
   }, [visibleInspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
 
-  if (loading || authLoading) {
+  if (isPending || authLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2">
@@ -511,12 +529,13 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     );
   }
 
-  if (error) {
+  // Only a first-load failure (no data at all) replaces the list with an error.
+  if (isError && !data) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2 text-red-600">
           <AlertCircle className="h-6 w-6" />
-          <span>{error}</span>
+          <span>{queryError instanceof Error ? queryError.message : "Failed to load inspections"}</span>
         </div>
       </div>
     );
@@ -525,6 +544,12 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   return (
     <>
     <div className="space-y-4">
+      {isError ? (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Couldn&apos;t refresh — showing the last loaded list.</span>
+        </div>
+      ) : null}
       <StatusFilterChips
         chips={CHIP_DEFS}
         activeChipId={activeChipId}
@@ -623,7 +648,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                               <DropdownMenuLabel>Actions</DropdownMenuLabel>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem asChild>
-                                <Link href={viewHref} className="flex items-center gap-2">
+                                <Link href={`${viewHref}${backParam}`} className="flex items-center gap-2">
                                   <Eye className="h-4 w-4" />
                                   View inspection
                                 </Link>
@@ -631,7 +656,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                               {r.application?.application_number ? (
                                 <DropdownMenuItem asChild>
                                   <Link
-                                    href={`${appBasePath}/${encodeURIComponent(r.application.application_number)}`}
+                                    href={`${appBasePath}/${encodeURIComponent(r.application.application_number)}${backParam}`}
                                     className="flex items-center gap-2"
                                   >
                                     <Eye className="h-4 w-4" />
@@ -641,7 +666,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
                               ) : null}
                               {!isManual && permitNumber ? (
                                 <DropdownMenuItem asChild>
-                                  <Link href={`/permit/view/${encodeURIComponent(permitNumber)}`} className="flex items-center gap-2">
+                                  <Link href={`/permit/view/${encodeURIComponent(permitNumber)}${backParam}`} className="flex items-center gap-2">
                                     <Eye className="h-4 w-4" />
                                     View permit
                                   </Link>

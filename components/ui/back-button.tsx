@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { safeInternalPath } from "@/lib/safe-internal-path"
 
 interface BackButtonProps {
   label?: string
@@ -48,6 +49,18 @@ export function SmartBackButton({
 
   const handleBack = () => {
     if (typeof window !== "undefined") {
+      // An explicit ?back= target threaded from the originating list is the
+      // canonical destination — it makes a cold load return to the exact tab.
+      // Read it from the live URL (not useSearchParams) so pages hosting this
+      // button don't need their own Suspense boundary.
+      let dest = fallbackHref
+      try {
+        const back = safeInternalPath(new URLSearchParams(window.location.search).get("back"))
+        if (back) dest = back
+      } catch {
+        // keep fallbackHref
+      }
+
       const ref = document.referrer
       let sameOrigin = false
       try {
@@ -63,8 +76,11 @@ export function SmartBackButton({
         router.back()
         return
       }
+      // Cold load (direct link / new tab / external referrer) → deterministic
+      // list URL (the ?back= target when present, else the page's fallback).
+      router.push(dest)
+      return
     }
-    // Cold load (direct link / new tab / external referrer) → deterministic list URL.
     router.push(fallbackHref)
   }
 
