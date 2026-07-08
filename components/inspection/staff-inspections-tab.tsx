@@ -200,7 +200,7 @@ interface StaffInspectionsTabProps {
 }
 
 export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
-  const { userProfile, loading: authLoading } = useAuth();
+  const { userProfile } = useAuth();
   const currentUserId = userProfile?.id ?? null;
   const basePath = getInspectionBasePath(roleContext || userProfile?.role);
   const appBasePath = getApplicationBasePath(roleContext || userProfile?.role);
@@ -219,11 +219,14 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
   // a failed background refresh keeps the last-good rows while exposing isError.
   const {
     data,
-    isPending,
+    isLoading,
     isError,
     error: queryError,
   } = useQuery<InspectionsData>({
-    queryKey: [INSPECTIONS_QUERY_KEY, currentUserId],
+    // Stable key (same shape the Water Use Reports / Permit Registry tabs use) so a
+    // remount after a detail-page visit hits the persisted cache instead of showing
+    // a spinner. Cross-user isolation is handled by clearing the cache on logout.
+    queryKey: [INSPECTIONS_QUERY_KEY],
     queryFn: fetchInspections,
     staleTime: 60_000,
     placeholderData: keepPreviousData,
@@ -241,7 +244,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     try {
       const { error } = await supabase.from("inspections").delete().eq("id", id);
       if (error) throw error;
-      queryClient.setQueryData<InspectionsData>([INSPECTIONS_QUERY_KEY, currentUserId], (old) =>
+      queryClient.setQueryData<InspectionsData>([INSPECTIONS_QUERY_KEY], (old) =>
         old ? { ...old, inspections: old.inspections.filter((r) => r.id !== id) } : old
       );
     } catch (e: any) {
@@ -518,7 +521,7 @@ export function StaffInspectionsTab({ roleContext }: StaffInspectionsTabProps) {
     return result;
   }, [visibleInspections, permitByAppId, permitHolderByNumber, registryByInspectionId, search, activeChipId]);
 
-  if (isPending || authLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center gap-2">

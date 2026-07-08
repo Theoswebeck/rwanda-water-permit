@@ -12,7 +12,7 @@ import { PermitLocationMap } from "@/components/public/permit-location-map";
 import { Tx } from "@/components/ui/tx";
 import { geometryToCoordinatePolygons, type CoordinatePoint } from "@/lib/geoUtils";
 import { getEffectiveInternalNotes } from "@/lib/document-overrides";
-import { safeInternalPath } from "@/lib/safe-internal-path";
+import { PermitViewBack } from "@/components/public/permit-view-back";
 
 function formatDate(dateString: string): string {
   const raw = dateString.trim();
@@ -97,17 +97,10 @@ function statusBadgeVariant(status: PermitStatus): { label: string; className: s
 
 export default async function PublicPermitViewPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ permitNumber: string[] }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { permitNumber: segments } = await params;
-  // Optional in-app return target (threaded by staff lists via ?back=). Only
-  // accept same-origin internal paths so this public page can't be used as an
-  // open redirect.
-  const backRaw = (await searchParams)?.back;
-  const backHref = safeInternalPath(typeof backRaw === "string" ? backRaw : null);
   if (!Array.isArray(segments) || segments.length === 0) notFound();
   // Permit numbers contain slashes (e.g. "000022/RWB/2026"). When %2F is
   // decoded by the server the single segment becomes multiple path parts.
@@ -327,20 +320,7 @@ export default async function PublicPermitViewPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="container mx-auto px-4 py-8">
-        {backHref ? (
-          <div className="mx-auto mb-4 max-w-4xl">
-            <Link
-              href={backHref}
-              className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="m12 19-7-7 7-7" />
-                <path d="M19 12H5" />
-              </svg>
-              <Tx>Back</Tx>
-            </Link>
-          </div>
-        ) : null}
+        <PermitViewBack />
         <div className="mx-auto max-w-4xl">
           <div className="rounded-xl border bg-white shadow-sm">
             <div className="px-4 pt-6 md:px-8 md:pt-10">

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
+import { getQueryClient } from "@/lib/react-query-provider";
 import type { User } from "@/types/database";
 import type { SignupAccountType } from "@/lib/auth/account-types";
 
@@ -161,6 +162,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } finally {
       setUser(null);
       setUserProfile(null);
+      // Drop all cached query data so the next user (who may log in without a
+      // full page reload) never sees the previous user's cached lists.
+      try {
+        getQueryClient().clear();
+      } catch {
+        // no-op — cache clearing is best-effort
+      }
     }
   };
 
