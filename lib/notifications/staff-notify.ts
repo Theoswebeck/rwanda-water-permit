@@ -271,13 +271,41 @@ async function fetchEntity(entityType: EntityType, entityId: string) {
       assigned_reviewer_id: string | null
       assigned_verifier_id: string | null
       assigned_approver_id: string | null
+      owner_kind: string | null
+      owner_id: string | null
+      application_id: string | null
+      locked_field_overrides: Record<string, string> | null
     }>(
       `select id, assigned_assessor_id, assigned_reviewer_id,
-              assigned_verifier_id, assigned_approver_id
+              assigned_verifier_id, assigned_approver_id,
+              owner_kind, owner_id, application_id, locked_field_overrides
        from public.inspections where id = $1 limit 1`,
       [entityId]
     )
-    return res.rows[0] || null
+    const insp = res.rows[0]
+    if (!insp) return null
+
+    // Resolve permit number so email links use the permit-based URL that
+    // the inspection pages expect (they resolve by permit number, not UUID).
+    let permitNumber: string | null = null
+    if (insp.owner_kind === 'permit_registry' && insp.owner_id) {
+      const regRes = await query<{ permit_number: string }>(
+        `select permit_number from public.permit_registry where id = $1 limit 1`,
+        [insp.owner_id]
+      )
+      permitNumber = regRes.rows[0]?.permit_number ?? null
+    } else if (insp.application_id) {
+      const permRes = await query<{ permit_number: string }>(
+        `select permit_number from public.permits where application_id = $1 limit 1`,
+        [insp.application_id]
+      )
+      permitNumber = permRes.rows[0]?.permit_number ?? null
+    }
+    if (!permitNumber && insp.locked_field_overrides?.permitNumber) {
+      permitNumber = insp.locked_field_overrides.permitNumber
+    }
+
+    return { ...insp, _link_id: permitNumber ?? insp.id }
   }
 
   return null
@@ -338,7 +366,8 @@ function buildStaffEmailCopy(
   const orgName = process.env.ORG_NAME || 'Rwanda Water Resources Board'
   const supportEmail = process.env.SUPPORT_EMAIL || 'info@rwb.rw'
   const ref = getEntityReference(entity)
-  const link = buildPortalLink(config.dashboardPath(entityId))
+  const linkId = (entity as Record<string, unknown>)._link_id as string | undefined ?? entityId
+  const link = buildPortalLink(config.dashboardPath(linkId))
   const staffName = `${staffUser.first_name || ''} ${staffUser.last_name || ''}`.trim() || 'Staff'
 
   const subject = `[RWB] ${config.emailSubjectPrefix} — ${ref}`
