@@ -463,46 +463,15 @@ export function ApplicationForm({
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // Auto-save functionality - runs every 30 seconds
-  useEffect(() => {
-    const autoSaveInterval = setInterval(async () => {
-      try {
-        setAutoSaveStatus('saving');
-        
-        // Get current form values without validation
-        const currentValues = form.getValues();
-        
-        // Validate with draft schema (relaxed validation)
-        const validatedData = draftSchema.parse(currentValues);
-        
-        // Add files to the form data
-        const formData = {
-          ...validatedData,
-          ...files,
-        };
-        
-        // Save as draft (auto-save)
-        await onSaveAsDraft(
-          isBulkApplicant ? { ...formData, bulk_networks: bulkNetworks, bulk_district: bulkDistrict } as any : formData as any,
-          'draft',
-          true
-        );
-
-        setLastAutoSave(new Date());
-        setAutoSaveStatus('saved');
-
-        // Reset status after 2 seconds
-        setTimeout(() => setAutoSaveStatus('idle'), 2000);
-      } catch (error) {
-        console.error('Auto-save failed:', error);
-        setAutoSaveStatus('error');
-        setTimeout(() => setAutoSaveStatus('idle'), 3000);
-      }
-    }, 30000); // 30 seconds
-
-    // Cleanup interval on unmount
-    return () => clearInterval(autoSaveInterval);
-  }, [form, files, onSaveAsDraft]);
+  // Auto-save DISABLED.
+  // The background 30s timer used to call onSaveAsDraft(..., 'draft') unconditionally.
+  // If it fired after an application had already been submitted (e.g. the form stayed
+  // mounted while the applicant completed IremboPay payment), it silently reverted the
+  // application status from 'submitted' back to 'draft', hiding it from the review
+  // dashboard (see RWB-2026-000064). Saving drafts is now explicit only, via "Save Now".
+  // (Automatic timer removed — no setInterval. Drafts now save only when the user
+  // explicitly clicks "Save Now", which is only reachable on editable draft /
+  // revision_required applications and therefore cannot clobber a submitted one.)
 
   // Manual auto-save trigger (can be called immediately)
   const triggerAutoSave = async () => {
@@ -1860,7 +1829,7 @@ export function ApplicationForm({
                 {autoSaveStatus === 'idle' && !lastAutoSave && (
                   <>
                     <FileText className="h-4 w-4 text-gray-500" />
-                    <span className="text-sm text-gray-500">Auto-save enabled (every 30s)</span>
+                    <span className="text-sm text-gray-500">Use &ldquo;Save Now&rdquo; to save a draft</span>
                   </>
                 )}
               </div>
