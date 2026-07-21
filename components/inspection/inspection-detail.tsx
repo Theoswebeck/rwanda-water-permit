@@ -374,6 +374,16 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
   const employment = getEmploymentData();
   const ohs = getOhsData();
   const isConcession = inspection.inspection_template === "concession";
+
+  // Section II "permitted vs actual". The permitted activity comes from the
+  // permit; the override is only a fallback for permits that carry no purpose.
+  // Actual activity and the concession area units live in locked_field_overrides
+  // (see docs/superpowers/specs/2026-07-21-inspection-permitted-vs-actual-design.md §3.3).
+  const overrides = inspection.locked_field_overrides || {};
+  const permittedActivity = inspection.application?.water_purpose || overrides.waterPurpose || null;
+  const actualActivity = overrides.actualActivity || null;
+  const permittedAreaUnit = overrides.permittedConcessionAreaUnit || "ha";
+  const actualAreaUnit = overrides.actualConcessionAreaUnit || "ha";
   const complianceStatus = inspection.compliance_status || inspection.result;
 
   return (
@@ -404,17 +414,25 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
       </SectionShell>
 
       {/* Permit specifics */}
-      <SectionShell 
-        title="Permit specifics" 
-        description={isConcession ? "Concession surface area and boundaries" : "Water abstraction details"}
+      <SectionShell
+        title="Permit specifics (permitted vs actual)"
+        description={isConcession ? "Permitted vs actual concession area, plus boundaries" : "Permitted vs actual water abstraction"}
       >
         {isConcession ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <ReadonlyField label="Authorized surface area (Ha)" value={inspection.authorized_surface_area_ha != null ? formatNum(inspection.authorized_surface_area_ha) : null} />
-              <ReadonlyField label="Actual surface area (Ha)" value={inspection.actual_surface_area_ha != null ? formatNum(inspection.actual_surface_area_ha) : null} />
+              <ReadonlyField label="Permitted activity" value={permittedActivity} />
+              <ReadonlyField label="Actual activity" value={actualActivity} />
+              <ReadonlyField
+                label={`Permitted concession area (${permittedAreaUnit})`}
+                value={inspection.authorized_surface_area_ha != null ? formatNum(inspection.authorized_surface_area_ha) : overrides.concessionAreaHa ?? null}
+              />
+              <ReadonlyField
+                label={`Actual concession area (${actualAreaUnit})`}
+                value={inspection.actual_surface_area_ha != null ? formatNum(inspection.actual_surface_area_ha) : null}
+              />
             </div>
-            
+
             {/* Authorized boundaries */}
             {Array.isArray(inspection.authorized_concession_boundaries) && inspection.authorized_concession_boundaries.length > 0 && (
               <Card className="border-slate-200 dark:border-slate-800 mb-4">
@@ -464,15 +482,17 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ReadonlyField 
-                label="Allowed quantity" 
-                value={inspection.allowed_quantity != null ? `${formatNum(inspection.allowed_quantity)} ${inspection.allowed_unit || 'm³/year'}` : null} 
+              <ReadonlyField label="Permitted activity" value={permittedActivity} />
+              <ReadonlyField label="Actual activity" value={actualActivity} />
+              <ReadonlyField
+                label="Permitted abstraction quantity"
+                value={inspection.allowed_quantity != null ? `${formatNum(inspection.allowed_quantity)} ${inspection.allowed_unit || 'm³/year'}` : null}
               />
-              <ReadonlyField label="Authorized abstraction method" value={inspection.authorized_abstraction_method} />
-              <ReadonlyField 
-                label="Actual quantity" 
-                value={inspection.actual_quantity != null ? `${formatNum(inspection.actual_quantity)} ${inspection.actual_unit || 'm³/year'}` : null} 
+              <ReadonlyField
+                label="Actual abstraction quantity"
+                value={inspection.actual_quantity != null ? `${formatNum(inspection.actual_quantity)} ${inspection.actual_unit || 'm³/year'}` : null}
               />
+              <ReadonlyField label="Permitted abstraction method" value={inspection.authorized_abstraction_method} />
               <ReadonlyField label="Actual abstraction method" value={inspection.actual_abstraction_method} />
             </div>
             <div className="mt-4">
@@ -488,16 +508,6 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <ReadonlyField label="Type of activity" value={inspection.activity_type} />
             <ReadonlyField label="Starting date" value={inspection.activity_starting_date} />
-          </div>
-        </SectionShell>
-      )}
-
-      {/* Wastewater Management */}
-      {(inspection.wastewater_system_type || inspection.wastewater_system_effectiveness) && (
-        <SectionShell title="Wastewater management system">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <ReadonlyField label="Type of the system" value={inspection.wastewater_system_type} />
-            <ReadonlyField label="Effectiveness of the system" value={inspection.wastewater_system_effectiveness} />
           </div>
         </SectionShell>
       )}
@@ -608,6 +618,16 @@ export function InspectionDetail({ inspectionId, permitNumber }: InspectionDetai
           </div>
         </div>
       </SectionShell>
+
+      {/* General observations — wastewater (moved out of Permit specifics) */}
+      {(inspection.wastewater_system_type || inspection.wastewater_system_effectiveness) && (
+        <SectionShell title="General observations — Wastewater management system">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <ReadonlyField label="Type of the system" value={inspection.wastewater_system_type} />
+            <ReadonlyField label="Effectiveness of the system" value={inspection.wastewater_system_effectiveness} />
+          </div>
+        </SectionShell>
+      )}
 
       {/* Conclusion & recommendations */}
       <SectionShell title="Conclusion & recommendations">

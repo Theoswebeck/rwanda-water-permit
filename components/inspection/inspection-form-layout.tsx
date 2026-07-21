@@ -261,6 +261,113 @@ function EditableLockedField({
   );
 }
 
+const ABSTRACTION_UNIT_OPTIONS = ["m³/year", "m³/day"] as const;
+const AREA_UNIT_OPTIONS = ["ha", "m²"] as const;
+const DEFAULT_ABSTRACTION_UNIT = "m³/year";
+const DEFAULT_AREA_UNIT = "ha";
+
+/**
+ * Bare (label-less) variant of EditableLockedField, for use inside
+ * ComparisonRow where the row header already carries the label.
+ */
+function LockedValueInput({
+  lockedValue,
+  overrideKey,
+  overrides,
+  canEdit,
+  onOverride,
+  placeholder,
+  maxLength,
+}: {
+  lockedValue?: string | null;
+  overrideKey: string;
+  overrides?: Record<string, string>;
+  canEdit: boolean;
+  onOverride: (key: string, value: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+}) {
+  if (!isFieldEmpty(lockedValue)) {
+    return <Input disabled value={lockedValue || "N/A"} className="h-11 bg-muted/30 border-slate-200 dark:border-slate-800" />;
+  }
+
+  return (
+    <Input
+      disabled={!canEdit}
+      value={overrides?.[overrideKey] ?? ""}
+      maxLength={maxLength}
+      placeholder={canEdit ? (placeholder ?? "Not on the permit — enter it") : "N/A"}
+      className={cn(
+        "h-11 border-slate-200 dark:border-slate-800",
+        canEdit
+          ? "bg-amber-50/50 dark:bg-amber-950/10 border-amber-300 dark:border-amber-800 focus:border-amber-500 focus:ring-amber-500/20"
+          : "bg-muted/30"
+      )}
+      onChange={(e) => onOverride(overrideKey, e.target.value)}
+    />
+  );
+}
+
+function UnitSelect({
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  options: readonly string[];
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="h-11 w-[120px] shrink-0 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800 disabled:bg-muted/30">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option} value={option}>
+            {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/**
+ * One row of the Section II "permitted vs actual" comparison: the permitted
+ * side comes from the permit (read-only, or amber-editable when the permit has
+ * no value), the actual side is what the inspector observed on site.
+ */
+function ComparisonRow({
+  title,
+  permitted,
+  actual,
+}: {
+  title: string;
+  permitted: React.ReactNode;
+  actual: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-900/30 border-b border-slate-200 dark:border-slate-800 text-sm font-medium">
+        {title}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-200 dark:divide-slate-800">
+        <div className="p-4 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Permitted</div>
+          {permitted}
+        </div>
+        <div className="p-4 space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actual</div>
+          {actual}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TextField({
   label,
   value,
@@ -294,12 +401,18 @@ function NumberField({
   disabled,
   onChange,
   suffix,
+  trailing,
+  placeholder,
 }: {
-  label: string;
+  /** Omit inside ComparisonRow, where the row header already labels the field. */
+  label?: string;
   value?: number | null;
   disabled: boolean;
   onChange: (v: number | null) => void;
   suffix?: string;
+  /** Rendered after the input — used for the unit dropdowns. */
+  trailing?: React.ReactNode;
+  placeholder?: string;
 }) {
   const [inputValue, setInputValue] = useState(value === null || value === undefined ? "" : String(value));
   const [focused, setFocused] = useState(false);
@@ -349,19 +462,21 @@ function NumberField({
 
   return (
     <div className="space-y-2">
-      <Label className="text-sm">{label}</Label>
+      {label ? <Label className="text-sm">{label}</Label> : null}
       <div className="flex items-center gap-2">
         <Input
           type="text"
           inputMode="decimal"
           value={inputValue}
           disabled={disabled}
+          placeholder={placeholder}
           className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
           onFocus={() => setFocused(true)}
           onBlur={handleBlur}
           onChange={(e) => handleChange(e.target.value)}
         />
         {suffix ? <span className="text-sm text-muted-foreground whitespace-nowrap">{suffix}</span> : null}
+        {trailing}
       </div>
     </div>
   );
@@ -558,6 +673,16 @@ export function InspectionFormLayout({
   const employment = form.employment_gender_breakdown || {};
   const ohs = form.ohs_gender_sensitive || {};
   const overrides = form.locked_field_overrides || {};
+
+  // Section II comparison rows: the permitted side is read-only when the permit
+  // supplies a value. When it does not, the inspector enters both the value and
+  // its unit, so the permitted-side unit dropdown unlocks along with the input.
+  const permittedQuantityValue =
+    form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined;
+  const isPermittedQuantityMissing = isFieldEmpty(permittedQuantityValue);
+  const permittedAreaValue =
+    locked.concessionAreaHa !== undefined && locked.concessionAreaHa !== null ? String(locked.concessionAreaHa) : undefined;
+  const isPermittedAreaMissing = isFieldEmpty(permittedAreaValue);
 
   const handleOverride = useCallback(
     (key: string, value: string) => {
@@ -760,11 +885,90 @@ export function InspectionFormLayout({
 
           <TabsContent value="specifics" className="pt-6 space-y-6">
             {template === "authorization" ? (
-              <SectionShell title="3. Water Use Details" description="As per the official RWB checklist.">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <EditableLockedField label="Abstracted quantity" lockedValue={form.allowed_quantity !== undefined && form.allowed_quantity !== null ? String(form.allowed_quantity) : undefined} overrideKey="allowedQuantity" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <EditableLockedField label="Unit" lockedValue={form.allowed_unit} overrideKey="allowedUnit" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} maxLength={20} />
-                  <EditableLockedField label="Abstraction method" lockedValue={form.authorized_abstraction_method} overrideKey="authorizedAbstractionMethod" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
+              <SectionShell
+                title="3. Permit specifics (permitted vs actual)"
+                description="Compare what the permit authorizes with what was observed on site."
+              >
+                <div className="space-y-4">
+                  <ComparisonRow
+                    title="Activity"
+                    permitted={
+                      <LockedValueInput
+                        lockedValue={locked.waterPurpose}
+                        overrideKey="waterPurpose"
+                        overrides={overrides}
+                        canEdit={canEdit}
+                        onOverride={handleOverride}
+                      />
+                    }
+                    actual={
+                      <Input
+                        disabled={!canEdit}
+                        value={overrides.actualActivity ?? ""}
+                        placeholder={canEdit ? "Activity observed on site" : "N/A"}
+                        className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                        onChange={(e) => handleOverride("actualActivity", e.target.value)}
+                      />
+                    }
+                  />
+
+                  <ComparisonRow
+                    title="Abstraction quantity"
+                    permitted={
+                      <div className="flex items-center gap-2">
+                        <LockedValueInput
+                          lockedValue={permittedQuantityValue}
+                          overrideKey="allowedQuantity"
+                          overrides={overrides}
+                          canEdit={canEdit}
+                          onOverride={handleOverride}
+                        />
+                        <UnitSelect
+                          value={form.allowed_unit || DEFAULT_ABSTRACTION_UNIT}
+                          options={ABSTRACTION_UNIT_OPTIONS}
+                          disabled={!canEdit || !isPermittedQuantityMissing}
+                          onChange={(v) => setField("allowed_unit", v as any)}
+                        />
+                      </div>
+                    }
+                    actual={
+                      <NumberField
+                        value={form.actual_quantity ?? null}
+                        disabled={!canEdit}
+                        onChange={(v) => setField("actual_quantity", (v ?? undefined) as any)}
+                        trailing={
+                          <UnitSelect
+                            value={form.actual_unit || DEFAULT_ABSTRACTION_UNIT}
+                            options={ABSTRACTION_UNIT_OPTIONS}
+                            disabled={!canEdit}
+                            onChange={(v) => setField("actual_unit", v as any)}
+                          />
+                        }
+                      />
+                    }
+                  />
+
+                  <ComparisonRow
+                    title="Abstraction method"
+                    permitted={
+                      <LockedValueInput
+                        lockedValue={form.authorized_abstraction_method}
+                        overrideKey="authorizedAbstractionMethod"
+                        overrides={overrides}
+                        canEdit={canEdit}
+                        onOverride={handleOverride}
+                      />
+                    }
+                    actual={
+                      <Input
+                        disabled={!canEdit}
+                        value={form.actual_abstraction_method ?? ""}
+                        placeholder={canEdit ? "Method observed on site" : "N/A"}
+                        className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                        onChange={(e) => setField("actual_abstraction_method", e.target.value as any)}
+                      />
+                    }
+                  />
                 </div>
 
                 <div className="mt-6">
@@ -777,10 +981,68 @@ export function InspectionFormLayout({
                 </div>
               </SectionShell>
             ) : (
-              <SectionShell title="3. Concession (Surface area & boundaries)" description="As per the official RWB concession checklist.">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <EditableLockedField label="Authorized surface area" lockedValue={locked.concessionAreaHa !== undefined ? `${locked.concessionAreaHa} Ha` : undefined} overrideKey="authorizedSurfaceArea" overrides={overrides} canEdit={canEdit} onOverride={handleOverride} />
-                  <NumberField label="Actual surface area covered" value={form.actual_surface_area_ha ?? null} disabled={!canEdit} onChange={(v) => setField("actual_surface_area_ha", (v ?? undefined) as any)} suffix="Ha" />
+              <SectionShell
+                title="3. Permit specifics (permitted vs actual)"
+                description="Compare what the permit authorizes with what was observed on site."
+              >
+                <div className="space-y-4">
+                  <ComparisonRow
+                    title="Activity"
+                    permitted={
+                      <LockedValueInput
+                        lockedValue={locked.waterPurpose}
+                        overrideKey="waterPurpose"
+                        overrides={overrides}
+                        canEdit={canEdit}
+                        onOverride={handleOverride}
+                      />
+                    }
+                    actual={
+                      <Input
+                        disabled={!canEdit}
+                        value={overrides.actualActivity ?? ""}
+                        placeholder={canEdit ? "Activity observed on site" : "N/A"}
+                        className="h-11 bg-white/70 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800"
+                        onChange={(e) => handleOverride("actualActivity", e.target.value)}
+                      />
+                    }
+                  />
+
+                  <ComparisonRow
+                    title="Concession area"
+                    permitted={
+                      <div className="flex items-center gap-2">
+                        <LockedValueInput
+                          lockedValue={permittedAreaValue}
+                          overrideKey="concessionAreaHa"
+                          overrides={overrides}
+                          canEdit={canEdit}
+                          onOverride={handleOverride}
+                        />
+                        <UnitSelect
+                          value={overrides.permittedConcessionAreaUnit || DEFAULT_AREA_UNIT}
+                          options={AREA_UNIT_OPTIONS}
+                          disabled={!canEdit || !isPermittedAreaMissing}
+                          onChange={(v) => handleOverride("permittedConcessionAreaUnit", v)}
+                        />
+                      </div>
+                    }
+                    actual={
+                      <NumberField
+                        value={form.actual_surface_area_ha ?? null}
+                        disabled={!canEdit}
+                        onChange={(v) => setField("actual_surface_area_ha", (v ?? undefined) as any)}
+                        trailing={
+                          <UnitSelect
+                            value={overrides.actualConcessionAreaUnit || DEFAULT_AREA_UNIT}
+                            options={AREA_UNIT_OPTIONS}
+                            disabled={!canEdit}
+                            onChange={(v) => handleOverride("actualConcessionAreaUnit", v)}
+                          />
+                        }
+                      />
+                    }
+                  />
                 </div>
 
                 <div className="mt-6 grid grid-cols-1 gap-6">
@@ -838,12 +1100,6 @@ export function InspectionFormLayout({
               </SectionShell>
             )}
 
-            <SectionShell title="4. Wastewater Management System">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TextField label="Type of the system" value={form.wastewater_system_type ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_type", v as any)} />
-                <TextField label="Effectiveness of the system" value={form.wastewater_system_effectiveness ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_effectiveness", v as any)} />
-              </div>
-            </SectionShell>
           </TabsContent>
 
           <TabsContent value="social" className="pt-6 space-y-6">
@@ -1051,7 +1307,17 @@ export function InspectionFormLayout({
           </TabsContent>
 
           <TabsContent value="findings" className="pt-6 space-y-6">
-            <SectionShell title="8. Water use conflicts">
+            <SectionShell
+              title="8. General observations — Wastewater management system"
+              description="Observed on site, independent of what the permit specifies."
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <TextField label="Type of the system" value={form.wastewater_system_type ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_type", v as any)} />
+                <TextField label="Effectiveness of the system" value={form.wastewater_system_effectiveness ?? ""} disabled={!canEdit} onChange={(v) => setField("wastewater_system_effectiveness", v as any)} />
+              </div>
+            </SectionShell>
+
+            <SectionShell title="9. Water use conflicts">
               <div className="space-y-2">
                 <Label>Description of any water use conflict in the area related to the permit</Label>
                 <Textarea
@@ -1063,7 +1329,7 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title="9. Catchment protection initiatives">
+            <SectionShell title="10. Catchment protection initiatives">
               <div className="space-y-2">
                 <Label>Description of any initiative by the water user to protect the catchment</Label>
                 <Textarea
@@ -1075,7 +1341,7 @@ export function InspectionFormLayout({
               </div>
             </SectionShell>
 
-            <SectionShell title="10. Conclusion and recommendations">
+            <SectionShell title="11. Conclusion and recommendations">
               <div className="space-y-6">
                 <div className="space-y-2">
                   <Label>General conclusion</Label>
