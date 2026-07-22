@@ -22,7 +22,7 @@ import { staffListHref } from "@/lib/staff-nav";
 import { InspectionFormLayout } from "@/components/inspection/inspection-form-layout";
 import { InspectionOwnerBadge } from "@/components/inspection/inspection-owner-badge";
 import { InspectionWorkflowActions } from "@/components/inspection/inspection-workflow-actions";
-import { isAssessorOwnedWorkflow, isTerminalStatus } from "@/lib/inspection-workflow";
+import { isAssessorOwnedWorkflow } from "@/lib/inspection-workflow";
 import type { InspectionWorkflowStatus } from "@/types/inspection-workflow";
 import { assertInspectionPayloadKeys } from "@/lib/inspections/payload-columns";
 import { runInspectionSaveWithSafetyNet } from "@/lib/inspections/safe-payload-retry";
@@ -215,11 +215,6 @@ export default function PermitInspectionUnifiedPage() {
 
   const [inspectionId, setInspectionId] = useState<string | null>(null);
   const [inspectionRecord, setInspectionRecord] = useState<Inspection | null>(null);
-  // A prior, already-completed (approved/rejected) inspection for this same
-  // permit. Kept only for the "previously inspected" banner below — never
-  // bound to inspectionId/inspectionRecord, so it stays untouched history
-  // while the page instead prefills a brand-new inspection for editing.
-  const [previousInspection, setPreviousInspection] = useState<(Inspection & { workflow_status?: string | null }) | null>(null);
   const [inspectionData, setInspectionData] = useState<any>(null);
   const [template, setTemplate] = useState<InspectionTemplate>("authorization");
   const [activeTab, setActiveTab] = useState("locked");
@@ -244,7 +239,6 @@ export default function PermitInspectionUnifiedPage() {
       try {
         setLoading(true);
         setError(null);
-        setPreviousInspection(null);
         if (authLoading) return;
         if (!applicationNumber) {
           setError("Missing application number");
@@ -290,22 +284,14 @@ export default function PermitInspectionUnifiedPage() {
           if (latestError) throw latestError;
           const existing = (latest && latest[0]) as Inspection | undefined;
 
-          // A finished inspection cycle (approved/rejected) is immutable
-          // history, not "the" inspection to reopen. For permit-linked
-          // sources (registry or real application) we keep it as a
-          // read-only reference and fall through below to prefill a fresh
-          // inspection instead, so a permit can be inspected again while
-          // every prior cycle stays on its own row. Manual/no-permit
-          // inspections are looked up by a single fixed id (not "latest for
-          // this permit"), so that lookup always binds directly regardless
-          // of status — there is no "permit" to re-inspect there.
+          // Always bind the latest inspection for this permit and display it.
+          // A terminal (approved/rejected) inspection is not assessor-owned, so
+          // isAssessorOwnedWorkflow returns false and the form loads read-only —
+          // the assessor sees the completed data instead of a blank form, the
+          // same way the reviewer page shows it.
           const existingWorkflowStatus = (existing as { workflow_status?: string | null } | undefined)?.workflow_status;
-          const existingIsTerminal = isTerminalStatus(existingWorkflowStatus ?? "");
-          const existingIsReinspectable = !!existing && existingIsTerminal && data.source !== "manual_unpermitted";
 
-          if (existingIsReinspectable) {
-            setPreviousInspection(existing as Inspection);
-          } else if (existing) {
+          if (existing) {
             setInspectionId(existing.id);
             const isOwner = existing.inspector_id === user?.id;
             const isAssessorOwned = isAssessorOwnedWorkflow(existingWorkflowStatus);
@@ -695,22 +681,6 @@ export default function PermitInspectionUnifiedPage() {
           ) : null}
         </div>
       </div>
-
-      {previousInspection ? (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            This permit was previously inspected — that inspection was{" "}
-            <span className="font-medium">
-              {previousInspection.workflow_status === "rejected" ? "rejected" : "approved"}
-            </span>
-            {previousInspection.completed_date
-              ? ` on ${new Date(previousInspection.completed_date).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`
-              : ""}
-            {" "}and is preserved as a separate record. You're filling out a new inspection below.
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       {inspectionId && inspectionRecord ? (
         <InspectionWorkflowActions
