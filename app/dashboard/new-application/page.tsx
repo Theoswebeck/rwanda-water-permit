@@ -199,10 +199,11 @@ async function uploadApplicationDocuments(applicationId: string, formData: any, 
       portConstructionGeneralRequirements: 'other',
       portConstructionEIA: 'environmental_impact_doc',
       portConstructionFeasibilityStudy: 'other',
-      // Gaz extraction documents
+      // Gas extraction documents
       gazExtractionGeneralRequirements: 'other',
       gazExtractionEIA: 'environmental_impact_doc',
       gazExtractionFeasibilityStudy: 'other',
+      gazExtractionRMBLicense: 'other',
       // Livestock documents
       livestockGeneralRequirements: 'other',
       livestockFeasibilityStudy: 'other',

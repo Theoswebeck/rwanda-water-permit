@@ -172,14 +172,15 @@ export function getAnnexRequirementForActivity(
         ],
       };
 
-    // Annex J (Gaz extraction)
+    // Annex (Gas Extraction)
     case "gaz_extraction":
       return {
-        annexTitle: "ANNEX J (Only for gaz extraction)",
+        annexTitle: "ANNEX (Only for Gas Extraction)",
         attachments: [
           req(applicationLetterLabel, "gazExtractionGeneralRequirements"),
-          req("Environmental Impact Assessment certificate", "gazExtractionEIA"),
-          req("Feasibility study", "gazExtractionFeasibilityStudy"),
+          req("Environmental Impact Assessment Certificate", "gazExtractionEIA"),
+          req("Project Feasibility Study", "gazExtractionFeasibilityStudy"),
+          req("Recommendation/License from RMB", "gazExtractionRMBLicense"),
         ],
       };
 
