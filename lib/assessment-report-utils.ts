@@ -181,6 +181,7 @@ export function determineReportType(
       "fish_farming_lakes",
       "recreation_activities",
       "port_construction",
+      "gaz_extraction",
     ]);
     const hasPureConcessionActivity = cleaned.some((a) => pureConcessionActivities.has(a));
     if (hasPureConcessionActivity) {
@@ -194,7 +195,7 @@ export function determineReportType(
   }
 
   // Fallback to water_purpose (legacy format)
-  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities' || waterPurpose === 'port_construction') {
+  if (waterPurpose === 'fish_farming_lakes' || waterPurpose === 'recreation_activities' || waterPurpose === 'port_construction' || waterPurpose === 'gaz_extraction') {
     return 'concession';
   }
 
@@ -266,7 +267,7 @@ export const ACTIVITY_LABELS: Record<string, string> = {
   port_construction: "Port Construction",
   recreation_activities: "Recreational Activities",
   recreation: "Recreational Activities",
-  gaz_extraction: "Gaz Extraction",
+  gaz_extraction: "Gas Extraction",
   livestock: "Livestock",
   domestic: "Water Supply",
   municipal_supply: "Municipal Supply",

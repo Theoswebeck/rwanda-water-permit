@@ -59,7 +59,7 @@ function getIntendedActivities(application: ApplicationLike): string[] {
 
 export function isConcessionApplication(application: ApplicationLike): boolean {
   const acts = getIntendedActivities(application);
-  return acts.includes("fish_farming_lakes") || acts.includes("recreation_activities") || acts.includes("port_construction");
+  return acts.includes("fish_farming_lakes") || acts.includes("recreation_activities") || acts.includes("port_construction") || acts.includes("gaz_extraction");
 }
 
 export function selectPermitVariant(application: ApplicationLike): PermitVariant {

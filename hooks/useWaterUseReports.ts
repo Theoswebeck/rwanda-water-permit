@@ -226,7 +226,10 @@ export function getReportTemplate(intendedActivities: string[] | null | undefine
     'recreation',
     'fish_farming_lakes',
     'gas_extraction',
+    'gaz_extraction',
     'port',
+    'port_construction',
+    'recreation_activities',
   ]
 
   if (!intendedActivities || intendedActivities.length === 0) {

@@ -267,7 +267,7 @@ export default async function PublicPermitViewPage({
   })();
   const issueDate = getCanonicalIssueDate(permit as Record<string, unknown>);
   const normalizedPurpose = typeof permit.purpose === "string" ? permit.purpose.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
-  const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities", "port_construction"]);
+  const concessionPurposeHints = new Set(["fish_farming_lakes", "recreation", "recreation_activities", "port_construction", "gaz_extraction"]);
   const isConcessionPermit = (application ? isConcessionApplication(application) : false) || concessionPurposeHints.has(normalizedPurpose);
 
   const abstractionValue = (() => {

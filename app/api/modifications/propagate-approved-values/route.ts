@@ -116,7 +116,7 @@ function isConcessionApplication(activitiesRaw: unknown, notes: JsonRecord | nul
   const direct = normalizeActivities(activitiesRaw)
   const notesActivities = normalizeActivities(notes?.intendedActivities)
   const activities = direct.length ? direct : notesActivities
-  return activities.includes('fish_farming_lakes') || activities.includes('recreation_activities') || activities.includes('port_construction')
+  return activities.includes('fish_farming_lakes') || activities.includes('recreation_activities') || activities.includes('port_construction') || activities.includes('gaz_extraction')
 }
 
 function resolveOriginalApplicationId(mod: ModificationRow, notes: JsonRecord | null): string | null {
