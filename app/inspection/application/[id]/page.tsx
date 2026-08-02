@@ -241,6 +241,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
       'mining': 'mining',
       'recreation': 'recreation_activities',
       'port_construction': 'port_construction',
+      'gaz_extraction': 'gaz_extraction',
       'livestock': 'livestock'
     };
     

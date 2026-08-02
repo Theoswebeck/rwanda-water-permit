@@ -193,7 +193,7 @@ function mapApplicationToFormData(application: Application, userProfile?: any): 
     const purposeToActivity: Record<string, string> = {
       'domestic': 'water_supply', 'irrigation': 'irrigation', 'fish_farming_lakes': 'fish_farming_lakes',
       'fish_farming_ponds': 'fish_farming_ponds', 'industrial': 'industry', 'electricity_generation': 'electricity_generation',
-      'mining': 'mining', 'recreation': 'recreation_activities', 'port_construction': 'port_construction', 'livestock': 'livestock'
+      'mining': 'mining', 'recreation': 'recreation_activities', 'port_construction': 'port_construction', 'gaz_extraction': 'gaz_extraction', 'livestock': 'livestock'
     };
     let mappedActivity = purposeToActivity[application.water_purpose] || 'water_supply';
     if (Array.isArray((application as any).intended_activities) && (application as any).intended_activities.length > 0) {
@@ -518,6 +518,8 @@ export default function ApproverApplicationPage() {
             if (Number.isFinite(recM2) && recM2 > 0) return Number((recM2 / 10000).toFixed(4));
             const portM2 = Number(formData.portConstructionConcessionAreaM2);
             if (Number.isFinite(portM2) && portM2 > 0) return Number((portM2 / 10000).toFixed(4));
+            const gazM2 = Number(formData.gazExtractionConcessionAreaM2);
+            if (Number.isFinite(gazM2) && gazM2 > 0) return Number((gazM2 / 10000).toFixed(4));
             return undefined;
           }
           return formData.waterAbstractionDetails?.[0]?.maxAverageYearly

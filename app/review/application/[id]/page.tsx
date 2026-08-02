@@ -593,6 +593,8 @@ export default function ReviewApplicationPage() {
             if (Number.isFinite(recM2) && recM2 > 0) return Number((recM2 / 10000).toFixed(4));
             const portM2 = Number(formData.portConstructionConcessionAreaM2);
             if (Number.isFinite(portM2) && portM2 > 0) return Number((portM2 / 10000).toFixed(4));
+            const gazM2 = Number(formData.gazExtractionConcessionAreaM2);
+            if (Number.isFinite(gazM2) && gazM2 > 0) return Number((gazM2 / 10000).toFixed(4));
             return undefined;
           }
           return formData.waterAbstractionDetails?.[0]?.maxAverageYearly

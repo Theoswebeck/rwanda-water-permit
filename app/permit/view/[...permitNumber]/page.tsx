@@ -324,6 +324,9 @@ export default async function PublicPermitViewPage({
     const portConstructionM2 = parsePositiveNumber(internalNotes?.portConstructionConcessionAreaM2);
     if (portConstructionM2) return `${(portConstructionM2 / 10000).toLocaleString()} ha`;
 
+    const gazExtractionM2 = parsePositiveNumber(internalNotes?.gazExtractionConcessionAreaM2);
+    if (gazExtractionM2) return `${(gazExtractionM2 / 10000).toLocaleString()} ha`;
+
     if (permit.source === "permit_registry") {
       const registryRaw = typeof permit.water_allowance === "string" ? permit.water_allowance.trim() : "";
       if (registryRaw && registryRaw !== "0" && registryRaw !== "0.0" && registryRaw !== "0.00") {

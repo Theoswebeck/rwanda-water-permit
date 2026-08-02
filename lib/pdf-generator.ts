@@ -313,7 +313,7 @@ function getActivityLabel(activity: string): string {
     navigation: "Navigation",
     port_construction: "Port Construction",
     recreation_activities: "Recreational Activities",
-    gaz_extraction: "Gaz Extraction",
+    gaz_extraction: "Gas Extraction",
     livestock: "Livestock",
     other: "Other",
   };

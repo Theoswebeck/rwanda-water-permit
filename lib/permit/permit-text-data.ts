@@ -194,7 +194,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   construction_of_infrastructures: "Construction or installation of infrastructure",
   navigation: "Navigation", recreation_activities: "Recreational Activities",
   port_construction: "Port Construction",
-  gaz_extraction: "Gaz Extraction", livestock: "Livestock", other: "Other",
+  gaz_extraction: "Gas Extraction", livestock: "Livestock", other: "Other",
 };
 
 export function resolveActivities(app: PermitApplication): string {

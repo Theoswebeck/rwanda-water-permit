@@ -70,7 +70,7 @@ export const INTENDED_ACTIVITY_OPTIONS: { value: string; label: string }[] = [
   { value: "electricity_generation", label: "Electricity generation (Hydropower)" },
   { value: "fish_farming_lakes", label: "Fish farming in lakes" },
   { value: "fish_farming_ponds", label: "Fish farming in ponds" },
-  { value: "gaz_extraction", label: "Gaz extraction" },
+  { value: "gaz_extraction", label: "Gas Extraction" },
   { value: "industry", label: "Industry" },
   { value: "irrigation", label: "Irrigation" },
   { value: "livestock", label: "Livestock" },

@@ -494,7 +494,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
   const watchedPolygons = form.watch('waterSourcePolygons');
 
   // Activity/purpose automatically determines abstraction vs concession — no manual choice
-  const CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities", "port_construction"];
+  const CONCESSION_PURPOSES = ["fish_farming_lakes", "recreation_activities", "port_construction", "gaz_extraction"];
   const effectiveWaterUseCategory: "abstraction" | "concession" = CONCESSION_PURPOSES.includes(waterPurpose || "")
     ? "concession"
     : "abstraction";
@@ -1593,7 +1593,7 @@ export const PermitTransferForm = memo(function PermitTransferForm({
                                   <SelectItem value="electricity_generation">{tx("Electricity Generation")}</SelectItem>
                                   <SelectItem value="fish_farming_lakes">{tx("Fish Farming (Lakes)")}</SelectItem>
                                   <SelectItem value="fish_farming_ponds">{tx("Fish Farming (Ponds)")}</SelectItem>
-                                  <SelectItem value="gaz_extraction">{tx("Gaz Extraction")}</SelectItem>
+                                  <SelectItem value="gaz_extraction">{tx("Gas Extraction")}</SelectItem>
                                   <SelectItem value="industrial">{tx("Industrial")}</SelectItem>
                                   <SelectItem value="irrigation">{tx("Irrigation")}</SelectItem>
                                   <SelectItem value="livestock">{tx("Livestock")}</SelectItem>

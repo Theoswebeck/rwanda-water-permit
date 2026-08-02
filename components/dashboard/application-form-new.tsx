@@ -423,7 +423,7 @@ const applicationFormSchema = z.object({
   portConstructionEIA: z.any().optional(),
   portConstructionFeasibilityStudy: z.any().optional(),
 
-  // Gaz extraction
+  // Gas extraction
   gazExtractionGeneralRequirements: z.any().optional(),
   gazExtractionEIA: z.any().optional(),
   gazExtractionFeasibilityStudy: z.any().optional(),
@@ -1492,7 +1492,7 @@ export function ApplicationForm({
     navigationGeneralRequirements: useRef<HTMLInputElement>(null),
     navigationEIA: useRef<HTMLInputElement>(null),
     navigationManagementPlan: useRef<HTMLInputElement>(null),
-    // Gaz extraction documents
+    // Gas extraction documents
     gazExtractionGeneralRequirements: useRef<HTMLInputElement>(null),
     gazExtractionEIA: useRef<HTMLInputElement>(null),
     gazExtractionFeasibilityStudy: useRef<HTMLInputElement>(null),
